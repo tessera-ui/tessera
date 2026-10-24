@@ -8,6 +8,7 @@ use tessera_components::{
     alignment::{Alignment, CrossAxisAlignment},
     boxed::boxed,
     column::column,
+    flow_row::flow_row,
     icon::icon,
     icon_button::icon_button,
     list_item::list_item,
@@ -15,13 +16,14 @@ use tessera_components::{
     modifier::{ModifierExt as _, SemanticsArgs},
     row::row,
     search::{SearchBarColors, SearchBarController, docked_search_bar, search_bar},
-    shape_def::Shape,
+    shape_def::{RoundedCorner, Shape},
     spacer::spacer,
     text::text,
     theme::MaterialTheme,
 };
 use tessera_ui::{
-    Color, Dp, Modifier, RenderSlot, State, accesskit::Role, remember, tessera, use_context,
+    Color, Dp, Modifier, RenderSlot, State, accesskit::Role, modifier::FocusModifierExt as _,
+    remember, tessera, use_context,
 };
 
 use super::{
@@ -30,6 +32,10 @@ use super::{
     article::{ArticlePage, SpecSection, article},
     gap, panel, spec_table, subheading, type_style,
 };
+
+#[cfg(all(test, not(target_family = "wasm")))]
+#[path = "search_layout_tests.rs"]
+mod layout_tests;
 
 #[tessera]
 pub(super) fn search_spec() {
@@ -83,7 +89,249 @@ fn configurations() {
     live_search(true, false, true);
     gap(Dp(32.0));
     subheading("Layout".into());
-    layout_examples();
+    gap(Dp(24.0));
+    flow_row()
+        .item_spacing(Dp(24.0))
+        .line_spacing(Dp(32.0))
+        .children(|| {
+            configuration_layout(true, false);
+            configuration_layout(false, false);
+            configuration_layout(true, true);
+            configuration_layout(false, true);
+        });
+}
+
+#[tessera]
+fn configuration_layout(full_screen: bool, divided: bool) {
+    let controller = remember(|| {
+        let mut controller = SearchBarController::new(true);
+        controller.set_query("Eli");
+        controller
+    });
+    let submitted = remember(|| true);
+    let opened = remember(String::new);
+    let width = remember(|| Dp(502.0));
+    let scale = width.get().0 / 502.0;
+    let scheme = use_context::<MaterialTheme>().unwrap().get().color_scheme;
+    column()
+        .modifier(Modifier::new().width(Dp(502.0)))
+        .children(move || {
+            boxed()
+                .modifier(
+                    Modifier::new()
+                        .on_globally_positioned(move |bounds: tessera_ui::PxRect| {
+                            let next = Dp::from_pixels_f32(bounds.width.to_f32());
+                            if width.get() != next {
+                                width.set(next);
+                            }
+                        })
+                        .fill_max_width()
+                        .height(Dp(456.0 * scale))
+                        .clip_to_bounds()
+                        .background_with_shape(
+                            scheme.surface_container_highest,
+                            Shape::rounded_rectangle(Dp(16.0)),
+                        ),
+                )
+                .children(move || {
+                    boxed().modifier(
+                        Modifier::new()
+                            .offset(
+                                Dp(if full_screen { 37.0 } else { -80.0 } * scale),
+                                Dp(44.0 * scale),
+                            )
+                            .size(
+                                Dp(if full_screen { 428.0 } else { 560.0 } * scale),
+                                Dp(600.0 * scale),
+                            )
+                            .background_with_shape(
+                                scheme.surface,
+                                Shape::rounded_rectangle(Dp(28.0 * scale)),
+                            )
+                            .border_with_shape(
+                                Dp(8.0 * scale),
+                                scheme.outline_variant,
+                                Shape::rounded_rectangle(Dp(28.0 * scale)),
+                            ),
+                    );
+                    row()
+                        .cross_axis_alignment(CrossAxisAlignment::Center)
+                        .modifier(
+                            Modifier::new()
+                                .offset(
+                                    Dp(if full_screen { 69.0 } else { -48.0 } * scale),
+                                    Dp(72.0 * scale),
+                                )
+                                .width(Dp(if full_screen { 364.0 } else { 496.0 } * scale)),
+                        )
+                        .children(move || {
+                            text()
+                                .content("9:30")
+                                .style(type_style(14.0 * scale, 20.0 * scale))
+                                .modifier(Modifier::new().weight(1.0));
+                            icon().vector(filled::WIFI_SVG).size(Dp(16.0 * scale));
+                            icon()
+                                .vector(filled::SIGNAL_CELLULAR_4_BAR_SVG)
+                                .size(Dp(16.0 * scale));
+                            icon()
+                                .vector(filled::BATTERY_FULL_SVG)
+                                .size(Dp(16.0 * scale));
+                        });
+                    boxed()
+                        .modifier(
+                            Modifier::new()
+                                .offset(
+                                    Dp(if full_screen {
+                                        if divided { 45.0 } else { 57.0 }
+                                    } else {
+                                        79.0
+                                    } * scale),
+                                    Dp(if full_screen {
+                                        if divided { 132.0 } else { 116.0 }
+                                    } else {
+                                        126.0
+                                    } * scale),
+                                )
+                                .size(
+                                    Dp(if full_screen {
+                                        if divided { 412.0 } else { 388.0 }
+                                    } else {
+                                        378.0
+                                    } * scale),
+                                    Dp(480.0 * scale),
+                                ),
+                        )
+                        .children(move || {
+                            search_control(controller, submitted, full_screen, divided)
+                                .results_content(move || {
+                                    email_results(controller, submitted, opened);
+                                });
+                        });
+                });
+            gap(Dp(12.0));
+            prose(format!(
+                "{} · {} style",
+                if full_screen {
+                    "Full-screen layout"
+                } else {
+                    "Docked layout"
+                },
+                if divided {
+                    "Divided (baseline)"
+                } else {
+                    "Contained"
+                }
+            ));
+            if !opened.with(String::is_empty) {
+                gap(Dp(8.0));
+                prose(format!("Opened message: {}", opened.get()));
+            }
+        });
+}
+
+#[tessera]
+fn email_results(
+    controller: State<SearchBarController>,
+    submitted: State<bool>,
+    opened: State<String>,
+) {
+    let query = controller.with(|value| value.query().to_lowercase());
+    let scheme = use_context::<MaterialTheme>().unwrap().get().color_scheme;
+    column()
+        .modifier(
+            Modifier::new().fill_max_width().semantics(SemanticsArgs {
+                role: Some(Role::List),
+                merge_descendants: true,
+                live: Some(tessera_ui::accesskit::Live::Polite),
+                label: Some(
+                    if submitted.get() {
+                        "Email search results"
+                    } else {
+                        "Email search suggestions"
+                    }
+                    .into(),
+                ),
+                ..Default::default()
+            }),
+        )
+        .children(move || {
+            text()
+                .content(if submitted.get() {
+                    "Results"
+                } else {
+                    "Suggestions"
+                })
+                .style(type_style(12.0, 16.0))
+                .modifier(Modifier::new().padding_all(Dp(16.0)));
+            let mut count = 0;
+            for (sender, subject, preview, time, initial) in [
+                (
+                    "Eli, me",
+                    "Adopt a pup?",
+                    "The pet adoption organization...",
+                    "8:22 AM",
+                    "E",
+                ),
+                (
+                    "Zita, Odette, Dagmar",
+                    "Movie marathon",
+                    "We have to watch one of these...",
+                    "7:15 AM",
+                    "Z",
+                ),
+                (
+                    "In, Aki, Aro",
+                    "Museum field trip",
+                    "So far about 20 students signed...",
+                    "9:40 AM",
+                    "I",
+                ),
+            ] {
+                if query.is_empty()
+                    || format!("{sender} {subject} {preview} to Eli")
+                        .to_lowercase()
+                        .contains(&query)
+                {
+                    count += 1;
+                    list_item()
+                        .headline(sender)
+                        .supporting_text(format!("{subject}\n{preview}"))
+                        .min_height(Dp(92.0))
+                        .leading(move || {
+                            boxed()
+                                .alignment(Alignment::Center)
+                                .modifier(
+                                    Modifier::new()
+                                        .size(Dp(40.0), Dp(40.0))
+                                        .background_with_shape(
+                                            scheme.tertiary_container,
+                                            Shape::Ellipse,
+                                        ),
+                                )
+                                .children(move || {
+                                    text()
+                                        .content(initial)
+                                        .style(type_style(16.0, 24.0))
+                                        .color(scheme.on_tertiary_container);
+                                });
+                        })
+                        .trailing(move || {
+                            column().children(move || {
+                                text().content(time).style(type_style(12.0, 16.0));
+                                gap(Dp(16.0));
+                                icon().vector(filled::STAR_BORDER_SVG).size(Dp(24.0));
+                            });
+                        })
+                        .on_click(move || {
+                            submitted.set(true);
+                            opened.set(subject.into());
+                        });
+                }
+            }
+            if count == 0 {
+                prose("No matching messages");
+            }
+        });
 }
 
 #[tessera]
@@ -129,6 +377,7 @@ fn search_control(
     submitted: State<bool>,
     full_screen: bool,
     divided: bool,
+    results_content: Option<RenderSlot>,
 ) {
     let scheme = use_context::<MaterialTheme>().unwrap().get().color_scheme;
     let leading = RenderSlot::new(move || {
@@ -161,9 +410,13 @@ fn search_control(
             icon().vector(filled::MIC_SVG).size(Dp(24.0));
         }
     });
-    let content = RenderSlot::new(move || {
-        results(controller, submitted);
-    });
+    let content = if let Some(content) = results_content {
+        content
+    } else {
+        RenderSlot::new(move || {
+            results(controller, submitted);
+        })
+    };
     let colors = SearchBarColors {
         container_color: scheme.surface_container_high,
         divider_color: if divided {
@@ -178,8 +431,16 @@ fn search_control(
             .placeholder("Search your messages")
             .leading_icon_shared(leading)
             .trailing_icon_shared(trailing)
-            .shape(Shape::rounded_rectangle(Dp(28.0)))
-            .results_container_color(scheme.surface_container_low)
+            .shape(if divided {
+                Shape::RECTANGLE
+            } else {
+                Shape::rounded_rectangle(Dp(28.0))
+            })
+            .results_container_color(if divided {
+                scheme.surface_container_high
+            } else {
+                scheme.surface_container_low
+            })
             .colors(colors)
             .show_divider(divided)
             .content_padding(Dp::ZERO)
@@ -196,7 +457,16 @@ fn search_control(
             .placeholder("Search your messages")
             .leading_icon_shared(leading)
             .trailing_icon_shared(trailing)
-            .shape(Shape::rounded_rectangle(Dp(28.0)))
+            .shape(if divided {
+                Shape::RoundedRectangle {
+                    top_left: RoundedCorner::manual(Dp(28.0), 3.0),
+                    top_right: RoundedCorner::manual(Dp(28.0), 3.0),
+                    bottom_left: RoundedCorner::manual(Dp::ZERO, 3.0),
+                    bottom_right: RoundedCorner::manual(Dp::ZERO, 3.0),
+                }
+            } else {
+                Shape::rounded_rectangle(Dp(28.0))
+            })
             .dropdown_shape(Shape::rounded_rectangle(Dp(if divided {
                 0.0
             } else {

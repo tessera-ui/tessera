@@ -236,7 +236,11 @@ pub(super) fn selection_article(
             }),
         });
     }
-    article(title,description,sections).hero_shared(example).pages(vec![
+    let mut page = article(title, description, sections).hero_shared(example);
+    if kind == Kind::Switch {
+        page = page.intro_shared(anatomy);
+    }
+    page.pages(vec![
         ArticlePage {title:"Overview",intro:Some(RenderSlot::new(move || {
             paragraph(match kind {
                 Kind::Checkbox=>"Choose multiple related options. Use concise labels and make selected, unselected and mixed states easy to scan.",

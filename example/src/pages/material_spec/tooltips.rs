@@ -5,7 +5,7 @@
 //! Explain actions with contextual help and optional follow-up actions.
 
 use tessera_components::{
-    alignment::Alignment,
+    alignment::{Alignment, CrossAxisAlignment},
     boxed::boxed,
     button::button,
     column::column,
@@ -13,6 +13,7 @@ use tessera_components::{
     icon_button::icon_button,
     material_icons::filled,
     modifier::{MinimumInteractiveComponentEnforcement, ModifierExt as _, SemanticsArgs},
+    row::row,
     shape_def::Shape,
     spacer::spacer,
     surface::surface,
@@ -232,31 +233,7 @@ fn detail(rich: bool) {
             gap(Dp(112.0));
             subheading(format!("{title} colors"));
             gap(Dp(24.0));
-            for dark in [false, true] {
-                material_theme()
-                    .theme(move || MaterialTheme::from_seed(ACCENT, dark))
-                    .child(move || {
-                        surface()
-                            .modifier(Modifier::new().fill_max_width())
-                            .child(move || {
-                                column()
-                                    .modifier(
-                                        Modifier::new().fill_max_width().padding_all(Dp(24.0)),
-                                    )
-                                    .children(move || {
-                                        sample(
-                                            format!(
-                                                "{} {}",
-                                                if dark { "Dark" } else { "Light" },
-                                                title
-                                            ),
-                                            rich,
-                                        );
-                                    });
-                            });
-                    });
-                gap(Dp(24.0));
-            }
+            tooltip_color_pair(rich);
             gap(Dp(88.0));
             subheading(format!("{title} measurements"));
             gap(Dp(24.0));
@@ -283,26 +260,222 @@ fn detail(rich: bool) {
                 gap(Dp(112.0));
                 subheading("Rich tooltip configurations".to_owned());
                 gap(Dp(24.0));
-                for (index, headline, actions) in [
-                    (1, true, 2),
-                    (2, true, 1),
-                    (3, true, 0),
-                    (4, false, 1),
-                    (5, false, 2),
-                ] {
-                    panel(RenderSlot::new(move || {
-                        sample(format!("Rich configuration {index}"), true)
-                            .headline(headline)
-                            .actions(actions);
-                    }));
-                    gap(Dp(24.0));
-                }
+                tooltip_configurations();
+            }
+        });
+}
+
+fn tooltip_color_labels(rich: bool) -> Vec<&'static str> {
+    if rich {
+        vec![
+            "On surface variant",
+            "Surface container",
+            "On surface variant",
+            "Primary",
+        ]
+    } else {
+        vec!["Inverse on surface", "Inverse surface"]
+    }
+}
+
+#[tessera]
+fn tooltip_color_pair(rich: bool) {
+    let scheme = use_context::<MaterialTheme>().unwrap().get().color_scheme;
+    boxed()
+        .modifier(
+            Modifier::new()
+                .fill_max_width()
+                .clip_shape(Shape::rounded_rectangle(Dp(24.0)))
+                .semantics(SemanticsArgs {
+                    role: Some(Role::Group),
+                    label: Some(format!(
+                        "{} tooltip color roles",
+                        if rich { "Rich" } else { "Plain" }
+                    )),
+                    merge_descendants: true,
+                    ..Default::default()
+                }),
+        )
+        .children(move || {
+            row()
+                .modifier(Modifier::new().fill_max_width())
+                .children(move || {
+                    for dark in [false, true] {
+                        column()
+                            .modifier(Modifier::new().weight(1.0).semantics(SemanticsArgs {
+                                role: Some(Role::Group),
+                                label: Some(format!(
+                                    "{} {} tooltip color example",
+                                    if dark { "Dark" } else { "Light" },
+                                    if rich { "rich" } else { "plain" }
+                                )),
+                                merge_descendants: true,
+                                ..Default::default()
+                            }))
+                            .children(move || {
+                                material_theme()
+                                    .theme(move || MaterialTheme::from_seed(ACCENT, dark))
+                                    .child(move || {
+                                        tooltip_figure(rich, false).color_roles(true);
+                                    });
+                            });
+                    }
+                });
+        });
+    gap(Dp(24.0));
+    prose(format!(
+        "{} tooltip color roles used for light and dark themes:",
+        if rich { "Rich" } else { "Plain" }
+    ));
+    gap(Dp(16.0));
+    for (index, label) in tooltip_color_labels(rich).into_iter().enumerate() {
+        row()
+            .cross_axis_alignment(CrossAxisAlignment::Center)
+            .children(move || {
+                boxed()
+                    .alignment(Alignment::Center)
+                    .modifier(
+                        Modifier::new()
+                            .size(Dp(24.0), Dp(32.0))
+                            .background_with_shape(scheme.on_surface, Shape::CAPSULE),
+                    )
+                    .children(move || {
+                        text()
+                            .content((index + 1).to_string())
+                            .style(type_style(14.0, 20.0))
+                            .color(scheme.surface);
+                    });
+                text()
+                    .content(label)
+                    .style(type_style(16.0, 24.0))
+                    .modifier(Modifier::new().padding_symmetric(Dp(12.0), Dp(4.0)));
+            });
+        gap(Dp(8.0));
+    }
+}
+
+#[tessera]
+fn tooltip_configurations() {
+    material_theme()
+        .theme(|| MaterialTheme::from_seed(ACCENT, true))
+        .child(tooltip_configuration_canvas);
+    gap(Dp(24.0));
+    for (index, label) in [
+        "Subhead, supporting text, and two buttons",
+        "Subhead, supporting text, and one button",
+        "Subhead and supporting text",
+        "Supporting text and one button",
+        "Supporting text and two buttons",
+    ]
+    .into_iter()
+    .enumerate()
+    {
+        prose(format!("{}  {label}", index + 1));
+        gap(Dp(8.0));
+    }
+}
+
+#[tessera]
+fn tooltip_configuration_canvas() {
+    let geometry = remember(Geometry::new);
+    let scheme = use_context::<MaterialTheme>().unwrap().get().color_scheme;
+    let width = geometry
+        .with(|values| {
+            values
+                .get("figure")
+                .map(|rect| Dp::from_pixels_f32(rect.width.to_f32()).0)
+        })
+        .unwrap_or(1024.0);
+    let scale = width / 1024.0;
+    let height = width * 1394.0 / 2048.0;
+    boxed()
+        .modifier(
+            watch(geometry, "figure")
+                .fill_max_width()
+                .height(Dp(height))
+                .background_with_shape(scheme.surface, Shape::rounded_rectangle(Dp(24.0)))
+                .semantics(SemanticsArgs {
+                    role: Some(Role::Group),
+                    label: Some("Rich tooltip five configurations".into()),
+                    merge_descendants: true,
+                    ..Default::default()
+                }),
+        )
+        .children(move || {
+            tooltip_grid(Dp(width), Dp(height));
+            for (number, headline, actions, x, y) in [
+                (1, true, 2, 122.0, 117.0),
+                (2, true, 1, 122.0, 349.0),
+                (3, true, 0, 590.0, 117.0),
+                (4, false, 1, 590.0, 286.0),
+                (5, false, 2, 590.0, 488.0),
+            ] {
+                tooltip_configuration(number, headline, actions, Dp(x * scale), Dp(y * scale));
             }
         });
 }
 
 #[tessera]
-fn tooltip_figure(rich: bool, measurements: bool) {
+fn tooltip_configuration(number: usize, headline: bool, actions: usize, x: Dp, y: Dp) {
+    let controller = remember(|| {
+        let mut controller = TooltipController::new();
+        controller.show();
+        controller
+    });
+    let calls = remember(|| 0_usize);
+    let geometry = remember(Geometry::new);
+    let scheme = use_context::<MaterialTheme>().unwrap().get().color_scheme;
+    let popup_height = geometry
+        .with(|values| {
+            values
+                .get("popup")
+                .map(|rect| Dp::from_pixels_f32(rect.height.to_f32()).0)
+        })
+        .unwrap_or(if actions == 0 {
+            112.0
+        } else if headline {
+            156.0
+        } else {
+            132.0
+        });
+    boxed().modifier(Modifier::new().offset(Dp(x.0-8.0),Dp(y.0-48.0)).required_size(Dp(328.0),Dp(popup_height+56.0)).semantics(SemanticsArgs {
+        role:Some(Role::Group),label:Some(format!("Rich tooltip configuration {number}")),merge_descendants:true,..Default::default()
+    })).children(move || {
+        provide_context(||MinimumInteractiveComponentEnforcement {enabled:false},move || {
+            let mut provider=tooltip_provider("Rich tooltips bring attention to a particular element or feature that warrants a person’s focus.")
+                .controller(controller).variant(TooltipVariant::Rich).placement(TooltipPlacement::Below).persistent(actions>0).popup_modifier(watch(geometry,"popup").width(Dp(312.0)));
+            if headline {provider=provider.headline("Rich tooltip");}
+            if actions>0 {
+                provider=provider.actions(move || {
+                    row().children(move || {
+                        for action in 1..=actions {
+                            button().text().accessibility_label(format!("Tooltip configuration {number} action {action}")).on_click(move || {
+                                calls.set(calls.get()+1);controller.with_mut(TooltipController::dismiss);
+                            }).child(|| {text().content("Action");});
+                        }
+                    });
+                });
+            }
+            provider.child(move || {
+                boxed().modifier(Modifier::new().required_size(Dp(328.0),Dp(popup_height+56.0))).children(move || {
+                    tooltip_anchor().controller(controller).modifier(Modifier::new().offset(Dp(8.0),Dp(8.0)).size(Dp(312.0),Dp(36.0))).child(move || {
+                        boxed().modifier(Modifier::new().size(Dp(312.0),Dp(36.0))).children(move || {
+                            surface().style(scheme.surface_container_high.into()).shape(Shape::rounded_rectangle(Dp(12.0))).modifier(Modifier::new().required_size(Dp(24.0),Dp(24.0)).border_with_shape(Dp(1.0),scheme.on_surface,Shape::rounded_rectangle(Dp(12.0))))
+                                .accessibility_label(format!("Show rich tooltip configuration {number}")).on_click(move ||controller.with_mut(TooltipController::show)).child(move || {text().content(number.to_string()).style(type_style(14.0,20.0));});
+                        });
+                    });
+                    if calls.get()>0 && !controller.with(TooltipController::is_open) {
+                        text().content(format!("Tooltip configuration {number} actions: {}",calls.get())).style(type_style(14.0,20.0)).modifier(Modifier::new().offset(Dp(8.0),Dp(48.0)));
+                    }
+                });
+            });
+        });
+    });
+}
+
+#[tessera]
+fn tooltip_figure(rich: bool, measurements: bool, color_roles: Option<bool>) {
+    let color_roles = color_roles.unwrap_or(false);
     let geometry = remember(Geometry::new);
     let controller = remember(|| {
         let mut controller = TooltipController::new();
@@ -318,7 +491,11 @@ fn tooltip_figure(rich: bool, measurements: bool) {
                 .map(|rect| Dp::from_pixels_f32(rect.width.to_f32()).0)
         })
         .unwrap_or(1024.0);
-    let figure_height = figure_width / (2048.0 / 600.0);
+    let figure_height = if color_roles {
+        figure_width * 2.0 / (2048.0 / if rich { 676.0 } else { 600.0 })
+    } else {
+        figure_width / (2048.0 / 600.0)
+    };
     let popup_height = geometry
         .with(|values| {
             values
@@ -333,15 +510,17 @@ fn tooltip_figure(rich: bool, measurements: bool) {
                 .fill_max_width()
                 .height(Dp(figure_height))
                 .background_with_shape(
-                    scheme.surface_container_low,
-                    Shape::rounded_rectangle(Dp(24.0)),
+                    if color_roles {scheme.surface_container_lowest} else {scheme.surface_container_low},
+                    Shape::rounded_rectangle(if color_roles {Dp::ZERO} else {Dp(24.0)}),
                 )
                 .semantics(SemanticsArgs {
                     role: Some(Role::Group),
                     label: Some(format!(
                         "{} tooltip {} figure",
                         if rich { "Rich" } else { "Plain" },
-                        if measurements {
+                        if color_roles {
+                            "color"
+                        } else if measurements {
                             "measurement"
                         } else {
                             "anatomy"
@@ -370,8 +549,23 @@ fn tooltip_figure(rich: bool, measurements: bool) {
             if rich {
                 tooltip = tooltip
                     .headline("Rich tooltip")
-                    .action_label("Action")
-                    .on_action(move || actions.set(actions.get() + 1));
+                    .actions(move || {
+                        button()
+                            .text()
+                            .modifier(watch(geometry, "action"))
+                            .accessibility_label("Action")
+                            .on_click(move || {
+                                controller.with_mut(TooltipController::dismiss);
+                                actions.set(actions.get() + 1);
+                            })
+                            .child(|| {
+                                let typography = use_context::<MaterialTheme>()
+                                    .unwrap()
+                                    .get()
+                                    .typography;
+                                text().content("Action").style(typography.label_large);
+                            });
+                    });
             }
             tooltip.child(move || {
                 boxed()
@@ -388,19 +582,21 @@ fn tooltip_figure(rich: bool, measurements: bool) {
                     });
             });
             });
-            tooltip_annotations(geometry, rich, measurements);
+            tooltip_annotations(geometry, rich, measurements).color_roles(color_roles);
         });
-    gap(Dp(16.0));
-    prose(if measurements {
-        format!(
-            "{} tooltip padding and size measurements",
-            if rich { "Rich" } else { "Plain" }
-        )
-    } else if rich {
-        "1  Subhead\n2  Container\n3  Supporting text\n4  Text button".into()
-    } else {
-        "1  Supporting text\n2  Container".into()
-    });
+    if !color_roles {
+        gap(Dp(16.0));
+        prose(if measurements {
+            format!(
+                "{} tooltip padding and size measurements",
+                if rich { "Rich" } else { "Plain" }
+            )
+        } else if rich {
+            "1  Subhead\n2  Container\n3  Supporting text\n4  Text button".into()
+        } else {
+            "1  Supporting text\n2  Container".into()
+        });
+    }
     if actions.get() > 0 {
         text()
             .content(format!("Tooltip figure actions: {}", actions.get()))
@@ -426,8 +622,18 @@ fn tooltip_grid(width: Dp, height: Dp) {
 }
 
 #[tessera]
-fn tooltip_annotations(geometry: State<Geometry>, rich: bool, measurements: bool) {
-    let values = geometry.get();
+fn tooltip_annotations(
+    geometry: State<Geometry>,
+    rich: bool,
+    measurements: bool,
+    color_roles: Option<bool>,
+) {
+    let values = geometry.with(annotations::relative_geometry);
+    tooltip_annotation_content(values, rich, measurements, color_roles.unwrap_or(false));
+}
+
+#[tessera]
+fn tooltip_annotation_content(values: Geometry, rich: bool, measurements: bool, color_roles: bool) {
     let (Some(root), Some(popup), Some(anchor)) = (
         values.get("figure"),
         relative(&values, "popup"),
@@ -439,7 +645,103 @@ fn tooltip_annotations(geometry: State<Geometry>, rich: bool, measurements: bool
     let top = if rich { 12.0 } else { 4.0 };
     let bottom = if rich { 8.0 } else { 4.0 };
     let mut svg = String::new();
-    if measurements {
+    if color_roles {
+        let scheme = use_context::<MaterialTheme>().unwrap().get().color_scheme;
+        let ink = if scheme.is_dark { "#cac4d0" } else { "#49454f" };
+        let labels = tooltip_color_labels(rich);
+        let regions = if rich {
+            let headline = Rect {
+                x: popup.x + 16.0,
+                y: popup.y + 12.0,
+                w: 80.0,
+                h: 20.0,
+            };
+            let Some(action) = relative(&values, "action") else {
+                return;
+            };
+            vec![
+                (1, headline, headline.x + 40.0, true),
+                (2, popup, popup.x + popup.w - 88.0, true),
+                (
+                    3,
+                    Rect {
+                        x: headline.x,
+                        y: headline.y + 24.0,
+                        w: popup.w - 32.0,
+                        h: (action.y - headline.y - 36.0).max(0.0),
+                    },
+                    popup.x + popup.w - 64.0,
+                    false,
+                ),
+                (4, action, action.x + 20.0, false),
+            ]
+        } else {
+            vec![
+                (
+                    1,
+                    Rect {
+                        x: popup.x + 8.0,
+                        y: popup.y + 4.0,
+                        w: popup.w - 16.0,
+                        h: popup.h - 8.0,
+                    },
+                    popup.x + 20.0,
+                    false,
+                ),
+                (2, popup, popup.x + popup.w - 12.0, true),
+            ]
+        };
+        for (number, rect, x, above) in regions {
+            let end = if above { rect.y } else { rect.y + rect.h };
+            if rich && number == 4 {
+                let marker_x = popup.x - 40.0;
+                let marker_y = rect.y + rect.h * 0.5 - 16.0;
+                dotted(
+                    &mut svg,
+                    marker_x + 24.0,
+                    marker_y + 16.0,
+                    rect.x - marker_x - 24.0,
+                    false,
+                    ink,
+                );
+                tooltip_color_marker(
+                    number,
+                    labels[number - 1].into(),
+                    Dp(marker_x),
+                    Dp(marker_y),
+                );
+                dotted(&mut svg, rect.x, rect.y, rect.w, false, ink);
+                dotted(&mut svg, rect.x, rect.y + rect.h, rect.w, false, ink);
+                dotted(&mut svg, rect.x, rect.y, rect.h, true, ink);
+                dotted(&mut svg, rect.x + rect.w, rect.y, rect.h, true, ink);
+                continue;
+            }
+            let y = if above {
+                popup.y
+                    - if rich && number == 1 {
+                        36.0
+                    } else if rich {
+                        56.0
+                    } else {
+                        52.0
+                    }
+            } else if rich {
+                popup.y + popup.h - 24.0
+            } else {
+                popup.y + popup.h + 36.0
+            };
+            let start = if above { y + 32.0 } else { end };
+            let length = if above { end - start } else { y - end };
+            dotted(&mut svg, x, start, length, true, ink);
+            if number != 2 {
+                dotted(&mut svg, rect.x, rect.y, rect.w, false, ink);
+                dotted(&mut svg, rect.x, rect.y + rect.h, rect.w, false, ink);
+                dotted(&mut svg, rect.x, rect.y, rect.h, true, ink);
+                dotted(&mut svg, rect.x + rect.w, rect.y, rect.h, true, ink);
+            }
+            tooltip_color_marker(number, labels[number - 1].into(), Dp(x - 12.0), Dp(y));
+        }
+    } else if measurements {
         for rect in [
             Rect {
                 x: popup.x,
@@ -577,6 +879,31 @@ fn tooltip_annotations(geometry: State<Geometry>, rich: bool, measurements: bool
 }
 
 #[tessera]
+fn tooltip_color_marker(number: usize, label: String, x: Dp, y: Dp) {
+    let scheme = use_context::<MaterialTheme>().unwrap().get().color_scheme;
+    boxed()
+        .alignment(Alignment::Center)
+        .modifier(
+            Modifier::new()
+                .offset(x, y)
+                .size(Dp(24.0), Dp(32.0))
+                .background_with_shape(scheme.on_surface, Shape::CAPSULE)
+                .semantics(SemanticsArgs {
+                    role: Some(Role::Note),
+                    label: Some(format!("Tooltip color role {number}: {label}")),
+                    merge_descendants: true,
+                    ..Default::default()
+                }),
+        )
+        .children(move || {
+            text()
+                .content(number.to_string())
+                .style(type_style(14.0, 20.0))
+                .color(scheme.surface);
+        });
+}
+
+#[tessera]
 fn live_tooltips() {
     let plain = remember(TooltipController::new);
     let rich = remember(TooltipController::new);
@@ -701,129 +1028,5 @@ fn placement_examples() {
 }
 
 #[cfg(all(test, not(target_family = "wasm")))]
-mod tests {
-    use tessera_ui::{
-        HeadlessConfig, HeadlessRenderer, MOUSE_POINTER_ID, PressKeyEventType, PxPosition,
-        accesskit::Rect,
-    };
-
-    use super::*;
-
-    struct ComponentPipelines;
-    impl tessera_ui::RenderModule for ComponentPipelines {
-        fn register_pipelines(&self, context: &mut tessera_ui::PipelineContext<'_>) {
-            tessera_components::pipelines::register_pipelines(context);
-        }
-    }
-
-    #[tessera]
-    fn fixture() {
-        material_theme().child(|| {
-            boxed()
-                .alignment(Alignment::TopStart)
-                .modifier(Modifier::new().fill_max_size())
-                .children(|| {
-                    column()
-                        .modifier(Modifier::new().width(Dp(600.0)))
-                        .children(|| {
-                            live_tooltips();
-                        });
-                });
-        });
-    }
-
-    fn bounds(renderer: &HeadlessRenderer, label: &str) -> Rect {
-        renderer
-            .accessibility_snapshot()
-            .unwrap()
-            .nodes
-            .iter()
-            .find(|(_, node)| node.role() == Role::Button && node.label() == Some(label))
-            .unwrap_or_else(|| panic!("missing live tooltip control {label}"))
-            .1
-            .bounds()
-            .unwrap()
-    }
-
-    fn click(renderer: &mut HeadlessRenderer, bounds: Rect) {
-        let position = PxPosition::from_f32_xy(
-            ((bounds.x0 + bounds.x1) * 0.5) as f32,
-            ((bounds.y0 + bounds.y1) * 0.5) as f32,
-        );
-        renderer.pointer_move(MOUSE_POINTER_ID, position);
-        renderer.pointer_press(MOUSE_POINTER_ID, position, PressKeyEventType::Left);
-        renderer.pointer_release(MOUSE_POINTER_ID, position, PressKeyEventType::Left);
-        renderer.render_frames(4);
-    }
-
-    #[test]
-    #[ignore = "Requires a GPU adapter for the real component pipelines"]
-    fn live_tooltips_keep_trigger_actions_and_replace_the_active_explanation() {
-        let mut renderer = HeadlessRenderer::new(
-            Box::new(fixture),
-            vec![Box::new(ComponentPipelines)],
-            HeadlessConfig {
-                width: 800,
-                height: 600,
-                sample_count: 1,
-                ..Default::default()
-            },
-        )
-        .expect("native tooltip examples");
-        renderer.render_frames(4);
-        let favorite = bounds(&renderer, "Favorite tooltip action");
-        renderer.pointer_move(
-            MOUSE_POINTER_ID,
-            PxPosition::from_f32_xy(
-                ((favorite.x0 + favorite.x1) * 0.5) as f32,
-                ((favorite.y0 + favorite.y1) * 0.5) as f32,
-            ),
-        );
-        renderer.render_frames(35);
-        assert!(
-            renderer
-                .accessibility_snapshot()
-                .unwrap()
-                .nodes
-                .iter()
-                .any(|(_, node)| node.role() == Role::Tooltip
-                    && node.label() == Some("Add to favorites"))
-        );
-        click(&mut renderer, favorite);
-        assert!(
-            renderer
-                .accessibility_snapshot()
-                .unwrap()
-                .nodes
-                .iter()
-                .any(|(_, node)| node.label() == Some("Favorite: on; tooltip actions: 0")),
-            "tooltip hover must preserve the trigger's actual toggle action"
-        );
-        let about = bounds(&renderer, "About collections");
-        click(&mut renderer, about);
-        let snapshot = renderer.accessibility_snapshot().unwrap();
-        assert!(
-            !snapshot
-                .nodes
-                .iter()
-                .any(|(_, node)| node.role() == Role::Tooltip
-                    && matches!(
-                        node.label(),
-                        Some("Add to favorites" | "Remove from favorites")
-                    )),
-            "the shared live host dismisses the preceding plain tooltip"
-        );
-        assert!(snapshot.nodes.iter().any(|(_, node)| node.role() == Role::Dialog && node.label() == Some("Collections")));
-        let action = bounds(&renderer, "Got it");
-        click(&mut renderer, action);
-        let snapshot = renderer.accessibility_snapshot().unwrap();
-        assert!(!snapshot.nodes.iter().any(|(_, node)| node.role() == Role::Dialog && node.label() == Some("Collections")));
-        assert!(
-            snapshot
-                .nodes
-                .iter()
-                .any(|(_, node)| node.label() == Some("Favorite: on; tooltip actions: 1")),
-            "the real rich tooltip action updates its owner"
-        );
-    }
-}
+#[path = "tooltips_tests.rs"]
+mod tests;

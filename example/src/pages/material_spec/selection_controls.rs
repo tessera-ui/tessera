@@ -32,6 +32,15 @@ use super::{
     spec_table, type_style,
 };
 
+#[path = "switch_states.rs"]
+mod switch_states;
+
+#[path = "checkbox_states.rs"]
+mod checkbox_states;
+
+#[path = "selection_pointer.rs"]
+mod pointer;
+
 #[tessera]
 pub(super) fn checkbox_spec() {
     selection_article(
@@ -110,7 +119,7 @@ pub(super) fn switch_spec() {
         RenderSlot::new(|| {
             settings(true);
         }),
-        RenderSlot::new(configurations),
+        RenderSlot::new(switch_figures::anatomy),
     );
 }
 
@@ -399,64 +408,85 @@ fn colors(is_switch: bool) {
     gap(Dp(24.0));
     color_scheme(is_switch, true);
     gap(Dp(32.0));
+    super::subheading("Adjacent text label color".into());
+    gap(Dp(16.0));
     text()
-        .content("Adjacent labels use On surface in either selection state.")
+        .content(if is_switch {
+            "Use On surface for the setting name and On surface variant for supporting text. Keep these roles when a setting changes."
+        } else {
+            "Use On surface for adjacent option labels. Selection changes the checkbox, while the label keeps its text color."
+        })
         .style(type_style(16.0, 24.0))
         .color(INK);
+    gap(Dp(24.0));
+    selection_labels::figure(is_switch);
 }
 
 #[tessera]
 fn states(is_switch: bool) {
-    text()
-        .content("Hover a control, focus with Tab, or press Space to inspect the actual feedback.")
-        .style(type_style(16.0, 24.0))
-        .color(INK);
-    gap(Dp(32.0));
-    panel(RenderSlot::new(move || {
-        column().children(move || {
-            for enabled in [true, false] {
-                text()
-                    .content(if enabled { "Enabled" } else { "Disabled" })
-                    .style(type_style(24.0, 32.0));
-                gap(Dp(24.0));
-                flow_row()
-                    .item_spacing(Dp(48.0))
-                    .line_spacing(Dp(16.0))
-                    .children(move || {
-                        selection_control(is_switch, false, false, enabled, 0, "Unselected");
-                        selection_control(is_switch, true, false, enabled, 0, "Selected");
-                    });
-                gap(Dp(32.0));
-            }
-        });
-    }));
+    if is_switch {
+        switch_states::states();
+    } else {
+        checkbox_states::states();
+    }
 }
 
 #[tessera]
 fn measurement_table(is_switch: bool) {
-    spec_table(
-        vec!["Attribute".into(), "Value".into()],
-        if is_switch {
-            vec![
-                vec!["Track size".into(), "52 × 32dp".into()],
-                vec!["Track outline".into(), "2dp".into()],
-                vec!["Unselected handle".into(), "16dp".into()],
-                vec!["Selected handle / handle with icon".into(), "24dp".into()],
-                vec!["Pressed handle".into(), "28dp".into()],
-                vec!["Icon".into(), "16dp".into()],
-                vec!["State layer".into(), "40dp".into()],
-                vec!["Target".into(), "48dp".into()],
-            ]
-        } else {
+    if is_switch {
+        let rows = [
+            ("Track", "Height", "32dp", 4),
+            ("", "Width", "52dp", 1),
+            ("", "Outline width", "2dp", 1),
+            ("", "Shape", "md.sys.shape.corner.full", 1),
+            ("Handle", "Height (unselected)", "16dp", 9),
+            ("", "Height - with icon", "24dp", 1),
+            ("", "Height (selected)", "24dp", 1),
+            ("", "Height (pressed)", "28dp", 1),
+            ("", "Width (unselected)", "16dp", 1),
+            ("", "Width - with icon", "24dp", 1),
+            ("", "Width (selected)", "24dp", 1),
+            ("", "Width (pressed)", "28dp", 1),
+            ("", "Shape", "md.sys.shape.corner.full", 1),
+            ("State layer", "Size", "40dp", 2),
+            ("", "Shape", "md.sys.shape.corner.full", 1),
+            ("Target", "Size", "48dp", 1),
+            ("Icon", "Size (selected)", "16dp", 1),
+            ("Icon", "Size (unselected)", "16dp", 1),
+        ];
+        let mut cells = Vec::new();
+        for (index, (element, attribute, value, span)) in rows.into_iter().enumerate() {
+            for (column, text) in [element, attribute, value].into_iter().enumerate() {
+                if column == 0 && text.is_empty() {
+                    continue;
+                }
+                cells.push(tessera_components::text_table::TextTableCell {
+                    text: text.into(),
+                    row: index + 1,
+                    column,
+                    row_span: if column == 0 { span } else { 1 },
+                    ..Default::default()
+                });
+            }
+        }
+        super::spec_table_cells(
+            ["Element", "Attribute", "Value"]
+                .map(str::to_owned)
+                .to_vec(),
+            cells,
+        );
+    } else {
+        spec_table(
+            vec!["Attribute".into(), "Value".into()],
             vec![
                 vec!["Container".into(), "18 × 18dp".into()],
                 vec!["Corner radius".into(), "2dp".into()],
                 vec!["Icon".into(), "18dp · centered".into()],
                 vec!["State layer".into(), "40dp".into()],
                 vec!["Target".into(), "48 × 48dp".into()],
-            ]
-        },
-    );
+            ],
+        );
+    }
 }
 
 #[tessera]
@@ -488,43 +518,13 @@ fn measurements(is_switch: bool) {
     measurement_table(is_switch);
 }
 
+#[path = "switch_figures.rs"]
+mod switch_figures;
+
 #[tessera]
 fn configurations() {
-    panel(RenderSlot::new(|| {
-        column().children(|| {
-            for (icons, label) in [
-                "Without icons",
-                "Icon when selected",
-                "Icons in both states",
-            ]
-            .into_iter()
-            .enumerate()
-            {
-                text().content(label).style(type_style(20.0, 28.0));
-                gap(Dp(16.0));
-                flow_row()
-                    .item_spacing(Dp(48.0))
-                    .line_spacing(Dp(16.0))
-                    .children(move || {
-                        selection_control(
-                            true,
-                            false,
-                            false,
-                            true,
-                            icons,
-                            format!("{label}: unselected"),
-                        );
-                        selection_control(
-                            true,
-                            true,
-                            false,
-                            true,
-                            icons,
-                            format!("{label}: selected"),
-                        );
-                    });
-                gap(Dp(32.0));
-            }
-        });
-    }));
+    switch_figures::configurations();
 }
+
+#[path = "selection_labels.rs"]
+mod selection_labels;

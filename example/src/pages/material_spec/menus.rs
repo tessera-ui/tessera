@@ -5,7 +5,7 @@
 //! Inspect menu groups, selection and keyboard interaction.
 
 use tessera_components::{
-    alignment::{Alignment, MainAxisAlignment},
+    alignment::{Alignment, CrossAxisAlignment, MainAxisAlignment},
     badge::badge_with_content,
     boxed::boxed,
     button::button,
@@ -13,32 +13,35 @@ use tessera_components::{
     divider::horizontal_divider,
     flow_row::flow_row,
     icon::icon,
-    icon_button::icon_button,
     material_icons::filled,
     menus::{
-        MenuAnchor, MenuColorStyle, MenuController, MenuPosition, menu_group, menu_item,
-        menu_provider,
+        MenuAnchor, MenuColorStyle, MenuController, MenuItemSelectionMode, MenuPosition,
+        menu_group, menu_item, menu_provider,
     },
-    modifier::ModifierExt as _,
+    modifier::{ModifierExt as _, SemanticsArgs},
     row::row,
     shape_def::Shape,
-    split_buttons::{
-        SplitButtonVariant, split_button_layout, split_leading_button, split_trailing_button,
-    },
+    split_buttons::{SplitButtonDefaults, SplitButtonSize},
     text::text,
-    theme::MaterialTheme,
+    theme::{MaterialTheme, material_theme},
 };
 use tessera_ui::{
-    Dp, Modifier, PxPosition, PxRect, PxSize, RenderSlot, State, modifier::FocusModifierExt as _,
-    remember, tessera, use_context,
+    Dp, Modifier, PxPosition, PxRect, PxSize, RenderSlot, State, accesskit::Role,
+    modifier::FocusModifierExt as _, remember, tessera, use_context,
 };
 
 use super::{
-    INK,
+    ACCENT, INK,
     annotations::{self, Geometry, dotted, relative, watch},
     article::{ArticlePage, SpecSection, article},
     gap, panel, spec_table, subheading, type_style,
 };
+
+#[path = "menus_accessibility.rs"]
+mod accessibility_figures;
+
+#[path = "menus_selection.rs"]
+mod selection_figures;
 
 #[tessera]
 pub(super) fn menus_spec() {
@@ -58,19 +61,22 @@ pub(super) fn menus_spec() {
         ] },
         ArticlePage { title: "Guidelines", intro: None, sections: vec![
             SpecSection { title: "Usage", content: RenderSlot::new(|| { prose("Use menus for temporary sets of actions. Keep vibrant menus for higher emphasis. Open them from a button, icon, field or contextual secondary click."); gap(Dp(24.0)); launch(); gap(Dp(32.0)); subheading("Menu groups".into()); prose("Bundle related actions with a divider or a small gap. Use no more than one or two gaps. Use dividers instead of gaps in scrolling menus."); gap(Dp(24.0)); configurations(); }) },
-            SpecSection { title: "Anatomy", content: RenderSlot::new(|| { menu_figure(true, false, MenuColorStyle::Standard); gap(Dp(24.0)); subheading("Flexibility & slots".into()); prose("Keep a single action per menu item. Preserve menu item padding and a target of at least 48 × 48dp. Nested buttons or switches introduce competing actions and break the menu interaction model."); }) },
+            SpecSection { title: "Anatomy", content: RenderSlot::new(|| { menu_figure(true, false, MenuColorStyle::Standard); }) },
+            SpecSection { title: "Flexibility & slots", content: RenderSlot::new(|| { prose("Use simple slot content such as images, progress indicators or color swatches. Keep a single action per menu item. Preserve menu item padding and a target of at least 48 × 48dp. Nested buttons or switches introduce competing actions and break the menu interaction model."); }) },
             SpecSection { title: "Placement", content: RenderSlot::new(|| { prose("Position the menu next to its trigger, below it or over it. Reposition near a window edge so the surface stays visible. Submenus open beside the parent item without covering it."); gap(Dp(24.0)); launch(); }) },
             SpecSection { title: "Adaptive design", content: RenderSlot::new(|| { subheading("Compact breakpoints".into()); prose("Consider a bottom sheet on compact screens when actions need more room or longer labels."); gap(Dp(24.0)); subheading("Other breakpoints".into()); prose("Keep menus near their content on medium and expanded screens. Submenus can organize more complex sets of choices when horizontal space is available."); }) },
-            SpecSection { title: "Behavior", content: RenderSlot::new(|| { subheading("Appearing".into()); prose("The menu expands from its trigger and adapts its direction to available space. A selected option shows a ripple; the trigger remains visually pressed while the menu is open."); gap(Dp(24.0)); launch(); gap(Dp(24.0)); subheading("Selecting".into()); prose("Single selection replaces the previous choice. Multiple selection keeps the menu open until dismissal. Use shape, color and a checkmark to reinforce selection."); gap(Dp(24.0)); states(); gap(Dp(24.0)); subheading("Scrolling".into()); prose("Use a persistent scrollbar when every item cannot fit at once. Avoid gaps in a scrolling menu."); }) },
-            SpecSection { title: "Density", content: RenderSlot::new(|| {prose("A denser menu reduces vertical spacing on desktop. Keep interaction targets large enough for the intended input method.");}) },
+            SpecSection { title: "Behavior", content: RenderSlot::new(|| { subheading("Appearing".into()); prose("The menu expands from its trigger and adapts its direction to available space. A selected option shows a ripple; the trigger remains visually pressed while the menu is open."); gap(Dp(24.0)); launch(); gap(Dp(24.0)); subheading("Selecting".into()); prose("Single selection replaces the previous choice. Multiple selection keeps the menu open until dismissal. Use shape, color and a checkmark to reinforce selection."); gap(Dp(24.0)); selection_figures::selection_figure(); gap(Dp(24.0)); subheading("Scrolling".into()); prose("Use a persistent scrollbar when every item cannot fit at once. Avoid gaps in a scrolling menu."); }) },
+            SpecSection { title: "Focus", content: RenderSlot::new(|| { prose("As focus moves between submenus, the active menu becomes more rounded and the inactive menu becomes less rounded. Hover or focus Share to open its submenu and inspect the shape change."); gap(Dp(24.0)); launch(); }) },
+            SpecSection { title: "Density", content: RenderSlot::new(|| {prose("On web, density settings reduce vertical spacing. Keep interaction targets large enough for the intended input method.");}) },
         ] },
         ArticlePage { title: "Accessibility", intro: None, sections: vec![
             SpecSection { title: "Use cases", content: RenderSlot::new(|| { prose("People must be able to reach, open and dismiss menus, navigate their items and select an action using assistive technology."); gap(Dp(24.0)); launch(); }) },
-            SpecSection { title: "Interaction & style", content: RenderSlot::new(|| { prose("Selection changes both shape and color. Add a checkmark so selection is recognizable without color alone. Keep one action per item, including custom slot content."); gap(Dp(24.0)); states(); }) },
-            SpecSection { title: "Focus", content: RenderSlot::new(|| { prose("Opening a menu places focus on its first item. Escape, selection or an outside press dismisses it and restores focus to its trigger. Dividers and gaps are not focus targets."); }) },
+            SpecSection { title: "Interaction & style", content: RenderSlot::new(|| { prose("Selection changes both shape and color. Add a checkmark so selection is recognizable without color alone."); gap(Dp(24.0)); accessibility_figures::state_selection(); }) },
+            SpecSection { title: "Flexibility & slots", content: RenderSlot::new(|| { prose("Preserve each menu item's padding and a target of at least 48 × 48dp. Slot content must follow menu interaction patterns and perform one action. Avoid nested buttons, switches or other independent actions."); }) },
+            SpecSection { title: "Focus", content: RenderSlot::new(|| { prose("Opening a menu places focus on its first item. Focus after dismissal depends on the surrounding task; this example returns focus to its trigger. Dividers and gaps are not focus targets."); }) },
             SpecSection { title: "Keyboard navigation", content: RenderSlot::new(keyboard) },
-            SpecSection { title: "Interactability", content: RenderSlot::new(|| {prose("Disabled choices remain visible to explain unavailable actions. They cannot activate. Separators convey grouping without adding an action.");}) },
-            SpecSection { title: "Labeling elements", content: RenderSlot::new(|| { prose("Use each visible menu item label as its accessible name. Icons accompanying text are decorative. A submenu trigger must communicate that it opens another menu."); spec_table(vec!["Element".into(),"Label".into(),"Role".into()],vec![vec!["Menu item".into(),"Preview".into(),"Menu item".into()]]); }) },
+            SpecSection { title: "Interactability", content: RenderSlot::new(|| {prose("Disabled choices remain visible and can receive focus, but cannot activate. Dividers and gaps cannot receive focus.");}) },
+            SpecSection { title: "Labeling elements", content: RenderSlot::new(|| { prose("Use each visible menu item label as its accessible name. Icons accompanying text are decorative. A submenu trigger must communicate that it opens another menu."); gap(Dp(24.0)); accessibility_figures::labeling(); }) },
         ] },
     ]);
 }
@@ -115,6 +121,8 @@ fn variants() {
 
 #[tessera]
 fn configurations() {
+    subheading("Vertical menus layout".into());
+    gap(Dp(24.0));
     panel(RenderSlot::new(|| {
         flow_row()
             .main_axis_alignment(MainAxisAlignment::Center)
@@ -130,6 +138,7 @@ fn configurations() {
 #[tessera]
 fn configuration(grouped: bool) {
     let selected = remember(|| 2_usize);
+    let scheme = use_context::<MaterialTheme>().unwrap().get().color_scheme;
     column()
         .modifier(Modifier::new().width(Dp(216.0)))
         .children(move || {
@@ -138,29 +147,67 @@ fn configuration(grouped: bool) {
                 .modifier(Modifier::new().fill_max_width())
                 .children(move || {
                     if grouped {
-                        split_button_layout()
-                            .leading_button(|| {
-                                split_leading_button()
-                                    .variant(SplitButtonVariant::Tonal)
-                                    .on_click(|| {})
-                                    .content(|| {
-                                        icon().vector(filled::EDIT_SVG).size(Dp(20.0));
-                                        text().content("Label");
-                                    });
-                            })
-                            .trailing_button(|| {
-                                split_trailing_button()
-                                    .variant(SplitButtonVariant::Tonal)
-                                    .expanded(true)
-                                    .accessibility_label("Grouped menu options")
-                                    .on_click(|| {});
-                            });
+                        row().children(move || {
+                            boxed()
+                                .alignment(Alignment::Center)
+                                .modifier(Modifier::new().height(Dp(40.0)).background_with_shape(
+                                    scheme.secondary_container,
+                                    SplitButtonDefaults::leading_shape(SplitButtonSize::Small),
+                                ))
+                                .children(move || {
+                                    row()
+                                        .cross_axis_alignment(CrossAxisAlignment::Center)
+                                        .modifier(
+                                            Modifier::new().padding_symmetric(Dp(16.0), Dp::ZERO),
+                                        )
+                                        .children(move || {
+                                            icon()
+                                                .vector(filled::EDIT_SVG)
+                                                .size(Dp(20.0))
+                                                .tint(scheme.on_secondary_container);
+                                            boxed().modifier(Modifier::new().width(Dp(8.0)));
+                                            text()
+                                                .content("Label")
+                                                .color(scheme.on_secondary_container);
+                                        });
+                                });
+                            boxed().modifier(Modifier::new().width(Dp(2.0)));
+                            boxed()
+                                .alignment(Alignment::Center)
+                                .modifier(
+                                    Modifier::new()
+                                        .size(Dp(48.0), Dp(40.0))
+                                        .background_with_shape(
+                                            scheme.secondary_container,
+                                            SplitButtonDefaults::trailing_shape(
+                                                SplitButtonSize::Small,
+                                            ),
+                                        ),
+                                )
+                                .children(move || {
+                                    icon()
+                                        .vector(filled::ARROW_DROP_DOWN_SVG)
+                                        .rotation(180.0)
+                                        .size(Dp(22.0))
+                                        .tint(scheme.on_secondary_container);
+                                });
+                        });
                     } else {
-                        icon_button()
-                            .filled_tonal()
-                            .icon(filled::MORE_VERT_SVG)
-                            .accessibility_label("Standard menu options")
-                            .on_click(|| {});
+                        boxed()
+                            .alignment(Alignment::Center)
+                            .modifier(
+                                Modifier::new()
+                                    .size(Dp(40.0), Dp(40.0))
+                                    .background_with_shape(
+                                        scheme.secondary_container,
+                                        Shape::rounded_rectangle(Dp(20.0)),
+                                    ),
+                            )
+                            .children(move || {
+                                icon()
+                                    .vector(filled::MORE_VERT_SVG)
+                                    .tint(scheme.on_secondary_container);
+                            });
                     }
                 });
             if grouped {
@@ -171,17 +218,20 @@ fn configuration(grouped: bool) {
                             .label("Item 1")
                             .leading_icon(filled::VISIBILITY_SVG)
                             .selected(selected.get() == 0)
+                            .selection_mode(MenuItemSelectionMode::Radio)
                             .on_click(move || selected.set(0));
                         menu_item()
                             .label("Item 2")
                             .leading_icon(filled::CONTENT_COPY_SVG)
                             .trailing_text("⌘C")
                             .selected(selected.get() == 1)
+                            .selection_mode(MenuItemSelectionMode::Radio)
                             .on_click(move || selected.set(1));
                         menu_item()
                             .label("Item 3")
                             .leading_icon(filled::CHECK_SVG)
                             .selected(selected.get() == 2)
+                            .selection_mode(MenuItemSelectionMode::Radio)
                             .on_click(move || selected.set(2));
                     });
                 menu_group().position(MenuPosition::Last).children(move || {
@@ -247,6 +297,7 @@ fn menu_sample(grouped: bool, style: MenuColorStyle) {
                         menu_item()
                             .label(label)
                             .selected(selected.get() == index)
+                            .selection_mode(MenuItemSelectionMode::Radio)
                             .close_on_click(false)
                             .leading_icon(if index == 0 {
                                 filled::VISIBILITY_SVG
@@ -389,6 +440,7 @@ fn menu_figure(anatomy: bool, measurements: bool, style: MenuColorStyle) {
                                         .label("Item 1")
                                         .leading_icon(filled::VISIBILITY_SVG)
                                         .selected(selected.get() == 1)
+                                        .selection_mode(MenuItemSelectionMode::Radio)
                                         .on_click(move || selected.set(1));
                                 });
                             boxed()
@@ -399,6 +451,7 @@ fn menu_figure(anatomy: bool, measurements: bool, style: MenuColorStyle) {
                                         .leading_icon(filled::CONTENT_COPY_SVG)
                                         .trailing_icon(filled::ARROW_RIGHT_SVG)
                                         .selected(selected.get() == 2)
+                                        .selection_mode(MenuItemSelectionMode::Radio)
                                         .on_click(move || selected.set(2));
                                 });
                             if anatomy {
@@ -577,6 +630,42 @@ fn colors() {
             });
     }));
     gap(Dp(24.0));
+    for style in [MenuColorStyle::Standard, MenuColorStyle::Vibrant] {
+        subheading(
+            if style == MenuColorStyle::Standard {
+                "Standard color roles"
+            } else {
+                "Vibrant color roles"
+            }
+            .into(),
+        );
+        gap(Dp(16.0));
+        row()
+            .modifier(Modifier::new().fill_max_width())
+            .children(move || {
+                for dark in [false, true] {
+                    boxed()
+                        .modifier(Modifier::new().weight(1.0))
+                        .children(move || {
+                            material_theme()
+                                .theme(move || MaterialTheme::from_seed(ACCENT, dark))
+                                .child(move || {
+                                    menu_color_figure(style, dark);
+                                });
+                        });
+                }
+            });
+        gap(Dp(24.0));
+        spec_table(
+            vec!["Element".into(), "Color role".into()],
+            menu_color_roles(style)
+                .iter()
+                .enumerate()
+                .map(|(index, role)| vec![(index + 1).to_string(), (*role).into()])
+                .collect(),
+        );
+        gap(Dp(32.0));
+    }
     spec_table(
         vec!["Element".into(), "Standard".into(), "Vibrant".into()],
         vec![
@@ -604,6 +693,304 @@ fn colors() {
     );
 }
 
+const COLOR_ROWS: [&str; 5] = [
+    "color-row-1",
+    "color-row-2",
+    "color-row-3",
+    "color-row-4",
+    "color-row-5",
+];
+
+fn menu_color_roles(style: MenuColorStyle) -> [&'static str; 11] {
+    if style == MenuColorStyle::Standard {
+        [
+            "On surface variant",
+            "On surface",
+            "On surface (state layer)",
+            "Surface container low",
+            "On surface variant",
+            "On surface variant",
+            "Tertiary container (selected)",
+            "On tertiary container (selected)",
+            "On surface variant",
+            "On surface variant",
+            "On tertiary container (selected)",
+        ]
+    } else {
+        [
+            "On tertiary container",
+            "On tertiary container",
+            "On tertiary container (state layer)",
+            "Tertiary container",
+            "On tertiary container",
+            "On tertiary container",
+            "Tertiary (selected)",
+            "On tertiary (selected)",
+            "On tertiary container",
+            "On tertiary container",
+            "On tertiary (selected)",
+        ]
+    }
+}
+
+#[tessera]
+fn menu_color_figure(style: MenuColorStyle, dark: bool) {
+    let geometry = remember(Geometry::new);
+    let selected = remember(|| 3_usize);
+    let scheme = use_context::<MaterialTheme>().unwrap().get().color_scheme;
+    let mode = if dark { "Dark" } else { "Light" };
+    let emphasis = if style == MenuColorStyle::Standard {
+        "standard"
+    } else {
+        "vibrant"
+    };
+    boxed()
+        .alignment(Alignment::Center)
+        .modifier(
+            watch(geometry, "figure")
+                .fill_max_width()
+                .height(Dp(536.0))
+                .background(scheme.surface)
+                .semantics(SemanticsArgs {
+                    role: Some(Role::Group),
+                    label: Some(format!("{mode} {emphasis} menu color roles")),
+                    merge_descendants: true,
+                    ..Default::default()
+                }),
+        )
+        .children(move || {
+            column()
+                .modifier(watch(geometry, "color-container").width(Dp(210.0)))
+                .children(move || {
+                    menu_group()
+                        .position(MenuPosition::First)
+                        .color_style(style)
+                        .children(move || {
+                            for index in 0..4 {
+                                boxed()
+                                    .modifier(watch(geometry, COLOR_ROWS[index]).fill_max_width())
+                                    .children(move || {
+                                        let mut item = menu_item()
+                                            .label(format!("Item {}", index + 1))
+                                            .selection_mode(MenuItemSelectionMode::Radio)
+                                            .selected(selected.get() == index)
+                                            .color_style(style)
+                                            .close_on_click(false)
+                                            .on_click(move || selected.set(index));
+                                        if index == 0 {
+                                            item = item.leading_icon(filled::VISIBILITY_SVG);
+                                        }
+                                        if index == 1 {
+                                            item = item
+                                                .leading_icon(filled::CONTENT_COPY_SVG)
+                                                .trailing_text("⌘C");
+                                        }
+                                        if index == 2 {
+                                            item = item
+                                                .leading_icon(filled::EDIT_SVG)
+                                                .trailing_icon(filled::ARROW_RIGHT_SVG);
+                                        }
+                                        drop(item);
+                                    });
+                            }
+                        });
+                    menu_group()
+                        .position(MenuPosition::Last)
+                        .color_style(style)
+                        .children(move || {
+                            boxed()
+                                .alignment(Alignment::CenterStart)
+                                .modifier(
+                                    watch(geometry, "color-label")
+                                        .fill_max_width()
+                                        .height(Dp(32.0))
+                                        .padding_symmetric(Dp(12.0), Dp::ZERO),
+                                )
+                                .children(move || {
+                                    text()
+                                        .content("Label text")
+                                        .style(type_style(14.0, 20.0))
+                                        .color(if style == MenuColorStyle::Standard {
+                                            scheme.on_surface_variant
+                                        } else {
+                                            scheme.on_tertiary_container
+                                        });
+                                });
+                            boxed()
+                                .modifier(watch(geometry, COLOR_ROWS[4]).fill_max_width())
+                                .children(move || {
+                                    menu_item()
+                                        .label("Item 5")
+                                        .supporting_text("Supporting text")
+                                        .trailing_icon(filled::ARROW_RIGHT_SVG)
+                                        .selection_mode(MenuItemSelectionMode::Radio)
+                                        .selected(selected.get() == 4)
+                                        .color_style(style)
+                                        .close_on_click(false)
+                                        .on_click(move || selected.set(4));
+                                });
+                        });
+                });
+            boxed()
+                .alignment(Alignment::TopStart)
+                .modifier(Modifier::new().fill_max_size())
+                .children(move || {
+                    menu_color_annotations(
+                        style,
+                        dark,
+                        selected.get(),
+                        geometry.with(annotations::relative_geometry),
+                    );
+                });
+        });
+}
+
+#[tessera]
+fn menu_color_annotations(style: MenuColorStyle, dark: bool, selected: usize, values: Geometry) {
+    let (
+        Some(root),
+        Some(container),
+        Some(first),
+        Some(second),
+        Some(last),
+        Some(label),
+        Some(active),
+    ) = (
+        values.get("figure"),
+        relative(&values, "color-container"),
+        relative(&values, COLOR_ROWS[0]),
+        relative(&values, COLOR_ROWS[1]),
+        relative(&values, COLOR_ROWS[4]),
+        relative(&values, "color-label"),
+        relative(&values, COLOR_ROWS[selected]),
+    )
+    else {
+        return;
+    };
+    let width = Dp::from_pixels_f32(root.width.to_f32());
+    let height = Dp::from_pixels_f32(root.height.to_f32());
+    let roles = menu_color_roles(style);
+    let tone = if dark { "#cac4d0" } else { "#49454f" };
+    let mut svg = String::new();
+    for (index, (x, y, tx, ty)) in [
+        (
+            first.x + 14.0,
+            container.y - 80.0,
+            first.x + 26.0,
+            first.y + 24.0,
+        ),
+        (
+            first.x + 53.0,
+            container.y - 80.0,
+            first.x + 65.0,
+            first.y + 24.0,
+        ),
+        (
+            second.x + 134.0,
+            container.y - 80.0,
+            second.x + 146.0,
+            second.y + 24.0,
+        ),
+        (
+            container.x + container.w + 38.0,
+            container.y - 2.0,
+            container.x + container.w - 18.0,
+            container.y + 14.0,
+        ),
+        (
+            container.x + container.w + 38.0,
+            second.y + 8.0,
+            second.x + second.w - 22.0,
+            second.y + 24.0,
+        ),
+        (
+            container.x + container.w + 38.0,
+            last.y + 12.0,
+            last.x + last.w - 24.0,
+            last.y + 28.0,
+        ),
+        (
+            active.x + 122.0,
+            container.y + container.h + 28.0,
+            active.x + 134.0,
+            active.y + active.h - 12.0,
+        ),
+        (
+            active.x + 77.0,
+            container.y + container.h + 28.0,
+            active.x + 89.0,
+            active.y + 24.0,
+        ),
+        (
+            last.x + 27.0,
+            container.y + container.h + 28.0,
+            last.x + 39.0,
+            last.y + 40.0,
+        ),
+        (
+            container.x - 64.0,
+            label.y + 2.0,
+            label.x + 24.0,
+            label.y + 18.0,
+        ),
+        (
+            container.x - 64.0,
+            active.y + 8.0,
+            active.x + 26.0,
+            active.y + 24.0,
+        ),
+    ]
+    .into_iter()
+    .enumerate()
+    {
+        if (tx - x).abs() > (ty - y).abs() {
+            dotted(
+                &mut svg,
+                (x + 12.0).min(tx),
+                ty,
+                (tx - x - 12.0).abs(),
+                false,
+                tone,
+            );
+        } else {
+            dotted(
+                &mut svg,
+                tx,
+                (y + 16.0).min(ty),
+                (ty - y - 16.0).abs(),
+                true,
+                tone,
+            );
+        }
+        menu_color_marker(index + 1, roles[index].into(), Dp(x), Dp(y));
+    }
+    annotations::lines(width, height, svg);
+}
+
+#[tessera]
+fn menu_color_marker(number: usize, role: String, x: Dp, y: Dp) {
+    let scheme = use_context::<MaterialTheme>().unwrap().get().color_scheme;
+    boxed()
+        .alignment(Alignment::Center)
+        .modifier(
+            Modifier::new()
+                .offset(x, y)
+                .size(Dp(24.0), Dp(32.0))
+                .background_with_shape(scheme.on_surface, Shape::rounded_rectangle(Dp(16.0)))
+                .semantics(SemanticsArgs {
+                    role: Some(Role::Note),
+                    label: Some(format!("Menu color role {number}: {role}")),
+                    ..Default::default()
+                }),
+        )
+        .children(move || {
+            text()
+                .content(number.to_string())
+                .style(type_style(14.0, 20.0))
+                .color(scheme.surface);
+        });
+}
+
 #[tessera]
 fn states() {
     let selected = remember(|| true);
@@ -615,6 +1002,7 @@ fn states() {
                     menu_item()
                         .label("Selected item")
                         .selected(selected.get())
+                        .selection_mode(MenuItemSelectionMode::Radio)
                         .leading_icon(filled::CHECK_SVG)
                         .close_on_click(false)
                         .on_click(move || selected.set(!selected.get()));
@@ -701,7 +1089,10 @@ fn keyboard() {
                 "Space or Enter".into(),
                 "Open a menu or select an item".into(),
             ],
-            vec!["Up / Down".into(), "Move between items".into()],
+            vec![
+                "Up / Down".into(),
+                "Open a closed menu or move between items in an open menu".into(),
+            ],
             vec!["Left / Right".into(), "Close / open a submenu".into()],
             vec!["Letters".into(), "Focus the next matching item".into()],
             vec!["Escape".into(), "Close the menu".into()],
@@ -795,5 +1186,22 @@ mod tests {
                 .any(|(_, node)| node.label() == Some("Preview")
                     && node.role() == tessera_ui::accesskit::Role::MenuItem)
         );
+        click(&mut renderer, "Open menu");
+        click(&mut renderer, "Share");
+        click(&mut renderer, "Copy link");
+        let snapshot = renderer.accessibility_snapshot().unwrap();
+        assert!(
+            snapshot
+                .nodes
+                .iter()
+                .any(|(_, node)| node.label() == Some("Link copied"))
+        );
+        assert!(!snapshot.nodes.iter().any(|(_, node)| {
+            node.role() == tessera_ui::accesskit::Role::MenuItem
+                && matches!(
+                    node.label(),
+                    Some("Preview" | "Share" | "Copy link" | "Email")
+                )
+        }));
     }
 }

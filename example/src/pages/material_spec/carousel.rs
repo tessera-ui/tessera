@@ -487,7 +487,15 @@ fn layout_figure(variant: CarouselVariant, measurements: bool) {
 
 #[tessera]
 fn carousel_annotations(geometry: State<Geometry>, measurements: bool, variant: CarouselVariant) {
-    let values = geometry.get();
+    carousel_annotation_content(
+        geometry.with(annotations::relative_geometry),
+        measurements,
+        variant,
+    );
+}
+
+#[tessera]
+fn carousel_annotation_content(values: Geometry, measurements: bool, variant: CarouselVariant) {
     let (Some(root), Some(container)) = (values.get("figure"), relative(&values, "container"))
     else {
         return;

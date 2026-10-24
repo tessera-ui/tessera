@@ -11,21 +11,49 @@ use tessera_components::{
     boxed::boxed,
     column::column,
     icon::icon,
+    interaction_state::InteractionState,
     material_icons::filled,
     modifier::{ClickableArgs, ModifierExt as _, Padding, SemanticsArgs},
     row::row,
     scrollable::ScrollableController,
-    shape_def::Shape,
+    shape_def::{RoundedCorner, Shape},
     spacer::spacer,
     surface::surface,
     text::text,
 };
 use tessera_ui::{
-    Callback, Dp, Modifier, PxPosition, RenderSlot, State, accesskit::Role,
-    modifier::FocusModifierExt as _, remember, tessera,
+    Callback, Dp, FocusManager, Modifier, PxPosition, RenderSlot, State, accesskit::Role,
+    current_frame_nanos, modifier::FocusModifierExt as _, receive_frame_nanos, remember, tessera,
+    use_context,
 };
 
-use super::{ACCENT, BACKGROUND, INK, gap, heading, media, srgb, type_style};
+use super::{
+    BACKGROUND, INK,
+    article_navigation::{
+        ARTICLE_TAB_TITLES, ArticleNavigationState, article_tab_focus_visible,
+        article_tab_modifier, article_tablist_modifier, sync_article_navigation,
+    },
+    article_tab_visual, gap, heading, media, srgb, type_style,
+};
+
+#[path = "article_modal.rs"]
+pub(super) mod modal_host;
+
+#[path = "article_lazy.rs"]
+mod lazy_sections;
+
+#[derive(Clone, PartialEq)]
+pub(super) struct ArticleDestination {
+    pub title: &'static str,
+    pub on_open: Callback,
+}
+
+#[derive(Clone, PartialEq)]
+pub(super) struct ArticleRoute {
+    pub initial_page: &'static str,
+    pub previous: Option<ArticleDestination>,
+    pub next: Option<ArticleDestination>,
+}
 
 #[derive(Clone, PartialEq)]
 pub(super) struct SpecSection {
@@ -63,7 +91,18 @@ pub(super) fn article(
     pages: Option<Vec<ArticlePage>>,
     page_heading_levels: Option<BTreeMap<&'static str, u8>>,
 ) {
-    let selected = remember(|| "Specs");
+    let route = use_context::<ArticleRoute>().map(|route| route.get());
+    let initial_page = route.as_ref().map_or("Specs", |route| route.initial_page);
+    let initial_page = if initial_page == "Specs"
+        || pages
+            .as_ref()
+            .is_some_and(|pages| pages.iter().any(|page| page.title == initial_page))
+    {
+        initial_page
+    } else {
+        "Specs"
+    };
+    let selected = remember(|| initial_page);
     let alternate = pages
         .as_ref()
         .and_then(|pages| pages.iter().find(|page| page.title == selected.get()));
@@ -89,151 +128,38 @@ pub(super) fn article(
     let data = remember(|| current.clone());
     let scroll = remember(ScrollableController::new);
     let width = remember(|| Dp(900.0));
-    let origin = remember(|| 0.0_f32);
-    let end = remember(|| 0.0_f32);
-    let anchors = remember(|| vec![0.0_f32; current.sections.len()]);
     if data.with(|data| data != &current) {
-        if data.with(|data| data.title != current.title || data.page != current.page) {
+        if data.with(|data| data.title != current.title) {
             scroll.with_mut(|scroll| scroll.set_scroll_position(PxPosition::ZERO));
-        }
-        if anchors.with(Vec::len) != current.sections.len() {
-            anchors.set(vec![0.0; current.sections.len()]);
         }
         data.set(current);
     }
-    surface()
-        .style(BACKGROUND.into())
-        .modifier(Modifier::new().fill_max_size().on_globally_positioned(
-            move |bounds: tessera_ui::PxRect| {
-                let next = Dp::from_pixels_f32(bounds.width.0 as f32);
-                if width.get() != next {
-                    width.set(next);
-                }
-                if origin.get() != bounds.y.0 as f32 {
-                    origin.set(bounds.y.0 as f32);
-                }
-            },
-        ))
-        .child(move || {
-            let pages = pages.clone();
-            column()
-                .modifier(Modifier::new().fill_max_size().vertical_scroll(scroll))
-                .children(move || {
-                    let compact = width.get().0 < 600.0;
-                    let inset = if compact { Dp(24.0) } else { Dp(40.0) };
-                    let page = data.get();
-                    media::page_header(page.title.clone(), page.description.clone(), width.get());
-                    article_tabs(selected, scroll).pages_optional(pages.clone());
-                    gap(Dp(64.0));
-                    if !page.sections.is_empty() && page.section_heading_level == 2 {
-                        column()
-                            .modifier(
-                                Modifier::new()
-                                    .fill_max_width()
-                                    .padding_symmetric(inset, Dp::ZERO),
-                            )
-                            .children(move || {
-                                text()
-                                    .content("On this page")
-                                    .style(type_style(14.0, 20.0))
-                                    .color(INK);
-                                gap(Dp(8.0));
-                                let sections = data.with(|data| data.sections.clone());
-                                for (index, section) in sections.iter().enumerate() {
-                                    text()
-                                        .content(section.title)
-                                        .style(type_style(16.0, 24.0))
-                                        .color(ACCENT)
-                                        .modifier(
-                                            Modifier::new()
-                                                .height(Dp(40.0))
-                                                .padding_symmetric(Dp::ZERO, Dp(8.0))
-                                                .clickable_with(ClickableArgs {
-                                                    role: Some(Role::Link),
-                                                    on_click: Callback::new(move || {
-                                                        let y = anchors
-                                                            .with(|anchors| anchors[index])
-                                                            - origin.get();
-                                                        let maximum = (end.get()
-                                                            - origin.get()
-                                                            - scroll.with(|scroll| {
-                                                                scroll
-                                                                    .visible_size()
-                                                                    .height
-                                                                    .to_f32()
-                                                            }))
-                                                        .max(0.0);
-                                                        let y = y.clamp(0.0, maximum);
-                                                        scroll.with_mut(|scroll| {
-                                                            scroll.set_scroll_position(
-                                                                PxPosition::from_f32_xy(0.0, -y),
-                                                            )
-                                                        });
-                                                    }),
-                                                    ..Default::default()
-                                                }),
-                                        );
-                                }
-                            });
-                    }
-                    if let Some(intro) = page.intro {
-                        if !page.sections.is_empty() {
-                            gap(Dp(80.0));
-                        }
-                        column()
-                            .modifier(
-                                Modifier::new()
-                                    .fill_max_width()
-                                    .padding_symmetric(inset, Dp::ZERO),
-                            )
-                            .children(move || intro.render());
-                    }
-                    for index in 0..page.sections.len() {
-                        article_section(
-                            index,
-                            data,
-                            scroll,
-                            anchors,
-                            end,
-                            if compact {
-                                page.compact_content_inset.unwrap_or(Dp(24.0))
-                            } else {
-                                Dp(40.0)
-                            },
-                        );
-                    }
-                });
-        });
+    modal_host::article_modal_host(RenderSlot::new(move || {
+        let pages = pages.clone();
+        let route = route.clone();
+        surface()
+            .style(BACKGROUND.into())
+            .modifier(Modifier::new().fill_max_size())
+            .child(move || {
+                let pages = pages.clone();
+                let route = route.clone();
+                lazy_sections::viewport(data, selected, scroll, width)
+                    .pages_optional(pages.clone())
+                    .route_optional(route.clone());
+            });
+    }));
 }
 
 #[tessera]
-fn article_section(
-    index: usize,
-    data: State<ArticleData>,
-    scroll: State<ScrollableController>,
-    anchors: State<Vec<f32>>,
-    end: State<f32>,
-    inset: Dp,
-) {
+fn article_section(index: usize, data: State<ArticleData>, inset: Dp) {
     let section = data.with(|data| data.sections[index].clone());
     column()
-        .modifier(
-            Modifier::new()
-                .fill_max_width()
-                .on_globally_positioned(move |bounds: tessera_ui::PxRect| {
-                    let y = bounds.y.0 as f32 - scroll.with(|scroll| scroll.child_position().y);
-                    if (anchors.with(|anchors| anchors[index]) - y).abs() > 0.5 {
-                        anchors.with_mut(|anchors| anchors[index] = y);
-                    }
-                    if index + 1 == anchors.with(Vec::len) {
-                        let next = y + bounds.height.to_f32();
-                        if (end.get() - next).abs() > 0.5 {
-                            end.set(next);
-                        }
-                    }
-                })
-                .padding(Padding::new(inset, Dp(80.0), inset, Dp(32.0))),
-        )
+        .modifier(Modifier::new().fill_max_width().padding(Padding::new(
+            inset,
+            Dp(80.0),
+            inset,
+            Dp(32.0),
+        )))
         .children(move || {
             boxed()
                 .modifier(Modifier::new().padding_symmetric(Dp(1.0), Dp::ZERO))
@@ -264,12 +190,208 @@ fn article_section(
         });
 }
 
+#[derive(Clone, PartialEq)]
+enum FooterAction {
+    Page(&'static str),
+    Component(Callback),
+}
+
+#[derive(Clone, PartialEq)]
+struct FooterLink {
+    title: String,
+    action: FooterAction,
+}
+
+#[derive(Clone, PartialEq)]
+struct FooterData {
+    previous: Option<FooterLink>,
+    next: Option<FooterLink>,
+}
+
+fn footer_links(
+    title: &str,
+    selected: &str,
+    pages: &[ArticlePage],
+    route: Option<&ArticleRoute>,
+) -> FooterData {
+    let available = ARTICLE_TAB_TITLES
+        .into_iter()
+        .filter(|label| *label == "Specs" || pages.iter().any(|page| page.title == *label))
+        .collect::<Vec<_>>();
+    let index = available
+        .iter()
+        .position(|label| *label == selected)
+        .unwrap_or(0);
+    let local = |page: &'static str| FooterLink {
+        title: format!("{title}: {page}"),
+        action: FooterAction::Page(page),
+    };
+    let external = |destination: &ArticleDestination| FooterLink {
+        title: format!("{}: Overview", destination.title),
+        action: FooterAction::Component(destination.on_open),
+    };
+    FooterData {
+        previous: index
+            .checked_sub(1)
+            .map(|index| local(available[index]))
+            .or_else(|| {
+                route
+                    .and_then(|route| route.previous.as_ref())
+                    .map(external)
+            }),
+        next: available
+            .get(index + 1)
+            .copied()
+            .map(local)
+            .or_else(|| route.and_then(|route| route.next.as_ref()).map(external)),
+    }
+}
+
+#[tessera]
+fn article_footer(
+    title: String,
+    selected: State<&'static str>,
+    scroll: State<ScrollableController>,
+    pages: Option<Vec<ArticlePage>>,
+    route: Option<ArticleRoute>,
+) {
+    let next = footer_links(
+        &title,
+        selected.get(),
+        pages.as_deref().unwrap_or_default(),
+        route.as_ref(),
+    );
+    let data = remember(|| next.clone());
+    if data.with(|data| data != &next) {
+        data.set(next);
+    }
+    row()
+        .modifier(
+            Modifier::new()
+                .fill_max_width()
+                .padding_symmetric(Dp(8.0), Dp::ZERO)
+                .semantics(SemanticsArgs {
+                    role: Some(Role::Group),
+                    label: Some("Previous and up next articles".into()),
+                    merge_descendants: true,
+                    ..Default::default()
+                }),
+        )
+        .children(move || {
+            if data.with(|data| data.previous.is_some()) {
+                article_footer_link(true, data, selected, scroll);
+            } else {
+                spacer().modifier(Modifier::new().weight(1.0));
+            }
+            spacer().modifier(Modifier::new().width(Dp(8.0)));
+            if data.with(|data| data.next.is_some()) {
+                article_footer_link(false, data, selected, scroll);
+            } else {
+                spacer().modifier(Modifier::new().weight(1.0));
+            }
+        });
+}
+
+#[tessera]
+fn article_footer_link(
+    previous: bool,
+    data: State<FooterData>,
+    selected: State<&'static str>,
+    scroll: State<ScrollableController>,
+) {
+    let link = data
+        .with(|data| {
+            if previous {
+                data.previous.clone()
+            } else {
+                data.next.clone()
+            }
+        })
+        .expect("article footer destination");
+    let label = if previous { "Previous" } else { "Up next" };
+    let corner = RoundedCorner::manual(Dp(24.0), 2.0);
+    boxed()
+        .modifier(
+            Modifier::new()
+                .weight(1.0)
+                .background_with_shape(
+                    srgb(248, 241, 246),
+                    Shape::RoundedRectangle {
+                        top_left: corner,
+                        top_right: corner,
+                        bottom_left: corner,
+                        bottom_right: corner,
+                    },
+                )
+                .clickable_with(ClickableArgs {
+                    role: Some(Role::Link),
+                    label: Some(format!("{label} {}", link.title)),
+                    on_click: Callback::new(move || {
+                        let link = data.with(|data| {
+                            if previous {
+                                data.previous.clone()
+                            } else {
+                                data.next.clone()
+                            }
+                        });
+                        if let Some(link) = link {
+                            FocusManager::current().clear_focus(false);
+                            FocusManager::current().defer_keyboard_until_layout();
+                            match link.action {
+                                FooterAction::Page(page) => {
+                                    selected.set(page);
+                                    scroll.with_mut(|scroll| {
+                                        scroll.set_scroll_position(PxPosition::ZERO)
+                                    });
+                                }
+                                FooterAction::Component(on_open) => on_open.call(),
+                            }
+                        }
+                    }),
+                    ..Default::default()
+                })
+                .padding_all(Dp(24.0)),
+        )
+        .children(move || {
+            let title = link.title.clone();
+            column().children(move || {
+                row()
+                    .cross_axis_alignment(CrossAxisAlignment::Center)
+                    .children(move || {
+                        if previous {
+                            icon()
+                                .vector(filled::ARROW_RIGHT_ALT_SVG)
+                                .rotation(180.0)
+                                .size(Dp(24.0))
+                                .tint(INK);
+                        }
+                        text()
+                            .content(label)
+                            .style(type_style(16.0, 24.0))
+                            .color(INK);
+                        if !previous {
+                            icon()
+                                .vector(filled::ARROW_RIGHT_ALT_SVG)
+                                .size(Dp(24.0))
+                                .tint(INK);
+                        }
+                    });
+                gap(Dp(8.0));
+                text()
+                    .content(title.clone())
+                    .style(type_style(24.0, 32.0))
+                    .color(INK);
+            });
+        });
+}
+
 #[tessera]
 fn article_tabs(
     selected: State<&'static str>,
     scroll: State<ScrollableController>,
     pages: Option<Vec<ArticlePage>>,
 ) {
+    media::load_fonts();
     let horizontal = remember(ScrollableController::new);
     let width = remember(|| Dp(900.0));
     let contents = remember(|| [Dp(160.0); 4]);
@@ -279,6 +401,39 @@ fn article_tabs(
                 .as_ref()
                 .is_some_and(|pages| pages.iter().any(|page| page.title == label))
     });
+    let navigation = remember(ArticleNavigationState::default);
+    sync_article_navigation(navigation, available, selected.get());
+    let now = current_frame_nanos();
+    let targets = ARTICLE_TAB_TITLES.map(|title| if selected.get() == title { 1.0 } else { 0.0 });
+    let motions =
+        remember(|| targets.map(|target| article_tab_visual::SelectionMotion::new(target, now)));
+    if motions.with(|motions| {
+        motions
+            .iter()
+            .zip(targets)
+            .any(|(motion, target)| motion.target() != target)
+    }) {
+        motions.with_mut(|motions| {
+            for (motion, target) in motions.iter_mut().zip(targets) {
+                motion.retarget(target, now);
+            }
+        });
+    }
+    if motions.with(|motions| motions.iter().any(|motion| motion.is_running())) {
+        receive_frame_nanos(move |frame| {
+            motions.with_mut(|motions| {
+                for motion in motions.iter_mut().filter(|motion| motion.is_running()) {
+                    motion.advance(frame);
+                }
+            });
+            if motions.with(|motions| motions.iter().any(|motion| motion.is_running())) {
+                tessera_ui::FrameNanosControl::Continue
+            } else {
+                tessera_ui::FrameNanosControl::Stop
+            }
+        });
+    }
+    let progress = motions.with(|motions| motions.map(|motion| motion.value()));
     let minimum = contents.with(|contents| {
         contents
             .iter()
@@ -292,7 +447,7 @@ fn article_tabs(
         .max(0.0);
     row()
         .modifier(
-            Modifier::new()
+            article_tablist_modifier(Modifier::new(), navigation)
                 .fill_max_width()
                 .on_globally_positioned(move |bounds: tessera_ui::PxRect| {
                     let next = Dp::from_pixels_f32(bounds.width.to_f32());
@@ -300,8 +455,8 @@ fn article_tabs(
                         width.set(next);
                     }
                 })
-                .padding_all(Dp(8.0))
-                .background_with_shape(srgb(248, 241, 246), Shape::rounded_rectangle(Dp(40.0)))
+                .padding(Padding::new(Dp(8.0), Dp(9.0), Dp(8.0), Dp::ZERO))
+                .background_with_shape(srgb(248, 241, 246), Shape::CAPSULE)
                 .horizontal_scroll(horizontal)
                 .semantics(SemanticsArgs {
                     role: Some(Role::TabList),
@@ -311,15 +466,7 @@ fn article_tabs(
                 }),
         )
         .children(move || {
-            for (index, (label, vector)) in [
-                ("Overview", filled::INFO_SVG),
-                ("Specs", filled::STYLE_SVG),
-                ("Guidelines", filled::DESIGN_SERVICES_SVG),
-                ("Accessibility", filled::ACCESSIBILITY_NEW_SVG),
-            ]
-            .into_iter()
-            .enumerate()
-            {
+            for (index, label) in ARTICLE_TAB_TITLES.into_iter().enumerate() {
                 if label != "Specs"
                     && !pages
                         .as_ref()
@@ -328,44 +475,52 @@ fn article_tabs(
                     continue;
                 }
                 let active = selected.get() == label;
+                let interaction = remember(InteractionState::default);
+                let (hovered, pressed) =
+                    interaction.with(|value| (value.is_hovered(), value.is_pressed()));
+                let focus_visible = article_tab_focus_visible(navigation, index);
                 boxed()
                     .alignment(Alignment::Center)
-                    .modifier(
-                        Modifier::new()
-                            .width(Dp(contents.with(|contents| contents[index].0)
-                                + 48.0
-                                + extra))
-                            .height(Dp(80.0))
-                            .background_with_shape(
-                                if active {
-                                    srgb(220, 218, 245)
-                                } else {
-                                    srgb(248, 241, 246)
-                                },
-                                Shape::rounded_rectangle(Dp(40.0)),
-                            )
-                            .semantics(SemanticsArgs {
-                                selected: Some(active),
-                                merge_descendants: true,
-                                ..Default::default()
-                            })
-                            .clickable_with(ClickableArgs {
-                                role: Some(Role::Tab),
-                                label: Some(label.into()),
-                                on_click: Callback::new(move || {
-                                    selected.set(label);
-                                    scroll.with_mut(|scroll| {
-                                        scroll.set_scroll_position(PxPosition::ZERO)
-                                    });
-                                }),
-                                ..Default::default()
-                            })
-                            .padding_symmetric(Dp(24.0), Dp::ZERO),
-                    )
+                    .modifier(article_tab_visual::focus_modifier(
+                        article_tab_modifier(
+                            Modifier::new()
+                                .width(Dp(contents.with(|contents| contents[index].0)
+                                    + 48.0
+                                    + extra))
+                                .height(Dp(79.0))
+                                .background_with_shape(
+                                    article_tab_visual::background(false, hovered, pressed),
+                                    Shape::CAPSULE,
+                                )
+                                .background_with_scaled_shape(
+                                    article_tab_visual::pill_color(
+                                        progress[index],
+                                        hovered,
+                                        pressed,
+                                    ),
+                                    Shape::CAPSULE,
+                                    [0.32 + 0.68 * progress[index], 1.0],
+                                ),
+                            navigation,
+                            index,
+                            Callback::new(move || {
+                                selected.set(label);
+                                scroll.with_mut(|scroll| {
+                                    scroll.set_scroll_position(PxPosition::ZERO)
+                                });
+                                FocusManager::current().defer_keyboard_until_layout();
+                            }),
+                            Some(interaction),
+                        ),
+                        focus_visible,
+                        hovered,
+                    ))
                     .children(move || {
                         row()
                             .modifier(Modifier::new().on_globally_positioned(
                                 move |bounds: tessera_ui::PxRect| {
+                                    #[cfg(all(test, not(target_family = "wasm")))]
+                                    visual_tests::record_content(index, bounds);
                                     let next = Dp::from_pixels_f32(bounds.width.to_f32());
                                     if contents.with(|contents| contents[index]) != next {
                                         contents.with_mut(|contents| contents[index] = next);
@@ -374,22 +529,31 @@ fn article_tabs(
                             ))
                             .cross_axis_alignment(CrossAxisAlignment::Center)
                             .children(move || {
-                                icon().vector(vector).size(Dp(24.0)).tint(srgb(77, 66, 86));
+                                icon()
+                                    .vector(article_tab_visual::vector(
+                                        index, active, hovered, pressed,
+                                    ))
+                                    .size(Dp(24.0))
+                                    .tint(article_tab_visual::foreground(active, hovered, pressed));
                                 spacer().modifier(Modifier::new().width(Dp(8.0)));
                                 text()
                                     .content(label)
                                     .style(tessera_components::theme::TextStyle {
-                                        font_family: Some("Example Sans Display"),
+                                        font_family: Some(article_tab_visual::font_family(
+                                            active, hovered, pressed,
+                                        )),
                                         font_weight: 500,
                                         ..type_style(16.0, 24.0)
                                     })
-                                    .color(if active {
-                                        srgb(33, 24, 43)
-                                    } else {
-                                        srgb(77, 66, 86)
-                                    });
+                                    .color(article_tab_visual::foreground(
+                                        active, hovered, pressed,
+                                    ));
                             });
                     });
             }
         });
 }
+
+#[cfg(all(test, not(target_family = "wasm")))]
+#[path = "article_tabs_tests.rs"]
+mod visual_tests;

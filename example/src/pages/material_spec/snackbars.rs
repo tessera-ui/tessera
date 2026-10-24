@@ -4,6 +4,10 @@
 //!
 //! Show brief process updates with optional undo and dismiss actions.
 
+#[cfg(all(test, not(target_arch = "wasm32")))]
+#[path = "snackbars_tests.rs"]
+mod regression_tests;
+
 use tessera_components::{
     alignment::Alignment,
     boxed::boxed,
@@ -243,7 +247,7 @@ fn request(two_lines: bool, action: bool, dismiss: bool) -> SnackbarRequest {
         .to_owned(),
         action_label: action.then(|| "Undo".to_owned()),
         with_dismiss_action: dismiss,
-        duration: Some(SnackbarDuration::Indefinite),
+        duration: None,
     }
 }
 
@@ -451,7 +455,14 @@ fn snackbar_annotations(
             Dp(bar.x - 40.0),
             Dp(bar.y + bar.h / 2.0 - 8.0),
         );
+        let x = bar.x - 16.0;
+        annotations::dotted(&mut svg, x, bar.y, bar.h, true, "#49454f");
+        annotations::dotted(&mut svg, x - 4.0, bar.y, 8.0, false, "#49454f");
+        annotations::dotted(&mut svg, x - 4.0, bar.y + bar.h, 8.0, false, "#49454f");
         annotations::dimension("16".into(), Dp(bar.x + 2.0), Dp(bar.y - 32.0));
+        annotations::dotted(&mut svg, bar.x, bar.y - 8.0, 16.0, false, "#49454f");
+        annotations::dotted(&mut svg, bar.x, bar.y - 12.0, 8.0, true, "#49454f");
+        annotations::dotted(&mut svg, bar.x + 16.0, bar.y - 12.0, 8.0, true, "#49454f");
         svg.push_str(&format!(
             "<rect x='{}' y='{}' width='16' height='{}' fill='#ee7da4' fill-opacity='.35'/>",
             bar.x, bar.y, bar.h
@@ -471,20 +482,58 @@ fn snackbar_annotations(
             h: bar.h - 28.0,
         };
         annotations::outline(&mut svg, message);
-        for (number, x, y) in [
-            (1, bar.x + 16.0, bar.y - 64.0),
-            (2, message.x + message.w / 2.0 - 12.0, bar.y + bar.h + 32.0),
-        ] {
-            annotations::marker(number, Dp(x), Dp(y));
-        }
+        let caption_y = bar.y + bar.h + 32.0;
+        let label_x = message.x + message.w / 2.0;
+        let container_x = bar.x + 28.0;
+        annotations::marker(1, Dp(container_x - 12.0), Dp(bar.y - 64.0));
+        annotations::dotted(&mut svg, container_x, bar.y - 32.0, 32.0, true, "#49454f");
+        svg.push_str(&format!("<circle cx='{container_x}' cy='{}' r='3.5' fill='none' stroke='#49454f' stroke-width='.7'/>",bar.y));
+        annotations::marker(2, Dp(label_x - 12.0), Dp(caption_y));
+        annotations::dotted(
+            &mut svg,
+            label_x,
+            message.y + message.h,
+            caption_y - message.y - message.h,
+            true,
+            "#49454f",
+        );
         if dismiss {
-            annotations::marker(4, Dp(bar.x + bar.w + 36.0), Dp(bar.y + bar.h / 2.0 - 16.0));
+            let icon = Rect {
+                x: bar.x + bar.w - 36.0,
+                y: bar.y + (bar.h - 24.0) / 2.0,
+                w: 24.0,
+                h: 24.0,
+            };
+            annotations::outline(&mut svg, icon);
+            let x = bar.x + bar.w + 36.0;
+            let y = bar.y + bar.h / 2.0;
+            annotations::marker(4, Dp(x), Dp(y - 16.0));
+            annotations::dotted(
+                &mut svg,
+                icon.x + icon.w,
+                y,
+                x - icon.x - icon.w,
+                false,
+                "#49454f",
+            );
         }
         if action {
-            annotations::marker(
-                3,
-                Dp(bar.x + bar.w - if dismiss { 108.0 } else { 60.0 }),
-                Dp(bar.y + bar.h + 32.0),
+            let label = Rect {
+                x: bar.x + bar.w - if dismiss { 104.0 } else { 56.0 },
+                y: bar.y + (bar.h - 24.0) / 2.0,
+                w: 48.0,
+                h: 24.0,
+            };
+            annotations::outline(&mut svg, label);
+            let x = label.x + label.w / 2.0;
+            annotations::marker(3, Dp(x - 12.0), Dp(caption_y));
+            annotations::dotted(
+                &mut svg,
+                x,
+                label.y + label.h,
+                caption_y - label.y - label.h,
+                true,
+                "#49454f",
             );
         }
     }
@@ -679,4 +728,107 @@ fn inline_feedback() {
                         .on_dismiss(move || dismiss.dismiss());
                 });
         });
+}
+
+#[cfg(all(test, not(target_family = "wasm")))]
+mod anatomy_tests {
+    use super::*;
+    use std::time::Duration;
+    use tessera_ui::{
+        HeadlessConfig, HeadlessRenderer,
+        accesskit::{Action, ActionRequest, Node, NodeId, TreeId},
+    };
+    struct Pipelines;
+    impl tessera_ui::RenderModule for Pipelines {
+        fn register_pipelines(&self, context: &mut tessera_ui::PipelineContext<'_>) {
+            tessera_components::pipelines::register_pipelines(context);
+        }
+    }
+    #[tessera]
+    fn fixture() {
+        material_theme().child(|| {
+            column().children(|| {
+                snackbar_figure(false, true, true, false);
+            });
+        });
+    }
+    fn node(renderer: &HeadlessRenderer, label: &str, role: Role) -> (NodeId, Node) {
+        renderer
+            .accessibility_snapshot()
+            .unwrap()
+            .nodes
+            .into_iter()
+            .find(|(_, node)| node.role() == role && node.label() == Some(label))
+            .unwrap_or_else(|| panic!("missing {label} {role:?}"))
+    }
+    #[test]
+    #[ignore = "requires a native GPU adapter"]
+    fn snackbar_anatomy_places_four_callouts_around_native_text_and_actions() {
+        let mut renderer = HeadlessRenderer::new(
+            Box::new(fixture),
+            vec![Box::new(Pipelines)],
+            HeadlessConfig {
+                width: 900,
+                height: 400,
+                sample_count: 1,
+                frame_time: Duration::from_nanos(16_666_667),
+                ..Default::default()
+            },
+        )
+        .unwrap();
+        renderer.render_frames(5);
+        let message = node(&renderer, "This is a snackbar message", Role::Status)
+            .1
+            .bounds()
+            .unwrap();
+        let (action_id, action) = node(&renderer, "Action", Role::Button);
+        let action = action.bounds().unwrap();
+        let close = node(&renderer, "Dismiss illustrated snackbar", Role::Button)
+            .1
+            .bounds()
+            .unwrap();
+        let container_marker = node(&renderer, "Anatomy marker 1", Role::Note)
+            .1
+            .bounds()
+            .unwrap();
+        let text_marker = node(&renderer, "Anatomy marker 2", Role::Note)
+            .1
+            .bounds()
+            .unwrap();
+        let action_marker = node(&renderer, "Anatomy marker 3", Role::Note)
+            .1
+            .bounds()
+            .unwrap();
+        let close_marker = node(&renderer, "Anatomy marker 4", Role::Note)
+            .1
+            .bounds()
+            .unwrap();
+        assert!(container_marker.y1 < message.y0);
+        assert!(text_marker.y0 > message.y1);
+        let text_center = (text_marker.x0 + text_marker.x1) / 2.0;
+        assert!(text_center >= message.x0 && text_center <= message.x1);
+        assert!(action_marker.y0 > action.y1);
+        let action_center = (action_marker.x0 + action_marker.x1) / 2.0;
+        assert!(action_center >= action.x0 && action_center <= action.x1);
+        assert!(close_marker.x0 > close.x1);
+        let close_center = (close_marker.y0 + close_marker.y1) / 2.0;
+        assert!(close_center >= close.y0 && close_center <= close.y1);
+        assert!(renderer.dispatch_accessibility_action(ActionRequest {
+            action: Action::Click,
+            target_tree: TreeId::ROOT,
+            target_node: action_id,
+            data: None
+        }));
+        renderer.render_frames(4);
+        node(&renderer, "Action performed", Role::Label);
+        node(&renderer, "Restore illustrated snackbar", Role::Button);
+        assert!(
+            !renderer
+                .accessibility_snapshot()
+                .unwrap()
+                .nodes
+                .iter()
+                .any(|(_, node)| node.role() == Role::Status)
+        );
+    }
 }

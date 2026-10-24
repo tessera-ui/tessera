@@ -551,7 +551,9 @@ pub(super) fn action_article(
     example: RenderSlot,
     anatomy: RenderSlot,
     behavior: RenderSlot,
+    overview: Option<RenderSlot>,
 ) {
+    let overview = overview.unwrap_or(example);
     let title = title(kind);
     let description = super::media::page_media(title)
         .expect("action article media")
@@ -602,7 +604,7 @@ pub(super) fn action_article(
                 recommendation(kind);
                 paragraph(summary(kind));
                 gap(Dp(32.0));
-                example.render();
+                overview.render();
             })),
             sections: vec![],
         },

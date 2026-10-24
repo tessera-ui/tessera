@@ -8,7 +8,7 @@
 pub(super) mod article_pages;
 
 use tessera_components::{
-    alignment::Alignment,
+    alignment::{Alignment, CrossAxisAlignment},
     badge::{badge, badge_with_content, badged_box},
     boxed::boxed,
     button::button,
@@ -19,20 +19,19 @@ use tessera_components::{
     icon::icon,
     icon_button::icon_button,
     material_icons::{filled, outlined},
-    modifier::{ModifierExt as _, SemanticsArgs},
+    modifier::{InteractionState, ModifierExt as _, Padding, SelectableArgs, SemanticsArgs},
     navigation_bar::{NavigationBarIconPosition, navigation_bar, navigation_bar_item},
     navigation_rail::{navigation_rail, navigation_rail_item},
     row::row,
     shape_def::Shape,
     side_sheet::{SideSheetPosition, modal_side_sheet_provider},
     spacer::spacer,
-    surface::surface,
     text::text,
     theme::{MaterialTheme, material_theme},
 };
 use tessera_ui::{
-    Dp, Modifier, RenderSlot, RenderSlotWith, State, accesskit::Role, remember, tessera,
-    use_context,
+    Callback, Color, Dp, FocusTraversalPolicy, Modifier, RenderSlot, RenderSlotWith, State,
+    accesskit::Role, modifier::FocusModifierExt as _, remember, tessera, use_context,
 };
 
 use super::{
@@ -41,8 +40,11 @@ use super::{
     article::SpecSection,
     gap, panel, spec_table, subheading, type_style,
 };
-
 use article_pages::{Figure, Kind, detailed_article};
+
+#[cfg(all(test, not(target_family = "wasm")))]
+#[path = "navigation_figures_tests.rs"]
+mod tests;
 
 const NAMES: [&str; 5] = ["Home", "Inbox", "Saved", "Media", "Settings"];
 
@@ -98,6 +100,16 @@ pub(super) fn navigation_spec(rail: bool) {
             content: RenderSlot::new(layouts),
         });
     }
+    sections.push(SpecSection {
+        title: if rail {
+            "Baseline navigation rail"
+        } else {
+            "Baseline navigation bar"
+        },
+        content: RenderSlot::new(move || {
+            baseline(rail);
+        }),
+    });
     detailed_article(
         if rail { Kind::Rail } else { Kind::Bar },
         if rail {
@@ -398,27 +410,743 @@ fn anatomy(rail: bool) {
 #[tessera]
 fn colors(rail: bool) {
     for dark in [false, true] {
-        subheading(if dark {
-            "Dark scheme".into()
-        } else {
-            "Light scheme".into()
+        color_figure(rail, dark);
+    }
+    gap(Dp(24.0));
+    color_legend(rail, false);
+}
+
+#[tessera]
+fn color_figure(rail: bool, dark: bool) {
+    let mut theme = MaterialTheme::from_seed(ACCENT, dark);
+    let backdrop = theme.color_scheme.surface;
+    if rail {
+        theme.color_scheme.surface = theme.color_scheme.surface_container;
+    }
+    material_theme()
+        .theme(move || theme.clone())
+        .child(move || {
+            if rail {
+                row()
+                    .modifier(Modifier::new().fill_max_width())
+                    .children(move || {
+                        for expanded in [false, true] {
+                            boxed()
+                                .modifier(Modifier::new().weight(1.0))
+                                .children(move || {
+                                    color_specimen(true, expanded, dark, backdrop);
+                                });
+                        }
+                    });
+            } else {
+                color_specimen(false, false, dark, backdrop);
+            }
         });
-        gap(Dp(24.0));
+}
+
+#[tessera]
+fn color_specimen(rail: bool, initially_expanded: bool, dark: bool, backdrop: Color) {
+    let geometry = remember(Geometry::new);
+    let selected = remember(|| 0_usize);
+    let expanded = remember(|| initially_expanded);
+    let actions = remember(|| 0_usize);
+    let context = if rail {
+        if expanded.get() {
+            "expanded rail"
+        } else {
+            "collapsed rail"
+        }
+    } else {
+        "bar"
+    };
+    let mode = if dark { "Dark" } else { "Light" };
+    column()
+        .modifier(Modifier::new().fill_max_width())
+        .children(move || {
+            boxed()
+                .alignment(Alignment::Center)
+                .modifier(
+                    watch(geometry, "figure")
+                        .fill_max_width()
+                        .height(Dp(if rail { 601.5 } else { 412.0 }))
+                        .background(backdrop)
+                        .semantics(SemanticsArgs {
+                            role: Some(Role::Group),
+                            merge_descendants: true,
+                            label: Some(format!("{mode} {context} color roles")),
+                            ..Default::default()
+                        }),
+                )
+                .children(move || {
+                    navigation_grid(geometry, dark);
+                    boxed()
+                        .modifier(if rail {
+                            watch(geometry, "container").height(Dp(512.0))
+                        } else {
+                            watch(geometry, "container")
+                                .width(Dp(412.0))
+                                .offset(Dp::ZERO, Dp(20.0))
+                        })
+                        .children(move || {
+                            if rail {
+                                navigation_rail()
+                                    .expanded(expanded.get())
+                                    .header(move || {
+                                        column().children(move || {
+                                            icon_button()
+                                                .standard()
+                                                .icon(if expanded.get() {
+                                                    filled::MENU_OPEN_SVG
+                                                } else {
+                                                    filled::MENU_SVG
+                                                })
+                                                .accessibility_label(format!(
+                                                    "{mode} {context} menu"
+                                                ))
+                                                .on_click(move || expanded.set(!expanded.get()));
+                                            gap(Dp(8.0));
+                                            extended_floating_action_button("Label")
+                                                .expanded(expanded.get())
+                                                .icon(filled::EDIT_SVG)
+                                                .elevation(FloatingActionButtonElevation::new(
+                                                    Dp::ZERO,
+                                                    Dp::ZERO,
+                                                    Dp::ZERO,
+                                                    Dp::ZERO,
+                                                ))
+                                                .accessibility_label(format!(
+                                                    "{mode} {context} compose"
+                                                ))
+                                                .on_click(move || actions.set(actions.get() + 1));
+                                        });
+                                    })
+                                    .content(move || {
+                                        for index in 0..4 {
+                                            let mut item = navigation_rail_item()
+                                                .label("Label")
+                                                .selected(selected.get() == index)
+                                                .accessibility_description(format!(
+                                                    "{mode} {context} destination {}",
+                                                    index + 1
+                                                ))
+                                                .on_click(move || selected.set(index))
+                                                .icon(move || {
+                                                    boxed()
+                                                        .modifier(watch(geometry, ICON_KEYS[index]))
+                                                        .children(move || {
+                                                            figure_icon(selected.get() == index);
+                                                        });
+                                                });
+                                            if index >= 2 {
+                                                item = item.badge(move || {
+                                                    navigation_badge(
+                                                        if index == 2 { 1 } else { 2 },
+                                                        geometry,
+                                                    );
+                                                });
+                                            }
+                                            drop(item);
+                                        }
+                                    });
+                            } else {
+                                navigation_bar()
+                                    .icon_position(NavigationBarIconPosition::Top)
+                                    .content(move || {
+                                        for index in 0..3 {
+                                            navigation_bar_item()
+                                                .label("Label")
+                                                .selected(selected.get() == index)
+                                                .accessibility_description(format!(
+                                                    "{mode} bar destination {}",
+                                                    index + 1
+                                                ))
+                                                .on_click(move || selected.set(index))
+                                                .icon(move || {
+                                                    boxed()
+                                                        .modifier(watch(geometry, ICON_KEYS[index]))
+                                                        .children(move || {
+                                                            figure_icon(selected.get() == index);
+                                                        });
+                                                });
+                                        }
+                                    });
+                            }
+                        });
+                    boxed()
+                        .alignment(Alignment::TopStart)
+                        .modifier(Modifier::new().fill_max_size())
+                        .children(move || {
+                            navigation_color_annotations(
+                                rail,
+                                expanded.get(),
+                                false,
+                                selected.get(),
+                                dark,
+                                geometry,
+                            );
+                        });
+                });
+            if actions.get() > 0 {
+                text()
+                    .content(format!("{mode} {context} compositions: {}", actions.get()))
+                    .style(type_style(14.0, 20.0));
+            }
+        });
+}
+
+#[tessera]
+fn navigation_grid(geometry: State<Geometry>, dark: bool) {
+    navigation_grid_content(geometry.with(annotations::relative_geometry), dark);
+}
+
+#[tessera]
+fn navigation_grid_content(values: Geometry, dark: bool) {
+    let Some(root) = values.get("figure") else {
+        return;
+    };
+    let width = Dp::from_pixels_f32(root.width.to_f32());
+    let height = Dp::from_pixels_f32(root.height.to_f32());
+    let tone = if dark { "#79747e" } else { "#aea9b4" };
+    let mut svg = String::new();
+    let mut y = 1.0;
+    while y < height.0 {
+        let mut x = 1.0;
+        while x < width.0 {
+            svg.push_str(&format!("<circle cx='{x}' cy='{y}' r='.4' fill='{tone}'/>"));
+            x += 8.0;
+        }
+        y += 8.0;
+    }
+    annotations::lines(width, height, svg);
+}
+
+fn navigation_color_roles(rail: bool, baseline: bool) -> Vec<&'static str> {
+    if rail && baseline {
+        vec![
+            "On secondary container",
+            "Secondary container",
+            "On surface",
+            "On surface variant",
+            "On surface variant",
+            "Error",
+            "On error",
+            "Error",
+        ]
+    } else if rail {
+        vec![
+            "Surface container (optional)",
+            "On secondary container",
+            "Secondary container",
+            "Secondary (vertical) / On secondary container (horizontal)",
+            "On surface variant",
+            "On surface variant",
+            "Error",
+            "On error",
+            "Error",
+        ]
+    } else {
+        vec![
+            if baseline {
+                "Surface"
+            } else {
+                "Surface container"
+            },
+            "On secondary container",
+            if baseline { "On surface" } else { "Secondary" },
+            "Secondary container",
+            "On surface variant",
+            "On surface variant",
+        ]
+    }
+}
+
+#[tessera]
+fn color_legend(rail: bool, baseline: bool) {
+    spec_table(
+        vec!["Element".into(), "Color role".into()],
+        navigation_color_roles(rail, baseline)
+            .into_iter()
+            .enumerate()
+            .map(|(index, role)| vec![(index + 1).to_string(), role.into()])
+            .collect(),
+    );
+}
+
+#[tessera]
+fn navigation_color_annotations(
+    rail: bool,
+    expanded: bool,
+    baseline: bool,
+    selected: usize,
+    dark: bool,
+    geometry: State<Geometry>,
+) {
+    navigation_color_annotation_content(
+        rail,
+        expanded,
+        baseline,
+        selected,
+        dark,
+        geometry.with(annotations::relative_geometry),
+    );
+}
+
+#[tessera]
+fn navigation_color_annotation_content(
+    rail: bool,
+    expanded: bool,
+    baseline: bool,
+    selected: usize,
+    dark: bool,
+    values: Geometry,
+) {
+    let (Some(root), Some(container), Some(active), Some(inactive)) = (
+        values.get("figure"),
+        relative(&values, "container"),
+        relative(&values, ICON_KEYS[selected]),
+        relative(
+            &values,
+            ICON_KEYS[(selected + 1) % if rail { 4 } else { 3 }],
+        ),
+    ) else {
+        return;
+    };
+    let width = Dp::from_pixels_f32(root.width.to_f32());
+    let height = Dp::from_pixels_f32(root.height.to_f32());
+    let active_label = if rail && expanded {
+        (active.x + active.w + 24.0, active.y + active.h * 0.5)
+    } else {
+        (active.x + active.w * 0.5, active.y + active.h + 12.0)
+    };
+    let inactive_label = if rail && expanded {
+        (
+            inactive.x + inactive.w + 24.0,
+            inactive.y + inactive.h * 0.5,
+        )
+    } else {
+        (
+            inactive.x + inactive.w * 0.5,
+            inactive.y + inactive.h + 12.0,
+        )
+    };
+    let indicator = if rail && expanded {
+        (active.x + active.w + 28.0, active.y - 8.0)
+    } else {
+        (
+            active.x + active.w + if baseline && !rail { 20.0 } else { 16.0 },
+            active.y + active.h * 0.5,
+        )
+    };
+    let mut anchors = if rail {
+        let mut points = if baseline {
+            vec![
+                (active.x + 12.0, active.y + 12.0),
+                indicator,
+                active_label,
+                (inactive.x + 12.0, inactive.y + 12.0),
+                inactive_label,
+            ]
+        } else {
+            vec![
+                (container.x + container.w - 12.0, container.y + 44.0),
+                (active.x + 12.0, active.y + 12.0),
+                indicator,
+                active_label,
+                (inactive.x + 12.0, inactive.y + 12.0),
+                inactive_label,
+            ]
+        };
+        for key in ["large-badge", "badge-label", "small-badge"] {
+            let Some(rect) = relative(&values, key) else {
+                return;
+            };
+            points.push((rect.x + rect.w * 0.5, rect.y + rect.h * 0.5));
+        }
+        points
+    } else {
+        vec![
+            (container.x + 4.0, container.y + container.h * 0.5),
+            (active.x + 12.0, active.y + 12.0),
+            active_label,
+            indicator,
+            (inactive.x + 12.0, inactive.y + 12.0),
+            inactive_label,
+        ]
+    };
+    let roles = navigation_color_roles(rail, baseline);
+    let mut svg = String::new();
+    for (index, (x, y)) in anchors.drain(..).enumerate() {
+        let (mx, my) = if rail {
+            let left = if baseline {
+                index % 2 == 0
+            } else {
+                matches!(index, 1 | 3 | 4 | 6)
+            };
+            (
+                if left {
+                    container.x - 48.0
+                } else {
+                    container.x + container.w + 24.0
+                },
+                y - 16.0,
+            )
+        } else if index == 0 {
+            (container.x - 48.0, y - 16.0)
+        } else if matches!(index, 2 | 5) {
+            (x - 12.0, container.y + container.h + 24.0)
+        } else {
+            (x - 12.0, container.y - 56.0)
+        };
+        if rail || index == 0 {
+            dotted(
+                &mut svg,
+                (mx + 12.0).min(x),
+                y,
+                (x - mx - 12.0).abs(),
+                false,
+                if dark { "#cac4d0" } else { "#49454f" },
+            );
+        } else {
+            dotted(
+                &mut svg,
+                x,
+                (my + 16.0).min(y),
+                (y - my - 16.0).abs(),
+                true,
+                if dark { "#cac4d0" } else { "#49454f" },
+            );
+        }
+        navigation_color_marker(index + 1, roles[index].into(), Dp(mx), Dp(my));
+    }
+    annotations::lines(width, height, svg);
+}
+
+#[tessera]
+fn navigation_color_marker(number: usize, role: String, x: Dp, y: Dp) {
+    let scheme = use_context::<MaterialTheme>().unwrap().get().color_scheme;
+    boxed()
+        .alignment(Alignment::Center)
+        .modifier(
+            Modifier::new()
+                .offset(x, y)
+                .size(Dp(24.0), Dp(32.0))
+                .background_with_shape(scheme.on_surface, Shape::rounded_rectangle(Dp(16.0)))
+                .semantics(SemanticsArgs {
+                    role: Some(Role::Note),
+                    label: Some(format!("Navigation color role {number}: {role}")),
+                    merge_descendants: true,
+                    ..Default::default()
+                }),
+        )
+        .children(move || {
+            text()
+                .content(number.to_string())
+                .style(type_style(14.0, 20.0))
+                .color(scheme.surface);
+        });
+}
+
+#[tessera]
+fn baseline(rail: bool) {
+    text().content(if rail { "The baseline rail is retained for comparison. Use a collapsed or expanded navigation rail for new designs." } else { "The baseline bar is retained for comparison. Use the flexible navigation bar for new designs." }).style(type_style(16.0, 24.0));
+    gap(Dp(24.0));
+    baseline_figure(rail, false);
+    gap(Dp(32.0));
+    subheading("Tokens & specs".into());
+    baseline_measurements(rail);
+    gap(Dp(32.0));
+    subheading("Color".into());
+    for dark in [false, true] {
         material_theme()
             .theme(move || MaterialTheme::from_seed(ACCENT, dark))
             .child(move || {
-                surface()
-                    .modifier(Modifier::new().fill_max_width())
-                    .child(move || {
-                        column()
-                            .modifier(Modifier::new().fill_max_width().padding_all(Dp(24.0)))
-                            .children(move || {
-                                sample(if dark { "Dark" } else { "Light" }, rail, false);
-                            });
-                    });
+                baseline_figure(rail, false)
+                    .color_annotations(true)
+                    .dark(dark);
             });
-        gap(Dp(32.0));
     }
+    gap(Dp(24.0));
+    color_legend(rail, true);
+    gap(Dp(32.0));
+    subheading("States".into());
+    text().content("Select a destination or move keyboard focus to inspect the live selection and input feedback. Focus does not activate a destination.").style(type_style(16.0, 24.0));
+    gap(Dp(24.0));
+    baseline_figure(rail, false);
+    gap(Dp(32.0));
+    subheading("Measurements".into());
+    baseline_figure(rail, true);
+    baseline_measurements(rail);
+    gap(Dp(32.0));
+    subheading("Configurations".into());
+    if rail {
+        text().content("Keep destinations in a vertical group. A menu or primary action may precede the destinations.").style(type_style(16.0, 24.0));
+        gap(Dp(24.0));
+        baseline_figure(true, false);
+    } else {
+        for count in [3, 4, 5] {
+            subheading(format!("{count} destinations"));
+            gap(Dp(16.0));
+            baseline_figure(false, false).destination_count(count);
+            gap(Dp(24.0));
+        }
+    }
+}
+
+#[tessera]
+fn baseline_measurements(rail: bool) {
+    spec_table(
+        vec!["Attribute".into(), "Value".into()],
+        vec![
+            vec![
+                if rail {
+                    "Container width"
+                } else {
+                    "Container height"
+                }
+                .into(),
+                "80dp".into(),
+            ],
+            vec![
+                "Item height".into(),
+                if rail { "56dp" } else { "80dp" }.into(),
+            ],
+            vec![
+                "Active indicator".into(),
+                if rail { "56 × 32dp" } else { "64 × 32dp" }.into(),
+            ],
+            vec!["Icon".into(), "24dp".into()],
+            vec!["Icon-to-label gap".into(), "4dp".into()],
+            vec![
+                if rail {
+                    "Item gap"
+                } else {
+                    "Top / bottom padding"
+                }
+                .into(),
+                if rail { "4dp" } else { "12 / 16dp" }.into(),
+            ],
+        ],
+    );
+}
+
+#[tessera]
+fn baseline_figure(
+    rail: bool,
+    measurements: bool,
+    color_annotations: Option<bool>,
+    dark: Option<bool>,
+    destination_count: Option<usize>,
+) {
+    let selected = remember(|| 0_usize);
+    let geometry = remember(Geometry::new);
+    let count = destination_count.unwrap_or(4).clamp(3, 5);
+    let color_annotations = color_annotations.unwrap_or(false);
+    let dark = dark.unwrap_or(false);
+    let scheme = use_context::<MaterialTheme>().unwrap().get().color_scheme;
+    boxed()
+        .alignment(Alignment::Center)
+        .modifier(
+            watch(geometry, "figure")
+                .fill_max_width()
+                .height(Dp(if rail { 480.0 } else { 323.0 }))
+                .background(scheme.surface_container_low),
+        )
+        .children(move || {
+            navigation_grid(geometry, dark);
+            boxed()
+                .modifier(
+                    watch(geometry, "container")
+                        .size(
+                            Dp(if rail { 80.0 } else { 412.0 }),
+                            Dp(if rail { 480.0 } else { 80.0 }),
+                        )
+                        .background(scheme.surface)
+                        .semantics(SemanticsArgs {
+                            role: Some(Role::TabList),
+                            merge_descendants: true,
+                            label: Some(
+                                if rail {
+                                    "Baseline navigation rail"
+                                } else {
+                                    "Baseline navigation bar"
+                                }
+                                .into(),
+                            ),
+                            ..Default::default()
+                        })
+                        .focus_group()
+                        .focus_traversal_policy(if rail {
+                            FocusTraversalPolicy::vertical().wrap(true)
+                        } else {
+                            FocusTraversalPolicy::horizontal().wrap(true)
+                        }),
+                )
+                .children(move || {
+                    if rail {
+                        column()
+                            .modifier(Modifier::new().fill_max_size())
+                            .children(move || {
+                                boxed()
+                                    .alignment(Alignment::TopCenter)
+                                    .modifier(Modifier::new().size(Dp(80.0), Dp(120.0)))
+                                    .children(|| {
+                                        boxed()
+                                            .modifier(Modifier::new().offset(Dp::ZERO, Dp(56.0)))
+                                            .children(|| {
+                                                icon().vector(filled::MENU_SVG).size(Dp(24.0));
+                                            });
+                                    });
+                                for index in 0..count {
+                                    if index > 0 {
+                                        gap(Dp(4.0));
+                                    }
+                                    baseline_destination(true, index, count, selected, geometry);
+                                }
+                            });
+                    } else {
+                        row()
+                            .modifier(Modifier::new().fill_max_size())
+                            .children(move || {
+                                for index in 0..count {
+                                    baseline_destination(false, index, count, selected, geometry);
+                                }
+                            });
+                    }
+                });
+            boxed()
+                .alignment(Alignment::TopStart)
+                .modifier(Modifier::new().fill_max_size())
+                .children(move || {
+                    if color_annotations {
+                        navigation_color_annotations(
+                            rail,
+                            false,
+                            true,
+                            selected.get(),
+                            dark,
+                            geometry,
+                        );
+                    } else {
+                        figure_annotations(rail, false, measurements, geometry);
+                    }
+                });
+        });
+}
+
+#[tessera]
+fn baseline_destination(
+    rail: bool,
+    index: usize,
+    count: usize,
+    selected: State<usize>,
+    geometry: State<Geometry>,
+) {
+    let interaction = remember(InteractionState::new);
+    let theme = use_context::<MaterialTheme>().unwrap().get();
+    let scheme = theme.color_scheme;
+    let active = selected.get() == index;
+    let layer = interaction.with(|value| {
+        if value.is_pressed() || value.is_focused() {
+            0.10
+        } else if value.is_hovered() {
+            0.08
+        } else {
+            0.0
+        }
+    });
+    let mut label_style = theme.typography.label_medium;
+    label_style.font_weight = if active { 600 } else { 500 };
+    boxed()
+        .modifier(
+            Modifier::new()
+                .size(
+                    Dp(if rail { 80.0 } else { 412.0 / count as f64 }),
+                    Dp(if rail { 56.0 } else { 80.0 }),
+                )
+                .selectable_with(SelectableArgs {
+                    selected: active,
+                    on_click: Callback::new(move || selected.set(index)),
+                    role: Some(Role::Tab),
+                    label: Some("Label".into()),
+                    description: Some(format!(
+                        "Baseline navigation {} destination {}",
+                        if rail { "rail" } else { "bar" },
+                        index + 1
+                    )),
+                    interaction_state: Some(interaction),
+                    ..Default::default()
+                }),
+        )
+        .children(move || {
+            column()
+                .cross_axis_alignment(CrossAxisAlignment::Center)
+                .modifier(Modifier::new().fill_max_size().padding(Padding::new(
+                    Dp::ZERO,
+                    if rail { Dp::ZERO } else { Dp(12.0) },
+                    Dp::ZERO,
+                    if rail { Dp(4.0) } else { Dp(16.0) },
+                )))
+                .children(move || {
+                    boxed()
+                        .alignment(Alignment::Center)
+                        .modifier(
+                            Modifier::new()
+                                .size(Dp(if rail { 56.0 } else { 64.0 }), Dp(32.0))
+                                .background_with_shape(
+                                    if active {
+                                        scheme.secondary_container
+                                    } else {
+                                        Color::TRANSPARENT
+                                    },
+                                    Shape::rounded_rectangle(Dp(16.0)),
+                                ),
+                        )
+                        .children(move || {
+                            boxed().modifier(
+                                Modifier::new().fill_max_size().background_with_shape(
+                                    scheme.on_surface.with_alpha(layer),
+                                    Shape::rounded_rectangle(Dp(16.0)),
+                                ),
+                            );
+                            boxed()
+                                .modifier(watch(geometry, ICON_KEYS[index]))
+                                .children(move || {
+                                    badged_box()
+                                        .content(move || {
+                                            icon()
+                                                .vector(
+                                                    [
+                                                        filled::CIRCLE_SVG,
+                                                        filled::CHANGE_HISTORY_SVG,
+                                                        filled::CROP_SQUARE_SVG,
+                                                        filled::PENTAGON_SVG,
+                                                        filled::STARS_SVG,
+                                                    ][index],
+                                                )
+                                                .size(Dp(24.0))
+                                                .tint(if active {
+                                                    scheme.on_secondary_container
+                                                } else {
+                                                    scheme.on_surface_variant
+                                                });
+                                        })
+                                        .badge(move || {
+                                            if index == 2 {
+                                                navigation_badge(1, geometry);
+                                            } else if index == 3 {
+                                                navigation_badge(2, geometry);
+                                            }
+                                        });
+                                });
+                        });
+                    gap(Dp(4.0));
+                    text().content("Label").style(label_style).color(if active {
+                        scheme.on_surface
+                    } else {
+                        scheme.on_surface_variant
+                    });
+                });
+        });
 }
 
 #[tessera]
@@ -794,7 +1522,16 @@ fn navigation_badge(index: usize, geometry: State<Geometry>) {
 
 #[tessera]
 fn figure_annotations(rail: bool, expanded: bool, measurements: bool, geometry: State<Geometry>) {
-    let values = geometry.get();
+    figure_annotation_content(
+        rail,
+        expanded,
+        measurements,
+        geometry.with(annotations::relative_geometry),
+    );
+}
+
+#[tessera]
+fn figure_annotation_content(rail: bool, expanded: bool, measurements: bool, values: Geometry) {
     let (Some(root), Some(container), Some(icon)) = (
         values.get("figure"),
         relative(&values, "container"),

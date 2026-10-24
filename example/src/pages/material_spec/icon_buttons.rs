@@ -12,14 +12,17 @@ use tessera_components::{
     icon_button::{
         IconButtonShape, IconButtonSize, IconButtonVariant, IconButtonWidth, icon_button,
     },
-    material_icons::filled,
-    modifier::ModifierExt as _,
-    surface::surface,
+    material_icons::{filled, outlined},
+    modifier::{InteractionVisualState, ModifierExt as _},
+    shape_def::Shape,
+    surface::{RipplePresentation, surface},
     text::text,
     theme::{MaterialTheme, material_theme},
     tooltip::{TooltipController, TooltipPlacement, tooltip_anchor, tooltip_provider},
 };
-use tessera_ui::{Dp, Modifier, RenderSlot, remember, tessera, use_context};
+use tessera_ui::{
+    Dp, Modifier, RenderSlot, modifier::FocusModifierExt as _, remember, tessera, use_context,
+};
 
 use super::{
     ACCENT,
@@ -101,7 +104,10 @@ pub(super) fn icon_buttons_spec() {
             gap(Dp(32.0));
             shape_morph();
         }),
-    );
+    )
+    .overview(|| {
+        overview_art();
+    });
 }
 
 #[tessera]
@@ -138,6 +144,111 @@ fn sample(
         .on_click(move || {
             actions.set(actions.get() + 1);
             if toggle {
+                selected.set(!selected.get());
+            }
+        });
+}
+
+#[tessera]
+fn overview_art() {
+    let width = remember(|| 1024.0_f64);
+    let scale = width.get() / 1024.0;
+    let scheme = use_context::<MaterialTheme>().unwrap().get().color_scheme;
+    boxed()
+        .modifier(
+            Modifier::new()
+                .fill_max_width()
+                .height(Dp(400.0 * scale))
+                .background_with_shape(
+                    scheme.surface_container_low,
+                    Shape::rounded_rectangle(Dp(24.0)),
+                )
+                .on_globally_positioned(move |bounds: tessera_ui::PxRect| {
+                    let next = Dp::from_pixels_f32(bounds.width.to_f32()).0;
+                    if width.is_alive() && width.get() != next {
+                        width.set(next);
+                    }
+                }),
+        )
+        .children(move || {
+            for (index, center) in [308.0, 408.0, 528.0, 636.0, 720.0].into_iter().enumerate() {
+                boxed()
+                    .alignment(Alignment::Center)
+                    .modifier(
+                        Modifier::new()
+                            .offset(Dp((center - 80.0) * scale), Dp(120.0 * scale))
+                            .size(Dp(160.0 * scale), Dp(160.0 * scale)),
+                    )
+                    .children(move || {
+                        overview_icon(index);
+                    });
+            }
+        });
+    gap(Dp(24.0));
+    text()
+        .content(
+            "Standard, filled unselected, filled selected, filled tonal, and outlined icon buttons",
+        )
+        .style(type_style(16.0, 24.0));
+}
+
+#[tessera]
+fn overview_icon(index: usize) {
+    let selected = remember(|| index == 2);
+    let actions = remember(|| 0_u32);
+    let (style, size, width, label) = match index {
+        0 => (
+            IconButtonVariant::Standard,
+            IconButtonSize::Small,
+            IconButtonWidth::Uniform,
+            "More options",
+        ),
+        1 | 2 => (
+            IconButtonVariant::Filled,
+            IconButtonSize::Large,
+            IconButtonWidth::Uniform,
+            "Settings",
+        ),
+        3 => (
+            IconButtonVariant::FilledTonal,
+            IconButtonSize::Medium,
+            IconButtonWidth::Wide,
+            "Download",
+        ),
+        _ => (
+            IconButtonVariant::Outlined,
+            IconButtonSize::Medium,
+            IconButtonWidth::Narrow,
+            "Delete",
+        ),
+    };
+    icon_button()
+        .variant(style)
+        .size(size)
+        .width(width)
+        .shape_style(IconButtonShape::Round)
+        .selected_optional(if index == 1 || index == 2 {
+            Some(selected.get())
+        } else {
+            None
+        })
+        .icon(match index {
+            0 => filled::MORE_VERT_SVG,
+            1 | 2 => {
+                if selected.get() {
+                    filled::SETTINGS_SVG
+                } else {
+                    outlined::SETTINGS_SVG
+                }
+            }
+            3 => filled::DOWNLOAD_SVG,
+            _ => outlined::DELETE_SVG,
+        })
+        .accessibility_label(format!("Overview {label} {}", index + 1))
+        .accessibility_description(format!("Activations: {}", actions.get()))
+        .on_click(move || {
+            actions.set(actions.get() + 1);
+            if index == 1 || index == 2 {
                 selected.set(!selected.get());
             }
         });
@@ -449,21 +560,214 @@ fn colors() {
 
 #[tessera]
 fn states() {
-    text()
-        .content("Hover, focus with Tab, or press and hold to inspect the real state layers.")
-        .style(type_style(16.0, 24.0));
+    for style in STYLES {
+        subheading(format!("{} button states", name(style)));
+        for toggle in [false, true] {
+            gap(Dp(24.0));
+            subheading(if toggle { "Toggle" } else { "Default" }.into());
+            gap(Dp(24.0));
+            icon_state_matrix(style, toggle);
+        }
+        gap(Dp(64.0));
+    }
+}
+
+#[tessera]
+fn icon_state_matrix(style: IconButtonVariant, toggle: bool) {
+    let width = remember(|| 1024.0_f64);
+    let scale = width.get() / 1024.0;
+    boxed()
+        .modifier(
+            Modifier::new()
+                .fill_max_width()
+                .height(Dp(600.0 * scale))
+                .clip_to_bounds()
+                .on_globally_positioned(move |bounds: tessera_ui::PxRect| {
+                    let next = Dp::from_pixels_f32(bounds.width.to_f32()).0;
+                    if width.is_alive() && width.get() != next {
+                        width.set(next);
+                    }
+                }),
+        )
+        .children(move || {
+            for dark in [false, true] {
+                material_theme()
+                    .theme(move || MaterialTheme::from_seed(ACCENT, dark))
+                    .child(move || {
+                        let scheme = use_context::<MaterialTheme>().unwrap().get().color_scheme;
+                        boxed()
+                            .modifier(
+                                Modifier::new()
+                                    .offset(Dp::ZERO, Dp(if dark { 300.0 } else { 0.0 } * scale))
+                                    .size(Dp(1024.0 * scale), Dp(300.0 * scale))
+                                    .background(scheme.surface_container_low),
+                            )
+                            .children(move || {
+                                for state in 0..5 {
+                                    let center = if toggle {
+                                        236.0 + state as f64 * 160.0
+                                    } else {
+                                        192.0 + state as f64 * 160.0
+                                    };
+                                    icon_state_marker(
+                                        (state + 1).to_string(),
+                                        center,
+                                        if toggle {
+                                            if dark { 58.0 } else { 74.0 }
+                                        } else if dark {
+                                            102.0
+                                        } else {
+                                            108.0
+                                        },
+                                        scale,
+                                    );
+                                    for selected in
+                                        [false, true].into_iter().take(if toggle { 2 } else { 1 })
+                                    {
+                                        let mut center_y = if toggle {
+                                            if selected { 208.0 } else { 140.0 }
+                                        } else {
+                                            174.0
+                                        };
+                                        if dark {
+                                            center_y -= if toggle { 16.0 } else { 6.0 };
+                                        }
+                                        boxed()
+                                            .alignment(Alignment::Center)
+                                            .modifier(
+                                                Modifier::new()
+                                                    .offset(
+                                                        Dp((center - 40.0) * scale),
+                                                        Dp((center_y - 40.0) * scale),
+                                                    )
+                                                    .size(Dp(80.0 * scale), Dp(80.0 * scale)),
+                                            )
+                                            .children(move || {
+                                                icon_state_item(
+                                                    style,
+                                                    toggle,
+                                                    selected,
+                                                    state,
+                                                    scale,
+                                                    format!(
+                                                        "{} {} {} {} {} icon",
+                                                        if dark { "Dark" } else { "Light" },
+                                                        name(style),
+                                                        if toggle { "toggle" } else { "default" },
+                                                        if selected {
+                                                            "selected"
+                                                        } else {
+                                                            "unselected"
+                                                        },
+                                                        [
+                                                            "enabled", "disabled", "hovered",
+                                                            "focused", "pressed"
+                                                        ][state]
+                                                    ),
+                                                );
+                                            });
+                                    }
+                                }
+                                if toggle {
+                                    icon_state_marker(
+                                        "A".into(),
+                                        140.0,
+                                        if dark { 124.0 } else { 140.0 },
+                                        scale,
+                                    );
+                                    icon_state_marker(
+                                        "B".into(),
+                                        140.0,
+                                        if dark { 192.0 } else { 208.0 },
+                                        scale,
+                                    );
+                                }
+                            });
+                    });
+            }
+        });
     gap(Dp(24.0));
-    subheading("Enabled".into());
-    gap(Dp(24.0));
-    panel(RenderSlot::new(|| {
-        style_examples(true);
-    }));
-    gap(Dp(24.0));
-    subheading("Disabled".into());
-    gap(Dp(24.0));
-    panel(RenderSlot::new(|| {
-        style_examples(false);
-    }));
+    if toggle {
+        text()
+            .content("A: Unselected. B: Selected")
+            .style(type_style(16.0, 24.0));
+    }
+    for (index, label) in ["Enabled", "Disabled", "Hovered", "Focused", "Pressed"]
+        .into_iter()
+        .enumerate()
+    {
+        text()
+            .content(format!("{}  {label}", index + 1))
+            .style(type_style(16.0, 24.0));
+    }
+}
+
+#[tessera]
+fn icon_state_marker(label: String, x: f64, y: f64, scale: f64) {
+    let scheme = use_context::<MaterialTheme>().unwrap().get().color_scheme;
+    boxed()
+        .alignment(Alignment::Center)
+        .modifier(
+            Modifier::new()
+                .offset(Dp((x - 12.0) * scale), Dp((y - 12.0) * scale))
+                .size(Dp(24.0 * scale), Dp(24.0 * scale))
+                .background_with_shape(scheme.on_surface, Shape::Ellipse),
+        )
+        .children(move || {
+            text()
+                .content(label.clone())
+                .style(type_style(14.0 * scale, 20.0 * scale))
+                .color(scheme.surface);
+        });
+}
+
+#[tessera]
+fn icon_state_item(
+    style: IconButtonVariant,
+    toggle: bool,
+    initial: bool,
+    state: usize,
+    scale: f64,
+    label: String,
+) {
+    let selected = remember(|| initial);
+    let actions = remember(|| 0_u32);
+    let label = remember(|| label);
+    let mut control = icon_button()
+        .variant(style)
+        .size(IconButtonSize::Small)
+        .width(IconButtonWidth::Uniform)
+        .shape_style(IconButtonShape::Round)
+        .modifier(Modifier::new().size(Dp(40.0 * scale), Dp(40.0 * scale)))
+        .selected_optional(if toggle { Some(selected.get()) } else { None })
+        .enabled(state != 1)
+        .presentation_state(match state {
+            2 => InteractionVisualState::Hover,
+            3 => InteractionVisualState::Focus,
+            4 => InteractionVisualState::Pressed,
+            _ => InteractionVisualState::Rest,
+        })
+        .icon(if toggle && !selected.get() {
+            outlined::SETTINGS_SVG
+        } else {
+            filled::SETTINGS_SVG
+        })
+        .accessibility_label(label.get())
+        .accessibility_description(format!("Activations: {}", actions.get()))
+        .on_click(move || {
+            actions.set(actions.get() + 1);
+            if toggle {
+                selected.set(!selected.get());
+            }
+        });
+    if state == 4 {
+        control = control.presentation_ripple(RipplePresentation {
+            origin: [0.73125, 0.97125],
+            radius: 0.67375,
+            opacity: 0.12,
+        });
+    }
+    drop(control);
 }
 
 #[tessera]

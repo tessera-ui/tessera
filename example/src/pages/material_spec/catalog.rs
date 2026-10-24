@@ -14,9 +14,16 @@ use tessera_components::{
     surface::surface,
     text::text,
 };
-use tessera_ui::{Dp, Modifier, State, modifier::FocusModifierExt as _, remember, tessera};
+use tessera_ui::{
+    Callback, Dp, Modifier, State, modifier::FocusModifierExt as _, provide_context, remember,
+    tessera,
+};
 
-use super::{BACKGROUND, INK, PANEL, gap, heading, slider_spec, type_style};
+use super::{
+    BACKGROUND, INK, PANEL,
+    article::{ArticleDestination, ArticleRoute},
+    gap, heading, slider_spec, type_style,
+};
 
 #[derive(Clone, Copy, PartialEq)]
 struct Component {
@@ -253,110 +260,152 @@ pub(super) fn component_pages() {
         .map(|navigation| navigation.get().0)
         .unwrap_or(fallback);
     let directory_scroll = remember(ScrollableController::new);
+    let overview_request = remember(|| None::<usize>);
+    let previous_article = Callback::new(move || {
+        if let Some(index) = selected.get().and_then(|index| index.checked_sub(1)) {
+            overview_request.set(Some(index));
+            selected.set(Some(index));
+        }
+    });
+    let next_article = Callback::new(move || {
+        if let Some(index) = selected
+            .get()
+            .and_then(|index| index.checked_add(1))
+            .filter(|index| *index < COMPONENTS.len())
+        {
+            overview_request.set(Some(index));
+            selected.set(Some(index));
+        }
+    });
+    if selected.get().is_none() && overview_request.get().is_some() {
+        overview_request.set(None);
+    }
     let width = remember(|| Dp(900.0));
     if let Some(index) = selected.get() {
         let component = COMPONENTS[index];
-        column()
-            .modifier(Modifier::new().fill_max_size())
-            .children(move || {
-                boxed()
-                    .modifier(Modifier::new().fill_max_width().weight(1.0).semantics(
-                        SemanticsArgs {
-                            test_tag: Some(format!("component-article-{}", component.demo)),
-                            role: Some(tessera_ui::accesskit::Role::Group),
-                            label: Some(format!("{} specifications", component.title)),
-                            merge_descendants: true,
-                            ..Default::default()
-                        },
-                    ))
-                    .children(move || {
-                        if component.demo == 13 {
-                            super::dialogs::dialogs_spec();
-                        } else if component.demo == 25 {
-                            super::snackbars::snackbars_spec();
-                        } else if component.demo == 1 {
-                            super::app_bars::app_bars_spec();
-                        } else if component.demo == 20 {
-                            super::segmented::segmented_spec();
-                        } else if component.demo == 24 {
-                            super::text_fields::text_fields_spec();
-                        } else if component.demo == 4 {
-                            super::tooltips::tooltips_spec();
-                        } else if component.demo == 31 || component.demo == 32 {
-                            super::navigation::navigation_spec(component.demo == 32);
-                        } else if component.demo == 21 {
-                            super::tabs::tabs_spec();
-                        } else if component.demo == 6 || component.demo == 7 {
-                            super::activity::activity_spec(component.demo == 6);
-                        } else if component.demo == 12 {
-                            super::badges::badges_spec();
-                        } else if component.demo == 18 {
-                            super::button_groups::button_groups_spec();
-                        } else if component.demo == 22 {
-                            super::split_buttons::split_buttons_spec();
-                        } else if component.demo == 8 {
-                            super::fab_menu::fab_menu_spec();
-                        } else if component.demo == 9 || component.demo == 19 {
-                            super::floating_actions::floating_actions_spec(component.demo == 9);
-                        } else if component.demo == 28 {
-                            super::date_pickers::date_pickers_spec();
-                        } else if component.demo == 30 {
-                            super::time_pickers::time_pickers_spec();
-                        } else if component.demo == 16 {
-                            super::cards::cards_spec();
-                        } else if component.demo == 15 {
-                            super::lists::lists_spec();
-                        } else if component.demo == 14 {
-                            super::dividers::divider_spec();
-                        } else if component.demo == 3 {
-                            super::icon_buttons::icon_buttons_spec();
-                        } else if component.demo == 17 {
-                            super::chips::chips_spec();
-                        } else if component.demo == 23 {
-                            super::radio_buttons::radio_buttons_spec();
-                        } else if component.demo == 5 {
-                            slider_spec();
-                        } else if component.demo == 36 {
-                            super::buttons::buttons_spec();
-                        } else if component.demo == 37 {
-                            super::selection_controls::checkbox_spec();
-                        } else if component.demo == 38 {
-                            super::selection_controls::switch_spec();
-                        } else if component.demo == 26 {
-                            super::menus::menus_spec();
-                        } else if component.demo == 27 {
-                            super::search::search_spec();
-                        } else if component.demo == 2 {
-                            super::carousel::carousel_spec();
-                        } else if component.demo == 10 {
-                            super::toolbars::toolbars_spec();
-                        } else if component.demo == 11 {
-                            super::drawers::drawers_spec();
-                        } else if component.demo == 33 || component.demo == 34 {
-                            super::sheets::sheets_spec(component.demo == 34);
-                        } else {
-                            unreachable!("unregistered component article");
-                        }
-                    });
-            });
+        let route = ArticleRoute {
+            initial_page: if overview_request.get() == Some(index) {
+                "Overview"
+            } else {
+                "Specs"
+            },
+            previous: index.checked_sub(1).map(|index| ArticleDestination {
+                title: COMPONENTS[index].title,
+                on_open: previous_article,
+            }),
+            next: COMPONENTS
+                .get(index + 1)
+                .map(|component| ArticleDestination {
+                    title: component.title,
+                    on_open: next_article,
+                }),
+        };
+        let initial_route = route.clone();
+        let content = tessera_ui::RenderSlot::new(move || {
+            let current = tessera_ui::use_context::<ArticleRoute>().expect("article route context");
+            if current.with(|current| current != &route) {
+                current.set(route.clone());
+            }
+            column()
+                .modifier(Modifier::new().fill_max_size())
+                .children(move || {
+                    boxed()
+                        .modifier(Modifier::new().fill_max_width().weight(1.0).semantics(
+                            SemanticsArgs {
+                                test_tag: Some(format!("component-article-{}", component.demo)),
+                                role: Some(tessera_ui::accesskit::Role::Group),
+                                label: Some(format!("{} specifications", component.title)),
+                                merge_descendants: true,
+                                ..Default::default()
+                            },
+                        ))
+                        .children(move || {
+                            if component.demo == 13 {
+                                super::dialogs::dialogs_spec();
+                            } else if component.demo == 25 {
+                                super::snackbars::snackbars_spec();
+                            } else if component.demo == 1 {
+                                super::app_bars::app_bars_spec();
+                            } else if component.demo == 20 {
+                                super::segmented::segmented_spec();
+                            } else if component.demo == 24 {
+                                super::text_fields::text_fields_spec();
+                            } else if component.demo == 4 {
+                                super::tooltips::tooltips_spec();
+                            } else if component.demo == 31 || component.demo == 32 {
+                                super::navigation::navigation_spec(component.demo == 32);
+                            } else if component.demo == 21 {
+                                super::tabs::tabs_spec();
+                            } else if component.demo == 6 || component.demo == 7 {
+                                super::activity::activity_spec(component.demo == 6);
+                            } else if component.demo == 12 {
+                                super::badges::badges_spec();
+                            } else if component.demo == 18 {
+                                super::button_groups::button_groups_spec();
+                            } else if component.demo == 22 {
+                                super::split_buttons::split_buttons_spec();
+                            } else if component.demo == 8 {
+                                super::fab_menu::fab_menu_spec();
+                            } else if component.demo == 9 || component.demo == 19 {
+                                super::floating_actions::floating_actions_spec(component.demo == 9);
+                            } else if component.demo == 28 {
+                                super::date_pickers::date_pickers_spec();
+                            } else if component.demo == 30 {
+                                super::time_pickers::time_pickers_spec();
+                            } else if component.demo == 16 {
+                                super::cards::cards_spec();
+                            } else if component.demo == 15 {
+                                super::lists::lists_spec();
+                            } else if component.demo == 14 {
+                                super::dividers::divider_spec();
+                            } else if component.demo == 3 {
+                                super::icon_buttons::icon_buttons_spec();
+                            } else if component.demo == 17 {
+                                super::chips::chips_spec();
+                            } else if component.demo == 23 {
+                                super::radio_buttons::radio_buttons_spec();
+                            } else if component.demo == 5 {
+                                slider_spec();
+                            } else if component.demo == 36 {
+                                super::buttons::buttons_spec();
+                            } else if component.demo == 37 {
+                                super::selection_controls::checkbox_spec();
+                            } else if component.demo == 38 {
+                                super::selection_controls::switch_spec();
+                            } else if component.demo == 26 {
+                                super::menus::menus_spec();
+                            } else if component.demo == 27 {
+                                super::search::search_spec();
+                            } else if component.demo == 2 {
+                                super::carousel::carousel_spec();
+                            } else if component.demo == 10 {
+                                super::toolbars::toolbars_spec();
+                            } else if component.demo == 11 {
+                                super::drawers::drawers_spec();
+                            } else if component.demo == 33 || component.demo == 34 {
+                                super::sheets::sheets_spec(component.demo == 34);
+                            } else {
+                                unreachable!("unregistered component article");
+                            }
+                        });
+                });
+        });
+        provide_context(move || initial_route.clone(), move || content.render());
         return;
     }
     surface()
         .style(BACKGROUND.into())
         .modifier(Modifier::new().fill_max_size())
         .child(move || {
-            column()
-                .modifier(
-                    Modifier::new()
-                        .fill_max_size()
-                        .on_globally_positioned(move |bounds: tessera_ui::PxRect| {
-                            let next = Dp::from_pixels_f32(bounds.width.0 as f32);
-                            if width.get() != next {
-                                width.set(next);
-                            }
-                        })
-                        .vertical_scroll(directory_scroll),
-                )
+            super::scroll_viewport::spec_scroll_viewport(directory_scroll)
+                .viewport_modifier(Modifier::new().on_layout_coordinates(
+                    move |coordinates: tessera_ui::LayoutCoordinates| {
+                        let next = Dp::from(coordinates.local_size.width);
+                        if width.get() != next {
+                            width.set(next);
+                        }
+                    },
+                ))
                 .children(move || {
                     super::media::page_header("Components", "", width.get());
                     for (category, title) in [
@@ -463,13 +512,19 @@ fn component_card(component: Component, index: usize, selected: State<Option<usi
 
 #[cfg(all(test, not(target_family = "wasm")))]
 mod tests {
+    use std::{cell::Cell, time::Duration};
+
     use tessera_components::theme::material_theme;
     use tessera_ui::{
         HeadlessConfig, HeadlessRenderer, MOUSE_POINTER_ID, PressKeyEventType, PxPosition,
-        accesskit::{Node, Rect, Role, Toggled},
+        accesskit::{Action, ActionRequest, Node, Rect, Role, Toggled, TreeId},
     };
 
     use super::*;
+
+    thread_local! {
+        static INITIAL_COMPONENT: Cell<Option<usize>> = const { Cell::new(None) };
+    }
 
     struct ComponentPipelines;
 
@@ -482,7 +537,7 @@ mod tests {
     #[tessera]
     fn fixture() {
         material_theme().child(|| {
-            let selected = remember(|| None::<usize>);
+            let selected = remember(|| INITIAL_COMPONENT.get());
             let drawer =
                 remember(|| tessera_components::side_sheet::SideSheetController::new(false));
             tessera_ui::provide_context(
@@ -625,6 +680,71 @@ mod tests {
         None
     }
 
+    fn settle_time_geometry(renderer: &mut HeadlessRenderer) {
+        let geometry = |renderer: &HeadlessRenderer| {
+            (
+                control(renderer, "Anatomy horizontal layout")
+                    .bounds()
+                    .unwrap(),
+                bounds(renderer, "Anatomy time preview"),
+            )
+        };
+        let mut previous = geometry(renderer);
+        let mut stable_frames = 0;
+        let mut observed = vec![previous];
+        for _ in 0..12 {
+            renderer.render_frames(1);
+            let current = geometry(renderer);
+            observed.push(current);
+            if current == previous {
+                stable_frames += 1;
+                if stable_frames == 2 {
+                    return;
+                }
+            } else {
+                stable_frames = 0;
+            }
+            previous = current;
+        }
+        panic!("Time preview and control geometry did not settle: {observed:?}");
+    }
+
+    fn settle_loading_geometry(renderer: &mut HeadlessRenderer) {
+        let geometry = |renderer: &HeadlessRenderer| {
+            (
+                bounds(renderer, "Loading indicator illustration"),
+                scoped_node(
+                    renderer,
+                    "Loading indicator specifications",
+                    "Configured loading",
+                    Role::ProgressIndicator,
+                )
+                .expect("configured loading indicator")
+                .bounds()
+                .unwrap(),
+                control(renderer, "Contained loading").bounds().unwrap(),
+            )
+        };
+        let mut previous = geometry(renderer);
+        let mut stable_frames = 0;
+        let mut observed = vec![previous];
+        for _ in 0..12 {
+            renderer.render_frames(1);
+            let current = geometry(renderer);
+            observed.push(current);
+            if current == previous {
+                stable_frames += 1;
+                if stable_frames == 2 {
+                    return;
+                }
+            } else {
+                stable_frames = 0;
+            }
+            previous = current;
+        }
+        panic!("Loading illustration and controls did not settle: {observed:?}");
+    }
+
     fn toggle(renderer: &mut HeadlessRenderer, label: &str, before: Toggled, after: Toggled) {
         let node = control(renderer, label);
         assert_eq!(node.toggled(), Some(before), "initial {label}");
@@ -633,6 +753,327 @@ mod tests {
             control(renderer, label).toggled(),
             Some(after),
             "updated {label}"
+        );
+    }
+
+    fn tab(renderer: &HeadlessRenderer, label: &str) -> Node {
+        renderer
+            .accessibility_snapshot()
+            .unwrap()
+            .nodes
+            .into_iter()
+            .find(|(_, node)| node.role() == Role::Tab && node.label() == Some(label))
+            .unwrap_or_else(|| panic!("missing article tab {label}"))
+            .1
+    }
+
+    fn compose_navigation_target(renderer: &mut HeadlessRenderer, label: &str, role: Role) {
+        let toward_header = matches!(role, Role::Tab | Role::Heading)
+            || (role == Role::Link
+                && !label.starts_with("Previous ")
+                && !label.starts_with("Up next "));
+        for _ in 0..128 {
+            if renderer
+                .accessibility_snapshot()
+                .unwrap()
+                .nodes
+                .iter()
+                .any(|(_, node)| node.role() == role && node.label() == Some(label))
+            {
+                return;
+            }
+            renderer.pointer_scroll(
+                MOUSE_POINTER_ID,
+                PxPosition::from_f32_xy(
+                    renderer.physical_size().width as f32 - 30.0,
+                    renderer.physical_size().height as f32 * 0.5,
+                ),
+                0.0,
+                if toward_header { 1200.0 } else { -1200.0 },
+            );
+            renderer.render_frames(40);
+        }
+        panic!("scrolling did not compose actual navigation target {label}");
+    }
+
+    fn activate_navigation(renderer: &mut HeadlessRenderer, label: &str, role: Role) {
+        compose_navigation_target(renderer, label, role);
+        for action in [Action::Focus, Action::Click] {
+            let id = renderer
+                .accessibility_snapshot()
+                .unwrap()
+                .nodes
+                .into_iter()
+                .find(|(_, node)| node.role() == role && node.label() == Some(label))
+                .unwrap_or_else(|| panic!("missing navigation {label}"))
+                .0;
+            assert!(renderer.dispatch_accessibility_action(ActionRequest {
+                action,
+                target_tree: TreeId::ROOT,
+                target_node: id,
+                data: None,
+            }));
+            renderer.render_frames(4);
+        }
+    }
+
+    #[test]
+    #[ignore = "requires a native GPU adapter"]
+    fn article_measurement_clear_keeps_scrolled_geometry_through_pointer_press_and_release() {
+        for same_frame in [false, true] {
+            INITIAL_COMPONENT.set(
+                COMPONENTS
+                    .iter()
+                    .position(|component| component.title == "Text fields"),
+            );
+            let mut renderer = HeadlessRenderer::new(
+                Box::new(fixture),
+                vec![Box::new(ComponentPipelines)],
+                HeadlessConfig {
+                    width: 900,
+                    height: 900,
+                    sample_count: 1,
+                    frame_time: Duration::from_nanos(16_666_667),
+                    ..Default::default()
+                },
+            )
+            .unwrap();
+            renderer.render_frames(5);
+            INITIAL_COMPONENT.set(None);
+            let specs = tab(&renderer, "Specs").bounds().unwrap();
+            click(&mut renderer, specs);
+            let focused_label = |renderer: &HeadlessRenderer| {
+                let tree = renderer.accessibility_snapshot().unwrap();
+                tree.nodes
+                    .iter()
+                    .find(|(id, _)| *id == tree.focus)
+                    .and_then(|(_, node)| node.label())
+                    .map(str::to_owned)
+            };
+            assert_eq!(focused_label(&renderer).as_deref(), Some("Specs"));
+            let label = "Outlined measurement with icons populated";
+            let clear = format!("Clear {label}");
+            let container = format!("{label} container");
+            let mut observations = Vec::new();
+            for _ in 0..128 {
+                let current = renderer
+                    .accessibility_snapshot()
+                    .unwrap()
+                    .nodes
+                    .into_iter()
+                    .find(|(_, node)| {
+                        node.role() == Role::Button && node.label() == Some(clear.as_str())
+                    })
+                    .and_then(|(_, node)| node.bounds());
+                let Some(current) = current else {
+                    renderer.pointer_scroll(
+                        MOUSE_POINTER_ID,
+                        PxPosition::from_f32_xy(870.0, 450.0),
+                        0.0,
+                        -1200.0,
+                    );
+                    renderer.render_frames(40);
+                    continue;
+                };
+                observations.push(current);
+                if current.y0 >= 64.0 && current.y1 <= 900.0 {
+                    break;
+                }
+                renderer.pointer_scroll(
+                    MOUSE_POINTER_ID,
+                    PxPosition::from_f32_xy(895.0, 450.0),
+                    0.0,
+                    (450.0 - (current.y0 + current.y1) * 0.5) as f32,
+                );
+                renderer.render_frames(40);
+            }
+            let margin = PxPosition::from_f32_xy(875.0, 850.0);
+            renderer.pointer_move(MOUSE_POINTER_ID, margin);
+            renderer.pointer_press(MOUSE_POINTER_ID, margin, PressKeyEventType::Left);
+            renderer.render_frames(1);
+            renderer.pointer_release(MOUSE_POINTER_ID, margin, PressKeyEventType::Left);
+            renderer.render_frames(5);
+            let target = control(&renderer, &clear).bounds().unwrap();
+            assert!(
+                target.y0 >= 64.0 && target.y1 <= 900.0,
+                "Clear must be visible before pressing: {target:?}; wheel observations: {observations:?}"
+            );
+            assert_eq!(
+                focused_label(&renderer).as_deref(),
+                Some("Specs"),
+                "scrolling into view must retain the original Specs focus before Clear is pressed"
+            );
+            let before = bounds(&renderer, &container);
+            let position = PxPosition::from_f32_xy(
+                ((target.x0 + target.x1) * 0.5) as f32,
+                ((target.y0 + target.y1) * 0.5) as f32,
+            );
+            renderer.pointer_move(MOUSE_POINTER_ID, position);
+            renderer.render_frames(1);
+            renderer.pointer_press(MOUSE_POINTER_ID, position, PressKeyEventType::Left);
+            if !same_frame {
+                renderer.render_frames(1);
+                assert_eq!(
+                    bounds(&renderer, &container),
+                    before,
+                    "pointer press must not reveal the earlier Specs focus; current focus={:?}",
+                    focused_label(&renderer)
+                );
+                let tree = renderer.accessibility_snapshot().unwrap();
+                let input = tree
+                    .nodes
+                    .iter()
+                    .find(|(_, node)| node.role() == Role::TextInput && node.label() == Some(label))
+                    .unwrap();
+                assert_eq!(
+                    input.1.value(),
+                    Some("Input text"),
+                    "Clear has not activated before release"
+                );
+            }
+            renderer.pointer_release(MOUSE_POINTER_ID, position, PressKeyEventType::Left);
+            renderer.render_frames(5);
+            assert_eq!(
+                bounds(&renderer, &container),
+                before,
+                "release must preserve the scrolled figure position"
+            );
+            let tree = renderer.accessibility_snapshot().unwrap();
+            let input = tree
+                .nodes
+                .iter()
+                .find(|(_, node)| node.role() == Role::TextInput && node.label() == Some(label))
+                .unwrap();
+            assert_eq!(input.1.value().unwrap_or_default(), "");
+            assert_eq!(tree.focus, input.0, "Clear returns focus to its own editor");
+            assert!(!tree.nodes.iter().any(
+                |(_, node)| node.role() == Role::Button && node.label() == Some(clear.as_str())
+            ));
+        }
+    }
+
+    #[test]
+    #[ignore = "requires a native GPU adapter"]
+    fn article_footer_routes_between_pages_and_components_and_resets_directory_entry() {
+        INITIAL_COMPONENT.set(
+            COMPONENTS
+                .iter()
+                .position(|component| component.title == "Text fields"),
+        );
+        let mut renderer = HeadlessRenderer::new(
+            Box::new(fixture),
+            vec![Box::new(ComponentPipelines)],
+            HeadlessConfig {
+                width: 900,
+                height: 1500,
+                sample_count: 1,
+                frame_time: Duration::from_nanos(16_666_667),
+                ..Default::default()
+            },
+        )
+        .unwrap();
+        renderer.render_frames(5);
+        INITIAL_COMPONENT.set(None);
+        compose_navigation_target(&mut renderer, "Previous and up next articles", Role::Group);
+        let footer_tree = renderer.accessibility_snapshot().unwrap();
+        let footer = footer_tree
+            .nodes
+            .iter()
+            .find(|(_, node)| {
+                node.role() == Role::Group && node.label() == Some("Previous and up next articles")
+            })
+            .expect("native article footer group");
+        let mut pending = vec![footer.0];
+        let mut observed = Vec::new();
+        while let Some(id) = pending.pop() {
+            let (_, node) = footer_tree
+                .nodes
+                .iter()
+                .find(|(node_id, _)| *node_id == id)
+                .unwrap();
+            observed.push((
+                id,
+                node.role(),
+                node.label(),
+                node.bounds(),
+                node.children(),
+            ));
+            pending.extend_from_slice(node.children());
+        }
+        let links = footer
+            .1
+            .children()
+            .iter()
+            .filter_map(|id| {
+                footer_tree
+                    .nodes
+                    .iter()
+                    .find(|(node_id, _)| node_id == id)
+                    .map(|(_, node)| node)
+            })
+            .collect::<Vec<_>>();
+        assert_eq!(
+            links.len(),
+            2,
+            "footer must expose both native navigation targets: {observed:#?}"
+        );
+        for label in [
+            "Previous Text fields: Overview",
+            "Up next Text fields: Guidelines",
+        ] {
+            assert!(
+                links.iter().any(|node| node.role() == Role::Link
+                    && node.label() == Some(label)
+                    && node.supports_action(Action::Click)),
+                "footer is missing actionable link {label}: {observed:#?}"
+            );
+        }
+        let previous = bounds(&renderer, "Previous Text fields: Overview");
+        let next = bounds(&renderer, "Up next Text fields: Guidelines");
+        assert_eq!(previous.y0, next.y0);
+        assert_eq!(bounds(&renderer, "Vertical scrollbar").width(), 15.0);
+        assert_eq!(previous.width(), 430.0);
+        assert_eq!(previous.height(), 112.0);
+        assert_eq!(next.x0 - previous.x1, 8.0);
+        activate_navigation(&mut renderer, "Previous Text fields: Overview", Role::Link);
+        assert_eq!(tab(&renderer, "Overview").is_selected(), Some(true));
+        activate_navigation(&mut renderer, "Previous Tabs: Overview", Role::Link);
+        assert_eq!(tab(&renderer, "Overview").is_selected(), Some(true));
+        bounds(&renderer, "Tabs specifications");
+        for (label, selected) in [
+            ("Up next Tabs: Specs", "Specs"),
+            ("Up next Tabs: Guidelines", "Guidelines"),
+            ("Up next Tabs: Accessibility", "Accessibility"),
+            ("Up next Text fields: Overview", "Overview"),
+            ("Up next Text fields: Specs", "Specs"),
+        ] {
+            activate_navigation(&mut renderer, label, Role::Link);
+            assert_eq!(tab(&renderer, selected).is_selected(), Some(true));
+            let title = renderer
+                .accessibility_snapshot()
+                .unwrap()
+                .nodes
+                .into_iter()
+                .find(|(_, node)| node.role() == Role::Heading && node.level() == Some(1))
+                .unwrap()
+                .1
+                .bounds()
+                .unwrap();
+            assert!(
+                title.y0 >= 64.0 && title.y0 < 300.0,
+                "page navigation returns to its header"
+            );
+        }
+        activate_navigation(&mut renderer, "Back to components", Role::Button);
+        activate_navigation(
+            &mut renderer,
+            "Open Text fields specifications",
+            Role::Button,
+        );
+        assert_eq!(
+            tab(&renderer, "Specs").is_selected(),
+            Some(true),
+            "a fresh directory entry keeps its default page"
         );
     }
 
@@ -693,9 +1134,9 @@ mod tests {
             "the completed icon must remain stable"
         );
         for (width, image_x, image_width, image_height) in [
-            (390, 8.0, 374.0, 187.0),
-            (1440, 724.0, 708.0, 544.0),
-            (900, 8.0, 884.0, 442.0),
+            (390, 8.0, 359.0, 179.0),
+            (1440, 716.0, 700.0, 544.0),
+            (900, 8.0, 869.0, 434.0),
         ] {
             renderer.resize(width, 1800);
             renderer.render_frames(5);
@@ -769,7 +1210,7 @@ mod tests {
                 });
             assert_eq!(node.is_selected(), Some(label == "Specs"));
             let rect = node.bounds().unwrap();
-            assert_eq!(rect.height(), 80.0);
+            assert_eq!(rect.height(), 79.0);
             if let Some(previous) = previous {
                 assert_eq!(rect.y0, previous.y0);
                 assert_eq!(rect.x0, previous.x1);
@@ -778,12 +1219,34 @@ mod tests {
         }
         let figure = bounds(&renderer, "Basic dialog measurement figure");
         let container = bounds(&renderer, "Basic dialog measurement container");
-        assert_eq!(container.width(), 312.0);
-        assert!(((container.x0 + container.x1) - (figure.x0 + figure.x1)).abs() < 1.0);
+        assert!((container.width() - figure.width() * 312.0 / 1024.0).abs() <= 1.0);
+        assert!((container.x0 - figure.x0 - figure.width() * 360.0 / 1024.0).abs() <= 1.0);
         let marker = bounds(&renderer, "Anatomy marker 2");
         assert!(marker.y1 < bounds(&renderer, "Basic dialog anatomy container").y0);
         let pixels = renderer.read_pixels().unwrap();
         let pixel = |x: usize, y: usize| &pixels[(y * 900 + x) * 4..(y * 900 + x) * 4 + 4];
+        let selected_tab = tab(&renderer, "Specs").bounds().unwrap();
+        let idle_tab = tab(&renderer, "Overview").bounds().unwrap();
+        let background = pixel(
+            (idle_tab.x0 + 10.0) as usize,
+            ((idle_tab.y0 + idle_tab.y1) * 0.5) as usize,
+        );
+        assert_eq!(
+            pixel(
+                (selected_tab.x0 + 10.0) as usize,
+                (selected_tab.y0 + 10.0) as usize
+            ),
+            background,
+            "article tabs must have circular capsule ends rather than squircle corners"
+        );
+        assert_ne!(
+            pixel(
+                (selected_tab.x0 + 40.0) as usize,
+                (selected_tab.y0 + 10.0) as usize
+            ),
+            background,
+            "the selected capsule must still paint its interior"
+        );
         assert_ne!(
             pixel(
                 (container.x0 + 32.0) as usize,
@@ -811,17 +1274,23 @@ mod tests {
         click(&mut renderer, overview);
         let open = control(&renderer, "Open basic dialog");
         let full = control(&renderer, "Open full-screen dialog");
-        let illustration = bounds(&renderer, "Basic dialog anatomy figure");
+        let illustration = bounds(&renderer, "Dialogs overview figure");
         assert!(full.bounds().unwrap().y0 >= open.bounds().unwrap().y1 + 12.0);
         assert!(
-            illustration.y0 >= full.bounds().unwrap().y1 + 32.0,
+            open.bounds().unwrap().y0 >= illustration.y1 + 32.0,
             "intro content must stack instead of painting over its controls"
         );
         click(&mut renderer, open.bounds().unwrap());
         renderer.render_frames(30);
-        assert!(renderer.accessibility_snapshot().unwrap().nodes.iter().any(
-            |(_, node)| node.role() == Role::Dialog && node.label() == Some("Reset settings?")
-        ));
+        assert!(
+            renderer
+                .accessibility_snapshot()
+                .unwrap()
+                .nodes
+                .iter()
+                .any(|(_, node)| node.role() == Role::AlertDialog
+                    && node.label() == Some("Reset settings?"))
+        );
         let cancel = control(&renderer, "Cancel");
         click(&mut renderer, cancel.bounds().unwrap());
         renderer.render_frames(30);
@@ -868,29 +1337,15 @@ mod tests {
             let overview = tab(&renderer, "Overview").bounds().unwrap();
             click(&mut renderer, overview);
             if title == "Radio button" {
-                let radio = control(&renderer, "Notification preference: Important only")
-                    .bounds()
-                    .unwrap();
-                let label = Rect::new(radio.x1 + 8.0, radio.y0, radio.x1 + 40.0, radio.y1);
-                click(&mut renderer, label);
+                let second = control(&renderer, "Second option").bounds().unwrap();
+                click(&mut renderer, second);
                 assert_eq!(
-                    control(&renderer, "Notification preference: Important only").toggled(),
+                    control(&renderer, "Second option").toggled(),
                     Some(Toggled::True)
                 );
                 assert_eq!(
-                    control(&renderer, "Notification preference: All notifications").toggled(),
+                    control(&renderer, "First option").toggled(),
                     Some(Toggled::False)
-                );
-                let snapshot = renderer.accessibility_snapshot().unwrap();
-                assert_eq!(
-                    snapshot
-                        .nodes
-                        .iter()
-                        .find(|(id, _)| *id == snapshot.focus)
-                        .unwrap()
-                        .1
-                        .label(),
-                    Some("Notification preference: Important only")
                 );
             } else {
                 let name = if title == "Checkbox" {
@@ -924,7 +1379,51 @@ mod tests {
             let guidelines = tab(&renderer, "Guidelines").bounds().unwrap();
             click(&mut renderer, guidelines);
             bounds(&renderer, "Usage");
-            if title == "Checkbox" {
+            if title == "Radio button" {
+                assert_eq!(
+                    control(&renderer, "Callisto").toggled(),
+                    Some(Toggled::True)
+                );
+                let ringtone = control(&renderer, "Luna").bounds().unwrap();
+                click(
+                    &mut renderer,
+                    Rect::new(
+                        ringtone.x1 + 8.0,
+                        ringtone.y0,
+                        ringtone.x1 + 40.0,
+                        ringtone.y1,
+                    ),
+                );
+                assert_eq!(control(&renderer, "Luna").toggled(), Some(Toggled::True));
+                assert_eq!(
+                    control(&renderer, "Callisto").toggled(),
+                    Some(Toggled::False)
+                );
+                let radio = control(&renderer, "Notification preference: Important only")
+                    .bounds()
+                    .unwrap();
+                let label = Rect::new(radio.x1 + 8.0, radio.y0, radio.x1 + 40.0, radio.y1);
+                click(&mut renderer, label);
+                assert_eq!(
+                    control(&renderer, "Notification preference: Important only").toggled(),
+                    Some(Toggled::True)
+                );
+                assert_eq!(
+                    control(&renderer, "Notification preference: All notifications").toggled(),
+                    Some(Toggled::False)
+                );
+                let snapshot = renderer.accessibility_snapshot().unwrap();
+                assert_eq!(
+                    snapshot
+                        .nodes
+                        .iter()
+                        .find(|(id, _)| *id == snapshot.focus)
+                        .unwrap()
+                        .1
+                        .label(),
+                    Some("Notification preference: Important only")
+                );
+            } else if title == "Checkbox" {
                 assert_eq!(
                     control(&renderer, "All items").toggled(),
                     Some(Toggled::Mixed)
@@ -1033,6 +1532,15 @@ mod tests {
                     bounds(&renderer, "Standard group selection: 1");
                 }
                 36 => {
+                    let action = control(&renderer, "Overview Filled button");
+                    assert_eq!(action.description(), Some("Activations: 0"));
+                    click(&mut renderer, action.bounds().unwrap());
+                    assert_eq!(
+                        control(&renderer, "Overview Filled button").description(),
+                        Some("Activations: 1")
+                    );
+                    let specs = tab(&renderer, "Specs").bounds().unwrap();
+                    click(&mut renderer, specs);
                     toggle(
                         &mut renderer,
                         "Toggle button",
@@ -1069,6 +1577,15 @@ mod tests {
                     bounds(&renderer, "Overview: Document created");
                 }
                 3 => {
+                    let action = control(&renderer, "Overview More options 1");
+                    assert_eq!(action.description(), Some("Activations: 0"));
+                    click(&mut renderer, action.bounds().unwrap());
+                    assert_eq!(
+                        control(&renderer, "Overview More options 1").description(),
+                        Some("Activations: 1")
+                    );
+                    let specs = tab(&renderer, "Specs").bounds().unwrap();
+                    click(&mut renderer, specs);
                     let target = control(&renderer, "Toggle favorite").bounds().unwrap();
                     renderer.render_frames(30);
                     let icon_is_filled = |renderer: &mut HeadlessRenderer| {
@@ -1329,17 +1846,20 @@ mod tests {
                 width: 900,
                 height: 8000,
                 sample_count: 1,
+                frame_time: Duration::from_nanos(16_666_667),
                 ..Default::default()
             },
         )
         .unwrap();
-        renderer.render_frames(3);
+        renderer.render_frames(8);
         for component in COMPONENTS {
+            eprintln!("Checking {} specifications", component.title);
             let card = bounds(
                 &renderer,
                 &format!("Open {} specifications", component.title),
             );
             click(&mut renderer, card);
+            renderer.render_frames(8);
             let snapshot = renderer.accessibility_snapshot().unwrap();
             assert!(
                 snapshot
@@ -1360,6 +1880,33 @@ mod tests {
                     component.title
                 );
             }
+            renderer.resize(390, 900);
+            renderer.render_frames(8);
+            let title = renderer
+                .accessibility_snapshot()
+                .unwrap()
+                .nodes
+                .into_iter()
+                .find(|(_, node)| {
+                    node.role() == Role::Heading
+                        && node.level() == Some(1)
+                        && node.label()
+                            == Some(if component.demo == 19 {
+                                "Floating action buttons (FABs)"
+                            } else {
+                                component.title
+                            })
+                })
+                .expect("article title")
+                .1
+                .bounds()
+                .unwrap();
+            assert!(
+                title.x0 >= 0.0 && title.x1 <= 390.0,
+                "compact title must stay within the viewport: {title:?}"
+            );
+            renderer.resize(900, 8000);
+            renderer.render_frames(8);
             match component.demo {
                 20 => {
                     renderer.render_frames(5);
@@ -1546,7 +2093,8 @@ mod tests {
                     .unwrap();
                     assert_eq!(brand.width(), 32.0);
                     let bar = bounds(&renderer, "Configured app bar bar");
-                    assert!(((brand.x0 + brand.x1) - (bar.x0 + bar.x1)).abs() < 0.01);
+                    assert_eq!(bar.width(), 725.0);
+                    assert_eq!((brand.x0 - bar.x0, brand.x1 - bar.x0), (346.0, 378.0));
                     toggle(
                         &mut renderer,
                         "Configured app bar logo",
@@ -1601,7 +2149,7 @@ mod tests {
                     let input = bounds(&renderer, "Configured Filled input");
                     click(&mut renderer, input);
                     renderer.inject_text("Ada");
-                    renderer.render_frames(3);
+                    renderer.render_frames(8);
                     bounds(&renderer, "Configured Filled value: Ada");
                     toggle(
                         &mut renderer,
@@ -1612,7 +2160,7 @@ mod tests {
                     let input = bounds(&renderer, "Configured Filled input");
                     click(&mut renderer, input);
                     renderer.inject_text("ignored");
-                    renderer.render_frames(3);
+                    renderer.render_frames(8);
                     bounds(&renderer, "Configured Filled value: Ada");
                     toggle(
                         &mut renderer,
@@ -1651,7 +2199,7 @@ mod tests {
                     let input = bounds(&renderer, "Configured Outlined input");
                     click(&mut renderer, input);
                     renderer.inject_text("Paris");
-                    renderer.render_frames(3);
+                    renderer.render_frames(8);
                     bounds(&renderer, "Configured Outlined value: Paris");
                     toggle(
                         &mut renderer,
@@ -1913,7 +2461,7 @@ mod tests {
                             .unwrap();
                     assert!(ferries.x0 >= 0.0 && ferries.x1 <= 390.0);
                     renderer.resize(900, 8000);
-                    renderer.render_frames(3);
+                    renderer.render_frames(8);
                     let trains =
                         scoped_node(&renderer, "Secondary tabs preview", "Trains", Role::Tab)
                             .unwrap();
@@ -1921,6 +2469,7 @@ mod tests {
                     bounds(&renderer, "Secondary content: Trains");
                 }
                 6 => {
+                    settle_loading_geometry(&mut renderer);
                     let indicator = scoped_node(
                         &renderer,
                         "Loading indicator specifications",
@@ -2195,6 +2744,7 @@ mod tests {
                     }
                 }
                 28 => {
+                    activate_navigation(&mut renderer, "Modal date picker", Role::Link);
                     let day = scoped_node(
                         &renderer,
                         "Calendar date preview",
@@ -2223,6 +2773,7 @@ mod tests {
                     let confirm = control(&renderer, "Calendar confirm date");
                     click(&mut renderer, confirm.bounds().unwrap());
                     bounds(&renderer, "Confirmed range: 2026-07-18 – 2026-07-22");
+                    activate_navigation(&mut renderer, "Modal date input", Role::Link);
                     toggle(
                         &mut renderer,
                         "Input range selection",
@@ -2236,30 +2787,89 @@ mod tests {
                                 .expect("range input field");
                         assert_eq!(input.value(), Some(value));
                     }
-                    let forbidden = scoped_node(
-                        &renderer,
-                        "Restricted date preview",
-                        "July 19, 2026",
-                        Role::Button,
-                    )
-                    .expect("disabled day");
-                    assert!(forbidden.is_disabled());
-                    click(&mut renderer, forbidden.bounds().unwrap());
-                    bounds(&renderer, "Restricted date: 2026-07-18");
-                    let allowed = scoped_node(
-                        &renderer,
-                        "Restricted date preview",
-                        "July 20, 2026",
-                        Role::Button,
-                    )
-                    .expect("enabled day");
+                    activate_navigation(&mut renderer, "Element states", Role::Link);
+                    let state_day = "August 17, 2025";
+                    let light_day = "Light Enabled date state";
+                    let disabled_day = "Light Disabled date state";
+                    let dark_day = "Dark Enabled date state";
+                    let allowed = scoped_node(&renderer, light_day, state_day, Role::Button)
+                        .expect("native enabled date state");
+                    assert!(!allowed.is_disabled());
+                    assert_eq!(allowed.is_selected(), Some(false));
                     click(&mut renderer, allowed.bounds().unwrap());
-                    bounds(&renderer, "Restricted date: 2026-07-20");
+                    assert_eq!(
+                        scoped_node(&renderer, light_day, state_day, Role::Button)
+                            .unwrap()
+                            .is_selected(),
+                        Some(true),
+                    );
+                    let forbidden = scoped_node(&renderer, disabled_day, state_day, Role::Button)
+                        .expect("native disabled date state");
+                    assert!(forbidden.is_disabled());
+                    assert_eq!(forbidden.is_selected(), Some(false));
+                    click(&mut renderer, forbidden.bounds().unwrap());
+                    assert_eq!(
+                        scoped_node(&renderer, disabled_day, state_day, Role::Button)
+                            .unwrap()
+                            .is_selected(),
+                        Some(false),
+                    );
+                    assert_eq!(
+                        scoped_node(&renderer, dark_day, state_day, Role::Button)
+                            .expect("independent dark date state")
+                            .is_selected(),
+                        Some(false),
+                    );
+                    let dark_year = "Dark Enabled year state";
+                    let disabled_year = "Light Disabled year state";
+                    let year = scoped_node(&renderer, dark_year, "2025", Role::Button)
+                        .expect("native enabled year state");
+                    assert!(!year.is_disabled());
+                    assert_eq!(year.is_selected(), Some(false));
+                    click(&mut renderer, year.bounds().unwrap());
+                    assert_eq!(
+                        scoped_node(&renderer, dark_year, "2025", Role::Button)
+                            .unwrap()
+                            .is_selected(),
+                        Some(true),
+                    );
+                    let forbidden = scoped_node(&renderer, disabled_year, "2025", Role::Button)
+                        .expect("native disabled year state");
+                    assert!(forbidden.is_disabled());
+                    assert_eq!(forbidden.is_selected(), Some(false));
+                    click(&mut renderer, forbidden.bounds().unwrap());
+                    assert_eq!(
+                        scoped_node(&renderer, disabled_year, "2025", Role::Button)
+                            .unwrap()
+                            .is_selected(),
+                        Some(false),
+                    );
+                    assert_eq!(
+                        scoped_node(&renderer, "Light Enabled year state", "2025", Role::Button)
+                            .expect("independent light year state")
+                            .is_selected(),
+                        Some(false),
+                    );
+                    assert_eq!(
+                        scoped_node(&renderer, light_day, state_day, Role::Button)
+                            .unwrap()
+                            .is_selected(),
+                        Some(true),
+                        "disabled and independent year clicks must retain the selected date",
+                    );
+                    assert_eq!(
+                        scoped_node(&renderer, dark_year, "2025", Role::Button)
+                            .unwrap()
+                            .is_selected(),
+                        Some(true),
+                        "disabled year clicks must retain the independently selected year",
+                    );
+                    activate_navigation(&mut renderer, "Modal date picker", Role::Link);
                     let open = control(&renderer, "Open Calendar date dialog");
                     click(&mut renderer, open.bounds().unwrap());
                     renderer.render_frames(24);
                     renderer.resize(900, 1200);
-                    renderer.render_frames(3);
+                    renderer.render_frames(8);
                     let mode = scoped_node(
                         &renderer,
                         "Modal date preview",
@@ -2297,9 +2907,11 @@ mod tests {
                             .any(|(_, node)| node.role() == Role::Dialog)
                     );
                     renderer.resize(900, 8000);
-                    renderer.render_frames(3);
+                    renderer.render_frames(8);
                 }
                 30 => {
+                    activate_navigation(&mut renderer, "Anatomy", Role::Link);
+                    settle_time_geometry(&mut renderer);
                     let vertical = bounds(&renderer, "Anatomy time preview");
                     toggle(
                         &mut renderer,
@@ -2307,15 +2919,18 @@ mod tests {
                         Toggled::False,
                         Toggled::True,
                     );
+                    settle_time_geometry(&mut renderer);
                     let horizontal = bounds(&renderer, "Anatomy time preview");
                     assert!(horizontal.width() > vertical.width());
                     assert!(horizontal.height() < vertical.height());
                     renderer.resize(390, 8000);
-                    renderer.render_frames(3);
+                    renderer.render_frames(8);
+                    settle_time_geometry(&mut renderer);
                     let compact = bounds(&renderer, "Anatomy time preview");
                     assert!(compact.width() < 400.0 && compact.height() > horizontal.height());
                     renderer.resize(900, 8000);
-                    renderer.render_frames(3);
+                    renderer.render_frames(8);
+                    settle_time_geometry(&mut renderer);
                     toggle(
                         &mut renderer,
                         "Anatomy 24-hour format",
@@ -2446,6 +3061,7 @@ mod tests {
                             .iter()
                             .any(|(_, node)| node.label() == Some("Expanded archive folder"))
                     );
+                    activate_navigation(&mut renderer, "Measurements", Role::Link);
                     for (label, height) in [
                         ("One-line list measurement", 56.0),
                         ("Two-line list measurement", 72.0),
@@ -2513,6 +3129,8 @@ mod tests {
                     );
                 }
                 23 => {
+                    let guidelines = bounds(&renderer, "Guidelines");
+                    click(&mut renderer, guidelines);
                     toggle(
                         &mut renderer,
                         "Notification preference: Important only",
@@ -2523,6 +3141,8 @@ mod tests {
                         control(&renderer, "Notification preference: All notifications").toggled(),
                         Some(Toggled::False)
                     );
+                    let specs = bounds(&renderer, "Specs");
+                    click(&mut renderer, specs);
                 }
                 36 => {
                     toggle(
@@ -2627,7 +3247,7 @@ mod tests {
                     | 38
             ) {
                 renderer.resize(900, 1200);
-                renderer.render_frames(3);
+                renderer.render_frames(8);
                 for section in [
                     if matches!(
                         component.demo,
@@ -2665,14 +3285,14 @@ mod tests {
                         let back = bounds(&renderer, "Back to components");
                         click(&mut renderer, back);
                         renderer.resize(900, 8000);
-                        renderer.render_frames(3);
+                        renderer.render_frames(8);
                         let card = bounds(
                             &renderer,
                             &format!("Open {} specifications", component.title),
                         );
                         click(&mut renderer, card);
                         renderer.resize(900, 1200);
-                        renderer.render_frames(3);
+                        renderer.render_frames(8);
                     }
                     let link = renderer
                         .accessibility_snapshot()
@@ -2687,6 +3307,7 @@ mod tests {
                         .bounds()
                         .unwrap();
                     click(&mut renderer, link);
+                    renderer.render_frames(8);
                     let heading = renderer
                         .accessibility_snapshot()
                         .unwrap()
@@ -2728,35 +3349,19 @@ mod tests {
                         );
                     }
                 }
+                if matches!(component.demo, 9 | 18 | 19 | 22) {
+                    activate_navigation(&mut renderer, "Variants", Role::Link);
+                } else if component.demo == 28 {
+                    activate_navigation(&mut renderer, "Modal date picker", Role::Link);
+                } else if component.demo == 30 {
+                    activate_navigation(&mut renderer, "Anatomy", Role::Link);
+                }
                 renderer.resize(390, 900);
-                renderer.render_frames(3);
-                let title = renderer
-                    .accessibility_snapshot()
-                    .unwrap()
-                    .nodes
-                    .into_iter()
-                    .find(|(_, node)| {
-                        node.role() == Role::Heading
-                            && node.level() == Some(1)
-                            && node.label()
-                                == Some(if component.demo == 19 {
-                                    "Floating action buttons (FABs)"
-                                } else {
-                                    component.title
-                                })
-                    })
-                    .expect("article title")
-                    .1
-                    .bounds()
-                    .unwrap();
-                assert!(
-                    title.x0 >= 0.0 && title.x1 <= 390.0,
-                    "compact title must stay within the viewport: {title:?}"
-                );
+                renderer.render_frames(8);
                 if component.demo == 28 {
                     let preview = bounds(&renderer, "Calendar date preview");
-                    assert_eq!(preview.width(), 360.0);
-                    assert!(preview.x0 >= 0.0 && preview.x1 <= 390.0);
+                    assert_eq!(preview.width(), 359.0);
+                    assert!(preview.x0 >= 8.0 && preview.x1 <= 375.0);
                 } else if component.demo == 30 {
                     let preview = bounds(&renderer, "Anatomy time preview");
                     assert!(preview.width() >= 304.0 && preview.width() < 400.0);
@@ -2788,7 +3393,7 @@ mod tests {
                     }
                 }
                 renderer.resize(900, 8000);
-                renderer.render_frames(3);
+                renderer.render_frames(8);
             }
             let back = bounds(&renderer, "Back to components");
             click(&mut renderer, back);
@@ -2798,13 +3403,93 @@ mod tests {
             );
         }
         renderer.resize(390, 900);
-        renderer.render_frames(3);
+        renderer.render_frames(8);
         let first = bounds(&renderer, "Open Button groups specifications");
         let second = bounds(&renderer, "Open Buttons specifications");
         assert!(first.x0 >= 0.0 && first.x1 <= 390.0);
         assert!(
             second.y0 >= first.y1,
             "compact directory must use one column"
+        );
+    }
+
+    #[test]
+    #[ignore = "requires a native GPU adapter for real directory and article tracks"]
+    fn reserved_track_preserves_directory_groups_wheel_and_article_routes() {
+        let mut renderer = HeadlessRenderer::new(
+            Box::new(fixture),
+            vec![Box::new(ComponentPipelines)],
+            HeadlessConfig {
+                width: 907,
+                height: 1800,
+                sample_count: 1,
+                frame_time: Duration::from_nanos(16_666_667),
+                ..Default::default()
+            },
+        )
+        .unwrap();
+        renderer.render_frames(8);
+        let track = |renderer: &HeadlessRenderer| {
+            let bars = renderer
+                .accessibility_snapshot()
+                .unwrap()
+                .nodes
+                .into_iter()
+                .filter(|(_, node)| node.role() == Role::ScrollBar)
+                .collect::<Vec<_>>();
+            assert_eq!(bars.len(), 1, "Each page owns exactly one outer track");
+            bars[0].1.bounds().unwrap()
+        };
+        let bar = track(&renderer);
+        assert_eq!((bar.x0, bar.width()), (892.0, 15.0));
+        let first = bounds(&renderer, "Open Button groups specifications");
+        let second = bounds(&renderer, "Open Buttons specifications");
+        let third = bounds(&renderer, "Open Extended FABs specifications");
+        let next_group = bounds(&renderer, "Open FAB menu specifications");
+        assert_eq!((first.width(), second.width()), (434.0, 434.0));
+        assert_eq!(first.y0, second.y0);
+        assert_eq!(third.y0, first.y1 + 8.0);
+        assert_eq!(
+            next_group.y0,
+            third.y1 + 8.0,
+            "Three-card groups retain their real empty slot"
+        );
+        renderer.pointer_scroll(
+            MOUSE_POINTER_ID,
+            PxPosition::from_f32_xy(900.0, 800.0),
+            0.0,
+            -120.0,
+        );
+        renderer.render_frames(120);
+        assert_eq!(
+            bounds(&renderer, "Open Button groups specifications").y0,
+            first.y0 - 120.0
+        );
+        renderer.pointer_scroll(
+            MOUSE_POINTER_ID,
+            PxPosition::from_f32_xy(400.0, 800.0),
+            0.0,
+            120.0,
+        );
+        renderer.render_frames(120);
+        assert_eq!(
+            bounds(&renderer, "Open Button groups specifications"),
+            first
+        );
+        click(&mut renderer, first);
+        renderer.render_frames(8);
+        assert_eq!(track(&renderer), bar);
+        let guidelines = tab(&renderer, "Guidelines").bounds().unwrap();
+        click(&mut renderer, guidelines);
+        assert_eq!(tab(&renderer, "Guidelines").is_selected(), Some(true));
+        assert_eq!(track(&renderer), bar);
+        let back = bounds(&renderer, "Back to components");
+        click(&mut renderer, back);
+        renderer.render_frames(8);
+        assert_eq!(track(&renderer), bar);
+        assert_eq!(
+            bounds(&renderer, "Open Button groups specifications").width(),
+            434.0
         );
     }
 }

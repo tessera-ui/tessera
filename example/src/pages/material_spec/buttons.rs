@@ -5,23 +5,29 @@
 //! Compare button selection, sizes, shapes, colors and input feedback.
 
 use tessera_components::{
+    alignment::Alignment,
+    boxed::boxed,
     button::{ButtonShape, ButtonSize, ButtonVariant, button},
     column::column,
     flow_row::flow_row,
     icon::icon,
     material_icons::filled,
-    modifier::ModifierExt as _,
+    modifier::{InteractionVisualState, ModifierExt as _, Padding, SemanticsArgs},
+    shape_def::Shape,
     surface::surface,
     text::text,
     theme::{MaterialTheme, material_theme},
 };
-use tessera_ui::{Dp, Modifier, RenderSlot, remember, tessera};
+use tessera_ui::{
+    Dp, Modifier, RenderSlot, accesskit::Role, modifier::FocusModifierExt as _, remember, tessera,
+    use_context,
+};
 
 use super::{
     ACCENT, INK,
     action_articles::{Kind, action_article},
     article::SpecSection,
-    gap, panel, spec_table, type_style,
+    gap, panel, spec_table, subheading, type_style,
 };
 
 const STYLES: [ButtonVariant; 5] = [
@@ -90,7 +96,10 @@ pub(super) fn buttons_spec() {
         RenderSlot::new(variants),
         RenderSlot::new(anatomy),
         RenderSlot::new(shape_morph),
-    );
+    )
+    .overview(|| {
+        overview_art();
+    });
 }
 
 #[tessera]
@@ -128,6 +137,105 @@ pub(super) fn button_preview(
     control.child(move || {
         text().content(label.clone());
     });
+}
+
+#[tessera]
+fn overview_art() {
+    let width = remember(|| 1024.0_f64);
+    let scale = width.get() / 1024.0;
+    let scheme = use_context::<MaterialTheme>().unwrap().get().color_scheme;
+    boxed()
+        .modifier(
+            Modifier::new()
+                .fill_max_width()
+                .height(Dp(300.0 * scale))
+                .background_with_shape(
+                    scheme.surface_container_low,
+                    Shape::rounded_rectangle(Dp(24.0)),
+                )
+                .on_globally_positioned(move |bounds: tessera_ui::PxRect| {
+                    let next = Dp::from_pixels_f32(bounds.width.to_f32()).0;
+                    if width.is_alive() && width.get() != next {
+                        width.set(next);
+                    }
+                }),
+        )
+        .children(move || {
+            for (index, style) in STYLES.into_iter().enumerate() {
+                let center = [159.0, 342.0, 515.0, 699.0, 879.0][index];
+                boxed()
+                    .alignment(Alignment::Center)
+                    .modifier(
+                        Modifier::new()
+                            .offset(Dp((center - 80.0) * scale), Dp(76.0 * scale))
+                            .size(Dp(160.0 * scale), Dp(80.0 * scale)),
+                    )
+                    .children(move || {
+                        overview_button(style, index, scale);
+                    });
+                boxed()
+                    .alignment(Alignment::Center)
+                    .modifier(
+                        Modifier::new()
+                            .offset(Dp((center - 20.0) * scale), Dp(168.0 * scale))
+                            .size(Dp(40.0 * scale), Dp(40.0 * scale))
+                            .background_with_shape(scheme.on_surface, Shape::Ellipse)
+                            .semantics(SemanticsArgs {
+                                role: Some(Role::Note),
+                                label: Some(format!("{} {} button", index + 1, style_name(style))),
+                                ..Default::default()
+                            }),
+                    )
+                    .children(move || {
+                        text()
+                            .content((index + 1).to_string())
+                            .style(type_style(16.0 * scale, 24.0 * scale))
+                            .color(scheme.surface);
+                    });
+            }
+        });
+    gap(Dp(24.0));
+    for (index, caption) in [
+        "Elevated button",
+        "Filled button",
+        "Filled tonal button",
+        "Outlined button",
+        "Text button",
+    ]
+    .into_iter()
+    .enumerate()
+    {
+        text()
+            .content(format!("{}  {caption}", index + 1))
+            .style(type_style(16.0, 24.0));
+    }
+}
+
+#[tessera]
+fn overview_button(style: ButtonVariant, index: usize, scale: f64) {
+    let actions = remember(|| 0_u32);
+    let mut label_style = type_style(14.0 * scale, 20.0 * scale);
+    label_style.font_weight = 500;
+    button()
+        .variant(style)
+        .size(ButtonSize::Small)
+        .shape_style(ButtonShape::Round)
+        .content_padding(Padding::default())
+        .modifier(Modifier::new().size(
+            Dp([90.0, 68.0, 68.0, 90.0, 64.0][index] * scale),
+            Dp(40.0 * scale),
+        ))
+        .border_width(Dp(if style == ButtonVariant::Outlined {
+            scale
+        } else {
+            0.0
+        }))
+        .accessibility_label(format!("Overview {} button", style_name(style)))
+        .accessibility_description(format!("Activations: {}", actions.get()))
+        .on_click(move || actions.set(actions.get() + 1))
+        .child(move || {
+            text().content(style_name(style)).style(label_style);
+        });
 }
 
 #[tessera]
@@ -362,53 +470,218 @@ fn colors() {
 
 #[tessera]
 fn states() {
-    text()
-        .content("Hover, focus with Tab, or hold a button to inspect its live input feedback.")
-        .style(type_style(16.0, 24.0))
-        .color(INK);
-    gap(Dp(32.0));
-    panel(RenderSlot::new(|| {
-        column()
-            .modifier(Modifier::new().fill_max_width())
-            .children(|| {
-                for style in STYLES {
-                    text()
-                        .content(format!("{} button states", style_name(style)))
-                        .style(type_style(24.0, 32.0));
-                    gap(Dp(24.0));
-                    flow_row()
-                        .item_spacing(Dp(16.0))
-                        .line_spacing(Dp(16.0))
-                        .children(move || {
-                            button_preview(
-                                style,
-                                ButtonSize::Small,
-                                ButtonShape::Round,
-                                false,
-                                true,
-                                "Enabled",
-                            );
-                            button_preview(
-                                style,
-                                ButtonSize::Small,
-                                ButtonShape::Round,
-                                false,
-                                false,
-                                "Disabled",
-                            );
-                            button_preview(
-                                style,
-                                ButtonSize::Small,
-                                ButtonShape::Round,
-                                false,
-                                true,
-                                "Interact",
-                            );
-                        });
-                    gap(Dp(40.0));
-                }
-            });
-    }));
+    for style in STYLES {
+        subheading(format!("{} button style states", style_name(style)));
+        gap(Dp(24.0));
+        subheading("Default".into());
+        gap(Dp(24.0));
+        button_state_matrix(style, false);
+        if style != ButtonVariant::Text {
+            gap(Dp(40.0));
+            subheading("Toggle".into());
+            gap(Dp(24.0));
+            button_state_matrix(style, true);
+        }
+        gap(Dp(64.0));
+    }
+}
+
+#[tessera]
+fn button_state_matrix(style: ButtonVariant, toggle: bool) {
+    let width = remember(|| 1024.0_f64);
+    let scale = width.get() / 1024.0;
+    boxed()
+        .modifier(
+            Modifier::new()
+                .fill_max_width()
+                .height(Dp(600.0 * scale))
+                .clip_to_bounds()
+                .on_globally_positioned(move |bounds: tessera_ui::PxRect| {
+                    let next = Dp::from_pixels_f32(bounds.width.to_f32()).0;
+                    if width.is_alive() && width.get() != next {
+                        width.set(next);
+                    }
+                }),
+        )
+        .children(move || {
+            for dark in [false, true] {
+                material_theme()
+                    .theme(move || MaterialTheme::from_seed(ACCENT, dark))
+                    .child(move || {
+                        let scheme = use_context::<MaterialTheme>().unwrap().get().color_scheme;
+                        boxed()
+                            .modifier(
+                                Modifier::new()
+                                    .offset(Dp::ZERO, Dp(if dark { 300.0 } else { 0.0 } * scale))
+                                    .size(Dp(1024.0 * scale), Dp(300.0 * scale))
+                                    .background(scheme.surface_container_low),
+                            )
+                            .children(move || {
+                                for state in 0..5 {
+                                    let center = if toggle {
+                                        [169.0, 353.0, 537.0, 722.0, 909.0][state]
+                                    } else {
+                                        [144.0, 328.0, 512.0, 696.0, 880.0][state]
+                                    };
+                                    button_state_marker(
+                                        (state + 1).to_string(),
+                                        center,
+                                        if toggle {
+                                            if dark { 74.0 } else { 79.0 }
+                                        } else {
+                                            116.0
+                                        },
+                                        scale,
+                                    );
+                                    for selected in
+                                        [false, true].into_iter().take(if toggle { 2 } else { 1 })
+                                    {
+                                        let mut center_y = if toggle {
+                                            if selected { 208.0 } else { 136.0 }
+                                        } else {
+                                            172.0
+                                        };
+                                        if toggle && dark {
+                                            center_y -= 4.0;
+                                        }
+                                        boxed()
+                                            .alignment(Alignment::Center)
+                                            .modifier(
+                                                Modifier::new()
+                                                    .offset(
+                                                        Dp((center - 80.0) * scale),
+                                                        Dp((center_y - 40.0) * scale),
+                                                    )
+                                                    .size(Dp(160.0 * scale), Dp(80.0 * scale)),
+                                            )
+                                            .children(move || {
+                                                button_state_item(
+                                                    style,
+                                                    toggle,
+                                                    selected,
+                                                    state,
+                                                    scale,
+                                                    format!(
+                                                        "{} {} {} {} {}",
+                                                        if dark { "Dark" } else { "Light" },
+                                                        style_name(style),
+                                                        if toggle { "toggle" } else { "default" },
+                                                        if selected {
+                                                            "selected"
+                                                        } else {
+                                                            "unselected"
+                                                        },
+                                                        [
+                                                            "enabled", "disabled", "hovered",
+                                                            "focused", "pressed"
+                                                        ][state]
+                                                    ),
+                                                );
+                                            });
+                                    }
+                                }
+                                if toggle {
+                                    button_state_marker(
+                                        "A".into(),
+                                        86.0,
+                                        if dark { 132.0 } else { 136.0 },
+                                        scale,
+                                    );
+                                    button_state_marker(
+                                        "B".into(),
+                                        86.0,
+                                        if dark { 204.0 } else { 208.0 },
+                                        scale,
+                                    );
+                                }
+                            });
+                    });
+            }
+        });
+    gap(Dp(24.0));
+    if toggle {
+        text()
+            .content("A. Unselected, B. Selected")
+            .style(type_style(16.0, 24.0));
+    }
+    for (index, label) in ["Enabled", "Disabled", "Hovered", "Focused", "Pressed"]
+        .into_iter()
+        .enumerate()
+    {
+        text()
+            .content(format!("{}  {label}", index + 1))
+            .style(type_style(16.0, 24.0));
+    }
+}
+
+#[tessera]
+fn button_state_marker(label: String, x: f64, y: f64, scale: f64) {
+    let scheme = use_context::<MaterialTheme>().unwrap().get().color_scheme;
+    boxed()
+        .alignment(Alignment::Center)
+        .modifier(
+            Modifier::new()
+                .offset(Dp((x - 12.0) * scale), Dp((y - 12.0) * scale))
+                .size(Dp(24.0 * scale), Dp(24.0 * scale))
+                .background_with_shape(scheme.on_surface, Shape::Ellipse),
+        )
+        .children(move || {
+            text()
+                .content(label.clone())
+                .style(type_style(14.0 * scale, 20.0 * scale))
+                .color(scheme.surface);
+        });
+}
+
+#[tessera]
+fn button_state_item(
+    style: ButtonVariant,
+    toggle: bool,
+    initial: bool,
+    state: usize,
+    scale: f64,
+    name: String,
+) {
+    let selected = remember(|| initial);
+    let actions = remember(|| 0_u32);
+    let name = remember(|| name);
+    let mut label_style = type_style(14.0 * scale, 20.0 * scale);
+    label_style.font_weight = 500;
+    button()
+        .variant(style)
+        .size(ButtonSize::Small)
+        .shape_style(ButtonShape::Round)
+        .selected_optional(if toggle { Some(selected.get()) } else { None })
+        .enabled(state != 1)
+        .presentation_state(match state {
+            2 => InteractionVisualState::Hover,
+            3 => InteractionVisualState::Focus,
+            4 => InteractionVisualState::Pressed,
+            _ => InteractionVisualState::Rest,
+        })
+        .content_padding(Padding::default())
+        .modifier(Modifier::new().size(
+            Dp([84.0, 90.0, 86.0, 86.0, 84.0][state] * scale),
+            Dp(40.0 * scale),
+        ))
+        .border_width(Dp(if style == ButtonVariant::Outlined {
+            scale
+        } else {
+            0.0
+        }))
+        .accessibility_label(name.get())
+        .accessibility_description(format!("Activations: {}", actions.get()))
+        .on_click(move || {
+            actions.set(actions.get() + 1);
+            if toggle {
+                selected.set(!selected.get());
+            }
+        })
+        .child(move || {
+            text()
+                .content(["Enabled", "Disabled", "Hovered", "Focused", "Pressed"][state])
+                .style(label_style);
+        });
 }
 
 #[tessera]

@@ -39,6 +39,10 @@ pub(super) fn load_fonts() {
         for asset in [
             crate::res::material_spec::EXAMPLESANSDISPLAY_TTF,
             crate::res::material_spec::EXAMPLESANSTEXT_TTF,
+            crate::res::material_spec::EXAMPLESANSTABS_TTF,
+            crate::res::material_spec::EXAMPLESANSTABSHOVER_TTF,
+            crate::res::material_spec::EXAMPLESANSTABSSELECTED_TTF,
+            crate::res::material_spec::EXAMPLESANSTABSPRESSED_TTF,
         ] {
             fonts.db_mut().load_font_data(
                 asset

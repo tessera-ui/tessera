@@ -298,7 +298,15 @@ fn figure(modal: bool, measurements: bool) {
 
 #[tessera]
 fn figure_annotations(modal: bool, measurements: bool, geometry: State<Geometry>) {
-    let values = geometry.get();
+    figure_annotation_content(
+        modal,
+        measurements,
+        geometry.with(annotations::relative_geometry),
+    );
+}
+
+#[tessera]
+fn figure_annotation_content(modal: bool, measurements: bool, values: Geometry) {
     let (Some(root), Some(container), Some(indicator)) = (
         values.get("figure"),
         relative(&values, "container"),

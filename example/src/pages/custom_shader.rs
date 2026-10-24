@@ -8,7 +8,7 @@ use tessera_ui::{
     Dp, DrawCommand, EntryRegistry, FrameNanosControl, Modifier, PipelineContext, RenderModule,
     State, TesseraPackage,
     layout::layout,
-    px::{Px, PxPosition, PxRect, PxSize},
+    px::{Px, PxRect, PxSize},
     receive_frame_nanos, remember,
     renderer::drawer::pipeline::{DrawContext, DrawablePipeline},
     tessera, use_context, wgpu,
@@ -298,15 +298,16 @@ impl RaymarchPipeline {
         &self,
         queue: &wgpu::Queue,
         command: &RaymarchCommand,
-        position: PxPosition,
-        size: PxSize,
+        geometry: tessera_ui::DrawGeometry,
         target_size: PxSize,
     ) {
+        let position = geometry.window_origin();
+        let [width, height] = geometry.window_size();
         let values = [
             position.x,
             position.y,
-            size.width.raw() as f32,
-            size.height.raw() as f32,
+            width,
+            height,
             command.mouse[0],
             command.mouse[1],
             command.time_seconds,
@@ -353,20 +354,14 @@ impl DrawablePipeline<RaymarchCommand> for RaymarchPipeline {
         context.render_pass.set_pipeline(&self.pipeline);
         context.render_pass.set_bind_group(0, &self.bind_group, &[]);
 
-        for (command, size, position) in context.commands {
+        for (command, geometry) in context.commands {
             let Some((x, y, width, height)) =
-                resolve_scissor_rect(*position, *size, context.clip_rect, context.target_size)
+                resolve_scissor_rect(*geometry, context.clip_rect, context.target_size)
             else {
                 continue;
             };
 
-            self.write_uniforms(
-                context.queue,
-                command,
-                *position,
-                *size,
-                context.target_size,
-            );
+            self.write_uniforms(context.queue, command, *geometry, context.target_size);
             context.render_pass.set_scissor_rect(x, y, width, height);
             context.render_pass.draw(0..6, 0..1);
         }
@@ -374,13 +369,12 @@ impl DrawablePipeline<RaymarchCommand> for RaymarchPipeline {
 }
 
 fn resolve_scissor_rect(
-    position: PxPosition,
-    size: PxSize,
+    geometry: tessera_ui::DrawGeometry,
     clip_rect: Option<PxRect>,
     target_size: PxSize,
 ) -> Option<(u32, u32, u32, u32)> {
     let viewport = PxRect::new(Px::ZERO, Px::ZERO, target_size.width, target_size.height);
-    let base = PxRect::from_position_size(position, size);
+    let base = geometry.window_bounds().outward();
 
     let clipped = match clip_rect {
         Some(clip) => base.intersection(&clip)?,

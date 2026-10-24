@@ -19,18 +19,20 @@ use tessera_components::{
     spacer::spacer,
     surface::surface,
     text::text,
-    theme::MaterialTheme,
+    theme::{MaterialTheme, material_theme},
     time_picker::{
         TimePickerDisplayMode, TimePickerLayout, TimePickerSelection, TimePickerState, time_picker,
         time_picker_dialog,
     },
 };
 use tessera_ui::{
-    Dp, FocusManager, Modifier, RenderSlot, State, accesskit::Role, remember, tessera, use_context,
+    Dp, FocusManager, LayoutCoordinates, Modifier, RenderSlot, State, accesskit::Role,
+    modifier::FocusModifierExt as _, remember, scaled_box, tessera, use_context,
 };
 
 use super::{
-    annotations::{self, Geometry, Rect, dotted, relative, watch},
+    ACCENT,
+    annotations::{self, PreciseGeometry, Rect, dotted, watch_precise},
     article::{ArticlePage, SpecSection, article},
     gap, spec_table, subheading, type_style,
 };
@@ -308,18 +310,119 @@ fn tokens() {
 #[tessera]
 fn colors() {
     subheading("Time picker dial color".into());
-    prose(
-        "The container uses surface container high. The selected field uses primary container; the clock handle and track use primary. Period selection uses tertiary container.",
-    );
     gap(Dp(24.0));
-    time_figure(false, false, false, FigureKind::Plain, "Dial color".into());
+    time_color_pair(false);
     gap(Dp(32.0));
     subheading("Time picker input color".into());
-    prose(
-        "Input fields retain the same selected and unselected color roles. Supporting labels and the mode action use on surface variant.",
-    );
     gap(Dp(24.0));
-    time_figure(true, false, false, FigureKind::Plain, "Input color".into());
+    time_color_pair(true);
+}
+
+fn time_color_labels(input: bool) -> Vec<&'static str> {
+    let mut labels = vec![
+        "On surface variant",
+        "On surface",
+        "Surface container highest",
+        "On surface",
+        "Tertiary container",
+        "On tertiary container",
+        "Surface container high",
+        "Outline",
+        "On surface",
+        "Primary",
+        "On surface variant",
+    ];
+    if input {
+        labels.extend(["On primary container", "Primary container"]);
+    } else {
+        labels[10] = "On primary";
+        labels.extend([
+            "Primary",
+            "On surface variant",
+            "On surface",
+            "Surface container highest",
+            "On primary container",
+            "Primary container",
+        ]);
+    }
+    labels
+}
+
+#[tessera]
+fn time_color_pair(input: bool) {
+    let scheme = use_context::<MaterialTheme>().unwrap().get().color_scheme;
+    boxed()
+        .modifier(
+            Modifier::new()
+                .fill_max_width()
+                .clip_shape(Shape::rounded_rectangle(Dp(24.0)))
+                .semantics(SemanticsArgs {
+                    role: Some(Role::Group),
+                    label: Some(format!(
+                        "Time picker {} color roles",
+                        if input { "input" } else { "dial" }
+                    )),
+                    merge_descendants: true,
+                    ..Default::default()
+                }),
+        )
+        .children(move || {
+            row()
+                .modifier(Modifier::new().fill_max_width())
+                .children(move || {
+                    for dark in [false, true] {
+                        column()
+                            .modifier(Modifier::new().weight(1.0))
+                            .children(move || {
+                                material_theme()
+                                    .theme(move || MaterialTheme::from_seed(ACCENT, dark))
+                                    .child(move || {
+                                        time_figure(
+                                            input,
+                                            false,
+                                            false,
+                                            FigureKind::Colors,
+                                            format!(
+                                                "{} {} color",
+                                                if dark { "Dark" } else { "Light" },
+                                                if input { "input" } else { "dial" }
+                                            ),
+                                        );
+                                    });
+                            });
+                    }
+                });
+        });
+    gap(Dp(24.0));
+    prose(format!(
+        "Time picker {} color roles used for light and dark themes:",
+        if input { "input" } else { "dial" }
+    ));
+    gap(Dp(16.0));
+    for (index, label) in time_color_labels(input).into_iter().enumerate() {
+        row()
+            .cross_axis_alignment(CrossAxisAlignment::Center)
+            .children(move || {
+                boxed()
+                    .alignment(Alignment::Center)
+                    .modifier(
+                        Modifier::new()
+                            .size(Dp(24.0), Dp(32.0))
+                            .background_with_shape(scheme.on_surface, Shape::CAPSULE),
+                    )
+                    .children(move || {
+                        text()
+                            .content((index + 1).to_string())
+                            .color(scheme.surface)
+                            .style(type_style(14.0, 20.0));
+                    });
+                text()
+                    .content(label)
+                    .style(type_style(16.0, 24.0))
+                    .modifier(Modifier::new().padding_symmetric(Dp(12.0), Dp::ZERO));
+            });
+        gap(Dp(8.0));
+    }
 }
 
 #[tessera]
@@ -382,39 +485,164 @@ fn measurements() {
 #[tessera]
 fn configurations() {
     subheading("Vertical orientation and horizontal orientation".into());
-    time_figure(
-        false,
-        false,
-        false,
-        FigureKind::Plain,
-        "Vertical configuration".into(),
-    );
     gap(Dp(24.0));
-    time_figure(
-        false,
-        true,
-        false,
-        FigureKind::Plain,
-        "Horizontal configuration".into(),
-    );
+    time_configuration_pair(false, false);
     gap(Dp(32.0));
     subheading("24-hour time picker dial".into());
-    time_figure(false, false, true, FigureKind::Plain, "24-hour dial".into());
+    gap(Dp(24.0));
+    time_configuration_pair(false, true);
     gap(Dp(32.0));
     subheading("12-hour and 24-hour time picker inputs".into());
-    time_figure(
-        true,
-        false,
-        false,
-        FigureKind::Plain,
-        "12-hour input".into(),
-    );
     gap(Dp(24.0));
-    time_figure(true, false, true, FigureKind::Plain, "24-hour input".into());
+    time_configuration_pair(true, false);
     gap(Dp(24.0));
-    text().content("Switch orientation, clock format and input mode. Narrow containers automatically use the vertical layout.").style(type_style(16.0, 24.0));
+    text()
+        .content("Switch orientation, clock format and input mode.")
+        .style(type_style(16.0, 24.0));
     gap(Dp(24.0));
     example("Configurations", false);
+}
+
+#[tessera]
+fn time_configuration_pair(input: bool, twenty_four: bool) {
+    let scheme = use_context::<MaterialTheme>().unwrap().get().color_scheme;
+    let title = if input {
+        "Time input format comparison"
+    } else if twenty_four {
+        "24-hour time orientation comparison"
+    } else {
+        "12-hour time orientation comparison"
+    };
+    let available_width = remember(|| Dp(1024.0));
+    let scale = (available_width.get().0 / 1024.0) as f32;
+    boxed()
+        .modifier(Modifier::new().fill_max_width().on_layout_coordinates(
+            move |coordinates: LayoutCoordinates| {
+                let next = Dp::from_pixels_f32(coordinates.local_size.width.to_f32());
+                if next != available_width.get() {
+                    available_width.set(next);
+                }
+            },
+        ))
+        .children(move || {
+            scaled_box(scale).child(move || {
+                boxed()
+                    .alignment(Alignment::Center)
+                    .modifier(
+                        Modifier::new()
+                            .required_size(Dp(1024.0), Dp(if input { 400.0 } else { 640.0 }))
+                            .background_with_shape(
+                                scheme.surface_container_low,
+                                Shape::rounded_rectangle(Dp(24.0)),
+                            )
+                            .semantics(SemanticsArgs {
+                                role: Some(Role::Group),
+                                label: Some(title.into()),
+                                merge_descendants: true,
+                                ..Default::default()
+                            }),
+                    )
+                    .children(move || {
+                        row()
+                            .cross_axis_alignment(CrossAxisAlignment::Center)
+                            .children(move || {
+                                for second in [false, true] {
+                                    let horizontal = !input && second;
+                                    let twenty_four = twenty_four || (input && second);
+                                    let label = if input {
+                                        if twenty_four {
+                                            "24-hour input"
+                                        } else {
+                                            "12-hour input"
+                                        }
+                                    } else if twenty_four {
+                                        if horizontal {
+                                            "24-hour horizontal dial"
+                                        } else {
+                                            "24-hour vertical dial"
+                                        }
+                                    } else if horizontal {
+                                        "12-hour horizontal dial"
+                                    } else {
+                                        "12-hour vertical dial"
+                                    };
+                                    if second {
+                                        spacer().modifier(Modifier::new().width(Dp(32.0)));
+                                    }
+                                    time_configuration_card(
+                                        input,
+                                        horizontal,
+                                        twenty_four,
+                                        label.into(),
+                                    );
+                                }
+                            });
+                    });
+            });
+        });
+}
+
+#[tessera]
+fn time_configuration_card(input: bool, horizontal: bool, twenty_four: bool, label: String) {
+    let sample = Sample {
+        state: remember(|| {
+            TimePickerState::new(
+                if twenty_four { 20 } else { 7 },
+                0,
+                twenty_four,
+                if input {
+                    TimePickerDisplayMode::Input
+                } else {
+                    TimePickerDisplayMode::Picker
+                },
+            )
+        }),
+        layout: remember(|| {
+            if horizontal {
+                TimePickerLayout::Horizontal
+            } else {
+                TimePickerLayout::Vertical
+            }
+        }),
+        status: remember(String::new),
+    };
+    let open = remember(|| true);
+    column()
+        .cross_axis_alignment(CrossAxisAlignment::Center)
+        .modifier(
+            Modifier::new()
+                .width(Dp(if horizontal {
+                    572.0
+                } else if twenty_four {
+                    304.0
+                } else {
+                    328.0
+                }))
+                .semantics(SemanticsArgs {
+                    role: Some(Role::Group),
+                    label: Some(format!("{label} time configuration")),
+                    merge_descendants: true,
+                    ..Default::default()
+                }),
+        )
+        .children(move || {
+            if open.get() {
+                picker_surface(sample, label.clone()).modal(open);
+            } else {
+                text()
+                    .content(sample.status.get())
+                    .style(type_style(16.0, 24.0));
+                button()
+                    .text()
+                    .accessibility_label(format!("Reopen {label}"))
+                    .on_click(move || open.set(true))
+                    .child(|| {
+                        text().content("Open time picker");
+                    });
+            }
+            gap(Dp(16.0));
+            text().content(label.clone()).style(type_style(16.0, 24.0));
+        });
 }
 
 #[derive(Clone, Copy, Default, PartialEq)]
@@ -424,6 +652,7 @@ enum FigureKind {
     Specs,
     Guidelines,
     Measurements,
+    Colors,
 }
 
 #[tessera]
@@ -484,67 +713,96 @@ fn time_figure(
         }),
         status: remember(|| "Ready".to_owned()),
     };
-    let geometry = remember(Geometry::new);
+    let geometry = remember(PreciseGeometry::new);
     #[cfg(test)]
     tests::GEOMETRY.set(Some(geometry));
     let scheme = use_context::<MaterialTheme>().unwrap().get().color_scheme;
     let input = sample
         .state
         .with(|value| value.display_mode() == TimePickerDisplayMode::Input);
-    let actual_horizontal = horizontal
-        && !input
-        && geometry.with(|value| {
-            value
-                .get("figure")
-                .is_none_or(|bounds| Dp::from_pixels_f32(bounds.width.to_f32()).0 >= 668.0)
-        });
+    let actual_horizontal = horizontal && !input;
+    let canonical_width = if kind == FigureKind::Colors {
+        512.0
+    } else {
+        1024.0
+    };
+    let canonical_height = if input {
+        374.0
+    } else if actual_horizontal {
+        520.0
+    } else {
+        640.0
+    };
+    let available_width = remember(move || Dp(canonical_width));
+    let scale = (available_width.get().0 / canonical_width) as f32;
     boxed()
-        .alignment(Alignment::Center)
-        .modifier(
-            watch(geometry, "figure")
-                .fill_max_width()
-                .height(Dp(if input {
-                    400.0
-                } else if actual_horizontal {
-                    552.0
-                } else {
-                    680.0
-                }))
-                .background_with_shape(
-                    scheme.surface_container_low,
-                    Shape::rounded_rectangle(Dp(24.0)),
-                ),
-        )
+        .modifier(Modifier::new().fill_max_width().on_layout_coordinates(
+            move |coordinates: LayoutCoordinates| {
+                let next = Dp::from_pixels_f32(coordinates.local_size.width.to_f32());
+                if next != available_width.get() {
+                    available_width.set(next);
+                }
+            },
+        ))
         .children(move || {
             let label = label.clone();
-            surface()
-                .style(scheme.surface_container_high.into())
-                .shape(Shape::rounded_rectangle(Dp(28.0)))
-                .modifier(watch(geometry, "container").semantics(SemanticsArgs {
-                    role: Some(Role::Group),
-                    label: Some(format!("{label} annotated time picker")),
-                    merge_descendants: true,
-                    ..Default::default()
-                }))
-                .child(move || {
-                    time_figure_contents(sample, geometry, actual_horizontal, label.clone());
-                });
-            if kind != FigureKind::Plain {
+            scaled_box(scale).child(move || {
+                let label = label.clone();
                 boxed()
-                    .modifier(Modifier::new().fill_max_size())
+                    .alignment(Alignment::Center)
+                    .modifier(
+                        watch_precise(geometry, "figure")
+                            .required_size(Dp(canonical_width), Dp(canonical_height))
+                            .background_with_shape(
+                                scheme.surface_container_low,
+                                Shape::rounded_rectangle(if kind == FigureKind::Colors {
+                                    Dp::ZERO
+                                } else {
+                                    Dp(24.0)
+                                }),
+                            ),
+                    )
                     .children(move || {
-                        time_annotations(sample, geometry, actual_horizontal, kind);
+                        let label = label.clone();
+                        surface()
+                            .style(scheme.surface_container_high.into())
+                            .shape(Shape::rounded_rectangle(Dp(28.0)))
+                            .modifier(watch_precise(geometry, "container").semantics(
+                                SemanticsArgs {
+                                    role: Some(Role::Group),
+                                    label: Some(format!("{label} annotated time picker")),
+                                    merge_descendants: true,
+                                    ..Default::default()
+                                },
+                            ))
+                            .child(move || {
+                                time_figure_contents(
+                                    sample,
+                                    geometry,
+                                    actual_horizontal,
+                                    label.clone(),
+                                );
+                            });
+                        if kind != FigureKind::Plain {
+                            boxed()
+                                .modifier(Modifier::new().fill_max_size())
+                                .children(move || {
+                                    time_annotations(sample, geometry, actual_horizontal, kind);
+                                });
+                        }
                     });
-            }
+            });
         });
     if matches!(kind, FigureKind::Specs | FigureKind::Guidelines) {
         gap(Dp(24.0));
         time_anatomy_legend(input, kind);
     }
-    gap(Dp(12.0));
-    text()
-        .content(sample.status.get())
-        .style(type_style(14.0, 20.0));
+    if kind != FigureKind::Colors {
+        gap(Dp(12.0));
+        text()
+            .content(sample.status.get())
+            .style(type_style(14.0, 20.0));
+    }
 }
 
 #[tessera]
@@ -633,7 +891,7 @@ fn time_legend_item(number: usize, label: String) {
 #[tessera]
 fn time_figure_contents(
     sample: Sample,
-    geometry: State<Geometry>,
+    geometry: State<PreciseGeometry>,
     horizontal: bool,
     label: String,
 ) {
@@ -656,7 +914,7 @@ fn time_figure_contents(
                 .content(if input { "Enter time" } else { "Select time" })
                 .style(theme.typography.label_medium)
                 .color(theme.color_scheme.on_surface_variant)
-                .modifier(watch(geometry, "headline"));
+                .modifier(watch_precise(geometry, "headline"));
             if !horizontal {
                 gap(Dp(20.0));
             }
@@ -667,11 +925,15 @@ fn time_figure_contents(
                 } else {
                     TimePickerLayout::Vertical
                 })
-                .modifier(watch(geometry, "picker"));
+                .modifier(watch_precise(geometry, "picker"));
             gap(Dp(24.0));
             row()
                 .cross_axis_alignment(CrossAxisAlignment::Center)
-                .modifier(watch(geometry, "actions").fill_max_width().height(Dp(40.0)))
+                .modifier(
+                    watch_precise(geometry, "actions")
+                        .fill_max_width()
+                        .height(Dp(40.0)),
+                )
                 .children(move || {
                     icon_button()
                         .standard()
@@ -681,7 +943,7 @@ fn time_figure_contents(
                             filled::KEYBOARD_SVG
                         })
                         .content_color(theme.color_scheme.on_surface_variant)
-                        .modifier(watch(geometry, "toggle"))
+                        .modifier(watch_precise(geometry, "toggle"))
                         .accessibility_label(format!("{label} switch input mode"))
                         .on_click(move || {
                             sample.state.with_mut(TimePickerState::toggle_display_mode);
@@ -690,7 +952,7 @@ fn time_figure_contents(
                     spacer().modifier(Modifier::new().weight(1.0));
                     button()
                         .text()
-                        .modifier(watch(geometry, "cancel"))
+                        .modifier(watch_precise(geometry, "cancel"))
                         .accessibility_label(format!("{label} cancel time"))
                         .on_click(move || sample.status.set("Cancelled".into()))
                         .child(|| {
@@ -699,7 +961,7 @@ fn time_figure_contents(
                     spacer().modifier(Modifier::new().width(Dp(8.0)));
                     button()
                         .text()
-                        .modifier(watch(geometry, "confirm"))
+                        .modifier(watch_precise(geometry, "confirm"))
                         .accessibility_label(format!("{label} confirm time"))
                         .on_click(move || {
                             sample.status.set(sample.state.with(|value| {
@@ -806,8 +1068,23 @@ fn picker_regions(picker: Rect, input: bool, horizontal: bool, twenty_four: bool
 }
 
 #[tessera]
-fn time_annotations(sample: Sample, geometry: State<Geometry>, horizontal: bool, kind: FigureKind) {
-    let values = geometry.get();
+fn time_annotations(
+    sample: Sample,
+    geometry: State<PreciseGeometry>,
+    horizontal: bool,
+    kind: FigureKind,
+) {
+    let values = geometry.with(annotations::relative_precise_geometry);
+    time_annotation_content(sample, values, horizontal, kind);
+}
+
+#[tessera]
+fn time_annotation_content(
+    sample: Sample,
+    values: std::collections::BTreeMap<&'static str, Rect>,
+    horizontal: bool,
+    kind: FigureKind,
+) {
     let (
         Some(root),
         Some(container),
@@ -819,13 +1096,13 @@ fn time_annotations(sample: Sample, geometry: State<Geometry>, horizontal: bool,
         Some(confirm),
     ) = (
         values.get("figure"),
-        relative(&values, "container"),
-        relative(&values, "headline"),
-        relative(&values, "picker"),
-        relative(&values, "actions"),
-        relative(&values, "toggle"),
-        relative(&values, "cancel"),
-        relative(&values, "confirm"),
+        values.get("container").copied(),
+        values.get("headline").copied(),
+        values.get("picker").copied(),
+        values.get("actions").copied(),
+        values.get("toggle").copied(),
+        values.get("cancel").copied(),
+        values.get("confirm").copied(),
     )
     else {
         return;
@@ -1008,7 +1285,19 @@ fn time_annotations(sample: Sample, geometry: State<Geometry>, horizontal: bool,
             }),
         );
     } else {
-        let targets: Vec<(usize, Rect, u8)> = if kind == FigureKind::Guidelines {
+        let detailed = matches!(kind, FigureKind::Guidelines | FigureKind::Colors);
+        let ink = if kind == FigureKind::Colors
+            && use_context::<MaterialTheme>()
+                .unwrap()
+                .get()
+                .color_scheme
+                .is_dark
+        {
+            "#cac4d0"
+        } else {
+            "#49454f"
+        };
+        let targets: Vec<(usize, Rect, u8)> = if detailed {
             let mut list = vec![
                 (1, headline, 0),
                 (2, separator, 2),
@@ -1075,24 +1364,26 @@ fn time_annotations(sample: Sample, geometry: State<Geometry>, horizontal: bool,
                 container.y + 28.0
             } else if !input && target.w == clock.w && target.h == clock.h {
                 clock.y + 68.0
-            } else if kind == FigureKind::Guidelines && number == 5 {
+            } else if detailed && number == 5 {
                 am.y + 4.0
-            } else if kind == FigureKind::Guidelines && number == 6 {
+            } else if detailed && number == 6 {
                 am.y + am.h - 4.0
-            } else if (kind == FigureKind::Guidelines
-                && (number == 3 || number == if input { 13 } else { 17 }))
+            } else if (detailed && (number == 3 || number == if input { 13 } else { 17 }))
                 || (kind == FigureKind::Specs && number == if input { 10 } else { 14 })
             {
                 target.y + target.h * 0.24
-            } else if (kind == FigureKind::Guidelines
-                && (number == 4 || number == if input { 12 } else { 16 }))
+            } else if (detailed && (number == 4 || number == if input { 12 } else { 16 }))
                 || (kind == FigureKind::Specs && number == if input { 9 } else { 13 })
             {
                 target.y + target.h * 0.74
             } else {
                 target.y + target.h / 2.0
             };
-            let x = if side == 0 {
+            let x = if kind == FigureKind::Colors && side == 0 {
+                16.0
+            } else if kind == FigureKind::Colors && side == 1 {
+                root.w - 40.0
+            } else if side == 0 {
                 container.x - 60.0
             } else if side == 1 {
                 container.x + container.w + 40.0
@@ -1112,7 +1403,7 @@ fn time_annotations(sample: Sample, geometry: State<Geometry>, horizontal: bool,
                 target.x + target.w / 2.0
             };
             if side == 2 {
-                dotted(&mut svg, tx, y + 32.0, ty - y - 32.0, true, "#49454f");
+                dotted(&mut svg, tx, y + 32.0, ty - y - 32.0, true, ink);
             } else {
                 dotted(
                     &mut svg,
@@ -1120,20 +1411,65 @@ fn time_annotations(sample: Sample, geometry: State<Geometry>, horizontal: bool,
                     ty,
                     if side == 0 { tx - x - 24.0 } else { x - tx },
                     false,
-                    "#49454f",
+                    ink,
                 );
             }
-            annotations::marker(number, Dp(x), Dp(y));
+            if kind == FigureKind::Colors {
+                time_color_marker(
+                    number,
+                    time_color_labels(input)[number - 1].into(),
+                    Dp(x),
+                    Dp(y),
+                );
+                if target.w > 4.0 && target.w != container.w && target.w != clock.w {
+                    dotted(&mut svg, target.x, target.y, target.w, false, ink);
+                    dotted(
+                        &mut svg,
+                        target.x,
+                        target.y + target.h,
+                        target.w,
+                        false,
+                        ink,
+                    );
+                    dotted(&mut svg, target.x, target.y, target.h, true, ink);
+                    dotted(&mut svg, target.x + target.w, target.y, target.h, true, ink);
+                }
+            } else {
+                annotations::marker(number, Dp(x), Dp(y));
+            }
         }
-        for target in [headline, hour_text, minute_text, buttons, toggle] {
-            annotations::outline(&mut svg, target);
+        if kind != FigureKind::Colors {
+            for target in [headline, hour_text, minute_text, buttons, toggle] {
+                annotations::outline(&mut svg, target);
+            }
         }
     }
-    annotations::lines(
-        Dp::from_pixels_f32(root.width.to_f32()),
-        Dp::from_pixels_f32(root.height.to_f32()),
-        svg,
-    );
+    annotations::lines(Dp(root.w), Dp(root.h), svg);
+}
+
+#[tessera]
+fn time_color_marker(number: usize, label: String, x: Dp, y: Dp) {
+    let scheme = use_context::<MaterialTheme>().unwrap().get().color_scheme;
+    boxed()
+        .alignment(Alignment::Center)
+        .modifier(
+            Modifier::new()
+                .offset(x, y)
+                .size(Dp(24.0), Dp(32.0))
+                .background_with_shape(scheme.on_surface, Shape::CAPSULE)
+                .semantics(SemanticsArgs {
+                    role: Some(Role::Note),
+                    label: Some(format!("Time color role {number}: {label}")),
+                    merge_descendants: true,
+                    ..Default::default()
+                }),
+        )
+        .children(move || {
+            text()
+                .content(number.to_string())
+                .style(type_style(14.0, 20.0))
+                .color(scheme.surface);
+        });
 }
 
 #[tessera]
@@ -1271,48 +1607,62 @@ fn time_behavior(sample: Sample, modal: State<bool>) {
 #[tessera]
 fn dial_target_figure() {
     let state = remember(|| TimePickerState::new(7, 0, false, TimePickerDisplayMode::Picker));
-    let geometry = remember(Geometry::new);
+    let geometry = remember(PreciseGeometry::new);
     let scheme = use_context::<MaterialTheme>().unwrap().get().color_scheme;
+    let available_width = remember(|| Dp(676.0));
+    let scale = (available_width.get().0 / 676.0) as f32;
     boxed()
-        .alignment(Alignment::Center)
-        .modifier(
-            watch(geometry, "figure")
-                .fill_max_width()
-                .height(Dp(352.0))
-                .background_with_shape(
-                    scheme.surface_container_low,
-                    Shape::rounded_rectangle(Dp(24.0)),
-                ),
-        )
+        .modifier(Modifier::new().fill_max_width().on_layout_coordinates(
+            move |coordinates: LayoutCoordinates| {
+                let next = Dp::from_pixels_f32(coordinates.local_size.width.to_f32());
+                if next != available_width.get() {
+                    available_width.set(next);
+                }
+            },
+        ))
         .children(move || {
-            boxed()
-                .modifier(
-                    watch(geometry, "clock")
-                        .size(Dp(256.0), Dp(256.0))
-                        .clip_to_bounds(),
-                )
-                .children(move || {
-                    time_picker()
-                        .state(state)
-                        .layout(TimePickerLayout::Vertical)
-                        .modifier(
-                            Modifier::new()
-                                .required_size(Dp(280.0), Dp(372.0))
-                                .offset(Dp(-12.0), Dp(-116.0)),
-                        );
-                });
-            boxed()
-                .modifier(Modifier::new().fill_max_size())
-                .children(move || {
-                    dial_target_annotations(geometry, state);
-                });
+            scaled_box(scale).child(move || {
+                boxed()
+                    .alignment(Alignment::Center)
+                    .modifier(
+                        watch_precise(geometry, "figure")
+                            .required_size(Dp(676.0), Dp(300.0))
+                            .background_with_shape(
+                                scheme.surface_container_low,
+                                Shape::rounded_rectangle(Dp(24.0)),
+                            ),
+                    )
+                    .children(move || {
+                        boxed()
+                            .modifier(
+                                watch_precise(geometry, "clock")
+                                    .size(Dp(256.0), Dp(256.0))
+                                    .clip_to_bounds(),
+                            )
+                            .children(move || {
+                                time_picker()
+                                    .state(state)
+                                    .layout(TimePickerLayout::Vertical)
+                                    .modifier(
+                                        Modifier::new()
+                                            .required_size(Dp(280.0), Dp(372.0))
+                                            .offset(Dp(-12.0), Dp(-116.0)),
+                                    );
+                            });
+                        boxed()
+                            .modifier(Modifier::new().fill_max_size())
+                            .children(move || {
+                                dial_target_annotations(geometry, state);
+                            });
+                    });
+            });
         });
 }
 
 #[tessera]
-fn dial_target_annotations(geometry: State<Geometry>, state: State<TimePickerState>) {
-    let values = geometry.get();
-    let (Some(root), Some(clock)) = (values.get("figure"), relative(&values, "clock")) else {
+fn dial_target_annotations(geometry: State<PreciseGeometry>, state: State<TimePickerState>) {
+    let values = geometry.with(annotations::relative_precise_geometry);
+    let (Some(root), Some(clock)) = (values.get("figure"), values.get("clock").copied()) else {
         return;
     };
     let (angle, radius) = state.with(clock_annotation);
@@ -1328,11 +1678,7 @@ fn dial_target_annotations(geometry: State<Geometry>, state: State<TimePickerSta
     annotations::outline(&mut svg, target);
     annotations::dimension("48".into(), Dp(x + 12.0), Dp(y - 28.0));
     annotations::dimension("48".into(), Dp(x - 28.0), Dp(y + 14.0));
-    annotations::lines(
-        Dp::from_pixels_f32(root.width.to_f32()),
-        Dp::from_pixels_f32(root.height.to_f32()),
-        svg,
-    );
+    annotations::lines(Dp(root.w), Dp(root.h), svg);
 }
 
 #[tessera]

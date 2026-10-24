@@ -8,22 +8,23 @@ use tessera_components::{
     alignment::{Alignment, CrossAxisAlignment},
     boxed::boxed,
     column::column,
-    divider::horizontal_divider,
     modifier::{ModifierExt as _, SemanticsArgs},
-    row::row,
     shape_def::Shape,
     spacer::spacer,
     surface::surface,
     text::text,
+    text_table::{TextTableCell, TextTableHeading, text_table},
     theme::TextStyle,
 };
-use tessera_ui::{Color, Dp, Modifier, RenderSlot, State, remember, tessera};
+use tessera_ui::{Color, Dp, Modifier, RenderSlot, tessera};
 
 mod action_articles;
 mod activity;
 mod annotations;
 mod app_bars;
 mod article;
+mod article_navigation;
+mod article_tab_visual;
 mod badges;
 mod button_groups;
 mod buttons;
@@ -43,16 +44,19 @@ mod media;
 mod menus;
 mod navigation;
 mod radio_buttons;
+mod scroll_viewport;
 mod search;
 mod segmented;
 mod selection_articles;
 mod selection_controls;
 mod sheets;
 mod sliders;
+mod sliders_tokens;
 mod snackbars;
 mod split_buttons;
 mod tabs;
 mod text_fields;
+mod text_fields_accessibility;
 mod time_pickers;
 mod toolbars;
 mod tooltips;
@@ -142,65 +146,49 @@ fn panel(content: RenderSlot) {
         });
 }
 
-type TableData = (Vec<String>, Vec<Vec<String>>);
-
 #[tessera]
 fn spec_table(headers: Vec<String>, rows: Vec<Vec<String>>) {
-    let current = (headers, rows);
-    let data = remember(|| current.clone());
-    if data.with(|data| data != &current) {
-        data.set(current);
-    }
-    column()
-        .modifier(Modifier::new().fill_max_width().semantics(SemanticsArgs {
-            role: Some(tessera_ui::accesskit::Role::Table),
-            merge_descendants: true,
-            ..Default::default()
-        }))
-        .children(move || {
-            table_row(data);
-            for index in 0..data.with(|data| data.1.len()) {
-                horizontal_divider();
-                table_row(data).row_index(index);
-            }
-        });
+    let cells = rows
+        .into_iter()
+        .enumerate()
+        .flat_map(|(row, values)| {
+            values
+                .into_iter()
+                .enumerate()
+                .map(move |(column, text)| TextTableCell {
+                    text,
+                    row: row + 1,
+                    column,
+                    ..Default::default()
+                })
+        })
+        .collect();
+    spec_table_cells(headers, cells);
 }
 
 #[tessera]
-fn table_row(data: State<TableData>, row_index: Option<usize>) {
-    row()
-        .modifier(
-            Modifier::new()
-                .fill_max_width()
-                .padding_all(Dp(16.0))
-                .semantics(SemanticsArgs {
-                    role: Some(tessera_ui::accesskit::Role::Row),
-                    merge_descendants: true,
-                    ..Default::default()
-                }),
-        )
-        .children(move || {
-            let values = data.with(|data| match row_index {
-                Some(index) => data.1[index].clone(),
-                None => data.0.clone(),
-            });
-            for value in values {
-                text()
-                    .content(value)
-                    .style(TextStyle {
-                        font_weight: if row_index.is_none() { 500 } else { 400 },
-                        ..type_style(14.0, 20.0)
-                    })
-                    .modifier(Modifier::new().weight(1.0).semantics(SemanticsArgs {
-                        role: Some(if row_index.is_none() {
-                            tessera_ui::accesskit::Role::ColumnHeader
-                        } else {
-                            tessera_ui::accesskit::Role::Cell
-                        }),
-                        ..Default::default()
-                    }));
-            }
-        });
+fn spec_table_cells(headers: Vec<String>, cells: Vec<TextTableCell>) {
+    media::load_fonts();
+    let columns = headers.len();
+    let mut values = headers
+        .into_iter()
+        .enumerate()
+        .map(|(column, text)| TextTableCell {
+            text,
+            column,
+            heading: TextTableHeading::Column,
+            ..Default::default()
+        })
+        .collect::<Vec<_>>();
+    values.extend(cells);
+    text_table(values)
+        .columns(columns)
+        .style(type_style(16.0, 24.0))
+        .header_style(type_style(16.0, 24.0))
+        .modifier(Modifier::new().fill_max_width())
+        .color(INK)
+        .header_color(srgb(77, 66, 86))
+        .header_background(PANEL);
 }
 
 #[tessera]
@@ -212,3 +200,7 @@ pub(super) fn material_spec() {
 fn slider_spec() {
     sliders::slider_spec();
 }
+
+#[cfg(all(test, not(target_family = "wasm")))]
+#[path = "material_spec/text_table_adapter_tests.rs"]
+mod text_table_adapter_tests;

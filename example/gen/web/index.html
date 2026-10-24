@@ -95,12 +95,12 @@
       </div>
     </div>
     <script type="module">
-      import init from "./pkg-web/example_lib.js";
+      import init from "./pkg-web/example_lib.js?v=20261025-text-incremental-probe-51";
 
       const loading = document.getElementById("tessera-loading");
 
       try {
-        await init();
+        await init({ module_or_path: "./pkg-web/example_lib_bg.wasm?v=20261025-text-incremental-probe-51" });
         loading.classList.add("tessera-loading-done");
         loading.addEventListener("transitionend", () => loading.remove(), {
           once: true,
