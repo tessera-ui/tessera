@@ -109,6 +109,26 @@ pub(crate) struct ComponentNode {
     pub(crate) props_unchanged_from_previous: bool,
 }
 
+#[derive(Clone, Default)]
+pub(crate) struct InputTransforms(Option<(crate::LocalToWindow, Arc<[PxPosition]>)>);
+
+impl InputTransforms {
+    pub(super) fn new(parent: crate::LocalToWindow, positions: Arc<[PxPosition]>) -> Self {
+        Self((!positions.is_empty()).then_some((parent, positions)))
+    }
+
+    pub(super) fn is_empty(&self) -> bool {
+        self.0.is_none()
+    }
+
+    pub(super) fn get(&self, index: usize) -> Option<crate::LocalToWindow> {
+        let (parent, positions) = self.0.as_ref()?;
+        positions
+            .get(index)
+            .map(|position| parent.with_local_origin(*position))
+    }
+}
+
 /// Contains metadata of the component node.
 pub(crate) struct ComponentNodeMetaData {
     pub(super) prepared_layout: Option<super::PreparedLayoutMetadata>,
@@ -132,7 +152,7 @@ pub(crate) struct ComponentNodeMetaData {
     pub base_abs_position: Option<PxPosition>,
     pub local_to_window: Option<crate::LocalToWindow>,
     pub(super) input_local_positions: Arc<[PxPosition]>,
-    pub input_transforms: Arc<[crate::LocalToWindow]>,
+    pub input_transforms: InputTransforms,
     pub event_clip_bounds: Option<crate::FloatRect>,
     /// The node's start position, relative to the root window.
     /// After placement modifiers are applied.
@@ -175,7 +195,7 @@ impl ComponentNodeMetaData {
             base_abs_position: None,
             local_to_window: None,
             input_local_positions: Arc::from([]),
-            input_transforms: Arc::from([]),
+            input_transforms: InputTransforms::default(),
             event_clip_bounds: None,
             abs_position: None,
             event_clip_rect: None,

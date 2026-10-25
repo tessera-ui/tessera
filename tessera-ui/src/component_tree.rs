@@ -492,6 +492,7 @@ pub struct ComponentTree {
     /// Last reported window-space bounds for nodes with globally positioned
     /// callbacks, keyed by instance key.
     last_global_rects: HashMap<u64, GlobalPositionSnapshot>,
+    position_observer_nodes: HashSet<NodeId>,
     pending_position_observers: HashSet<NodeId>,
     /// Globally positioned callbacks collected during compute and invoked
     /// after the runtime borrow is released.
@@ -565,6 +566,7 @@ impl ComponentTree {
             pending_keyboard_events: VecDeque::new(),
             pending_ime_events: Vec::new(),
             last_global_rects: HashMap::default(),
+            position_observer_nodes: HashSet::default(),
             pending_position_observers: HashSet::default(),
             pending_globally_positioned_invocations: Vec::new(),
         }
@@ -599,6 +601,7 @@ impl ComponentTree {
         self.replay_ancestry = replay::ReplayAncestry::default();
         self.node_ids_by_instance_key.clear();
         self.last_global_rects.clear();
+        self.position_observer_nodes.clear();
         self.pending_position_observers.clear();
         self.pending_globally_positioned_invocations.clear();
     }
@@ -865,6 +868,8 @@ impl ComponentTree {
                 })
                 .collect::<Vec<_>>();
             for node_id in &detached_node_ids {
+                self.position_observer_nodes.remove(node_id);
+                self.pending_position_observers.remove(node_id);
                 self.removed_frame_nodes.insert(*node_id);
                 self.changed_frame_nodes.remove(node_id);
                 self.metadatas.remove(node_id);
@@ -876,9 +881,33 @@ impl ComponentTree {
         self.replay_detached_root = None;
         self.replay_retained_roots.clear();
 
-        let mut ancestor = Some(parent_id);
+        #[cfg(feature = "profiling")]
+        let previous_parent_len = self.tree[parent_id].get().subtree_len;
+        let layout_changed = self.refresh_layout_children(parent_id);
+        #[cfg(feature = "profiling")]
+        let current_parent_len = self.tree[parent_id].get().subtree_len;
+        let mut refresh_adjacency =
+            layout_changed && self.tree[parent_id].get().role != NodeRole::Layout;
+        let mut ancestor = self.tree[parent_id].parent();
         while let Some(node_id) = ancestor {
-            self.refresh_layout_children(node_id);
+            if refresh_adjacency {
+                refresh_adjacency = self.refresh_layout_children(node_id)
+                    && self.tree[node_id].get().role != NodeRole::Layout;
+            } else {
+                #[cfg(feature = "profiling")]
+                {
+                    if previous_parent_len == current_parent_len {
+                        break;
+                    }
+                    let node = self.tree[node_id].get_mut();
+                    node.subtree_len = node
+                        .subtree_len
+                        .saturating_sub(previous_parent_len)
+                        .saturating_add(current_parent_len);
+                }
+                #[cfg(not(feature = "profiling"))]
+                break;
+            }
             ancestor = self.tree.get(node_id).and_then(|node| node.parent());
         }
 
@@ -975,6 +1004,8 @@ impl ComponentTree {
         candidate_node_id.detach(&mut self.tree);
         current_node_id.insert_before(candidate_node_id, &mut self.tree);
         self.metadatas.remove(&current_node_id);
+        self.position_observer_nodes.remove(&current_node_id);
+        self.pending_position_observers.remove(&current_node_id);
         self.composition_order.remove(&current_node_id);
         self.changed_frame_nodes.remove(&current_node_id);
         self.removed_frame_nodes.insert(current_node_id);
@@ -1020,12 +1051,13 @@ impl ComponentTree {
                 .globally_positioned_handlers
                 .is_empty()
             {
+                self.position_observer_nodes.insert(node_id);
                 self.pending_position_observers.insert(node_id);
             }
         }
     }
 
-    fn refresh_layout_children(&mut self, node_id: indextree::NodeId) {
+    fn refresh_layout_children(&mut self, node_id: indextree::NodeId) -> bool {
         let mut children = Vec::new();
         #[cfg(feature = "profiling")]
         let mut subtree_len = 1_usize;
@@ -1058,10 +1090,12 @@ impl ComponentTree {
         {
             node.subtree_len = subtree_len;
         }
-        if node.layout_children.as_deref() != Some(children.as_slice()) {
+        let changed = node.layout_children.as_deref() != Some(children.as_slice());
+        if changed {
             node.layout_children = Some(children.into());
         }
         crate::runtime::record_layout_structure(node.instance_key, keys);
+        changed
     }
 
     /// Get a reference to the underlying tree structure.
@@ -1123,7 +1157,22 @@ impl ComponentTree {
 
     fn collect_globally_positioned_invocations(&mut self, _root_node: indextree::NodeId) {
         let mut candidates = std::mem::take(&mut self.pending_position_observers);
-        candidates.extend(self.metadatas.geometry_changed.iter().copied());
+        let changed = &self.metadatas.geometry_changed;
+        if self.position_observer_nodes.len() < changed.len() {
+            candidates.extend(
+                self.position_observer_nodes
+                    .iter()
+                    .filter(|id| changed.contains(id))
+                    .copied(),
+            );
+        } else {
+            candidates.extend(
+                changed
+                    .iter()
+                    .filter(|id| self.position_observer_nodes.contains(id))
+                    .copied(),
+            );
+        }
         let mut invocations = Vec::new();
         for node_id in candidates {
             let Some(node_ref) = self.tree.get(node_id) else {
@@ -1275,6 +1324,8 @@ impl ComponentTree {
         modifiers: winit::keyboard::ModifiersState,
     ) -> WindowRequests {
         let mut window_requests = WindowRequests::default();
+        self.pointer_index
+            .invalidate(&self.changed_frame_nodes, &self.removed_frame_nodes);
         let mut changed = self.metadatas.geometry_changed.clone();
         changed.extend(self.changed_frame_nodes.iter().copied());
         self.pointer_work.0 = self.pointer_index.update(
@@ -1741,6 +1792,9 @@ impl ComponentTree {
         bool,
         bool,
     ) {
+        let mut stage_timer =
+            tracing::enabled!(target: "tessera_ui::frame_cost", tracing::Level::DEBUG)
+                .then(Instant::now);
         self.metadatas.geometry_visits = 0;
         self.metadatas.geometry_changed.clear();
         self.metadatas.placement_order_changed.clear();
@@ -1844,6 +1898,7 @@ impl ComponentTree {
             }
         }
         let dirty_expand_ns = dirty_prepare_start.elapsed().as_nanos() as u64;
+        record_frame_stage(&mut stage_timer, "layout_dirty_paths");
         let mut diagnostics = LayoutDiagnosticsCollector::default();
 
         let changed_frame_nodes = std::mem::take(&mut self.changed_frame_nodes);
@@ -1873,6 +1928,7 @@ impl ComponentTree {
         );
         self.focus_owner.commit_pending();
 
+        record_frame_stage(&mut stage_timer, "consumer_attachments");
         measure_self_nodes.extend(structural_dirty_nodes);
         let layout_ctx = LayoutContext::new(
             &mut self.layout_snapshots,
@@ -1903,6 +1959,7 @@ impl ComponentTree {
             }
         }
 
+        record_frame_stage(&mut stage_timer, "measure");
         let mut diagnostics_snapshot = diagnostics.snapshot(
             dirty_nodes_param,
             dirty_nodes_structural,
@@ -1953,9 +2010,6 @@ impl ComponentTree {
             }
         };
 
-        let mut stage_timer =
-            tracing::enabled!(target: "tessera_ui::frame_cost", tracing::Level::DEBUG)
-                .then(Instant::now);
         diagnostics_snapshot.geometry_nodes_updated =
             populate_layout_metadata(root_node, &self.tree, &mut self.metadatas);
         record_frame_stage(&mut stage_timer, "geometry");
@@ -2090,6 +2144,7 @@ impl ComponentTree {
             "Typed input dispatch executed in {:?}",
             input_dispatch_timer.elapsed()
         );
+        record_frame_stage(&mut stage_timer, "focused_input");
         (
             graph,
             window_requests,
@@ -2121,7 +2176,7 @@ fn drain_pending_keyboard_events<E>(
 #[derive(Clone)]
 struct NodeInputContext {
     local_to_window: crate::LocalToWindow,
-    input_transforms: Arc<[crate::LocalToWindow]>,
+    input_transforms: node::InputTransforms,
     event_clip_bounds: Option<crate::FloatRect>,
     base_abs_pos: PxPosition,
     abs_pos: PxPosition,
@@ -2304,7 +2359,7 @@ fn node_handles_pointer_at_position(
     size: ComputedData,
     position: PxPosition,
     scale: f32,
-    transforms: &[crate::LocalToWindow],
+    transforms: &node::InputTransforms,
 ) -> bool {
     let mut current_abs_pos = base_abs_pos;
     let size = PxSize::new(size.width, size.height);
@@ -2341,7 +2396,7 @@ fn resolve_node_hover_cursor_icon(
     size: ComputedData,
     position: PxPosition,
     scale: f32,
-    transforms: &[crate::LocalToWindow],
+    transforms: &node::InputTransforms,
 ) -> Option<winit::window::CursorIcon> {
     let mut current_abs_pos = base_abs_pos;
     let size = PxSize::new(size.width, size.height);
@@ -3378,9 +3433,13 @@ fn prepare_layout_metadata_for_node(
     };
     let base_self_position = parent_transform.map_point(rel_pos);
     let cached_position = reuse_local_placement
-        .then_some(metadata.prepared_layout)
-        .flatten()
-        .map(|previous| previous.local_position);
+        .then(|| {
+            metadata
+                .prepared_layout
+                .as_ref()
+                .map(|previous| previous.local_position)
+        })
+        .flatten();
     let local_position = if let Some(position) = cached_position {
         position
     } else {
@@ -3402,21 +3461,22 @@ fn prepare_layout_metadata_for_node(
     let child_scale = tree
         .get(node_id)
         .map_or(1.0, |node| node.get().children_scale);
-    let child_local_to_window = local_to_window
-        .compose(
-            crate::LocalToWindow::new(child_scale, PxPosition::ZERO)
-                .expect("Child scale must be finite and positive"),
-        )
-        .expect("Composed child transform must remain finite and invertible");
+    let child_local_to_window = if child_scale == 1.0 {
+        local_to_window
+    } else {
+        local_to_window
+            .compose(
+                crate::LocalToWindow::new(child_scale, PxPosition::ZERO)
+                    .expect("Child scale must be finite and positive"),
+            )
+            .expect("Composed child transform must remain finite and invertible")
+    };
     metadata.local_to_window = Some(local_to_window);
     if !metadata.input_local_positions.is_empty() {
-        metadata.input_transforms = metadata
-            .input_local_positions
-            .iter()
-            .map(|position| parent_transform.with_local_origin(*position))
-            .collect();
+        metadata.input_transforms =
+            node::InputTransforms::new(parent_transform, metadata.input_local_positions.clone());
     } else if !metadata.input_transforms.is_empty() {
-        metadata.input_transforms = Arc::from([]);
+        metadata.input_transforms = node::InputTransforms::default();
     }
     let cumulative_opacity = current_opacity * metadata.opacity;
     metadata.base_abs_position = Some(base_self_position);
@@ -3537,12 +3597,15 @@ fn populate_layout_metadata(
         updates: &mut u64,
     ) {
         metadatas.geometry_visits += 1;
-        let (previous, initialized, paint_dirty) =
+        let (previous, was_hidden, initialized, paint_dirty) =
             metadatas
                 .get(&node_id)
-                .map_or((None, false, false), |metadata| {
+                .map_or((None, true, false, false), |metadata| {
                     (
-                        metadata.prepared_layout,
+                        (!inherited_changed)
+                            .then(|| metadata.prepared_layout)
+                            .flatten(),
+                        metadata.prepared_layout.is_none(),
                         metadata.geometry_initialized,
                         metadata.paint_dirty,
                     )
@@ -3563,7 +3626,7 @@ fn populate_layout_metadata(
             parent_has_shape_clipping,
             initialized && !dirty.contains(&node_id),
         );
-        if initialized && previous.is_none() && prepared.is_none() && !dirty.contains(&node_id) {
+        if initialized && was_hidden && prepared.is_none() && !dirty.contains(&node_id) {
             return;
         }
         let order_changed = metadatas.placement_order_dirty.remove(&node_id);
@@ -3628,8 +3691,17 @@ fn populate_layout_metadata(
             );
         };
         if changed {
-            for &child in direct_layout_children(node_id, tree).iter() {
-                visit_child(child);
+            if let Some(children) = tree
+                .get(node_id)
+                .and_then(|node| node.get().layout_children.as_ref())
+            {
+                for &child in children.iter() {
+                    visit_child(child);
+                }
+            } else {
+                for &child in direct_layout_children(node_id, tree).iter() {
+                    visit_child(child);
+                }
             }
         } else if let Some(children) = dirty_children.get(&node_id) {
             for &child in children {
@@ -3984,6 +4056,155 @@ mod tests {
                     Some(crate::PxRect::new(Px(0), Px(revealed_y), Px(80), Px(24)))
                 );
             }
+        }
+    }
+
+    #[test]
+    fn retained_scene_reuses_fragment_commands_on_translation_and_refreshes_paint() {
+        use std::sync::atomic::{AtomicUsize, Ordering};
+
+        struct Marker {
+            clones: Arc<AtomicUsize>,
+            value: u32,
+            opacity: f32,
+        }
+
+        impl Clone for Marker {
+            fn clone(&self) -> Self {
+                self.clones.fetch_add(1, Ordering::Relaxed);
+                Self {
+                    clones: self.clones.clone(),
+                    value: self.value,
+                    opacity: self.opacity,
+                }
+            }
+        }
+
+        impl crate::DrawCommand for Marker {
+            fn apply_opacity(&mut self, opacity: f32) {
+                self.opacity *= opacity;
+            }
+        }
+
+        let clones = Arc::new(AtomicUsize::new(0));
+        let mut tree = ComponentTree::new();
+        let root = tree.add_node(node("root", 1, 1));
+        let leaf = tree.add_node(node("leaf", 2, 2));
+        tree.pop_node();
+        tree.pop_node();
+        for id in [root, leaf] {
+            let metadata = tree.metadatas.entry_or_default(id);
+            metadata.computed_data = Some(ComputedData {
+                width: Px(32),
+                height: Px(32),
+            });
+            metadata.rel_position = Some(PxPosition::ZERO);
+        }
+        tree.metadatas
+            .entry_or_default(leaf)
+            .fragment
+            .push_draw_command(Marker {
+                clones: clones.clone(),
+                value: 1,
+                opacity: 1.0,
+            });
+        populate_layout_metadata(root, &tree.tree, &mut tree.metadatas);
+        let viewport = PxSize::new(Px(100), Px(100));
+        let mut scene = scene::FrameScene::default();
+        scene.update(
+            root,
+            &tree.tree,
+            &tree.metadatas,
+            &root.descendants(&tree.tree).collect(),
+            &HashSet::default(),
+            viewport,
+        );
+        for (offset, opacity) in [(1.25, 1.0), (2.5, 0.5), (3.75, 0.5)] {
+            clones.store(0, Ordering::Relaxed);
+            tree.metadatas.geometry_changed.clear();
+            tree.metadatas.mark_geometry_dirty(root);
+            let metadata = tree.metadatas.entry_or_default(root);
+            metadata.rel_position = Some(PxPosition::from_f32_xy(offset, 0.0));
+            metadata.opacity = opacity;
+            populate_layout_metadata(root, &tree.tree, &mut tree.metadatas);
+            let (graph, _) = scene.update(
+                root,
+                &tree.tree,
+                &tree.metadatas,
+                &HashSet::default(),
+                &HashSet::default(),
+                viewport,
+            );
+            assert_eq!(
+                clones.load(Ordering::Relaxed),
+                1,
+                "translation must copy the command only into the frame output"
+            );
+            let op = graph
+                .ops()
+                .iter()
+                .find(|op| op.command.downcast_draw_ref::<Marker>().is_some())
+                .unwrap();
+            let marker = op.command.downcast_draw_ref::<Marker>().unwrap();
+            assert_eq!(marker.value, 1);
+            assert_eq!(marker.opacity, opacity);
+            assert_eq!(
+                op.geometry.window_origin(),
+                PxPosition::from_f32_xy(offset, 0.0)
+            );
+        }
+        let metadata = tree.metadatas.entry_or_default(leaf);
+        metadata.fragment = Default::default();
+        metadata.fragment.push_draw_command(Marker {
+            clones,
+            value: 2,
+            opacity: 1.0,
+        });
+        tree.metadatas.paint_changed.insert(leaf);
+        let (graph, _) = scene.update(
+            root,
+            &tree.tree,
+            &tree.metadatas,
+            &HashSet::default(),
+            &HashSet::default(),
+            viewport,
+        );
+        let marker = graph
+            .ops()
+            .iter()
+            .find_map(|op| op.command.downcast_draw_ref::<Marker>())
+            .unwrap();
+        assert_eq!(marker.value, 2);
+        assert_eq!(marker.opacity, 0.5);
+        tree.metadatas.paint_changed.clear();
+        for (offset, width, visible) in [
+            (150.0, 100, false),
+            (160.0, 100, false),
+            (160.0, 200, true),
+            (160.0, 100, false),
+            (0.25, 100, true),
+        ] {
+            tree.metadatas.geometry_changed.clear();
+            tree.metadatas.mark_geometry_dirty(root);
+            tree.metadatas.entry_or_default(root).rel_position =
+                Some(PxPosition::from_f32_xy(offset, 0.0));
+            populate_layout_metadata(root, &tree.tree, &mut tree.metadatas);
+            let (graph, _) = scene.update(
+                root,
+                &tree.tree,
+                &tree.metadatas,
+                &HashSet::default(),
+                &HashSet::default(),
+                PxSize::new(Px(width), Px(100)),
+            );
+            assert_eq!(
+                graph
+                    .ops()
+                    .iter()
+                    .any(|op| op.command.downcast_draw_ref::<Marker>().is_some()),
+                visible,
+                "retained visibility must follow translation and viewport resizing"
+            );
         }
     }
 
@@ -5015,6 +5236,51 @@ mod tests {
         assert!(!replace_result.removed_instance_keys.contains(&3));
         assert!(!replace_result.removed_instance_logic_ids.contains(&2));
         assert!(!replace_result.removed_instance_logic_ids.contains(&3));
+    }
+
+    #[test]
+    fn replay_preserves_nested_layout_adjacency_and_ancestor_counts() {
+        let mut tree = ComponentTree::new();
+        let root = tree.add_node(node_with_role("root", NodeRole::Composition, 1, 1));
+        let outer = tree.add_node(node("outer", 2, 2));
+        let inner = tree.add_node(node("inner", 3, 3));
+        tree.add_node(node_with_role("wrapper", NodeRole::Composition, 4, 4));
+        let leaf = tree.add_node(node("leaf", 5, 5));
+        for _ in 0..5 {
+            tree.pop_node();
+        }
+        for add_extra in [true, false] {
+            let context = tree
+                .begin_replace_subtree_by_instance_key(4)
+                .unwrap_or_else(|_| panic!("wrapper exists"));
+            let wrapper = tree.add_node(node_with_role("wrapper", NodeRole::Composition, 4, 4));
+            tree.add_node(node("leaf", 5, 5));
+            assert!(tree.try_reuse_current_subtree(5, 5));
+            tree.pop_node();
+            let extra = add_extra.then(|| {
+                let extra = tree.add_node(node("extra", 6, 6));
+                tree.pop_node();
+                extra
+            });
+            tree.pop_node();
+            assert!(tree.finish_replace_subtree(context).is_ok());
+            assert_eq!(direct_layout_children(root, &tree.tree).as_ref(), &[outer]);
+            assert_eq!(direct_layout_children(outer, &tree.tree).as_ref(), &[inner]);
+            let expected = extra.map_or_else(|| vec![leaf], |extra| vec![leaf, extra]);
+            assert_eq!(
+                direct_layout_children(inner, &tree.tree).as_ref(),
+                expected.as_slice()
+            );
+            #[cfg(feature = "profiling")]
+            for (id, base) in [(root, 5), (outer, 4), (inner, 3), (wrapper, 2)] {
+                assert_eq!(
+                    tree.get(id).unwrap().subtree_len,
+                    base + usize::from(add_extra)
+                );
+            }
+            #[cfg(not(feature = "profiling"))]
+            let _ = wrapper;
+        }
     }
 
     #[test]

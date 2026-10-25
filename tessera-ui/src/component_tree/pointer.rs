@@ -26,6 +26,7 @@ struct Entry {
 
 #[derive(Default)]
 pub(super) struct PointerIndex {
+    eligible: HashSet<NodeId>,
     entries: HashMap<NodeId, Entry>,
     cells: HashMap<(i32, i32), HashSet<NodeId>>,
     oversized: HashSet<NodeId>,
@@ -69,8 +70,41 @@ impl PointerIndex {
         removed.extend(std::mem::take(&mut self.removed));
         let structural = std::mem::take(&mut self.changed);
         let geometry_count = changed.len();
-        let mut changed = changed.clone();
-        changed.extend(structural.iter().copied());
+        for &id in &structural {
+            let eligible = tree
+                .get(id)
+                .filter(|node| !node.is_removed())
+                .is_some_and(|node| {
+                    let node = node.get();
+                    node.role == NodeRole::Layout
+                        && (!node.pointer_preview_handlers.is_empty()
+                            || !node.pointer_handlers.is_empty()
+                            || !node.pointer_final_handlers.is_empty()
+                            || node.modifier.has_pointer_input())
+                });
+            if eligible {
+                self.eligible.insert(id);
+            } else {
+                self.eligible.remove(&id);
+            }
+        }
+        let mut updates = structural.clone();
+        if self.eligible.len() < changed.len() {
+            updates.extend(
+                self.eligible
+                    .iter()
+                    .filter(|id| changed.contains(id))
+                    .copied(),
+            );
+        } else {
+            updates.extend(
+                changed
+                    .iter()
+                    .filter(|id| self.eligible.contains(id))
+                    .copied(),
+            );
+        }
+        let changed = updates;
         if tracing::enabled!(target: "tessera_ui::frame_cost", tracing::Level::TRACE) {
             let mut structural_nodes = HashMap::default();
             let mut stale = 0_usize;
@@ -94,6 +128,7 @@ impl PointerIndex {
             );
         }
         for &id in &removed {
+            self.eligible.remove(&id);
             self.remove(id);
             self.hovered.remove(&id);
             self.pending.remove(&id);

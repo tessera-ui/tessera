@@ -21,6 +21,7 @@ thread_local! {
     static PARENT_OFFSET: Cell<Option<State<PxPosition>>> = const { Cell::new(None) };
     static CHILD_OFFSET: Cell<Option<State<PxPosition>>> = const { Cell::new(None) };
     static CHILD_TRANSFORMS: Cell<usize> = const { Cell::new(0) };
+    static OBSERVER_VISIBLE: Cell<Option<State<bool>>> = const { Cell::new(None) };
 }
 
 #[derive(Clone, PartialEq)]
@@ -71,6 +72,11 @@ fn inherited_translation_reuses_local_placement_and_preserves_fractional_observe
             .unwrap()
             .set(PxPosition::from_f32_xy(-0.5, offset));
         pump_layout_test_session(&mut session, frame * 16_666_667);
+        assert_eq!(
+            session.diagnostics().unwrap().pointer_nodes_updated,
+            0,
+            "moving decorative layouts must not update the pointer index"
+        );
         let bounds = COORDINATES.with_borrow(|items| items.last().unwrap().window_bounds());
         assert_eq!(bounds.x, 12.0);
         assert_eq!(bounds.y, 24.0 + offset);
@@ -88,6 +94,76 @@ fn inherited_translation_reuses_local_placement_and_preserves_fractional_observe
     assert!(CHILD_TRANSFORMS.get() > initial);
     let bounds = COORDINATES.with_borrow(|items| items.last().unwrap().window_bounds());
     assert_eq!((bounds.x, bounds.y), (13.5, 24.5));
+}
+
+#[derive(Clone, PartialEq)]
+struct PlaceWhenVisible(State<bool>);
+
+impl LayoutModifierNode for PlaceWhenVisible {
+    fn measure(
+        &self,
+        scope: &mut MeasureScope<'_>,
+    ) -> Result<LayoutResult, crate::MeasurementError> {
+        let child = scope.children()[0].measure(scope, &Constraint::exact(Px(150), Px(35)))?;
+        let mut result = LayoutResult::new(ComputedData {
+            width: Px(300),
+            height: Px(200),
+        });
+        if self.0.get() {
+            result.place_child(child, PxPosition::from_f32_xy(10.25, 20.5));
+        }
+        Ok(result)
+    }
+}
+
+#[crate::tessera(crate)]
+fn hidden_position_observer_fixture() {
+    let visible = crate::remember(|| true);
+    let parent = crate::remember(|| PxPosition::ZERO);
+    OBSERVER_VISIBLE.set(Some(visible));
+    PARENT_OFFSET.set(Some(parent));
+    layout()
+        .policy(PlaceWhenVisible(visible))
+        .modifier(Modifier::new().push_placement(StateTranslation(parent, false)))
+        .child(|| {
+            layout().modifier(Modifier::new().on_layout_coordinates(|coordinates| {
+                COORDINATES.with_borrow_mut(|items| items.push(coordinates));
+            }));
+        });
+}
+
+#[test]
+fn position_observer_resumes_after_hidden_ancestor_moves() {
+    COORDINATES.with_borrow_mut(Vec::clear);
+    let mut session = start_layout_test_session(
+        layout_test(hidden_position_observer_fixture).viewport_px(300, 200),
+    );
+    pump_layout_test_session(&mut session, 0);
+    assert_eq!(COORDINATES.with_borrow(Vec::len), 1);
+    OBSERVER_VISIBLE.get().unwrap().set(false);
+    PARENT_OFFSET
+        .get()
+        .unwrap()
+        .set(PxPosition::from_f32_xy(0.0, 41.25));
+    pump_layout_test_session(&mut session, 16_666_667);
+    assert_eq!(COORDINATES.with_borrow(Vec::len), 1);
+    PARENT_OFFSET
+        .get()
+        .unwrap()
+        .set(PxPosition::from_f32_xy(0.0, 80.5));
+    pump_layout_test_session(&mut session, 33_333_334);
+    assert_eq!(COORDINATES.with_borrow(Vec::len), 1);
+    OBSERVER_VISIBLE.get().unwrap().set(true);
+    pump_layout_test_session(&mut session, 50_000_001);
+    let coordinates = COORDINATES.with_borrow(|items| {
+        assert_eq!(items.len(), 2);
+        items[1]
+    });
+    let bounds = coordinates.window_bounds();
+    assert_eq!(
+        (bounds.x, bounds.y, bounds.width, bounds.height),
+        (10.25, 101.0, 150.0, 35.0)
+    );
 }
 
 #[derive(Clone, PartialEq)]

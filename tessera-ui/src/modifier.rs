@@ -967,10 +967,7 @@ impl Modifier {
         (!left_pointer && !right_pointer) || (left_pointer == right_pointer && left == right)
     }
 
-    pub(crate) fn resolve_placement(
-        &self,
-        mut position: PxPosition,
-    ) -> (PxPosition, Vec<PxPosition>) {
+    pub(crate) fn has_pointer_input(&self) -> bool {
         let mut pointer = false;
         self.element.fold_actions(&mut |action| {
             pointer |= matches!(
@@ -981,6 +978,14 @@ impl Modifier {
                     | ModifierAction::PointerFinalInput(_)
             );
         });
+        pointer
+    }
+
+    pub(crate) fn resolve_placement(
+        &self,
+        mut position: PxPosition,
+    ) -> (PxPosition, Vec<PxPosition>) {
+        let pointer = self.has_pointer_input();
         let mut positions = Vec::new();
         self.element.fold_actions(&mut |action| {
             if let ModifierAction::Placement(node) = action {

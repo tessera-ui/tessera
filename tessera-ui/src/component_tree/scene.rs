@@ -24,9 +24,10 @@ enum SceneClip {
 }
 
 struct SceneDraw {
-    fragment: RenderFragment,
+    fragment: Arc<RenderFragment>,
     geometry: DrawGeometry,
     opacity: f32,
+    visible: bool,
 }
 
 struct SceneRope {
@@ -50,6 +51,7 @@ struct SceneBranch {
 #[derive(Default)]
 pub(super) struct FrameScene {
     branches: HashMap<NodeId, SceneBranch>,
+    geometry_consumers: HashSet<NodeId>,
     root: Option<Arc<SceneRope>>,
     graph: Option<RenderGraph>,
     viewport: Option<PxSize>,
@@ -91,18 +93,24 @@ impl FrameScene {
                 structural.insert(parent);
             }
             while let Some(id) = parent {
-                dirty.insert(id);
+                if !dirty.insert(id) {
+                    break;
+                }
                 parent = self.branches.get(&id).and_then(|branch| branch.parent);
             }
         }
         for node_id in removed {
             self.branches.remove(node_id);
+            self.geometry_consumers.remove(node_id);
         }
         record_frame_stage(&mut stage_timer, "scene_removals");
         let mut own_changes = changed.clone();
         own_changes.extend(metadata.paint_changed.iter().copied());
         let viewport_rect = PxRect::enclosing(PxPosition::ZERO, viewport);
-        for &node_id in &metadata.geometry_changed {
+        for &node_id in self
+            .geometry_consumers
+            .intersection(&metadata.geometry_changed)
+        {
             let Some(branch) = self.branches.get(&node_id) else {
                 own_changes.insert(node_id);
                 continue;
@@ -110,10 +118,9 @@ impl FrameScene {
             if branch.culled && fully_clipped(tree, metadata, node_id, viewport_rect) {
                 continue;
             }
-            let prepared = metadata.get(&node_id).and_then(|node| node.prepared_layout);
-            let has_draw = metadata
-                .get(&node_id)
-                .is_some_and(|node| !node.fragment.ops().is_empty());
+            let node_metadata = metadata.get(&node_id);
+            let prepared = node_metadata.and_then(|node| node.prepared_layout);
+            let has_draw = node_metadata.is_some_and(|node| !node.fragment.ops().is_empty());
             if !branch.culled
                 && branch.draw.is_none()
                 && branch.clip.is_none()
@@ -123,18 +130,13 @@ impl FrameScene {
                 continue;
             }
             if branch.clip.is_none()
+                && branch.draw.as_ref().is_some_and(|draw| !draw.visible)
                 && prepared.is_some_and(|prepared| {
                     !prepared.clips_children
                         && DrawGeometry::new(prepared.size, prepared.local_to_window)
                             .window_bounds()
                             .outward()
                             .is_orthogonal(&viewport_rect)
-                })
-                && branch.draw.as_ref().is_some_and(|draw| {
-                    draw.geometry
-                        .window_bounds()
-                        .outward()
-                        .is_orthogonal(&viewport_rect)
                 })
             {
                 continue;
@@ -205,16 +207,31 @@ impl FrameScene {
                 }
             }
             if own_changes.contains(&node_id) {
+                let fragment_changed =
+                    changed.contains(&node_id) || metadata.paint_changed.contains(&node_id);
                 let prepared = metadata
                     .get(&node_id)
                     .and_then(|metadata| metadata.prepared_layout);
                 branch.draw = prepared.and_then(|prepared| {
                     let metadata = metadata.get(&node_id)?;
                     (!metadata.fragment.ops().is_empty()).then(|| {
+                        let fragment = branch
+                            .draw
+                            .as_ref()
+                            .filter(|_| !fragment_changed)
+                            .map(|draw| Arc::clone(&draw.fragment))
+                            .unwrap_or_else(|| Arc::new(metadata.fragment.clone()));
+                        let geometry = DrawGeometry::new(prepared.size, prepared.local_to_window);
                         Arc::new(SceneDraw {
-                            fragment: metadata.fragment.clone(),
-                            geometry: DrawGeometry::new(prepared.size, prepared.local_to_window),
+                            fragment,
+                            geometry,
                             opacity: prepared.cumulative_opacity,
+                            visible: geometry.local_size.width.0 > 0
+                                && geometry.local_size.height.0 > 0
+                                && !geometry
+                                    .window_bounds()
+                                    .outward()
+                                    .is_orthogonal(&viewport_rect),
                         })
                     })
                 });
@@ -232,6 +249,11 @@ impl FrameScene {
                     .get(&node_id)
                     .is_none_or(|metadata| metadata.abs_position.is_none());
             branch.culled = hidden || fully_clipped(tree, metadata, node_id, viewport_rect);
+            if branch.draw.is_some() || branch.clip.is_some() || branch.culled {
+                self.geometry_consumers.insert(node_id);
+            } else {
+                self.geometry_consumers.remove(&node_id);
+            }
             branch.output = if branch.culled
                 || (branch.draw.is_none() && branch.children.is_empty())
             {
@@ -276,7 +298,7 @@ impl FrameScene {
         if !same || self.viewport != Some(viewport) || self.graph.is_none() {
             let mut builder = RenderGraphBuilder::new();
             if let Some(root) = &next_root {
-                root.emit(&mut builder, PxRect::enclosing(PxPosition::ZERO, viewport));
+                root.emit(&mut builder);
             }
             self.graph = Some(builder.finish());
         }
@@ -315,26 +337,23 @@ fn fully_clipped(
 }
 
 impl SceneRope {
-    fn emit(&self, builder: &mut RenderGraphBuilder, viewport: PxRect) {
+    fn emit(&self, builder: &mut RenderGraphBuilder) {
         match self.clip {
             Some(SceneClip::Shape(region)) => builder.push_shape_clip_push(region),
             Some(SceneClip::Rect(rect)) => builder.push_clip_push(rect),
             None => {}
         }
         if let Some(draw) = &self.draw {
-            if draw.geometry.local_size.width.0 > 0
-                && draw.geometry.local_size.height.0 > 0
-                && !draw
-                    .geometry
-                    .window_bounds()
-                    .outward()
-                    .is_orthogonal(&viewport)
-            {
-                builder.append_fragment(draw.fragment.clone(), draw.geometry, draw.opacity);
+            if draw.visible {
+                builder.append_fragment(
+                    draw.fragment.as_ref().clone(),
+                    draw.geometry,
+                    draw.opacity,
+                );
             }
         }
         for child in self.children.values() {
-            child.emit(builder, viewport);
+            child.emit(builder);
         }
         if self.clip.is_some() {
             builder.push_clip_pop();
