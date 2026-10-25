@@ -23,6 +23,9 @@ Direct layout children are retained through transparent composition nodes.
 Structural reconciliation updates that adjacency; measurement reads it through
 shared handles. Cached child constraints and sizes are shared, and dirty-child
 indexes identify the size dependencies that need checking.
+Replay propagates adjacency changes through transparent ancestors only until a
+layout boundary or unchanged adjacency. Profiling subtree counts propagate
+separately as size deltas.
 When parent constraints change, layout wrappers can reuse their content if the
 effective content constraints and final size remain unchanged. This prevents a
 fixed-size sibling from remeasuring merely because a flex container offers it a
@@ -43,10 +46,17 @@ Geometry propagation uses retained direct layout adjacency, skipping transparent
 composition wrappers. An inherited translation reuses unchanged local placement
 results and their state dependencies; local placement changes still reevaluate
 the affected modifier chain.
+Read-only geometry traversal borrows cached child lists without acquiring an
+additional shared reference for each visited node.
+Input action positions remain local and share their storage. Input consumers
+map requested positions through the current parent transform without allocating
+a world-transform array for each translated node.
 
 - Paint records queued visible nodes. Revealing a dirty hidden node queues its
   first recording.
-- Position observers inspect changed geometry and newly attached observers.
+- Position observers intersect changed geometry with retained registrations and
+  inspect newly attached observers. Hidden registrations remain eligible when
+  their layout is revealed again.
 - Focus attachments and ordered child indexes update only affected handles.
   Placement-order changes have their own journal. Pure translations update
   focus rectangles without rebuilding traversal paths; transparent composition
@@ -59,11 +69,20 @@ the affected modifier chain.
   Geometry updates retain unchanged handlers and composition order. Moving an
   already clipped handler does not schedule input delivery by itself; captures,
   hover exits, and explicit state invalidations still schedule delivery.
+  Geometry journals are intersected with registered pointer capabilities before
+  updating the spatial index; decorative layout changes do not enter it.
 - The scene retains render-bearing branches and compresses transparent chains.
   An unchanged scene shares its render graph and cached execution ordering.
   Transparent unary branches forward their current descendant output without
   rebuilding every wrapper. Fully clipped output and draws that remain outside
   the viewport retain their geometry until they can contribute again.
+  Geometry changes share immutable paint fragments. Frame assembly applies
+  opacity to its command output without mutating the retained fragment.
+  Geometry journals are intersected with drawing, clipping, and hidden scene
+  branches before evaluating scene candidates.
+  Draw visibility is retained until geometry or viewport dimensions change.
+  Text commands share shaped glyph buffers; scrolling and span-color opacity
+  changes copy shared buffers before mutation.
 - Accessibility retains stable semantic identities and child order. Ordinary
   frames publish changed nodes and focus. Initial platform activation and
   explicit headless snapshots publish the complete semantic tree. Inherited
@@ -104,6 +123,18 @@ scope when navigation is requested. Active frame receivers run their callbacks.
 Changed render scenes assemble their command output; GPU pass construction,
 uploads, and command encoding process the commands being rendered. Explicit
 profiling and inspection snapshots enumerate their requested output.
+Shape pipelines retain separate GPU buffer and binding slots for cached and
+uncached batches. Slots advance across every draw in a frame and reset only at
+the frame boundary, so queued batches never overwrite each other's uploads.
+Warmed batches reuse capacity; larger batches replace only their own slot.
+Shape cache heat advances once per rendered frame, independently of draw-batch
+count. Repeated batches cannot prematurely warm a transient shape or expire
+another stable shape within the same frame.
+Vector atlas samples share aligned uniform-buffer blocks with dynamic offsets.
+Each active block uploads once before frame submission; unused retained blocks
+do not participate in that frame's upload work.
+Short typed draw batches use inline scratch storage and spill to the heap only
+when their command count exceeds that capacity.
 
 These paths differ from unconditional component-tree reconstruction on every
 frame. They remain important when profiling broad updates and large outputs.
