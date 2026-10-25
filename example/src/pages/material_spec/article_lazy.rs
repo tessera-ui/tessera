@@ -55,12 +55,17 @@ pub(super) fn viewport(
     }
     let items = RenderSlotWith::new(move |item| {
         let page = data.get();
-        let first_section = 1 + usize::from(page.intro.is_some());
+        let first_section = 3 + usize::from(page.intro.is_some());
         let compact = width.get().0 < 600.0;
         let inset = if compact { Dp(24.0) } else { Dp(40.0) };
         if item == 0 {
-            header(data, selected, scroll, width, bindings);
-        } else if item == 1 && page.intro.is_some() {
+            media::page_header(page.title, page.description, width.get());
+        } else if item == 1 {
+            article_tabs(selected, scroll)
+                .pages_optional(bindings.with(|bindings| bindings.pages.clone()));
+        } else if item == 2 {
+            contents(data, width, bindings);
+        } else if item == 3 && page.intro.is_some() {
             column()
                 .modifier(
                     Modifier::new()
@@ -126,15 +131,34 @@ pub(super) fn viewport(
                 .max_viewport_main(height.get())
                 .scrollbar_behavior(ScrollBarBehavior::Hidden)
                 .items_with_key_shared(
+                    1,
+                    move |_| {
+                        (
+                            data.with(|page| page.title.clone()),
+                            None::<&'static str>,
+                            0,
+                        )
+                    },
+                    items,
+                )
+                .sticky_header_with_key_shared(
+                    (
+                        data.with(|page| page.title.clone()),
+                        None::<&'static str>,
+                        1,
+                    ),
+                    RenderSlotWith::new(move |_| items.render(1)),
+                )
+                .items_with_key_shared(
                     {
                         let page = data.get();
                         1 + usize::from(page.intro.is_some()) + page.sections.len() + 1
                     },
                     move |item| {
                         let page = data.get();
-                        (page.title, (item != 0).then_some(page.page), item)
+                        (page.title, Some(page.page), item + 2)
                     },
-                    items,
+                    RenderSlotWith::new(move |item| items.render(item + 2)),
                 );
             boxed()
                 .alignment(Alignment::TopStart)
@@ -149,20 +173,11 @@ pub(super) fn viewport(
 }
 
 #[tessera]
-fn header(
-    data: State<ArticleData>,
-    selected: State<&'static str>,
-    scroll: State<ScrollableController>,
-    width: State<Dp>,
-    bindings: State<ChapterBindings>,
-) {
+fn contents(data: State<ArticleData>, width: State<Dp>, bindings: State<ChapterBindings>) {
     column()
         .modifier(Modifier::new().fill_max_width())
         .children(move || {
             let page = data.get();
-            media::page_header(page.title, page.description, width.get());
-            article_tabs(selected, scroll)
-                .pages_optional(bindings.with(|bindings| bindings.pages.clone()));
             gap(Dp(64.0));
             if !page.sections.is_empty() && page.section_heading_level == 2 {
                 let inset = if width.get().0 < 600.0 {
@@ -203,12 +218,12 @@ fn header(
                                                 if !controller.is_alive() {
                                                     return;
                                                 }
-                                                let first = 1 + usize::from(
+                                                let first = 3 + usize::from(
                                                     data.with(|data| data.intro.is_some()),
                                                 );
                                                 controller.with_mut(|controller| {
                                                     controller
-                                                        .scroll_to_item(first + index, Dp::ZERO);
+                                                        .scroll_to_item(first + index, Dp(88.0));
                                                 });
                                             }),
                                             ..Default::default()

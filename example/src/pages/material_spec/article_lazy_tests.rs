@@ -206,9 +206,16 @@ fn real_buttons_route_retains_visited_native_state_reveals_cold_sections_and_pre
         .1
         .bounds()
         .unwrap();
+    let pinned_tab = find(&renderer, "Specs", Some(Role::Tab)).unwrap();
+    assert_eq!(pinned_tab.0, specs_id);
+    let pinned_bounds = pinned_tab.1.bounds().unwrap();
     assert!(
-        heading.y0 >= 80.0 && heading.y0 < 200.0,
-        "cold last section must align its real native heading: {heading:?}"
+        pinned_bounds.y0 >= 64.0 && pinned_bounds.y1 < 180.0,
+        "Article tabs must remain visible above a scrolled chapter: {pinned_bounds:?}"
+    );
+    assert!(
+        heading.y0 >= pinned_bounds.y1 && heading.y0 < pinned_bounds.y1 + 120.0,
+        "cold last section must align below the pinned article tabs: {heading:?}"
     );
     let label = reveal(&mut renderer, "Label", Some(Role::Button), -600.0)
         .1

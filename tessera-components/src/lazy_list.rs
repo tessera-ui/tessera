@@ -584,6 +584,23 @@ macro_rules! impl_lazy_list_builder {
                 self
             }
 
+            /// Append a sticky header with a stable key and a shared indexed render
+            /// slot.
+            pub fn sticky_header_with_key_shared<K>(
+                mut self,
+                key: K,
+                builder: impl Into<RenderSlotWith<usize>>,
+            ) -> Self
+            where
+                K: Hash,
+            {
+                self.push_slot(LazySlot::Sticky(LazyStickySlot {
+                    builder: builder.into(),
+                    key_hash: Some(hash_key(key)),
+                }));
+                self
+            }
+
             /// Append lazy items from an iterator, exposing index and element.
             pub fn items_from_iter<I, T, F>(mut self, iter: I, builder: F) -> Self
             where
