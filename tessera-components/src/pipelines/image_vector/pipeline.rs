@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::{collections::HashMap, num::NonZeroU64};
 
 use encase::{ShaderType, UniformBuffer};
 use glam::{Vec2, Vec4};
@@ -14,6 +14,12 @@ const DEFAULT_ATLAS_SIZE: u32 = 2048;
 const MIN_ATLAS_SIZE: u32 = 256;
 const ATLAS_PADDING: u32 = 1;
 const ATLAS_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Rgba8UnormSrgb;
+const SAMPLES_PER_BUFFER: usize = 64;
+
+#[cfg(test)]
+thread_local! {
+    pub(super) static SAMPLE_UPLOADS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
 
 struct GeometryResources {
     vertex_buffer: wgpu::Buffer,
@@ -46,8 +52,9 @@ struct AtlasCacheEntry {
 
 struct SampleResources {
     buffer: wgpu::Buffer,
-    bind_group: wgpu::BindGroup,
-    page_index: usize,
+    bind_groups: HashMap<usize, wgpu::BindGroup>,
+    bytes: Vec<u8>,
+    used: usize,
 }
 
 #[derive(ShaderType, Clone, PartialEq, Copy)]
@@ -82,6 +89,7 @@ pub struct ImageVectorPipeline {
     raster_sample_count: u32,
     sample_resources: Vec<SampleResources>,
     next_sample: usize,
+    sample_stride: usize,
 }
 
 impl ImageVectorPipeline {
@@ -140,7 +148,7 @@ impl ImageVectorPipeline {
                         visibility: wgpu::ShaderStages::VERTEX | wgpu::ShaderStages::FRAGMENT,
                         ty: wgpu::BindingType::Buffer {
                             ty: wgpu::BufferBindingType::Uniform,
-                            has_dynamic_offset: false,
+                            has_dynamic_offset: true,
                             min_binding_size: Some(AtlasSampleUniforms::min_size()),
                         },
                         count: None,
@@ -284,6 +292,8 @@ impl ImageVectorPipeline {
             raster_sample_count,
             sample_resources: Vec::new(),
             next_sample: 0,
+            sample_stride: (AtlasSampleUniforms::min_size().get() as usize)
+                .next_multiple_of(device.limits().min_uniform_buffer_offset_alignment as usize),
         }
     }
 
@@ -458,6 +468,23 @@ impl DrawablePipeline<ImageVectorCommand> for ImageVectorPipeline {
         self.next_sample = 0;
     }
 
+    fn end_frame(&mut self, context: &FrameContext<'_>) {
+        #[cfg(test)]
+        SAMPLE_UPLOADS.set(0);
+        // Queue writes precede submission of the frame's encoded draws.
+        for resources in self
+            .sample_resources
+            .iter()
+            .take(self.next_sample.div_ceil(SAMPLES_PER_BUFFER))
+        {
+            context
+                .queue
+                .write_buffer(&resources.buffer, 0, &resources.bytes[..resources.used]);
+            #[cfg(test)]
+            SAMPLE_UPLOADS.with(|count| count.set(count.get() + 1));
+        }
+    }
+
     fn draw(&mut self, context: &mut DrawContext<ImageVectorCommand>) {
         if context.commands.is_empty() {
             return;
@@ -482,8 +509,8 @@ impl DrawablePipeline<ImageVectorCommand> for ImageVectorPipeline {
                 continue;
             };
             let key = AtlasKey::new(&command.data, width, height);
-            let entry = match self.cache.get_mut(&key) {
-                Some(entry) => entry,
+            let (uv_origin, uv_scale, page_index) = match self.cache.get(&key) {
+                Some(entry) => (entry.uv_origin, entry.uv_scale, entry.page_index),
                 None => continue,
             };
 
@@ -492,8 +519,8 @@ impl DrawablePipeline<ImageVectorCommand> for ImageVectorPipeline {
                 tint: command.tint,
                 tint_mode: command.tint_mode,
                 rotation: command.rotation,
-                uv_origin: entry.uv_origin,
-                uv_scale: entry.uv_scale,
+                uv_origin,
+                uv_scale,
                 target_size: context.target_size,
             });
             let mut buffer = UniformBuffer::new(Vec::new());
@@ -502,43 +529,41 @@ impl DrawablePipeline<ImageVectorCommand> for ImageVectorPipeline {
                 .expect("sample uniform serialization failed");
 
             let bytes = buffer.into_inner();
-            let slot_index = self.next_sample;
+            let slot_index = self.next_sample / SAMPLES_PER_BUFFER;
+            let offset = (self.next_sample % SAMPLES_PER_BUFFER) * self.sample_stride;
             self.next_sample += 1;
             if slot_index == self.sample_resources.len() {
                 let buffer = context.device.create_buffer(&wgpu::BufferDescriptor {
                     label: Some("image_vector_sample_uniform_buffer"),
-                    size: bytes.len() as u64,
+                    size: (self.sample_stride * SAMPLES_PER_BUFFER) as u64,
                     usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
                     mapped_at_creation: false,
                 });
-                let bind_group = create_sample_bind_group(
-                    context.device,
-                    &self.sample_bind_group_layout,
-                    self.atlas.page_view(entry.page_index),
-                    &self.atlas_sampler,
-                    &buffer,
-                );
                 self.sample_resources.push(SampleResources {
                     buffer,
-                    bind_group,
-                    page_index: entry.page_index,
+                    bind_groups: HashMap::new(),
+                    bytes: vec![0; self.sample_stride * SAMPLES_PER_BUFFER],
+                    used: 0,
                 });
             }
             let resources = &mut self.sample_resources[slot_index];
-            if resources.page_index != entry.page_index {
-                resources.bind_group = create_sample_bind_group(
+            resources.bytes[offset..offset + bytes.len()].copy_from_slice(&bytes);
+            resources.used = offset + bytes.len();
+            let buffer = &resources.buffer;
+            let bind_group = resources.bind_groups.entry(page_index).or_insert_with(|| {
+                create_sample_bind_group(
                     context.device,
                     &self.sample_bind_group_layout,
-                    self.atlas.page_view(entry.page_index),
+                    self.atlas.page_view(page_index),
                     &self.atlas_sampler,
-                    &resources.buffer,
-                );
-                resources.page_index = entry.page_index;
-            }
-            context.queue.write_buffer(&resources.buffer, 0, &bytes);
-            context
-                .render_pass
-                .set_bind_group(0, &resources.bind_group, &[]);
+                    buffer,
+                )
+            });
+            context.render_pass.set_bind_group(
+                0,
+                &*bind_group,
+                &[u32::try_from(offset).expect("Vector sample offset")],
+            );
             context.render_pass.draw(0..6, 0..1);
         }
     }
@@ -564,7 +589,11 @@ fn create_sample_bind_group(
             },
             wgpu::BindGroupEntry {
                 binding: 2,
-                resource: buffer.as_entire_binding(),
+                resource: wgpu::BindingResource::Buffer(wgpu::BufferBinding {
+                    buffer,
+                    offset: 0,
+                    size: NonZeroU64::new(AtlasSampleUniforms::min_size().get()),
+                }),
             },
         ],
         label: Some("image_vector_sample_bind_group"),
