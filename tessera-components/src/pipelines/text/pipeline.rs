@@ -392,7 +392,7 @@ impl DrawablePipeline<TextCommand> for GlyphonTextRender {
 #[derive(Debug, Clone)]
 pub struct TextData {
     /// glyphon text buffer
-    text_buffer: glyphon::Buffer,
+    text_buffer: Arc<glyphon::Buffer>,
     /// text area size
     pub size: [u32; 2],
     /// Baseline offset of the first visible line, relative to the text origin.
@@ -481,7 +481,7 @@ impl TextData {
             font,
         };
         let data = Self {
-            text_buffer,
+            text_buffer: Arc::new(text_buffer),
             size: bounds,
             first_baseline,
             last_baseline,
@@ -512,7 +512,7 @@ impl TextData {
                 layout: line.layout_opt().cloned().unwrap_or_default(),
             })
             .collect();
-        let base_span_colors = text_buffer
+        let base_span_colors: Vec<_> = text_buffer
             .lines
             .iter()
             .flat_map(|line| line.layout_opt().into_iter().flatten())
@@ -548,7 +548,7 @@ impl TextData {
         let total_height = line_count as f32 * metrics.line_height;
         // build text data
         Self {
-            text_buffer,
+            text_buffer: Arc::new(text_buffer),
             size: [run_width as u32, total_height.ceil() as u32],
             first_baseline,
             last_baseline,
@@ -564,7 +564,10 @@ impl TextData {
                 family: None,
             },
             styled_identity: Some(Arc::new(styled_identity)),
-            base_span_colors: Some(Arc::new(base_span_colors)),
+            base_span_colors: base_span_colors
+                .iter()
+                .any(Option::is_some)
+                .then(|| Arc::new(base_span_colors)),
             span_opacity: 1.0,
         }
     }
@@ -592,9 +595,9 @@ impl TextData {
         if self.text_buffer.scroll() == scroll {
             return;
         }
-        self.text_buffer.set_scroll(scroll);
-        self.text_buffer
-            .shape_until_scroll(&mut write_font_system(), false);
+        let buffer = Arc::make_mut(&mut self.text_buffer);
+        buffer.set_scroll(scroll);
+        buffer.shape_until_scroll(&mut write_font_system(), false);
         let mut width = 0.0_f32;
         self.first_baseline = 0.0;
         self.last_baseline = 0.0;
@@ -706,7 +709,7 @@ impl TextData {
         self.current_color = target_color;
         if let Some(colors) = &self.base_span_colors {
             let mut colors = colors.iter();
-            for line in &mut self.text_buffer.lines {
+            for line in &mut Arc::make_mut(&mut self.text_buffer).lines {
                 line.map_layout_glyph_colors(|_| {
                     colors.next().copied().flatten().map(|color| {
                         glyphon::Color::rgba(
@@ -732,6 +735,57 @@ mod tests {
     use super::{TextConstraint, TextData, read_font_system};
 
     #[test]
+    fn retained_text_copies_share_shapes_and_isolate_scroll_and_opacity() {
+        let shaped = TextData::shape(
+            "Shared shaped glyphs".into(),
+            Color::BLACK,
+            MaterialTypography::default().body_large,
+            TextConstraint {
+                max_width: None,
+                max_height: None,
+            },
+        );
+        let origin = tessera_ui::PxPosition::from_f32_xy(20.0, 30.0);
+        let mut buffer = (*shaped.text_area(origin, 1.0).buffer).clone();
+        for line in &mut buffer.lines {
+            line.map_layout_glyph_colors(|_| Some(glyphon::Color::rgba(120, 80, 40, 255)));
+        }
+        let original = TextData::from_buffer(buffer);
+        let mut faded = original.clone();
+        assert!(
+            std::ptr::eq(
+                original.text_area(origin, 1.0).buffer,
+                faded.text_area(origin, 1.0).buffer
+            ),
+            "retained command copies must share their shaped glyph storage"
+        );
+        let mut scrolled = original.clone();
+        let mut scroll = scrolled.text_area(origin, 1.0).buffer.scroll();
+        scroll.horizontal = 13.5;
+        scrolled.set_scroll(scroll);
+        assert_eq!(scrolled.text_area(origin, 1.0).left, 6.5);
+        assert_eq!(original.text_area(origin, 1.0).left, 20.0);
+        faded.apply_opacity(0.5);
+        let alpha = |data: &TextData| {
+            data.text_area(origin, 1.0)
+                .buffer
+                .layout_runs()
+                .next()
+                .unwrap()
+                .glyphs[0]
+                .color_opt
+                .unwrap()
+                .a()
+        };
+        assert_eq!(alpha(&faded), 128);
+        assert_eq!(alpha(&original), 255);
+        faded.apply_opacity(0.25);
+        assert_eq!(alpha(&faded), 64);
+        assert_eq!(alpha(&original), 255);
+        assert_eq!(alpha(&scrolled), 255);
+    }
+
+    #[test]
     fn horizontal_buffer_scroll_moves_glyph_origin_without_moving_clip_bounds() {
         let shaped = TextData::shape(
             "Scrollable editor text".into(),
@@ -742,8 +796,8 @@ mod tests {
                 max_height: Some(24.0),
             },
         );
-        let before = TextData::from_buffer(shaped.text_buffer.clone());
-        let mut buffer = shaped.text_buffer;
+        let before = TextData::from_buffer(shaped.text_buffer.as_ref().clone());
+        let mut buffer = shaped.text_buffer.as_ref().clone();
         let mut scroll = buffer.scroll();
         scroll.horizontal = 13.5;
         buffer.set_scroll(scroll);
