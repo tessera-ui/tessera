@@ -478,24 +478,51 @@ fn detail(outlined: bool) {
             }
             spec_table(
                 vec!["Attribute".into(), "Value".into()],
-                vec![
-                    vec!["Container height / touch target".into(), "56dp".into()],
+                if outlined {
                     vec![
-                        "Unpopulated label alignment".into(),
-                        "Vertically centered".into(),
-                    ],
-                    vec!["Horizontal padding without icons".into(), "16dp".into()],
-                    vec!["Horizontal padding with icons".into(), "12dp".into()],
-                    vec!["Icon alignment".into(), "Vertically centered".into()],
-                    vec!["Icon-to-text spacing".into(), "16dp".into()],
-                    vec!["Supporting text top padding".into(), "4dp".into()],
-                    vec!["Supporting text-to-counter spacing".into(), "16dp".into()],
-                    if outlined {
-                        vec!["Populated label horizontal padding".into(), "4dp".into()]
-                    } else {
-                        vec!["Populated content top/bottom padding".into(), "8dp".into()]
-                    },
-                ],
+                        vec!["Container height".into(), "56dp".into()],
+                        vec!["Left/right padding without icons".into(), "16dp".into()],
+                        vec!["Left/right padding with icons".into(), "12dp".into()],
+                        vec!["Padding between icons and text".into(), "16dp".into()],
+                        vec!["Icon alignment".into(), "Vertically centered".into()],
+                        vec![
+                            "Supporting text and character counter top padding".into(),
+                            "4dp".into(),
+                        ],
+                        vec![
+                            "Padding between supporting text and character counter".into(),
+                            "16dp".into(),
+                        ],
+                        vec!["Label alignment".into(), "Vertically centered".into()],
+                        vec![
+                            "Left/right padding populated label text".into(),
+                            "4dp".into(),
+                        ],
+                        vec!["Target size".into(), "56dp".into()],
+                    ]
+                } else {
+                    vec![
+                        vec!["Default container height".into(), "56dp".into()],
+                        vec![
+                            "Label alignment (unpopulated)".into(),
+                            "Vertically centered".into(),
+                        ],
+                        vec!["Top/bottom padding".into(), "8dp".into()],
+                        vec!["Left/right padding without icons".into(), "16dp".into()],
+                        vec!["Left/right padding with icons".into(), "12dp".into()],
+                        vec!["Icon alignment".into(), "Vertically centered".into()],
+                        vec!["Padding between icons and text".into(), "16dp".into()],
+                        vec![
+                            "Supporting text and character counter top padding".into(),
+                            "4dp".into(),
+                        ],
+                        vec![
+                            "Padding between supporting text and character counter".into(),
+                            "16dp".into(),
+                        ],
+                        vec!["Target size".into(), "56dp".into()],
+                    ]
+                },
             );
             gap(Dp(112.0));
             subheading(format!("{title} configurations"));
