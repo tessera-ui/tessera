@@ -1,4 +1,4 @@
-use encase::{ShaderSize, ShaderType, StorageBuffer};
+use encase::{ShaderType, StorageBuffer};
 use glam::{Vec2, Vec4};
 use tessera_ui::{PxPosition, PxSize, wgpu};
 
@@ -21,13 +21,78 @@ struct CachedRectInstances {
     rects: Vec<CachedRectUniform>,
 }
 
+#[derive(Default)]
+pub(super) struct BatchResources {
+    slots: Vec<BatchSlot>,
+    next: usize,
+}
+
+struct BatchSlot {
+    buffer: wgpu::Buffer,
+    bind_group: wgpu::BindGroup,
+    capacity: u64,
+}
+
+impl BatchResources {
+    pub(super) fn begin_frame(&mut self) {
+        self.next = 0;
+    }
+
+    fn upload(
+        &mut self,
+        device: &wgpu::Device,
+        queue: &wgpu::Queue,
+        layout: &wgpu::BindGroupLayout,
+        bytes: &[u8],
+    ) -> &wgpu::BindGroup {
+        let index = self.next;
+        self.next += 1;
+        if self
+            .slots
+            .get(index)
+            .is_none_or(|slot| slot.capacity < bytes.len() as u64)
+        {
+            #[cfg(test)]
+            super::BATCH_ALLOCATIONS.with(|count| count.set(count.get() + 1));
+            let capacity = (bytes.len() as u64).next_power_of_two();
+            let buffer = device.create_buffer(&wgpu::BufferDescriptor {
+                label: Some("Shape Batch Storage"),
+                size: capacity,
+                usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
+                mapped_at_creation: false,
+            });
+            let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
+                layout,
+                entries: &[wgpu::BindGroupEntry {
+                    binding: 0,
+                    resource: buffer.as_entire_binding(),
+                }],
+                label: Some("Shape Batch Bind Group"),
+            });
+            let slot = BatchSlot {
+                buffer,
+                bind_group,
+                capacity,
+            };
+            if index == self.slots.len() {
+                self.slots.push(slot);
+            } else {
+                self.slots[index] = slot;
+            }
+        }
+        let slot = &self.slots[index];
+        queue.write_buffer(&slot.buffer, 0, bytes);
+        &slot.bind_group
+    }
+}
+
 fn build_instances(
     commands: &[(&ShapeCommand, tessera_ui::DrawGeometry)],
     target_size: PxSize,
 ) -> Vec<ShapeUniforms> {
     commands
         .iter()
-        .flat_map(|(command, geometry)| {
+        .map(|(command, geometry)| {
             let mut uniforms =
                 rect_to_uniforms(command, geometry.local_size, geometry.window_origin());
             let [width, height] = geometry.window_size();
@@ -37,14 +102,14 @@ fn build_instances(
             uniforms.corner_radii *= scale;
             uniforms.border_width *= scale;
             uniforms.screen_size = [target_size.width.to_f32(), target_size.height.to_f32()].into();
-            vec![uniforms]
+            uniforms
         })
         .collect()
 }
 
 impl ShapePipeline {
     pub(super) fn draw_uncached_batch(
-        &self,
+        &mut self,
         gpu: &wgpu::Device,
         gpu_queue: &wgpu::Queue,
         target_size: PxSize,
@@ -62,39 +127,28 @@ impl ShapePipeline {
             return;
         }
 
-        let storage_buffer = gpu.create_buffer(&wgpu::BufferDescriptor {
-            label: Some("Shape Storage Buffer"),
-            size: 16 + ShapeUniforms::SHADER_SIZE.get() * instances.len() as u64,
-            usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
-            mapped_at_creation: false,
-        });
-
         let uniforms = ShapeInstances { instances };
 
         let mut buffer_content = StorageBuffer::new(Vec::<u8>::new());
         buffer_content
             .write(&uniforms)
             .expect("buffer write failed");
-        gpu_queue.write_buffer(&storage_buffer, 0, buffer_content.as_ref());
-
-        let bind_group = gpu.create_bind_group(&wgpu::BindGroupDescriptor {
-            layout: &self.bind_group_layout,
-            entries: &[wgpu::BindGroupEntry {
-                binding: 0,
-                resource: storage_buffer.as_entire_binding(),
-            }],
-            label: Some("shape_bind_group"),
-        });
+        let bind_group = self.uncached_batches.upload(
+            gpu,
+            gpu_queue,
+            &self.bind_group_layout,
+            buffer_content.as_ref(),
+        );
 
         render_pass.set_pipeline(&self.pipeline);
-        render_pass.set_bind_group(0, &bind_group, &[]);
+        render_pass.set_bind_group(0, bind_group, &[]);
         render_pass.set_vertex_buffer(0, self.quad_vertex_buffer.slice(..));
         render_pass.set_index_buffer(self.quad_index_buffer.slice(..), wgpu::IndexFormat::Uint16);
         render_pass.draw_indexed(0..6, 0, 0..uniforms.instances.len() as u32);
     }
 
     pub(super) fn draw_cached_run(
-        &self,
+        &mut self,
         gpu: &wgpu::Device,
         gpu_queue: &wgpu::Queue,
         target_size: PxSize,
@@ -128,28 +182,18 @@ impl ShapePipeline {
             .write(&rect_instances)
             .expect("buffer write failed");
 
-        let instance_buffer = gpu.create_buffer(&wgpu::BufferDescriptor {
-            label: Some("Shape Cache Instance Buffer"),
-            size: buffer_content.as_ref().len() as u64,
-            usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
-            mapped_at_creation: false,
-        });
-        gpu_queue.write_buffer(&instance_buffer, 0, buffer_content.as_ref());
-
-        let transform_bind_group = gpu.create_bind_group(&wgpu::BindGroupDescriptor {
-            layout: &self.cache_transform_bind_group_layout,
-            entries: &[wgpu::BindGroupEntry {
-                binding: 0,
-                resource: instance_buffer.as_entire_binding(),
-            }],
-            label: Some("shape_cache_transform_bind_group"),
-        });
+        let transform_bind_group = self.cached_batches.upload(
+            gpu,
+            gpu_queue,
+            &self.cache_transform_bind_group_layout,
+            buffer_content.as_ref(),
+        );
 
         render_pass.set_pipeline(&self.cached_pipeline);
         render_pass.set_vertex_buffer(0, self.quad_vertex_buffer.slice(..));
         render_pass.set_index_buffer(self.quad_index_buffer.slice(..), wgpu::IndexFormat::Uint16);
         render_pass.set_bind_group(0, texture_bind_group, &[]);
-        render_pass.set_bind_group(1, &transform_bind_group, &[]);
+        render_pass.set_bind_group(1, transform_bind_group, &[]);
         render_pass.draw_indexed(0..6, 0, 0..instances.len() as u32);
     }
 

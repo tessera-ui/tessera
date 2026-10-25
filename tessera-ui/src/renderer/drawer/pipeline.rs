@@ -97,6 +97,8 @@
 
 use std::{any::TypeId, collections::HashMap};
 
+use smallvec::SmallVec;
+
 use crate::{
     px::{PxRect, PxSize},
     render_graph::DrawGeometry,
@@ -437,7 +439,7 @@ impl<T: DrawCommand + 'static, P: DrawablePipeline<T> + 'static> ErasedDrawableP
         } = context;
 
         if commands[0].0.is::<T>() {
-            let typed_commands: Vec<(&T, DrawGeometry)> = commands
+            let typed_commands: SmallVec<[(&T, DrawGeometry); 16]> = commands
                 .iter()
                 .map(|(cmd, geometry)| {
                     (

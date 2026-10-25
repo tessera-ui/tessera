@@ -14,7 +14,7 @@ use glam::{Vec2, Vec4};
 use lru::LruCache;
 use tessera_ui::{
     PxPosition, PxSize,
-    renderer::drawer::pipeline::{DrawContext, DrawablePipeline},
+    renderer::drawer::pipeline::{DrawContext, DrawablePipeline, FrameContext},
     wgpu::{self, include_wgsl},
 };
 
@@ -31,6 +31,12 @@ const SHAPE_CACHE_CAPACITY: usize = 100;
 const CACHE_HEAT_THRESHOLD: u32 = 3;
 /// Number of frames to keep heat tracking data before cleanup.
 const HEAT_TRACKING_WINDOW: u32 = 10;
+
+#[cfg(test)]
+thread_local! {
+    pub(super) static BATCH_ALLOCATIONS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+    pub(super) static CACHE_BUILDS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
 
 type CachedInstanceBatch = Option<(Arc<ShapeCacheEntry>, Vec<(PxPosition, PxSize)>)>;
 
@@ -77,6 +83,8 @@ pub struct ShapePipeline {
     heat_tracker: HashMap<ShapeCacheKey, ShapeHeatTracker>,
     current_frame: u32,
     render_format: wgpu::TextureFormat,
+    uncached_batches: draw::BatchResources,
+    cached_batches: draw::BatchResources,
 }
 
 impl ShapePipeline {
@@ -271,20 +279,26 @@ impl ShapePipeline {
             heat_tracker: HashMap::new(),
             current_frame: 0,
             render_format: config.format,
+            uncached_batches: draw::BatchResources::default(),
+            cached_batches: draw::BatchResources::default(),
         }
     }
 }
 
 impl DrawablePipeline<ShapeCommand> for ShapePipeline {
-    fn draw(&mut self, context: &mut DrawContext<ShapeCommand>) {
-        if context.commands.is_empty() {
-            return;
-        }
-
+    fn begin_frame(&mut self, _: &FrameContext<'_>) {
+        self.uncached_batches.begin_frame();
+        self.cached_batches.begin_frame();
         self.current_frame = self.current_frame.wrapping_add(1);
         self.heat_tracker.retain(|_, tracker| {
             self.current_frame.saturating_sub(tracker.last_seen_frame) < HEAT_TRACKING_WINDOW
         });
+    }
+
+    fn draw(&mut self, context: &mut DrawContext<ShapeCommand>) {
+        if context.commands.is_empty() {
+            return;
+        }
 
         let mut cache_entries = Vec::with_capacity(context.commands.len());
         for (command, geometry) in context.commands.iter() {

@@ -276,6 +276,8 @@ impl ShapePipeline {
         command: &ShapeCommand,
         size: PxSize,
     ) -> ShapeCacheEntry {
+        #[cfg(test)]
+        super::CACHE_BUILDS.with(|count| count.set(count.get() + 1));
         let object_width = size.width.positive().max(1);
         let object_height = size.height.positive().max(1);
         let width = object_width;

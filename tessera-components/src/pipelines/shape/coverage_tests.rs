@@ -5,13 +5,111 @@
 //! Preserve opaque interior border pixels across sample counts, transforms and
 //! clips.
 
+use std::cell::Cell;
+
 use tessera_ui::{
-    Color, Dp, HeadlessConfig, HeadlessRenderer, Modifier, RenderModule, scaled_box, tessera,
+    Color, Dp, HeadlessConfig, HeadlessRenderer, Modifier, RenderModule, State, remember,
+    scaled_box, tessera,
 };
 
 use crate::{boxed::boxed, modifier::ModifierExt as _, shape_def::Shape};
 
 struct Pipelines;
+
+thread_local! {
+    static DISTINCT: Cell<Option<State<bool>>> = const { Cell::new(None) };
+}
+
+#[tessera]
+fn cache_clock_fixture() {
+    let distinct = remember(|| false);
+    DISTINCT.set(Some(distinct));
+    boxed()
+        .modifier(Modifier::new().fill_max_size())
+        .children(move || {
+            for index in 0..15 {
+                let color = if distinct.get() {
+                    Color::from_rgb((20 + index * 10) as f32 / 255.0, 0.4, 0.6)
+                } else {
+                    Color::from_rgb(0.8, 0.4, 0.6)
+                };
+                boxed()
+                    .modifier(
+                        Modifier::new()
+                            .offset(Dp(4.0 + index as f64 * 16.0), Dp(4.0))
+                            .size(Dp(12.0), Dp(12.0))
+                            .clip_to_bounds(),
+                    )
+                    .children(move || {
+                        boxed().modifier(
+                            Modifier::new()
+                                .fill_max_size()
+                                .background_with_shape(color, Shape::rounded_rectangle(Dp(2.0))),
+                        );
+                    });
+            }
+        });
+}
+
+#[test]
+#[ignore = "requires a native GPU adapter for cache generation across isolated draw batches"]
+fn shape_cache_heats_once_per_frame_across_many_batches() {
+    crate::test_utils::run_isolated_test(
+        "pipelines::shape::coverage_tests::shape_cache_heats_once_per_frame_across_many_batches",
+        || {
+            for sample_count in [1, 4] {
+                let mut renderer = HeadlessRenderer::new(
+                    Box::new(cache_clock_fixture),
+                    vec![Box::new(Pipelines)],
+                    HeadlessConfig {
+                        width: 248,
+                        height: 24,
+                        sample_count,
+                        ..Default::default()
+                    },
+                )
+                .unwrap();
+                super::pipeline::CACHE_BUILDS.set(0);
+                renderer.render_frames(1);
+                assert_eq!(
+                    super::pipeline::CACHE_BUILDS.get(),
+                    0,
+                    "repeated batches in one frame must not warm a transient shape"
+                );
+                renderer.render_frames(7);
+                assert_eq!(
+                    super::pipeline::CACHE_BUILDS.get(),
+                    1,
+                    "one stable shape must become cached across real frames"
+                );
+                DISTINCT.get().unwrap().set(true);
+                let before = super::pipeline::CACHE_BUILDS.get();
+                renderer.render_frames(8);
+                assert_eq!(
+                    super::pipeline::CACHE_BUILDS.get() - before,
+                    15,
+                    "more than ten batches per frame must not expire stable shape heat"
+                );
+                let cached = renderer.read_pixels().unwrap();
+                let mut previous_red = None;
+                for index in 0..15 {
+                    let x = 10 + index * 16;
+                    let actual = pixel(&cached, 248, x, 10);
+                    assert_eq!(actual[3], 255);
+                    if let Some(previous) = previous_red {
+                        assert!(
+                            actual[0] > previous,
+                            "cached batch colors must remain distinct and ordered"
+                        );
+                    }
+                    previous_red = Some(actual[0]);
+                }
+                renderer.render_frames(2);
+                assert_eq!(renderer.read_pixels().unwrap(), cached);
+            }
+        },
+    );
+}
 
 impl RenderModule for Pipelines {
     fn register_pipelines(&self, context: &mut tessera_ui::PipelineContext<'_>) {
@@ -103,8 +201,20 @@ fn native_borders_keep_fully_covered_pixels_opaque_at_integer_and_fractional_cli
             },
         )
         .unwrap();
-        renderer.render_frames(3);
+        renderer.render_frames(8);
         let pixels = renderer.read_pixels().unwrap();
+        let allocations = super::pipeline::BATCH_ALLOCATIONS.get();
+        renderer.render_frames(8);
+        assert_eq!(
+            super::pipeline::BATCH_ALLOCATIONS.get(),
+            allocations,
+            "warmed shape batches must reuse GPU buffers and bindings"
+        );
+        assert_eq!(
+            renderer.read_pixels().unwrap(),
+            pixels,
+            "reused batch slots must preserve cached and fractional shape pixels"
+        );
         for x in [24, 32, 40] {
             assert_black(&pixels, 112, x, 16, sample_count);
             assert_black(&pixels, 112, x, 17, sample_count);
