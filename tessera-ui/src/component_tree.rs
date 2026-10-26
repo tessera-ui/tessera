@@ -2301,6 +2301,15 @@ fn resolve_node_input_context(
     metadatas: &ComponentNodeMetaDatas,
     node_id: indextree::NodeId,
 ) -> Option<NodeInputContext> {
+    resolve_node_input_context_with_name(tree, metadatas, node_id, String::new())
+}
+
+fn resolve_node_input_context_with_name(
+    tree: &ComponentNodeTree,
+    metadatas: &ComponentNodeMetaDatas,
+    node_id: indextree::NodeId,
+    mut fn_name: String,
+) -> Option<NodeInputContext> {
     let Some(node_ref) = tree.get(node_id) else {
         warn!("Node not found for node {node_id:?}; skipping input handling");
         return None;
@@ -2332,7 +2341,7 @@ fn resolve_node_input_context(
     };
     let instance_logic_id = node.instance_logic_id;
     let instance_key = node.instance_key;
-    let fn_name = node.fn_name.as_str().to_owned();
+    fn_name.clone_from(&node.fn_name);
     let parent_id = node_ref.parent();
 
     Some(NodeInputContext {
@@ -2635,7 +2644,7 @@ struct PointerNodePlan {
 struct PointerDispatchPlan {
     preorder: Vec<indextree::NodeId>,
     postorder: Vec<indextree::NodeId>,
-    nodes: HashMap<indextree::NodeId, PointerNodePlan>,
+    nodes: HashMap<indextree::NodeId, Arc<PointerNodePlan>>,
 }
 
 struct PointerInputDispatchContext<'a> {
@@ -2644,7 +2653,7 @@ struct PointerInputDispatchContext<'a> {
     cursor_position: &'a mut Option<PxPosition>,
     pointer_changes: &'a mut [PointerChange],
     pointer_change_paths: &'a [Vec<u64>],
-    nodes: &'a HashMap<indextree::NodeId, PointerNodePlan>,
+    nodes: &'a HashMap<indextree::NodeId, Arc<PointerNodePlan>>,
     active_pointer_paths: &'a HashMap<u64, Vec<u64>>,
     active_pointer_positions: &'a HashMap<u64, Option<PxPosition>>,
     modifiers: winit::keyboard::ModifiersState,
