@@ -1,4 +1,4 @@
-use std::{any::TypeId, mem};
+use std::any::TypeId;
 
 use downcast_rs::Downcast;
 use smallvec::SmallVec;
@@ -659,8 +659,21 @@ impl RenderCore {
         }
 
         let submit_start = Instant::now();
-        queue.submit(Some(encoder.finish()));
+        let command_buffer = encoder.finish();
+        let finish_time =
+            tracing::enabled!(target: "tessera_ui::frame_cost", tracing::Level::DEBUG)
+                .then(|| submit_start.elapsed());
+        queue.submit(Some(command_buffer));
         let submit = submit_start.elapsed();
+        if let Some(finish_time) = finish_time {
+            debug!(
+                target: "tessera_ui::frame_cost",
+                frame_index = current_frame,
+                encoder_finish_ns = finish_time.as_nanos(),
+                queue_submit_ns = submit.saturating_sub(finish_time).as_nanos(),
+                "render_submit_cpu"
+            );
+        }
 
         let present = std::time::Duration::ZERO;
         self.external_textures.collect_garbage(current_frame, 2);
@@ -1324,11 +1337,11 @@ fn render_current_pass(params: RenderPassParams<'_, '_>) {
     clipper.restore(&mut rpass, target_size, apply_clip);
 
     // Prepare buffered submission state
-    let mut buffer: Vec<(Box<dyn DrawCommand>, DrawGeometry)> = Vec::new();
+    let mut buffer: SmallVec<[(&dyn DrawCommand, DrawGeometry); 16]> = SmallVec::new();
     let mut last_command_type_id = None;
     let mut current_batch_draw_rect: Option<PxRect> = None;
     let mut current_batch_read: Option<RenderResourceId> = None;
-    for cmd in mem::take(commands_in_pass).into_iter() {
+    for cmd in commands_in_pass.iter() {
         let cmd = match cmd {
             DrawOrClip::Clip(clip_ops) => {
                 // Must flush any existing buffered commands before changing
@@ -1364,7 +1377,7 @@ fn render_current_pass(params: RenderPassParams<'_, '_>) {
                     current_batch_read = None;
                 }
                 // Update clip stack
-                match clip_ops {
+                match *clip_ops {
                     ClipOps::Push(rect) => {
                         clip_stack.push(rect);
                         clipper.push(&mut rpass, target_size, None);
@@ -1421,7 +1434,7 @@ fn render_current_pass(params: RenderPassParams<'_, '_>) {
 
         // Add the command to the buffer and update the current batch rect
         // (extracted merge helper).
-        buffer.push((cmd.command, cmd.geometry));
+        buffer.push((cmd.command.as_ref(), cmd.geometry));
         last_command_type_id = Some(cmd.type_id);
         current_batch_read = read_resource;
         current_batch_draw_rect = Some(merge_batch_rect(current_batch_draw_rect, cmd.draw_rect));
@@ -1465,6 +1478,8 @@ fn render_current_pass(params: RenderPassParams<'_, '_>) {
         &mut rpass,
         &scene_texture_view,
     );
+    drop(buffer);
+    commands_in_pass.clear();
     let record_us = timing.map(|start| start.elapsed().as_micros());
     let finalize_start = timing.map(|_| Instant::now());
     drop(rpass);
@@ -1502,7 +1517,7 @@ fn resolve_scene_view(
 fn submit_buffered_commands(
     rpass: &mut wgpu::RenderPass<'_>,
     params: SubmitBatchParams<'_, '_>,
-    buffer: &mut Vec<(Box<dyn DrawCommand>, DrawGeometry)>,
+    buffer: &mut SmallVec<[(&dyn DrawCommand, DrawGeometry); 16]>,
 ) {
     let SubmitBatchParams {
         drawer,
@@ -1512,39 +1527,24 @@ fn submit_buffered_commands(
         clip_stack,
         current_batch_draw_rect,
     } = params;
-    // Take the buffered commands and convert to the transient representation
-    // expected by drawer.submit
-    let commands = mem::take(buffer);
-    let commands = commands
-        .iter()
-        .map(|(cmd, geometry)| (&**cmd, *geometry))
-        .collect::<Vec<_>>();
-
-    // Apply clipping to the current batch rectangle; if nothing remains, abort
-    // early.
     let (current_clip_rect, anything_to_submit) =
         apply_clip_to_batch_rect(clip_stack, current_batch_draw_rect, target_size);
-    if !anything_to_submit {
-        return;
+    if anything_to_submit && let Some(rect) = *current_batch_draw_rect {
+        set_scissor_rect_from_pxrect(rpass, rect);
+        drawer.submit(
+            ErasedDrawContext {
+                device: resources.device,
+                queue: resources.queue,
+                config: resources.config,
+                target_size,
+                render_pass: rpass,
+                scene_texture_view,
+                clip_rect: current_clip_rect,
+            },
+            buffer.as_slice(),
+        );
     }
-
-    let Some(rect) = *current_batch_draw_rect else {
-        return;
-    };
-    set_scissor_rect_from_pxrect(rpass, rect);
-
-    drawer.submit(
-        ErasedDrawContext {
-            device: resources.device,
-            queue: resources.queue,
-            config: resources.config,
-            target_size,
-            render_pass: rpass,
-            scene_texture_view,
-            clip_rect: current_clip_rect,
-        },
-        &commands,
-    );
+    buffer.clear();
     *current_batch_draw_rect = None;
 }
 

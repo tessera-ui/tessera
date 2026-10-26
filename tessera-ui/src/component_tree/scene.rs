@@ -17,7 +17,7 @@ use crate::{
 
 use super::{ComponentNodeMetaDatas, ComponentNodeTree, NodeRole, record_frame_stage};
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, PartialEq)]
 enum SceneClip {
     Shape(ClipRegion),
     Rect(PxRect),
@@ -222,16 +222,25 @@ impl FrameScene {
                             .map(|draw| Arc::clone(&draw.fragment))
                             .unwrap_or_else(|| Arc::new(metadata.fragment.clone()));
                         let geometry = DrawGeometry::new(prepared.size, prepared.local_to_window);
+                        let visible = geometry.local_size.width.0 > 0
+                            && geometry.local_size.height.0 > 0
+                            && !geometry
+                                .window_bounds()
+                                .outward()
+                                .is_orthogonal(&viewport_rect);
+                        if let Some(draw) = &branch.draw
+                            && Arc::ptr_eq(&draw.fragment, &fragment)
+                            && draw.geometry == geometry
+                            && draw.opacity == prepared.cumulative_opacity
+                            && draw.visible == visible
+                        {
+                            return Arc::clone(draw);
+                        }
                         Arc::new(SceneDraw {
                             fragment,
                             geometry,
                             opacity: prepared.cumulative_opacity,
-                            visible: geometry.local_size.width.0 > 0
-                                && geometry.local_size.height.0 > 0
-                                && !geometry
-                                    .window_bounds()
-                                    .outward()
-                                    .is_orthogonal(&viewport_rect),
+                            visible,
                         })
                     })
                 });
@@ -255,11 +264,22 @@ impl FrameScene {
                 self.geometry_consumers.remove(&node_id);
             }
             branch.output = if branch.culled
-                || (branch.draw.is_none() && branch.children.is_empty())
+                || (branch.draw.as_ref().is_none_or(|draw| !draw.visible)
+                    && branch.children.is_empty())
             {
                 None
             } else if branch.draw.is_none() && branch.clip.is_none() && branch.children.len() == 1 {
                 branch.children.values().next().cloned()
+            } else if let Some(previous) = &branch.output
+                && previous.clip == branch.clip
+                && match (&previous.draw, &branch.draw) {
+                    (Some(previous), Some(next)) => Arc::ptr_eq(previous, next),
+                    (None, None) => true,
+                    _ => false,
+                }
+                && previous.children.ptr_eq(&branch.children)
+            {
+                Some(Arc::clone(previous))
             } else {
                 Some(Arc::new(SceneRope {
                     draw: branch.draw.clone(),
@@ -279,8 +299,14 @@ impl FrameScene {
                     && let Some(&index) = parent.child_indices.get(&child)
                 {
                     if let Some(output) = &branch.output {
-                        parent.children.insert(index, Arc::clone(output));
-                    } else {
+                        if parent
+                            .children
+                            .get(&index)
+                            .is_none_or(|previous| !Arc::ptr_eq(previous, output))
+                        {
+                            parent.children.insert(index, Arc::clone(output));
+                        }
+                    } else if parent.children.contains_key(&index) {
                         parent.children.remove(&index);
                     }
                 }
@@ -345,11 +371,7 @@ impl SceneRope {
         }
         if let Some(draw) = &self.draw {
             if draw.visible {
-                builder.append_fragment(
-                    draw.fragment.as_ref().clone(),
-                    draw.geometry,
-                    draw.opacity,
-                );
+                builder.append_fragment(draw.fragment.as_ref(), draw.geometry, draw.opacity);
             }
         }
         for child in self.children.values() {

@@ -435,7 +435,7 @@ impl RenderGraphBuilder {
     /// Appends a fragment into the frame graph.
     pub(crate) fn append_fragment(
         &mut self,
-        mut fragment: RenderFragment,
+        fragment: &RenderFragment,
         geometry: DrawGeometry,
         opacity: f32,
     ) {
@@ -443,29 +443,27 @@ impl RenderGraphBuilder {
             return;
         }
 
-        let mut resource_map: Vec<RenderResourceId> = Vec::with_capacity(fragment.resources.len());
-        for resource in fragment.resources.drain(..) {
-            let index = self.resources.len() as u32;
-            self.resources.push(resource);
-            resource_map.push(RenderResourceId::Local(index));
-        }
+        let resource_base = self.resources.len() as u32;
+        self.resources.extend(fragment.resources.iter().cloned());
 
         let base_index = self.ops.len();
 
-        for mut op in fragment.ops.drain(..) {
+        for op in &fragment.ops {
             let writes_scene = op.write == Some(RenderResourceId::SceneColor);
             let position_override = op.position_override.unwrap_or(PxPosition::ZERO);
             let size_override = op.size_override.unwrap_or(geometry.local_size);
 
-            let read = op.read.map(|r| map_resource(r, &resource_map));
-            let write = op.write.map(|w| map_resource(w, &resource_map));
+            let map = |resource| map_resource(resource, resource_base, fragment.resources.len());
+            let read = op.read.map(map);
+            let write = op.write.map(map);
             let deps = op
                 .deps
                 .iter()
                 .map(|dep| base_index + *dep as usize)
                 .collect::<SmallVec<[usize; 2]>>();
 
-            if let Command::Draw(ref mut command) = op.command {
+            let mut command = op.command.clone();
+            if let Command::Draw(ref mut command) = command {
                 command.apply_opacity(opacity);
             }
 
@@ -478,7 +476,7 @@ impl RenderGraphBuilder {
             };
 
             self.ops.push(RenderGraphOp {
-                command: op.command,
+                command,
                 type_id: op.type_id,
                 read,
                 write,
@@ -501,13 +499,11 @@ impl RenderGraphBuilder {
     }
 }
 
-fn map_resource(resource: RenderResourceId, local_map: &[RenderResourceId]) -> RenderResourceId {
+fn map_resource(resource: RenderResourceId, base: u32, count: usize) -> RenderResourceId {
     match resource {
-        RenderResourceId::Local(index) => local_map
-            .get(index as usize)
-            .copied()
-            .unwrap_or(RenderResourceId::Local(index)),
-        RenderResourceId::External(index) => RenderResourceId::External(index),
+        RenderResourceId::Local(index) if (index as usize) < count => {
+            RenderResourceId::Local(base + index)
+        }
         other => other,
     }
 }
@@ -974,20 +970,35 @@ mod tests {
             sample: None,
         });
         fragment.ops_mut()[0].write = Some(local);
+        fragment.ops_mut()[1].read = Some(local);
+        fragment.ops_mut()[1].deps.push(0);
         for op in fragment.ops_mut() {
             op.size_override = Some(PxSize::new(Px(64), Px(32)));
             op.position_override = Some(PxPosition::from_f32_xy(4.0, 8.0));
         }
         let mut builder = RenderGraphBuilder::new();
         builder.append_fragment(
-            fragment,
+            &fragment,
             DrawGeometry::new(
                 PxSize::new(Px(240), Px(56)),
                 LocalToWindow::new(0.625, PxPosition::from_f32_xy(10.25, 20.5)).unwrap(),
             ),
             1.0,
         );
+        builder.append_fragment(
+            &fragment,
+            DrawGeometry::from_position_size(PxPosition::ZERO, PxSize::new(Px(64), Px(32))),
+            0.5,
+        );
         let graph = builder.finish();
+        assert_eq!(graph.resources().len(), 2);
+        assert_eq!(graph.ops()[1].read, Some(RenderResourceId::Local(0)));
+        assert_eq!(graph.ops()[1].deps.as_slice(), &[0]);
+        assert_eq!(graph.ops()[2].write, Some(RenderResourceId::Local(1)));
+        assert_eq!(graph.ops()[3].read, Some(RenderResourceId::Local(1)));
+        assert_eq!(graph.ops()[3].deps.as_slice(), &[2]);
+        assert_eq!(fragment.ops()[0].write, Some(RenderResourceId::Local(0)));
+        assert_eq!(fragment.ops()[1].deps.as_slice(), &[0]);
         let local = graph
             .ops()
             .iter()
