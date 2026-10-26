@@ -619,6 +619,40 @@ pub trait CursorModifierExt {
 }
 
 impl Modifier {
+    /// Observes measured dimensions in local layout units after initial
+    /// placement and size changes. Moving or scaling an ancestor does not
+    /// trigger a callback unless the local measured size changes. Hidden
+    /// layouts resume observation when placed again.
+    pub fn on_layout_size_changed<F>(self, handler: F) -> Self
+    where
+        F: Into<CallbackWith<crate::PxSize>>,
+    {
+        self.push_action(ModifierAction::GloballyPositioned(
+            crate::component_tree::GloballyPositionedHandler::Size(handler.into()),
+        ))
+    }
+
+    /// Uses this layout's local units as a coordinate space for descendant
+    /// [`Self::on_layout_rect_in_space`] observers, including this layout.
+    /// Nested spaces take precedence over their ancestors.
+    pub fn layout_coordinate_space(self) -> Self {
+        self.push_build(LayoutCoordinateSpace)
+    }
+
+    /// Observes this layout's fractional bounds in the nearest declared
+    /// [`Self::layout_coordinate_space`]. Without a declared space, observes
+    /// window bounds. Calls after initial placement and when these bounds
+    /// change; moving or scaling the entire space does not trigger a callback.
+    /// Hidden layouts resume observation when placed again.
+    pub fn on_layout_rect_in_space<F>(self, handler: F) -> Self
+    where
+        F: Into<CallbackWith<crate::FloatRect>>,
+    {
+        self.push_action(ModifierAction::GloballyPositioned(
+            crate::component_tree::GloballyPositionedHandler::InSpace(handler.into()),
+        ))
+    }
+
     /// Creates an empty modifier chain.
     pub fn new() -> Self {
         ensure_build_phase();
@@ -1373,6 +1407,16 @@ fn modifier_action_eq(lhs: &ModifierAction, rhs: &ModifierAction) -> bool {
             lhs == rhs
         }
         _ => false,
+    }
+}
+
+struct LayoutCoordinateSpace;
+
+impl BuildModifierNode for LayoutCoordinateSpace {
+    fn apply(&self, runtime: &mut TesseraRuntime) {
+        if let Some(node) = runtime.component_tree.current_node_mut() {
+            node.layout_coordinate_space = true;
+        }
     }
 }
 

@@ -25,6 +25,7 @@ struct ConsumerAncestry {
     order: Vec<usize>,
     semantics: Vec<(u64, bool, Option<String>)>,
     focus: Vec<(FocusHandleId, FocusRegistrationKind)>,
+    coordinate_space: Option<u64>,
 }
 
 impl ComponentTree {
@@ -50,9 +51,16 @@ impl ComponentTree {
             order: Vec::new(),
             semantics: Vec::new(),
             focus: Vec::new(),
+            coordinate_space: None,
         };
         for id in ancestors {
             let node = self.tree[id].get();
+            if result.coordinate_space.is_none()
+                && node.layout_coordinate_space
+                && node.role == super::NodeRole::Layout
+            {
+                result.coordinate_space = Some(node.instance_key);
+            }
             result
                 .order
                 .push(self.composition_order.get(&id).copied().unwrap_or_default());
@@ -81,6 +89,12 @@ impl ComponentTree {
                 continue;
             }
             let current = self.consumer_ancestry(root, false);
+            if current.coordinate_space != previous.coordinate_space {
+                self.pending_position_observers.extend(
+                    root.descendants(&self.tree)
+                        .filter(|id| self.position_observer_nodes.contains(id)),
+                );
+            }
             if current != previous {
                 tracing::debug!(
                     target: "tessera_ui::replay",

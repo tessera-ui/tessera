@@ -190,6 +190,14 @@ impl FrameScene {
             .collect::<Vec<_>>();
         ordered.sort_unstable_by_key(|&(_, depth)| std::cmp::Reverse(depth));
         record_frame_stage(&mut stage_timer, "scene_order");
+        tracing::debug!(
+            target: "tessera_ui::frame_cost",
+            structural_nodes = structural.len(),
+            geometry_changes = metadata.geometry_changed.len(),
+            own_changes = own_changes.len(),
+            updated_branches = ordered.len(),
+            "scene_update_work"
+        );
         let updated = ordered.len() as u64;
         for (node_id, depth) in ordered {
             let node = &tree[node_id];

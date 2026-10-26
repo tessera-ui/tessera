@@ -97,6 +97,7 @@ pub(crate) struct ComponentNode {
     pub(crate) focus_reveal_handler: Option<FocusRevealHandler>,
     /// Callbacks notified when this node's window rectangle changes.
     pub(crate) globally_positioned_handlers: Vec<GloballyPositionedHandler>,
+    pub(crate) layout_coordinate_space: bool,
     /// Node-local modifier chain attached during build.
     pub(crate) modifier: Modifier,
     /// The unified layout node applied at the innermost layer.
@@ -134,6 +135,7 @@ pub(crate) struct ComponentNodeMetaData {
     pub(super) prepared_layout: Option<super::PreparedLayoutMetadata>,
     pub(super) geometry_initialized: bool,
     pub(super) observes_geometry: bool,
+    pub(super) observes_size: bool,
     pub(super) paint_dirty: bool,
     /// The computed data (size) of the node.
     /// None if the node is not computed yet.
@@ -188,6 +190,7 @@ impl ComponentNodeMetaData {
             prepared_layout: None,
             geometry_initialized: false,
             observes_geometry: false,
+            observes_size: false,
             paint_dirty: true,
             computed_data: None,
             draw_layout: NodeDrawLayout::default(),
@@ -272,6 +275,7 @@ pub(crate) struct ComponentNodeMetaDatas {
     pub(super) geometry_visits: u64,
     pub(super) geometry_dirty: rustc_hash::FxHashSet<NodeId>,
     pub(super) geometry_changed: rustc_hash::FxHashSet<NodeId>,
+    pub(super) size_changed: rustc_hash::FxHashSet<NodeId>,
     pub(super) paint_changed: rustc_hash::FxHashSet<NodeId>,
     pub(super) placement_order_dirty: rustc_hash::FxHashSet<NodeId>,
     pub(crate) placement_order_changed: rustc_hash::FxHashSet<NodeId>,
@@ -289,6 +293,7 @@ impl ComponentNodeMetaDatas {
         self.profiling_dirty.clear();
         self.geometry_dirty.clear();
         self.geometry_changed.clear();
+        self.size_changed.clear();
         self.paint_dirty_nodes.clear();
         self.paint_changed.clear();
         self.placement_order_dirty.clear();
@@ -310,6 +315,7 @@ impl ComponentNodeMetaDatas {
         self.profiling_dirty.remove(node_id);
         self.geometry_dirty.remove(node_id);
         self.geometry_changed.remove(node_id);
+        self.size_changed.remove(node_id);
         self.paint_dirty_nodes.remove(node_id);
         self.paint_changed.remove(node_id);
         self.placement_order_dirty.remove(node_id);
@@ -395,13 +401,17 @@ pub type FocusEventHandler = CallbackWith<FocusState>;
 pub type FocusBeyondBoundsHandler = CallbackWith<FocusDirection, bool>;
 /// Reveal callback attached to a scrollable container node.
 pub type FocusRevealHandler = CallbackWith<FocusRevealRequest, bool>;
-/// Callback invoked with this node's rectangle in window coordinates.
+/// Callback invoked after a layout's observed geometry changes.
 #[derive(Clone, Copy, PartialEq)]
 pub enum GloballyPositionedHandler {
     Pixels(CallbackWith<PxRect>),
     Precise(CallbackWith<crate::FloatRect>),
     Transform(CallbackWith<crate::LocalToWindow>),
     Coordinates(CallbackWith<crate::LayoutCoordinates>),
+    /// Observes bounds in the closest declared layout coordinate space.
+    InSpace(CallbackWith<crate::FloatRect>),
+    /// Observes measured dimensions in local layout units.
+    Size(CallbackWith<PxSize>),
 }
 
 #[derive(Clone, Copy)]
@@ -410,6 +420,7 @@ pub(crate) struct GeometryObservation {
     pub precise: crate::FloatRect,
     pub transform: crate::LocalToWindow,
     pub coordinates: crate::LayoutCoordinates,
+    pub in_space: crate::FloatRect,
 }
 
 impl GloballyPositionedHandler {
@@ -419,6 +430,8 @@ impl GloballyPositionedHandler {
             Self::Precise(_) => previous.precise != next.precise,
             Self::Transform(_) => previous.transform != next.transform,
             Self::Coordinates(_) => previous.coordinates != next.coordinates,
+            Self::InSpace(_) => previous.in_space != next.in_space,
+            Self::Size(_) => previous.coordinates.local_size != next.coordinates.local_size,
         }
     }
 
@@ -428,6 +441,8 @@ impl GloballyPositionedHandler {
             Self::Precise(handler) => handler.call(geometry.precise),
             Self::Transform(handler) => handler.call(geometry.transform),
             Self::Coordinates(handler) => handler.call(geometry.coordinates),
+            Self::InSpace(handler) => handler.call(geometry.in_space),
+            Self::Size(handler) => handler.call(geometry.coordinates.local_size),
         }
     }
 }

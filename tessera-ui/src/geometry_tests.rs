@@ -22,6 +22,409 @@ thread_local! {
     static CHILD_OFFSET: Cell<Option<State<PxPosition>>> = const { Cell::new(None) };
     static CHILD_TRANSFORMS: Cell<usize> = const { Cell::new(0) };
     static OBSERVER_VISIBLE: Cell<Option<State<bool>>> = const { Cell::new(None) };
+    static SPACE_RECTS: RefCell<Vec<FloatRect>> = const { RefCell::new(Vec::new()) };
+    static OUTER_SCALE: Cell<Option<State<f32>>> = const { Cell::new(None) };
+    static INNER_SCALE: Cell<Option<State<f32>>> = const { Cell::new(None) };
+    static MARK_SPACE: Cell<Option<State<bool>>> = const { Cell::new(None) };
+    static NESTED_SPACE: Cell<Option<State<bool>>> = const { Cell::new(None) };
+    static CONTENT_SIZE: Cell<Option<State<ComputedData>>> = const { Cell::new(None) };
+    static SPACE_OFFSET: Cell<Option<State<PxPosition>>> = const { Cell::new(None) };
+    static COUNTER_OFFSET: Cell<Option<State<PxPosition>>> = const { Cell::new(None) };
+    static SIZES: RefCell<Vec<crate::PxSize>> = const { RefCell::new(Vec::new()) };
+    static LATE_SIZES: RefCell<Vec<crate::PxSize>> = const { RefCell::new(Vec::new()) };
+    static LATE_OBSERVER: Cell<Option<State<bool>>> = const { Cell::new(None) };
+}
+
+#[derive(Clone, PartialEq)]
+struct SizeOnlyRoot(State<bool>);
+
+impl LayoutModifierNode for SizeOnlyRoot {
+    fn measure(
+        &self,
+        scope: &mut MeasureScope<'_>,
+    ) -> Result<LayoutResult, crate::MeasurementError> {
+        let mut result = LayoutResult::new(ComputedData {
+            width: Px(300),
+            height: Px(200),
+        });
+        if self.0.get() {
+            let child = scope.children()[0].measure(scope, &Constraint::NONE)?;
+            result.place_child(child, PxPosition::from_f32_xy(10.25, 20.5));
+        }
+        Ok(result)
+    }
+}
+
+#[derive(Clone, PartialEq)]
+struct SizeOnlyContent(State<ComputedData>);
+
+impl LayoutModifierNode for SizeOnlyContent {
+    fn measure(
+        &self,
+        _scope: &mut MeasureScope<'_>,
+    ) -> Result<LayoutResult, crate::MeasurementError> {
+        Ok(LayoutResult::new(self.0.get()))
+    }
+}
+
+#[crate::tessera(crate)]
+fn size_only_observer_fixture() {
+    let parent = crate::remember(|| PxPosition::ZERO);
+    let child = crate::remember(|| PxPosition::ZERO);
+    let visible = crate::remember(|| true);
+    let scale = crate::remember(|| 1.0_f32);
+    let late = crate::remember(|| false);
+    let size = crate::remember(|| ComputedData {
+        width: Px(150),
+        height: Px(35),
+    });
+    PARENT_OFFSET.set(Some(parent));
+    CHILD_OFFSET.set(Some(child));
+    OBSERVER_VISIBLE.set(Some(visible));
+    OUTER_SCALE.set(Some(scale));
+    CONTENT_SIZE.set(Some(size));
+    LATE_OBSERVER.set(Some(late));
+    layout()
+        .policy(SizeOnlyRoot(visible))
+        .modifier(Modifier::new().push_placement(StateTranslation(parent, false)))
+        .child(move || {
+            scaled_box(scale.get()).child(move || {
+                let modifier = Modifier::new()
+                    .push_placement(StateTranslation(child, false))
+                    .on_layout_size_changed(|size| SIZES.with_borrow_mut(|sizes| sizes.push(size)));
+                let modifier = if late.get() {
+                    modifier.on_layout_size_changed(|size| {
+                        LATE_SIZES.with_borrow_mut(|sizes| sizes.push(size))
+                    })
+                } else {
+                    modifier
+                };
+                layout().policy(SizeOnlyContent(size)).modifier(modifier);
+            });
+        });
+}
+
+#[test]
+fn size_observers_ignore_movement_and_scaling_and_publish_resized_revealed_and_new_subscribers() {
+    SIZES.with_borrow_mut(Vec::clear);
+    LATE_SIZES.with_borrow_mut(Vec::clear);
+    let mut session =
+        start_layout_test_session(layout_test(size_only_observer_fixture).viewport_px(300, 200));
+    pump_layout_test_session(&mut session, 0);
+    assert_eq!(
+        SIZES.with_borrow(|sizes| sizes.clone()),
+        vec![crate::PxSize::new(Px(150), Px(35))]
+    );
+    PARENT_OFFSET
+        .get()
+        .unwrap()
+        .set(PxPosition::from_f32_xy(128.5, -0.25));
+    pump_layout_test_session(&mut session, 16_666_667);
+    assert!(session.diagnostics().unwrap().geometry_nodes_updated > 0);
+    CHILD_OFFSET
+        .get()
+        .unwrap()
+        .set(PxPosition::from_f32_xy(3.75, 4.0));
+    pump_layout_test_session(&mut session, 33_333_334);
+    OUTER_SCALE.get().unwrap().set(0.625);
+    pump_layout_test_session(&mut session, 50_000_001);
+    assert_eq!(SIZES.with_borrow(Vec::len), 1);
+    CONTENT_SIZE.get().unwrap().set(ComputedData {
+        width: Px(220),
+        height: Px(55),
+    });
+    pump_layout_test_session(&mut session, 66_666_668);
+    assert_eq!(
+        SIZES.with_borrow(|sizes| *sizes.last().unwrap()),
+        crate::PxSize::new(Px(220), Px(55))
+    );
+    assert_eq!(SIZES.with_borrow(Vec::len), 2);
+    OBSERVER_VISIBLE.get().unwrap().set(false);
+    pump_layout_test_session(&mut session, 83_333_335);
+    CONTENT_SIZE.get().unwrap().set(ComputedData {
+        width: Px(250),
+        height: Px(60),
+    });
+    pump_layout_test_session(&mut session, 100_000_002);
+    assert_eq!(SIZES.with_borrow(Vec::len), 2);
+    OBSERVER_VISIBLE.get().unwrap().set(true);
+    pump_layout_test_session(&mut session, 116_666_669);
+    assert_eq!(SIZES.with_borrow(Vec::len), 3);
+    assert_eq!(
+        SIZES.with_borrow(|sizes| *sizes.last().unwrap()),
+        crate::PxSize::new(Px(250), Px(60))
+    );
+    LATE_OBSERVER.get().unwrap().set(true);
+    pump_layout_test_session(&mut session, 133_333_336);
+    assert_eq!(SIZES.with_borrow(Vec::len), 3);
+    assert_eq!(
+        LATE_SIZES.with_borrow(|sizes| sizes.clone()),
+        vec![crate::PxSize::new(Px(250), Px(60))]
+    );
+    OBSERVER_VISIBLE.get().unwrap().set(false);
+    pump_layout_test_session(&mut session, 150_000_003);
+    CONTENT_SIZE.get().unwrap().set(ComputedData {
+        width: Px(310),
+        height: Px(70),
+    });
+    pump_layout_test_session(&mut session, 166_666_670);
+    assert_eq!(SIZES.with_borrow(Vec::len), 3);
+    assert_eq!(LATE_SIZES.with_borrow(Vec::len), 1);
+    OBSERVER_VISIBLE.get().unwrap().set(true);
+    pump_layout_test_session(&mut session, 183_333_337);
+    assert_eq!(SIZES.with_borrow(Vec::len), 4);
+    assert_eq!(
+        LATE_SIZES.with_borrow(|sizes| *sizes.last().unwrap()),
+        crate::PxSize::new(Px(310), Px(70))
+    );
+    LATE_OBSERVER.get().unwrap().set(false);
+    pump_layout_test_session(&mut session, 200_000_004);
+    PARENT_OFFSET.get().unwrap().set(PxPosition::ZERO);
+    pump_layout_test_session(&mut session, 216_666_671);
+    assert_eq!(SIZES.with_borrow(Vec::len), 4);
+    assert_eq!(LATE_SIZES.with_borrow(Vec::len), 2);
+    OBSERVER_VISIBLE.get().unwrap().set(false);
+    pump_layout_test_session(&mut session, 233_333_338);
+    OBSERVER_VISIBLE.get().unwrap().set(true);
+    pump_layout_test_session(&mut session, 250_000_005);
+    assert_eq!(SIZES.with_borrow(Vec::len), 5);
+    assert_eq!(
+        SIZES.with_borrow(|sizes| *sizes.last().unwrap()),
+        crate::PxSize::new(Px(310), Px(70))
+    );
+    assert_eq!(LATE_SIZES.with_borrow(Vec::len), 2);
+}
+
+#[derive(Clone, PartialEq)]
+struct SpaceContent(State<bool>, State<ComputedData>);
+
+impl LayoutModifierNode for SpaceContent {
+    fn measure(
+        &self,
+        scope: &mut MeasureScope<'_>,
+    ) -> Result<LayoutResult, crate::MeasurementError> {
+        let size = self.1.get();
+        let child =
+            scope.children()[0].measure(scope, &Constraint::exact(size.width, size.height))?;
+        let mut result = LayoutResult::new(ComputedData {
+            width: Px(300),
+            height: Px(200),
+        });
+        if self.0.get() {
+            result.place_child(child, PxPosition::from_f32_xy(10.25, 20.5));
+        }
+        Ok(result)
+    }
+}
+
+#[crate::tessera(crate)]
+fn relative_observer_fixture() {
+    let parent = crate::remember(|| PxPosition::ZERO);
+    let child = crate::remember(|| PxPosition::from_f32_xy(2.25, 3.5));
+    let visible = crate::remember(|| true);
+    let outer = crate::remember(|| 1.0_f32);
+    let inner = crate::remember(|| 0.625_f32);
+    let marked = crate::remember(|| true);
+    let nested = crate::remember(|| false);
+    let space_offset = crate::remember(|| PxPosition::ZERO);
+    let counter_offset = crate::remember(|| PxPosition::ZERO);
+    let size = crate::remember(|| ComputedData {
+        width: Px(150),
+        height: Px(35),
+    });
+    PARENT_OFFSET.set(Some(parent));
+    CHILD_OFFSET.set(Some(child));
+    OBSERVER_VISIBLE.set(Some(visible));
+    OUTER_SCALE.set(Some(outer));
+    INNER_SCALE.set(Some(inner));
+    MARK_SPACE.set(Some(marked));
+    NESTED_SPACE.set(Some(nested));
+    SPACE_OFFSET.set(Some(space_offset));
+    COUNTER_OFFSET.set(Some(counter_offset));
+    CONTENT_SIZE.set(Some(size));
+    layout()
+        .policy(Anchor)
+        .modifier(Modifier::new().push_placement(StateTranslation(parent, false)))
+        .child(move || {
+            scaled_box(outer.get()).child(move || {
+                let modifier = if marked.get() {
+                    Modifier::new().layout_coordinate_space()
+                } else {
+                    Modifier::new()
+                };
+                layout()
+                    .policy(Anchor)
+                    .modifier(modifier.push_placement(StateTranslation(space_offset, false)))
+                    .child(move || {
+                        scaled_box(inner.get()).child(move || {
+                            let modifier = if nested.get() {
+                                Modifier::new().layout_coordinate_space()
+                            } else {
+                                Modifier::new()
+                            };
+                            layout()
+                                .policy(SpaceContent(visible, size))
+                                .modifier(
+                                    modifier
+                                        .push_placement(StateTranslation(counter_offset, false)),
+                                )
+                                .child(move || {
+                                    layout().modifier(
+                                        Modifier::new()
+                                            .push_placement(StateTranslation(child, false))
+                                            .on_layout_rect_in_space(|rect| {
+                                                SPACE_RECTS
+                                                    .with_borrow_mut(|rects| rects.push(rect));
+                                            })
+                                            .on_layout_coordinates(|coordinates| {
+                                                COORDINATES.with_borrow_mut(|items| {
+                                                    items.push(coordinates)
+                                                });
+                                            }),
+                                    );
+                                });
+                        });
+                    });
+            });
+        });
+}
+
+#[test]
+fn relative_observers_ignore_space_motion_and_track_local_changes_and_reparenting() {
+    SPACE_RECTS.with_borrow_mut(Vec::clear);
+    COORDINATES.with_borrow_mut(Vec::clear);
+    let mut session =
+        start_layout_test_session(layout_test(relative_observer_fixture).viewport_px(1000, 800));
+    pump_layout_test_session(&mut session, 0);
+    let expected = FloatRect {
+        x: 18.0625,
+        y: 35.5,
+        width: 93.75,
+        height: 21.875,
+    };
+    assert_eq!(
+        SPACE_RECTS.with_borrow(|rects| rects.clone()),
+        vec![expected]
+    );
+    for frame in 1..=5 {
+        PARENT_OFFSET
+            .get()
+            .unwrap()
+            .set(PxPosition::from_f32_xy(65536.25 * frame as f32, -0.5));
+        pump_layout_test_session(&mut session, frame * 16_666_667);
+    }
+    assert_eq!(SPACE_RECTS.with_borrow(Vec::len), 1);
+    assert_eq!(COORDINATES.with_borrow(Vec::len), 6);
+    OUTER_SCALE.get().unwrap().set(0.75);
+    pump_layout_test_session(&mut session, 100_000_000);
+    assert_eq!(SPACE_RECTS.with_borrow(Vec::len), 1);
+    INNER_SCALE.get().unwrap().set(0.5);
+    pump_layout_test_session(&mut session, 116_666_667);
+    assert_eq!(
+        SPACE_RECTS.with_borrow(|rects| *rects.last().unwrap()),
+        FloatRect {
+            x: 16.5,
+            y: 32.5,
+            width: 75.0,
+            height: 17.5
+        }
+    );
+    CHILD_OFFSET
+        .get()
+        .unwrap()
+        .set(PxPosition::from_f32_xy(3.75, 4.0));
+    pump_layout_test_session(&mut session, 133_333_334);
+    assert_eq!(
+        SPACE_RECTS.with_borrow(|rects| *rects.last().unwrap()),
+        FloatRect {
+            x: 17.25,
+            y: 32.75,
+            width: 75.0,
+            height: 17.5
+        }
+    );
+    CONTENT_SIZE.get().unwrap().set(ComputedData {
+        width: Px(120),
+        height: Px(40),
+    });
+    pump_layout_test_session(&mut session, 150_000_001);
+    let resized = FloatRect {
+        x: 17.25,
+        y: 32.75,
+        width: 60.0,
+        height: 20.0,
+    };
+    assert_eq!(
+        SPACE_RECTS.with_borrow(|rects| *rects.last().unwrap()),
+        resized
+    );
+    let count = SPACE_RECTS.with_borrow(Vec::len);
+    OBSERVER_VISIBLE.get().unwrap().set(false);
+    pump_layout_test_session(&mut session, 166_666_668);
+    PARENT_OFFSET.get().unwrap().set(PxPosition::ZERO);
+    pump_layout_test_session(&mut session, 183_333_335);
+    assert_eq!(SPACE_RECTS.with_borrow(Vec::len), count);
+    OBSERVER_VISIBLE.get().unwrap().set(true);
+    pump_layout_test_session(&mut session, 200_000_002);
+    assert_eq!(SPACE_RECTS.with_borrow(Vec::len), count + 1);
+    assert_eq!(
+        SPACE_RECTS.with_borrow(|rects| *rects.last().unwrap()),
+        resized
+    );
+    MARK_SPACE.get().unwrap().set(false);
+    pump_layout_test_session(&mut session, 216_666_669);
+    assert_eq!(SPACE_RECTS.with_borrow(Vec::len), count + 2);
+    assert_eq!(
+        SPACE_RECTS.with_borrow(|rects| *rects.last().unwrap()),
+        COORDINATES.with_borrow(|items| items.last().unwrap().window_bounds())
+    );
+    MARK_SPACE.get().unwrap().set(true);
+    pump_layout_test_session(&mut session, 233_333_336);
+    assert_eq!(SPACE_RECTS.with_borrow(Vec::len), count + 3);
+    assert_eq!(
+        SPACE_RECTS.with_borrow(|rects| *rects.last().unwrap()),
+        resized
+    );
+    NESTED_SPACE.get().unwrap().set(true);
+    pump_layout_test_session(&mut session, 250_000_003);
+    assert_eq!(SPACE_RECTS.with_borrow(Vec::len), count + 4);
+    assert_eq!(
+        SPACE_RECTS.with_borrow(|rects| *rects.last().unwrap()),
+        FloatRect {
+            x: 14.0,
+            y: 24.5,
+            width: 120.0,
+            height: 40.0,
+        }
+    );
+    NESTED_SPACE.get().unwrap().set(false);
+    pump_layout_test_session(&mut session, 266_666_670);
+    assert_eq!(SPACE_RECTS.with_borrow(Vec::len), count + 5);
+    assert_eq!(
+        SPACE_RECTS.with_borrow(|rects| *rects.last().unwrap()),
+        resized
+    );
+    let window_count = COORDINATES.with_borrow(Vec::len);
+    SPACE_OFFSET
+        .get()
+        .unwrap()
+        .set(PxPosition::from_f32_xy(64.0, 0.0));
+    COUNTER_OFFSET
+        .get()
+        .unwrap()
+        .set(PxPosition::from_f32_xy(-128.0, 0.0));
+    pump_layout_test_session(&mut session, 283_333_337);
+    assert_eq!(COORDINATES.with_borrow(Vec::len), window_count);
+    assert_eq!(SPACE_RECTS.with_borrow(Vec::len), count + 6);
+    assert_eq!(
+        SPACE_RECTS.with_borrow(|rects| *rects.last().unwrap()),
+        FloatRect {
+            x: -46.75,
+            y: 32.75,
+            width: 60.0,
+            height: 20.0,
+        }
+    );
 }
 
 #[derive(Clone, PartialEq)]

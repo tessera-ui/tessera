@@ -521,7 +521,10 @@ pub struct ComponentTree {
     /// callbacks, keyed by instance key.
     last_global_rects: HashMap<u64, GlobalPositionSnapshot>,
     position_observer_nodes: HashSet<NodeId>,
+    window_observer_nodes: HashSet<NodeId>,
     pending_position_observers: HashSet<NodeId>,
+    observer_spaces: HashMap<NodeId, u64>,
+    space_observers: HashMap<u64, HashSet<NodeId>>,
     /// Globally positioned callbacks collected during compute and invoked
     /// after the runtime borrow is released.
     pending_globally_positioned_invocations:
@@ -595,7 +598,10 @@ impl ComponentTree {
             pending_ime_events: Vec::new(),
             last_global_rects: HashMap::default(),
             position_observer_nodes: HashSet::default(),
+            window_observer_nodes: HashSet::default(),
             pending_position_observers: HashSet::default(),
+            observer_spaces: HashMap::default(),
+            space_observers: HashMap::default(),
             pending_globally_positioned_invocations: Vec::new(),
         }
     }
@@ -630,7 +636,10 @@ impl ComponentTree {
         self.node_ids_by_instance_key.clear();
         self.last_global_rects.clear();
         self.position_observer_nodes.clear();
+        self.window_observer_nodes.clear();
         self.pending_position_observers.clear();
+        self.observer_spaces.clear();
+        self.space_observers.clear();
         self.pending_globally_positioned_invocations.clear();
     }
 
@@ -899,6 +908,8 @@ impl ComponentTree {
                 .collect::<Vec<_>>();
             for node_id in &detached_node_ids {
                 self.position_observer_nodes.remove(node_id);
+                self.window_observer_nodes.remove(node_id);
+                self.forget_observer_space(*node_id);
                 self.pending_position_observers.remove(node_id);
                 self.removed_frame_nodes.insert(*node_id);
                 self.changed_frame_nodes.remove(node_id);
@@ -1035,6 +1046,8 @@ impl ComponentTree {
         current_node_id.insert_before(candidate_node_id, &mut self.tree);
         self.metadatas.remove(&current_node_id);
         self.position_observer_nodes.remove(&current_node_id);
+        self.window_observer_nodes.remove(&current_node_id);
+        self.forget_observer_space(current_node_id);
         self.pending_position_observers.remove(&current_node_id);
         self.composition_order.remove(&current_node_id);
         self.changed_frame_nodes.remove(&current_node_id);
@@ -1077,17 +1090,26 @@ impl ComponentTree {
         if let Some(node_id) = self.node_queue.pop() {
             self.refresh_layout_children(node_id);
             let node = self.tree[node_id].get();
-            self.metadatas.entry_or_default(node_id).observes_geometry =
-                !node.pointer_preview_handlers.is_empty()
-                    || !node.pointer_handlers.is_empty()
-                    || !node.pointer_final_handlers.is_empty()
-                    || !node.keyboard_preview_handlers.is_empty()
-                    || !node.keyboard_handlers.is_empty()
-                    || !node.ime_preview_handlers.is_empty()
-                    || !node.ime_handlers.is_empty()
-                    || node.focus_registration.is_some()
-                    || !node.globally_positioned_handlers.is_empty()
-                    || node.modifier.has_input_geometry();
+            let observes_window = node
+                .globally_positioned_handlers
+                .iter()
+                .any(|handler| !matches!(handler, GloballyPositionedHandler::Size(_)));
+            let metadata = self.metadatas.entry_or_default(node_id);
+            metadata.observes_size = node
+                .globally_positioned_handlers
+                .iter()
+                .any(|handler| matches!(handler, GloballyPositionedHandler::Size(_)));
+            metadata.observes_geometry = !node.pointer_preview_handlers.is_empty()
+                || !node.pointer_handlers.is_empty()
+                || !node.pointer_final_handlers.is_empty()
+                || !node.keyboard_preview_handlers.is_empty()
+                || !node.keyboard_handlers.is_empty()
+                || !node.ime_preview_handlers.is_empty()
+                || !node.ime_handlers.is_empty()
+                || node.focus_registration.is_some()
+                || observes_window
+                || node.layout_coordinate_space
+                || node.modifier.has_input_geometry();
             if !self.tree[node_id]
                 .get()
                 .globally_positioned_handlers
@@ -1095,6 +1117,9 @@ impl ComponentTree {
             {
                 self.position_observer_nodes.insert(node_id);
                 self.pending_position_observers.insert(node_id);
+                if observes_window {
+                    self.window_observer_nodes.insert(node_id);
+                }
             }
         }
     }
@@ -1245,12 +1270,77 @@ impl ComponentTree {
         (&self.tree, &self.metadatas, &mut self.focus_owner)
     }
 
+    fn forget_observer_space(&mut self, node_id: NodeId) {
+        if let Some(space) = self.observer_spaces.remove(&node_id)
+            && let Some(observers) = self.space_observers.get_mut(&space)
+        {
+            observers.remove(&node_id);
+            if observers.is_empty() {
+                self.space_observers.remove(&space);
+            }
+        }
+    }
+
+    fn sync_observer_space(&mut self, node_id: NodeId) {
+        let space = self.tree.get(node_id).and_then(|node| {
+            node.get()
+                .globally_positioned_handlers
+                .iter()
+                .any(|handler| matches!(handler, GloballyPositionedHandler::InSpace(_)))
+                .then(|| {
+                    node_id.ancestors(&self.tree).find_map(|id| {
+                        let node = self.tree[id].get();
+                        (node.role == NodeRole::Layout && node.layout_coordinate_space)
+                            .then_some(node.instance_key)
+                    })
+                })
+                .flatten()
+        });
+        if self.observer_spaces.get(&node_id).copied() == space {
+            return;
+        }
+        self.forget_observer_space(node_id);
+        if let Some(space) = space {
+            self.observer_spaces.insert(node_id, space);
+            self.space_observers
+                .entry(space)
+                .or_default()
+                .insert(node_id);
+        }
+    }
+
     fn collect_globally_positioned_invocations(&mut self, _root_node: indextree::NodeId) {
         let mut candidates = std::mem::take(&mut self.pending_position_observers);
+        for &node_id in &candidates {
+            self.sync_observer_space(node_id);
+        }
         let changed = &self.metadatas.geometry_changed;
-        if self.position_observer_nodes.len() < changed.len() {
+        // Counter-translated descendants can retain window geometry while
+        // changing their position within a moving coordinate space.
+        if self.space_observers.len() < changed.len() {
+            for (space, observers) in &self.space_observers {
+                if self
+                    .node_ids_by_instance_key
+                    .get(space)
+                    .is_some_and(|id| changed.contains(id))
+                {
+                    candidates.extend(observers.iter().copied());
+                }
+            }
+        } else {
+            for &node_id in changed {
+                if let Some(observers) = self
+                    .tree
+                    .get(node_id)
+                    .and_then(|node| self.space_observers.get(&node.get().instance_key))
+                {
+                    candidates.extend(observers.iter().copied());
+                }
+            }
+        }
+        if self.window_observer_nodes.len() < changed.len() {
             candidates.extend(
-                self.position_observer_nodes
+                self.window_observer_nodes
                     .iter()
                     .filter(|id| changed.contains(id))
                     .copied(),
@@ -1259,10 +1349,12 @@ impl ComponentTree {
             candidates.extend(
                 changed
                     .iter()
-                    .filter(|id| self.position_observer_nodes.contains(id))
+                    .filter(|id| self.window_observer_nodes.contains(id))
                     .copied(),
             );
         }
+        candidates.extend(self.metadatas.size_changed.iter().copied());
+        let observer_candidates = candidates.len();
         let mut invocations = Vec::new();
         for node_id in candidates {
             let Some(node_ref) = self.tree.get(node_id) else {
@@ -1305,6 +1397,15 @@ impl ComponentTree {
                     local_size: PxSize::new(size.width, size.height),
                     local_to_window: transform,
                 },
+                in_space: if node
+                    .globally_positioned_handlers
+                    .iter()
+                    .any(|handler| matches!(handler, GloballyPositionedHandler::InSpace(_)))
+                {
+                    layout_rect_in_space(&self.tree, &self.metadatas, node_id).unwrap_or(precise)
+                } else {
+                    precise
+                },
             };
             let previous = self.last_global_rects.get(&node.instance_key);
             for handler in &node.globally_positioned_handlers {
@@ -1323,6 +1424,13 @@ impl ComponentTree {
                 },
             );
         }
+        tracing::debug!(
+            target: "tessera_ui::frame_cost",
+            callbacks = invocations.len(),
+            candidates = observer_candidates,
+            size_changes = self.metadatas.size_changed.len(),
+            "position_observer_work"
+        );
         self.pending_globally_positioned_invocations
             .extend(invocations);
     }
@@ -1887,6 +1995,7 @@ impl ComponentTree {
                 .then(Instant::now);
         self.metadatas.geometry_visits = 0;
         self.metadatas.geometry_changed.clear();
+        self.metadatas.size_changed.clear();
         self.metadatas.placement_order_changed.clear();
         self.metadatas.paint_changed.clear();
         self.focus_owner.begin_layout();
@@ -3530,6 +3639,35 @@ fn geometry_parent(tree: &ComponentNodeTree, node_id: NodeId) -> Option<NodeId> 
         .find(|&id| tree[id].get().role == NodeRole::Layout || tree[id].parent().is_none())
 }
 
+fn layout_rect_in_space(
+    tree: &ComponentNodeTree,
+    metadata: &ComponentNodeMetaDatas,
+    node_id: NodeId,
+) -> Option<crate::FloatRect> {
+    let size = metadata.get(&node_id)?.prepared_layout?.size;
+    let mut transform = crate::LocalToWindow::IDENTITY;
+    let mut child_position = None;
+    for id in node_id.ancestors(tree) {
+        let node = tree[id].get();
+        if node.role != NodeRole::Layout {
+            continue;
+        }
+        let prepared = metadata.get(&id)?.prepared_layout?;
+        if let Some(position) = child_position {
+            transform = crate::LocalToWindow::new(node.children_scale, PxPosition::ZERO)?
+                .with_local_origin(position)
+                .compose(transform)?;
+        }
+        if node.layout_coordinate_space {
+            return Some(
+                transform.map_rect(crate::FloatRect::from_position_size(PxPosition::ZERO, size)),
+            );
+        }
+        child_position = Some(prepared.local_position);
+    }
+    None
+}
+
 fn prepare_layout_metadata_for_node(
     node: &ComponentNode,
     metadata: &mut ComponentNodeMetaData,
@@ -3724,42 +3862,57 @@ fn populate_layout_metadata(
             return;
         };
         let self_dirty = dirty.contains(&node_id);
-        let (previous, was_hidden, initialized, paint_dirty, prepared, publishes_geometry) =
-            if let Some(metadata) = metadatas.get_mut(&node_id) {
-                let initialized = metadata.geometry_initialized;
-                if initialized && !inherited_changed && !self_dirty {
-                    return;
-                }
-                let previous = metadata.prepared_layout;
-                let was_hidden = metadata.prepared_layout.is_none();
-                let paint_dirty = metadata.paint_dirty;
-                let prepared = prepare_layout_metadata_for_node(
-                    node,
-                    metadata,
-                    parent_transform,
-                    is_root,
-                    clip_bounds,
-                    clip_rect,
-                    current_opacity,
-                    parent_has_shape_clipping,
-                    initialized && !self_dirty,
-                );
-                let publishes_geometry = metadata.observes_geometry
-                    || metadata.accessibility.is_some()
-                    || metadata.clips_children
-                    || !metadata.fragment.ops().is_empty();
-                (
-                    previous,
-                    was_hidden,
-                    initialized,
-                    paint_dirty,
-                    prepared,
-                    publishes_geometry,
-                )
-            } else {
-                (None, true, false, false, None, false)
-            };
+        let (
+            previous,
+            was_hidden,
+            initialized,
+            paint_dirty,
+            prepared,
+            publishes_geometry,
+            size_changed,
+        ) = if let Some(metadata) = metadatas.get_mut(&node_id) {
+            let initialized = metadata.geometry_initialized;
+            if initialized && !inherited_changed && !self_dirty {
+                return;
+            }
+            let previous = metadata.prepared_layout;
+            let was_placed = metadata.abs_position.is_some();
+            let was_hidden = metadata.prepared_layout.is_none();
+            let paint_dirty = metadata.paint_dirty;
+            let prepared = prepare_layout_metadata_for_node(
+                node,
+                metadata,
+                parent_transform,
+                is_root,
+                clip_bounds,
+                clip_rect,
+                current_opacity,
+                parent_has_shape_clipping,
+                initialized && !self_dirty,
+            );
+            let publishes_geometry = metadata.observes_geometry
+                || metadata.accessibility.is_some()
+                || metadata.clips_children
+                || !metadata.fragment.ops().is_empty();
+            let size_changed = metadata.observes_size
+                && (was_placed != prepared.is_some()
+                    || previous.map(|layout| layout.size) != prepared.map(|layout| layout.size));
+            (
+                previous,
+                was_hidden,
+                initialized,
+                paint_dirty,
+                prepared,
+                publishes_geometry,
+                size_changed,
+            )
+        } else {
+            (None, true, false, false, None, false, false)
+        };
         *updates += 1;
+        if size_changed {
+            metadatas.size_changed.insert(node_id);
+        }
         if initialized && was_hidden && prepared.is_none() && !self_dirty {
             return;
         }
@@ -3777,12 +3930,19 @@ fn populate_layout_metadata(
         }
         if prepared.is_none() && node.role == NodeRole::Layout {
             for descendant in node_id.descendants(tree) {
-                if let Some(metadata) = metadatas.get_mut(&descendant) {
+                let size_hidden = if let Some(metadata) = metadatas.get_mut(&descendant) {
+                    let size_hidden = metadata.observes_size && metadata.abs_position.is_some();
                     metadata.base_abs_position = None;
                     metadata.abs_position = None;
                     metadata.local_to_window = None;
                     metadata.event_clip_bounds = None;
                     metadata.event_clip_rect = None;
+                    size_hidden
+                } else {
+                    false
+                };
+                if size_hidden {
+                    metadatas.size_changed.insert(descendant);
                 }
                 metadatas.geometry_changed.insert(descendant);
             }
@@ -3937,6 +4097,7 @@ mod tests {
             focus_beyond_bounds_handler: None,
             focus_reveal_handler: None,
             globally_positioned_handlers: Vec::new(),
+            layout_coordinate_space: false,
             modifier: Modifier::default(),
             layout_node: Box::new(DefaultLayoutNode),
             draw_node: Box::new(NoopDrawModifier),

@@ -853,6 +853,7 @@ mod tests {
             focus_beyond_bounds_handler: None,
             focus_reveal_handler: None,
             globally_positioned_handlers: Vec::new(),
+            layout_coordinate_space: false,
             modifier: Modifier::default(),
             layout_node: Box::new(DefaultLayoutNode),
             draw_node: Box::new(NoopDrawModifier),
