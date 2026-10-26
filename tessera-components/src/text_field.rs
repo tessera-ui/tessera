@@ -584,14 +584,10 @@ fn outlined_floating_label(
         .child(move || {
             text()
                 .content(label_text.clone())
-                .modifier(Modifier::new().on_layout_coordinates(
-                    move |coordinates: tessera_ui::LayoutCoordinates| {
-                        if outline.with(|outline| outline.label_width)
-                            != coordinates.local_size.width
-                        {
-                            outline.with_mut(|outline| {
-                                outline.label_width = coordinates.local_size.width
-                            });
+                .modifier(Modifier::new().on_layout_size_changed(
+                    move |size: tessera_ui::PxSize| {
+                        if outline.with(|outline| outline.label_width) != size.width {
+                            outline.with_mut(|outline| outline.label_width = size.width);
                         }
                     },
                 ))
@@ -854,14 +850,15 @@ fn text_field_content(
         .style(surface_style)
         .shape(surface_args.shape)
         .block_input(!args.enabled)
-        .modifier(surface_args.modifier.on_layout_coordinates(
-            move |coordinates: tessera_ui::LayoutCoordinates| {
-                let size = coordinates.local_size;
-                if outline.with(|outline| outline.size) != size {
-                    outline.with_mut(|outline| outline.size = size);
-                }
-            },
-        ))
+        .modifier(
+            surface_args
+                .modifier
+                .on_layout_size_changed(move |size: tessera_ui::PxSize| {
+                    if outline.with(|outline| outline.size) != size {
+                        outline.with_mut(|outline| outline.size = size);
+                    }
+                }),
+        )
         .content_color(color)
         .child(move || {
             boxed().children(move || {
