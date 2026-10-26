@@ -19,6 +19,14 @@ cached placements. Intrinsic measurements retain their separate metadata and
 dependency rules. A placement-only change can still require measurement when a
 layout policy does not provide a compatible placement result.
 
+Measurement invalidations in unplaced subtrees must outlive the current frame.
+After layout publishes its placements, measurement and placement invalidations
+retain their phase and direct child paths within unplaced branches, stopping at
+the first placed layout. This also covers mutations in the frame that hides a
+subtree. Hidden branches remain idle; their next measurement checks only these
+pending paths. Placement updates retain measured dimensions. Hidden transform
+updates invalidate local placement until geometry is published again.
+
 Direct layout children are retained through transparent composition nodes.
 Structural reconciliation updates that adjacency; measurement reads it through
 shared handles. Cached child constraints and sizes are shared, and dirty-child
@@ -38,9 +46,21 @@ geometry stays unchanged, only its dirty child branches are visited. Changed
 origins, inherited clipping, opacity, placement order, and visibility propagate
 to their affected descendants. Unplaced layout subtrees lose input, semantics,
 drawing, and focus eligibility.
+Propagation stops when a child's window transform, rectangular clipping,
+opacity, and clip ancestry remain unchanged, including counter-translated
+pinned content and size-only changes in unclipped parents. Independently dirty
+descendants still update. Ancestor shape changes propagate even when their
+bounding rectangles are unchanged, preserving current descendant hit tests.
 An already hidden, unchanged subtree does not republish descendant geometry
 when a visible ancestor moves. First hiding, structural changes, and revealing
 still update the affected consumers.
+
+Every affected layout retains current window coordinates, including passive
+containers. Geometry change notifications include only nodes with drawing,
+clipping, semantics, input, focus, or position-observer capabilities. Passive
+container movement still propagates to its descendants without notifying
+unrelated frame consumers. First hiding continues to publish affected subtree
+removals, and newly attached capabilities receive their initial update.
 
 Geometry propagation uses retained direct layout adjacency, skipping transparent
 composition wrappers. An inherited translation reuses unchanged local placement
@@ -76,8 +96,20 @@ a world-transform array for each translated node.
   Transparent unary branches forward their current descendant output without
   rebuilding every wrapper. Fully clipped output and draws that remain outside
   the viewport retain their geometry until they can contribute again.
+  Invisible draw leaves do not occupy the output tree. Updating their paint
+  retains unchanged visible output; revealing them publishes the latest paint.
+  Ancestor branches reuse their output when their draw, clip, and child outputs
+  remain unchanged.
   Geometry changes share immutable paint fragments. Frame assembly applies
   opacity to its command output without mutating the retained fragment.
+  Assembly borrows fragment operations directly and remaps contiguous resource
+  IDs without allocating intermediate fragment or resource-mapping vectors.
+  Renderer batches borrow the pass's owned commands and reuse reference scratch
+  storage across pipeline and clip boundaries, including overflow capacity.
+  Shape batches append instances to retained storage-buffer blocks. Cached
+  transforms and uncached shape parameters use separate pools; each draw keeps
+  its own instance range across clip and pass boundaries. Frame-end uploads
+  publish the used blocks before the frame's command buffer is submitted.
   Geometry journals are intersected with drawing, clipping, and hidden scene
   branches before evaluating scene candidates.
   Draw visibility is retained until geometry or viewport dimensions change.
@@ -87,8 +119,11 @@ a world-transform array for each translated node.
   frames publish changed nodes and focus. Initial platform activation and
   explicit headless snapshots publish the complete semantic tree. Inherited
   tooltip and semantic-boundary changes update the affected descendants.
-  Geometry-only changes update existing semantic bounds without rebuilding
+  Position-only changes update existing semantic bounds without rebuilding
   labels, actions, parent relationships, or child ordering.
+  Reading order follows placed layout children across transparent composition
+  wrappers, independently of overlay paint order. Placement-order changes
+  relink affected semantic children without replacing their identities or focus.
   Platform publication starts after accessibility activation. Without an active
   consumer, bounded change journals coalesce updates until an explicit semantic
   snapshot or activation requests the current tree. Removed unpublished nodes
@@ -105,7 +140,10 @@ rather than another traversal of its unchanged descendants.
 A dirty descendant does not force an equal-prop ancestor to execute. Replay
 retains that ancestor and schedules the remaining dirty boundary separately,
 including invalidations created while replaying its parent. Only boundaries
-actually executed in the frame count as covered. Writes targeting an already
+actually executed in the frame count as covered. Forward invalidations finish
+before layout without a fixed replay-round limit, so nested slots do not add
+frames of stale content. Each boundary executes at most once per frame.
+Writes targeting an already
 executed boundary are deferred to the next frame, preserving the validity of
 its replay snapshot. Replacement cleanup enumerates abandoned nodes rather
 than every descendant of a reused subtree.
@@ -123,10 +161,10 @@ scope when navigation is requested. Active frame receivers run their callbacks.
 Changed render scenes assemble their command output; GPU pass construction,
 uploads, and command encoding process the commands being rendered. Explicit
 profiling and inspection snapshots enumerate their requested output.
-Shape pipelines retain separate GPU buffer and binding slots for cached and
-uncached batches. Slots advance across every draw in a frame and reset only at
-the frame boundary, so queued batches never overwrite each other's uploads.
-Warmed batches reuse capacity; larger batches replace only their own slot.
+Shape pipelines retain separate storage-buffer pools for cached and uncached
+batches. Draws append disjoint instance ranges and upload each used block once
+at the frame boundary. Warmed batches reuse capacity; larger batches replace
+only an unused block, preserving all earlier draws in the same frame.
 Shape cache heat advances once per rendered frame, independently of draw-batch
 count. Repeated batches cannot prematurely warm a transient shape or expire
 another stable shape within the same frame.
@@ -153,6 +191,11 @@ Profiling maintains subtree counts during structural updates instead of walking
 reused subtrees to count them each frame. Optional tracing targets
 `tessera_ui::replay`, `tessera_ui::build_cost`, and `tessera_ui::frame_cost` expose
 replay boundaries, component build durations, and frame-consumer stage costs.
+At debug level, `tessera_ui::frame_cost` also reports `render_submit_cpu` with
+separate `encoder_finish_ns` and `queue_submit_ns` fields. Both are CPU-side
+durations; the profiling submission metric includes both operations. GPU
+execution requires timestamp-query measurements and must not be inferred from
+either CPU duration.
 
 Run deterministic core and component regressions with:
 
