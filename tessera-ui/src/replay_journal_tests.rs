@@ -357,6 +357,58 @@ fn a_later_replay_round_defers_writes_to_an_already_executed_boundary() {
     check_independent_nested_replay(true, true);
 }
 
+thread_local! {
+    static CYCLIC_REPLAY_ARMED: Cell<Option<State<bool>>> = const { Cell::new(None) };
+    static CYCLIC_REPLAY_BUILDS: Cell<[usize; 2]> = const { Cell::new([0; 2]) };
+}
+
+#[tessera(crate)]
+fn cyclic_replay_peer(index: usize, own: State<u32>, other: State<u32>, armed: State<bool>) {
+    let mut builds = CYCLIC_REPLAY_BUILDS.get();
+    builds[index] += 1;
+    CYCLIC_REPLAY_BUILDS.set(builds);
+    let value = own.get();
+    if armed.get() {
+        other.set(value + 1);
+    }
+    layout()
+        .policy(Overlap)
+        .modifier(Modifier::new().push_semantics(Tag {
+            key: format!("cyclic-{index}"),
+            label: format!("Cycle {index}"),
+        }));
+}
+
+#[tessera(crate)]
+fn cyclic_replay_fixture() {
+    let left = remember(|| 0_u32);
+    let right = remember(|| 0_u32);
+    let armed = remember(|| false);
+    CYCLIC_REPLAY_ARMED.set(Some(armed));
+    layout().policy(Overlap).child(move || {
+        cyclic_replay_peer(0, left, right, armed);
+        cyclic_replay_peer(1, right, left, armed);
+    });
+}
+
+#[test]
+fn cyclic_writers_execute_once_per_frame_and_keep_their_next_frame_work() {
+    CYCLIC_REPLAY_BUILDS.set([0; 2]);
+    let mut session =
+        start_layout_test_session(layout_test(|| cyclic_replay_fixture()).viewport_px(100, 100));
+    pump_layout_test_session(&mut session, 0);
+    assert_eq!(CYCLIC_REPLAY_BUILDS.get(), [1, 1]);
+    CYCLIC_REPLAY_ARMED.get().unwrap().set(true);
+    for frame in 1..=3 {
+        pump_layout_test_session(&mut session, frame * 16_666_667);
+        assert_eq!(CYCLIC_REPLAY_BUILDS.get(), [frame as usize + 1; 2]);
+        assert!(crate::runtime::has_pending_build_invalidations());
+        let labels = semantic_reading_order();
+        assert!(labels.iter().any(|label| label == "Cycle 0"));
+        assert!(labels.iter().any(|label| label == "Cycle 1"));
+    }
+}
+
 #[tessera(crate)]
 fn ordered_branch(index: usize) {
     RETAINED_BUILDS.set(RETAINED_BUILDS.get() + 1);

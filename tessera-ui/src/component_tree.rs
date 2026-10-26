@@ -87,14 +87,24 @@ impl Default for NodeDrawLayout {
 #[derive(Default)]
 pub(crate) struct LayoutSnapshotMap {
     entries: HashMap<u64, Arc<LayoutSnapshotEntry>>,
+    deferred: HashMap<u64, DeferredLayoutInvalidation>,
+}
+
+#[derive(Clone, Default)]
+pub(crate) struct DeferredLayoutInvalidation {
+    pub measure: bool,
+    pub placement: bool,
+    pub children: HashSet<u64>,
 }
 
 impl LayoutSnapshotMap {
     pub(crate) fn clear(&mut self) {
         self.entries.clear();
+        self.deferred.clear();
     }
 
     pub(crate) fn remove(&mut self, instance_key: &u64) -> Option<Arc<LayoutSnapshotEntry>> {
+        self.deferred.remove(instance_key);
         self.entries.remove(instance_key)
     }
 
@@ -103,6 +113,7 @@ impl LayoutSnapshotMap {
         instance_key: u64,
         entry: LayoutSnapshotEntry,
     ) -> Option<Arc<LayoutSnapshotEntry>> {
+        self.deferred.remove(&instance_key);
         self.entries.insert(instance_key, Arc::new(entry))
     }
 
@@ -318,6 +329,23 @@ impl LayoutContext<'_> {
         // pass. The pointer is created from a unique mutable borrow for the
         // duration of the pass and only accessed on the same thread.
         unsafe { (*self.snapshots).get_cloned(&instance_key) }
+    }
+
+    #[inline]
+    pub(crate) fn deferred_invalidation(
+        &self,
+        instance_key: u64,
+    ) -> Option<DeferredLayoutInvalidation> {
+        // SAFETY: See `snapshot`.
+        unsafe { (*self.snapshots).deferred.get(&instance_key).cloned() }
+    }
+
+    #[inline]
+    pub(crate) fn acknowledge_deferred_invalidation(&self, instance_key: u64) {
+        // SAFETY: See `snapshot`.
+        unsafe {
+            (*self.snapshots).deferred.remove(&instance_key);
+        }
     }
 
     #[inline]
@@ -651,6 +679,8 @@ impl ComponentTree {
     fn sync_accessibility(&mut self, root: NodeId, immediate: bool) -> usize {
         self.accessibility_index
             .invalidate_geometry(&self.metadatas.geometry_changed);
+        self.accessibility_index
+            .invalidate_placement_order(&self.metadatas.placement_order_changed);
         self.accessibility_index
             .invalidate(&self.metadatas.paint_changed, &HashSet::default());
         if immediate {
@@ -1046,6 +1076,18 @@ impl ComponentTree {
     pub(crate) fn pop_node(&mut self) {
         if let Some(node_id) = self.node_queue.pop() {
             self.refresh_layout_children(node_id);
+            let node = self.tree[node_id].get();
+            self.metadatas.entry_or_default(node_id).observes_geometry =
+                !node.pointer_preview_handlers.is_empty()
+                    || !node.pointer_handlers.is_empty()
+                    || !node.pointer_final_handlers.is_empty()
+                    || !node.keyboard_preview_handlers.is_empty()
+                    || !node.keyboard_handlers.is_empty()
+                    || !node.ime_preview_handlers.is_empty()
+                    || !node.ime_handlers.is_empty()
+                    || node.focus_registration.is_some()
+                    || !node.globally_positioned_handlers.is_empty()
+                    || node.modifier.has_input_geometry();
             if !self.tree[node_id]
                 .get()
                 .globally_positioned_handlers
@@ -1134,6 +1176,54 @@ impl ComponentTree {
         }
         for key in keys {
             self.layout_snapshots.remove(key);
+        }
+    }
+
+    fn defer_unplaced_layout_paths(
+        &mut self,
+        keys: impl Iterator<Item = u64>,
+        placement_only: bool,
+    ) {
+        if self.layout_snapshots.entries.is_empty() {
+            return;
+        }
+        let mut visited = HashSet::default();
+        for key in keys {
+            let Some(&node_id) = self.node_ids_by_instance_key.get(&key) else {
+                continue;
+            };
+            let mut child = None;
+            for id in node_id.ancestors(&self.tree) {
+                let node = &self.tree[id];
+                if node.get().role != NodeRole::Layout && node.parent().is_some() {
+                    continue;
+                }
+                if self
+                    .metadatas
+                    .get(&id)
+                    .is_some_and(|metadata| metadata.abs_position.is_some())
+                {
+                    break;
+                }
+                let key = node.get().instance_key;
+                if self.layout_snapshots.entries.contains_key(&key) {
+                    let invalidation = self.layout_snapshots.deferred.entry(key).or_default();
+                    if let Some(child) = child {
+                        if !invalidation.measure {
+                            invalidation.children.insert(child);
+                        }
+                    } else if placement_only {
+                        invalidation.placement = true;
+                    } else {
+                        invalidation.measure = true;
+                        invalidation.children.clear();
+                    }
+                }
+                if !visited.insert(id) {
+                    break;
+                }
+                child = Some(key);
+            }
         }
     }
 
@@ -1930,32 +2020,34 @@ impl ComponentTree {
 
         record_frame_stage(&mut stage_timer, "consumer_attachments");
         measure_self_nodes.extend(structural_dirty_nodes);
-        let layout_ctx = LayoutContext::new(
-            &mut self.layout_snapshots,
-            &measure_self_nodes,
-            &placement_dirty_nodes,
-            &dirty_nodes_effective,
-            &dirty_children,
-            &mut diagnostics,
-        );
+        {
+            let layout_ctx = LayoutContext::new(
+                &mut self.layout_snapshots,
+                &measure_self_nodes,
+                &placement_dirty_nodes,
+                &dirty_nodes_effective,
+                &dirty_children,
+                &mut diagnostics,
+            );
 
-        let measure_timer = Instant::now();
-        debug!("Start measuring the component tree...");
+            let measure_timer = Instant::now();
+            debug!("Start measuring the component tree...");
 
-        match measure_node(
-            root_node,
-            &screen_constraint,
-            &self.tree,
-            &mut self.metadatas,
-            Some(&layout_ctx),
-        ) {
-            Ok(_root_computed_data) => {
-                debug!("Component tree measured in {:?}", measure_timer.elapsed());
-            }
-            Err(e) => {
-                panic!(
-                    "Root node ({root_node:?}) measurement failed: {e:?}. Aborting draw command computation."
-                );
+            match measure_node(
+                root_node,
+                &screen_constraint,
+                &self.tree,
+                &mut self.metadatas,
+                Some(&layout_ctx),
+            ) {
+                Ok(_root_computed_data) => {
+                    debug!("Component tree measured in {:?}", measure_timer.elapsed());
+                }
+                Err(e) => {
+                    panic!(
+                        "Root node ({root_node:?}) measurement failed: {e:?}. Aborting draw command computation."
+                    );
+                }
             }
         }
 
@@ -1966,6 +2058,22 @@ impl ComponentTree {
             dirty_nodes_effective.len() as u64,
             dirty_expand_ns,
         );
+        diagnostics_snapshot.geometry_nodes_updated =
+            populate_layout_metadata(root_node, &self.tree, &mut self.metadatas);
+        self.defer_unplaced_layout_paths(measure_self_nodes.iter().copied(), false);
+        self.defer_unplaced_layout_paths(
+            layout_dirty_nodes.placement_self_nodes.iter().copied(),
+            true,
+        );
+        for key in &layout_dirty_nodes.transform_nodes {
+            if let Some(id) = self.node_ids_by_instance_key.get(key)
+                && let Some(metadata) = self.metadatas.get_mut(id)
+                && metadata.abs_position.is_none()
+            {
+                metadata.geometry_initialized = false;
+            }
+        }
+        record_frame_stage(&mut stage_timer, "geometry");
 
         let (compute_resource_manager, gpu) = match mode {
             ComputeMode::Full {
@@ -1974,8 +2082,6 @@ impl ComponentTree {
             } => (compute_resource_manager, gpu),
             #[cfg(any(test, feature = "testing"))]
             ComputeMode::LayoutOnly => {
-                diagnostics_snapshot.geometry_nodes_updated =
-                    populate_layout_metadata(root_node, &self.tree, &mut self.metadatas);
                 self.collect_globally_positioned_invocations(root_node);
                 diagnostics_snapshot.accessibility_nodes_updated =
                     self.sync_accessibility(root_node, true) as u64;
@@ -2010,9 +2116,6 @@ impl ComponentTree {
             }
         };
 
-        diagnostics_snapshot.geometry_nodes_updated =
-            populate_layout_metadata(root_node, &self.tree, &mut self.metadatas);
-        record_frame_stage(&mut stage_timer, "geometry");
         let record_timer = Instant::now();
         let _focus_owner_guard = bind_focus_owner(&mut self.focus_owner);
         record_layout_commands(
@@ -2027,6 +2130,11 @@ impl ComponentTree {
         diagnostics_snapshot.geometry_nodes_updated +=
             populate_layout_metadata(root_node, &self.tree, &mut self.metadatas);
         record_frame_stage(&mut stage_timer, "geometry_after_paint");
+        tracing::debug!(
+            target: "tessera_ui::frame_cost",
+            geometry_journal_nodes = self.metadatas.geometry_changed.len(),
+            "geometry_journal"
+        );
         self.collect_globally_positioned_invocations(root_node);
         record_frame_stage(&mut stage_timer, "position_observers");
         diagnostics_snapshot.accessibility_nodes_updated =
@@ -3372,6 +3480,16 @@ struct PreparedLayoutMetadata {
     has_shape_clipping: bool,
 }
 
+impl PreparedLayoutMetadata {
+    fn child_geometry_eq(&self, other: &Self) -> bool {
+        self.child_local_to_window == other.child_local_to_window
+            && self.child_clip_bounds == other.child_clip_bounds
+            && self.child_clip_rect == other.child_clip_rect
+            && self.cumulative_opacity == other.cumulative_opacity
+            && self.has_shape_clipping == other.has_shape_clipping
+    }
+}
+
 fn map_clip_region(
     mut region: crate::ClipRegion,
     transform: crate::LocalToWindow,
@@ -3404,18 +3522,16 @@ fn geometry_parent(tree: &ComponentNodeTree, node_id: NodeId) -> Option<NodeId> 
 }
 
 fn prepare_layout_metadata_for_node(
-    tree: &ComponentNodeTree,
-    metadatas: &mut ComponentNodeMetaDatas,
+    node: &ComponentNode,
+    metadata: &mut ComponentNodeMetaData,
     parent_transform: crate::LocalToWindow,
     is_root: bool,
-    node_id: indextree::NodeId,
     parent_clip_bounds: Option<crate::FloatRect>,
     parent_clip_rect: Option<PxRect>,
     current_opacity: f32,
     parent_has_shape_clipping: bool,
     reuse_local_placement: bool,
 ) -> Option<PreparedLayoutMetadata> {
-    let metadata = metadatas.get_mut(&node_id)?;
     metadata.has_shape_clipping = parent_has_shape_clipping || metadata.clip_region.is_some();
     let rel_pos = match metadata.rel_position {
         Some(pos) => pos,
@@ -3443,7 +3559,6 @@ fn prepare_layout_metadata_for_node(
     let local_position = if let Some(position) = cached_position {
         position
     } else {
-        let node = tree.get(node_id)?.get();
         let _phase = push_phase(RuntimePhase::Place);
         let _instance = push_current_component_instance_key(node.instance_key);
         crate::runtime::clear_phase_state_reads(
@@ -3458,9 +3573,7 @@ fn prepare_layout_metadata_for_node(
     };
     let local_to_window = parent_transform.with_local_origin(local_position);
     let self_position = local_to_window.translation();
-    let child_scale = tree
-        .get(node_id)
-        .map_or(1.0, |node| node.get().children_scale);
+    let child_scale = node.children_scale;
     let child_local_to_window = if child_scale == 1.0 {
         local_to_window
     } else {
@@ -3593,40 +3706,52 @@ fn populate_layout_metadata(
         current_opacity: f32,
         parent_has_shape_clipping: bool,
         inherited_order_changed: bool,
+        inherited_shape_clip_changed: bool,
         inherited_changed: bool,
         updates: &mut u64,
     ) {
         metadatas.geometry_visits += 1;
-        let (previous, was_hidden, initialized, paint_dirty) =
-            metadatas
-                .get(&node_id)
-                .map_or((None, true, false, false), |metadata| {
-                    (
-                        (!inherited_changed)
-                            .then(|| metadata.prepared_layout)
-                            .flatten(),
-                        metadata.prepared_layout.is_none(),
-                        metadata.geometry_initialized,
-                        metadata.paint_dirty,
-                    )
-                });
-        if initialized && !inherited_changed && !dirty.contains(&node_id) {
+        let Some(node) = tree.get(node_id).map(|node| node.get()) else {
             return;
-        }
+        };
+        let self_dirty = dirty.contains(&node_id);
+        let (previous, was_hidden, initialized, paint_dirty, prepared, publishes_geometry) =
+            if let Some(metadata) = metadatas.get_mut(&node_id) {
+                let initialized = metadata.geometry_initialized;
+                if initialized && !inherited_changed && !self_dirty {
+                    return;
+                }
+                let previous = metadata.prepared_layout;
+                let was_hidden = metadata.prepared_layout.is_none();
+                let paint_dirty = metadata.paint_dirty;
+                let prepared = prepare_layout_metadata_for_node(
+                    node,
+                    metadata,
+                    parent_transform,
+                    is_root,
+                    clip_bounds,
+                    clip_rect,
+                    current_opacity,
+                    parent_has_shape_clipping,
+                    initialized && !self_dirty,
+                );
+                let publishes_geometry = metadata.observes_geometry
+                    || metadata.accessibility.is_some()
+                    || metadata.clips_children
+                    || !metadata.fragment.ops().is_empty();
+                (
+                    previous,
+                    was_hidden,
+                    initialized,
+                    paint_dirty,
+                    prepared,
+                    publishes_geometry,
+                )
+            } else {
+                (None, true, false, false, None, false)
+            };
         *updates += 1;
-        let prepared = prepare_layout_metadata_for_node(
-            tree,
-            metadatas,
-            parent_transform,
-            is_root,
-            node_id,
-            clip_bounds,
-            clip_rect,
-            current_opacity,
-            parent_has_shape_clipping,
-            initialized && !dirty.contains(&node_id),
-        );
-        if initialized && was_hidden && prepared.is_none() && !dirty.contains(&node_id) {
+        if initialized && was_hidden && prepared.is_none() && !self_dirty {
             return;
         }
         let order_changed = metadatas.placement_order_dirty.remove(&node_id);
@@ -3635,17 +3760,13 @@ fn populate_layout_metadata(
             metadatas.placement_order_changed.insert(node_id);
         }
         let changed = inherited_changed || !initialized || prepared != previous || order_changed;
-        if changed {
+        if changed && publishes_geometry {
             metadatas.geometry_changed.insert(node_id);
         }
         if prepared.is_some() && paint_dirty {
             metadatas.paint_dirty_nodes.insert(node_id);
         }
-        if prepared.is_none()
-            && tree
-                .get(node_id)
-                .is_some_and(|node| node.get().role == NodeRole::Layout)
-        {
+        if prepared.is_none() && node.role == NodeRole::Layout {
             for descendant in node_id.descendants(tree) {
                 if let Some(metadata) = metadatas.get_mut(&descendant) {
                     metadata.base_abs_position = None;
@@ -3672,6 +3793,23 @@ fn populate_layout_metadata(
         let has_shape_clipping = prepared.map_or(parent_has_shape_clipping, |prepared| {
             prepared.has_shape_clipping
         });
+        let shape_clip = |metadata: Option<PreparedLayoutMetadata>| {
+            metadata
+                .filter(|metadata| metadata.clips_children)
+                .and_then(|metadata| metadata.clip_region)
+        };
+        // Shape changes can invalidate descendant hit tests without changing
+        // their rectangular clip bounds or coordinate transforms.
+        let shape_clip_changed =
+            inherited_shape_clip_changed || shape_clip(previous) != shape_clip(prepared);
+        let children_changed = !initialized
+            || order_changed
+            || shape_clip_changed
+            || match (previous, prepared) {
+                (Some(previous), Some(prepared)) => !previous.child_geometry_eq(&prepared),
+                (None, None) => false,
+                _ => true,
+            };
         let mut visit_child = |child| {
             visit(
                 tree,
@@ -3686,15 +3824,13 @@ fn populate_layout_metadata(
                 opacity,
                 has_shape_clipping,
                 order_changed,
-                changed,
+                shape_clip_changed,
+                children_changed,
                 updates,
             );
         };
-        if changed {
-            if let Some(children) = tree
-                .get(node_id)
-                .and_then(|node| node.get().layout_children.as_ref())
-            {
+        if children_changed {
+            if let Some(children) = node.layout_children.as_ref() {
                 for &child in children.iter() {
                     visit_child(child);
                 }
@@ -3721,6 +3857,7 @@ fn populate_layout_metadata(
         None,
         None,
         1.0,
+        false,
         false,
         false,
         false,
@@ -3801,6 +3938,132 @@ mod tests {
 
     fn node(name: &str, instance_logic_id: u64, instance_key: u64) -> ComponentNode {
         node_with_role(name, NodeRole::Layout, instance_logic_id, instance_key)
+    }
+
+    #[test]
+    fn unchanged_child_coordinates_stop_geometry_propagation_but_shape_changes_reach_inputs() {
+        let mut tree = ComponentTree::new();
+        let root = tree.add_node(node("root", 1, 1));
+        let moving = tree.add_node(node("moving", 2, 2));
+        let pinned = tree.add_node(node("pinned", 3, 3));
+        let inner = tree.add_node(node("inner", 4, 4));
+        let mut control = node("control", 5, 5);
+        control.pointer_handlers.push(Box::new(|_| {}));
+        let leaf = tree.add_node(control);
+        for _ in 0..5 {
+            tree.pop_node();
+        }
+        for id in [root, moving, pinned, inner, leaf] {
+            let metadata = tree.metadatas.entry_or_default(id);
+            metadata.computed_data = Some(ComputedData {
+                width: Px(100),
+                height: Px(100),
+            });
+            metadata.rel_position = Some(PxPosition::ZERO);
+            metadata.placement_order = Some(0);
+        }
+        node::place_node(leaf, PxPosition::new(Px(2), Px(2)), 0, &mut tree.metadatas);
+        populate_layout_metadata(root, &tree.tree, &mut tree.metadatas);
+        tree.metadatas.geometry_changed.clear();
+        tree.metadatas.geometry_visits = 0;
+
+        node::place_node(
+            moving,
+            PxPosition::new(Px(35), Px(0)),
+            0,
+            &mut tree.metadatas,
+        );
+        node::place_node(
+            pinned,
+            PxPosition::new(Px(-35), Px(0)),
+            0,
+            &mut tree.metadatas,
+        );
+        populate_layout_metadata(root, &tree.tree, &mut tree.metadatas);
+        assert_eq!(
+            tree.metadatas.get(&leaf).unwrap().abs_position,
+            Some(PxPosition::new(Px(2), Px(2)))
+        );
+        assert!(
+            !tree.metadatas.geometry_changed.contains(&leaf),
+            "a counter-translated branch must not invalidate unchanged descendant input geometry"
+        );
+        assert_eq!(tree.metadatas.geometry_visits, 3);
+
+        tree.metadatas.geometry_changed.clear();
+        tree.metadatas.entry_or_default(pinned).computed_data = Some(ComputedData {
+            width: Px(120),
+            height: Px(100),
+        });
+        tree.metadatas.mark_geometry_dirty(pinned);
+        populate_layout_metadata(root, &tree.tree, &mut tree.metadatas);
+        assert!(
+            !tree.metadatas.geometry_changed.contains(&leaf),
+            "an unclipped parent's size must not invalidate unchanged child coordinates"
+        );
+
+        node::place_node(leaf, PxPosition::new(Px(3), Px(3)), 0, &mut tree.metadatas);
+        populate_layout_metadata(root, &tree.tree, &mut tree.metadatas);
+        assert_eq!(
+            tree.metadatas.get(&leaf).unwrap().abs_position,
+            Some(PxPosition::new(Px(3), Px(3)))
+        );
+        assert!(tree.metadatas.geometry_changed.contains(&leaf));
+
+        let clip = crate::ClipRegion {
+            position: PxPosition::ZERO,
+            size: [100.0, 100.0],
+            shape: crate::ClipShape::RoundedRectangle {
+                radii: [0.0; 4],
+                exponents: [2.0; 4],
+            },
+        };
+        let metadata = tree.metadatas.entry_or_default(root);
+        metadata.clips_children = true;
+        metadata.clip_region = Some(clip);
+        tree.metadatas.mark_geometry_dirty(root);
+        populate_layout_metadata(root, &tree.tree, &mut tree.metadatas);
+        assert!(inside_shape_clips(
+            &tree.tree,
+            &tree.metadatas,
+            leaf,
+            PxPosition::new(Px(4), Px(4))
+        ));
+        tree.metadatas.geometry_changed.clear();
+
+        tree.metadatas.entry_or_default(root).clip_region = Some(crate::ClipRegion {
+            shape: crate::ClipShape::RoundedRectangle {
+                radii: [40.0; 4],
+                exponents: [2.0; 4],
+            },
+            ..clip
+        });
+        tree.metadatas.mark_geometry_dirty(root);
+        populate_layout_metadata(root, &tree.tree, &mut tree.metadatas);
+        assert!(tree.metadatas.geometry_changed.contains(&leaf));
+        assert!(!inside_shape_clips(
+            &tree.tree,
+            &tree.metadatas,
+            leaf,
+            PxPosition::new(Px(4), Px(4))
+        ));
+
+        tree.metadatas.entry_or_default(pinned).rel_position = None;
+        tree.metadatas.mark_geometry_dirty(pinned);
+        populate_layout_metadata(root, &tree.tree, &mut tree.metadatas);
+        assert!(tree.metadatas.get(&leaf).unwrap().abs_position.is_none());
+        tree.metadatas.entry_or_default(inner).geometry_initialized = false;
+        node::place_node(
+            pinned,
+            PxPosition::new(Px(-35), Px(0)),
+            0,
+            &mut tree.metadatas,
+        );
+        populate_layout_metadata(root, &tree.tree, &mut tree.metadatas);
+        assert_eq!(
+            tree.metadatas.get(&leaf).unwrap().abs_position,
+            Some(PxPosition::new(Px(3), Px(3)))
+        );
     }
 
     thread_local! {
@@ -4091,8 +4354,12 @@ mod tests {
         let root = tree.add_node(node("root", 1, 1));
         let leaf = tree.add_node(node("leaf", 2, 2));
         tree.pop_node();
+        let outside = tree.add_node(node("outside", 3, 3));
         tree.pop_node();
-        for id in [root, leaf] {
+        let sibling = tree.add_node(node("sibling", 4, 4));
+        tree.pop_node();
+        tree.pop_node();
+        for id in [root, leaf, outside, sibling] {
             let metadata = tree.metadatas.entry_or_default(id);
             metadata.computed_data = Some(ComputedData {
                 width: Px(32),
@@ -4100,6 +4367,22 @@ mod tests {
             });
             metadata.rel_position = Some(PxPosition::ZERO);
         }
+        let outside_clones = Arc::new(AtomicUsize::new(0));
+        let metadata = tree.metadatas.entry_or_default(outside);
+        metadata.rel_position = Some(PxPosition::from_f32_xy(150.0, 0.0));
+        metadata.fragment.push_draw_command(Marker {
+            clones: outside_clones.clone(),
+            value: 3,
+            opacity: 1.0,
+        });
+        tree.metadatas
+            .entry_or_default(sibling)
+            .fragment
+            .push_draw_command(Marker {
+                clones: Arc::new(AtomicUsize::new(0)),
+                value: 5,
+                opacity: 1.0,
+            });
         tree.metadatas
             .entry_or_default(leaf)
             .fragment
@@ -4119,6 +4402,53 @@ mod tests {
             &HashSet::default(),
             viewport,
         );
+        clones.store(0, Ordering::Relaxed);
+        tree.metadatas.geometry_changed.clear();
+        let metadata = tree.metadatas.entry_or_default(outside);
+        metadata.fragment = Default::default();
+        metadata.fragment.push_draw_command(Marker {
+            clones: outside_clones,
+            value: 4,
+            opacity: 1.0,
+        });
+        tree.metadatas.paint_changed.insert(outside);
+        let (graph, _) = scene.update(
+            root,
+            &tree.tree,
+            &tree.metadatas,
+            &HashSet::default(),
+            &HashSet::default(),
+            viewport,
+        );
+        assert_eq!(
+            clones.load(Ordering::Relaxed),
+            0,
+            "offscreen paint must not reassemble unchanged visible commands"
+        );
+        assert_eq!(
+            graph
+                .ops()
+                .iter()
+                .filter_map(|op| op.command.downcast_draw_ref::<Marker>())
+                .map(|marker| marker.value)
+                .collect::<Vec<_>>(),
+            vec![1, 5]
+        );
+        tree.metadatas.paint_changed.clear();
+        tree.metadatas.geometry_changed.insert(leaf);
+        scene.update(
+            root,
+            &tree.tree,
+            &tree.metadatas,
+            &HashSet::default(),
+            &HashSet::default(),
+            viewport,
+        );
+        assert_eq!(
+            clones.load(Ordering::Relaxed),
+            0,
+            "an unchanged draw in the geometry journal must retain its visible output"
+        );
         for (offset, opacity) in [(1.25, 1.0), (2.5, 0.5), (3.75, 0.5)] {
             clones.store(0, Ordering::Relaxed);
             tree.metadatas.geometry_changed.clear();
@@ -4127,6 +4457,16 @@ mod tests {
             metadata.rel_position = Some(PxPosition::from_f32_xy(offset, 0.0));
             metadata.opacity = opacity;
             populate_layout_metadata(root, &tree.tree, &mut tree.metadatas);
+            assert!(
+                !tree.metadatas.geometry_changed.contains(&root),
+                "a passive layout must not publish geometry notifications for its own translation"
+            );
+            assert_eq!(
+                tree.metadatas.get(&root).unwrap().abs_position,
+                Some(PxPosition::from_f32_xy(offset, 0.0)),
+                "passive layout coordinates must remain available for inspection"
+            );
+            assert!(tree.metadatas.geometry_changed.contains(&leaf));
             let (graph, _) = scene.update(
                 root,
                 &tree.tree,
@@ -4206,6 +4546,29 @@ mod tests {
                 "retained visibility must follow translation and viewport resizing"
             );
         }
+        tree.metadatas.geometry_changed.clear();
+        tree.metadatas.mark_geometry_dirty(outside);
+        tree.metadatas.entry_or_default(outside).rel_position =
+            Some(PxPosition::from_f32_xy(40.0, 0.0));
+        populate_layout_metadata(root, &tree.tree, &mut tree.metadatas);
+        let (graph, _) = scene.update(
+            root,
+            &tree.tree,
+            &tree.metadatas,
+            &HashSet::default(),
+            &HashSet::default(),
+            viewport,
+        );
+        assert_eq!(
+            graph
+                .ops()
+                .iter()
+                .filter_map(|op| op.command.downcast_draw_ref::<Marker>())
+                .map(|marker| marker.value)
+                .collect::<Vec<_>>(),
+            vec![2, 4, 5],
+            "revealing an omitted branch must publish its latest paint in sibling order"
+        );
     }
 
     #[test]

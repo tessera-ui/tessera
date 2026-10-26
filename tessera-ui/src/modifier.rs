@@ -981,6 +981,24 @@ impl Modifier {
         pointer
     }
 
+    pub(crate) fn has_input_geometry(&self) -> bool {
+        let mut input = false;
+        self.element.fold_actions(&mut |action| {
+            input |= matches!(
+                action,
+                ModifierAction::Cursor(_)
+                    | ModifierAction::PointerPreviewInput(_)
+                    | ModifierAction::PointerInput(_)
+                    | ModifierAction::PointerFinalInput(_)
+                    | ModifierAction::KeyboardPreviewInput(_)
+                    | ModifierAction::KeyboardInput(_)
+                    | ModifierAction::ImePreviewInput(_)
+                    | ModifierAction::ImeInput(_)
+            );
+        });
+        input
+    }
+
     pub(crate) fn resolve_placement(
         &self,
         mut position: PxPosition,

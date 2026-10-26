@@ -52,6 +52,18 @@ impl AccessibilityIndex {
         self.geometry_changed.extend(changed);
     }
 
+    pub(crate) fn invalidate_placement_order(&mut self, changed: &HashSet<ComponentNodeId>) {
+        for id in changed {
+            if self
+                .components
+                .get(id)
+                .is_some_and(|(_, context)| context.semantic)
+            {
+                self.changed.insert(*id);
+            }
+        }
+    }
+
     pub(crate) fn invalidate(
         &mut self,
         changed: &HashSet<ComponentNodeId>,
@@ -160,16 +172,27 @@ impl AccessibilityIndex {
             let mut tooltip = None;
             let mut visible = true;
             let mut path = Vec::new();
+            let mut skip_composition_order = false;
             for ancestor in id.ancestors(tree) {
                 #[cfg(test)]
                 {
                     self.ancestor_visits += 1;
                 }
-                path.push(order.get(&ancestor).copied().unwrap_or_default());
                 let Some(metadata) = metadatas.get(&ancestor) else {
                     visible = false;
                     break;
                 };
+                if tree[ancestor].get().role == NodeRole::Layout {
+                    // Overlaid content can change paint order without changing
+                    // logical reading order.
+                    skip_composition_order = metadata.placement_order.is_some();
+                    path.push(metadata.placement_order.map_or_else(
+                        || order.get(&ancestor).copied().unwrap_or_default(),
+                        |order| usize::try_from(order).unwrap_or(usize::MAX),
+                    ));
+                } else if !skip_composition_order {
+                    path.push(order.get(&ancestor).copied().unwrap_or_default());
+                }
                 if ancestor != root
                     && tree[ancestor].get().role == NodeRole::Layout
                     && metadata.abs_position.is_none()
@@ -1247,6 +1270,64 @@ mod tests {
             .find(|(node_id, _)| *node_id == accesskit_id(id))
             .expect("semantic node must be present")
             .1
+    }
+
+    #[test]
+    fn placement_order_relinks_semantic_children_across_composition_wrappers() {
+        let mut tree = ComponentNodeTree::new();
+        let mut metadatas = ComponentNodeMetaDatas::new();
+        let root = append_node(&mut tree, &mut metadatas, None, None);
+        let content_wrapper = append_node(&mut tree, &mut metadatas, Some(root), None);
+        let navigation_wrapper = append_node(&mut tree, &mut metadatas, Some(root), None);
+        tree[content_wrapper].get_mut().role = NodeRole::Composition;
+        tree[navigation_wrapper].get_mut().role = NodeRole::Composition;
+        let content = append_node(
+            &mut tree,
+            &mut metadatas,
+            Some(content_wrapper),
+            Some(
+                AccessibilityNode::new()
+                    .with_role(Role::Link)
+                    .with_label("Content"),
+            ),
+        );
+        let navigation = append_node(
+            &mut tree,
+            &mut metadatas,
+            Some(navigation_wrapper),
+            Some(
+                AccessibilityNode::new()
+                    .with_role(Role::Tab)
+                    .with_label("Navigation"),
+            ),
+        );
+        metadatas.get_mut(&content).unwrap().placement_order = Some(1);
+        metadatas.get_mut(&navigation).unwrap().placement_order = Some(0);
+        let order = [(content_wrapper, 0), (navigation_wrapper, 1)]
+            .into_iter()
+            .collect();
+        let mut index = AccessibilityIndex::default();
+        index.invalidate(&root.descendants(&tree).collect(), &HashSet::default());
+        index.update(&tree, &metadatas, root, &order);
+        let initial = index.tree_update(&tree, Some(navigation), true).unwrap();
+        assert_eq!(
+            node(&initial, root).children(),
+            &[accesskit_id(navigation), accesskit_id(content)]
+        );
+        metadatas.get_mut(&content).unwrap().placement_order = Some(0);
+        metadatas.get_mut(&navigation).unwrap().placement_order = Some(1);
+        let changed = [content, navigation].into_iter().collect();
+        metadatas.placement_order_changed = changed;
+        index.invalidate_geometry(&metadatas.placement_order_changed);
+        index.invalidate_placement_order(&metadatas.placement_order_changed);
+        metadatas.placement_order_changed.clear();
+        index.update(&tree, &metadatas, root, &order);
+        let delta = index.tree_update(&tree, Some(navigation), false).unwrap();
+        assert_eq!(
+            node(&delta, root).children(),
+            &[accesskit_id(content), accesskit_id(navigation)]
+        );
+        assert_eq!(delta.focus, accesskit_id(navigation));
     }
 
     #[test]

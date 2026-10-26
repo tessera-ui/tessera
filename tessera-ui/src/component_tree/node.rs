@@ -133,6 +133,7 @@ impl InputTransforms {
 pub(crate) struct ComponentNodeMetaData {
     pub(super) prepared_layout: Option<super::PreparedLayoutMetadata>,
     pub(super) geometry_initialized: bool,
+    pub(super) observes_geometry: bool,
     pub(super) paint_dirty: bool,
     /// The computed data (size) of the node.
     /// None if the node is not computed yet.
@@ -186,6 +187,7 @@ impl ComponentNodeMetaData {
         Self {
             prepared_layout: None,
             geometry_initialized: false,
+            observes_geometry: false,
             paint_dirty: true,
             computed_data: None,
             draw_layout: NodeDrawLayout::default(),
@@ -987,16 +989,22 @@ pub(crate) fn measure_node(
     if let Some(layout_ctx) = layout_ctx {
         layout_ctx.inc_measure_node_calls();
         if let Some(entry) = layout_ctx.snapshot(node_data.instance_key) {
+            let deferred = layout_ctx.deferred_invalidation(node_data.instance_key);
             let same_constraint = entry.constraint_key == *parent_constraint;
             let node_self_measure_dirty = layout_ctx
                 .measure_self_nodes
-                .contains(&node_data.instance_key);
+                .contains(&node_data.instance_key)
+                || deferred.as_ref().is_some_and(|pending| pending.measure);
             let node_self_placement_dirty = layout_ctx
                 .placement_self_nodes
-                .contains(&node_data.instance_key);
+                .contains(&node_data.instance_key)
+                || deferred.as_ref().is_some_and(|pending| pending.placement);
             let node_effective_dirty = layout_ctx
                 .dirty_effective_nodes
-                .contains(&node_data.instance_key);
+                .contains(&node_data.instance_key)
+                || deferred
+                    .as_ref()
+                    .is_some_and(|pending| !pending.children.is_empty());
             let has_all_child_constraints = entry.child_constraints.len() == children.len();
             let has_all_child_sizes = entry.child_sizes.len() == children.len();
             let can_try_reuse = !node_self_measure_dirty
@@ -1030,7 +1038,22 @@ pub(crate) fn measure_node(
                         layout_ctx.inc_dirty_child_checked();
                         let index = entry.child_indices.get(&tree[id].get().instance_key)?;
                         Some((*index, id))
-                    });
+                    })
+                    .chain(
+                        deferred
+                            .iter()
+                            .flat_map(|pending| pending.children.iter())
+                            .filter(|key| !layout_ctx.dirty_effective_nodes.contains(key))
+                            .filter_map(|key| {
+                                let &index = entry.child_indices.get(key)?;
+                                let &id = children.get(index)?;
+                                if tree[id].get().instance_key != *key {
+                                    return None;
+                                }
+                                layout_ctx.inc_dirty_child_checked();
+                                Some((index, id))
+                            }),
+                    );
 
                 let mut child_size_changed = false;
                 for (index, child_id) in dirty_children {
@@ -1060,6 +1083,7 @@ pub(crate) fn measure_node(
                         component_node_metadatas
                             .entry_or_default(node_id)
                             .layout_cache_hit = true;
+                        layout_ctx.acknowledge_deferred_invalidation(node_data.instance_key);
                         layout_ctx.inc_cache_hit_boundary();
                         return Ok(entry.layout_result.size);
                     }
@@ -1141,6 +1165,7 @@ pub(crate) fn measure_node(
                                 },
                             );
                         }
+                        layout_ctx.acknowledge_deferred_invalidation(node_data.instance_key);
                         layout_ctx.inc_cache_hit_boundary();
                         return Ok(cached_result.size);
                     }

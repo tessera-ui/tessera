@@ -750,6 +750,93 @@ mod tests {
             .node("measure-only")
             .width(120);
     }
+
+    thread_local! {
+        static RETAINED_VISIBLE: Cell<Option<State<bool>>> = const { Cell::new(None) };
+    }
+
+    #[derive(Clone, PartialEq)]
+    struct RetainedChildPolicy {
+        visible: Option<State<bool>>,
+    }
+
+    impl LayoutModifierNode for RetainedChildPolicy {
+        fn measure(
+            &self,
+            scope: &mut MeasureScope<'_>,
+        ) -> Result<LayoutResult, crate::MeasurementError> {
+            let mut result = LayoutResult::new(ComputedData {
+                width: Px(200),
+                height: Px(60),
+            });
+            if self.visible.is_none_or(|visible| visible.get()) {
+                let child = scope.children()[0];
+                child.measure(scope, &Constraint::NONE)?;
+                result.place_child(child, PxPosition::ZERO);
+            }
+            Ok(result)
+        }
+    }
+
+    #[tessera(crate)]
+    fn retained_measure_fixture() {
+        let visible = remember(|| true);
+        let width = remember(|| 40);
+        RETAINED_VISIBLE.set(Some(visible));
+        MEASURE_ONLY_WIDTH.set(Some(width));
+        crate::layout::layout()
+            .policy(RetainedChildPolicy {
+                visible: Some(visible),
+            })
+            .child(move || {
+                crate::layout::layout()
+                    .policy(RetainedChildPolicy { visible: None })
+                    .child(move || {
+                        crate::layout::layout()
+                            .policy(MeasureOnlyWidthPolicy { width })
+                            .modifier(Modifier::new().push_semantics(TestTagSemanticsModifier {
+                                tag: "retained-measure".into(),
+                            }));
+                    });
+            });
+    }
+
+    #[test]
+    fn unplaced_subtree_keeps_measurement_invalidations_until_it_is_revealed() {
+        for update_before_hiding in [false, true] {
+            let mut session = start_layout_test_session(
+                layout_test(retained_measure_fixture).viewport_px(240, 100),
+            );
+            pump_layout_test_session(&mut session, 0)
+                .node("retained-measure")
+                .width(40);
+            RETAINED_VISIBLE.get().unwrap().set(false);
+            if update_before_hiding {
+                MEASURE_ONLY_WIDTH.get().unwrap().set(80);
+            }
+            pump_layout_test_session(&mut session, 16_666_667);
+            if !update_before_hiding {
+                MEASURE_ONLY_WIDTH.get().unwrap().set(80);
+            }
+            pump_layout_test_session(&mut session, 33_333_334);
+            pump_layout_test_session(&mut session, 50_000_001);
+            assert_eq!(
+                last_layout_frame_diagnostics().unwrap().measure_node_calls,
+                1,
+                "an invalid unplaced subtree must not schedule repeated hidden measurements"
+            );
+            RETAINED_VISIBLE.get().unwrap().set(true);
+            pump_layout_test_session(&mut session, 66_666_668)
+                .node("retained-measure")
+                .width(80)
+                .position(0, 0);
+            pump_layout_test_session(&mut session, 83_333_335);
+            assert_eq!(
+                last_layout_frame_diagnostics().unwrap().measure_node_calls,
+                1
+            );
+        }
+    }
     #[derive(Clone, PartialEq)]
     struct FixedSizePolicy {
         width: i32,
@@ -1284,6 +1371,54 @@ mod tests {
             .child(move || {
                 slot.render();
             });
+    }
+
+    #[tessera(crate)]
+    fn nested_prop_slot(width: i32, remaining: usize) {
+        if remaining == 0 {
+            crate::layout::layout()
+                .policy(FixedSizePolicy { width, height: 20 })
+                .modifier(Modifier::new().push_semantics(TestTagSemanticsModifier {
+                    tag: "deep-slot-value".to_owned(),
+                }));
+        } else {
+            slot_host().slot(move || {
+                nested_prop_slot(width, remaining - 1);
+            });
+        }
+    }
+
+    thread_local! {
+        static DEEP_SLOT_WIDTH: Cell<Option<State<i32>>> = const { Cell::new(None) };
+    }
+
+    #[tessera(crate)]
+    fn nested_prop_slot_fixture() {
+        let width = remember(|| 20);
+        DEEP_SLOT_WIDTH.set(Some(width));
+        nested_prop_slot(width.get(), 12);
+    }
+
+    #[test]
+    fn nested_slot_props_finish_forward_replay_before_layout_in_the_same_frame() {
+        let mut session = start_layout_test_session(
+            layout_test(|| nested_prop_slot_fixture()).viewport_px(200, 100),
+        );
+        pump_layout_test_session(&mut session, 0)
+            .node("deep-slot-value")
+            .size(20, 20);
+        DEEP_SLOT_WIDTH.get().unwrap().set(60);
+        pump_layout_test_session(&mut session, 16_666_667)
+            .node("deep-slot-value")
+            .size(60, 20);
+        pump_layout_test_session(&mut session, 33_333_334)
+            .node("deep-slot-value")
+            .size(60, 20);
+        assert_eq!(
+            last_layout_frame_diagnostics().unwrap().measure_node_calls,
+            1,
+            "Completed slot updates must leave the following idle layout cached"
+        );
     }
 
     #[tessera(crate)]
@@ -1867,6 +2002,61 @@ mod tests {
                     .geometry_nodes_updated,
                 0
             );
+        }
+    }
+
+    #[tessera(crate)]
+    fn retained_phase_fixture(transform: bool) {
+        let visible = remember(|| true);
+        RETAINED_VISIBLE.set(Some(visible));
+        crate::layout::layout()
+            .policy(RetainedChildPolicy {
+                visible: Some(visible),
+            })
+            .child(move || {
+                placement_state_fixture(transform);
+            });
+    }
+
+    #[test]
+    fn unplaced_subtree_keeps_placement_and_transform_invalidations_without_remeasuring() {
+        for transform in [false, true] {
+            for update_before_hiding in [false, true] {
+                PHASE_MEASURES.set(0);
+                let mut session = start_layout_test_session(
+                    layout_test(move || {
+                        retained_phase_fixture(transform);
+                    })
+                    .viewport_px(240, 100),
+                );
+                pump_layout_test_session(&mut session, 0)
+                    .node("phase-child")
+                    .position(0, 0);
+                let measures = PHASE_MEASURES.get();
+                RETAINED_VISIBLE.get().unwrap().set(false);
+                if update_before_hiding {
+                    PHASE_OFFSET.get().unwrap().set(35);
+                }
+                pump_layout_test_session(&mut session, 16_666_667);
+                if !update_before_hiding {
+                    PHASE_OFFSET.get().unwrap().set(35);
+                }
+                pump_layout_test_session(&mut session, 33_333_334);
+                pump_layout_test_session(&mut session, 50_000_001);
+                assert_eq!(
+                    last_layout_frame_diagnostics().unwrap().measure_node_calls,
+                    1
+                );
+                RETAINED_VISIBLE.get().unwrap().set(true);
+                pump_layout_test_session(&mut session, 66_666_668)
+                    .node("phase-child")
+                    .position(35, 0);
+                assert_eq!(
+                    PHASE_MEASURES.get(),
+                    measures,
+                    "revealing a placement-only update must retain measured dimensions"
+                );
+            }
         }
     }
 

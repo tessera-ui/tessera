@@ -522,18 +522,10 @@ pub(crate) fn build_component_tree<F: Fn()>(entry_point: &F) -> BuildTreeResult 
         let total_nodes_before_build =
             TesseraRuntime::with(|runtime| runtime.component_tree.tree().len() as u64);
 
-        // Backwards writes can legitimately trigger follow-up rounds; cap them
-        // so a pair of components writing each other's inputs cannot
-        // loop forever within one frame. Leftover work is deferred to
-        // the next frame.
-        const MAX_REPLAY_ROUNDS_PER_FRAME: usize = 8;
-        let mut replay_round = 0_usize;
+        // Executed boundaries cannot replay again in this frame. Forward slot
+        // dependencies may span more rounds than their nesting depth suggests;
+        // only backwards writes need to be deferred to the next frame.
         while !pending_dirty_instance_keys.is_empty() {
-            replay_round += 1;
-            if replay_round > MAX_REPLAY_ROUNDS_PER_FRAME {
-                crate::runtime::defer_build_invalidations(&pending_dirty_instance_keys);
-                break;
-            }
             let live_dirty_instance_keys =
                 retain_live_dirty_instance_keys(&pending_dirty_instance_keys);
             if tracing::enabled!(target: "tessera_ui::replay", tracing::Level::DEBUG) {
