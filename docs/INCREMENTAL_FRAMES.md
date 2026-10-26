@@ -62,6 +62,26 @@ container movement still propagates to its descendants without notifying
 unrelated frame consumers. First hiding continues to publish affected subtree
 removals, and newly attached capabilities receive their initial update.
 
+Use `Modifier::layout_coordinate_space` on a figure or container and
+`Modifier::on_layout_rect_in_space` on its measured descendants when only
+relative geometry is needed. These observers compose local placements up to
+the nearest declared space. Common ancestor translation and scaling do not
+change the published bounds or invalidate annotation composition. Local size,
+placement, scaling, visibility, and coordinate-space ancestry changes still
+publish updated bounds. Without a declared space, bounds use window units.
+Window-coordinate observers continue to receive ancestor movement normally.
+The observer index tracks each declared space's subscribers separately from
+window-geometry notifications. Counter-translated descendants therefore update
+their relative observations even when cached window geometry stays unchanged.
+
+Use `Modifier::on_layout_size_changed` for consumers of measured dimensions.
+Size observations have a separate change journal. Size-only observers are
+excluded from window-position indexing, so common translations and ancestor
+scaling do not visit them when local dimensions stay unchanged. Newly attached
+observers receive the current size;
+unplaced layouts defer notifications until placement resumes. Window and
+relative-coordinate observers retain their own geometry dependencies.
+
 Geometry propagation uses retained direct layout adjacency, skipping transparent
 composition wrappers. An inherited translation reuses unchanged local placement
 results and their state dependencies; local placement changes still reevaluate
@@ -91,6 +111,13 @@ a world-transform array for each translated node.
   hover exits, and explicit state invalidations still schedule delivery.
   Geometry journals are intersected with registered pointer capabilities before
   updating the spatial index; decorative layout changes do not enter it.
+  Pointer entries retain their rectangular grid coverage. Position updates
+  refresh input geometry without changing shared cells; boundary crossings
+  insert and remove only the differing cells. Hidden and oversized entries
+  transition between coverage modes without allocating per-entry cell lists.
+  Dispatch shares cached handler plans instead of copying their action lists.
+  Geometry updates reuse uniquely owned plans and function-name buffers;
+  retained copies stay immutable, and structural changes replace handlers.
 - The scene retains render-bearing branches and compresses transparent chains.
   An unchanged scene shares its render graph and cached execution ordering.
   Transparent unary branches forward their current descendant output without
@@ -191,6 +218,15 @@ Profiling maintains subtree counts during structural updates instead of walking
 reused subtrees to count them each frame. Optional tracing targets
 `tessera_ui::replay`, `tessera_ui::build_cost`, and `tessera_ui::frame_cost` expose
 replay boundaries, component build durations, and frame-consumer stage costs.
+At debug level, `scene_update_work` distinguishes structural candidates,
+geometry notifications, directly changed nodes, and rebuilt scene branches.
+`position_observer_work` counts callbacks scheduled by geometry publication.
+It also reports candidate counts and entries in the size-change journal.
+Compare these counters with replay boundaries to distinguish geometry-only
+scroll updates from composition triggered by position observers. Component
+build durations include child builds; do not sum nested samples as exclusive
+CPU time. Detailed tracing also adds overhead, so compare frame latency with
+tracing disabled separately from work counts.
 At debug level, `tessera_ui::frame_cost` also reports `render_submit_cpu` with
 separate `encoder_finish_ns` and `queue_submit_ns` fields. Both are CPU-side
 durations; the profiling submission metric includes both operations. GPU
