@@ -4,6 +4,8 @@
 //!
 //! Navigate long specifications without constructing every unseen figure.
 
+use std::sync::Mutex;
+
 use tessera_components::{
     alignment::Alignment,
     boxed::boxed,
@@ -32,6 +34,39 @@ struct ChapterBindings {
     route: Option<ArticleRoute>,
 }
 
+#[derive(Default)]
+struct HeaderPositions {
+    viewport_top: Option<f32>,
+    header_top: Option<f32>,
+}
+
+fn update_header_pin(
+    positions: State<Mutex<HeaderPositions>>,
+    pinned: State<bool>,
+    viewport_top: Option<f32>,
+    header_top: Option<f32>,
+) {
+    if !positions.is_alive() || !pinned.is_alive() {
+        return;
+    }
+    let next = positions.with(|positions| {
+        let mut positions = positions.lock().unwrap();
+        if let Some(top) = viewport_top {
+            positions.viewport_top = Some(top);
+        }
+        if let Some(top) = header_top {
+            positions.header_top = Some(top);
+        }
+        positions
+            .viewport_top
+            .zip(positions.header_top)
+            .is_some_and(|(viewport, header)| header <= viewport)
+    });
+    if pinned.get() != next {
+        pinned.set(next);
+    }
+}
+
 #[tessera]
 pub(super) fn viewport(
     data: State<ArticleData>,
@@ -44,6 +79,8 @@ pub(super) fn viewport(
     let page = data.get();
     let controller = remember_with_key((page.title.clone(), page.page), LazyListController::new);
     let height = remember(|| Px(1));
+    let pinned = remember(|| false);
+    let positions = remember(|| Mutex::new(HeaderPositions::default()));
     let next = ChapterBindings {
         controller,
         pages,
@@ -61,8 +98,22 @@ pub(super) fn viewport(
         if item == 0 {
             media::page_header(page.title, page.description, width.get());
         } else if item == 1 {
-            article_tabs(selected, scroll)
-                .pages_optional(bindings.with(|bindings| bindings.pages.clone()));
+            boxed()
+                .modifier(Modifier::new().fill_max_width().on_layout_coordinates(
+                    move |coordinates: LayoutCoordinates| {
+                        update_header_pin(
+                            positions,
+                            pinned,
+                            None,
+                            Some(coordinates.local_to_window.translation().y),
+                        );
+                    },
+                ))
+                .children(move || {
+                    article_tabs(selected, scroll)
+                        .pinned(pinned)
+                        .pages_optional(bindings.with(|bindings| bindings.pages.clone()));
+                });
         } else if item == 2 {
             contents(data, width, bindings);
         } else if item == 3 && page.intro.is_some() {
@@ -112,6 +163,12 @@ pub(super) fn viewport(
                         .fill_max_size()
                         .weight(1.0)
                         .on_layout_coordinates(move |coordinates: LayoutCoordinates| {
+                            update_header_pin(
+                                positions,
+                                pinned,
+                                Some(coordinates.local_to_window.translation().y),
+                                None,
+                            );
                             let next = Dp::from(coordinates.local_size.width);
                             if next != width.get() {
                                 width.set(next);
@@ -223,7 +280,7 @@ fn contents(data: State<ArticleData>, width: State<Dp>, bindings: State<ChapterB
                                                 );
                                                 controller.with_mut(|controller| {
                                                     controller
-                                                        .scroll_to_item(first + index, Dp(88.0));
+                                                        .scroll_to_item(first + index, Dp(72.0));
                                                 });
                                             }),
                                             ..Default::default()

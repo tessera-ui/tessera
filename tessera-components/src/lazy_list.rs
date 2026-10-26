@@ -1015,7 +1015,7 @@ fn lazy_list_view(
         .map(|visible| visible.item_index)
         .collect();
 
-    let children = if keep_composed_items {
+    let mut children = if keep_composed_items {
         let mut history = controller.with(|controller| controller.composed.clone());
         history.retain(|index, key| {
             plan.visible_child(*index)
@@ -1034,6 +1034,13 @@ fn lazy_list_view(
     } else {
         visible_children.children
     };
+    // Sticky items overlap scrolling content and must own the upper paint and
+    // hit-test order.
+    children.sort_by_key(|child| {
+        plan.sticky_indices()
+            .binary_search(&child.item_index)
+            .is_ok()
+    });
     let composed_item_indices = children.iter().map(|child| child.item_index).collect();
     layout()
         .modifier(focus_modifier)
@@ -1367,6 +1374,7 @@ impl tessera_ui::LayoutModifierNode for LazyListLayout {
             placements.push((item_index, child, offset_main, child_size));
         }
 
+        placements.sort_unstable_by_key(|placement| placement.0);
         for placement in &placements {
             let cross_offset = compute_cross_offset(
                 inner_cross,

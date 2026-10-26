@@ -13,18 +13,19 @@ use tessera_components::{
     icon::icon,
     interaction_state::InteractionState,
     material_icons::filled,
-    modifier::{ClickableArgs, ModifierExt as _, Padding, SemanticsArgs},
+    modifier::{ClickableArgs, ModifierExt as _, Padding, SemanticsArgs, ShadowArgs},
     row::row,
     scrollable::ScrollableController,
     shape_def::{RoundedCorner, Shape},
     spacer::spacer,
     surface::surface,
     text::text,
+    theme::MaterialTheme,
 };
 use tessera_ui::{
-    Callback, Dp, FocusManager, Modifier, PxPosition, RenderSlot, State, accesskit::Role,
-    current_frame_nanos, modifier::FocusModifierExt as _, receive_frame_nanos, remember, tessera,
-    use_context,
+    Callback, Dp, FocusManager, LayoutCoordinates, Modifier, Px, PxPosition, RenderSlot, State,
+    accesskit::Role, current_frame_nanos, modifier::FocusModifierExt as _, receive_frame_nanos,
+    remember, tessera, use_context,
 };
 
 use super::{
@@ -390,10 +391,80 @@ fn article_tabs(
     selected: State<&'static str>,
     scroll: State<ScrollableController>,
     pages: Option<Vec<ArticlePage>>,
+    pinned: Option<State<bool>>,
+) {
+    let width = remember(|| Dp(900.0));
+    let pinned = if let Some(pinned) = pinned {
+        pinned
+    } else {
+        remember(|| false)
+    };
+    // Preserve the inline flow extent when the pinned navigation contracts.
+    boxed()
+        .alignment(Alignment::TopCenter)
+        .modifier(
+            Modifier::new()
+                .fill_max_width()
+                .height(Dp(88.0))
+                .on_layout_coordinates(move |coordinates: LayoutCoordinates| {
+                    let next = Dp::from(coordinates.local_size.width);
+                    if width.get() != next {
+                        width.set(next);
+                    }
+                }),
+        )
+        .children(move || {
+            let available = (width.get().0 - 16.0).max(0.0);
+            let navigation_width = if pinned.get() {
+                available.min(1024.0)
+            } else {
+                available
+            };
+            let corner = RoundedCorner::manual(Dp(40.0), 2.0);
+            spacer().modifier(
+                Modifier::new()
+                    .width(Dp(navigation_width))
+                    .height(Dp(if pinned.get() { 72.0 } else { 88.0 }))
+                    .background_with_shape(
+                        BACKGROUND,
+                        Shape::RoundedRectangle {
+                            top_left: RoundedCorner::manual(Dp::ZERO, 2.0),
+                            top_right: RoundedCorner::manual(Dp::ZERO, 2.0),
+                            bottom_left: corner,
+                            bottom_right: corner,
+                        },
+                    ),
+            );
+            let scheme = use_context::<MaterialTheme>().unwrap().get().color_scheme;
+            spacer().modifier(
+                Modifier::new()
+                    .width(Dp(navigation_width))
+                    .height(Dp(if pinned.get() { 63.0 } else { 79.0 }))
+                    .offset(Dp::ZERO, Dp(9.0))
+                    .shadow(
+                        &scheme,
+                        &ShadowArgs {
+                            elevation: if pinned.get() { Dp(1.0) } else { Dp::ZERO },
+                            shape: Shape::CAPSULE,
+                            ..Default::default()
+                        },
+                    )
+                    .background_with_shape(srgb(248, 241, 246), Shape::CAPSULE),
+            );
+            article_tab_row(selected, scroll, width, pinned).pages_optional(pages.clone());
+        });
+}
+
+#[tessera]
+fn article_tab_row(
+    selected: State<&'static str>,
+    scroll: State<ScrollableController>,
+    width: State<Dp>,
+    pinned: State<bool>,
+    pages: Option<Vec<ArticlePage>>,
 ) {
     media::load_fonts();
     let horizontal = remember(ScrollableController::new);
-    let width = remember(|| Dp(900.0));
     let contents = remember(|| [Dp(160.0); 4]);
     let available = ["Overview", "Specs", "Guidelines", "Accessibility"].map(|label| {
         label == "Specs"
@@ -434,29 +505,17 @@ fn article_tabs(
         });
     }
     let progress = motions.with(|motions| motions.map(|motion| motion.value()));
-    let minimum = contents.with(|contents| {
-        contents
-            .iter()
-            .enumerate()
-            .filter(|(index, _)| available[*index])
-            .map(|(_, width)| width.0 + 48.0)
-            .sum::<f64>()
-    });
-    let extra = ((width.get().0 - 16.0 - minimum)
-        / available.iter().filter(|available| **available).count() as f64)
-        .max(0.0);
+    let available_width = (width.get().0 - 16.0).max(0.0);
+    let navigation_width = if pinned.get() {
+        available_width.min(1024.0)
+    } else {
+        available_width
+    };
     row()
         .modifier(
             article_tablist_modifier(Modifier::new(), navigation)
-                .fill_max_width()
-                .on_globally_positioned(move |bounds: tessera_ui::PxRect| {
-                    let next = Dp::from_pixels_f32(bounds.width.to_f32());
-                    if width.get() != next {
-                        width.set(next);
-                    }
-                })
-                .padding(Padding::new(Dp(8.0), Dp(9.0), Dp(8.0), Dp::ZERO))
-                .background_with_shape(srgb(248, 241, 246), Shape::CAPSULE)
+                .width(Dp(navigation_width))
+                .offset(Dp::ZERO, Dp(9.0))
                 .horizontal_scroll(horizontal)
                 .semantics(SemanticsArgs {
                     role: Some(Role::TabList),
@@ -466,6 +525,22 @@ fn article_tabs(
                 }),
         )
         .children(move || {
+            let minimums =
+                contents.with(|contents| contents.map(|width| Dp(width.0 + 48.0).to_px()));
+            let available_width = (width.get().0 - 16.0).max(0.0);
+            let navigation_width = if pinned.get() {
+                available_width.min(1024.0)
+            } else {
+                available_width
+            };
+            let minimum: i32 = minimums
+                .iter()
+                .enumerate()
+                .filter(|(index, _)| available[*index])
+                .map(|(_, width)| width.0)
+                .sum();
+            let mut remaining = available.iter().filter(|available| **available).count() as i32;
+            let mut extra = (Dp(navigation_width).to_px().0 - minimum).max(0);
             for (index, label) in ARTICLE_TAB_TITLES.into_iter().enumerate() {
                 if label != "Specs"
                     && !pages
@@ -474,6 +549,11 @@ fn article_tabs(
                 {
                     continue;
                 }
+                // Share physical-pixel remainders instead of leaving rounded
+                // gaps.
+                let share = extra / remaining;
+                extra -= share;
+                remaining -= 1;
                 let active = selected.get() == label;
                 let interaction = remember(InteractionState::default);
                 let (hovered, pressed) =
@@ -484,10 +564,8 @@ fn article_tabs(
                     .modifier(article_tab_visual::focus_modifier(
                         article_tab_modifier(
                             Modifier::new()
-                                .width(Dp(contents.with(|contents| contents[index].0)
-                                    + 48.0
-                                    + extra))
-                                .height(Dp(79.0))
+                                .width(Dp::from(Px(minimums[index].0 + share)))
+                                .height(Dp(if pinned.get() { 63.0 } else { 79.0 }))
                                 .background_with_shape(
                                     article_tab_visual::background(false, hovered, pressed),
                                     Shape::CAPSULE,

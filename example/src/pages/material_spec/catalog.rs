@@ -577,7 +577,30 @@ mod tests {
 
     fn click(renderer: &mut HeadlessRenderer, mut bounds: Rect) {
         let viewport = renderer.physical_size();
-        if bounds.y1 > f64::from(viewport.height) || bounds.y0 < 64.0 {
+        let snapshot = renderer.accessibility_snapshot().unwrap();
+        let article_tab = snapshot.nodes.iter().any(|(_, node)| {
+            node.bounds() == Some(bounds)
+                && node.role() == Role::Tab
+                && node.label().is_some_and(|label| {
+                    ["Overview", "Specs", "Guidelines", "Accessibility"].contains(&label)
+                })
+        });
+        let content_top = if bounds.y1 <= 64.0 {
+            0.0
+        } else if article_tab {
+            64.0
+        } else {
+            snapshot
+                .nodes
+                .iter()
+                .find(|(_, node)| {
+                    node.role() == Role::TabList && node.label() == Some("Article sections")
+                })
+                .and_then(|(_, node)| node.bounds())
+                .filter(|bounds| bounds.y0 <= 73.0)
+                .map_or(64.0, |bounds| bounds.y1)
+        };
+        if bounds.y1 > f64::from(viewport.height) || bounds.y0 < content_top {
             let target = renderer
                 .accessibility_snapshot()
                 .unwrap()
@@ -1838,6 +1861,47 @@ mod tests {
 
     #[test]
     #[ignore = "requires a native GPU adapter"]
+    fn initial_app_bar_article_updates_its_variant_after_compact_resize() {
+        INITIAL_COMPONENT.set(
+            COMPONENTS
+                .iter()
+                .position(|component| component.title == "App bars"),
+        );
+        let mut renderer = HeadlessRenderer::new(
+            Box::new(fixture),
+            vec![Box::new(ComponentPipelines)],
+            HeadlessConfig {
+                width: 900,
+                height: 8000,
+                sample_count: 1,
+                frame_time: Duration::from_nanos(16_666_667),
+                ..Default::default()
+            },
+        )
+        .unwrap();
+        renderer.render_frames(8);
+        INITIAL_COMPONENT.set(None);
+        renderer.resize(390, 900);
+        renderer.render_frames(8);
+        renderer.resize(900, 8000);
+        renderer.render_frames(8);
+        assert_eq!(bounds(&renderer, "Configured app bar bar").height(), 136.0);
+        let small = control(&renderer, "Configured app bar Small");
+        click(&mut renderer, small.bounds().unwrap());
+        assert_eq!(
+            control(&renderer, "Configured app bar Small").toggled(),
+            Some(Toggled::True),
+            "The variant control must receive the real pointer click"
+        );
+        assert_eq!(
+            bounds(&renderer, "Configured app bar bar").height(),
+            64.0,
+            "The preview must remeasure after changing the variant"
+        );
+    }
+
+    #[test]
+    #[ignore = "requires a native GPU adapter"]
     fn every_directory_card_opens_its_article_and_returns_to_the_directory() {
         let mut renderer = HeadlessRenderer::new(
             Box::new(fixture),
@@ -2059,7 +2123,15 @@ mod tests {
                     assert_eq!(bounds(&renderer, "Configured app bar bar").height(), 136.0);
                     let small = control(&renderer, "Configured app bar Small");
                     click(&mut renderer, small.bounds().unwrap());
-                    assert_eq!(bounds(&renderer, "Configured app bar bar").height(), 64.0);
+                    assert_eq!(
+                        bounds(&renderer, "Configured app bar bar").height(),
+                        64.0,
+                        "small control bounds: {:?}, selected: {:?}, article tab bounds: {:?}, diagnostics: {:?}",
+                        small.bounds(),
+                        control(&renderer, "Configured app bar Small").toggled(),
+                        bounds(&renderer, "Article sections"),
+                        renderer.diagnostics()
+                    );
                     let large = control(&renderer, "Configured app bar Large flexible");
                     click(&mut renderer, large.bounds().unwrap());
                     assert_eq!(bounds(&renderer, "Configured app bar bar").height(), 152.0);
