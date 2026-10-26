@@ -35,6 +35,7 @@ const HEAT_TRACKING_WINDOW: u32 = 10;
 #[cfg(test)]
 thread_local! {
     pub(super) static BATCH_ALLOCATIONS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+    pub(super) static BATCH_UPLOADS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
     pub(super) static CACHE_BUILDS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
 }
 
@@ -287,12 +288,24 @@ impl ShapePipeline {
 
 impl DrawablePipeline<ShapeCommand> for ShapePipeline {
     fn begin_frame(&mut self, _: &FrameContext<'_>) {
+        #[cfg(test)]
+        BATCH_UPLOADS.set(0);
         self.uncached_batches.begin_frame();
         self.cached_batches.begin_frame();
         self.current_frame = self.current_frame.wrapping_add(1);
         self.heat_tracker.retain(|_, tracker| {
             self.current_frame.saturating_sub(tracker.last_seen_frame) < HEAT_TRACKING_WINDOW
         });
+    }
+
+    fn end_frame(&mut self, context: &FrameContext<'_>) {
+        let uncached = self.uncached_batches.finish_frame(context.queue);
+        let cached = self.cached_batches.finish_frame(context.queue);
+        tracing::debug!(
+            uploads = uncached.0 + cached.0,
+            bytes = uncached.1 + cached.1,
+            "shape_frame_uploads"
+        );
     }
 
     fn draw(&mut self, context: &mut DrawContext<ShapeCommand>) {
@@ -332,7 +345,6 @@ impl DrawablePipeline<ShapeCommand> for ShapePipeline {
                 if !pending_uncached.is_empty() {
                     self.draw_uncached_batch(
                         context.device,
-                        context.queue,
                         context.target_size,
                         context.render_pass,
                         context.commands,
@@ -347,7 +359,6 @@ impl DrawablePipeline<ShapeCommand> for ShapePipeline {
                     } else {
                         self.flush_cached_run(
                             context.device,
-                            context.queue,
                             context.target_size,
                             context.render_pass,
                             &mut pending_cached_run,
@@ -360,7 +371,6 @@ impl DrawablePipeline<ShapeCommand> for ShapePipeline {
             } else {
                 self.flush_cached_run(
                     context.device,
-                    context.queue,
                     context.target_size,
                     context.render_pass,
                     &mut pending_cached_run,
@@ -371,7 +381,6 @@ impl DrawablePipeline<ShapeCommand> for ShapePipeline {
 
         self.flush_cached_run(
             context.device,
-            context.queue,
             context.target_size,
             context.render_pass,
             &mut pending_cached_run,
@@ -380,7 +389,6 @@ impl DrawablePipeline<ShapeCommand> for ShapePipeline {
         if !pending_uncached.is_empty() {
             self.draw_uncached_batch(
                 context.device,
-                context.queue,
                 context.target_size,
                 context.render_pass,
                 context.commands,

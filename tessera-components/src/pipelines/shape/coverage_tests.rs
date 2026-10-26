@@ -1,9 +1,8 @@
-//! Native shape edge coverage regressions.
+//! Native shape coverage and shared-upload regressions.
 //!
 //! ## Usage
 //!
-//! Preserve opaque interior border pixels across sample counts, transforms and
-//! clips.
+//! Verify clipped, scaled and cached surfaces across repeated draw batches.
 
 use std::cell::Cell;
 
@@ -16,6 +15,9 @@ use crate::{boxed::boxed, modifier::ModifierExt as _, shape_def::Shape};
 
 struct Pipelines;
 
+const BATCH_COUNT: usize = 300;
+const VIEWPORT_WIDTH: u32 = 8 + BATCH_COUNT as u32 * 16;
+
 thread_local! {
     static DISTINCT: Cell<Option<State<bool>>> = const { Cell::new(None) };
 }
@@ -27,9 +29,9 @@ fn cache_clock_fixture() {
     boxed()
         .modifier(Modifier::new().fill_max_size())
         .children(move || {
-            for index in 0..15 {
+            for index in 0..BATCH_COUNT {
                 let color = if distinct.get() {
-                    Color::from_rgb((20 + index * 10) as f32 / 255.0, 0.4, 0.6)
+                    Color::from_rgb((20 + index % 15 * 10) as f32 / 255.0, 0.4, 0.6)
                 } else {
                     Color::from_rgb(0.8, 0.4, 0.6)
                 };
@@ -53,16 +55,16 @@ fn cache_clock_fixture() {
 
 #[test]
 #[ignore = "requires a native GPU adapter for cache generation across isolated draw batches"]
-fn shape_cache_heats_once_per_frame_across_many_batches() {
+fn shape_batches_share_uploads_and_preserve_cache_heat_and_pixels_across_buffers() {
     crate::test_utils::run_isolated_test(
-        "pipelines::shape::coverage_tests::shape_cache_heats_once_per_frame_across_many_batches",
+        "pipelines::shape::coverage_tests::shape_batches_share_uploads_and_preserve_cache_heat_and_pixels_across_buffers",
         || {
             for sample_count in [1, 4] {
                 let mut renderer = HeadlessRenderer::new(
                     Box::new(cache_clock_fixture),
                     vec![Box::new(Pipelines)],
                     HeadlessConfig {
-                        width: 248,
+                        width: VIEWPORT_WIDTH,
                         height: 24,
                         sample_count,
                         ..Default::default()
@@ -76,11 +78,30 @@ fn shape_cache_heats_once_per_frame_across_many_batches() {
                     0,
                     "repeated batches in one frame must not warm a transient shape"
                 );
+                assert!(
+                    super::pipeline::BATCH_UPLOADS.get() <= 2,
+                    "uncached batches must share frame uploads, got {}",
+                    super::pipeline::BATCH_UPLOADS.get()
+                );
+                let uncached = renderer.read_pixels().unwrap();
+                let first = pixel(&uncached, VIEWPORT_WIDTH, 10, 10);
+                assert_eq!(first[3], 255);
+                for index in 0..BATCH_COUNT {
+                    assert_eq!(
+                        pixel(&uncached, VIEWPORT_WIDTH, 10 + index * 16, 10),
+                        first,
+                        "uncached batch {index} must retain its own position across buffer boundaries"
+                    );
+                }
                 renderer.render_frames(7);
                 assert_eq!(
                     super::pipeline::CACHE_BUILDS.get(),
                     1,
                     "one stable shape must become cached across real frames"
+                );
+                assert!(
+                    super::pipeline::BATCH_UPLOADS.get() <= 2,
+                    "cached batches must share frame uploads"
                 );
                 DISTINCT.get().unwrap().set(true);
                 let before = super::pipeline::CACHE_BUILDS.get();
@@ -92,19 +113,36 @@ fn shape_cache_heats_once_per_frame_across_many_batches() {
                 );
                 let cached = renderer.read_pixels().unwrap();
                 let mut previous_red = None;
-                for index in 0..15 {
+                for index in 0..BATCH_COUNT {
                     let x = 10 + index * 16;
-                    let actual = pixel(&cached, 248, x, 10);
+                    let actual = pixel(&cached, VIEWPORT_WIDTH, x, 10);
                     assert_eq!(actual[3], 255);
-                    if let Some(previous) = previous_red {
+                    if index % 15 != 0
+                        && let Some(previous) = previous_red
+                    {
                         assert!(
                             actual[0] > previous,
                             "cached batch colors must remain distinct and ordered"
                         );
                     }
+                    assert_eq!(
+                        actual,
+                        pixel(&cached, VIEWPORT_WIDTH, 10 + index % 15 * 16, 10),
+                        "cached batch {index} must preserve texture and transform selection across buffers"
+                    );
                     previous_red = Some(actual[0]);
                 }
+                assert!(
+                    super::pipeline::BATCH_UPLOADS.get() <= 2,
+                    "distinct cached textures must share transform uploads"
+                );
+                let allocations = super::pipeline::BATCH_ALLOCATIONS.get();
                 renderer.render_frames(2);
+                assert_eq!(
+                    super::pipeline::BATCH_ALLOCATIONS.get(),
+                    allocations,
+                    "stable frame batches must reuse GPU buffers and bindings"
+                );
                 assert_eq!(renderer.read_pixels().unwrap(), cached);
             }
         },
