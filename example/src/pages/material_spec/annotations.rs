@@ -29,6 +29,43 @@ pub(super) type Geometry = BTreeMap<&'static str, PxRect>;
 
 pub(super) type PreciseGeometry = BTreeMap<&'static str, LayoutCoordinates>;
 
+pub(super) type SpaceGeometry = BTreeMap<&'static str, tessera_ui::FloatRect>;
+
+pub(super) fn watch_in_space(geometry: State<SpaceGeometry>, name: &'static str) -> Modifier {
+    let modifier = Modifier::new();
+    let modifier = if name == "figure" {
+        modifier.layout_coordinate_space()
+    } else {
+        modifier
+    };
+    modifier.on_layout_rect_in_space(move |rect| {
+        if geometry.is_alive()
+            && geometry.with(|geometry| geometry.get(name).copied()) != Some(rect)
+        {
+            geometry.with_mut(|geometry| {
+                geometry.insert(name, rect);
+            });
+        }
+    })
+}
+
+pub(super) fn space_geometry(geometry: &SpaceGeometry) -> BTreeMap<&'static str, Rect> {
+    geometry
+        .iter()
+        .map(|(&name, rect)| {
+            (
+                name,
+                Rect {
+                    x: Dp::from_pixels_f32(rect.x).0,
+                    y: Dp::from_pixels_f32(rect.y).0,
+                    w: Dp::from_pixels_f32(rect.width).0,
+                    h: Dp::from_pixels_f32(rect.height).0,
+                },
+            )
+        })
+        .collect()
+}
+
 #[derive(Default)]
 struct Observations {
     coordinates: PreciseGeometry,

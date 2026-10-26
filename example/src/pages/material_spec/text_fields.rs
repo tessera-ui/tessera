@@ -33,7 +33,7 @@ use tessera_ui::{
 
 use super::{
     ACCENT, BACKGROUND, INK,
-    annotations::{self, PreciseGeometry, Rect, watch_precise},
+    annotations::{self, Rect, SpaceGeometry, watch_in_space},
     article::{ArticlePage, SpecSection, article},
     gap, panel, spec_table, srgb, subheading, type_style,
 };
@@ -88,7 +88,7 @@ fn sample(
     error: Option<bool>,
     icons: Option<bool>,
     preview_width: Option<Dp>,
-    anatomy_geometry: Option<State<PreciseGeometry>>,
+    anatomy_geometry: Option<State<SpaceGeometry>>,
 ) {
     let initial = if populated.unwrap_or(true) {
         if anatomy_geometry.is_some() {
@@ -218,7 +218,7 @@ fn sample(
                     };
                     field = field
                         .modifier(if let Some(geometry) = anatomy_geometry {
-                            watch_precise(
+                            watch_in_space(
                                 geometry,
                                 if populated.unwrap_or(true) {
                                     "populated"
@@ -618,7 +618,7 @@ fn field_figure(outlined: bool, error: bool, multiline: bool, measurements: bool
         676.0,
         320.0,
         RenderSlot::new(move || {
-            let geometry = remember(PreciseGeometry::new);
+            let geometry = remember(SpaceGeometry::new);
             let controller = remember(|| {
                 let mut value = TextInputController::new(Dp(16.0), Some(Dp(24.0)));
                 value.set_text("Input");
@@ -630,7 +630,7 @@ fn field_figure(outlined: bool, error: bool, multiline: bool, measurements: bool
             boxed()
                 .alignment(Alignment::Center)
                 .modifier(
-                    watch_precise(geometry, "figure")
+                    watch_in_space(geometry, "figure")
                         .fill_max_width()
                         .height(Dp(320.0))
                         .background_with_shape(
@@ -648,7 +648,7 @@ fn field_figure(outlined: bool, error: bool, multiline: bool, measurements: bool
                                 TextFieldBuilder::filled()
                             };
                             let mut field = field
-                                .modifier(watch_precise(geometry, "field").fill_max_width())
+                                .modifier(watch_in_space(geometry, "field").fill_max_width())
                                 .min_width(Dp::ZERO)
                                 .min_height(Dp(if multiline { 96.0 } else { 56.0 }))
                                 .controller(controller)
@@ -714,7 +714,7 @@ fn field_figure(outlined: bool, error: bool, multiline: bool, measurements: bool
                                 })
                                 .style(type_style(12.0, 16.0))
                                 .modifier(
-                                    watch_precise(geometry, "support")
+                                    watch_in_space(geometry, "support")
                                         .padding_symmetric(Dp(16.0), Dp::ZERO)
                                         .semantics(SemanticsArgs {
                                             role: Some(if error {
@@ -737,11 +737,8 @@ fn field_figure(outlined: bool, error: bool, multiline: bool, measurements: bool
 }
 
 #[tessera]
-fn field_annotations(geometry: State<PreciseGeometry>, measurements: bool) {
-    field_annotation_geometry(
-        geometry.with(annotations::relative_precise_geometry),
-        measurements,
-    );
+fn field_annotations(geometry: State<SpaceGeometry>, measurements: bool) {
+    field_annotation_geometry(geometry.with(annotations::space_geometry), measurements);
 }
 
 #[tessera]
@@ -1261,12 +1258,12 @@ fn field_container_diagram() {
         676.0,
         425.0,
         RenderSlot::new(move || {
-            let geometry = remember(PreciseGeometry::new);
+            let geometry = remember(SpaceGeometry::new);
             let scale = 1.0;
             let scheme = use_context::<MaterialTheme>().unwrap().get().color_scheme;
             boxed()
                 .modifier(
-                    watch_precise(geometry, "figure")
+                    watch_in_space(geometry, "figure")
                         .fill_max_width()
                         .height(Dp(425.0 * scale))
                         .background_with_shape(
@@ -1329,12 +1326,12 @@ fn field_error_icon_diagram() {
         676.0,
         300.0,
         RenderSlot::new(move || {
-            let geometry = remember(PreciseGeometry::new);
+            let geometry = remember(SpaceGeometry::new);
             let scale = 1.0;
             let scheme = use_context::<MaterialTheme>().unwrap().get().color_scheme;
             boxed()
                 .modifier(
-                    watch_precise(geometry, "figure")
+                    watch_in_space(geometry, "figure")
                         .fill_max_width()
                         .height(Dp(300.0 * scale))
                         .clip_to_bounds()
@@ -1462,12 +1459,12 @@ fn field_icons_diagram() {
         676.0,
         320.0,
         RenderSlot::new(move || {
-            let geometry = remember(PreciseGeometry::new);
+            let geometry = remember(SpaceGeometry::new);
             let scale = 1.0;
             let scheme = use_context::<MaterialTheme>().unwrap().get().color_scheme;
             boxed()
                 .modifier(
-                    watch_precise(geometry, "figure")
+                    watch_in_space(geometry, "figure")
                         .fill_max_width()
                         .height(Dp(320.0 * scale))
                         .background_with_shape(
@@ -1702,12 +1699,12 @@ fn field_anatomy_pair(outlined: bool) {
         1024.0,
         240.0,
         RenderSlot::new(move || {
-            let geometry = remember(PreciseGeometry::new);
+            let geometry = remember(SpaceGeometry::new);
             let scheme = use_context::<MaterialTheme>().unwrap().get().color_scheme;
             boxed()
                 .alignment(Alignment::Center)
                 .modifier(
-                    watch_precise(geometry, "figure")
+                    watch_in_space(geometry, "figure")
                         .fill_max_width()
                         .height(Dp(240.0))
                         .background_with_shape(
@@ -1768,7 +1765,7 @@ fn field_anatomy_pair(outlined: bool) {
 }
 
 #[tessera]
-fn field_anatomy_item(populated: bool, outlined: bool, geometry: State<PreciseGeometry>) {
+fn field_anatomy_item(populated: bool, outlined: bool, geometry: State<SpaceGeometry>) {
     let controller = remember(|| {
         let mut value = TextInputController::new(Dp(16.0), Some(Dp(24.0)));
         value.set_text(if populated { "Input text" } else { "" });
@@ -1792,7 +1789,7 @@ fn field_anatomy_item(populated: bool, outlined: bool, geometry: State<PreciseGe
             };
             let mut field = field
                 .modifier(
-                    watch_precise(geometry, if populated { "populated" } else { "empty" })
+                    watch_in_space(geometry, if populated { "populated" } else { "empty" })
                         .fill_max_width(),
                 )
                 .min_width(Dp::ZERO)
@@ -1831,11 +1828,8 @@ fn field_anatomy_item(populated: bool, outlined: bool, geometry: State<PreciseGe
 }
 
 #[tessera]
-fn field_pair_annotations(geometry: State<PreciseGeometry>, outlined: bool) {
-    field_pair_annotation_geometry(
-        geometry.with(annotations::relative_precise_geometry),
-        outlined,
-    );
+fn field_pair_annotations(geometry: State<SpaceGeometry>, outlined: bool) {
+    field_pair_annotation_geometry(geometry.with(annotations::space_geometry), outlined);
 }
 
 #[tessera]
@@ -2068,12 +2062,12 @@ fn specs_anatomy_panel(outlined: bool, dark: bool) {
         1024.0,
         300.0,
         RenderSlot::new(move || {
-            let geometry = remember(PreciseGeometry::new);
+            let geometry = remember(SpaceGeometry::new);
             let scheme = use_context::<MaterialTheme>().unwrap().get().color_scheme;
             boxed()
                 .alignment(Alignment::Center)
                 .modifier(
-                    watch_precise(geometry, "figure")
+                    watch_in_space(geometry, "figure")
                         .fill_max_width()
                         .height(Dp(300.0))
                         .background(scheme.surface_container_low)
@@ -2705,7 +2699,7 @@ fn field_measurements(outlined: bool, variant: usize) {
         1024.0,
         300.0,
         RenderSlot::new(move || {
-            let geometry = remember(PreciseGeometry::new);
+            let geometry = remember(SpaceGeometry::new);
             let display = remember(|| MeasurementDisplay {
                 nonempty: [false, variant != 2],
                 focused: [false; 2],
@@ -2714,7 +2708,7 @@ fn field_measurements(outlined: bool, variant: usize) {
             boxed()
                 .alignment(Alignment::Center)
                 .modifier(
-                    watch_precise(geometry, "figure")
+                    watch_in_space(geometry, "figure")
                         .fill_max_width()
                         .height(Dp(300.0))
                         .background_with_shape(
@@ -2752,7 +2746,7 @@ fn field_measurement_item(
     outlined: bool,
     variant: usize,
     populated: bool,
-    geometry: State<PreciseGeometry>,
+    geometry: State<SpaceGeometry>,
     display: State<MeasurementDisplay>,
 ) {
     let initial = if populated && variant != 2 {
@@ -2788,7 +2782,7 @@ fn field_measurement_item(
                     };
                     let mut field = field
                         .modifier(
-                            watch_precise(
+                            watch_in_space(
                                 geometry,
                                 if populated {
                                     "populated-field"
@@ -2839,7 +2833,7 @@ fn field_measurement_item(
                         field = field.leading_icon(move || {
                             boxed()
                                 .modifier(
-                                    watch_precise(
+                                    watch_in_space(
                                         geometry,
                                         if populated {
                                             "populated-leading"
@@ -2896,7 +2890,7 @@ fn field_measurement_item(
                             .style(type_style(12.0, 16.0))
                             .color(scheme.on_surface_variant)
                             .modifier(
-                                watch_precise(
+                                watch_in_space(
                                     geometry,
                                     if populated {
                                         "populated-support"
@@ -2916,7 +2910,7 @@ fn field_measurement_item(
                             );
                         if populated {
                             spacer()
-                                .modifier(watch_precise(geometry, "counter-gap").width(Dp(16.0)));
+                                .modifier(watch_in_space(geometry, "counter-gap").width(Dp(16.0)));
                             text()
                                 .content(format!(
                                     "{}/20",
@@ -2924,7 +2918,7 @@ fn field_measurement_item(
                                 ))
                                 .style(type_style(12.0, 16.0))
                                 .color(scheme.on_surface_variant)
-                                .modifier(watch_precise(geometry, "counter").semantics(
+                                .modifier(watch_in_space(geometry, "counter").semantics(
                                     SemanticsArgs {
                                         role: Some(Role::Label),
                                         label: Some(format!(
@@ -3013,13 +3007,13 @@ fn measurement_axis(
 
 #[tessera]
 fn field_measurement_annotations(
-    geometry: State<PreciseGeometry>,
+    geometry: State<SpaceGeometry>,
     outlined: bool,
     variant: usize,
     display: State<MeasurementDisplay>,
 ) {
     field_measurement_annotation_geometry(
-        geometry.with(annotations::relative_precise_geometry),
+        geometry.with(annotations::space_geometry),
         outlined,
         variant,
         display.get(),
