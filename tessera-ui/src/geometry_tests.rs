@@ -682,6 +682,124 @@ impl PointerInputModifierNode for ObserveInput {
     }
 }
 
+#[derive(Clone, PartialEq)]
+struct ResponsiveInputStage(State<ComputedData>);
+
+impl LayoutModifierNode for ResponsiveInputStage {
+    fn measure(
+        &self,
+        scope: &mut MeasureScope<'_>,
+    ) -> Result<LayoutResult, crate::MeasurementError> {
+        let child = scope.children()[0].measure(scope, &Constraint::NONE)?;
+        let mut result = LayoutResult::new(self.0.get());
+        result.place_child(child, PxPosition::ZERO);
+        Ok(result)
+    }
+}
+
+#[crate::tessera(crate)]
+fn dynamic_scale_input_fixture() {
+    let scale = crate::remember(|| 1.0_f32);
+    let visible = crate::remember(|| true);
+    let size = crate::remember(|| ComputedData {
+        width: Px(48),
+        height: Px(48),
+    });
+    let stage_size = crate::remember(|| ComputedData {
+        width: Px(200),
+        height: Px(80),
+    });
+    CONTENT_SIZE.set(Some(stage_size));
+    let content = crate::RenderSlot::new(move || {
+        layout()
+            .policy(SizeOnlyContent(size))
+            .modifier(Modifier::new().push_pointer_input(ObserveInput(true)));
+    });
+    layout().policy(SizeOnlyRoot(visible)).child(move || {
+        layout()
+            .policy(ResponsiveInputStage(stage_size))
+            .modifier(Modifier::new().on_layout_coordinates(
+                move |coordinates: crate::LayoutCoordinates| {
+                    let next = coordinates.local_size.width.0 as f32 / 200.0;
+                    if scale.get() != next {
+                        scale.set(next);
+                    }
+                },
+            ))
+            .child(move || {
+                scaled_box(scale.get()).child_shared(content);
+            });
+    });
+}
+
+#[test]
+fn dynamic_ancestor_scale_updates_unobserved_pointer_coordinates_and_scroll_units() {
+    {
+        let mut previous = start_layout_test_session(
+            layout_test(dynamic_scale_input_fixture).viewport_px(300, 200),
+        );
+        pump_layout_test_session(&mut previous, 0);
+    }
+    INPUT.with_borrow_mut(Vec::clear);
+    let mut session =
+        start_layout_test_session(layout_test(dynamic_scale_input_fixture).viewport_px(300, 200));
+    pump_layout_test_session(&mut session, 0);
+    for (index, (width, scale, x, y, local_delta)) in [
+        (200, 1.0, 50.25, 44.5, 12.0),
+        (300, 1.5, 70.25, 56.5, 8.0),
+        (100, 0.5, 30.25, 32.5, 24.0),
+        (200, 1.0, 50.25, 44.5, 12.0),
+    ]
+    .into_iter()
+    .enumerate()
+    {
+        CONTENT_SIZE.get().unwrap().set(ComputedData {
+            width: Px(width),
+            height: Px(80),
+        });
+        let frame = (index as u64 * 4 + 1) * 16_666_667;
+        pump_layout_test_session(&mut session, frame);
+        pump_layout_test_session(&mut session, frame + 16_666_667);
+        pump_layout_test_session(&mut session, frame + 33_333_334);
+        INPUT.with_borrow_mut(Vec::clear);
+        let position = PxPosition::from_f32_xy(x, y);
+        let scroll = PointerChange::new(
+            Instant::now(),
+            crate::MOUSE_POINTER_ID,
+            CursorEventContent::Scroll(ScrollEventContent {
+                delta_x: 0.0,
+                delta_y: 12.0,
+                unit: ScrollDeltaUnit::Pixel,
+                source: ScrollEventSource::Wheel,
+            }),
+            GestureState::default(),
+        )
+        .with_position(position);
+        pump_layout_test_session_with_input(
+            &mut session,
+            frame + 50_000_001,
+            vec![scroll],
+            Some(position),
+        );
+        let samples = INPUT.with_borrow(Clone::clone);
+        assert_eq!(samples.len(), 1, "Input delivery at scale {scale}");
+        assert_eq!(
+            samples[0].1,
+            Some(PxPosition::from_f32_xy(40.0, 24.0)),
+            "Local pointer coordinates at scale {scale}"
+        );
+        assert_eq!(
+            samples[0].2,
+            Some(position),
+            "Canonical window pointer at scale {scale}"
+        );
+        assert_eq!(
+            samples[0].3, local_delta,
+            "Local scroll units at scale {scale}"
+        );
+    }
+}
+
 #[crate::tessera(crate)]
 fn scale_fixture() {
     layout()

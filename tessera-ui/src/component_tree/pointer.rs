@@ -106,6 +106,14 @@ impl PointerIndex {
         removed.extend(std::mem::take(&mut self.removed));
         let structural = std::mem::take(&mut self.changed);
         let geometry_count = changed.len();
+        // Retire removals before registering current structural nodes.
+        // A tree reset can reuse identities present in both journals.
+        for &id in &removed {
+            self.eligible.remove(&id);
+            self.remove(id);
+            self.hovered.remove(&id);
+            self.pending.remove(&id);
+        }
         for &id in &structural {
             let eligible = tree
                 .get(id)
@@ -162,12 +170,6 @@ impl PointerIndex {
                 ?structural_nodes,
                 "pointer_index_invalidations"
             );
-        }
-        for &id in &removed {
-            self.eligible.remove(&id);
-            self.remove(id);
-            self.hovered.remove(&id);
-            self.pending.remove(&id);
         }
         record_frame_stage(&mut stage_timer, "pointer_invalidations");
         for &id in &changed {
