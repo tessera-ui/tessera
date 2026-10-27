@@ -553,6 +553,7 @@ struct TooltipLayout {
     open: bool,
     anchor: tessera_ui::FloatRect,
     origin: Arc<RwLock<tessera_ui::LayoutCoordinates>>,
+    visible: State<Option<tessera_ui::FloatRect>>,
     placement: TooltipPlacement,
 }
 
@@ -565,13 +566,18 @@ impl PartialEq for TooltipLayout {
 fn popup_position(
     anchor: tessera_ui::FloatRect,
     size: ComputedData,
-    available: ComputedData,
+    available: tessera_ui::FloatRect,
     placement: TooltipPlacement,
 ) -> PxPosition {
     let gap = Dp(4.0).to_pixels_f32();
     let margin = Dp(8.0).to_pixels_f32();
-    let width = available.width.to_f32().max(0.0);
-    let height = available.height.to_f32().max(0.0);
+    let anchor = tessera_ui::FloatRect {
+        x: anchor.x - available.x,
+        y: anchor.y - available.y,
+        ..anchor
+    };
+    let width = available.width.max(0.0);
+    let height = available.height.max(0.0);
     let popup_width = size.width.to_f32();
     let popup_height = size.height.to_f32();
     let above = anchor.y - gap - popup_height;
@@ -601,14 +607,16 @@ fn popup_position(
         ),
     };
     PxPosition::from_f32_xy(
-        x.clamp(
-            margin.min(width),
-            (width - popup_width - margin).max(margin.min(width)),
-        ),
-        y.clamp(
-            margin.min(height),
-            (height - popup_height - margin).max(margin.min(height)),
-        ),
+        available.x
+            + x.clamp(
+                margin.min(width),
+                (width - popup_width - margin).max(margin.min(width)),
+            ),
+        available.y
+            + y.clamp(
+                margin.min(height),
+                (height - popup_height - margin).max(margin.min(height)),
+            ),
     )
 }
 
@@ -619,21 +627,24 @@ impl tessera_ui::LayoutModifierNode for TooltipLayout {
         let constraint = input.parent_constraint().without_min();
         let main = children[0].measure(input, &constraint)?;
         result.place_child(children[0], PxPosition::ZERO);
-        if self.open {
+        if self.open
+            && let Some(visible) = self.visible.get()
+        {
+            let origin = *self.origin.read();
+            let visible = origin.local_to_window.inverse_rect(visible);
             let constraint = tessera_ui::Constraint::new(
                 AxisConstraint::new(
                     Px::ZERO,
-                    Some((main.width - Dp(16.0).to_px()).max(Px::ZERO)),
+                    Some((Px(visible.width.floor() as i32) - Dp(16.0).to_px()).max(Px::ZERO)),
                 ),
                 AxisConstraint::new(
                     Px::ZERO,
-                    Some((main.height - Dp(16.0).to_px()).max(Px::ZERO)),
+                    Some((Px(visible.height.floor() as i32) - Dp(16.0).to_px()).max(Px::ZERO)),
                 ),
             );
             let popup = children[1].measure(input, &constraint)?;
-            let origin = *self.origin.read();
             let anchor = origin.local_to_window.inverse_rect(self.anchor);
-            let position = popup_position(anchor, popup.size(), main.size(), self.placement);
+            let position = popup_position(anchor, popup.size(), visible, self.placement);
             result.place_child(children[1], position);
         }
         Ok(result.with_size(main.size()))
@@ -780,7 +791,14 @@ pub fn tooltip_provider(
         .push_keyboard_input(TooltipRestoreInput { controller })
         .push_pointer_final_input(TooltipRestoreInput { controller });
     let bounds = Arc::clone(&origin);
-    modifier = modifier.on_layout_coordinates(move |coordinates| *bounds.write() = coordinates);
+    let visible = remember(|| None::<tessera_ui::FloatRect>);
+    modifier = modifier
+        .on_layout_coordinates(move |coordinates| *bounds.write() = coordinates)
+        .on_visible_window_bounds(move |bounds| {
+            if visible.get() != bounds {
+                visible.set(bounds);
+            }
+        });
     provide_context(
         || TooltipContext { controller, active },
         || {
@@ -790,6 +808,7 @@ pub fn tooltip_provider(
                     open,
                     anchor,
                     origin,
+                    visible,
                     placement: placement.unwrap_or_default(),
                 })
                 .child(move || {
@@ -1033,7 +1052,10 @@ fn tooltip_panel(
 mod tests {
     use std::cell::Cell;
 
-    use tessera_ui::headless::{HeadlessConfig, HeadlessRenderer};
+    use tessera_ui::{
+        accesskit::{Action, ActionRequest, TreeId},
+        headless::{HeadlessConfig, HeadlessRenderer},
+    };
 
     use crate::{boxed::boxed, theme::material_theme};
 
@@ -1153,9 +1175,11 @@ mod tests {
 
     #[test]
     fn placement_flips_at_each_edge_and_clamps_to_window_margins() {
-        let available = ComputedData {
-            width: Px(400),
-            height: Px(300),
+        let available = tessera_ui::FloatRect {
+            x: 0.0,
+            y: 0.0,
+            width: 400.0,
+            height: 300.0,
         };
         let popup = ComputedData {
             width: Px(120),
@@ -1213,7 +1237,10 @@ mod tests {
     }
 
     thread_local! {
-        static POPUP_BOUNDS: Cell<Option<PxRect>> = const { Cell::new(None) };
+        static VISIBLE_HOST: Cell<Option<tessera_ui::FloatRect>> = const { Cell::new(None) };
+        static CLIP_GEOMETRY: Cell<Option<tessera_ui::LayoutCoordinates>> = const { Cell::new(None) };
+        static HOST_GEOMETRY: Cell<Option<tessera_ui::LayoutCoordinates>> = const { Cell::new(None) };
+        static POPUP_BOUNDS: Cell<Option<tessera_ui::FloatRect>> = const { Cell::new(None) };
         static CONTROLLER: Cell<Option<State<TooltipController>>> = const { Cell::new(None) };
         static SETTINGS: Cell<Option<State<Settings>>> = const { Cell::new(None) };
         static CLICKS: Cell<Option<State<u32>>> = const { Cell::new(None) };
@@ -1237,7 +1264,7 @@ mod tests {
         material_theme().child(move || {
             let config = settings.get();
             let popup_modifier = Modifier::new()
-                .on_globally_positioned(|bounds| POPUP_BOUNDS.set(Some(bounds)));
+                .on_globally_positioned_precise(|bounds| POPUP_BOUNDS.set(Some(bounds)));
             let popup_modifier = if let Some(width) = config.popup_width {
                 popup_modifier.width(width)
             } else {
@@ -1309,6 +1336,140 @@ mod tests {
         PxPosition::from_f32_xy(rect.x + rect.width * 0.5, rect.y + rect.height * 0.5)
     }
 
+    #[tessera]
+    fn clipped_host_fixture(scale: f32) {
+        let controller = remember(|| {
+            let mut controller = TooltipController::new();
+            controller.show();
+            controller
+        });
+        CONTROLLER.set(Some(controller));
+        tessera_ui::scaled_box(scale).child(move || {
+            material_theme().child(move || {
+                boxed()
+                    .modifier(
+                        Modifier::new()
+                            .clip_to_bounds()
+                            .required_size(Dp(400.0), Dp(300.0))
+                            .on_layout_coordinates(|coordinates| {
+                                CLIP_GEOMETRY.set(Some(coordinates))
+                            }),
+                    )
+                    .children(move || {
+                        tooltip_provider("This explanation must remain visible above the trigger.")
+                            .controller(controller)
+                            .variant(TooltipVariant::Rich)
+                            .action_label("Got it")
+                            .placement(TooltipPlacement::Below)
+                            .modifier(
+                                Modifier::new()
+                                    .required_size(Dp(400.0), Dp(1000.0))
+                                    .on_visible_window_bounds(|bounds| VISIBLE_HOST.set(bounds))
+                                    .on_layout_coordinates(|coordinates| {
+                                        HOST_GEOMETRY.set(Some(coordinates))
+                                    }),
+                            )
+                            .child(move || {
+                                boxed()
+                                    .modifier(Modifier::new().required_size(Dp(400.0), Dp(1000.0)))
+                                    .children(move || {
+                                        tooltip_anchor()
+                                            .controller(controller)
+                                            .modifier(Modifier::new().offset(Dp(120.0), Dp(240.0)))
+                                            .child(|| {
+                                                button().child(|| {
+                                                    crate::text::text().content("Trigger");
+                                                });
+                                            });
+                                    });
+                            });
+                    });
+            });
+        });
+    }
+
+    #[test]
+    #[ignore = "requires a native GPU adapter"]
+    fn gpu_rich_tooltip_flips_inside_clipped_scaled_hosts_and_its_action_remains_available() {
+        for scale in [1.0, 0.75] {
+            let mut renderer = HeadlessRenderer::new(
+                Box::new(move || {
+                    clipped_host_fixture(scale);
+                }),
+                vec![Box::new(crate::TesseraComponents)],
+                HeadlessConfig {
+                    width: 400,
+                    height: 320,
+                    ..Default::default()
+                },
+            )
+            .unwrap();
+            renderer.render_frames(6);
+            let tree = renderer.accessibility_snapshot().unwrap();
+            let popup = tree
+                .nodes
+                .iter()
+                .find(|(_, node)| node.role() == Role::Dialog)
+                .expect("placed rich tooltip")
+                .1
+                .bounds()
+                .unwrap();
+            let anchor = CONTROLLER
+                .get()
+                .unwrap()
+                .with(|controller| controller.anchor);
+            assert_eq!(
+                VISIBLE_HOST.get(),
+                Some(tessera_ui::FloatRect {
+                    x: 0.0,
+                    y: 0.0,
+                    width: 400.0 * scale,
+                    height: 300.0 * scale,
+                }),
+                "the overflow host must be clipped by its actual scaled ancestor"
+            );
+
+            assert!(popup.y0 >= 8.0 * f64::from(scale) - 1.0, "{popup:?}");
+            assert!(
+                popup.y1 <= f64::from(anchor.y) - 4.0 * f64::from(scale) + 1.0,
+                "a preferred-below popup must flip above the bottom-edge trigger: {popup:?}, {anchor:?}, visible {:?}, host {:?}, clip {:?}",
+                VISIBLE_HOST.get(),
+                HOST_GEOMETRY.get(),
+                CLIP_GEOMETRY.get()
+            );
+            assert!(popup.y1 <= 300.0 * f64::from(scale), "{popup:?}");
+            renderer.resize(400, 200);
+            renderer.render_frames(6);
+            let tree = renderer.accessibility_snapshot().unwrap();
+            let resized = tree
+                .nodes
+                .iter()
+                .find(|(_, node)| node.role() == Role::Dialog)
+                .unwrap()
+                .1
+                .bounds()
+                .unwrap();
+            assert!(
+                resized.y1 <= 200.0 - 8.0 * f64::from(scale) + 1.0,
+                "window resize must update visible bounds even when the host keeps its size: {resized:?}"
+            );
+            let action = tree
+                .nodes
+                .iter()
+                .find(|(_, node)| node.role() == Role::Button && node.label() == Some("Got it"))
+                .expect("tooltip action")
+                .0;
+            assert!(renderer.dispatch_accessibility_action(ActionRequest {
+                action: Action::Click,
+                target_node: action,
+                data: None,
+                target_tree: TreeId::ROOT,
+            }));
+            renderer.render_frames(4);
+            assert!(!CONTROLLER.get().unwrap().with(TooltipController::is_open));
+        }
+    }
+
     #[test]
     #[ignore = "requires a native GPU adapter"]
     fn gpu_hover_restores_pixels_preserves_focus_and_updates_content_and_variant() {
@@ -1345,7 +1506,7 @@ mod tests {
             .bounds()
             .expect("popup bounds");
         assert_eq!(requested.width(), 312.0);
-        assert_eq!(POPUP_BOUNDS.get().expect("observed popup").width.0, 312);
+        assert_eq!(POPUP_BOUNDS.get().expect("observed popup").width, 312.0);
 
         settings.with_mut(|settings| settings.popup_width = None);
         renderer.render_frames(4);
@@ -1361,7 +1522,7 @@ mod tests {
         assert!(natural.width() >= 40.0 && natural.width() <= 320.0);
         assert!(natural.width() < requested.width());
         assert_eq!(
-            POPUP_BOUNDS.get().expect("observed popup").width.0 as f64,
+            POPUP_BOUNDS.get().expect("observed popup").width as f64,
             natural.width()
         );
     }
@@ -1397,10 +1558,10 @@ mod tests {
         let observed = POPUP_BOUNDS
             .get()
             .expect("popup modifier observes the actual container");
-        assert_eq!(observed.x.0 as f64, bounds.x0);
-        assert_eq!(observed.y.0 as f64, bounds.y0);
-        assert_eq!(observed.width.0 as f64, bounds.width());
-        assert_eq!(observed.height.0 as f64, bounds.height());
+        assert_eq!(observed.x as f64, bounds.x0);
+        assert_eq!(observed.y as f64, bounds.y0);
+        assert_eq!(observed.width as f64, bounds.width());
+        assert_eq!(observed.height as f64, bounds.height());
         assert!(bounds.x1 - bounds.x0 <= 200.0);
         assert!(bounds.y1 - bounds.y0 >= 24.0);
         let trigger = tree
