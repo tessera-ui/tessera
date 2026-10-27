@@ -10,9 +10,10 @@ use tessera_foundation::gesture::{DragAxis, DragRecognizer, DragSettings};
 use tessera_ui::{
     AccessibilityActionHandler, AccessibilityNode, AxisConstraint, ClipRegion, ClipShape,
     ComputedData, Constraint, Dp, DrawModifierContent, DrawModifierContext, DrawModifierNode,
-    FocusProperties, FocusRequester, KeyboardInput, KeyboardInputModifierNode, LayoutResult,
-    MeasurementError, Modifier, PointerEventPass, PointerInput, PointerInputModifierNode, Px,
-    PxPosition, RenderSlotWith, SemanticsModifierNode, State,
+    FocusManager, FocusProperties, FocusRequester, FocusScopeNode, KeyboardInput,
+    KeyboardInputModifierNode, LayoutResult, MeasurementError, Modifier, PointerEventPass,
+    PointerInput, PointerInputModifierNode, Px, PxPosition, RenderSlotWith, SemanticsModifierNode,
+    State,
     accesskit::{Action, Role},
     dp::scale_factor,
     key,
@@ -30,6 +31,7 @@ use crate::{
 use strategy::{Strategy, StrategyConfig};
 use variable::normalized_ratio;
 
+mod focus;
 mod strategy;
 mod variable;
 
@@ -515,7 +517,13 @@ impl tessera_ui::LayoutModifierNode for CarouselLayout {
                 .binary_search_by_key(&index, |mask| mask.0)
                 .ok()
                 .map(|position| masks[position].1)
-                .unwrap_or(-item_size * 2.0);
+                .unwrap_or(
+                    if vertical {
+                        height.to_f32()
+                    } else {
+                        width.to_f32()
+                    } * 0.5,
+                );
             let center = if self.reverse {
                 (if vertical {
                     height.to_f32()
@@ -567,7 +575,13 @@ impl tessera_ui::LayoutModifierNode for CarouselLayout {
                 .binary_search_by_key(&index, |mask| mask.0)
                 .ok()
                 .map(|position| masks[position].1)
-                .unwrap_or(-item_size * 2.0);
+                .unwrap_or(
+                    if vertical {
+                        input.size().height.to_f32()
+                    } else {
+                        input.size().width.to_f32()
+                    } * 0.5,
+                );
             let center = if self.reverse {
                 (if vertical {
                     input.size().height.to_f32()
@@ -649,6 +663,7 @@ struct CarouselInput {
     reverse: bool,
     vertical: bool,
     behavior: CarouselFlingBehavior,
+    navigation: focus::Navigation,
 }
 
 impl PointerInputModifierNode for CarouselInput {
@@ -759,10 +774,7 @@ impl PointerInputModifierNode for CarouselInput {
 
 impl KeyboardInputModifierNode for CarouselInput {
     fn on_keyboard_input(&self, mut input: KeyboardInput<'_>) {
-        use winit::{
-            event::ElementState,
-            keyboard::{Key, NamedKey},
-        };
+        use winit::{event::ElementState, keyboard::Key};
 
         if !self.enabled
             || input.key_modifiers.control_key()
@@ -775,56 +787,18 @@ impl KeyboardInputModifierNode for CarouselInput {
             if event.state != ElementState::Pressed {
                 continue;
             }
-            let Some(count) = self
-                .controller
-                .with(|state| state.config.map(|config| config.count))
-            else {
-                continue;
-            };
-            let current = self.controller.with(CarouselController::current_item);
-            let target = match &event.logical_key {
-                Key::Named(NamedKey::Home) => 0,
-                Key::Named(NamedKey::End) => count.saturating_sub(1),
-                Key::Named(key)
-                    if *key
-                        == if self.vertical {
-                            NamedKey::ArrowDown
-                        } else {
-                            NamedKey::ArrowRight
-                        } =>
-                {
-                    if self.reverse {
-                        current.saturating_sub(1)
-                    } else {
-                        current.saturating_add(1).min(count.saturating_sub(1))
-                    }
-                }
-                Key::Named(key)
-                    if *key
-                        == if self.vertical {
-                            NamedKey::ArrowUp
-                        } else {
-                            NamedKey::ArrowLeft
-                        } =>
-                {
-                    if self.reverse {
-                        current.saturating_add(1).min(count.saturating_sub(1))
-                    } else {
-                        current.saturating_sub(1)
-                    }
-                }
-                _ => continue,
-            };
-            if self
-                .controller
-                .with(|state| state.navigation_required(target))
+            if let Key::Named(key) = event.logical_key
+                && self.navigation.navigate(
+                    self.controller,
+                    key,
+                    self.vertical,
+                    self.reverse,
+                    input.key_modifiers.shift_key(),
+                )
             {
-                self.controller
-                    .with_mut(|state| state.animate_to_item(target));
-                self.focus.request_focus();
                 input.block_keyboard();
+                break;
             }
-            break;
         }
     }
 }
@@ -902,18 +876,24 @@ struct CarouselRenderState {
     content: Option<RenderSlotWith<CarouselItemInfo>>,
 }
 
-fn visible_indices(state: &CarouselController, count: usize) -> Vec<usize> {
-    if state.strategy.is_some() {
+fn item_indices(state: &CarouselController, count: usize, retained: Option<usize>) -> Vec<usize> {
+    let mut indices = if state.strategy.is_some() {
         state
             .masks
             .iter()
             .map(|mask| mask.0)
             .filter(|index| *index < count)
-            .collect()
+            .collect::<Vec<_>>()
     } else {
         (state.current_item.saturating_sub(2)..state.current_item.saturating_add(6).min(count))
             .collect()
+    };
+    if let Some(retained) = retained.filter(|index| *index < count)
+        && let Err(position) = indices.binary_search(&retained)
+    {
+        indices.insert(position, retained);
     }
+    indices
 }
 
 #[tessera]
@@ -921,7 +901,13 @@ fn carousel_item(
     index: usize,
     controller: State<CarouselController>,
     render_state: State<CarouselRenderState>,
+    navigation: focus::Navigation,
 ) {
+    let scope = remember(FocusScopeNode::new).get();
+    let _lease = remember(move || focus::ItemLease { navigation, index });
+    navigation.items.with(|items| {
+        items.lock().insert(index, scope);
+    });
     let shape = render_state.with(|state| state.shape);
     let vertical = controller.with(|state| {
         state
@@ -931,6 +917,11 @@ fn carousel_item(
     layout()
         .modifier(
             Modifier::new()
+                .focus_scope_with(scope)
+                .focus_properties(FocusProperties::new().skip_traversal(true))
+                .on_layout_coordinates(move |_| {
+                    navigation.finish(controller.with(|state| !state.needs_frame()));
+                })
                 .semantics(SemanticsArgs {
                     role: Some(Role::ListItem),
                     merge_descendants: true,
@@ -1117,6 +1108,31 @@ pub fn carousel(
     }
     let enabled = user_scroll_enabled.unwrap_or(true);
     let reverse = reverse_layout.unwrap_or(false);
+    let navigation = focus::Navigation {
+        viewport: focus,
+        items: remember(|| parking_lot::Mutex::new(std::collections::BTreeMap::new())),
+        pending: remember(|| None),
+    };
+    if !enabled
+        || navigation
+            .pending
+            .get()
+            .is_some_and(|index| index >= item_count)
+    {
+        if navigation.pending.get().is_some() {
+            navigation.pending.set(None);
+        }
+    } else if navigation.pending.get().is_some() {
+        FocusManager::current().defer_keyboard_until_layout();
+        receive_frame_nanos(move |_| {
+            if navigation.finish(controller.with(|state| !state.needs_frame())) {
+                tessera_ui::FrameNanosControl::Stop
+            } else {
+                FocusManager::current().defer_keyboard_until_layout();
+                tessera_ui::FrameNanosControl::Continue
+            }
+        });
+    }
     if !enabled
         && controller.with(|state| {
             state.dragging || state.wheel_idle.is_some() || state.free_velocity != 0.0
@@ -1212,8 +1228,12 @@ pub fn carousel(
             controller.with_mut(|state| state.configure(next));
         }
     }
-    let (indices, offset) =
-        controller.with(|state| (visible_indices(state, item_count), state.motion.value()));
+    let (indices, offset) = controller.with(|state| {
+        (
+            item_indices(state, item_count, navigation.retained_item()),
+            state.motion.value(),
+        )
+    });
     let policy = CarouselLayout {
         controller,
         config,
@@ -1241,7 +1261,8 @@ pub fn carousel(
         .focus_properties(
             FocusProperties::new()
                 .can_focus(enabled && item_count > 1)
-                .can_request_focus(enabled && item_count > 1),
+                .can_request_focus(enabled && item_count > 1)
+                .skip_traversal(true),
         )
         .semantics(SemanticsArgs {
             role: Some(Role::List),
@@ -1272,6 +1293,7 @@ pub fn carousel(
             reverse,
             vertical,
             behavior,
+            navigation,
         })
         .push_keyboard_input(CarouselInput {
             controller,
@@ -1281,6 +1303,7 @@ pub fn carousel(
             reverse,
             vertical,
             behavior,
+            navigation,
         });
     let corner = RoundedCorner::manual(Dp(28.0), 2.0);
     let shape = shape.unwrap_or(if variant == CarouselVariant::FullScreen {
@@ -1304,10 +1327,11 @@ pub fn carousel(
     }
     layout().modifier(modifier).policy(policy).child(move || {
         let count = render_state.with(|state| state.count);
-        let indices = controller.with(|state| visible_indices(state, count));
+        let indices =
+            controller.with(|state| item_indices(state, count, navigation.retained_item()));
         for index in indices {
             key(index, || {
-                carousel_item(index, controller, render_state);
+                carousel_item(index, controller, render_state, navigation);
             });
         }
     });

@@ -8,29 +8,30 @@ use std::sync::Arc;
 
 use tessera_components::{
     alignment::{Alignment, CrossAxisAlignment},
+    app_bar::top_app_bar,
     boxed::boxed,
     button::button,
-    carousel::{
-        CarouselController, CarouselFlingBehavior, CarouselItemInfo, CarouselVariant, carousel,
-    },
+    carousel::{CarouselController, CarouselFlingBehavior, CarouselVariant, carousel},
     column::column,
     icon::icon,
+    icon_button::icon_button,
     material_icons::filled,
     modifier::{ModifierExt as _, SemanticsArgs},
     row::row,
+    scrollable::ScrollableController,
     shape_def::Shape,
     spacer::spacer,
+    surface::surface,
     text::text,
     theme::MaterialTheme,
 };
 use tessera_ui::{
-    Dp, Modifier, PxRect, RenderSlot, State, accesskit::Role, modifier::FocusModifierExt as _,
-    remember, tessera, use_context,
+    Dp, Modifier, RenderSlot, State, accesskit::Role, remember, tessera, use_context,
 };
 
 use super::{
     annotations::{self, Geometry, dotted, relative, watch},
-    article::{ArticlePage, SpecSection, article},
+    article::{ArticlePage, SpecSection, article, modal_host::hosted_dialog},
     gap, panel, spec_table, subheading, type_style,
 };
 
@@ -156,7 +157,7 @@ pub(super) fn carousel_spec() {
                         paragraph("People must be able to enter the collection, move between items, activate an item and skip the collection using assistive technology.".into());
                     }) },
                     SpecSection { title: "Requirements on scrolling pages", content: RenderSlot::new(|| {
-                        paragraph("Provide a vertically arranged alternative on a scrolling page. Show all opens the complete collection below; Back to carousel restores the horizontal view. Keep these controls outside the item container.".into());
+                        paragraph("Provide a vertically arranged alternative on a scrolling page. Show all opens a separate vertically scrolling collection page; Back to carousel restores the horizontal view. Keep these controls outside the item container.".into());
                         gap(Dp(24.0));
                         collection(CarouselVariant::MultiBrowse, true);
                     }) },
@@ -222,42 +223,87 @@ fn collection(variant: CarouselVariant, allow_all: bool) {
     let controller = remember(CarouselController::default);
     let all = remember(|| false);
     let selected = remember(|| 0_usize);
-    column()
-        .modifier(Modifier::new().fill_max_width())
-        .children(move || {
-            if all.get() {
-                button()
-                    .text()
-                    .accessibility_label("Back to carousel")
-                    .on_click(move || all.set(false))
-                    .child(|| {
-                        text().content("Back to carousel");
-                    });
-                gap(Dp(16.0));
-                for index in 0..6 {
-                    media_item(index, selected)
-                        .modifier(Modifier::new().fill_max_width().height(Dp(180.0)));
-                    gap(Dp(8.0));
-                }
-            } else {
-                carousel_content(variant, controller, selected);
-                if allow_all {
-                    gap(Dp(4.0));
-                    button()
-                        .text()
-                        .accessibility_label("Show all carousel items")
-                        .on_click(move || all.set(true))
-                        .child(|| {
-                            text().content("Show all");
+    hosted_dialog(all)
+        .full_screen(true)
+        .accessibility_label("All carousel collections")
+        .on_close_request(move || all.set(false))
+        .main_content(move || {
+            column()
+                .modifier(Modifier::new().fill_max_width())
+                .children(move || {
+                    carousel_content(variant, controller, selected);
+                    if allow_all {
+                        gap(Dp(4.0));
+                        button()
+                            .text()
+                            .accessibility_label("Show all carousel items")
+                            .on_click(move || all.set(true))
+                            .child(|| {
+                                text().content("Show all");
+                            });
+                    }
+                    if selected.get() != 0 {
+                        gap(Dp(8.0));
+                        text()
+                            .content(format!("Collection {} opened", selected.get()))
+                            .style(type_style(14.0, 20.0));
+                    }
+                });
+        })
+        .dialog_content(move || {
+            all_items_page(all, selected);
+        });
+}
+
+#[tessera]
+fn all_items_page(open: State<bool>, selected: State<usize>) {
+    let scroll = remember(ScrollableController::new);
+    let scheme = use_context::<MaterialTheme>().unwrap().get().color_scheme;
+    surface()
+        .modifier(Modifier::new().fill_max_size())
+        .style(scheme.surface.into())
+        .child(move || {
+            column()
+                .modifier(Modifier::new().fill_max_size())
+                .children(move || {
+                    top_app_bar()
+                        .title("All collections")
+                        .container_color(scheme.surface)
+                        .navigation_icon(move || {
+                            icon_button()
+                                .icon(filled::ARROW_BACK_SVG)
+                                .accessibility_label("Back to carousel")
+                                .on_click(move || open.set(false));
                         });
-                }
-            }
-            if selected.get() != 0 {
-                gap(Dp(8.0));
-                text()
-                    .content(format!("Collection {} opened", selected.get()))
-                    .style(type_style(14.0, 20.0));
-            }
+                    boxed()
+                        .modifier(
+                            Modifier::new()
+                                .fill_max_width()
+                                .weight(1.0)
+                                .vertical_scroll(scroll),
+                        )
+                        .children(move || {
+                            column()
+                                .modifier(Modifier::new().fill_max_width().padding_all(Dp(16.0)))
+                                .children(move || {
+                                    if selected.get() != 0 {
+                                        text()
+                                            .content(format!(
+                                                "Collection {} opened",
+                                                selected.get()
+                                            ))
+                                            .style(type_style(14.0, 20.0));
+                                        gap(Dp(16.0));
+                                    }
+                                    for index in 0..6 {
+                                        media_item(index, selected).modifier(
+                                            Modifier::new().fill_max_width().height(Dp(180.0)),
+                                        );
+                                        gap(Dp(8.0));
+                                    }
+                                });
+                        });
+                });
         });
 }
 
@@ -352,36 +398,51 @@ fn carousel_content(
                         )
                         .accessibility_label(format!("{} collections", name(variant)))
                         .content(move |item| {
-                            let modifier = geometry
-                                .map(|geometry| item_geometry(geometry, item, variant))
-                                .unwrap_or_default();
+                            let modifier = if let Some(geometry) = geometry {
+                                let name = item_name(item.index);
+                                let _lease = remember(move || ItemGeometryLease { geometry, name });
+                                item_geometry(geometry, name)
+                            } else {
+                                Modifier::new()
+                            };
                             media_item(item.index, selected).modifier(modifier.fill_max_size());
                         });
                 });
         });
 }
 
-fn item_geometry(
+fn item_name(index: usize) -> &'static str {
+    ["item0", "item1", "item2", "item3", "item4", "item5"][index]
+}
+
+struct ItemGeometryLease {
     geometry: State<Geometry>,
-    item: CarouselItemInfo,
-    variant: CarouselVariant,
-) -> Modifier {
-    Modifier::new().on_globally_positioned(move |bounds: PxRect| {
-        let visible = if variant == CarouselVariant::FullScreen {
-            bounds
-        } else {
-            let width = item.masked_width().to_px();
-            PxRect::new(
-                bounds.x + (bounds.width - width) / 2,
-                bounds.y,
-                width,
-                bounds.height,
-            )
-        };
-        let key = ["item0", "item1", "item2", "item3", "item4", "item5"][item.index];
-        if geometry.with(|geometry| geometry.get(key).copied()) != Some(visible) {
+    name: &'static str,
+}
+
+impl Drop for ItemGeometryLease {
+    fn drop(&mut self) {
+        if self.geometry.is_alive() {
+            self.geometry.with_mut(|geometry| {
+                geometry.remove(self.name);
+            });
+        }
+    }
+}
+
+fn item_geometry(geometry: State<Geometry>, name: &'static str) -> Modifier {
+    Modifier::new().on_visible_window_bounds(move |bounds: Option<tessera_ui::FloatRect>| {
+        if !geometry.is_alive() {
+            return;
+        }
+        let bounds = bounds.map(|bounds| bounds.outward());
+        if geometry.with(|geometry| geometry.get(name).copied()) != bounds {
             geometry.with_mut(|geometry| {
-                geometry.insert(key, visible);
+                if let Some(bounds) = bounds {
+                    geometry.insert(name, bounds);
+                } else {
+                    geometry.remove(name);
+                }
             });
         }
     })
@@ -583,8 +644,28 @@ fn carousel_annotation_content(values: Geometry, measurements: bool, variant: Ca
                 rect.w > 0.0 && rect.x + rect.w > container.x && rect.x < container.x + container.w
             })
             .collect::<Vec<_>>();
-        items.sort_by(|a, b| a.x.total_cmp(&b.x));
-        for (index, item) in items.into_iter().take(count).enumerate() {
+        items.sort_by(|a, b| b.w.total_cmp(&a.w));
+        items.dedup_by(|a, b| (a.w - b.w).abs() <= 1.0);
+        if items.len() > count {
+            let last = *items.last().unwrap();
+            items = if count == 3 {
+                vec![items[0], items[(items.len() - 1) / 2], last]
+            } else if count == 2 {
+                vec![items[0], last]
+            } else {
+                vec![items[0]]
+            };
+        }
+        let item_count = items.len();
+        for (index, item) in items.into_iter().enumerate() {
+            let number = if variant == CarouselVariant::MultiBrowse
+                && index > 0
+                && index + 1 == item_count
+            {
+                4
+            } else {
+                index + 2
+            };
             let x = item.x + item.w / 2.0;
             annotations::outline(&mut svg, item);
             dotted(
@@ -595,11 +676,7 @@ fn carousel_annotation_content(values: Geometry, measurements: bool, variant: Ca
                 true,
                 "#49454f",
             );
-            annotations::marker(
-                index + 2,
-                Dp(x - 12.0),
-                Dp(container.y + container.h + 20.0),
-            );
+            annotations::marker(number, Dp(x - 12.0), Dp(container.y + container.h + 20.0));
         }
     }
     annotations::lines(width, height, svg);
@@ -726,6 +803,8 @@ mod tests {
 
     thread_local! {
         static VARIANT: Cell<CarouselVariant> = const { Cell::new(CarouselVariant::MultiBrowse) };
+        static GEOMETRY: Cell<Option<State<Geometry>>> = const { Cell::new(None) };
+        static CONTROLLER: Cell<Option<State<CarouselController>>> = const { Cell::new(None) };
     }
 
     struct ComponentPipelines;
@@ -742,6 +821,9 @@ mod tests {
         material_theme().child(move || {
             let controller = remember(CarouselController::default);
             let selected = remember(|| 0_usize);
+            let geometry = remember(Geometry::new);
+            GEOMETRY.set(Some(geometry));
+            CONTROLLER.set(Some(controller));
             boxed()
                 .alignment(Alignment::TopStart)
                 .modifier(Modifier::new().fill_max_size())
@@ -749,7 +831,7 @@ mod tests {
                     column()
                         .modifier(Modifier::new().width(Dp(400.0)))
                         .children(move || {
-                            carousel_content(variant, controller, selected);
+                            carousel_content(variant, controller, selected).geometry(geometry);
                         });
                 });
         });
@@ -811,6 +893,41 @@ mod tests {
                 "{} viewport height",
                 name(variant)
             );
+            let geometry = GEOMETRY.get().expect("observed figure geometry");
+            let controller = CONTROLLER.get().expect("figure controller");
+            for target in [5, 0, 3] {
+                controller.with_mut(|controller| controller.jump_to_item(target));
+                renderer.render_frames(8);
+                let values = geometry.get();
+                let container = values.get("container").expect("container geometry");
+                let visible: Vec<_> = values
+                    .iter()
+                    .filter(|(name, _)| name.starts_with("item"))
+                    .collect();
+                assert!(!visible.is_empty(), "{} target {target}", name(variant));
+                for (item, rect) in visible {
+                    assert!(rect.width.0 > 0 && rect.height.0 > 0);
+                    assert!(
+                        rect.x >= container.x
+                            && rect.y >= container.y
+                            && rect.x + rect.width <= container.x + container.width
+                            && rect.y + rect.height <= container.y + container.height,
+                        "{} target {target}: {item} {rect:?} outside {container:?}",
+                        name(variant)
+                    );
+                }
+                assert!(
+                    values.contains_key(item_name(target)),
+                    "{} target {target}: {values:?}",
+                    name(variant)
+                );
+                if target == 5 {
+                    assert!(
+                        !values.contains_key("item0"),
+                        "unmounted first item must release its annotation: {values:?}"
+                    );
+                }
+            }
             assert!(
                 snapshot.nodes.iter().any(|(_, node)| matches!(
                     node.role(),
