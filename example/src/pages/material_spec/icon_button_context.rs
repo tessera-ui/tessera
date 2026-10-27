@@ -128,7 +128,7 @@ fn caption(#[prop(into)] value: String) {
 }
 
 #[tessera]
-fn context_row(prose: RenderSlot, figure: RenderSlot) {
+pub(super) fn context_row(prose: RenderSlot, figure: RenderSlot) {
     let width = remember(|| Dp(1024.0));
     boxed()
         .modifier(Modifier::new().fill_max_width().on_layout_coordinates(

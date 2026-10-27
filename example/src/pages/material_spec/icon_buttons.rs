@@ -36,6 +36,9 @@ use super::{
 #[path = "icon_button_context.rs"]
 pub(super) mod context;
 
+#[path = "icon_button_measurements.rs"]
+mod measurements;
+
 const STYLES: [IconButtonVariant; 4] = [
     IconButtonVariant::Filled,
     IconButtonVariant::FilledTonal,
@@ -99,7 +102,7 @@ pub(super) fn icon_buttons_spec() {
             },
             SpecSection {
                 title: "Measurements",
-                content: RenderSlot::new(measurements),
+                content: RenderSlot::new(measurements::figures),
             },
         ],
         RenderSlot::new(variants),
@@ -851,39 +854,4 @@ fn shape_morph() {
                 }
             });
     }));
-}
-
-#[tessera]
-fn measurements() {
-    spec_table(
-        vec![
-            "Size".into(),
-            "Height / icon".into(),
-            "Narrow / uniform / wide".into(),
-        ],
-        vec![
-            vec!["XS".into(), "32 / 20dp".into(), "28 / 32 / 40dp".into()],
-            vec!["S".into(), "40 / 24dp".into(), "32 / 40 / 52dp".into()],
-            vec!["M".into(), "56 / 24dp".into(), "48 / 56 / 72dp".into()],
-            vec!["L".into(), "96 / 32dp".into(), "64 / 96 / 128dp".into()],
-            vec!["XL".into(), "136 / 40dp".into(), "104 / 136 / 184dp".into()],
-        ],
-    );
-    gap(Dp(24.0));
-    text()
-        .content("Minimum target: 48 × 48dp. Round corners are fully rounded at rest.")
-        .style(type_style(16.0, 24.0));
-    gap(Dp(24.0));
-    spec_table(
-        vec![
-            "Size".into(),
-            "Square radius".into(),
-            "Pressed radius".into(),
-        ],
-        vec![
-            vec!["XS / S".into(), "12dp".into(), "8dp".into()],
-            vec!["M".into(), "16dp".into(), "12dp".into()],
-            vec!["L / XL".into(), "28dp".into(), "16dp".into()],
-        ],
-    );
 }
