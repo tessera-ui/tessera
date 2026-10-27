@@ -13,6 +13,8 @@ use tessera_components::{
     loading_indicator::loading_indicator,
     modifier::ModifierExt as _,
     progress::{circular_progress_indicator, linear_progress_indicator},
+    pull_refresh::{PullRefreshController, pull_refresh},
+    scrollable::ScrollableController,
     shape_def::Shape,
     slider::slider,
     surface::surface,
@@ -144,6 +146,8 @@ fn wait_times() {
 #[tessera]
 fn refresh_example() {
     let refreshing = remember(|| false);
+    let controller = remember(PullRefreshController::new);
+    let scroll = remember(ScrollableController::new);
     column()
         .modifier(Modifier::new().fill_max_width())
         .children(move || {
@@ -159,17 +163,37 @@ fn refresh_example() {
                     });
                 });
             gap(Dp(24.0));
-            boxed()
-                .alignment(Alignment::Center)
-                .modifier(Modifier::new().fill_max_width().height(Dp(160.0)))
-                .children(move || {
-                    if refreshing.get() {
-                        loading_indicator()
-                            .contained(true)
-                            .accessibility_label("Refreshing page");
-                    } else {
-                        text().content("Content is up to date");
-                    }
+            pull_refresh()
+                .modifier(Modifier::new().fill_max_width().height(Dp(240.0)))
+                .controller(controller)
+                .refreshing(refreshing.get())
+                .indicator_size(Dp(48.0))
+                .on_refresh(move || refreshing.set(true))
+                .indicator(move || {
+                    loading_indicator()
+                        .contained(true)
+                        .paused(!refreshing.get())
+                        .accessibility_label("Refreshing page");
+                })
+                .child(move || {
+                    boxed()
+                        .modifier(Modifier::new().fill_max_size().vertical_scroll(scroll))
+                        .children(move || {
+                            boxed()
+                                .alignment(Alignment::Center)
+                                .modifier(Modifier::new().fill_max_width().height(Dp(320.0)))
+                                .children(move || {
+                                    column().children(move || {
+                                        text().content("Pull down to refresh");
+                                        gap(Dp(16.0));
+                                        text().content(if refreshing.get() {
+                                            "Refreshing content"
+                                        } else {
+                                            "Content is up to date"
+                                        });
+                                    });
+                                });
+                        });
                 });
         });
 }

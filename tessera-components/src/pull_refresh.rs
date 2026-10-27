@@ -152,6 +152,13 @@ impl PullRefreshController {
         should_refresh
     }
 
+    fn cancel_pull(&mut self) {
+        if !self.refreshing && self.is_pulling() {
+            self.distance_pulled = 0.0;
+            self.set_target_position(0.0);
+        }
+    }
+
     fn update_position(&mut self, frame_nanos: u64, smoothing: f32) -> bool {
         let delta_time = if let Some(last_frame_nanos) = self.last_frame_nanos {
             frame_nanos.saturating_sub(last_frame_nanos) as f32 / 1_000_000_000.0
@@ -340,6 +347,8 @@ pub fn pull_refresh_indicator(
 /// - `indicator_stroke_width` — optional indicator stroke width.
 /// - `indicator_elevation` — optional indicator elevation.
 /// - `controller` — optional external refresh controller.
+/// - `indicator` — optional custom indicator content; uses `indicator_size` and
+///   follows the controller position.
 /// - `child` — optional content rendered inside the pull-refresh container.
 ///
 /// ## Examples
@@ -396,6 +405,7 @@ pub fn pull_refresh(
     indicator_stroke_width: Option<Dp>,
     indicator_elevation: Option<Dp>,
     controller: Option<State<PullRefreshController>>,
+    indicator: Option<RenderSlot>,
     child: Option<RenderSlot>,
 ) {
     let refreshing = refreshing.unwrap_or(false);
@@ -493,6 +503,10 @@ pub fn pull_refresh(
                 ScrollVelocity::new(0.0, input.available.y.max(0.0))
             }
         }))
+        .with_post_fling_handler(CallbackWith::new(move |_| {
+            controller.with_mut(PullRefreshController::cancel_pull);
+            ScrollVelocity::ZERO
+        }))
         .with_parent(parent_nested_scroll);
 
     layout()
@@ -524,48 +538,47 @@ pub fn pull_refresh(
                                 controller,
                                 indicator_size.unwrap_or(PullRefreshDefaults::INDICATOR_SIZE),
                             );
-                            pull_refresh_indicator_with_offset(PullRefreshIndicatorOffsetArgs {
-                                indicator_size: indicator_size
-                                    .unwrap_or(PullRefreshDefaults::INDICATOR_SIZE),
-                                indicator_background_color,
-                                indicator_content_color,
-                                indicator_track_color: indicator_track_color
-                                    .unwrap_or(Color::TRANSPARENT),
-                                indicator_stroke_width: indicator_stroke_width
-                                    .unwrap_or(PullRefreshDefaults::INDICATOR_STROKE_WIDTH),
-                                indicator_elevation: indicator_elevation
-                                    .unwrap_or(PullRefreshDefaults::INDICATOR_ELEVATION),
-                                refresh_controller: controller,
-                                offset,
-                            });
+                            layout()
+                                .modifier(Modifier::new().offset(Dp(0.0), offset))
+                                .child(move || {
+                                    if let Some(indicator) = indicator {
+                                        boxed()
+                                            .modifier(
+                                                Modifier::new().size(
+                                                    indicator_size.unwrap_or(
+                                                        PullRefreshDefaults::INDICATOR_SIZE,
+                                                    ),
+                                                    indicator_size.unwrap_or(
+                                                        PullRefreshDefaults::INDICATOR_SIZE,
+                                                    ),
+                                                ),
+                                            )
+                                            .alignment(Alignment::Center)
+                                            .children(move || {
+                                                indicator.render();
+                                            });
+                                    } else {
+                                        pull_refresh_indicator()
+                                            .size(
+                                                indicator_size
+                                                    .unwrap_or(PullRefreshDefaults::INDICATOR_SIZE),
+                                            )
+                                            .background_color(indicator_background_color)
+                                            .content_color(indicator_content_color)
+                                            .track_color(
+                                                indicator_track_color.unwrap_or(Color::TRANSPARENT),
+                                            )
+                                            .stroke_width(indicator_stroke_width.unwrap_or(
+                                                PullRefreshDefaults::INDICATOR_STROKE_WIDTH,
+                                            ))
+                                            .elevation(indicator_elevation.unwrap_or(
+                                                PullRefreshDefaults::INDICATOR_ELEVATION,
+                                            ))
+                                            .controller(controller);
+                                    }
+                                });
                         });
                 });
-        });
-}
-
-struct PullRefreshIndicatorOffsetArgs {
-    indicator_size: Dp,
-    indicator_background_color: Color,
-    indicator_content_color: Color,
-    indicator_track_color: Color,
-    indicator_stroke_width: Dp,
-    indicator_elevation: Dp,
-    refresh_controller: State<PullRefreshController>,
-    offset: Dp,
-}
-
-fn pull_refresh_indicator_with_offset(args: PullRefreshIndicatorOffsetArgs) {
-    layout()
-        .modifier(Modifier::new().offset(Dp(0.0), args.offset))
-        .child(move || {
-            pull_refresh_indicator()
-                .size(args.indicator_size)
-                .background_color(args.indicator_background_color)
-                .content_color(args.indicator_content_color)
-                .track_color(args.indicator_track_color)
-                .stroke_width(args.indicator_stroke_width)
-                .elevation(args.indicator_elevation)
-                .controller(args.refresh_controller);
         });
 }
 
@@ -574,3 +587,7 @@ fn indicator_offset_dp(controller: State<PullRefreshController>, indicator_size:
         controller.with(|s| s.position().to_f32()) - indicator_size.to_pixels_f32();
     Dp::from_pixels_f32(indicator_offset_px)
 }
+
+#[cfg(all(test, not(target_family = "wasm")))]
+#[path = "pull_refresh_tests.rs"]
+mod tests;
