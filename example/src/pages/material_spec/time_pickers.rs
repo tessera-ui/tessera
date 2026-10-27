@@ -52,6 +52,12 @@ pub(super) fn time_pickers_spec() {
         layout: remember(TimePickerLayout::default),
         status: remember(|| "Ready".to_owned()),
     };
+    let committed = remember(|| (9_u8, 41_u8));
+    let draft = Sample {
+        state: remember(|| TimePickerState::new(9, 41, false, TimePickerDisplayMode::Picker)),
+        layout: remember(TimePickerLayout::default),
+        status: sample.status,
+    };
     dialog_provider().is_open(modal.get()).padding(Dp::ZERO).accessibility_label("Time picker dialog")
         .on_close_request(move || modal.set(false))
         .main_content(move || {
@@ -67,8 +73,9 @@ pub(super) fn time_pickers_spec() {
                     controls(sample, "Anatomy");
                     gap(Dp(24.0)); visual(sample, "Anatomy");
                     gap(Dp(24.0));
-                    button().outlined().accessibility_label("Open time picker dialog").on_click(move || modal.set(true))
+                    button().outlined().accessibility_label("Open time picker dialog").on_click(move || open_picker(modal, draft, committed))
                         .child(|| { text().content("Open dialog"); });
+                    confirmed_time(committed);
                     gap(Dp(24.0));
                 }) },
                 SpecSection { title: "Color", content: RenderSlot::new(colors) },
@@ -82,9 +89,9 @@ pub(super) fn time_pickers_spec() {
                 ArticlePage {title:"Guidelines",intro:Some(RenderSlot::new(|| {time_figure(false,false,false,FigureKind::Plain,"Guideline introduction".into());})),sections:vec![
                     SpecSection {title:"Usage",content:RenderSlot::new(time_usage)},
                     SpecSection {title:"Anatomy",content:RenderSlot::new(time_guideline_anatomy)},
-                    SpecSection {title:"Placement",content:RenderSlot::new(move || {prose("Show the picker above a scrim and keep the entire surface visible. Switch orientation or use input fields when space is limited.");gap(Dp(24.0));button().outlined().accessibility_label("Open placement time picker").on_click(move || modal.set(true)).child(|| {text().content("Open time picker");});})},
+                    SpecSection {title:"Placement",content:RenderSlot::new(move || {prose("Show the picker above a scrim and keep the entire surface visible. Switch orientation or use input fields when space is limited.");gap(Dp(24.0));button().outlined().accessibility_label("Open placement time picker").on_click(move || open_picker(modal, draft, committed)).child(|| {text().content("Open time picker");});confirmed_time(committed);})},
                     SpecSection {title:"Adaptive design",content:RenderSlot::new(time_adaptive)},
-                    SpecSection {title:"Behavior",content:RenderSlot::new(move || {time_behavior(sample,modal);})},
+                    SpecSection {title:"Behavior",content:RenderSlot::new(move || {time_behavior(sample,modal,draft,committed);})},
                 ]},
                 ArticlePage {title:"Accessibility",intro:None,sections:vec![
                     SpecSection {title:"Use cases",content:RenderSlot::new(|| {prose("People must be able to enter hours and minutes manually, choose a clock format and operate the picker with assistive technology.");gap(Dp(24.0));time_figure(true,false,false,FigureKind::Plain,"Accessible input".into());})},
@@ -93,7 +100,27 @@ pub(super) fn time_pickers_spec() {
                     SpecSection {title:"Labeling elements",content:RenderSlot::new(time_labels)},
                 ]},
             ]);
-        }).dialog_content(move || { picker_surface(sample, "Modal").modal(modal); });
+        }).dialog_content(move || { picker_surface(draft, "Modal").modal(modal).committed(committed); });
+}
+
+fn open_picker(modal: State<bool>, draft: Sample, committed: State<(u8, u8)>) {
+    let (hour, minute) = committed.get();
+    draft.state.set(TimePickerState::new(
+        hour,
+        minute,
+        false,
+        TimePickerDisplayMode::Picker,
+    ));
+    modal.set(true);
+}
+
+#[tessera]
+fn confirmed_time(committed: State<(u8, u8)>) {
+    let (hour, minute) = committed.get();
+    gap(Dp(16.0));
+    text()
+        .content(format!("Saved time: {hour:02}:{minute:02}"))
+        .style(type_style(16.0, 24.0));
 }
 
 #[tessera]
@@ -191,7 +218,12 @@ fn visual(sample: Sample, #[prop(into)] label: String, modal: Option<State<bool>
 }
 
 #[tessera]
-fn picker_surface(sample: Sample, #[prop(into)] label: String, modal: Option<State<bool>>) {
+fn picker_surface(
+    sample: Sample,
+    #[prop(into)] label: String,
+    modal: Option<State<bool>>,
+    committed: Option<State<(u8, u8)>>,
+) {
     let theme = use_context::<MaterialTheme>()
         .expect("MaterialTheme must be provided")
         .get();
@@ -213,7 +245,8 @@ fn picker_surface(sample: Sample, #[prop(into)] label: String, modal: Option<Sta
                 .modifier(Modifier::new().padding_all(Dp(24.0)))
                 .children(move || {
                     picker_contents(sample, confirm_label.clone(), cancel_label.clone())
-                        .modal_optional(modal);
+                        .modal_optional(modal)
+                        .committed_optional(committed);
                 });
         });
 }
@@ -224,6 +257,7 @@ fn picker_contents(
     #[prop(into)] confirm_label: String,
     #[prop(into)] cancel_label: String,
     modal: Option<State<bool>>,
+    committed: Option<State<(u8, u8)>>,
 ) {
     time_picker_dialog()
         .state(sample.state)
@@ -233,9 +267,13 @@ fn picker_contents(
                 .text()
                 .accessibility_label(confirm_label.clone())
                 .on_click(move || {
-                    sample.status.set(sample.state.with(|state| {
-                        format!("Confirmed {:02}:{:02}", state.hour(), state.minute())
-                    }));
+                    let time = sample.state.with(|state| (state.hour(), state.minute()));
+                    if let Some(committed) = committed {
+                        committed.set(time);
+                    }
+                    sample
+                        .status
+                        .set(format!("Confirmed {:02}:{:02}", time.0, time.1));
                     if let Some(modal) = modal {
                         modal.set(false);
                     }
@@ -1615,7 +1653,7 @@ fn time_adaptive() {
 }
 
 #[tessera]
-fn time_behavior(sample: Sample, modal: State<bool>) {
+fn time_behavior(sample: Sample, modal: State<bool>, draft: Sample, committed: State<(u8, u8)>) {
     prose(
         "Select a field and adjust the corresponding dial, or type directly using keyboard input.",
     );
@@ -1627,10 +1665,12 @@ fn time_behavior(sample: Sample, modal: State<bool>) {
     button()
         .outlined()
         .accessibility_label("Open behavior time picker")
-        .on_click(move || modal.set(true))
+        .on_click(move || open_picker(modal, draft, committed))
         .child(|| {
             text().content("Open time picker");
         });
+    gap(Dp(24.0));
+    confirmed_time(committed);
     gap(Dp(24.0));
     subheading("Toggle between dial & input".into());
     controls(sample, "Behavior");

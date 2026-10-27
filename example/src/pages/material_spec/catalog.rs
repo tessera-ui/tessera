@@ -1861,6 +1861,138 @@ mod tests {
 
     #[test]
     #[ignore = "requires a native GPU adapter"]
+    fn time_modal_commits_only_on_confirmation_and_reopens_from_saved_time() {
+        INITIAL_COMPONENT.set(
+            COMPONENTS
+                .iter()
+                .position(|component| component.title == "Time pickers"),
+        );
+        let mut renderer = HeadlessRenderer::new(
+            Box::new(fixture),
+            vec![Box::new(ComponentPipelines)],
+            HeadlessConfig {
+                width: 900,
+                height: 1200,
+                sample_count: 1,
+                frame_time: Duration::from_nanos(16_666_667),
+                ..Default::default()
+            },
+        )
+        .unwrap();
+        renderer.render_frames(8);
+        INITIAL_COMPONENT.set(None);
+        activate_navigation(&mut renderer, "Anatomy", Role::Link);
+        renderer.render_frames(8);
+        for confirm in [false, true] {
+            let open = control(&renderer, "Open time picker dialog");
+            click(&mut renderer, open.bounds().unwrap());
+            renderer.render_frames(24);
+            assert_eq!(
+                scoped_node(&renderer, "Modal time preview", "Hour", Role::Button)
+                    .unwrap()
+                    .value(),
+                Some("09")
+            );
+            let hour = scoped_node(
+                &renderer,
+                "Modal time preview",
+                "Hour 3 of 12",
+                Role::Button,
+            )
+            .unwrap();
+            click(&mut renderer, hour.bounds().unwrap());
+            let minute = scoped_node(
+                &renderer,
+                "Modal time preview",
+                "Minute 15 of 60",
+                Role::Button,
+            )
+            .unwrap();
+            click(&mut renderer, minute.bounds().unwrap());
+            let action = control(
+                &renderer,
+                if confirm {
+                    "Modal confirm time"
+                } else {
+                    "Modal cancel time"
+                },
+            );
+            click(&mut renderer, action.bounds().unwrap());
+            renderer.render_frames(24);
+            bounds(
+                &renderer,
+                if confirm {
+                    "Saved time: 03:15"
+                } else {
+                    "Saved time: 09:41"
+                },
+            );
+            assert!(
+                !renderer
+                    .accessibility_snapshot()
+                    .unwrap()
+                    .nodes
+                    .iter()
+                    .any(|(_, node)| node.role() == Role::Dialog)
+            );
+        }
+        let open = control(&renderer, "Open time picker dialog");
+        click(&mut renderer, open.bounds().unwrap());
+        renderer.render_frames(24);
+        assert_eq!(
+            scoped_node(&renderer, "Modal time preview", "Hour", Role::Button)
+                .unwrap()
+                .value(),
+            Some("03")
+        );
+        assert_eq!(
+            scoped_node(&renderer, "Modal time preview", "Minute", Role::Button)
+                .unwrap()
+                .value(),
+            Some("15")
+        );
+        let hour = scoped_node(
+            &renderer,
+            "Modal time preview",
+            "Hour 8 of 12",
+            Role::Button,
+        )
+        .unwrap();
+        click(&mut renderer, hour.bounds().unwrap());
+        renderer.pointer_move(MOUSE_POINTER_ID, PxPosition::from_f32_xy(4.0, 180.0));
+        renderer.pointer_press(
+            MOUSE_POINTER_ID,
+            PxPosition::from_f32_xy(4.0, 180.0),
+            PressKeyEventType::Left,
+        );
+        renderer.pointer_release(
+            MOUSE_POINTER_ID,
+            PxPosition::from_f32_xy(4.0, 180.0),
+            PressKeyEventType::Left,
+        );
+        renderer.render_frames(24);
+        assert!(
+            !renderer
+                .accessibility_snapshot()
+                .unwrap()
+                .nodes
+                .iter()
+                .any(|(_, node)| node.role() == Role::Dialog)
+        );
+        bounds(&renderer, "Saved time: 03:15");
+        let open = control(&renderer, "Open time picker dialog");
+        click(&mut renderer, open.bounds().unwrap());
+        renderer.render_frames(24);
+        assert_eq!(
+            scoped_node(&renderer, "Modal time preview", "Hour", Role::Button)
+                .unwrap()
+                .value(),
+            Some("03")
+        );
+    }
+
+    #[test]
+    #[ignore = "requires a native GPU adapter"]
     fn initial_app_bar_article_updates_its_variant_after_compact_resize() {
         INITIAL_COMPONENT.set(
             COMPONENTS
