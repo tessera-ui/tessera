@@ -166,6 +166,8 @@ struct TextFieldProps {
     pub shape: Shape,
     /// Padding inside the text field.
     pub padding: Dp,
+    /// Horizontal content padding, defaulting to the uniform padding.
+    pub horizontal_padding: Option<Dp>,
     /// Border color when focused.
     pub focus_border_color: Option<Color>,
     /// Border width when focused.
@@ -273,6 +275,7 @@ impl Default for TextFieldProps {
             border_color: None,
             shape,
             padding: TextFieldDefaults::CONTENT_PADDING,
+            horizontal_padding: None,
             focus_border_color: None,
             focus_border_width: None,
             focus_background_color: None,
@@ -867,7 +870,7 @@ fn text_field_content(
                     let args = data.with(|data| data.0.clone());
                     outlined_border(
                         outline.get(),
-                        args.padding,
+                        args.horizontal_padding.unwrap_or(args.padding),
                         width,
                         color,
                         args.shape,
@@ -890,16 +893,17 @@ fn text_field_body(
     let floating = args.label.is_some() && (focused || !empty);
     let affixes = args.label.is_none() || floating;
     let padding = args.padding;
+    let horizontal_padding = args.horizontal_padding.unwrap_or(padding);
     let icon_inset = Dp(36.0 + TextFieldDefaults::ICON_TEXT_PADDING.0);
     let left = if args.leading_icon.is_some() {
         icon_inset
     } else {
-        padding
+        horizontal_padding
     };
     let right = if args.trailing_icon.is_some() {
         icon_inset
     } else {
-        padding
+        horizontal_padding
     };
     let label_style = label_floating_text_style(&theme);
     let line_height = label_style
@@ -1029,7 +1033,7 @@ fn text_field_body(
                         .label_color(color)
                         .label_font_size(label_style.font_size)
                         .label_line_height(line_height)
-                        .label_offset_x(padding)
+                        .label_offset_x(horizontal_padding)
                         .label_offset_y(Dp(-line_height.0 * 0.5))
                         .outline(outline);
                 } else {
@@ -1191,6 +1195,7 @@ fn text_field_menu_content(
 /// - `border_color` — optional border color.
 /// - `shape` — field container shape.
 /// - `padding` — content padding.
+/// - `horizontal_padding` — optional horizontal content padding override.
 /// - `focus_border_color` — optional focused border color.
 /// - `focus_border_width` — optional focused border width.
 /// - `focus_background_color` — optional focused background color.
@@ -1252,6 +1257,7 @@ pub fn text_field(
     border_color: Option<Color>,
     shape: Option<Shape>,
     padding: Option<Dp>,
+    horizontal_padding: Option<Dp>,
     focus_border_color: Option<Color>,
     focus_border_width: Option<Dp>,
     focus_background_color: Option<Color>,
@@ -1325,6 +1331,7 @@ pub fn text_field(
         border_color,
         shape,
         padding,
+        horizontal_padding,
         focus_border_color,
         focus_border_width,
         focus_background_color,

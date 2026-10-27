@@ -2349,7 +2349,15 @@ impl TextEditorController {
     }
 
     fn ensure_cursor_visible(&mut self) {
-        let scroll_after = self.edit_state.shape_until_cursor();
+        let mut scroll_after = self.edit_state.shape_until_cursor();
+        if self.single_line() && (scroll_after.line != 0 || scroll_after.vertical != 0.0) {
+            // Typography can change before layout publishes the larger
+            // viewport. A single-line editor must not retain
+            // vertical caret reveal from that temporary constraint.
+            scroll_after.line = 0;
+            scroll_after.vertical = 0.0;
+            self.edit_state.set_scroll(scroll_after);
+        }
         if self.scroll_state.sync_from_scroll(scroll_after) {
             self.sync_layout_snapshot_scroll();
         }
@@ -3885,6 +3893,33 @@ mod tests {
         );
         controller.set_layout_snapshot_buffer(buffer, Some(transformed.clone()));
         transformed
+    }
+
+    #[test]
+    fn single_line_typography_resize_keeps_fitting_text_at_the_top_of_its_viewport() {
+        let mut controller = TextEditorController::new(Dp(16.0), Some(Dp(24.0)));
+        controller.set_single_line(true);
+        controller.set_text("Carmen");
+        controller.text_data(TextConstraint {
+            max_width: Some(200.0),
+            max_height: Some(24.0),
+        });
+        controller.set_text_style(crate::theme::TextStyle {
+            font_size: Dp(28.0),
+            line_height: Some(Dp(42.0)),
+            ..Default::default()
+        });
+        controller.text_data(TextConstraint {
+            max_width: Some(350.0),
+            max_height: Some(42.0),
+        });
+        let scroll = controller.editor().with_buffer(|buffer| buffer.scroll());
+        assert_eq!(scroll.line, 0);
+        assert_eq!(
+            scroll.vertical, 0.0,
+            "a complete single line must remain visible after its font and viewport grow together"
+        );
+        assert_eq!(controller.scroll_state().vertical(), 0.0);
     }
 
     #[test]
