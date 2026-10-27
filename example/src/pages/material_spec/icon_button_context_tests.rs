@@ -199,6 +199,20 @@ fn contextual_actions_and_annotations_survive_scaled_resize_and_scroll() {
                     );
                 }
             }
+            if scene == 2 || scene == 3 {
+                let pixels = renderer.read_pixels().unwrap();
+                let y = 8.0 + (if scene == 2 { 250.0 } else { 280.0 }) * scale;
+                let sample = |x: f64| {
+                    let offset =
+                        ((y.floor() as usize * width as usize) + (x * scale).floor() as usize) * 4;
+                    pixels[offset..offset + 4].to_vec()
+                };
+                assert_eq!(
+                    sample(if scene == 2 { 470.0 } else { 300.0 }),
+                    sample(650.0),
+                    "cropped phone content must not paint outside the device: scene={scene}, width={width}"
+                );
+            }
             if let Ok(directory) = std::env::var("TESSERA_ICON_CONTEXT_OUTPUT") {
                 let path = std::path::Path::new(&directory)
                     .join(format!("wave63-context-{scene}-{width}.png"));

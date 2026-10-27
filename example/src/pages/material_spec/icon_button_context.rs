@@ -149,15 +149,16 @@ fn context_row(prose: RenderSlot, figure: RenderSlot) {
                         figure.render();
                     });
             } else {
+                let track = (width.get().0 - 40.0) / 3.0;
                 row()
                     .modifier(Modifier::new().fill_max_width())
                     .children(move || {
                         column()
-                            .modifier(Modifier::new().weight(1.0))
+                            .modifier(Modifier::new().width(Dp(track)))
                             .children_shared(prose);
-                        spacer().modifier(Modifier::new().width(Dp(32.0)));
+                        spacer().modifier(Modifier::new().width(Dp(20.0)));
                         column()
-                            .modifier(Modifier::new().weight(2.0))
+                            .modifier(Modifier::new().width(Dp(track * 2.0 + 20.0)))
                             .children_shared(figure);
                     });
             }
@@ -274,14 +275,14 @@ fn device(x: f64, y: f64, height: f64) {
         .modifier(
             Modifier::new()
                 .offset(Dp(x), Dp(y))
-                .size(Dp(428.0), Dp(height))
+                .required_size(Dp(428.0), Dp(height))
                 .background_with_shape(scheme.outline_variant, Shape::rounded_rectangle(Dp(28.0))),
         )
         .children(move || {
             spacer().modifier(
                 Modifier::new()
                     .offset(Dp(8.0), Dp(8.0))
-                    .size(Dp(412.0), Dp(height - 16.0))
+                    .required_size(Dp(412.0), Dp(height - 16.0))
                     .background_with_shape(scheme.surface, Shape::rounded_rectangle(Dp(20.0))),
             );
         });
@@ -488,17 +489,25 @@ fn labeling_figure() {
                     .background(scheme.outline_variant),
             );
             placed_text("Dinner", 54.0, 204.0, 100.0, 14.0, 20.0);
-            row()
-                .modifier(Modifier::new().offset(Dp(54.0), Dp(239.0)))
+            boxed()
+                .modifier(
+                    Modifier::new()
+                        .required_size(Dp(442.0), Dp(258.0))
+                        .clip_to_bounds(),
+                )
                 .children(|| {
-                    for label in ["5:30pm", "6:00pm", "6:30pm", "7:00pm", "7:30pm"] {
-                        let selected = remember(|| false);
-                        chip()
-                            .label(label)
-                            .selected(selected.get())
-                            .on_click(move || selected.set(!selected.get()));
-                        spacer().modifier(Modifier::new().width(Dp(8.0)));
-                    }
+                    row()
+                        .modifier(Modifier::new().offset(Dp(54.0), Dp(239.0)))
+                        .children(|| {
+                            for label in ["5:30pm", "6:00pm", "6:30pm", "7:00pm", "7:30pm"] {
+                                let selected = remember(|| false);
+                                chip()
+                                    .label(label)
+                                    .selected(selected.get())
+                                    .on_click(move || selected.set(!selected.get()));
+                                spacer().modifier(Modifier::new().width(Dp(8.0)));
+                            }
+                        });
                 });
             labeling_annotation(geometry, selected);
         }),
@@ -528,14 +537,21 @@ fn labeling_annotation(geometry: State<ObservedGeometry>, selected: State<bool>)
     boxed()
         .modifier(
             Modifier::new()
-                .offset(Dp(474.0), Dp(target.y + target.h * 0.5 - 60.0))
-                .size(Dp(if selected.get() { 176.0 } else { 160.0 }), Dp(120.0))
+                .offset(
+                    Dp(474.0),
+                    Dp(target.y + target.h * 0.5 - if selected.get() { 70.0 } else { 60.0 }),
+                )
+                .size(
+                    Dp(if selected.get() { 176.0 } else { 160.0 }),
+                    Dp(if selected.get() { 140.0 } else { 120.0 }),
+                )
                 .background_with_shape(scheme.surface, Shape::rounded_rectangle(Dp(12.0)))
                 .border_with_shape(Dp(4.0), tint, Shape::rounded_rectangle(Dp(12.0)))
                 .padding_all(Dp(16.0))
                 .semantics(SemanticsArgs {
                     role: Some(Role::Note),
                     label: Some("Icon button label and role".into()),
+                    merge_descendants: true,
                     ..Default::default()
                 }),
         )
@@ -576,6 +592,7 @@ fn density_figure() {
         RenderSlot::new(move || {
             let scheme = use_context::<MaterialTheme>().unwrap().get().color_scheme;
             device(194.0, -240.0, 500.0);
+            boxed().modifier(Modifier::new().required_size(Dp(676.0), Dp(252.0)).clip_to_bounds()).children(move || {
             spacer().modifier(
                 Modifier::new()
                     .offset(Dp(218.0), Dp(34.0))
@@ -616,6 +633,7 @@ fn density_figure() {
                 20.0,
             );
             photo_region(2, 238.0, 214.0, 340.0, 38.0);
+            });
             floating_toolbar()
                 .modifier(Modifier::new().offset(Dp(280.0), Dp(159.0)))
                 .accessibility_label("Nested message actions")
@@ -632,7 +650,8 @@ fn density_figure() {
                                 boxed()
                                     .modifier(
                                         watch_observed(geometry, name)
-                                            .background(Color::new(0.92, 0.40, 0.96, 0.4)),
+                                            .background(Color::new(0.92, 0.40, 0.96, 0.4))
+                                            .border(Dp(0.5), scheme.surface_container),
                                     )
                                     .children(move || {
                                         action(label, index);
@@ -671,6 +690,7 @@ fn density_annotation(geometry: State<ObservedGeometry>) {
                 .background_with_shape(ink, Shape::CAPSULE)
                 .semantics(SemanticsArgs {
                     role: Some(Role::Note),
+                    merge_descendants: true,
                     ..Default::default()
                 }),
         )
