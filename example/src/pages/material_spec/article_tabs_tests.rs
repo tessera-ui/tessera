@@ -20,6 +20,7 @@ use super::*;
 thread_local! {
     static CONTENT_BOUNDS: RefCell<[Option<tessera_ui::PxRect>; 4]> = const { RefCell::new([None; 4]) };
     static SELECTED: Cell<Option<State<&'static str>>> = const { Cell::new(None) };
+    static PINNED: Cell<Option<State<bool>>> = const { Cell::new(None) };
 }
 
 pub(super) fn record_content(index: usize, bounds: tessera_ui::PxRect) {
@@ -63,7 +64,9 @@ impl tessera_ui::RenderModule for Pipelines {
 fn fixture() {
     let selected = remember(|| "Specs");
     let scroll = remember(ScrollableController::new);
+    let pinned = remember(|| false);
     SELECTED.set(Some(selected));
+    PINNED.set(Some(pinned));
     material_theme().child(move || {
         boxed()
             .alignment(Alignment::TopStart)
@@ -73,7 +76,7 @@ fn fixture() {
                     .background(tessera_ui::Color::WHITE),
             )
             .children(move || {
-                article_tabs(selected, scroll).pages(
+                article_tabs(selected, scroll).pinned(pinned).pages(
                     ARTICLE_TAB_TITLES
                         .map(|title| ArticlePage {
                             title,
@@ -341,5 +344,220 @@ fn article_selection_pill_animates_with_clock_without_measuring_or_moving_target
         assert_eq!(renderer.diagnostics().measure_node_calls, 1);
         assert_eq!(renderer.diagnostics().cache_hits_direct, 1);
         assert_eq!(renderer.diagnostics().geometry_nodes_updated, 0);
+    }
+}
+
+#[test]
+#[ignore = "requires a native GPU adapter for narrow article tab layout and clipping"]
+fn narrow_article_tabs_keep_natural_labels_and_clip_scrolled_capsule() {
+    let name = concat!(
+        module_path!(),
+        "::narrow_article_tabs_keep_natural_labels_and_clip_scrolled_capsule"
+    );
+    let name = name.split_once("::").unwrap().1;
+    if std::env::var("TESSERA_NARROW_ARTICLE_TEST").as_deref() != Ok(name) {
+        let output = std::process::Command::new(std::env::current_exe().unwrap())
+            .args([
+                "--exact",
+                name,
+                "--include-ignored",
+                "--test-threads=1",
+                "--nocapture",
+            ])
+            .env("TESSERA_NARROW_ARTICLE_TEST", name)
+            .output()
+            .unwrap();
+        assert!(
+            output.status.success(),
+            "isolated narrow tabs failed:\n{}\n{}",
+            String::from_utf8_lossy(&output.stdout),
+            String::from_utf8_lossy(&output.stderr)
+        );
+        return;
+    }
+    let mut renderer = HeadlessRenderer::new(
+        Box::new(fixture),
+        vec![Box::new(Pipelines)],
+        HeadlessConfig {
+            width: 1000,
+            height: 160,
+            scale_factor: 1.0,
+            sample_count: 1,
+            ..Default::default()
+        },
+    )
+    .unwrap();
+    renderer.render_frames(12);
+    for scale in [1.25, 1.15, 1.0, 1.5, 2.0] {
+        tessera_ui::dp::set_scale_factor(scale);
+        renderer.resize((1000.0 * scale) as u32, (160.0 * scale) as u32);
+        renderer.render_frames(12);
+        let natural =
+            CONTENT_BOUNDS.with(|bounds| bounds.borrow().map(|bounds| bounds.unwrap().width));
+        for pinned in [false, true] {
+            PINNED.get().unwrap().set(pinned);
+            for width in [753.0, 500.0, 485.0, 375.0, 320.0, 1000.0] {
+                renderer.resize((width * scale) as u32, (160.0 * scale) as u32);
+                renderer.render_frames(12);
+                let tree = renderer.accessibility_snapshot().unwrap();
+                let focused_label = tree
+                    .nodes
+                    .iter()
+                    .find(|(id, node)| *id == tree.focus && node.role() == Role::Tab)
+                    .and_then(|(_, node)| node.label());
+                let visible_label = focused_label.unwrap_or("Specs");
+                let visible_index = ARTICLE_TAB_TITLES
+                    .iter()
+                    .position(|title| *title == visible_label)
+                    .unwrap();
+                let visible = tab(&renderer, visible_label).1.bounds().unwrap();
+                let minimum = natural[visible_index].0 + 2 * Dp(24.0).to_px().0;
+                assert!(
+                    visible.width() >= f64::from(minimum - 1),
+                    "active tab {visible_label} is clipped after resize at {width}, scale {scale}: {visible:?}, minimum {minimum}"
+                );
+                let contents = CONTENT_BOUNDS.with(|bounds| *bounds.borrow());
+                for (index, content) in contents.into_iter().enumerate() {
+                    let content = content.unwrap();
+                    assert!(
+                        (content.height.to_f32() - 24.0 * scale as f32).abs() <= 1.0,
+                        "{} wrapped at width {width}, scale {scale}, pinned {pinned}: {content:?}",
+                        ARTICLE_TAB_TITLES[index]
+                    );
+                    assert!(
+                        (content.width.0 - natural[index].0).abs() <= 1,
+                        "{} lost its natural width at {width}, scale {scale}: {content:?}, natural {:?}",
+                        ARTICLE_TAB_TITLES[index],
+                        natural[index]
+                    );
+                }
+                let target = tab(&renderer, "Accessibility").0;
+                assert!(renderer.dispatch_accessibility_action(ActionRequest {
+                    action: Action::Focus,
+                    target_node: target,
+                    data: None,
+                    target_tree: TreeId::ROOT,
+                }));
+                renderer.render_frames(24);
+                assert_eq!(renderer.accessibility_snapshot().unwrap().focus, target);
+                let focused_contents = CONTENT_BOUNDS.with(|bounds| *bounds.borrow());
+                for (index, content) in focused_contents.into_iter().enumerate() {
+                    let content = content.unwrap();
+                    assert!(
+                        (content.height.to_f32() - 24.0 * scale as f32).abs() <= 1.0,
+                        "{} wrapped after focus at width {width}, scale {scale}, pinned {pinned}: {content:?}",
+                        ARTICLE_TAB_TITLES[index]
+                    );
+                    assert!(
+                        (content.width.0 - natural[index].0).abs() <= 1,
+                        "{} shrank after focus at {width}, scale {scale}: {content:?}, natural {:?}",
+                        ARTICLE_TAB_TITLES[index],
+                        natural[index]
+                    );
+                }
+                let tree = renderer.accessibility_snapshot().unwrap();
+                let tablist = tree
+                    .nodes
+                    .iter()
+                    .find(|(_, node)| node.role() == Role::TabList)
+                    .unwrap()
+                    .1
+                    .bounds()
+                    .unwrap();
+                assert!(
+                    tablist.x0 >= 0.0 && tablist.x1 <= width * scale,
+                    "tab viewport overflows window: {tablist:?}"
+                );
+                let pixels = renderer.read_pixels().unwrap();
+                let sample = |x: f64, y: f64| {
+                    let offset = (((y * scale) as usize * renderer.physical_size().width as usize)
+                        + (x * scale) as usize)
+                        * 4;
+                    <[u8; 3]>::try_from(&pixels[offset..offset + 3]).unwrap()
+                };
+                let outside = sample(tablist.x0 / scale - 2.0, tablist.y0 / scale + 4.0);
+                let corner = sample(tablist.x0 / scale + 4.0, tablist.y0 / scale + 4.0);
+                assert!(
+                    outside
+                        .into_iter()
+                        .zip(corner)
+                        .all(|(a, b)| a.abs_diff(b) <= 2),
+                    "scrolled tab paints outside capsule corner at {width}, scale {scale}, pinned {pinned}: {outside:?} vs {corner:?}"
+                );
+            }
+        }
+    }
+}
+
+#[test]
+#[ignore = "requires a native GPU adapter for responsive article navigation controls"]
+fn narrow_article_arrows_select_adjacent_pages_and_reveal_the_selected_tab() {
+    let mut renderer = HeadlessRenderer::new(
+        Box::new(fixture),
+        vec![Box::new(Pipelines)],
+        HeadlessConfig {
+            width: 500,
+            height: 160,
+            sample_count: 1,
+            ..Default::default()
+        },
+    )
+    .unwrap();
+    renderer.render_frames(12);
+    for pinned in [false, true] {
+        PINNED.get().unwrap().set(pinned);
+        SELECTED.get().unwrap().set("Specs");
+        renderer.render_frames(12);
+        for (label, expected) in [
+            ("Go to next tab", "Guidelines"),
+            ("Go to next tab", "Accessibility"),
+            ("Go to previous tab", "Guidelines"),
+            ("Go to previous tab", "Specs"),
+            ("Go to previous tab", "Overview"),
+        ] {
+            let tree = renderer.accessibility_snapshot().unwrap();
+            let button = tree
+                .nodes
+                .iter()
+                .find(|(_, node)| node.role() == Role::Button && node.label() == Some(label))
+                .expect("adjacent page control");
+            assert!(renderer.dispatch_accessibility_action(ActionRequest {
+                target_node: button.0,
+                target_tree: TreeId::ROOT,
+                action: Action::Click,
+                data: None,
+            }));
+            renderer.render_frames(16);
+            assert_eq!(SELECTED.get().unwrap().get(), expected);
+            let tree = renderer.accessibility_snapshot().unwrap();
+            let viewport = tree
+                .nodes
+                .iter()
+                .find(|(_, node)| node.role() == Role::TabList)
+                .unwrap()
+                .1
+                .bounds()
+                .unwrap();
+            let selected = tab(&renderer, expected).1.bounds().unwrap();
+            assert!(
+                selected.x0 >= viewport.x0 - 1.0 && selected.x1 <= viewport.x1 + 1.0,
+                "selected {expected} must be revealed inside {viewport:?}: {selected:?}"
+            );
+            let absent = if expected == "Overview" {
+                Some("Go to previous tab")
+            } else if expected == "Accessibility" {
+                Some("Go to next tab")
+            } else {
+                None
+            };
+            if let Some(absent) = absent {
+                assert!(
+                    !tree.nodes.iter().any(
+                        |(_, node)| node.role() == Role::Button && node.label() == Some(absent)
+                    ),
+                    "boundary control must be absent"
+                );
+            }
+        }
     }
 }

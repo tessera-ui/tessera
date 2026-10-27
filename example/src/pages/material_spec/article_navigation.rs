@@ -24,7 +24,7 @@ pub(super) const ARTICLE_TAB_TITLES: [&str; 4] =
 
 pub(super) struct ArticleNavigationState {
     requesters: [FocusRequester; 4],
-    available: [bool; 4],
+    pub(super) available: [bool; 4],
     selected: usize,
     focused: Option<usize>,
 }
@@ -74,6 +74,17 @@ pub(super) fn article_tablist_modifier(
                 FocusManager::current().defer_keyboard_until_layout();
             }
         })
+}
+
+pub(super) fn focused_article_tab(navigation: State<ArticleNavigationState>) -> Option<usize> {
+    let requesters = navigation.with(|navigation| navigation.requesters);
+    requesters.iter().position(FocusRequester::is_focused)
+}
+
+pub(super) fn focus_article_tab(navigation: State<ArticleNavigationState>, index: usize) {
+    let requester = navigation.with(|navigation| navigation.requesters[index]);
+    requester.request_focus();
+    FocusManager::current().defer_keyboard_until_layout();
 }
 
 pub(super) fn article_tab_focus_visible(

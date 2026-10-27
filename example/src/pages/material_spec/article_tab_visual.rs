@@ -215,8 +215,7 @@ pub(super) fn focus_modifier(modifier: Modifier, visible: bool, hovered: bool) -
     } else {
         modifier
             .border_with_shape(Dp(2.0), srgb(28, 27, 29), Shape::CAPSULE)
-            .padding_all(Dp(2.0))
-            .border_with_shape(Dp(2.0), Color::WHITE, Shape::CAPSULE)
-            .padding_symmetric(Dp(22.0), Dp::ZERO)
+            .border_with_shape(Dp(4.0), Color::WHITE, Shape::CAPSULE)
+            .padding_symmetric(Dp(24.0), Dp::ZERO)
     }
 }

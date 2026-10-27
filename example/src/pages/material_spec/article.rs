@@ -11,6 +11,7 @@ use tessera_components::{
     boxed::boxed,
     column::column,
     icon::icon,
+    icon_button::icon_button,
     interaction_state::InteractionState,
     material_icons::filled,
     modifier::{ClickableArgs, ModifierExt as _, Padding, SemanticsArgs, ShadowArgs},
@@ -32,7 +33,8 @@ use super::{
     BACKGROUND, INK,
     article_navigation::{
         ARTICLE_TAB_TITLES, ArticleNavigationState, article_tab_focus_visible,
-        article_tab_modifier, article_tablist_modifier, sync_article_navigation,
+        article_tab_modifier, article_tablist_modifier, focus_article_tab, focused_article_tab,
+        sync_article_navigation,
     },
     article_tab_visual, gap, heading, media, srgb, type_style,
 };
@@ -414,16 +416,10 @@ fn article_tabs(
                 }),
         )
         .children(move || {
-            let available = (width.get().0 - 16.0).max(0.0);
-            let navigation_width = if pinned.get() {
-                available.min(1024.0)
-            } else {
-                available
-            };
             let corner = RoundedCorner::manual(Dp(40.0), 2.0);
             spacer().modifier(
                 Modifier::new()
-                    .width(Dp(navigation_width))
+                    .fill_max_width()
                     .height(Dp(if pinned.get() { 72.0 } else { 88.0 }))
                     .background_with_shape(
                         BACKGROUND,
@@ -434,22 +430,6 @@ fn article_tabs(
                             bottom_right: corner,
                         },
                     ),
-            );
-            let scheme = use_context::<MaterialTheme>().unwrap().get().color_scheme;
-            spacer().modifier(
-                Modifier::new()
-                    .width(Dp(navigation_width))
-                    .height(Dp(if pinned.get() { 63.0 } else { 79.0 }))
-                    .offset(Dp::ZERO, Dp(9.0))
-                    .shadow(
-                        &scheme,
-                        &ShadowArgs {
-                            elevation: if pinned.get() { Dp(1.0) } else { Dp::ZERO },
-                            shape: Shape::CAPSULE,
-                            ..Default::default()
-                        },
-                    )
-                    .background_with_shape(srgb(248, 241, 246), Shape::CAPSULE),
             );
             article_tab_row(selected, scroll, width, pinned).pages_optional(pages.clone());
         });
@@ -466,6 +446,12 @@ fn article_tab_row(
     media::load_fonts();
     let horizontal = remember(ScrollableController::new);
     let contents = remember(|| [Dp(160.0); 4]);
+    let density = tessera_ui::dp::scale_factor();
+    let content_density = remember(|| density);
+    if content_density.get() != density {
+        content_density.set(density);
+        contents.set([Dp(160.0); 4]);
+    }
     let available = ["Overview", "Specs", "Guidelines", "Accessibility"].map(|label| {
         label == "Specs"
             || pages
@@ -505,17 +491,250 @@ fn article_tab_row(
         });
     }
     let progress = motions.with(|motions| motions.map(|motion| motion.value()));
-    let available_width = (width.get().0 - 16.0).max(0.0);
-    let navigation_width = if pinned.get() {
-        available_width.min(1024.0)
+    let full_width = article_tab_width(width.get(), pinned.get());
+    let minimums = article_tab_minimums(contents);
+    let minimum: i32 = minimums
+        .iter()
+        .enumerate()
+        .filter(|(index, _)| available[*index])
+        .map(|(_, width)| width.0)
+        .sum();
+    let overflow = minimum > full_width.0;
+    let previous = overflow && adjacent_article_tab(selected.get(), available, true).is_some();
+    let next = overflow && adjacent_article_tab(selected.get(), available, false).is_some();
+    let control_width = Dp(48.0).to_px().0 + Dp(8.0).to_px().0;
+    let viewport_width =
+        Px((full_width.0 - control_width * (i32::from(previous) + i32::from(next))).max(0));
+    row()
+        .modifier(
+            Modifier::new()
+                .width(Dp::from(full_width))
+                .offset(Dp::ZERO, Dp(9.0)),
+        )
+        .children(move || {
+            if previous {
+                article_navigation_arrow(
+                    selected, scroll, horizontal, width, pinned, contents, navigation, true,
+                );
+                spacer().modifier(Modifier::new().width(Dp(8.0)));
+            }
+            boxed()
+                .modifier(
+                    Modifier::new()
+                        .width(Dp::from(viewport_width))
+                        .height(Dp(if pinned.get() { 63.0 } else { 79.0 })),
+                )
+                .children(move || {
+                    let scheme = use_context::<MaterialTheme>().unwrap().get().color_scheme;
+                    spacer().modifier(
+                        Modifier::new()
+                            .fill_max_size()
+                            .shadow(
+                                &scheme,
+                                &ShadowArgs {
+                                    elevation: if pinned.get() { Dp(1.0) } else { Dp::ZERO },
+                                    shape: Shape::CAPSULE,
+                                    ..Default::default()
+                                },
+                            )
+                            .background_with_shape(srgb(248, 241, 246), Shape::CAPSULE),
+                    );
+                    article_tab_strip(
+                        selected,
+                        scroll,
+                        horizontal,
+                        pinned,
+                        contents,
+                        navigation,
+                        available,
+                        progress,
+                        viewport_width,
+                    );
+                });
+            if next {
+                spacer().modifier(Modifier::new().width(Dp(8.0)));
+                article_navigation_arrow(
+                    selected, scroll, horizontal, width, pinned, contents, navigation, false,
+                );
+            }
+        });
+}
+
+fn article_tab_width(width: Dp, pinned: bool) -> Px {
+    let available = (width.0 - 16.0).max(0.0);
+    Dp(if pinned {
+        available.min(1024.0)
     } else {
-        available_width
+        available
+    })
+    .to_px()
+}
+
+fn article_tab_minimums(contents: State<[Dp; 4]>) -> [Px; 4] {
+    let side_padding = Dp(24.0).to_px();
+    contents.with(|contents| contents.map(|width| Px(width.to_px().0 + 2 * side_padding.0)))
+}
+
+fn article_tab_sizes(minimums: [Px; 4], available: [bool; 4], viewport: Px) -> [Px; 4] {
+    let minimum: i32 = minimums
+        .iter()
+        .enumerate()
+        .filter(|(index, _)| available[*index])
+        .map(|(_, width)| width.0)
+        .sum();
+    let mut remaining = available.iter().filter(|value| **value).count() as i32;
+    let mut extra = (viewport.0 - minimum).max(0);
+    std::array::from_fn(|index| {
+        if !available[index] {
+            return Px::ZERO;
+        }
+        let share = extra / remaining;
+        extra -= share;
+        remaining -= 1;
+        Px(minimums[index].0 + share)
+    })
+}
+
+fn reveal_article_tab(
+    horizontal: State<ScrollableController>,
+    sizes: [Px; 4],
+    target: usize,
+    viewport: Px,
+    reset: bool,
+) {
+    let start: i32 = sizes.iter().take(target).map(|width| width.0).sum();
+    let end = start + sizes[target].0;
+    let position = horizontal.with(|scroll| scroll.child_position());
+    let offset = if reset { 0.0 } else { position.x };
+    let offset = if start as f32 + offset < 0.0 {
+        -(start as f32)
+    } else if end as f32 + offset > viewport.0 as f32 {
+        (viewport.0 - end) as f32
+    } else {
+        offset
     };
+    let next = PxPosition::from_f32_xy(offset, position.y);
+    if next != position {
+        horizontal.with_mut(|scroll| scroll.set_scroll_position(next));
+    }
+}
+
+#[derive(Clone, Copy, PartialEq)]
+struct ArticleTabReveal {
+    selected: &'static str,
+    minimums: [Px; 4],
+    available: [bool; 4],
+    viewport: Px,
+}
+
+fn adjacent_article_tab(selected: &str, available: [bool; 4], previous: bool) -> Option<usize> {
+    let current = ARTICLE_TAB_TITLES
+        .iter()
+        .position(|title| *title == selected)?;
+    if previous {
+        (0..current).rev().find(|index| available[*index])
+    } else {
+        (current + 1..4).find(|index| available[*index])
+    }
+}
+
+#[tessera]
+fn article_navigation_arrow(
+    selected: State<&'static str>,
+    scroll: State<ScrollableController>,
+    horizontal: State<ScrollableController>,
+    width: State<Dp>,
+    pinned: State<bool>,
+    contents: State<[Dp; 4]>,
+    navigation: State<ArticleNavigationState>,
+    previous: bool,
+) {
+    icon_button()
+        .standard()
+        .modifier(Modifier::new().size(Dp(48.0), Dp(if pinned.get() { 63.0 } else { 79.0 })))
+        .shape(Shape::CAPSULE)
+        .color(srgb(248, 241, 246))
+        .content_color(srgb(77, 66, 86))
+        .icon(if previous {
+            filled::ARROW_BACK_SVG
+        } else {
+            filled::ARROW_FORWARD_SVG
+        })
+        .accessibility_label(if previous {
+            "Go to previous tab"
+        } else {
+            "Go to next tab"
+        })
+        .on_click(move || {
+            let available = navigation.with(|navigation| navigation.available);
+            let Some(target) = adjacent_article_tab(selected.get(), available, previous) else {
+                return;
+            };
+            let minimums = article_tab_minimums(contents);
+            let first = available.iter().position(|value| *value).unwrap();
+            let last = available.iter().rposition(|value| *value).unwrap();
+            let controls = i32::from(target > first) + i32::from(target < last);
+            let viewport = article_tab_width(width.get(), pinned.get()).0
+                - controls * (Dp(48.0).to_px().0 + Dp(8.0).to_px().0);
+            let sizes = article_tab_sizes(minimums, available, Px(viewport));
+            reveal_article_tab(horizontal, sizes, target, Px(viewport), false);
+            selected.set(ARTICLE_TAB_TITLES[target]);
+            scroll.with_mut(|scroll| scroll.set_scroll_position(PxPosition::ZERO));
+            if (previous && target == first) || (!previous && target == last) {
+                focus_article_tab(navigation, target);
+            } else {
+                FocusManager::current().defer_keyboard_until_layout();
+            }
+        });
+}
+
+#[tessera]
+fn article_tab_strip(
+    selected: State<&'static str>,
+    scroll: State<ScrollableController>,
+    horizontal: State<ScrollableController>,
+    pinned: State<bool>,
+    contents: State<[Dp; 4]>,
+    navigation: State<ArticleNavigationState>,
+    available: [bool; 4],
+    progress: [f32; 4],
+    viewport_width: Px,
+) {
+    let minimums = article_tab_minimums(contents);
+    let reveal = ArticleTabReveal {
+        selected: selected.get(),
+        minimums,
+        available,
+        viewport: viewport_width,
+    };
+    let last_reveal = remember(|| None::<ArticleTabReveal>);
+    let previous_reveal = last_reveal.get();
+    if previous_reveal != Some(reveal) {
+        last_reveal.set(Some(reveal));
+        let selected_index = ARTICLE_TAB_TITLES
+            .iter()
+            .position(|title| *title == selected.get())
+            .unwrap_or(1);
+        let target = if previous_reveal.is_none_or(|previous| previous.selected != reveal.selected)
+        {
+            selected_index
+        } else {
+            focused_article_tab(navigation).unwrap_or(selected_index)
+        };
+        let sizes = article_tab_sizes(minimums, available, viewport_width);
+        reveal_article_tab(
+            horizontal,
+            sizes,
+            target,
+            viewport_width,
+            previous_reveal.is_some_and(|previous| previous.minimums != minimums),
+        );
+    }
     row()
         .modifier(
             article_tablist_modifier(Modifier::new(), navigation)
-                .width(Dp(navigation_width))
-                .offset(Dp::ZERO, Dp(9.0))
+                .width(Dp::from(viewport_width))
+                .clip_shape(Shape::CAPSULE)
                 .horizontal_scroll(horizontal)
                 .semantics(SemanticsArgs {
                     role: Some(Role::TabList),
@@ -525,35 +744,12 @@ fn article_tab_row(
                 }),
         )
         .children(move || {
-            let minimums =
-                contents.with(|contents| contents.map(|width| Dp(width.0 + 48.0).to_px()));
-            let available_width = (width.get().0 - 16.0).max(0.0);
-            let navigation_width = if pinned.get() {
-                available_width.min(1024.0)
-            } else {
-                available_width
-            };
-            let minimum: i32 = minimums
-                .iter()
-                .enumerate()
-                .filter(|(index, _)| available[*index])
-                .map(|(_, width)| width.0)
-                .sum();
-            let mut remaining = available.iter().filter(|available| **available).count() as i32;
-            let mut extra = (Dp(navigation_width).to_px().0 - minimum).max(0);
+            let sizes =
+                article_tab_sizes(article_tab_minimums(contents), available, viewport_width);
             for (index, label) in ARTICLE_TAB_TITLES.into_iter().enumerate() {
-                if label != "Specs"
-                    && !pages
-                        .as_ref()
-                        .is_some_and(|pages| pages.iter().any(|page| page.title == label))
-                {
+                if !available[index] {
                     continue;
                 }
-                // Share physical-pixel remainders instead of leaving rounded
-                // gaps.
-                let share = extra / remaining;
-                extra -= share;
-                remaining -= 1;
                 let active = selected.get() == label;
                 let interaction = remember(InteractionState::default);
                 let (hovered, pressed) =
@@ -564,7 +760,7 @@ fn article_tab_row(
                     .modifier(article_tab_visual::focus_modifier(
                         article_tab_modifier(
                             Modifier::new()
-                                .width(Dp::from(Px(minimums[index].0 + share)))
+                                .width(Dp::from(sizes[index]))
                                 .height(Dp(if pinned.get() { 63.0 } else { 79.0 }))
                                 .background_with_shape(
                                     article_tab_visual::background(false, hovered, pressed),
@@ -595,16 +791,21 @@ fn article_tab_row(
                     ))
                     .children(move || {
                         row()
-                            .modifier(Modifier::new().on_globally_positioned(
-                                move |bounds: tessera_ui::PxRect| {
-                                    #[cfg(all(test, not(target_family = "wasm")))]
-                                    visual_tests::record_content(index, bounds);
-                                    let next = Dp::from_pixels_f32(bounds.width.to_f32());
-                                    if contents.with(|contents| contents[index]) != next {
-                                        contents.with_mut(|contents| contents[index] = next);
-                                    }
-                                },
-                            ))
+                            .modifier({
+                                let modifier = Modifier::new().on_layout_coordinates(
+                                    move |coordinates: LayoutCoordinates| {
+                                        let next = Dp::from(coordinates.local_size.width);
+                                        if contents.with(|contents| contents[index]) != next {
+                                            contents.with_mut(|contents| contents[index] = next);
+                                        }
+                                    },
+                                );
+                                #[cfg(all(test, not(target_family = "wasm")))]
+                                let modifier = modifier.on_globally_positioned(move |bounds| {
+                                    visual_tests::record_content(index, bounds)
+                                });
+                                modifier
+                            })
                             .cross_axis_alignment(CrossAxisAlignment::Center)
                             .children(move || {
                                 icon()

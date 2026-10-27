@@ -45,19 +45,32 @@ fn reveal(
         if let Some(target) = find(renderer, label, role) {
             let bounds = target.1.bounds().unwrap();
             let center = (bounds.y0 + bounds.y1) * 0.5;
-            if center > 80.0 && center < 835.0 {
+            if center
+                > (if role == Some(Role::Link) {
+                    150.0
+                } else {
+                    80.0
+                })
+                && center < f64::from(renderer.physical_size().height) - 36.0
+            {
                 return target;
             }
             renderer.pointer_scroll(
                 MOUSE_POINTER_ID,
-                PxPosition::from_f32_xy(870.0, 430.0),
+                PxPosition::from_f32_xy(
+                    (renderer.physical_size().width.min(907) as f32 - 37.0).max(1.0),
+                    430.0,
+                ),
                 0.0,
                 (430.0 - center).clamp(-1000.0, 1000.0) as f32,
             );
         } else {
             renderer.pointer_scroll(
                 MOUSE_POINTER_ID,
-                PxPosition::from_f32_xy(870.0, 430.0),
+                PxPosition::from_f32_xy(
+                    (renderer.physical_size().width.min(907) as f32 - 37.0).max(1.0),
+                    430.0,
+                ),
                 0.0,
                 direction,
             );
@@ -241,6 +254,26 @@ fn text_field_route_compacts_navigation_and_reveals_retained_outlined_callouts_a
     assert_eq!(
         find(&renderer, "Specs", Some(Role::Tab)).unwrap().0,
         specs.0
+    );
+    renderer.pointer_scroll(
+        MOUSE_POINTER_ID,
+        PxPosition::from_f32_xy(1300.0, 600.0),
+        0.0,
+        -520.0,
+    );
+    renderer.render_frames(30);
+    let pixels = renderer.read_pixels().unwrap();
+    let y = ((first.y0 + first.y1) / 2.0) as usize;
+    let pixel = |x| &pixels[(y * 1400 + x) * 4..][..4];
+    assert_eq!(
+        pixel(64),
+        pixel(12),
+        "the pinned header must cover chapter figures beside its centered tabs"
+    );
+    assert_eq!(
+        pixel(1320),
+        pixel(1372),
+        "the pinned header must cover chapter figures on both sides"
     );
 }
 
@@ -482,4 +515,195 @@ fn real_buttons_route_retains_visited_native_state_reveals_cold_sections_and_pre
         bounds.y0 >= 64.0 && bounds.y1 <= 871.0,
         "reverse scrolling must reveal the original retained control: {bounds:?}"
     );
+}
+
+#[test]
+#[ignore = "requires a native GPU adapter for actual date configuration navigation"]
+fn saving_date_range_configuration_preserves_article_position() {
+    let mut renderer = HeadlessRenderer::new(
+        Box::new(crate::app::app),
+        vec![Box::new(Pipelines)],
+        HeadlessConfig {
+            width: 1280,
+            height: 800,
+            sample_count: 1,
+            ..Default::default()
+        },
+    )
+    .unwrap();
+    renderer.render_frames(32);
+    click(&mut renderer, "Material Components", None, -600.0, None);
+    renderer.render_frames(60);
+    click(
+        &mut renderer,
+        "Open Date pickers specifications",
+        None,
+        -600.0,
+        None,
+    );
+    click(
+        &mut renderer,
+        "Modal date picker",
+        Some(Role::Link),
+        -600.0,
+        None,
+    );
+    let target = reveal(
+        &mut renderer,
+        "Save configuration date range",
+        Some(Role::Button),
+        -500.0,
+    );
+    let heading = find(
+        &renderer,
+        "Modal date picker configurations",
+        Some(Role::Heading),
+    )
+    .unwrap()
+    .1
+    .bounds()
+    .unwrap();
+    let bounds = target.1.bounds().unwrap();
+    let point = PxPosition::from_f32_xy(
+        ((bounds.x0 + bounds.x1) * 0.5) as f32,
+        ((bounds.y0 + bounds.y1) * 0.5) as f32,
+    );
+    renderer.pointer_move(MOUSE_POINTER_ID, point);
+    renderer.pointer_press(MOUSE_POINTER_ID, point, PressKeyEventType::Left);
+    renderer.render_frames(1);
+    renderer.pointer_release(MOUSE_POINTER_ID, point, PressKeyEventType::Left);
+    for frame in 0..12 {
+        renderer.render_frames(1);
+        let current = find(
+            &renderer,
+            "Modal date picker configurations",
+            Some(Role::Heading),
+        )
+        .unwrap()
+        .1
+        .bounds()
+        .unwrap();
+        let tree = renderer.accessibility_snapshot().unwrap();
+        let focus = tree
+            .nodes
+            .iter()
+            .find(|(id, _)| *id == tree.focus)
+            .map(|(_, node)| (node.label(), node.bounds()));
+        assert!(
+            (current.y0 - heading.y0).abs() <= 1.0,
+            "configuration action moved article at frame {frame}: {heading:?} -> {current:?}, focus {focus:?}"
+        );
+    }
+    assert!(find(&renderer, "Date range saved", None).is_some());
+}
+
+#[test]
+#[ignore = "requires a native GPU adapter for actual carousel article navigation"]
+fn carousel_collection_page_keeps_return_visible_and_restores_article_position() {
+    for width in [1280, 390] {
+        let mut renderer = HeadlessRenderer::new(
+            Box::new(crate::app::app),
+            vec![Box::new(Pipelines)],
+            HeadlessConfig {
+                width,
+                height: 800,
+                sample_count: 1,
+                ..Default::default()
+            },
+        )
+        .unwrap();
+        renderer.render_frames(32);
+        click(&mut renderer, "Material Components", None, -600.0, None);
+        renderer.render_frames(60);
+        click(
+            &mut renderer,
+            "Open Carousel specifications",
+            None,
+            -600.0,
+            None,
+        );
+        if width == 390 {
+            click(
+                &mut renderer,
+                "Go to next tab",
+                Some(Role::Button),
+                -700.0,
+                None,
+            );
+            click(
+                &mut renderer,
+                "Go to next tab",
+                Some(Role::Button),
+                -700.0,
+                None,
+            );
+        } else {
+            click(
+                &mut renderer,
+                "Accessibility",
+                Some(Role::Tab),
+                -700.0,
+                None,
+            );
+        }
+        click(
+            &mut renderer,
+            "Keyboard navigation",
+            Some(Role::Link),
+            -500.0,
+            None,
+        );
+        let target = reveal(
+            &mut renderer,
+            "Show all carousel items",
+            Some(Role::Button),
+            -500.0,
+        );
+        let before = target.1.bounds().unwrap();
+        let point = PxPosition::from_f32_xy(
+            ((before.x0 + before.x1) * 0.5) as f32,
+            ((before.y0 + before.y1) * 0.5) as f32,
+        );
+        renderer.pointer_move(MOUSE_POINTER_ID, point);
+        renderer.pointer_press(MOUSE_POINTER_ID, point, PressKeyEventType::Left);
+        renderer.step_frame();
+        renderer.pointer_release(MOUSE_POINTER_ID, point, PressKeyEventType::Left);
+        renderer.render_frames(8);
+        for frame in 0..16 {
+            renderer.step_frame();
+            let after = find(&renderer, "Back to carousel", Some(Role::Button))
+                .expect("collection page return control");
+            let bounds = after.1.bounds().unwrap();
+            assert!(
+                bounds.y0 >= 64.0 && bounds.y1 <= 145.0,
+                "return action must stay in the collection page header at frame {frame}: {bounds:?}"
+            );
+            let page = find(&renderer, "All carousel collections", Some(Role::Dialog))
+                .unwrap()
+                .1
+                .bounds()
+                .unwrap();
+            assert!(
+                (page.y0 - 64.0).abs() <= 1.0 && (page.y1 - 800.0).abs() <= 1.0,
+                "collection page must use the full content viewport height: {page:?}"
+            );
+            if width == 390 {
+                assert_eq!(
+                    page.width(),
+                    390.0,
+                    "compact collection page must not have modal outer margins"
+                );
+            }
+        }
+        click(
+            &mut renderer,
+            "Back to carousel",
+            Some(Role::Button),
+            500.0,
+            None,
+        );
+        let restored = find(&renderer, "Show all carousel items", Some(Role::Button)).unwrap();
+        assert_eq!(restored.0, target.0);
+        assert!((restored.1.bounds().unwrap().y0 - before.y0).abs() <= 1.0);
+    }
 }
