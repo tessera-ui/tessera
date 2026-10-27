@@ -670,6 +670,23 @@ fn chapter_content(
     anatomy: RenderSlot,
     behavior: RenderSlot,
 ) {
+    if kind == Kind::Icons {
+        match chapter.title {
+            "Placement" => {
+                super::icon_buttons::context::placement();
+                return;
+            }
+            "Labeling elements" => {
+                super::icon_buttons::context::labeling();
+                return;
+            }
+            "Layout & density" => {
+                super::icon_buttons::context::density();
+                return;
+            }
+            _ => {}
+        }
+    }
     column()
         .modifier(Modifier::new().fill_max_width())
         .children(move || {

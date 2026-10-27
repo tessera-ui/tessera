@@ -21,15 +21,20 @@ use tessera_components::{
     tooltip::{TooltipController, TooltipPlacement, tooltip_anchor, tooltip_provider},
 };
 use tessera_ui::{
-    Dp, Modifier, RenderSlot, modifier::FocusModifierExt as _, remember, tessera, use_context,
+    Dp, Modifier, RenderSlot, State, modifier::FocusModifierExt as _, remember, tessera,
+    use_context,
 };
 
 use super::{
     ACCENT,
     action_articles::{Kind, action_article},
+    annotations::{self, Geometry, dotted, relative, watch},
     article::SpecSection,
     gap, panel, spec_table, subheading, type_style,
 };
+
+#[path = "icon_button_context.rs"]
+pub(super) mod context;
 
 const STYLES: [IconButtonVariant; 4] = [
     IconButtonVariant::Filled,
@@ -475,23 +480,72 @@ fn tokens() {
 
 #[tessera]
 fn anatomy() {
-    panel(RenderSlot::new(|| {
-        column().children(|| {
-            sample(
-                IconButtonVariant::Filled,
-                IconButtonSize::Large,
-                IconButtonWidth::Uniform,
-                IconButtonShape::Round,
-                false,
-                false,
-                true,
-                "Anatomy add action",
-            );
+    let geometry = remember(Geometry::new);
+    panel(RenderSlot::new(move || {
+        column().children(move || {
+            boxed()
+                .alignment(Alignment::Center)
+                .modifier(watch(geometry, "figure").fill_max_width().height(Dp(224.0)))
+                .children(move || {
+                    boxed().modifier(watch(geometry, "container")).children(|| {
+                        sample(
+                            IconButtonVariant::Filled,
+                            IconButtonSize::Large,
+                            IconButtonWidth::Uniform,
+                            IconButtonShape::Round,
+                            false,
+                            false,
+                            true,
+                            "Anatomy add action",
+                        );
+                    });
+                    boxed()
+                        .modifier(Modifier::new().fill_max_size())
+                        .children(move || {
+                            icon_anatomy_callouts(geometry);
+                        });
+                });
             gap(Dp(24.0));
             text().content("1  Icon");
             text().content("2  Container");
         });
     }));
+}
+
+#[tessera]
+fn icon_anatomy_callouts(geometry: State<Geometry>) {
+    let values = geometry.get();
+    let (Some(root), Some(container)) = (values.get("figure"), relative(&values, "container"))
+    else {
+        return;
+    };
+    let mut svg = String::new();
+    let y = container.y + container.h * 0.5;
+    let left = container.x - 64.0;
+    let right = container.x + container.w + 40.0;
+    dotted(
+        &mut svg,
+        left + 24.0,
+        y,
+        container.x + container.w * 0.5 - left - 24.0,
+        false,
+        "#49454f",
+    );
+    dotted(
+        &mut svg,
+        container.x + container.w,
+        y,
+        right - container.x - container.w,
+        false,
+        "#49454f",
+    );
+    annotations::marker(1, Dp(left), Dp(y - 16.0));
+    annotations::marker(2, Dp(right), Dp(y - 16.0));
+    annotations::lines(
+        Dp::from_pixels_f32(root.width.to_f32()),
+        Dp::from_pixels_f32(root.height.to_f32()),
+        svg,
+    );
 }
 
 #[tessera]

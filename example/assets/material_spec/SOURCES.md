@@ -125,3 +125,7 @@ The Example Sans Tabs fonts are renamed Latin subsets and static instances of Go
 | ExampleSansTabsPressed.ttf | Example Sans Tabs Pressed | 18 | 500 | -50 |
 
 The existing Example Sans Display at weight 475 and Example Sans Text at weight 400 instances are unchanged. The dedicated tab subsets contain Latin U+0020 through U+00FF; text outside this subset uses normal font fallback.
+
+| icon-context-appbar.png | https://m3.material.io/components/icon-buttons/guidelines | https://firebasestorage.googleapis.com/v0/b/design-spec/o/projects%2Fgoogle-material-3%2Fimages%2Fm0c0xugp-14.png?alt=media — only the restaurant photograph region is displayed; controls, text and device framing are native. |
+| icon-context-label.png | https://m3.material.io/components/icon-buttons/accessibility | https://lh3.googleusercontent.com/Veran4xIuwOjaUK-TME0CkyE4D03sjgbC1O1fGyyeie01_pz6s0p7PoibSPSPzTNT7bmFKJy4kG40AnFtMviria4wR7kDBMlNQI6OuqqES8tBQ=s0 — only the food photograph region is displayed; labels, controls, framing and annotations are native. |
+| icon-context-density.png | https://m3.material.io/components/icon-buttons/accessibility | https://firebasestorage.googleapis.com/v0/b/design-spec/o/projects%2Fgoogle-material-3%2Fimages%2Fm0c1h7ba-4.png?alt=media — only the avatar and restaurant photograph regions are displayed; card, controls, framing and annotations are native. |
