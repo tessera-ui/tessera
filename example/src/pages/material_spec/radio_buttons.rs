@@ -27,14 +27,17 @@ use tessera_ui::{
 use super::{
     ACCENT,
     article::{ArticlePage, SpecSection, article},
-    gap, panel,
+    gap,
     selection_articles::option_label,
-    spec_table, subheading, type_style,
+    spec_table, type_style,
 };
 
 #[cfg(all(test, not(target_family = "wasm")))]
 #[path = "radio_figures_tests.rs"]
 mod figures_tests;
+
+#[path = "radio_page_figures.rs"]
+mod page_figures;
 
 #[tessera]
 pub(super) fn radio_buttons_spec() {
@@ -42,6 +45,12 @@ pub(super) fn radio_buttons_spec() {
         "Radio button",
         "Radio buttons let people select one option from a set of options",
         vec![
+            SpecSection {
+                title: "Anatomy",
+                content: RenderSlot::new(|| {
+                    page_figures::anatomy(false);
+                }),
+            },
             SpecSection {
                 title: "Tokens & specs",
                 content: RenderSlot::new(tokens),
@@ -60,60 +69,73 @@ pub(super) fn radio_buttons_spec() {
             },
         ],
     )
-    .intro(|| { overview(); })
+    .intro(ringtone)
     .pages(vec![
-        ArticlePage { title: "Overview", intro: Some(RenderSlot::new(|| {
-            overview();
-            gap(Dp(32.0));
-            prose("Choose one option from a visible set. Give each option a concise label and make the current selection prominent.");
-        })), sections: vec![] },
-        ArticlePage { title: "Guidelines", intro: None, sections: vec![
-            SpecSection { title: "Usage", content: RenderSlot::new(|| {
-                prose("Use radio buttons to expose a short list of mutually exclusive options. Prefer a menu when space is limited. Avoid nested radio choices.");
-                gap(Dp(24.0)); ringtone();
-                gap(Dp(24.0)); subheading("Alternate selection controls".into());
-                prose("Checkboxes allow several related choices, radio buttons select one option, and switches control independent settings.");
-            }) },
-            SpecSection { title: "Anatomy", content: RenderSlot::new(|| {
-                prose("Pair every selected or unselected icon with a clear, adjacent label.");
-                gap(Dp(24.0)); panel(RenderSlot::new(|| { choices("Radio button anatomy", true); }));
-            }) },
-            SpecSection { title: "Placement", content: RenderSlot::new(|| {
-                prose("Stack choices vertically and provide a suitable initial selection.");
-                gap(Dp(24.0)); panel(RenderSlot::new(|| { choices("Notification preference", true); }));
-            }) },
-            SpecSection { title: "Behavior", content: RenderSlot::new(|| {
-                prose("Selecting an icon or its label chooses that option and clears the previous choice. Apply the result immediately unless a surrounding form requires confirmation.");
-                gap(Dp(24.0)); panel(RenderSlot::new(|| { choices("Notification preference", true); }));
-            }) },
-        ] },
-        ArticlePage { title: "Accessibility", intro: None, sections: vec![
-            SpecSection { title: "Use cases", content: RenderSlot::new(|| {
-                prose("People using assistive technology need to find the control, change its selection and receive feedback about the result.");
-                gap(Dp(24.0)); panel(RenderSlot::new(|| { choices("Notification preference", true); }));
-            }) },
-            SpecSection { title: "Interaction & style", content: RenderSlot::new(|| {
-                prose("An icon and its label select the same option. Selecting another option clears the previous one; activating the selected option does not clear the group.");
-                gap(Dp(24.0)); subheading("Avoid applying density by default".into());
-                prose("Retain the default minimum 48dp targets. Let people explicitly opt into a denser presentation.");
-                gap(Dp(24.0)); panel(RenderSlot::new(|| { choices("Notification preference", true); }));
-            }) },
-            SpecSection { title: "Initial focus", content: RenderSlot::new(|| {
-                prose("Tab enters at the selected radio. If nothing is selected, forward traversal starts at the first option and reverse traversal starts at the last.");
-            }) },
-            SpecSection { title: "Keyboard navigation", content: RenderSlot::new(|| {
-                spec_table(vec!["Keys".into(), "Action".into()], vec![
-                    vec!["Tab / Shift + Tab".into(), "Enter or leave the radio group".into()],
-                    vec!["Arrow keys".into(), "Focus and select the next or previous option; wrap at the ends".into()],
-                    vec!["Space".into(), "Select the focused option".into()],
-                ]);
-                gap(Dp(24.0)); panel(RenderSlot::new(|| { choices("Notification preference", true); }));
-            }) },
-            SpecSection { title: "Labeling elements", content: RenderSlot::new(|| {
-                prose("Name the group after its category, and name each option after its adjacent label.");
-                gap(Dp(24.0)); panel(RenderSlot::new(|| { choices("Notification preference", true); }));
-            }) },
-        ] },
+        ArticlePage {
+            title: "Overview",
+            intro: Some(RenderSlot::new(page_figures::overview_article)),
+            sections: vec![],
+        },
+        ArticlePage {
+            title: "Guidelines",
+            intro: Some(RenderSlot::new(ringtone)),
+            sections: vec![
+                SpecSection {
+                    title: "Usage",
+                    content: RenderSlot::new(page_figures::usage),
+                },
+                SpecSection {
+                    title: "Anatomy",
+                    content: RenderSlot::new(|| {
+                        page_figures::anatomy(true);
+                    }),
+                },
+                SpecSection {
+                    title: "Placement",
+                    content: RenderSlot::new(page_figures::placement),
+                },
+                SpecSection {
+                    title: "Behavior",
+                    content: RenderSlot::new(page_figures::behavior),
+                },
+            ],
+        },
+        ArticlePage {
+            title: "Accessibility",
+            intro: None,
+            sections: vec![
+                SpecSection {
+                    title: "Use cases",
+                    content: RenderSlot::new(|| {
+                        page_figures::accessibility("Use cases".into());
+                    }),
+                },
+                SpecSection {
+                    title: "Interaction & style",
+                    content: RenderSlot::new(|| {
+                        page_figures::accessibility("Interaction & style".into());
+                    }),
+                },
+                SpecSection {
+                    title: "Initial focus",
+                    content: RenderSlot::new(|| {
+                        page_figures::accessibility("Initial focus".into());
+                    }),
+                },
+                SpecSection {
+                    title: "Keyboard navigation",
+                    content: RenderSlot::new(|| {
+                        page_figures::accessibility("Keyboard navigation".into());
+                    }),
+                },
+                SpecSection {
+                    title: "Labeling elements",
+                    content: RenderSlot::new(|| {
+                        page_figures::accessibility("Labeling elements".into());
+                    }),
+                },
+            ],
+        },
     ]);
 }
 
@@ -416,48 +438,17 @@ fn scheme(dark: bool) {
 
 #[tessera]
 fn colors() {
-    scheme(false);
-    gap(Dp(24.0));
-    scheme(true);
-    gap(Dp(24.0));
-    text()
-        .content("Adjacent labels use On surface regardless of selection.")
-        .style(type_style(16.0, 24.0));
+    page_figures::colors();
 }
 
 #[tessera]
 fn states() {
-    text()
-        .content(
-            "Hover, use Tab and the arrow keys, or hold a choice to inspect actual input feedback.",
-        )
-        .style(type_style(16.0, 24.0));
-    gap(Dp(24.0));
-    panel(RenderSlot::new(|| {
-        choices("Enabled choices", true);
-    }));
-    gap(Dp(24.0));
-    panel(RenderSlot::new(|| {
-        choices("Disabled choices", false);
-    }));
+    page_figures::states();
 }
 
 #[tessera]
 fn measurements() {
-    panel(RenderSlot::new(|| {
-        radio_button()
-            .selected(true)
-            .accessibility_label("Radio measurement example");
-    }));
-    gap(Dp(24.0));
-    spec_table(
-        vec!["Attribute".into(), "Value".into()],
-        vec![
-            vec!["Icon".into(), "20dp".into()],
-            vec!["State layer".into(), "40dp".into()],
-            vec!["Target".into(), "48 × 48dp".into()],
-        ],
-    );
+    page_figures::measurements();
 }
 
 #[cfg(all(test, not(target_family = "wasm")))]

@@ -551,10 +551,16 @@ fn shape_motion_preserves_velocity_and_settles_without_bounce() {
                 size.square_radius().0 as f32
             };
             assert_eq!(
-                top_left
-                    .resolve(PxSize::new(Px(short_edge as i32), Px(200)))
-                    .0,
-                expected
+                top_left.resolve(PxSize::new(Px(short_edge as i32), Px(200))),
+                (
+                    expected,
+                    if shape == IconButtonShape::Square {
+                        2.0
+                    } else {
+                        3.0
+                    },
+                ),
+                "Selected capsules stay circular; selected square corners stay superelliptic"
             );
         }
     }

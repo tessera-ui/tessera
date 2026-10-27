@@ -1527,15 +1527,26 @@ mod tests {
                 &format!("Open {} specifications", component.title),
             );
             click(&mut renderer, card);
+            renderer.render_frames(4);
             let tab = |renderer: &HeadlessRenderer, label: &str| {
-                renderer
-                    .accessibility_snapshot()
-                    .unwrap()
-                    .nodes
-                    .into_iter()
+                let nodes = renderer.accessibility_snapshot().unwrap().nodes;
+                nodes
+                    .iter()
                     .find(|(_, node)| node.role() == Role::Tab && node.label() == Some(label))
-                    .unwrap()
+                    .unwrap_or_else(|| {
+                        panic!(
+                            "Missing {label} tab in {}: {:?}",
+                            component.title,
+                            nodes
+                                .iter()
+                                .filter_map(|(_, node)| node
+                                    .label()
+                                    .map(|label| (node.role(), label)))
+                                .collect::<Vec<_>>()
+                        )
+                    })
                     .1
+                    .clone()
             };
             for label in ["Overview", "Specs", "Guidelines", "Accessibility"] {
                 assert_eq!(
@@ -1684,6 +1695,7 @@ mod tests {
                     .collect::<Vec<_>>()
             );
             if demo == 3 {
+                activate_navigation(&mut renderer, "Hover", Role::Link);
                 let trigger = control(&renderer, "Hover favorite action");
                 click(&mut renderer, trigger.bounds().unwrap());
                 renderer.render_frames(40);

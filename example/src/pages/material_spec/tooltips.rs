@@ -39,78 +39,134 @@ use super::{
 pub(super) fn tooltips_spec() {
     article(
         "Tooltips",
-        "Explain unfamiliar controls with brief contextual messages.",
+        "Tooltips display brief labels or messages",
         vec![
-            SpecSection {
-                title: "Tokens & specs",
-                content: RenderSlot::new(tokens),
-            },
-            SpecSection {
-                title: "Plain tooltip",
-                content: RenderSlot::new(|| {
-                    detail(false);
-                }),
-            },
-            SpecSection {
-                title: "Rich tooltip",
-                content: RenderSlot::new(|| {
-                    detail(true);
-                }),
-            },
+            section("Tokens & specs", RenderSlot::new(tokens)),
+            section("Plain tooltip", RenderSlot::new(|| { detail(false); })),
+            section("Rich tooltip", RenderSlot::new(|| { detail(true); })),
         ],
     ).pages(vec![
-        ArticlePage { title: "Overview", intro: Some(RenderSlot::new(|| {
-            prose("Plain tooltips explain icon-only actions. Rich tooltips add context, with an optional subhead and up to two relevant actions. Keep essential information visible outside tooltips.".into());
-            gap(Dp(32.0)); live_tooltips();
-        })), sections: vec![
-            section("Differences from M2", RenderSlot::new(|| {
-                prose("Material 3 uses theme color roles and more rounded rich tooltip containers.".into());
-                gap(Dp(24.0)); tooltip_figure(true, false);
+        ArticlePage {
+            title: "Overview",
+            intro: Some(RenderSlot::new(|| {
+                tooltip_points(vec![
+                    "Use tooltips to add context to a button or other UI element.",
+                    "Two variants: plain and rich.",
+                    "Plain tooltips describe elements or actions of icon buttons.",
+                    "Rich tooltips explain features in more detail, with an optional subhead and text actions.",
+                    "Keep essential information visible without opening a tooltip.",
+                ]);
+                gap(Dp(32.0)); tooltip_variant_examples();
             })),
-        ] },
-        ArticlePage { title: "Guidelines", intro: None, sections: vec![
-            section("Usage", RenderSlot::new(|| {
-                prose("Explain unfamiliar icon-only controls with a plain tooltip. Use rich tooltips for definitions or new-feature explanations. Do not repeat visible labels or hide critical information.".into());
-                gap(Dp(24.0)); live_tooltips();
-            })),
-            section("Anatomy", RenderSlot::new(|| {
-                subheading("Plain tooltip".into()); gap(Dp(24.0)); tooltip_figure(false, false);
-                gap(Dp(32.0)); subheading("Supporting text".into()); prose("Describe the action briefly, preferably on one line.".into());
-                gap(Dp(32.0)); subheading("Rich tooltip".into()); gap(Dp(24.0)); tooltip_figure(true, false);
-                gap(Dp(32.0)); subheading("Subhead (optional)".into()); prose("Summarize the message in a short subhead, especially for an automatically presented explanation.".into());
-                gap(Dp(24.0)); subheading("Text buttons (optional)".into()); prose("Keep one or two actions brief enough to fit side by side.".into());
-            })),
-            section("Placement", RenderSlot::new(|| {
-                subheading("Plain tooltips".into()); prose("Prefer above the target, or below an app-bar action. Leave 4dp from a visible control boundary and avoid covering its target.".into());
-                gap(Dp(24.0)); tooltip_figure(false, true);
-                gap(Dp(32.0)); subheading("Rich tooltips".into()); prose("Rich tooltips adjust near window edges. On desktop they can be centered below the target.".into());
-                gap(Dp(24.0)); placement_examples();
-            })),
-            section("Behavior", RenderSlot::new(|| {
-                subheading("Transient by default".into()); prose("Hover or keyboard focus explains a control without replacing its action. Opening another tooltip dismisses the previous explanation.".into());
-                gap(Dp(24.0)); live_tooltips();
-                gap(Dp(32.0)); subheading("Persistent rich tooltips".into()); prose("Use a deliberate click for a persistent explanation with actions. It remains available until dismissed; use labeled triggers rather than icon-only buttons.".into());
-            })),
-        ] },
-        ArticlePage { title: "Accessibility", intro: None, sections: vec![
-            section("Use cases", RenderSlot::new(|| { prose("People must receive the explanation and activate its trigger and actions using a keyboard or switch.".into()); })),
-            section("Interaction & style", RenderSlot::new(|| {
-                prose("Allow enough time to read the message. Hover and focus can reveal a transient explanation; selecting a labeled trigger opens a persistent rich explanation.".into());
-                gap(Dp(24.0)); live_tooltips();
-            })),
-            section("Focus order", RenderSlot::new(|| {
-                prose("Keep the trigger and tooltip actions in a linear focus sequence. Do not trap focus or obscure important page content. Escape dismisses the explanation and restores the trigger.".into());
-                gap(Dp(24.0)); live_tooltips();
-            })),
-            section("Keyboard navigation", RenderSlot::new(|| {
-                spec_table(vec!["Keys".into(), "Actions".into()], vec![vec!["Tab".into(), "Move between interactive elements".into()], vec!["Space or Enter".into(), "Activate the focused element".into()]]);
-                gap(Dp(24.0)); live_tooltips();
-            })),
-            section("Labeling elements", RenderSlot::new(|| {
-                prose("Expose the tooltip message and describe its trigger by action. Rich explanations with interactive actions also provide an accessible popup group.".into());
-                gap(Dp(24.0)); tooltip_figure(false, false); gap(Dp(32.0)); tooltip_figure(true, false);
-            })),
-        ] },
+            sections: vec![section("Differences from M2", RenderSlot::new(|| {
+                prose("Material 3 introduces rich tooltips alongside familiar plain labels. Color roles adapt both variants to light and dark themes.".into());
+                gap(Dp(24.0));
+                spec_table(vec!["Element".into(), "Material 3".into()], vec![
+                    vec!["Plain tooltip".into(), "Brief, non-interactive supporting text on an inverse surface".into()],
+                    vec!["Rich tooltip".into(), "A larger container with supporting text, optional subhead, and up to two text buttons".into()],
+                    vec!["Color".into(), "Theme-based inverse surface, surface container, and primary roles".into()],
+                ]);
+            }))],
+        },
+        ArticlePage {
+            title: "Guidelines", intro: None,
+            sections: vec![
+                section("Usage", RenderSlot::new(|| {
+                    prose("Use a plain tooltip to identify an unfamiliar icon or action. Use a rich tooltip to explain a feature, define a term, or describe its value. Tooltips supplement the interface; they do not replace visible instructions, errors, or control labels.".into());
+                    gap(Dp(24.0)); tooltip_variant_examples(); gap(Dp(24.0));
+                    tooltip_points(vec![
+                        "Do not repeat a label that is already visible next to the control.",
+                        "Avoid images and long instructions. Keep the explanation relevant to its target.",
+                        "Do not place interactive content inside a plain tooltip.",
+                    ]);
+                })),
+                section("Anatomy", RenderSlot::new(|| {
+                    subheading("Plain tooltip".into()); gap(Dp(24.0)); tooltip_figure(false, false);
+                    gap(Dp(32.0)); subheading("Supporting text".into());
+                    prose("Describe the action briefly, ideally on one line. Use sentence case and omit terminal punctuation for a short label.".into());
+                    gap(Dp(24.0)); tooltip_writing_examples(false);
+                    gap(Dp(48.0)); subheading("Rich tooltip".into()); gap(Dp(24.0)); tooltip_figure(true, false);
+                    gap(Dp(32.0)); subheading("Subhead (optional)".into());
+                    prose("Summarize the message in a few words, ideally on one line. A subhead is especially helpful when a rich tooltip appears automatically.".into());
+                    gap(Dp(24.0)); tooltip_writing_examples(true);
+                    gap(Dp(32.0)); subheading("Supporting text".into());
+                    prose("Explain the feature in a concise, self-contained message. Supporting text can wrap across lines; a subhead is not a substitute for that explanation.".into());
+                    gap(Dp(24.0)); subheading("Text buttons (optional)".into());
+                    prose("Use one or two brief, relevant actions. Keep labels short enough to fit side by side. Provide an explicit way to dismiss a persistent explanation.".into());
+                })),
+                section("Placement", RenderSlot::new(|| {
+                    subheading("Plain tooltips".into());
+                    prose("Prefer above the target, or below an app-bar action. Leave 4dp from the visible control boundary. Keep the tooltip close to its target without covering it.".into());
+                    gap(Dp(24.0)); tooltip_figure(false, true);
+                    gap(Dp(32.0)); subheading("Rich tooltips".into());
+                    prose("Position the explanation near its target and adjust at window edges. On desktop, a rich tooltip can be centered below the target. Do not obscure the control or information needed to understand the message.".into());
+                    gap(Dp(24.0)); placement_examples(); gap(Dp(16.0));
+                    prose("Corner examples request above or below placement; the tooltip flips and shifts to remain inside its available space.".into());
+                })),
+                section("Behavior", RenderSlot::new(|| {
+                    subheading("Transient tooltips".into());
+                    prose("Hover, keyboard focus, or a touch long press can reveal an explanation. Activating the control still performs its action. Keep the message available while the trigger or tooltip is engaged.".into());
+                    gap(Dp(24.0)); live_tooltips();
+                    gap(Dp(32.0)); subheading("Persistent rich tooltips".into());
+                    prose("A deliberate click can open a persistent rich explanation with actions. Keep it visible until an action, outside interaction, or Escape dismisses it. Use a labeled trigger for the explanation rather than overloading an icon-only control's primary action.".into());
+                    gap(Dp(24.0));
+                    spec_table(vec!["Interaction".into(), "Example behavior".into()], vec![
+                        vec!["Hover or focus".into(), "Reveal contextual help without activating the target".into()],
+                        vec!["Long press".into(), "Show help for a touch target without performing its primary action".into()],
+                        vec!["About collections".into(), "Open the persistent rich tooltip".into()],
+                        vec!["Got it / outside press / Escape".into(), "Dismiss the persistent explanation".into()],
+                    ]);
+                })),
+            ],
+        },
+        ArticlePage {
+            title: "Accessibility", intro: None,
+            sections: vec![
+                section("Use cases", RenderSlot::new(|| {
+                    tooltip_points(vec![
+                        "Receive the tooltip information with assistive technology.",
+                        "Reveal and dismiss the explanation with keyboard or switch input.",
+                        "Activate the trigger and any rich-tooltip actions without a pointer.",
+                    ]);
+                })),
+                section("Interaction & style", RenderSlot::new(|| {
+                    prose("Give people enough time to read the message without interrupting their task. Tooltips without required actions are transient; messages with actions must remain available while people move into the popup.".into());
+                    gap(Dp(24.0));
+                    tooltip_points(vec![
+                        "Reveal help on keyboard focus as well as hover; do not rely on hover alone.",
+                        "Allow the pointer to enter the tooltip without immediately hiding it.",
+                        "Keep important instructions visible in the page rather than only in a tooltip.",
+                        "Use theme color pairs and legible supporting text in both light and dark themes.",
+                    ]);
+                    gap(Dp(24.0)); live_tooltips();
+                })),
+                section("Focus order", RenderSlot::new(|| {
+                    prose("Keep the trigger and rich-tooltip actions in a logical sequence. A plain tooltip is a description, not another Tab stop. A rich tooltip with actions lets focus reach those actions, then continue to the page; it must not trap focus.".into());
+                    gap(Dp(24.0)); tooltip_focus_sequence(); gap(Dp(24.0));
+                    prose("Escape dismisses an open explanation. When dismissing from inside the popup, focus returns to its trigger. Revealing a plain tooltip must not steal focus from the control.".into());
+                })),
+                section("Keyboard navigation", RenderSlot::new(|| {
+                    spec_table(vec!["Keys".into(), "Actions".into()], vec![
+                        vec!["Tab".into(), "Move to the next control or available tooltip action".into()],
+                        vec!["Shift + Tab".into(), "Move to the previous interactive element".into()],
+                        vec!["Space or Enter".into(), "Activate the focused element".into()],
+                        vec!["Escape".into(), "Dismiss the open tooltip; restore its trigger when leaving the popup".into()],
+                    ]);
+                    gap(Dp(24.0));
+                    prose("Try the live example in Interaction & style: focus the favorite icon to reveal its label, then focus About collections, press Enter, and Tab to Got it.".into());
+                })),
+                section("Labeling elements", RenderSlot::new(|| {
+                    prose("Name the trigger by its action, not its appearance. Expose non-interactive help with a Tooltip role and associate the message with its trigger. An interactive rich explanation needs popup semantics and named actions, rather than a non-interactive label containing buttons.".into());
+                    gap(Dp(24.0));
+                    spec_table(vec!["Element".into(), "Accessible information in this example".into()], vec![
+                        vec!["Favorite icon".into(), "Add to favorites / Remove from favorites; the label follows the action".into()],
+                        vec!["Plain tooltip".into(), "Tooltip role; the same brief action description".into()],
+                        vec!["About collections".into(), "A labeled trigger for the rich explanation".into()],
+                        vec!["Interactive rich tooltip".into(), "Dialog role, Collections title, supporting description, and Got it action".into()],
+                    ]);
+                })),
+            ],
+        },
     ]);
 }
 
@@ -121,6 +177,134 @@ fn section(title: &'static str, content: RenderSlot) -> SpecSection {
 #[tessera]
 fn prose(content: String) {
     text().content(content).style(type_style(16.0, 24.0));
+}
+
+#[tessera]
+fn tooltip_points(items: Vec<&'static str>) {
+    column()
+        .modifier(Modifier::new().fill_max_width())
+        .children(move || {
+            for item in &items {
+                prose(format!("•  {item}"));
+                gap(Dp(12.0));
+            }
+        });
+}
+
+#[tessera]
+fn tooltip_variant_examples() {
+    let scheme = use_context::<MaterialTheme>().unwrap().get().color_scheme;
+    flow_row()
+        .item_spacing(Dp(24.0))
+        .line_spacing(Dp(24.0))
+        .children(move || {
+            for rich in [false, true] {
+                surface()
+                    .style(scheme.secondary_container.into())
+                    .shape(Shape::rounded_rectangle(Dp(24.0)))
+                    .modifier(Modifier::new().width(Dp(328.0)))
+                    .child(move || {
+                        column()
+                            .modifier(Modifier::new().padding_all(Dp(16.0)))
+                            .children(move || {
+                                sample(
+                                    if rich {
+                                        "Overview rich"
+                                    } else {
+                                        "Overview plain"
+                                    },
+                                    rich,
+                                );
+                                gap(Dp(16.0));
+                                subheading(
+                                    if rich {
+                                        "2  Rich tooltip"
+                                    } else {
+                                        "1  Plain tooltip"
+                                    }
+                                    .into(),
+                                );
+                                gap(Dp(8.0));
+                                prose(
+                                    if rich {
+                                        "More context, with an optional subhead and actions."
+                                    } else {
+                                        "A brief description of an element or action."
+                                    }
+                                    .into(),
+                                );
+                            });
+                    });
+            }
+        });
+}
+
+#[tessera]
+fn tooltip_writing_examples(rich: bool) {
+    let scheme = use_context::<MaterialTheme>().unwrap().get().color_scheme;
+    flow_row().item_spacing(Dp(24.0)).line_spacing(Dp(24.0)).children(move || {
+        for recommended in [true, false] {
+            column().modifier(Modifier::new().width(Dp(300.0))).children(move || {
+                boxed().alignment(Alignment::Center).modifier(
+                    Modifier::new().fill_max_width().height(Dp(176.0))
+                        .background_with_shape(scheme.surface_container_low, Shape::rounded_rectangle(Dp(24.0)))
+                        .semantics(SemanticsArgs {
+                            role: Some(Role::Note),
+                            label: Some(format!("{} {} wording example", if recommended { "Recommended" } else { "Not recommended" }, if rich { "rich tooltip subhead" } else { "plain tooltip" })),
+                            merge_descendants: true, ..Default::default()
+                        }),
+                ).children(move || {
+                    surface().style(if rich { scheme.surface_container } else { scheme.inverse_surface }.into())
+                        .shape(Shape::rounded_rectangle(Dp(if rich { 12.0 } else { 4.0 })))
+                        .modifier(Modifier::new().width(Dp(244.0)))
+                        .child(move || {
+                            column().modifier(Modifier::new().padding_all(Dp(if rich { 16.0 } else { 8.0 }))).children(move || {
+                                text().content(if rich {
+                                    if recommended { "New settings" } else { "New settings are now available for your uploaded images" }
+                                } else if recommended { "Upload" } else { "Press this button to upload your images." })
+                                    .style(type_style(if rich { 14.0 } else { 12.0 }, if rich { 20.0 } else { 16.0 }))
+                                    .color(if rich { scheme.on_surface_variant } else { scheme.inverse_on_surface });
+                                if rich {
+                                    gap(Dp(4.0));
+                                    text().content("Adjust image quality and storage space.").style(type_style(14.0, 20.0)).color(scheme.on_surface_variant);
+                                }
+                            });
+                        });
+                });
+                gap(Dp(12.0));
+                text().content(if recommended { "Do" } else { "Don't" }).style(type_style(16.0, 24.0)).color(if recommended { scheme.primary } else { scheme.error });
+                gap(Dp(8.0));
+                prose(if rich {
+                    if recommended { "Summarize the message in a few words." } else { "Avoid a subhead that wraps across several lines." }
+                } else if recommended { "Name the action directly." } else { "Avoid repeating instructions and unnecessary words." }.into());
+            });
+        }
+    });
+}
+
+#[tessera]
+fn tooltip_focus_sequence() {
+    let scheme = use_context::<MaterialTheme>().unwrap().get().color_scheme;
+    flow_row()
+        .item_spacing(Dp(12.0))
+        .line_spacing(Dp(12.0))
+        .children(move || {
+            for label in [
+                "1  About collections",
+                "2  Got it (in popup)",
+                "3  Next page control",
+            ] {
+                surface()
+                    .style(scheme.secondary_container.into())
+                    .shape(Shape::rounded_rectangle(Dp(16.0)))
+                    .child(move || {
+                        text()
+                            .content(label)
+                            .style(type_style(14.0, 20.0))
+                            .modifier(Modifier::new().padding_all(Dp(16.0)));
+                    });
+            }
+        });
 }
 
 #[tessera]
@@ -185,21 +369,56 @@ fn sample(
 
 #[tessera]
 fn tokens() {
+    let rich = remember(|| false);
+    prose("Select a variant to inspect its color, typography, shape, and elevation roles. The measurements below also show the rendered component's padding.".into());
+    gap(Dp(24.0));
+    flow_row()
+        .item_spacing(Dp(8.0))
+        .line_spacing(Dp(8.0))
+        .children(move || {
+            for (label, value) in [("Plain tooltip", false), ("Rich tooltip", true)] {
+                button()
+                    .tonal()
+                    .selected(rich.get() == value)
+                    .accessibility_label(format!("Show {label} tokens"))
+                    .on_click(move || rich.set(value))
+                    .child(move || {
+                        text().content(label);
+                    });
+            }
+        });
+    gap(Dp(24.0));
     spec_table(
         vec!["Element".into(), "Token value".into()],
-        vec![
+        if rich.get() {
             vec![
-                "Plain container / text".into(),
-                "Inverse surface / inverse on surface".into(),
-            ],
-            vec!["Plain supporting text".into(), "Body small".into()],
-            vec!["Rich container".into(), "Surface container".into()],
+                vec!["Container color".into(), "Surface container".into()],
+                vec![
+                    "Subhead / supporting text color".into(),
+                    "On surface variant".into(),
+                ],
+                vec!["Action color".into(), "Primary".into()],
+                vec!["Subhead type".into(), "Title small · 14sp / 20sp".into()],
+                vec![
+                    "Supporting text type".into(),
+                    "Body medium · 14sp / 20sp".into(),
+                ],
+                vec!["Action type".into(), "Label large · 14sp / 20sp".into()],
+                vec!["Container corner size".into(), "12dp".into()],
+                vec!["Container elevation".into(), "Level 2 · 3dp".into()],
+            ]
+        } else {
             vec![
-                "Rich subhead and supporting text".into(),
-                "On surface variant".into(),
-            ],
-            vec!["Rich action".into(), "Primary".into()],
-        ],
+                vec!["Container color".into(), "Inverse surface".into()],
+                vec!["Supporting text color".into(), "Inverse on surface".into()],
+                vec![
+                    "Supporting text type".into(),
+                    "Body small · 12sp / 16sp".into(),
+                ],
+                vec!["Container corner size".into(), "4dp".into()],
+                vec!["Container elevation".into(), "Level 0 · 0dp".into()],
+            ]
+        },
     );
 }
 
@@ -244,6 +463,9 @@ fn detail(rich: bool) {
                 if rich {
                     vec![
                         vec!["Top padding".into(), "12dp".into()],
+                        vec!["Bottom padding without actions".into(), "16dp".into()],
+                        vec!["Subhead to supporting text".into(), "4dp".into()],
+                        vec!["Supporting text to actions".into(), "12dp".into()],
                         vec!["Bottom padding with actions".into(), "8dp".into()],
                         vec!["Horizontal padding".into(), "16dp".into()],
                         vec!["Maximum width".into(), "320dp".into()],
@@ -251,6 +473,8 @@ fn detail(rich: bool) {
                 } else {
                     vec![
                         vec!["Single-line container height".into(), "24dp".into()],
+                        vec!["Minimum width".into(), "40dp".into()],
+                        vec!["Vertical padding".into(), "4dp".into()],
                         vec!["Horizontal padding".into(), "8dp".into()],
                         vec!["Maximum width".into(), "200dp".into()],
                     ]
@@ -910,6 +1134,8 @@ fn live_tooltips() {
     let favorite = remember(|| false);
     let actions = remember(|| 0_usize);
     let scheme = use_context::<MaterialTheme>().unwrap().get().color_scheme;
+    prose("Hover or focus the favorite icon. Select About collections to open a persistent explanation, then try Got it, outside press, or Escape.".into());
+    gap(Dp(16.0));
     tooltip_provider(if favorite.get() {
         "Remove from favorites"
     } else {
@@ -932,7 +1158,7 @@ fn live_tooltips() {
                     .modifier(
                         Modifier::new()
                             .fill_max_width()
-                            .height(Dp(360.0))
+                            .height(Dp(280.0))
                             .background_with_shape(
                                 scheme.surface_container_low,
                                 Shape::rounded_rectangle(Dp(24.0)),
@@ -952,7 +1178,11 @@ fn live_tooltips() {
                                         } else {
                                             filled::FAVORITE_BORDER_SVG
                                         })
-                                        .accessibility_label("Favorite tooltip action")
+                                        .accessibility_label(if favorite.get() {
+                                            "Remove from favorites"
+                                        } else {
+                                            "Add to favorites"
+                                        })
                                         .on_click(move || favorite.set(!favorite.get()));
                                 });
                                 tooltip_anchor().controller(rich).child(move || {
@@ -971,9 +1201,14 @@ fn live_tooltips() {
     gap(Dp(16.0));
     text()
         .content(format!(
-            "Favorite: {}; tooltip actions: {}",
+            "Favorite: {}; tooltip actions: {}; rich tooltip: {}",
             if favorite.get() { "on" } else { "off" },
-            actions.get()
+            actions.get(),
+            if rich.with(TooltipController::is_open) {
+                "shown"
+            } else {
+                "hidden"
+            }
         ))
         .style(type_style(14.0, 20.0));
 }

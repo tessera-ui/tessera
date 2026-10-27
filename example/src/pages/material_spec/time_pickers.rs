@@ -58,49 +58,166 @@ pub(super) fn time_pickers_spec() {
         layout: remember(TimePickerLayout::default),
         status: sample.status,
     };
-    dialog_provider().is_open(modal.get()).padding(Dp::ZERO).accessibility_label("Time picker dialog")
+    dialog_provider()
+        .is_open(modal.get())
+        .padding(Dp::ZERO)
+        .accessibility_label("Time picker dialog")
         .on_close_request(move || modal.set(false))
         .main_content(move || {
-            article("Time pickers", "Select a specific time with a clock dial or keyboard input.", vec![
-                SpecSection { title: "Tokens & specs", content: RenderSlot::new(tokens) },
-                SpecSection { title: "Anatomy", content: RenderSlot::new(move || {
-                    subheading("Time picker dial".into());
-                    time_figure(false,false,false,FigureKind::Specs,"Dial anatomy".into());
-                    gap(Dp(24.0));
-                    subheading("Time picker input".into());
-                    time_figure(true,false,false,FigureKind::Specs,"Input anatomy".into());
-                    gap(Dp(24.0));
-                    controls(sample, "Anatomy");
-                    gap(Dp(24.0)); visual(sample, "Anatomy");
-                    gap(Dp(24.0));
-                    button().outlined().accessibility_label("Open time picker dialog").on_click(move || open_picker(modal, draft, committed))
-                        .child(|| { text().content("Open dialog"); });
-                    confirmed_time(committed);
-                    gap(Dp(24.0));
-                }) },
-                SpecSection { title: "Color", content: RenderSlot::new(colors) },
-                SpecSection { title: "States", content: RenderSlot::new(states) },
-                SpecSection { title: "Measurements", content: RenderSlot::new(measurements) },
-                SpecSection { title: "Configurations", content: RenderSlot::new(configurations) },
-            ]).compact_content_inset(Dp(8.0)).pages(vec![
-                ArticlePage {title:"Overview",intro:Some(RenderSlot::new(time_variants)),sections:vec![
-                    SpecSection {title:"Differences from M2",content:RenderSlot::new(|| {prose("Time pickers use updated dynamic color mappings while retaining dial and keyboard input variants.");gap(Dp(24.0));time_figure(false,false,false,FigureKind::Plain,"Overview dial".into());})},
-                ]},
-                ArticlePage {title:"Guidelines",intro:Some(RenderSlot::new(|| {time_figure(false,false,false,FigureKind::Plain,"Guideline introduction".into());})),sections:vec![
-                    SpecSection {title:"Usage",content:RenderSlot::new(time_usage)},
-                    SpecSection {title:"Anatomy",content:RenderSlot::new(time_guideline_anatomy)},
-                    SpecSection {title:"Placement",content:RenderSlot::new(move || {prose("Show the picker above a scrim and keep the entire surface visible. Switch orientation or use input fields when space is limited.");gap(Dp(24.0));button().outlined().accessibility_label("Open placement time picker").on_click(move || open_picker(modal, draft, committed)).child(|| {text().content("Open time picker");});confirmed_time(committed);})},
-                    SpecSection {title:"Adaptive design",content:RenderSlot::new(time_adaptive)},
-                    SpecSection {title:"Behavior",content:RenderSlot::new(move || {time_behavior(sample,modal,draft,committed);})},
-                ]},
-                ArticlePage {title:"Accessibility",intro:None,sections:vec![
-                    SpecSection {title:"Use cases",content:RenderSlot::new(|| {prose("People must be able to enter hours and minutes manually, choose a clock format and operate the picker with assistive technology.");gap(Dp(24.0));time_figure(true,false,false,FigureKind::Plain,"Accessible input".into());})},
-                    SpecSection {title:"Interaction & style",content:RenderSlot::new(|| {prose("Always make keyboard input available from the dial. Use the input variant when there is too little room for a comfortable dial.");gap(Dp(24.0));subheading("Targets".into());prose("Dial selection targets are 48 × 48dp.");gap(Dp(24.0));dial_target_figure();})},
-                    SpecSection {title:"Keyboard navigation",content:RenderSlot::new(|| {spec_table(vec!["Keys".into(),"Action".into()],vec![vec!["Tab".into(),"Focus an enabled time slot or action".into()],vec!["Space or Enter".into(),"Activate the focused slot or action".into()]]);})},
-                    SpecSection {title:"Labeling elements",content:RenderSlot::new(time_labels)},
-                ]},
+            article(
+                "Time pickers",
+                "Time pickers help people select and set a specific time",
+                vec![
+                    SpecSection {
+                        title: "Tokens & specs",
+                        content: RenderSlot::new(tokens),
+                    },
+                    SpecSection {
+                        title: "Anatomy",
+                        content: RenderSlot::new(move || {
+                            subheading("Time picker dial".into());
+                            time_figure(
+                                false,
+                                false,
+                                false,
+                                FigureKind::Specs,
+                                "Dial anatomy".into(),
+                            );
+                            gap(Dp(24.0));
+                            subheading("Time picker input".into());
+                            time_figure(
+                                true,
+                                false,
+                                false,
+                                FigureKind::Specs,
+                                "Input anatomy".into(),
+                            );
+                            gap(Dp(24.0));
+                            controls(sample, "Anatomy");
+                            gap(Dp(24.0));
+                            visual(sample, "Anatomy");
+                            gap(Dp(24.0));
+                            button()
+                                .outlined()
+                                .accessibility_label("Open time picker dialog")
+                                .on_click(move || open_picker(modal, draft, committed))
+                                .child(|| {
+                                    text().content("Open dialog");
+                                });
+                            confirmed_time(committed);
+                            gap(Dp(24.0));
+                        }),
+                    },
+                    SpecSection {
+                        title: "Color",
+                        content: RenderSlot::new(colors),
+                    },
+                    SpecSection {
+                        title: "States",
+                        content: RenderSlot::new(states),
+                    },
+                    SpecSection {
+                        title: "Measurements",
+                        content: RenderSlot::new(measurements),
+                    },
+                    SpecSection {
+                        title: "Configurations",
+                        content: RenderSlot::new(configurations),
+                    },
+                ],
+            )
+            .compact_content_inset(Dp(8.0))
+            .pages(vec![
+                ArticlePage {
+                    title: "Overview",
+                    intro: Some(RenderSlot::new(time_variants)),
+                    sections: vec![
+                        SpecSection {
+                            title: "Availability & resources",
+                            content: RenderSlot::new(time_resources),
+                        },
+                        SpecSection {
+                            title: "Differences from M2",
+                            content: RenderSlot::new(time_m2_difference),
+                        },
+                    ],
+                },
+                ArticlePage {
+                    title: "Guidelines",
+                    intro: Some(RenderSlot::new(|| {
+                        time_figure(
+                            false,
+                            false,
+                            false,
+                            FigureKind::Plain,
+                            "Guideline introduction".into(),
+                        );
+                    })),
+                    sections: vec![
+                        SpecSection {
+                            title: "Usage",
+                            content: RenderSlot::new(time_usage),
+                        },
+                        SpecSection {
+                            title: "Anatomy",
+                            content: RenderSlot::new(time_guideline_anatomy),
+                        },
+                        SpecSection {
+                            title: "Placement",
+                            content: RenderSlot::new(move || {
+                                time_placement();
+                                gap(Dp(24.0));
+                                button()
+                                    .outlined()
+                                    .accessibility_label("Open placement time picker")
+                                    .on_click(move || open_picker(modal, draft, committed))
+                                    .child(|| {
+                                        text().content("Open time picker");
+                                    });
+                                confirmed_time(committed);
+                            }),
+                        },
+                        SpecSection {
+                            title: "Adaptive design",
+                            content: RenderSlot::new(time_adaptive),
+                        },
+                        SpecSection {
+                            title: "Behavior",
+                            content: RenderSlot::new(move || {
+                                time_behavior(sample, modal, draft, committed);
+                            }),
+                        },
+                    ],
+                },
+                ArticlePage {
+                    title: "Accessibility",
+                    intro: None,
+                    sections: vec![
+                        SpecSection {
+                            title: "Use cases",
+                            content: RenderSlot::new(time_accessibility_use_cases),
+                        },
+                        SpecSection {
+                            title: "Interaction & style",
+                            content: RenderSlot::new(time_accessibility_interaction),
+                        },
+                        SpecSection {
+                            title: "Keyboard navigation",
+                            content: RenderSlot::new(time_keyboard),
+                        },
+                        SpecSection {
+                            title: "Labeling elements",
+                            content: RenderSlot::new(time_labels),
+                        },
+                    ],
+                },
             ]);
-        }).dialog_content(move || { picker_surface(draft, "Modal").modal(modal).committed(committed); });
+        })
+        .dialog_content(move || {
+            picker_surface(draft, "Modal")
+                .modal(modal)
+                .committed(committed);
+        });
 }
 
 fn open_picker(modal: State<bool>, draft: Sample, committed: State<(u8, u8)>) {
@@ -261,6 +378,13 @@ fn picker_contents(
 ) {
     time_picker_dialog()
         .state(sample.state)
+        .title(sample.state.with(|state| {
+            if state.display_mode() == TimePickerDisplayMode::Input {
+                "Enter time"
+            } else {
+                "Select time"
+            }
+        }))
         .picker_layout(sample.layout.get())
         .confirm_button(move || {
             button()
@@ -700,8 +824,98 @@ fn prose(#[prop(into)] value: String) {
 
 #[tessera]
 fn time_variants() {
+    for item in [
+        "Time pickers are modal and cover the main content.",
+        "Two variants: dial and input. The keyboard icon makes input available from the dial.",
+        "Select hours, minutes and, for a 12-hour clock, AM or PM.",
+        "Keep touch selection comfortable on mobile devices.",
+    ] {
+        prose(format!("• {item}"));
+        gap(Dp(12.0));
+    }
+    gap(Dp(12.0));
+    let scheme = use_context::<MaterialTheme>().unwrap().get().color_scheme;
+    flow_row()
+        .item_spacing(Dp(32.0))
+        .line_spacing(Dp(32.0))
+        .modifier(
+            Modifier::new()
+                .fill_max_width()
+                .background_with_shape(
+                    scheme.surface_container_low,
+                    Shape::rounded_rectangle(Dp(24.0)),
+                )
+                .padding_all(Dp(24.0)),
+        )
+        .children(|| {
+            time_configuration_card(false, false, false, "Time picker dial".into());
+            time_configuration_card(true, false, false, "Time picker input".into());
+        });
+}
+
+#[tessera]
+fn time_resources() {
+    spec_table(
+        vec!["Type".into(), "Resource".into(), "Status".into()],
+        vec![
+            vec![
+                "Design".into(),
+                "Material 3 Design Kit (Figma)".into(),
+                "Available".into(),
+            ],
+            vec![
+                "Implementation".into(),
+                "Flutter".into(),
+                "Available".into(),
+            ],
+            vec![
+                "Implementation".into(),
+                "Jetpack Compose".into(),
+                "Available".into(),
+            ],
+            vec![
+                "Implementation".into(),
+                "Android Views (MDC-Android)".into(),
+                "Available".into(),
+            ],
+            vec![
+                "Implementation".into(),
+                "Material Web".into(),
+                "Unavailable".into(),
+            ],
+        ],
+    );
+    gap(Dp(16.0));
     prose(
-        "Time pickers select one specific time in a modal dialog. Dial and keyboard variants support hours, minutes and a 12- or 24-hour clock.",
+        "The availability above describes the Material libraries. The live examples on this page are rendered by Tessera.",
+    );
+}
+
+#[tessera]
+fn time_m2_difference() {
+    prose(
+        "Material 3 keeps the dial and keyboard variants, with new color mappings that support dynamic color. Selected time and period fields use different container roles rather than one shared accent treatment.",
+    );
+    gap(Dp(24.0));
+    spec_table(
+        vec!["Element".into(), "M2".into(), "M3".into()],
+        vec![
+            vec![
+                "Selected time field".into(),
+                "Accent emphasis".into(),
+                "Primary container / on primary container".into(),
+            ],
+            vec![
+                "Selected period".into(),
+                "Accent emphasis".into(),
+                "Tertiary container / on tertiary container".into(),
+            ],
+            vec![
+                "Color system".into(),
+                "Previous color mappings".into(),
+                "Dynamic color-compatible semantic roles".into(),
+            ],
+        ],
     );
     gap(Dp(24.0));
     time_figure(
@@ -709,7 +923,26 @@ fn time_variants() {
         false,
         false,
         FigureKind::Plain,
-        "Overview time picker dial".into(),
+        "M3 dynamic color mapping".into(),
+    );
+    prose("M3: selected hour and selected period have distinct color mappings.");
+}
+
+#[tessera]
+fn time_placement() {
+    prose(
+        "Center a modal time picker above a scrim. The main content remains visible for context but is unavailable until the picker closes. Keep the whole container, input-mode switch and confirmation actions on screen.",
+    );
+    gap(Dp(16.0));
+    prose(
+        "Use the dialog below to try a real modal. Changes remain a draft until OK; Cancel or a click outside the dialog preserves the saved value.",
+    );
+}
+
+#[tessera]
+fn time_accessibility_use_cases() {
+    prose(
+        "Offer both touch and keyboard entry. People using a screen reader, a physical keyboard or an alternative input device must be able to set a time without dragging a clock hand. Respect the person's 12- or 24-hour format preference.",
     );
     gap(Dp(24.0));
     time_figure(
@@ -717,7 +950,74 @@ fn time_variants() {
         false,
         false,
         FigureKind::Plain,
-        "Overview time picker input".into(),
+        "Accessible input".into(),
+    );
+}
+
+#[tessera]
+fn time_accessibility_interaction() {
+    prose(
+        "Always expose manual time entry through the keyboard icon on the dial. A clock icon returns to dial selection. Prefer the input variant when a dial is unnecessary or the available screen cannot contain it comfortably.",
+    );
+    gap(Dp(24.0));
+    subheading("Targets".into());
+    prose(
+        "Dial selection targets are 48 × 48dp. The annotated illustrations may scale to fit this article; production controls should retain their interactive target sizes rather than shrinking the dial to fit.",
+    );
+    gap(Dp(24.0));
+    dial_target_figure();
+    gap(Dp(24.0));
+    subheading("Focus and selection".into());
+    prose(
+        "Keep a visible focus indicator as well as selected colors. Hour and Minute supporting labels identify editable fields; AM and PM expose their selected state. Moving focus to a dial value does not confirm the time.",
+    );
+}
+
+#[tessera]
+fn time_keyboard() {
+    spec_table(
+        vec!["Keys".into(), "Action".into()],
+        vec![
+            vec![
+                "Tab / Shift+Tab".into(),
+                "Move forward / backward through enabled fields, dial, period and actions".into(),
+            ],
+            vec![
+                "Space or Enter".into(),
+                "Activate the focused time slot or button".into(),
+            ],
+        ],
+    );
+    gap(Dp(24.0));
+    subheading("Dial and period navigation in this example".into());
+    spec_table(
+        vec!["Keys".into(), "Action".into()],
+        vec![
+            vec![
+                "Right / Down arrow".into(),
+                "Focus the next dial value; switch between AM and PM".into(),
+            ],
+            vec![
+                "Left / Up arrow".into(),
+                "Focus the previous dial value; switch between AM and PM".into(),
+            ],
+            vec![
+                "Home / End".into(),
+                "Focus the first / last dial value or AM / PM".into(),
+            ],
+            vec![
+                "Number keys".into(),
+                "Edit the focused Hour or Minute field in input mode".into(),
+            ],
+            vec![
+                "Escape".into(),
+                "Dismiss the modal without saving its draft".into(),
+            ],
+        ],
+    );
+    gap(Dp(16.0));
+    prose(
+        "Arrow keys move dial focus; Space or Enter selects the focused value. Use OK to save the dialog's time. The standalone illustrations let you explore controls without changing the saved modal value.",
     );
 }
 
@@ -982,7 +1282,14 @@ fn time_figure_contents(
                         })
                         .content_color(theme.color_scheme.on_surface_variant)
                         .modifier(watch_precise(geometry, "toggle"))
-                        .accessibility_label(format!("{label} switch input mode"))
+                        .accessibility_label(format!(
+                            "{label} {}",
+                            if input {
+                                "switch to dial"
+                            } else {
+                                "switch to time input"
+                            }
+                        ))
                         .on_click(move || {
                             sample.state.with_mut(TimePickerState::toggle_display_mode);
                             FocusManager::current().defer_keyboard_until_layout();
@@ -1552,17 +1859,19 @@ fn time_color_marker(number: usize, label: String, x: Dp, y: Dp) {
 #[tessera]
 fn time_usage() {
     prose(
-        "Choose a specific time for an alarm or meeting. A modal picker supports hours and minutes, rather than fine-grained stopwatch measurements.",
+        "Set an alarm or schedule a meeting with a specific hour and minute. Time pickers appear in modal dialogs above the main content. They are not intended for granular measurements such as milliseconds in a stopwatch.",
     );
     gap(Dp(24.0));
     subheading("Time input picker".into());
-    prose("Manual number entry must remain available from the dial through its keyboard button.");
+    prose(
+        "Manual number entry must remain available from the dial through its keyboard button. The input variant uses separate Hour and Minute fields and opens the numeric keyboard on touch devices.",
+    );
     gap(Dp(24.0));
     time_figure(true, false, false, FigureKind::Plain, "Usage input".into());
     gap(Dp(24.0));
     subheading("24-hour time selection".into());
     prose(
-        "Choose the clock format outside the picker, usually according to system or app preferences. A 24-hour picker omits AM and PM.",
+        "Choose the clock format outside the picker, usually according to system or app preferences. A 24-hour picker omits AM and PM: its hour dial uses an outer ring for 1–12 and an inner ring for 13–23 and 00.",
     );
     gap(Dp(24.0));
     time_figure(
@@ -1655,12 +1964,12 @@ fn time_adaptive() {
 #[tessera]
 fn time_behavior(sample: Sample, modal: State<bool>, draft: Sample, committed: State<(u8, u8)>) {
     prose(
-        "Select a field and adjust the corresponding dial, or type directly using keyboard input.",
+        "Select a field and adjust the corresponding dial, or type directly using keyboard input. Releasing the clock hand after touch or pointer hour selection advances to minutes. Tap the Hour or Minute field to return to that part of the time; choose AM or PM separately in 12-hour format.",
     );
     gap(Dp(24.0));
     subheading("Appearing & disappearing".into());
     prose(
-        "The modal keeps focus until OK, Cancel or dismissal outside the surface. Confirming saves the chosen time; cancellation dismisses it.",
+        "The modal keeps focus until OK, Cancel or dismissal outside the surface. OK saves the draft. Cancel and outside dismissal leave the saved time unchanged; opening the dialog again starts from the saved time.",
     );
     button()
         .outlined()
@@ -1763,7 +2072,7 @@ fn dial_target_annotations(geometry: State<PreciseGeometry>, state: State<TimePi
 #[tessera]
 fn time_labels() {
     prose(
-        "Name the hour and minute fields separately. A dial value communicates its value and whether it represents hours or minutes. Name mode and dialog actions by what they do.",
+        "Name the hour and minute fields separately and associate each label with its control. Assistive technology can announce the control's role, label and value. A selected state must not depend on color alone. Dial values communicate the time unit, value and position in the set; icon buttons describe the destination input method.",
     );
     gap(Dp(24.0));
     subheading("Dial selector".into());
@@ -1783,7 +2092,7 @@ fn time_labels() {
             ],
             vec![
                 "Dial value".into(),
-                "Value and time unit".into(),
+                "Hour 7 of 12 / Minute 35 of 60".into(),
                 "Button".into(),
             ],
         ],

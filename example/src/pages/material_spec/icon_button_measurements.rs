@@ -26,9 +26,12 @@ use tessera_ui::{
 };
 
 use super::{
-    super::{annotations, gap, media, spec_table, srgb, subheading, type_style},
+    super::{annotations, gap, media, srgb, subheading, type_style},
     SIZES, context,
 };
+
+#[path = "icon_button_measurement_table.rs"]
+mod radius_table;
 
 #[tessera]
 pub(super) fn figures() {
@@ -71,42 +74,7 @@ pub(super) fn figures() {
     gap(Dp(32.0));
     corners();
     gap(Dp(24.0));
-    spec_table(
-        vec![
-            "".into(),
-            "XS".into(),
-            "S".into(),
-            "M".into(),
-            "L".into(),
-            "XL".into(),
-        ],
-        vec![
-            vec![
-                "A. Round button".into(),
-                "Full".into(),
-                "Full".into(),
-                "Full".into(),
-                "Full".into(),
-                "Full".into(),
-            ],
-            vec![
-                "B. Square button".into(),
-                "12dp".into(),
-                "12dp".into(),
-                "16dp".into(),
-                "28dp".into(),
-                "28dp".into(),
-            ],
-            vec![
-                "C. Pressed state".into(),
-                "8dp".into(),
-                "8dp".into(),
-                "12dp".into(),
-                "16dp".into(),
-                "16dp".into(),
-            ],
-        ],
-    );
+    radius_table::figure();
 }
 
 #[tessera]
@@ -258,6 +226,15 @@ fn control(
     name: String,
 ) {
     let actions = remember(|| 0_u32);
+    let scheme = use_context::<MaterialTheme>().unwrap().get().color_scheme;
+    let outline = variant == IconButtonVariant::Outlined;
+    let fixed_shape = if pressed {
+        Shape::rounded_rectangle(size.pressed_radius())
+    } else if shape == IconButtonShape::Square {
+        Shape::rounded_rectangle(size.square_radius())
+    } else {
+        Shape::CAPSULE
+    };
     let target_width = size.width(width).0.max(48.0);
     let target_height = size.height().0.max(48.0);
     boxed()
@@ -268,18 +245,25 @@ fn control(
                 .size(Dp(target_width), Dp(target_height)),
         )
         .children(move || {
+            if outline {
+                // Diagram outlines describe geometry with a uniform fine rule;
+                // keep them on visual bounds, not the expanded touch target.
+                boxed().modifier(
+                    Modifier::new()
+                        .size(size.width(width), size.height())
+                        .border_with_shape(Dp(1.0), scheme.outline_variant, fixed_shape),
+                );
+            }
             icon_button()
                 .size(size)
                 .width(width)
-                .variant(variant)
-                .shape_style(shape)
-                .shape(if pressed {
-                    Shape::rounded_rectangle(size.pressed_radius())
-                } else if shape == IconButtonShape::Square {
-                    Shape::rounded_rectangle(size.square_radius())
+                .variant(if outline {
+                    IconButtonVariant::Standard
                 } else {
-                    Shape::CAPSULE
+                    variant
                 })
+                .shape_style(shape)
+                .shape(fixed_shape)
                 .presentation_state(InteractionVisualState::Rest)
                 .icon(filled::EDIT_SVG)
                 .accessibility_label(name.clone())

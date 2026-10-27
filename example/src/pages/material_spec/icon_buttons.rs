@@ -39,6 +39,18 @@ pub(super) mod context;
 #[path = "icon_button_measurements.rs"]
 mod measurements;
 
+#[path = "icon_button_baseline.rs"]
+mod baseline;
+
+#[path = "icon_button_tokens.rs"]
+mod token_sets;
+
+#[path = "icon_button_spec_figures.rs"]
+mod figures;
+
+#[path = "icon_button_articles.rs"]
+pub(super) mod articles;
+
 const STYLES: [IconButtonVariant; 4] = [
     IconButtonVariant::Filled,
     IconButtonVariant::FilledTonal,
@@ -51,11 +63,6 @@ const SIZES: [IconButtonSize; 5] = [
     IconButtonSize::Medium,
     IconButtonSize::Large,
     IconButtonSize::ExtraLarge,
-];
-const WIDTHS: [IconButtonWidth; 3] = [
-    IconButtonWidth::Narrow,
-    IconButtonWidth::Uniform,
-    IconButtonWidth::Wide,
 ];
 
 fn name(style: IconButtonVariant) -> &'static str {
@@ -104,6 +111,10 @@ pub(super) fn icon_buttons_spec() {
                 title: "Measurements",
                 content: RenderSlot::new(measurements::figures),
             },
+            SpecSection {
+                title: "Baseline tokens",
+                content: RenderSlot::new(baseline::figure),
+            },
         ],
         RenderSlot::new(variants),
         RenderSlot::new(anatomy),
@@ -114,7 +125,7 @@ pub(super) fn icon_buttons_spec() {
         }),
     )
     .overview(|| {
-        overview_art();
+        articles::overview();
     });
 }
 
@@ -334,151 +345,66 @@ fn variants() {
 }
 
 #[tessera]
-fn sizes() {
-    column().children(|| {
-        for (index, size) in SIZES.into_iter().enumerate() {
-            text()
-                .content(["Extra small", "Small", "Medium", "Large", "Extra large"][index])
-                .style(type_style(16.0, 24.0));
-            gap(Dp(12.0));
-            flow_row()
-                .item_spacing(Dp(24.0))
-                .line_spacing(Dp(16.0))
-                .children(move || {
-                    for width in WIDTHS {
-                        sample(
-                            IconButtonVariant::Filled,
-                            size,
-                            width,
-                            IconButtonShape::Round,
-                            false,
-                            false,
-                            true,
-                            format!("{size:?} {width:?}"),
-                        );
-                    }
-                });
-            gap(Dp(32.0));
-        }
-    });
-}
-
-#[tessera]
 fn configurations() {
-    panel(RenderSlot::new(sizes));
-    gap(Dp(24.0));
-    panel(RenderSlot::new(|| {
-        flow_row()
-            .item_spacing(Dp(24.0))
-            .line_spacing(Dp(16.0))
-            .children(|| {
-                for shape in [IconButtonShape::Round, IconButtonShape::Square] {
-                    sample(
-                        IconButtonVariant::Filled,
-                        IconButtonSize::Medium,
-                        IconButtonWidth::Uniform,
-                        shape,
-                        false,
-                        false,
-                        true,
-                        format!("{shape:?} icon action"),
-                    );
-                }
-            });
-    }));
+    figures::configs();
     gap(Dp(24.0));
     spec_table(
-        vec!["Category".into(), "Configurations".into()],
         vec![
-            vec!["Size".into(), "XS, S (default), M, L, XL".into()],
-            vec!["Shape".into(), "Round (default), square".into()],
+            "Category".into(),
+            "Options".into(),
+            "M3".into(),
+            "M3 Expressive".into(),
+        ],
+        vec![
+            vec![
+                "Size".into(),
+                "Small (default)".into(),
+                "Available".into(),
+                "Available".into(),
+            ],
+            vec![
+                "Size".into(),
+                "Extra small, medium, large, extra large".into(),
+                "—".into(),
+                "Available".into(),
+            ],
+            vec![
+                "Shape".into(),
+                "Round (default)".into(),
+                "Available".into(),
+                "Available".into(),
+            ],
+            vec![
+                "Shape".into(),
+                "Square".into(),
+                "—".into(),
+                "Available".into(),
+            ],
             vec![
                 "Color style".into(),
-                "Filled, tonal, outlined, standard".into(),
+                "Filled (default), tonal, outlined, standard".into(),
+                "Available".into(),
+                "Available".into(),
             ],
-            vec!["Width".into(), "Narrow, uniform (default), wide".into()],
+            vec![
+                "Width".into(),
+                "Default".into(),
+                "Available".into(),
+                "Available".into(),
+            ],
+            vec![
+                "Width".into(),
+                "Narrow, wide".into(),
+                "—".into(),
+                "Available".into(),
+            ],
         ],
     );
 }
 
 #[tessera]
 fn tokens() {
-    let style = remember(|| IconButtonVariant::Filled);
-    flow_row().item_spacing(Dp(8.0)).children(move || {
-        for variant in STYLES {
-            tessera_components::button::button()
-                .text()
-                .accessibility_label(format!("{} icon tokens", name(variant)))
-                .on_click(move || style.set(variant))
-                .child(move || {
-                    text().content(name(variant));
-                });
-        }
-    });
-    gap(Dp(24.0));
-    let (
-        default_container,
-        default_icon,
-        off_container,
-        off_icon,
-        selected_container,
-        selected_icon,
-    ) = match style.get() {
-        IconButtonVariant::Filled => (
-            "Primary",
-            "On primary",
-            "Surface container",
-            "On surface variant",
-            "Primary",
-            "On primary",
-        ),
-        IconButtonVariant::FilledTonal => (
-            "Secondary container",
-            "On secondary container",
-            "Secondary container",
-            "On secondary container",
-            "Secondary",
-            "On secondary",
-        ),
-        IconButtonVariant::Outlined => (
-            "Transparent · outline variant",
-            "On surface variant",
-            "Transparent · outline variant",
-            "On surface variant",
-            "Inverse surface",
-            "Inverse on surface",
-        ),
-        IconButtonVariant::Standard => (
-            "Transparent",
-            "On surface variant",
-            "Transparent",
-            "On surface variant",
-            "Transparent",
-            "Primary",
-        ),
-    };
-    spec_table(
-        vec![
-            "Element".into(),
-            "Default".into(),
-            "Toggle off".into(),
-            "Toggle on".into(),
-        ],
-        vec![
-            vec![
-                "Container".into(),
-                default_container.into(),
-                off_container.into(),
-                selected_container.into(),
-            ],
-            vec![
-                "Icon".into(),
-                default_icon.into(),
-                off_icon.into(),
-                selected_icon.into(),
-            ],
-        ],
-    );
+    token_sets::figure();
 }
 
 #[tessera]
@@ -829,29 +755,5 @@ fn icon_state_item(
 
 #[tessera]
 fn shape_morph() {
-    text()
-        .content(
-            "Press either shape. Toggle selection changes round to square, and square to round.",
-        )
-        .style(type_style(16.0, 24.0));
-    gap(Dp(24.0));
-    panel(RenderSlot::new(|| {
-        flow_row()
-            .item_spacing(Dp(48.0))
-            .line_spacing(Dp(24.0))
-            .children(|| {
-                for shape in [IconButtonShape::Round, IconButtonShape::Square] {
-                    sample(
-                        IconButtonVariant::Filled,
-                        IconButtonSize::Large,
-                        IconButtonWidth::Uniform,
-                        shape,
-                        true,
-                        false,
-                        true,
-                        format!("Morph {shape:?}"),
-                    );
-                }
-            });
-    }));
+    figures::shape_morph();
 }

@@ -238,8 +238,14 @@ impl IconButtonMotion {
     }
 
     fn shape(&self) -> Shape {
-        let corner =
-            RoundedCorner::relative(self.fraction.value(), Dp(self.radius.value() as f64), 2.0);
+        let fraction = self.fraction.value();
+        // Capsule ends stay circular; ordinary corners use the shared
+        // superellipse curvature, smoothly interpolated during a morph.
+        let corner = RoundedCorner::relative(
+            fraction,
+            Dp(self.radius.value() as f64),
+            3.0 - fraction * 2.0,
+        );
         Shape::RoundedRectangle {
             top_left: corner,
             top_right: corner,

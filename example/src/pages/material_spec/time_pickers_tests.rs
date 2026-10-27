@@ -33,6 +33,17 @@ fn color_fixture() {
 }
 
 #[tessera]
+fn overview_fixture() {
+    material_theme().child(|| {
+        column()
+            .modifier(Modifier::new().fill_max_size())
+            .children(|| {
+                super::time_variants();
+            });
+    });
+}
+
+#[tessera]
 fn configuration_fixture() {
     material_theme().child(|| {
         column()
@@ -62,6 +73,64 @@ fn renderer_at_width(root: fn(), width: u32) -> HeadlessRenderer {
     .unwrap();
     renderer.render_frames(4);
     renderer
+}
+
+#[test]
+#[ignore = "requires a native GPU adapter"]
+fn overview_variants_wrap_without_shrinking_touch_targets() {
+    for width in [640, 1100] {
+        let mut renderer = renderer_at_width(overview_fixture, width);
+        let dial = node(
+            &renderer,
+            "Time picker dial time configuration",
+            Role::Group,
+            None,
+        )
+        .1
+        .bounds()
+        .unwrap();
+        let input = node(
+            &renderer,
+            "Time picker input time configuration",
+            Role::Group,
+            None,
+        )
+        .1
+        .bounds()
+        .unwrap();
+        assert!((dial.width() - 328.0).abs() <= 0.05);
+        assert!((input.width() - 328.0).abs() <= 0.05);
+        if width == 640 {
+            assert!(
+                dial.y1 <= input.y0,
+                "the input preview must wrap below the dial"
+            );
+        } else {
+            assert!(
+                dial.x1 <= input.x0,
+                "wide previews must appear side by side"
+            );
+        }
+        let target = node(&renderer, "Hour 7 of 12", Role::Button, Some(dial))
+            .1
+            .bounds()
+            .unwrap();
+        assert!((target.width() - 48.0).abs() <= 0.05);
+        assert!((target.height() - 48.0).abs() <= 0.05);
+        let confirm = node(
+            &renderer,
+            "Time picker input confirm time",
+            Role::Button,
+            Some(input),
+        )
+        .0;
+        action(&mut renderer, confirm, Action::Click);
+        assert_eq!(
+            node(&renderer, "Hour", Role::Button, Some(dial)).1.value(),
+            Some("07")
+        );
+        node(&renderer, "Reopen Time picker input", Role::Button, None);
+    }
 }
 
 #[test]

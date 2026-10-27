@@ -176,26 +176,50 @@ fn guidelines(kind: Kind) -> Vec<Chapter> {
         Kind::Icons => vec![
             chapter(
                 "Usage",
-                "Use familiar actions. Filled, tonal, outlined and standard styles provide decreasing emphasis; five sizes and three widths refine hierarchy.",
-                &["Color", "Size & width"],
+                "Use default icon buttons for actions and toggle icon buttons for binary choices.",
+                &[],
                 Example,
             ),
             chapter(
                 "Anatomy",
-                "Default actions use filled icons. Toggles distinguish selection with outlined and filled icons, or a clear weight change.",
-                &["Icon", "Container"],
+                "Use recognizable icons and distinguish selection through filled and outlined symbols.",
+                &[],
                 Anatomy,
             ),
             chapter(
+                "Color",
+                "Choose filled, tonal, outlined or standard emphasis for the surrounding content.",
+                &[],
+                Example,
+            ),
+            chapter(
+                "Size",
+                "Choose among five sizes according to action hierarchy, not the available gap.",
+                &[],
+                Example,
+            ),
+            chapter(
+                "Width",
+                "Use narrow, default and wide proportions while preserving minimum targets.",
+                &[],
+                Example,
+            ),
+            chapter(
+                "Shape",
+                "Use round and square resting shapes with clear pressed and selected transformations.",
+                &[],
+                Behavior,
+            ),
+            chapter(
                 "Placement",
-                "Place a small set of meaningful actions in app bars, cards, toolbars or button groups.",
+                "Group meaningful actions in app bars, cards and toolbars.",
                 &[],
                 Example,
             ),
             chapter(
                 "Behavior",
-                "Describe the action in a hover tooltip. Toggle icons visibly change when selected.",
-                &["Hover", "Selection"],
+                "Default actions perform a command; toggles retain selection and expose a useful hover label.",
+                &[],
                 Behavior,
             ),
         ],
@@ -672,8 +696,13 @@ fn chapter_content(
 ) {
     if kind == Kind::Icons {
         match chapter.title {
-            "Placement" => {
-                super::icon_buttons::context::placement();
+            title @ ("Usage" | "Anatomy" | "Color" | "Size" | "Width" | "Shape" | "Placement"
+            | "Behavior") => {
+                super::icon_buttons::articles::guidance(title.into());
+                return;
+            }
+            "Interaction & style" => {
+                super::icon_buttons::articles::contrast();
                 return;
             }
             "Labeling elements" => {

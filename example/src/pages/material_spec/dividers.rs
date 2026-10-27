@@ -2,7 +2,7 @@
 //!
 //! ## Usage
 //!
-//! Compare full-width and inset separation with content spacing.
+//! Compare full-width, inset, and vertical dividers in grouped content.
 
 use tessera_components::{
     alignment::{Alignment, CrossAxisAlignment},
@@ -11,30 +11,27 @@ use tessera_components::{
     column::column,
     divider::{horizontal_divider, vertical_divider},
     list_item::list_item,
-    modifier::{ModifierExt as _, Padding, SemanticsArgs},
+    modifier::{ModifierExt as _, Padding},
     row::row,
     shape_def::Shape,
-    spacer::spacer,
     surface::surface,
     text::text,
     theme::{MaterialTheme, material_theme},
 };
-use tessera_ui::{
-    Dp, Modifier, RenderSlot, State, accesskit::Role, remember, tessera, use_context,
-};
+use tessera_ui::{Dp, Modifier, RenderSlot, State, remember, tessera, use_context};
 
 use super::{
     ACCENT,
-    annotations::{self, Geometry, dotted, relative, watch},
+    annotations::{self, SpaceGeometry, dotted, space_geometry, watch_in_space},
     article::{ArticlePage, SpecSection, article},
-    gap, panel, spec_table, subheading, type_style,
+    gap, panel, spec_table, srgb, subheading, type_style,
 };
 
 #[tessera]
 pub(super) fn divider_spec() {
     article(
         "Divider",
-        "Group related content and separate neighboring sections with a thin line.",
+        "Dividers are thin lines that group content in lists or other containers.",
         vec![
             SpecSection {
                 title: "Tokens and specs",
@@ -50,54 +47,165 @@ pub(super) fn divider_spec() {
             },
         ],
     )
-    .hero(|| {
-        panel(RenderSlot::new(grouped_content));
-    }).pages(vec![
-        ArticlePage {title:"Overview",intro:Some(RenderSlot::new(|| {prose("Use a subtle divider when spacing alone cannot communicate groups. Group related content rather than drawing a line between every item.");gap(Dp(24.0));mail_groups(true);})),sections:vec![
-            SpecSection {title:"Differences from M2",content:RenderSlot::new(|| {prose("Dividers use updated dynamic color mappings and can also be vertical.");gap(Dp(24.0));vertical_example();})},
-        ]},
-        ArticlePage {title:"Guidelines",intro:None,sections:vec![
-            SpecSection {title:"Usage",content:RenderSlot::new(|| {prose("Use full-width lines between unrelated sections and inset lines within a related group. Prefer open space when it already communicates the hierarchy.");gap(Dp(24.0));divider_comparison();})},
-            SpecSection {title:"Anatomy",content:RenderSlot::new(divider_anatomy)},
-            SpecSection {title:"Full-width dividers",content:RenderSlot::new(|| {prose("Separate larger sections or distinguish interactive controls from informational content. Too many full-width lines create visual clutter.");gap(Dp(24.0));full_width_card();})},
-            SpecSection {title:"Inset dividers",content:RenderSlot::new(|| {prose("Use equal end insets to group related content. Leading avatars or icons anchor the rows and make the inset alignment easy to scan.");gap(Dp(24.0));mail_groups(true);gap(Dp(24.0));subheading("Using dividers both ways on the same screen".into());prose("Use full width for a change in content type and inset lines for nested items. Repeated rows may only need spacing.");gap(Dp(24.0));mail_groups(false);})},
-            SpecSection {title:"Vertical divider",content:RenderSlot::new(|| {prose("On larger screens, a vertical divider can distinguish text from related media or another pane.");gap(Dp(24.0));vertical_example();})},
-        ]},
-        ArticlePage {title:"Accessibility",intro:Some(RenderSlot::new(|| {prose("Dividers are decorative elements, which have no contrast minimums.");gap(Dp(24.0));decorative_example();})),sections:vec![]},
+    .intro(divider_anatomy)
+    .pages(vec![
+        ArticlePage {
+            title: "Overview",
+            intro: Some(RenderSlot::new(overview)),
+            sections: vec![
+                SpecSection {
+                    title: "Availability & resources",
+                    content: RenderSlot::new(resources),
+                },
+                SpecSection {
+                    title: "Differences from M2",
+                    content: RenderSlot::new(differences),
+                },
+            ],
+        },
+        ArticlePage {
+            title: "Guidelines",
+            intro: Some(RenderSlot::new(|| {
+                mail_groups(true);
+                caption("Full-width and inset dividers communicate different levels of grouping.");
+            })),
+            sections: vec![
+                SpecSection {
+                    title: "Usage",
+                    content: RenderSlot::new(usage),
+                },
+                SpecSection {
+                    title: "Anatomy",
+                    content: RenderSlot::new(divider_anatomy),
+                },
+                SpecSection {
+                    title: "Full-width dividers",
+                    content: RenderSlot::new(full_width_guidelines),
+                },
+                SpecSection {
+                    title: "Inset dividers",
+                    content: RenderSlot::new(inset_guidelines),
+                },
+                SpecSection {
+                    title: "Vertical divider",
+                    content: RenderSlot::new(|| {
+                        prose("Use a vertical divider to arrange content on a larger screen, such as separating paragraph text from related video or imagery.");
+                        gap(Dp(24.0));
+                        vertical_example();
+                        caption("A vertical divider distinguishes media from its description without breaking their shared context.");
+                    }),
+                },
+            ],
+        },
+        ArticlePage {
+            title: "Accessibility",
+            intro: Some(RenderSlot::new(|| {
+                prose("Dividers are decorative elements, which have no contrast minimums.");
+                gap(Dp(24.0));
+                decorative_example();
+                caption("Decorative elements have no contrast minimums. Text and interactive controls still need to meet their own accessibility requirements.");
+                gap(Dp(32.0));
+                prose("In this native example, the divider has no label, action, or focus stop. Use Tab to move between the two buttons, then Enter or Space to activate one. The status text identifies the activated action; the line only provides visual grouping.");
+            })),
+            sections: vec![],
+        },
     ]);
 }
 
 #[tessera]
-fn grouped_content() {
-    column()
-        .modifier(Modifier::new().fill_max_width())
-        .children(|| {
-            text().content("Account").style(type_style(20.0, 28.0));
-            gap(Dp(16.0));
-            text()
-                .content("Profile and preferences")
-                .style(type_style(16.0, 24.0));
-            gap(Dp(16.0));
-            horizontal_divider();
-            gap(Dp(16.0));
-            text()
-                .content("Notifications")
-                .style(type_style(20.0, 28.0));
-            gap(Dp(16.0));
-            text()
-                .content("Delivery and quiet hours")
-                .style(type_style(16.0, 24.0));
-        });
+fn prose(#[prop(into)] value: String) {
+    text().content(value).style(type_style(16.0, 24.0));
+}
+
+#[tessera]
+fn caption(#[prop(into)] value: String) {
+    let scheme = use_context::<MaterialTheme>().unwrap().get().color_scheme;
+    gap(Dp(16.0));
+    text()
+        .content(value)
+        .color(scheme.on_surface_variant)
+        .style(type_style(14.0, 20.0));
+}
+
+#[tessera]
+fn overview() {
+    prose("Make dividers visible but not bold.");
+    gap(Dp(16.0));
+    prose("Only use dividers if items cannot be grouped with open space.");
+    gap(Dp(16.0));
+    prose("Use dividers to group things, not separate individual items.");
+    gap(Dp(32.0));
+    mail_groups(true);
+    caption(
+        "Dividers group related messages in a list, while the full-width line marks a different section.",
+    );
+}
+
+#[tessera]
+fn resources() {
+    spec_table(
+        vec!["Type".into(), "Resource".into(), "Status".into()],
+        vec![
+            vec![
+                "Design".into(),
+                "Design Kit (Figma)".into(),
+                "Available".into(),
+            ],
+            vec![
+                "Implementation".into(),
+                "Flutter".into(),
+                "Available".into(),
+            ],
+            vec![
+                "Implementation".into(),
+                "Jetpack Compose".into(),
+                "Available".into(),
+            ],
+            vec![
+                "Implementation".into(),
+                "Android Views (MDC-Android)".into(),
+                "Available".into(),
+            ],
+            vec!["Implementation".into(), "Web".into(), "Available".into()],
+        ],
+    );
+    gap(Dp(24.0));
+    prose(
+        "Tessera examples on this page use native horizontal_divider and vertical_divider components. Insets are supplied by the surrounding layout.",
+    );
+}
+
+#[tessera]
+fn differences() {
+    prose("Color: Updated color mappings support dynamic color.");
+    gap(Dp(16.0));
+    prose("Configurations: Dividers can also be vertical.");
+    gap(Dp(24.0));
+    colors();
+    gap(Dp(32.0));
+    vertical_example();
 }
 
 #[tessera]
 fn tokens() {
     spec_table(
-        vec!["Element".into(), "Token value".into()],
+        vec!["Element".into(), "Token".into(), "Value".into()],
         vec![
-            vec!["Color".into(), "Outline variant".into()],
-            vec!["Thickness".into(), "1dp".into()],
+            vec![
+                "Divider color".into(),
+                "md.comp.divider.color".into(),
+                "Outline variant".into(),
+            ],
+            vec![
+                "Divider thickness".into(),
+                "md.comp.divider.thickness".into(),
+                "1dp".into(),
+            ],
         ],
+    );
+    gap(Dp(24.0));
+    prose(
+        "The divider inherits the outline variant color role from the active Material theme. Its length follows the available width, or the available height for a vertical divider.",
     );
 }
 
@@ -106,19 +214,27 @@ fn scheme(dark: bool) {
     material_theme()
         .theme(move || MaterialTheme::from_seed(ACCENT, dark))
         .child(move || {
-            let theme = use_context::<MaterialTheme>()
-                .expect("MaterialTheme must be provided")
-                .get();
+            let scheme = use_context::<MaterialTheme>().unwrap().get().color_scheme;
             surface()
-                .style(theme.color_scheme.surface.into())
+                .style(scheme.surface.into())
+                .shape(Shape::rounded_rectangle(Dp(24.0)))
                 .modifier(Modifier::new().fill_max_width())
                 .child(move || {
                     column()
-                        .modifier(Modifier::new().fill_max_width().padding_all(Dp(24.0)))
+                        .modifier(Modifier::new().fill_max_width().padding_all(Dp(32.0)))
                         .children(move || {
-                            subheading(if dark { "Dark theme" } else { "Light theme" }.to_owned());
+                            text()
+                                .content(if dark { "Dark theme" } else { "Light theme" })
+                                .color(scheme.on_surface)
+                                .style(type_style(20.0, 28.0));
+                            gap(Dp(32.0));
+                            text()
+                                .content("1  Outline variant")
+                                .color(scheme.on_surface_variant)
+                                .style(type_style(14.0, 20.0));
                             gap(Dp(24.0));
-                            grouped_content();
+                            horizontal_divider();
+                            gap(Dp(32.0));
                         });
                 });
         });
@@ -126,56 +242,93 @@ fn scheme(dark: bool) {
 
 #[tessera]
 fn colors() {
-    scheme(false);
+    prose(
+        "Color values are implemented through design tokens. The same outline variant role maps to different color values in light and dark schemes.",
+    );
     gap(Dp(24.0));
+    scheme(false);
+    gap(Dp(8.0));
     scheme(true);
+    caption("1  Outline variant — divider color in both light and dark themes.");
 }
 
 #[tessera]
-fn inset_example(#[prop(into)] label: String, left: Dp, right: Dp) {
-    column()
-        .modifier(Modifier::new().fill_max_width())
+fn divider_anatomy() {
+    let geometry = remember(SpaceGeometry::new);
+    let scheme = use_context::<MaterialTheme>().unwrap().get().color_scheme;
+    boxed()
+        .alignment(Alignment::Center)
+        .modifier(
+            watch_in_space(geometry, "figure")
+                .fill_max_width()
+                .height(Dp(224.0))
+                .background_with_shape(
+                    scheme.surface_container_low,
+                    Shape::rounded_rectangle(Dp(24.0)),
+                ),
+        )
         .children(move || {
-            text().content(label.clone()).style(type_style(16.0, 24.0));
-            gap(Dp(24.0));
-            let label = label.clone();
             boxed()
-                .modifier(Modifier::new().fill_max_width().padding(Padding::new(
-                    left,
-                    Dp::ZERO,
-                    right,
-                    Dp::ZERO,
-                )))
+                .modifier(
+                    Modifier::new()
+                        .fill_max_width()
+                        .padding_symmetric(Dp(48.0), Dp::ZERO),
+                )
                 .children(move || {
-                    horizontal_divider().modifier(Modifier::new().semantics(SemanticsArgs {
-                        role: Some(Role::Group),
-                        label: Some(format!("{label} measurement")),
-                        ..Default::default()
-                    }));
+                    horizontal_divider().modifier(watch_in_space(geometry, "line"));
                 });
-            gap(Dp(32.0));
+            boxed()
+                .modifier(Modifier::new().fill_max_size())
+                .children(move || {
+                    divider_callout(geometry);
+                });
         });
+    caption("1  Divider — a single thin line, with no container, label, or interactive state.");
+}
+
+#[tessera]
+fn divider_callout(geometry: State<SpaceGeometry>) {
+    let values = space_geometry(&geometry.get());
+    let (Some(root), Some(line)) = (values.get("figure"), values.get("line")) else {
+        return;
+    };
+    let mut svg = String::new();
+    dotted(
+        &mut svg,
+        line.x + line.w / 2.0,
+        line.y - 48.0,
+        48.0,
+        true,
+        "#49454f",
+    );
+    annotations::lines(Dp(root.w), Dp(root.h), svg);
+    annotations::marker(1, Dp(line.x + line.w / 2.0 - 12.0), Dp(line.y - 80.0));
 }
 
 #[tessera]
 fn measurements() {
-    panel(RenderSlot::new(|| {
-        column()
-            .modifier(Modifier::new().fill_max_width())
-            .children(|| {
-                inset_example("Full width", Dp::ZERO, Dp::ZERO);
-                inset_example("Inset", Dp(16.0), Dp::ZERO);
-                inset_example("Middle inset", Dp(16.0), Dp(16.0));
-            });
-    }));
+    prose(
+        "The divider is 1dp thick. Full-width, inset, and middle-inset configurations change its length, not its thickness.",
+    );
     gap(Dp(24.0));
+    measurement_figure("Full width", Dp::ZERO, Dp::ZERO);
+    gap(Dp(16.0));
+    measurement_figure("Inset", Dp(16.0), Dp::ZERO);
+    gap(Dp(16.0));
+    measurement_figure("Middle inset", Dp(16.0), Dp(16.0));
+    gap(Dp(32.0));
     spec_table(
         vec!["Attribute".into(), "Value".into()],
         vec![
-            vec!["Full-width divider".into(), "100%".into()],
-            vec!["Inset · left / right".into(), "16 / 0dp".into()],
-            vec!["Middle inset · left / right".into(), "16 / 16dp".into()],
-            vec!["Divider to supporting text".into(), "4dp".into()],
+            vec!["Divider full-width".into(), "100%".into()],
+            vec!["Divider inset left margin".into(), "16dp".into()],
+            vec!["Divider inset right margin".into(), "0dp".into()],
+            vec!["Divider middle-inset left margin".into(), "16dp".into()],
+            vec!["Divider middle-inset right margin".into(), "16dp".into()],
+            vec![
+                "Space between divider & supporting text".into(),
+                "4dp".into(),
+            ],
             vec!["Divider right margin".into(), "8dp".into()],
             vec!["Divider bottom margin".into(), "8dp".into()],
         ],
@@ -201,93 +354,274 @@ fn measurements() {
                     .children(|| {
                         horizontal_divider();
                     });
+                prose("4dp text gap · 8dp end margin · 8dp bottom margin");
             });
     }));
+    caption(
+        "Spacing belongs to the surrounding content layout; it is not added by the divider itself.",
+    );
 }
 
 #[tessera]
-fn prose(#[prop(into)] value: String) {
-    text().content(value).style(type_style(16.0, 24.0));
-}
-
-#[tessera]
-fn divider_comparison() {
-    panel(RenderSlot::new(|| {
-        column()
-            .modifier(Modifier::new().fill_max_width())
-            .children(|| {
-                text()
-                    .content("Full-width divider")
-                    .style(type_style(18.0, 24.0));
-                gap(Dp(24.0));
-                horizontal_divider();
-                gap(Dp(48.0));
-                text()
-                    .content("Inset divider")
-                    .style(type_style(18.0, 24.0));
-                gap(Dp(24.0));
-                boxed()
-                    .modifier(
-                        Modifier::new()
-                            .fill_max_width()
-                            .padding_symmetric(Dp(16.0), Dp::ZERO),
-                    )
-                    .children(|| {
-                        horizontal_divider();
-                    });
-            });
-    }));
-}
-
-#[tessera]
-fn divider_anatomy() {
-    let geometry = remember(Geometry::new);
+fn measurement_figure(#[prop(into)] label: String, left: Dp, right: Dp) {
+    let geometry = remember(SpaceGeometry::new);
     let scheme = use_context::<MaterialTheme>().unwrap().get().color_scheme;
     boxed()
-        .alignment(Alignment::Center)
         .modifier(
-            watch(geometry, "figure")
+            watch_in_space(geometry, "figure")
                 .fill_max_width()
-                .height(Dp(224.0))
+                .height(Dp(176.0))
                 .background_with_shape(
                     scheme.surface_container_low,
                     Shape::rounded_rectangle(Dp(24.0)),
                 ),
         )
         .children(move || {
-            horizontal_divider().modifier(watch(geometry, "line").width(Dp(320.0)));
+            text()
+                .content(label.clone())
+                .style(type_style(16.0, 24.0))
+                .modifier(Modifier::new().offset(Dp(24.0), Dp(16.0)));
+            boxed()
+                .modifier(
+                    Modifier::new()
+                        .fill_max_width()
+                        .padding_symmetric(Dp(40.0), Dp::ZERO)
+                        .offset(Dp::ZERO, Dp(88.0)),
+                )
+                .children(move || {
+                    boxed()
+                        .modifier(
+                            watch_in_space(geometry, "content")
+                                .fill_max_width()
+                                .padding(Padding::new(left, Dp::ZERO, right, Dp::ZERO)),
+                        )
+                        .children(move || {
+                            horizontal_divider().modifier(watch_in_space(geometry, "line"));
+                        });
+                });
             boxed()
                 .modifier(Modifier::new().fill_max_size())
                 .children(move || {
-                    divider_callout(geometry);
+                    measurement_callouts(geometry, left, right);
                 });
         });
-    gap(Dp(16.0));
-    prose("1  Divider");
 }
 
 #[tessera]
-fn divider_callout(geometry: State<Geometry>) {
-    let values = geometry.get();
-    let (Some(root), Some(line)) = (values.get("figure"), relative(&values, "line")) else {
+fn measurement_callouts(geometry: State<SpaceGeometry>, left: Dp, right: Dp) {
+    let values = space_geometry(&geometry.get());
+    let (Some(root), Some(content), Some(line)) = (
+        values.get("figure"),
+        values.get("content"),
+        values.get("line"),
+    ) else {
         return;
     };
     let mut svg = String::new();
-    dotted(
-        &mut svg,
-        line.x + line.w / 2.0,
-        line.y - 48.0,
-        48.0,
+    let y = line.y + 24.0;
+    let x1 = line.x;
+    let x2 = line.x + line.w;
+    svg.push_str(&format!("<path d='M{x1} {y}H{x2} M{x1} {}V{} M{x2} {}V{}' stroke='#b3261e' stroke-width='1' fill='none'/>", y - 4.0, y + 4.0, y - 4.0, y + 4.0));
+    dotted(&mut svg, x1, line.y - 16.0, 32.0, true, "#49454f");
+    dotted(&mut svg, x2, line.y - 16.0, 32.0, true, "#49454f");
+    annotations::lines(Dp(root.w), Dp(root.h), svg);
+    annotations::dimension("1dp".into(), Dp(content.x), Dp(line.y - 32.0));
+    annotations::dimension(
+        if left == Dp::ZERO && right == Dp::ZERO {
+            "100% available width".into()
+        } else {
+            "Available width minus insets".into()
+        },
+        Dp(content.x + 24.0),
+        Dp(y + 8.0),
+    );
+    if left != Dp::ZERO {
+        annotations::dimension("16dp".into(), Dp(content.x), Dp(line.y - 24.0));
+    }
+    if right != Dp::ZERO {
+        annotations::dimension(
+            "16dp".into(),
+            Dp(content.x + content.w - 36.0),
+            Dp(line.y - 24.0),
+        );
+    }
+}
+
+#[tessera]
+fn usage() {
+    prose(
+        "Dividers visually group components, create hierarchy, and can imply nested parent/child relationships. Use a full-width divider for a different kind of content, and inset dividers for nested content within a group.",
+    );
+    gap(Dp(24.0));
+    divider_comparison();
+    caption(
+        "Try the native controls to compare the same content with full-width, leading-inset, middle-inset, or no divider lines.",
+    );
+}
+
+#[tessera]
+fn divider_comparison() {
+    let mode = remember(|| 1_usize);
+    panel(RenderSlot::new(move || {
+        column()
+            .modifier(Modifier::new().fill_max_width())
+            .children(move || {
+                row()
+                    .modifier(Modifier::new().fill_max_width())
+                    .children(move || {
+                        for index in 0..4 {
+                            divider_option(index, mode);
+                        }
+                    });
+                gap(Dp(24.0));
+                text()
+                    .content(
+                        [
+                            "Full-width divider",
+                            "Inset divider",
+                            "Middle-inset divider",
+                            "Open space",
+                        ][mode.get()],
+                    )
+                    .style(type_style(20.0, 28.0));
+                gap(Dp(16.0));
+                for index in 0..3 {
+                    mail_row(index);
+                    if index < 2 && mode.get() != 3 {
+                        let left = if mode.get() == 0 { Dp::ZERO } else { Dp(16.0) };
+                        let right = if mode.get() == 2 { Dp(16.0) } else { Dp::ZERO };
+                        inset_line(left, right);
+                    }
+                }
+            });
+    }));
+}
+
+#[tessera]
+fn divider_option(index: usize, mode: State<usize>) {
+    let label = ["Full width", "Inset", "Middle inset", "No lines"][index];
+    button()
+        .text()
+        .modifier(Modifier::new().weight(1.0))
+        .on_click(move || mode.set(index))
+        .child(move || {
+            text()
+                .content(if mode.get() == index {
+                    format!("{label} · selected")
+                } else {
+                    label.to_owned()
+                })
+                .style(type_style(14.0, 20.0));
+        });
+}
+
+#[tessera]
+fn inset_line(left: Dp, right: Dp) {
+    boxed()
+        .modifier(Modifier::new().fill_max_width().padding(Padding::new(
+            left,
+            Dp::ZERO,
+            right,
+            Dp::ZERO,
+        )))
+        .children(|| {
+            horizontal_divider();
+        });
+}
+
+#[tessera]
+fn full_width_guidelines() {
+    prose(
+        "Full-width dividers separate content into sections, including content within cards and lists. They can also distinguish interactive areas from non-interactive areas and indicate how elements relate from an interaction perspective.",
+    );
+    gap(Dp(24.0));
+    full_width_card();
+    guidance(
+        false,
+        "Do: Use a full-width line to separate the card's information from its action.",
+    );
+    gap(Dp(32.0));
+    panel(RenderSlot::new(|| {
+        column()
+            .modifier(Modifier::new().fill_max_width())
+            .children(|| {
+                text().content("Your order").style(type_style(24.0, 32.0));
+                gap(Dp(16.0));
+                horizontal_divider();
+                list_item()
+                    .headline("Succulents")
+                    .supporting_text("Nursery");
+                horizontal_divider();
+                list_item()
+                    .headline("Watering can")
+                    .supporting_text("Medium, brass finish");
+                horizontal_divider();
+                list_item()
+                    .headline("Subtotal")
+                    .supporting_text("Including tax");
+                horizontal_divider();
+            });
+    }));
+    guidance(
         true,
-        "#49454f",
+        "Caution: Use full-width dividers sparingly. Too many lines make an interface look cluttered; spacing may already communicate the groups.",
     );
-    annotations::lines(
-        Dp::from_pixels_f32(root.width.to_f32()),
-        Dp::from_pixels_f32(root.height.to_f32()),
-        svg,
+}
+
+#[tessera]
+fn guidance(caution: bool, #[prop(into)] value: String) {
+    gap(Dp(16.0));
+    text()
+        .content(value)
+        .color(if caution {
+            srgb(108, 79, 0)
+        } else {
+            srgb(31, 97, 52)
+        })
+        .style(type_style(16.0, 24.0));
+}
+
+#[tessera]
+fn inset_guidelines() {
+    prose(
+        "Inset dividers separate related content, such as messages in a list. Use anchoring elements such as icons or avatars, with consistent alignment to the leading edge of the screen.",
     );
-    annotations::marker(1, Dp(line.x + line.w / 2.0 - 12.0), Dp(line.y - 80.0));
-    annotations::dimension("1dp".into(), Dp(line.x + line.w + 16.0), Dp(line.y - 10.0));
+    gap(Dp(24.0));
+    mail_groups(true);
+    caption(
+        "Inset dividers in a list of related messages. The avatars provide a stable visual anchor.",
+    );
+    gap(Dp(32.0));
+    prose(
+        "A middle-inset divider can separate body text from related selection controls within the same layout.",
+    );
+    gap(Dp(24.0));
+    middle_inset_content();
+    caption(
+        "The inset line divides descriptive content from related selections, without separating them into unrelated sections.",
+    );
+    gap(Dp(40.0));
+    subheading("Using dividers both ways on the same screen".into());
+    gap(Dp(16.0));
+    prose(
+        "1  Use a full-width divider for a different kind of content.\n2  Use inset dividers for nested content items.",
+    );
+    gap(Dp(24.0));
+    mail_groups(true);
+    guidance(
+        false,
+        "Do: Combine inset and full-width dividers to reflect the hierarchy of information.",
+    );
+    gap(Dp(32.0));
+    prose(
+        "List items with repetitive formats may not require an inset divider. Using only the margin between items is acceptable.",
+    );
+    gap(Dp(24.0));
+    mail_groups(false);
+    guidance(
+        false,
+        "Do: Omit divider lines where repeated layouts and spacing already make the relationship clear.",
+    );
 }
 
 #[tessera]
@@ -318,42 +652,34 @@ fn mail_row(index: usize) {
 #[tessera]
 fn mail_groups(inset: bool) {
     panel(RenderSlot::new(move || {
-        column()
+        surface()
             .modifier(Modifier::new().fill_max_width())
-            .children(move || {
-                text()
-                    .content("Inbox")
-                    .style(type_style(24.0, 32.0))
-                    .modifier(Modifier::new().padding_all(Dp(16.0)));
-                for index in 0..3 {
-                    mail_entry(index, inset);
-                }
-                gap(Dp(16.0));
-                horizontal_divider();
-                gap(Dp(16.0));
-                text()
-                    .content("Earlier messages")
-                    .style(type_style(18.0, 24.0))
-                    .modifier(Modifier::new().padding_all(Dp(16.0)));
-                mail_row(0);
+            .shape(Shape::rounded_rectangle(Dp(16.0)))
+            .child(move || {
+                column()
+                    .modifier(Modifier::new().fill_max_width())
+                    .children(move || {
+                        text()
+                            .content("Inbox · Today")
+                            .style(type_style(24.0, 32.0))
+                            .modifier(Modifier::new().padding_all(Dp(16.0)));
+                        for index in 0..3 {
+                            mail_row(index);
+                            if inset && index < 2 {
+                                inset_line(Dp(16.0), Dp::ZERO);
+                            }
+                        }
+                        gap(Dp(16.0));
+                        horizontal_divider();
+                        gap(Dp(16.0));
+                        text()
+                            .content("Earlier messages")
+                            .style(type_style(20.0, 28.0))
+                            .modifier(Modifier::new().padding_all(Dp(16.0)));
+                        mail_row(0);
+                    });
             });
     }));
-}
-
-#[tessera]
-fn mail_entry(index: usize, inset: bool) {
-    mail_row(index);
-    if inset && index < 2 {
-        boxed()
-            .modifier(
-                Modifier::new()
-                    .fill_max_width()
-                    .padding_symmetric(Dp(16.0), Dp::ZERO),
-            )
-            .children(|| {
-                horizontal_divider();
-            });
-    }
 }
 
 #[tessera]
@@ -361,7 +687,8 @@ fn full_width_card() {
     let saved = remember(|| false);
     panel(RenderSlot::new(move || {
         surface()
-            .modifier(Modifier::new().width(Dp(360.0)))
+            .modifier(Modifier::new().fill_max_width())
+            .shape(Shape::rounded_rectangle(Dp(16.0)))
             .child(move || {
                 column()
                     .modifier(Modifier::new().fill_max_width())
@@ -376,12 +703,50 @@ fn full_width_card() {
                                 prose("Manage your profile and notification preferences.");
                             });
                         horizontal_divider();
-                        button()
-                            .text()
-                            .on_click(move || saved.set(!saved.get()))
-                            .child(move || {
-                                text().content(if saved.get() { "Saved" } else { "Save changes" });
+                        boxed()
+                            .modifier(Modifier::new().padding_all(Dp(8.0)))
+                            .children(move || {
+                                button()
+                                    .text()
+                                    .on_click(move || saved.set(!saved.get()))
+                                    .child(move || {
+                                        text().content(if saved.get() {
+                                            "Saved · undo"
+                                        } else {
+                                            "Save changes"
+                                        });
+                                    });
                             });
+                    });
+            });
+    }));
+}
+
+#[tessera]
+fn middle_inset_content() {
+    let selected = remember(|| false);
+    panel(RenderSlot::new(move || {
+        surface()
+            .modifier(Modifier::new().fill_max_width())
+            .shape(Shape::rounded_rectangle(Dp(16.0)))
+            .child(move || {
+                column()
+                    .modifier(Modifier::new().fill_max_width())
+                    .children(move || {
+                        column()
+                            .modifier(Modifier::new().padding_all(Dp(16.0)))
+                            .children(|| {
+                                text().content("A little greenery").style(type_style(24.0, 32.0));
+                                gap(Dp(16.0));
+                                prose("Choose a small desert plant in a locally crafted ceramic pot. Both options share the same care instructions.");
+                            });
+                        inset_line(Dp(16.0), Dp(16.0));
+                        gap(Dp(16.0));
+                        text().content("Select type").style(type_style(20.0, 28.0)).modifier(Modifier::new().padding_symmetric(Dp(16.0), Dp::ZERO));
+                        row().children(move || {
+                            button().text().on_click(move || selected.set(false)).child(move || { text().content(if selected.get() { "Succulent" } else { "Succulent · selected" }); });
+                            button().text().on_click(move || selected.set(true)).child(move || { text().content(if selected.get() { "Cactus · selected" } else { "Cactus" }); });
+                        });
                     });
             });
     }));
@@ -390,22 +755,89 @@ fn full_width_card() {
 #[tessera]
 fn vertical_example() {
     let scheme = use_context::<MaterialTheme>().unwrap().get().color_scheme;
+    let playing = remember(|| false);
     panel(RenderSlot::new(move || {
-        row().cross_axis_alignment(CrossAxisAlignment::Center).modifier(Modifier::new().fill_max_width()).children(move || {
-        column().modifier(Modifier::new().weight(1.0).padding_all(Dp(16.0))).children(|| {text().content("Explore the collection").style(type_style(24.0,32.0));gap(Dp(16.0));prose("A vertical divider separates this description from its related media while preserving their shared context.");});
-        vertical_divider().modifier(Modifier::new().height(Dp(180.0)));
-        spacer().modifier(Modifier::new().weight(1.0).height(Dp(160.0)).padding_all(Dp(16.0)).background(scheme.tertiary_container));
-    });
+        row()
+            .cross_axis_alignment(CrossAxisAlignment::Center)
+            .modifier(Modifier::new().fill_max_width())
+            .children(move || {
+                boxed()
+                    .alignment(Alignment::Center)
+                    .modifier(
+                        Modifier::new()
+                            .weight(1.0)
+                            .height(Dp(200.0))
+                            .background_with_shape(
+                                scheme.tertiary_container,
+                                Shape::rounded_rectangle(Dp(16.0)),
+                            ),
+                    )
+                    .children(move || {
+                        button()
+                            .text()
+                            .on_click(move || playing.set(!playing.get()))
+                            .child(move || {
+                                text().content(if playing.get() {
+                                    "Pause preview"
+                                } else {
+                                    "Play preview"
+                                });
+                            });
+                    });
+                boxed()
+                    .modifier(Modifier::new().padding_symmetric(Dp(16.0), Dp::ZERO))
+                    .children(|| {
+                        vertical_divider().modifier(Modifier::new().height(Dp(200.0)));
+                    });
+                column()
+                    .modifier(Modifier::new().weight(1.0))
+                    .children(move || {
+                        text()
+                            .content("Explore the collection")
+                            .style(type_style(24.0, 32.0));
+                        gap(Dp(16.0));
+                        prose("Stories, performances, and people behind the music.");
+                        gap(Dp(16.0));
+                        prose(if playing.get() {
+                            "Preview playing"
+                        } else {
+                            "Preview paused"
+                        });
+                    });
+            });
     }));
 }
 
 #[tessera]
 fn decorative_example() {
-    panel(RenderSlot::new(|| {
-        column().modifier(Modifier::new().fill_max_width()).children(|| {
-        prose("Decorative elements have no contrast minimums");gap(Dp(24.0));
-        text().content("Related content").style(type_style(20.0,28.0));gap(Dp(16.0));horizontal_divider();gap(Dp(16.0));
-        prose("Content and controls keep their own labels and reading order. The decorative line adds no focus stop.");
-    });
+    let action = remember(|| "No action activated");
+    panel(RenderSlot::new(move || {
+        column()
+            .modifier(Modifier::new().fill_max_width())
+            .children(move || {
+                text()
+                    .content("Message preferences")
+                    .style(type_style(24.0, 32.0));
+                gap(Dp(16.0));
+                prose("The line is decorative. The content and controls carry their own meaning.");
+                gap(Dp(16.0));
+                button()
+                    .text()
+                    .on_click(move || action.set("Profile opened"))
+                    .child(|| {
+                        text().content("Open profile");
+                    });
+                gap(Dp(16.0));
+                horizontal_divider();
+                gap(Dp(16.0));
+                button()
+                    .text()
+                    .on_click(move || action.set("Notifications opened"))
+                    .child(|| {
+                        text().content("Open notifications");
+                    });
+                gap(Dp(16.0));
+                prose(action.get());
+            });
     }));
 }

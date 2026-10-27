@@ -69,6 +69,17 @@ fn measurement_diagrams_preserve_native_sizes_expanded_targets_and_clicks_after_
             renderer.resize(width, 1400);
             renderer.render_frames(16);
             let scale = f64::from(width) / if scene == 1 { 676.0 } else { 1024.0 };
+            let pixels = renderer.read_pixels().unwrap();
+            let pixel = |x: f64, y: f64| -> [u8; 3] {
+                let offset = ((y.floor() as u32 * width + x.floor() as u32) * 4) as usize;
+                pixels[offset..offset + 3].try_into().unwrap()
+            };
+            let difference = |a: [u8; 3], b: [u8; 3]| -> u16 {
+                a.into_iter()
+                    .zip(b)
+                    .map(|(a, b)| u16::from(a.abs_diff(b)))
+                    .sum()
+            };
             if scene == 0 {
                 for (name, expected_width, expected_height) in [
                     ("Measure ExtraSmall Narrow", 48.0, 48.0),
@@ -93,17 +104,6 @@ fn measurement_diagrams_preserve_native_sizes_expanded_targets_and_clicks_after_
                 let bounds = control(&renderer, "Measure ExtraLarge Uniform")
                     .bounds()
                     .unwrap();
-                let pixels = renderer.read_pixels().unwrap();
-                let pixel = |x: f64, y: f64| -> [u8; 3] {
-                    let offset = ((y.floor() as u32 * width + x.floor() as u32) * 4) as usize;
-                    pixels[offset..offset + 3].try_into().unwrap()
-                };
-                let difference = |a: [u8; 3], b: [u8; 3]| -> u16 {
-                    a.into_iter()
-                        .zip(b)
-                        .map(|(a, b)| u16::from(a.abs_diff(b)))
-                        .sum()
-                };
                 let background = pixel(bounds.x0 + 1.0, bounds.y0 + 1.0);
                 let corner = pixel(
                     bounds.x0 + bounds.width() / 8.0,
@@ -120,6 +120,20 @@ fn measurement_diagrams_preserve_native_sizes_expanded_targets_and_clicks_after_
                 assert!(
                     difference(background, corner) < 80,
                     "capsule acquired superellipse corners at {width}"
+                );
+            }
+            if scene == 2 && width == 1024 {
+                let bounds = control(&renderer, "Corner row 0 ExtraLarge")
+                    .bounds()
+                    .unwrap();
+                let y = (bounds.y0 + bounds.y1) / 2.0;
+                let background = pixel(bounds.x0 + 4.5, y);
+                let rule = pixel(bounds.x0 + 0.5, y);
+                let interior = pixel(bounds.x0 + 2.5, y);
+                assert!(difference(rule, background) > 30, "thin outline missing");
+                assert!(
+                    difference(interior, background) < 30,
+                    "diagram inherited the XL three-dp component outline"
                 );
             }
             let name = match scene {
