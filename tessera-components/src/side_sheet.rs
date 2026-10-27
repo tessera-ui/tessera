@@ -7,9 +7,9 @@
 mod input;
 
 use tessera_ui::{
-    Callback, CallbackWith, Color, Constraint, Dp, FocusProperties, FocusScopeNode,
-    FocusTraversalPolicy, LayoutResult, MeasurementError, Modifier, Px, PxPosition, RenderSlot,
-    State, current_frame_nanos,
+    Callback, CallbackWith, Color, ComputedData, Constraint, Dp, FocusProperties, FocusScopeNode,
+    FocusTraversalPolicy, LayoutResult, MeasurementError, Modifier, Px, PxPosition, PxSize,
+    RenderSlot, State, current_frame_nanos,
     layout::{MeasureScope, PlacementResult, PlacementScope, layout},
     modifier::FocusModifierExt as _,
     receive_frame_nanos, remember, tessera, use_context, winit,
@@ -329,11 +329,10 @@ fn build_side_sheet_nested_scroll_connection(
         .with_parent(parent)
 }
 
-/// Place side sheet if present. Extracted to reduce complexity of the parent
-/// function.
 fn place_side_sheet_if_present(
     input: &mut MeasureScope<'_>,
     result: &mut LayoutResult,
+    host_size: PxSize,
     is_open: bool,
     progress: f32,
     position: SideSheetPosition,
@@ -345,16 +344,8 @@ fn place_side_sheet_if_present(
     }
 
     let side_sheet = children[2];
-    let parent_width = input
-        .parent_constraint()
-        .width()
-        .resolve_max()
-        .unwrap_or(Px(0));
-    let parent_height = input
-        .parent_constraint()
-        .height()
-        .resolve_max()
-        .unwrap_or(Px(0));
+    let parent_width = host_size.width;
+    let parent_height = host_size.height;
 
     let max_width_px = MAX_SHEET_WIDTH.to_px();
     let sheet_width = if parent_width > max_width_px {
@@ -805,11 +796,7 @@ impl tessera_ui::LayoutModifierNode for SideSheetLayout {
             result.place_child(*scrim, PxPosition::ZERO);
         }
         if let Some(sheet) = children.get(2) {
-            let parent_width = input
-                .parent_constraint()
-                .width()
-                .resolve_max()
-                .unwrap_or(Px::ZERO);
+            let parent_width = input.size().width;
             let x = compute_side_sheet_x(
                 parent_width,
                 sheet.size().width,
@@ -829,24 +816,38 @@ impl tessera_ui::LayoutModifierNode for SideSheetLayout {
         let child_constraint = input.parent_constraint().without_min();
         let main_content = children[0];
         let main_content_size = main_content.measure(input, &child_constraint)?;
+        let host_size = PxSize::new(
+            input
+                .parent_constraint()
+                .width()
+                .clamp(main_content_size.width),
+            input
+                .parent_constraint()
+                .height()
+                .clamp(main_content_size.height),
+        );
         result.place_child(main_content, PxPosition::new(Px(0), Px(0)));
 
         if children.len() > 1 {
             let scrim = children[1];
-            scrim.measure(input, &child_constraint)?;
+            scrim.measure(input, &Constraint::exact(host_size.width, host_size.height))?;
             result.place_child(scrim, PxPosition::new(Px(0), Px(0)));
         }
 
         place_side_sheet_if_present(
             input,
             &mut result,
+            host_size,
             self.is_open,
             self.progress,
             self.position,
             self.drag_offset,
         );
 
-        Ok(result.with_size(main_content_size.size()))
+        Ok(result.with_size(ComputedData {
+            width: host_size.width,
+            height: host_size.height,
+        }))
     }
 }
 
@@ -884,3 +885,7 @@ mod placement_tests {
         }
     }
 }
+
+#[cfg(all(test, not(target_family = "wasm")))]
+#[path = "side_sheet_tests.rs"]
+mod host_tests;

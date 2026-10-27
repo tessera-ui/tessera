@@ -31,7 +31,7 @@ use super::{
     gap, spec_table, subheading, type_style,
 };
 
-const DESTINATIONS: [&str; 4] = ["Inbox", "Outbox", "Favorites", "Trash"];
+const DESTINATIONS: [&str; 5] = ["Inbox", "Outbox", "Favorites", "Trash", "Personal"];
 
 #[tessera]
 pub(super) fn drawers_spec() {
@@ -149,7 +149,7 @@ fn drawer_content(
                         .style(theme.typography.title_small)
                         .modifier(modifier);
                 });
-            for (index, label) in DESTINATIONS.into_iter().enumerate() {
+            for (index, label) in DESTINATIONS.into_iter().take(4).enumerate() {
                 let active = selected.get() == index;
                 let mut item = navigation_drawer_item()
                     .label(label)
@@ -211,11 +211,18 @@ fn drawer_content(
                 .modifier(Modifier::new().padding_all(Dp(16.0)));
             navigation_drawer_item()
                 .label("Personal")
-                .icon(|| {
-                    icon().vector(outlined::LABEL_SVG).size(Dp(24.0));
+                .selected(selected.get() == 4)
+                .icon(move || {
+                    icon()
+                        .vector(if selected.get() == 4 {
+                            filled::LABEL_SVG
+                        } else {
+                            outlined::LABEL_SVG
+                        })
+                        .size(Dp(24.0));
                 })
                 .on_click(move || {
-                    selected.set(2);
+                    selected.set(4);
                     if let Some(open) = open {
                         open.set(false);
                     }
@@ -395,6 +402,18 @@ fn figure_annotation_content(modal: bool, measurements: bool, values: Geometry) 
                     rect.y + 10.0,
                 ),
                 "icon" => (rect.x - 48.0, rect.y - 4.0, rect.x, rect.y + 12.0),
+                "indicator" => (
+                    container.x + container.w + 48.0,
+                    rect.y + rect.h / 2.0 - 48.0,
+                    rect.x + rect.w,
+                    rect.y + rect.h / 2.0,
+                ),
+                "badge" => (
+                    container.x + container.w + 96.0,
+                    rect.y + rect.h / 2.0 - 16.0,
+                    rect.x + rect.w,
+                    rect.y + rect.h / 2.0,
+                ),
                 _ => (
                     rect.x + rect.w + 24.0,
                     rect.y + rect.h / 2.0 - 16.0,
@@ -402,10 +421,45 @@ fn figure_annotation_content(modal: bool, measurements: bool, values: Geometry) 
                     rect.y + rect.h / 2.0,
                 ),
             };
-            dotted(&mut svg, tx, ty, x - tx, false, "#49454f");
+            if name == "indicator" {
+                let elbow = x - 8.0;
+                dotted(&mut svg, tx, ty, elbow - tx, false, "#49454f");
+                dotted(&mut svg, elbow, ty, y + 16.0 - ty, true, "#49454f");
+                dotted(&mut svg, elbow, y + 16.0, 8.0, false, "#49454f");
+            } else {
+                dotted(&mut svg, tx, ty, x - tx, false, "#49454f");
+            }
             annotations::marker(number, Dp(x), Dp(y));
         }
-        annotations::marker(3, Dp(indicator.x + 88.0), Dp(indicator.y + 64.0));
+        let label_x = indicator.x + 72.0;
+        let label_y = indicator.y - 88.0;
+        let marker_x = label_x + 96.0;
+        let elbow_y = indicator.y - 4.0;
+        dotted(
+            &mut svg,
+            marker_x,
+            label_y + 32.0,
+            elbow_y - label_y - 32.0,
+            true,
+            "#49454f",
+        );
+        dotted(
+            &mut svg,
+            marker_x,
+            elbow_y,
+            label_x - marker_x,
+            false,
+            "#49454f",
+        );
+        dotted(
+            &mut svg,
+            label_x,
+            elbow_y,
+            indicator.h / 2.0 + 4.0,
+            true,
+            "#49454f",
+        );
+        annotations::marker(3, Dp(marker_x - 12.0), Dp(label_y));
     }
     annotations::lines(width, height, svg);
 }
