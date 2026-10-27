@@ -1381,7 +1381,7 @@ fn date_figure(
                             });
                         } else {
                             date_picker_dialog().picker_today(illustration_today()).state(state).picker_view(modal_view).picker_title("Select date").picker_headline_optional(if state.with(DatePickerState::display_mode)==DatePickerDisplayMode::Input {Some("Enter dates".into())} else {None}).picker_first_day_of_week(Weekday::Sunday).dismiss_button(move || {button().text().accessibility_label("Reference date cancel").on_click(move ||{ open.set(false); status.set("Date selection cancelled".into()); FocusManager::current().defer_keyboard_until_layout(); }).child(||{text().content("Cancel");});})
-                                .confirm_button(move || {button().text().accessibility_label("Reference date confirm").on_click(move ||{ open.set(false); status.set("Date selection confirmed".into()); FocusManager::current().defer_keyboard_until_layout(); }).child(||{text().content("OK");});});
+                                .confirm_button(move || {button().text().enabled(state.with(|state| state.selected_date().is_some())).accessibility_label("Reference date confirm").on_click(move ||{ if state.with(|state| state.selected_date().is_none()) { return; } open.set(false); status.set("Date selection confirmed".into()); FocusManager::current().defer_keyboard_until_layout(); }).child(||{text().content("OK");});});
                         }
                     });
                 }
@@ -1475,8 +1475,8 @@ fn date_color_annotation_content(
         if menu {
             let header = docked_header_regions(calendar);
             regions.extend([
-                (2, header[0], 0, -80.0),
-                (3, header[1], 0, -80.0),
+                (2, header[0], -1, 0.0),
+                (3, header[1], 1, 0.0),
                 (4, rect(312.0, 64.0, 2.0, 2.0), 1, 0.0),
                 (5, rect(300.0, 112.0, 2.0, 2.0), 1, 0.0),
             ]);
@@ -1496,7 +1496,7 @@ fn date_color_annotation_content(
         } else {
             let header = docked_calendar_header_regions(calendar);
             regions.extend([
-                (2, header[0], 0, -80.0),
+                (2, header[0], -1, 0.0),
                 (3, rect(312.0, 12.0, 36.0, 44.0), 1, 0.0),
                 (4, rect(12.0, 64.0, 336.0, 40.0), 1, 0.0),
                 (8, rect(12.0, calendar.h - 48.0, 336.0, 40.0), 1, 0.0),
@@ -1654,6 +1654,29 @@ fn date_color_annotation_content(
             }
         }
     }
+    let mut marker_centers = BTreeMap::new();
+    for side in [-1, 1] {
+        let mut lane: Vec<_> = regions.iter().filter(|region| region.2 == side).collect();
+        lane.sort_by(|a, b| (a.1.y + a.1.h * 0.5 + a.3).total_cmp(&(b.1.y + b.1.h * 0.5 + b.3)));
+        let mut previous = -24.0;
+        let mut centers = Vec::with_capacity(lane.len());
+        for (_, region, _, shift) in &lane {
+            let center = (region.y + region.h * 0.5 + shift)
+                .max(previous + 40.0)
+                .max(16.0);
+            centers.push(center);
+            previous = center;
+        }
+        for i in (0..centers.len()).rev() {
+            let next = centers
+                .get(i + 1)
+                .map_or(height.0 - 16.0, |next| next - 40.0);
+            centers[i] = centers[i].min(next);
+        }
+        for ((number, _, _, _), center) in lane.into_iter().zip(centers) {
+            marker_centers.insert(*number, center);
+        }
+    }
     let mut svg = String::new();
     let ink = if scheme.is_dark { "#cac4d0" } else { "#49454f" };
     for (number, region, side, shift) in regions {
@@ -1678,17 +1701,21 @@ fn date_color_annotation_content(
             (x - 12.0, y)
         } else {
             let x = if side < 0 { 16.0 } else { width.0 - 40.0 };
-            let y = center_y + shift;
-            let from = if side < 0 {
-                x + 24.0
+            let y = marker_centers[&number];
+            let edge = if side < 0 { x + 24.0 } else { x };
+            let target = if side < 0 {
+                region.x
             } else {
                 region.x + region.w
             };
-            let to = if side < 0 { region.x } else { x };
-            dotted(&mut svg, from, y, to - from, false, ink);
-            if shift != 0.0 {
-                dotted(&mut svg, region.x, center_y, shift, true, ink);
-            }
+            let elbow = if side < 0 {
+                calendar.x - 12.0
+            } else {
+                calendar.x + calendar.w + 12.0
+            };
+            dotted(&mut svg, edge, y, elbow - edge, false, ink);
+            dotted(&mut svg, elbow, y, center_y - y, true, ink);
+            dotted(&mut svg, elbow, center_y, target - elbow, false, ink);
             (x, y - 16.0)
         };
         date_color_marker(number, labels[number - 1].into(), Dp(x), Dp(y));
@@ -2708,7 +2735,7 @@ fn modal_configuration(number: usize, initial_view: DatePickerView, input: bool)
     let status = remember(String::new);
     let scheme = use_context::<MaterialTheme>().unwrap().get().color_scheme;
     column()
-        .modifier(Modifier::new().width(Dp(360.0)))
+        .modifier(Modifier::new().width(Dp(360.0)).focus_restorer(None))
         .children(move || {
             configuration_number(number);
             if open.get() {
@@ -2753,7 +2780,11 @@ fn modal_configuration(number: usize, initial_view: DatePickerView, input: bool)
                                     .accessibility_label(format!(
                                         "Confirm modal configuration {number}"
                                     ))
+                                    .enabled(state.with(|state| state.selected_date().is_some()))
                                     .on_click(move || {
+                                        if state.with(|state| state.selected_date().is_none()) {
+                                            return;
+                                        }
                                         open.set(false);
                                         status.set("Date selection confirmed".into());
                                     })
@@ -2814,7 +2845,7 @@ fn range_configuration(number: usize, input: bool) {
     let status = remember(String::new);
     let scheme = use_context::<MaterialTheme>().unwrap().get().color_scheme;
     column()
-        .modifier(Modifier::new().width(Dp(360.0)))
+        .modifier(Modifier::new().width(Dp(360.0)).focus_restorer(None))
         .children(move || {
             configuration_number(number);
             if open.get() {
@@ -2969,6 +3000,7 @@ fn docked_configuration(number: usize, initial_view: DockedDatePickerView) {
         .modifier(
             Modifier::new()
                 .width(Dp(360.0))
+                .focus_restorer(None)
                 .default_min_size(Dp::ZERO, Dp(606.0)),
         )
         .children(move || {

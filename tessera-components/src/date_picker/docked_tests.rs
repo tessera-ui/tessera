@@ -12,7 +12,7 @@ use tessera_ui::{
     remember, tessera,
 };
 
-use crate::theme::material_theme;
+use crate::{modifier::ModifierExt as _, theme::material_theme};
 
 use super::{
     CalendarDate, DatePickerState, DockedDatePickerView, Weekday, YearMonth, docked_date_picker,
@@ -22,6 +22,7 @@ thread_local! {
     static STATE: Cell<Option<State<DatePickerState>>> = const { Cell::new(None) };
     static CHANGES: Cell<Option<State<u32>>> = const { Cell::new(None) };
     static VIEW: Cell<Option<State<DockedDatePickerView>>> = const { Cell::new(None) };
+    static OFFSET: Cell<Option<State<tessera_ui::Dp>>> = const { Cell::new(None) };
 }
 
 #[tessera]
@@ -42,14 +43,18 @@ fn fixture() {
         STATE.set(Some(state));
         CHANGES.set(Some(changes));
         VIEW.set(Some(view));
-        crate::boxed::boxed().children(move || {
-            docked_date_picker()
-                .state(state)
-                .view(view)
-                .today(CalendarDate::new(2025, 8, 17).unwrap())
-                .first_day_of_week(Weekday::Monday)
-                .on_date_change(move |_| changes.with_mut(|count| *count += 1));
-        });
+        let offset = remember(|| tessera_ui::Dp::ZERO);
+        OFFSET.set(Some(offset));
+        crate::boxed::boxed()
+            .modifier(tessera_ui::Modifier::new().offset(tessera_ui::Dp::ZERO, offset.get()))
+            .children(move || {
+                docked_date_picker()
+                    .state(state)
+                    .view(view)
+                    .today(CalendarDate::new(2025, 8, 17).unwrap())
+                    .first_day_of_week(Weekday::Monday)
+                    .on_date_change(move |_| changes.with_mut(|count| *count += 1));
+            });
     });
 }
 
@@ -135,6 +140,82 @@ fn check_calendar() {
     let bounds = node(&renderer, "Docked calendar").1.bounds().unwrap();
     assert_eq!((bounds.width(), bounds.height()), (360.0, 460.0));
     assert!(node(&renderer, "August 18, 2025").1.is_disabled());
+    let snapshot = renderer.snapshot();
+    for (button, caption) in [("Choose month", "Aug"), ("Choose year", "2025")] {
+        let target = node(&renderer, button).1.bounds().unwrap();
+        let mut pending = vec![&snapshot["root"]];
+        let mut caption_center = None;
+        while let Some(entry) = pending.pop() {
+            if entry["accessibility"]["label"].as_str() == Some(caption)
+                && let (Some(x), Some(y), Some(height)) = (
+                    entry["bounds"]["x"].as_f64(),
+                    entry["bounds"]["y"].as_f64(),
+                    entry["bounds"]["height"].as_f64(),
+                )
+                && x >= target.x0
+                && x < target.x1
+                && y >= target.y0
+                && y < target.y1
+            {
+                caption_center = Some(y + height / 2.0);
+            }
+            if let Some(children) = entry["children"].as_array() {
+                pending.extend(children);
+            }
+        }
+        assert!(
+            (caption_center.expect("visible navigation caption")
+                - (target.y0 + target.height() / 2.0))
+                .abs()
+                <= 1.0,
+            "month and year captions must be vertically centered in their targets"
+        );
+    }
+    let offset = OFFSET.get().unwrap();
+    offset.set(tessera_ui::Dp(600.0));
+    renderer.render_frames(3);
+    offset.set(tessera_ui::Dp::ZERO);
+    renderer.render_frames(3);
+
+    let date_bounds = node(&renderer, "July 28, 2025").1.bounds().unwrap();
+    let date_ink = |pixels: &[u8]| {
+        (date_bounds.y0.ceil() as usize..date_bounds.y1.floor() as usize)
+            .flat_map(|y| {
+                (date_bounds.x0.ceil() as usize..date_bounds.x1.floor() as usize)
+                    .map(move |x| (y * 420 + x) * 4)
+            })
+            .filter(|&offset| {
+                pixels[offset..offset + 3]
+                    .iter()
+                    .map(|&value| u32::from(value))
+                    .sum::<u32>()
+                    < 400
+            })
+            .count()
+    };
+    assert!(date_ink(&renderer.read_pixels().unwrap()) > 4);
+    renderer.pointer_move(
+        tessera_ui::MOUSE_POINTER_ID,
+        tessera_ui::PxPosition::from_f32_xy(
+            (date_bounds.x0 + date_bounds.width() / 2.0) as f32,
+            (date_bounds.y0 + date_bounds.height() / 2.0) as f32,
+        ),
+    );
+    renderer.render_frames(4);
+    assert!(
+        date_ink(&renderer.read_pixels().unwrap()) > 4,
+        "hover must retain the visible date caption"
+    );
+    renderer.pointer_move(
+        tessera_ui::MOUSE_POINTER_ID,
+        tessera_ui::PxPosition::from_f32_xy(410.0, 550.0),
+    );
+    renderer.render_frames(4);
+    assert!(
+        date_ink(&renderer.read_pixels().unwrap()) > 4,
+        "leaving hover must retain the visible date caption"
+    );
+
     view.set(DockedDatePickerView::Year);
     renderer.render_frames(3);
     assert!(

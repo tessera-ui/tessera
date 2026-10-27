@@ -384,6 +384,65 @@ fn date_figures_keep_docked_anchors_and_commit_only_complete_ranges() {
     ] {
         check_range_confirmation_and_cancellation(figure);
     }
+    check_single_date_input_confirmation();
+}
+
+fn check_single_date_input_confirmation() {
+    for (value, valid) in [("02/30/2025", false), ("02/28/2025", true)] {
+        RANGE_FIGURE.set(super::Figure::Input);
+        let mut renderer = HeadlessRenderer::new(
+            Box::new(range_fixture),
+            vec![Box::new(Pipelines)],
+            HeadlessConfig {
+                width: 800,
+                height: 800,
+                sample_count: 1,
+                ..Default::default()
+            },
+        )
+        .unwrap();
+        renderer.render_frames(4);
+        let input = renderer
+            .accessibility_snapshot()
+            .unwrap()
+            .nodes
+            .into_iter()
+            .find(|(_, node)| node.role() == Role::TextInput)
+            .expect("native date input")
+            .0;
+        assert!(renderer.dispatch_accessibility_action(ActionRequest {
+            action: Action::Focus,
+            target_tree: TreeId::ROOT,
+            target_node: input,
+            data: None,
+        }));
+        renderer.render_frames(3);
+        renderer.inject_text(value);
+        renderer.render_frames(4);
+        assert_eq!(
+            range_action(&renderer, "Reference date confirm").is_disabled(),
+            !valid,
+            "only a complete selectable date may be confirmed: {value}"
+        );
+        if valid {
+            activate(&mut renderer, "Reference date confirm");
+        } else {
+            activate(&mut renderer, "Reference date cancel");
+        }
+        let expected = if valid {
+            "Date selection confirmed"
+        } else {
+            "Date selection cancelled"
+        };
+        assert!(
+            renderer
+                .accessibility_snapshot()
+                .unwrap()
+                .nodes
+                .iter()
+                .any(|(_, node)| node.label() == Some(expected))
+        );
+    }
 }
 
 fn check_range_confirmation_and_cancellation(figure: super::Figure) {

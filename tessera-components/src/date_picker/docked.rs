@@ -368,6 +368,7 @@ fn menu_button(label: String, description: String, width: Dp, expanded: bool, ac
         )
         .shape(Shape::rounded_rectangle(Dp(8.0)))
         .style(tessera_ui::Color::TRANSPARENT.into())
+        .content_alignment(Alignment::Center)
         .on_click_shared(action)
         .accessibility_label(description)
         .child(move || {
