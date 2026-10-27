@@ -600,22 +600,35 @@ fn bar_example(kind: usize) {
         .placeholder("Hinted search text")
         .modifier(Modifier::new().width(Dp(400.0)))
         .leading_icon(|| {
-            icon().vector(filled::MENU_SVG).size(Dp(24.0));
+            icon_button()
+                .standard()
+                .modifier(Modifier::new().size(Dp(48.0), Dp(48.0)))
+                .icon(filled::MENU_SVG)
+                .accessibility_label("Search menu");
         })
         .trailing_icon(move || {
             row()
                 .cross_axis_alignment(CrossAxisAlignment::Center)
                 .children(move || {
                     if kind != 0 {
-                        icon().vector(filled::MIC_SVG).size(Dp(24.0));
+                        icon_button()
+                            .standard()
+                            .modifier(Modifier::new().size(Dp(48.0), Dp(48.0)))
+                            .icon(filled::MIC_SVG)
+                            .accessibility_label("Voice search");
                     }
                     if kind == 2 {
-                        spacer().modifier(Modifier::new().width(Dp(16.0)));
-                        icon().vector(filled::SEARCH_SVG).size(Dp(24.0));
+                        icon_button()
+                            .standard()
+                            .modifier(Modifier::new().size(Dp(48.0), Dp(48.0)))
+                            .icon(filled::SEARCH_SVG)
+                            .accessibility_label("Submit search");
                     }
                     if kind == 0 || kind == 3 {
-                        spacer().modifier(Modifier::new().width(Dp(8.0)));
-                        avatar();
+                        boxed()
+                            .alignment(Alignment::Center)
+                            .modifier(Modifier::new().size(Dp(48.0), Dp(48.0)))
+                            .children(|| avatar());
                     }
                 });
         });
@@ -771,6 +784,7 @@ fn anatomy_bar(geometry: State<Geometry>, active: bool) {
             if active {
                 icon_button()
                     .standard()
+                    .modifier(Modifier::new().size(Dp(48.0), Dp(48.0)))
                     .content_color(scheme.on_surface_variant)
                     .icon(filled::ARROW_BACK_SVG)
                     .accessibility_label("Close search")
@@ -795,6 +809,7 @@ fn anatomy_bar(geometry: State<Geometry>, active: bool) {
                             if active {
                                 icon_button()
                                     .standard()
+                                    .modifier(Modifier::new().size(Dp(48.0), Dp(48.0)))
                                     .content_color(scheme.on_surface_variant)
                                     .icon(filled::CLOSE_SVG)
                                     .accessibility_label("Clear search")
@@ -802,10 +817,16 @@ fn anatomy_bar(geometry: State<Geometry>, active: bool) {
                                         controller.with_mut(|value| value.set_query(""))
                                     });
                             }
-                            icon().vector(filled::AUTO_AWESOME_SVG).size(Dp(24.0));
+                            icon_button()
+                                .standard()
+                                .modifier(Modifier::new().size(Dp(48.0), Dp(48.0)))
+                                .icon(filled::AUTO_AWESOME_SVG)
+                                .accessibility_label("Search suggestions");
                             if !active {
-                                spacer().modifier(Modifier::new().width(Dp(8.0)));
-                                avatar();
+                                boxed()
+                                    .alignment(Alignment::Center)
+                                    .modifier(Modifier::new().size(Dp(48.0), Dp(48.0)))
+                                    .children(|| avatar());
                             }
                         });
                 });
@@ -967,7 +988,7 @@ fn measurements() {
             vec![
                 "Docked container".into(),
                 "Height".into(),
-                "240dp min; ⅔ screen max".into(),
+                "240dp min; 2/3 screen max".into(),
             ],
             vec![
                 "Focused bar".into(),
@@ -1025,9 +1046,12 @@ fn keyboard() {
 mod tests {
     use std::time::Duration;
 
-    use tessera_components::theme::material_theme;
+    use tessera_components::{
+        modifier::MinimumInteractiveComponentEnforcement, theme::material_theme,
+    };
     use tessera_ui::{
         HeadlessConfig, HeadlessRenderer, MOUSE_POINTER_ID, PressKeyEventType, PxPosition,
+        provide_context,
     };
 
     use super::*;
@@ -1070,6 +1094,60 @@ mod tests {
         renderer.pointer_press(MOUSE_POINTER_ID, position, PressKeyEventType::Left);
         renderer.pointer_release(MOUSE_POINTER_ID, position, PressKeyEventType::Left);
         renderer.render_frames(2);
+    }
+
+    #[tessera]
+    fn trailing_targets_fixture() {
+        material_theme().child(|| {
+            provide_context(
+                || MinimumInteractiveComponentEnforcement { enabled: false },
+                || {
+                    bar_example(2);
+                },
+            );
+        });
+    }
+
+    #[test]
+    #[ignore = "requires a native GPU adapter"]
+    fn search_anatomy_keeps_two_full_trailing_targets_and_centered_input() {
+        let mut renderer = HeadlessRenderer::new(
+            Box::new(trailing_targets_fixture),
+            vec![Box::new(Pipelines)],
+            HeadlessConfig {
+                width: 400,
+                height: 100,
+                sample_count: 1,
+                ..Default::default()
+            },
+        )
+        .unwrap();
+        renderer.render_frames(4);
+        let tree = renderer.accessibility_snapshot().unwrap();
+        for (label, x) in [("Voice search", 300.0), ("Submit search", 348.0)] {
+            let bounds = tree
+                .nodes
+                .iter()
+                .find(|(_, node)| node.role() == Role::Button && node.label() == Some(label))
+                .unwrap()
+                .1
+                .bounds()
+                .unwrap();
+            assert_eq!(
+                (bounds.x0, bounds.y0, bounds.width(), bounds.height()),
+                (x, 4.0, 48.0, 48.0)
+            );
+        }
+        let input = tree
+            .nodes
+            .iter()
+            .find(|(_, node)| node.role() == Role::TextInput)
+            .unwrap()
+            .1
+            .bounds()
+            .unwrap();
+        assert_eq!(input.x0, 56.0);
+        assert_eq!((input.y0 + input.y1) * 0.5, 28.0);
     }
 
     #[test]

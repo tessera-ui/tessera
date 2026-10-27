@@ -11,10 +11,13 @@ use tessera_ui::{
 };
 
 use crate::{
+    alignment::{Alignment, CrossAxisAlignment},
+    boxed::boxed,
     column::column,
     divider::horizontal_divider,
     modifier::ModifierExt as _,
     pos_misc::is_position_inside_bounds,
+    row::row,
     shape_def::Shape,
     spacer::spacer,
     surface::surface,
@@ -558,6 +561,7 @@ struct SearchResultsSurfaceArgs {
 struct SearchInteractionModifier {
     enabled: bool,
     controller: State<SearchBarController>,
+    input_controller: State<TextInputController>,
     on_active_change: CallbackWith<bool>,
     on_search: CallbackWith<String>,
 }
@@ -603,7 +607,10 @@ impl KeyboardInputModifierNode for SearchInteractionModifier {
                 }
                 winit::keyboard::PhysicalKey::Code(
                     winit::keyboard::KeyCode::Enter | winit::keyboard::KeyCode::NumpadEnter,
-                ) => {
+                ) if self
+                    .input_controller
+                    .with(|input| input.focus_handler().is_focused()) =>
+                {
                     self.on_search
                         .call(self.controller.with(|c| c.query().to_owned()));
                     handled = true;
@@ -670,6 +677,7 @@ fn search_bar_inner(
     let interaction = SearchInteractionModifier {
         enabled,
         controller,
+        input_controller,
         on_active_change,
         on_search,
     };
@@ -695,7 +703,7 @@ fn search_bar_inner(
         let trailing_icon = trailing_icon;
         let results_surface_args = results_surface_args.clone();
         column().children(move || {
-            build_search_field(SearchFieldArgs {
+            search_field().args(SearchFieldArgs {
                 enabled,
                 read_only,
                 placeholder: placeholder.clone(),
@@ -757,6 +765,7 @@ fn search_bar_inner(
     });
 }
 
+#[derive(Clone, PartialEq)]
 struct SearchFieldArgs {
     enabled: bool,
     read_only: bool,
@@ -771,45 +780,99 @@ struct SearchFieldArgs {
     on_query_change: CallbackWith<String, String>,
 }
 
-fn build_search_field(args: SearchFieldArgs) {
-    TextFieldBuilder::filled()
-        .enabled(args.enabled)
-        .read_only(args.read_only)
+#[tessera]
+fn search_field(args: Option<SearchFieldArgs>) {
+    let args = args.expect("search_field requires args");
+    let has_icons = args.leading_icon.is_some() || args.trailing_icon.is_some();
+    let scheme = use_context::<MaterialTheme>().unwrap().get().color_scheme;
+    let color = if args.enabled {
+        scheme.on_surface_variant
+    } else {
+        scheme.on_surface.with_alpha(0.38)
+    };
+    surface()
         .modifier(
             Modifier::new()
                 .fill_max_width()
                 .height(SearchBarDefaults::INPUT_HEIGHT),
         )
-        .min_height(SearchBarDefaults::INPUT_HEIGHT)
+        .style(args.colors.container_color.into())
         .shape(args.shape)
-        .background_color(args.colors.container_color)
-        .focus_background_color(args.colors.container_color)
-        .border_width(Dp(0.0))
-        .border_color(Color::TRANSPARENT)
-        .focus_border_width(Dp(0.0))
-        .focus_border_color(Color::TRANSPARENT)
-        .show_indicator(false)
-        .padding(TextFieldDefaults::CONTENT_PADDING)
-        .line_limit(TextFieldLineLimit::SingleLine)
-        .on_change(move |text| {
-            let next = args.on_query_change.call(text);
-            args.controller.with_mut(|c| c.set_query(next.clone()));
-            args.synced_query.set(next.clone());
-            next
-        })
-        .controller(args.input_controller)
-        .accessibility_label_optional(args.placeholder.clone())
-        .placeholder_optional(args.placeholder)
-        .leading_icon_optional(args.leading_icon.map(|leading_icon| {
-            RenderSlot::new(move || {
-                leading_icon.render();
-            })
-        }))
-        .trailing_icon_optional(args.trailing_icon.map(|trailing_icon| {
-            RenderSlot::new(move || {
-                trailing_icon.render();
-            })
-        }));
+        .content_color(color)
+        .block_input(!args.enabled)
+        .child(move || {
+            let args = args.clone();
+            row()
+                .modifier(
+                    Modifier::new()
+                        .fill_max_size()
+                        .padding_symmetric(Dp(4.0), Dp::ZERO),
+                )
+                .cross_axis_alignment(CrossAxisAlignment::Center)
+                .children(move || {
+                    let trailing_icon = args.trailing_icon;
+                    if let Some(leading) = args.leading_icon {
+                        boxed()
+                            .modifier(
+                                Modifier::new()
+                                    .default_min_size(Dp(48.0), Dp::ZERO)
+                                    .fill_max_height(),
+                            )
+                            .alignment(Alignment::Center)
+                            .children(move || leading.render());
+                    } else if has_icons {
+                        spacer().modifier(Modifier::new().width(Dp(8.0)));
+                    }
+                    let args = args.clone();
+                    boxed()
+                        .modifier(Modifier::new().weight(1.0).fill_max_height())
+                        .children(move || {
+                            TextFieldBuilder::filled()
+                                .enabled(args.enabled)
+                                .read_only(args.read_only)
+                                .modifier(
+                                    Modifier::new()
+                                        .fill_max_width()
+                                        .height(SearchBarDefaults::INPUT_HEIGHT),
+                                )
+                                .min_width(Dp::ZERO)
+                                .min_height(SearchBarDefaults::INPUT_HEIGHT)
+                                .shape(args.shape)
+                                .background_color(Color::TRANSPARENT)
+                                .focus_background_color(Color::TRANSPARENT)
+                                .border_width(Dp(0.0))
+                                .border_color(Color::TRANSPARENT)
+                                .focus_border_width(Dp(0.0))
+                                .focus_border_color(Color::TRANSPARENT)
+                                .show_indicator(false)
+                                .padding(TextFieldDefaults::CONTENT_PADDING)
+                                .horizontal_padding(if has_icons { Dp(4.0) } else { Dp(12.0) })
+                                .line_limit(TextFieldLineLimit::SingleLine)
+                                .on_change(move |text| {
+                                    let next = args.on_query_change.call(text);
+                                    args.controller.with_mut(|c| c.set_query(next.clone()));
+                                    args.synced_query.set(next.clone());
+                                    next
+                                })
+                                .controller(args.input_controller)
+                                .accessibility_label_optional(args.placeholder.clone())
+                                .placeholder_optional(args.placeholder.clone());
+                        });
+
+                    if let Some(trailing) = trailing_icon {
+                        boxed()
+                            .modifier(
+                                Modifier::new()
+                                    .default_min_size(Dp(48.0), Dp::ZERO)
+                                    .fill_max_height(),
+                            )
+                            .alignment(Alignment::Center)
+                            .children(move || trailing.render());
+                    } else if has_icons {
+                        spacer().modifier(Modifier::new().width(Dp(8.0)));
+                    }
+                });
+        });
 }
 
 fn sync_query(
@@ -868,6 +931,44 @@ mod tests {
                     );
                 });
         });
+    }
+
+    #[tessera]
+    fn multiple_search_actions_fixture() {
+        material_theme().child(|| {
+            docked_search_bar()
+                .placeholder("Search")
+                .trailing_icon(|| {
+                    crate::row::row().children(|| {
+                        for tag in ["first-search-action", "second-search-action"] {
+                            spacer().modifier(
+                                Modifier::new()
+                                    .size(tessera_ui::Dp(48.0), tessera_ui::Dp(48.0))
+                                    .semantics(crate::modifier::SemanticsArgs {
+                                        test_tag: Some(tag.into()),
+                                        ..Default::default()
+                                    }),
+                            );
+                        }
+                    });
+                })
+                .content(|| {});
+        });
+    }
+
+    #[test]
+    fn search_measures_multiple_trailing_actions_without_clipping_their_layout() {
+        let snapshot = layout_test(|| multiple_search_actions_fixture())
+            .viewport_px(400, 100)
+            .run();
+        snapshot
+            .node("first-search-action")
+            .position(300, 4)
+            .size(48, 48);
+        snapshot
+            .node("second-search-action")
+            .position(348, 4)
+            .size(48, 48);
     }
 
     #[test]
