@@ -707,3 +707,81 @@ fn carousel_collection_page_keeps_return_visible_and_restores_article_position()
         assert!((restored.1.bounds().unwrap().y0 - before.y0).abs() <= 1.0);
     }
 }
+
+#[tessera_ui::tessera]
+fn responsive_article_fixture() {
+    use tessera_components::{
+        boxed::boxed,
+        modifier::{ModifierExt as _, SemanticsArgs},
+        theme::material_theme,
+    };
+    use tessera_ui::{Dp, Modifier, RenderSlot};
+
+    material_theme().child(|| {
+        super::super::article(
+            "Layout",
+            "Responsive article",
+            vec![super::super::SpecSection {
+                title: "Container sizing",
+                content: RenderSlot::new(|| {
+                    boxed().modifier(Modifier::new().fill_max_width().height(Dp(64.0)).semantics(
+                        SemanticsArgs {
+                            role: Some(Role::Group),
+                            label: Some("Measured article body".into()),
+                            ..Default::default()
+                        },
+                    ));
+                }),
+            }],
+        );
+    });
+}
+
+#[test]
+#[ignore = "requires a native GPU adapter for actual responsive article layout"]
+fn article_body_and_contents_share_responsive_gutters_and_bounded_desktop_width() {
+    let mut renderer = HeadlessRenderer::new(
+        Box::new(responsive_article_fixture),
+        vec![Box::new(Pipelines)],
+        HeadlessConfig {
+            width: 390,
+            height: 3000,
+            sample_count: 1,
+            ..Default::default()
+        },
+    )
+    .unwrap();
+    for (width, expected_width, expected_left) in [
+        (390, 327.0, 24.0),
+        (800, 705.0, 40.0),
+        (1024, 833.0, 88.0),
+        (1280, 1024.0, 120.5),
+        (1600, 1024.0, 280.5),
+        (390, 327.0, 24.0),
+    ] {
+        renderer.resize(width, 3000);
+        renderer.render_frames(12);
+        let body = find(&renderer, "Measured article body", Some(Role::Group))
+            .expect("composed section")
+            .1
+            .bounds()
+            .unwrap();
+        let contents = find(&renderer, "Container sizing", Some(Role::Link))
+            .expect("table of contents")
+            .1
+            .bounds()
+            .unwrap();
+        assert!(
+            (body.width() - expected_width).abs() <= 1.0,
+            "body width at {width}: {body:?}"
+        );
+        assert!(
+            (body.x0 - expected_left).abs() <= 1.0,
+            "body gutter at {width}: {body:?}"
+        );
+        assert!(
+            (contents.x0 - body.x0).abs() <= 1.0,
+            "contents and body must share a gutter at {width}"
+        );
+    }
+}

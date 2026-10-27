@@ -67,6 +67,16 @@ fn update_header_pin(
     }
 }
 
+fn content_inset(width: Dp) -> Dp {
+    if width.0 < 600.0 {
+        Dp(24.0)
+    } else if width.0 < 960.0 {
+        Dp(40.0)
+    } else {
+        Dp(88.0_f64.max((width.0 - 1024.0) * 0.5))
+    }
+}
+
 #[tessera]
 pub(super) fn viewport(
     data: State<ArticleData>,
@@ -94,7 +104,7 @@ pub(super) fn viewport(
         let page = data.get();
         let first_section = 3 + usize::from(page.intro.is_some());
         let compact = width.get().0 < 600.0;
-        let inset = if compact { Dp(24.0) } else { Dp(40.0) };
+        let inset = content_inset(width.get());
         if item == 0 {
             media::page_header(page.title, page.description, width.get());
         } else if item == 1 {
@@ -139,7 +149,7 @@ pub(super) fn viewport(
                 if compact {
                     page.compact_content_inset.unwrap_or(Dp(24.0))
                 } else {
-                    Dp(40.0)
+                    inset
                 },
             );
         } else {
@@ -237,11 +247,7 @@ fn contents(data: State<ArticleData>, width: State<Dp>, bindings: State<ChapterB
             let page = data.get();
             gap(Dp(64.0));
             if !page.sections.is_empty() && page.section_heading_level == 2 {
-                let inset = if width.get().0 < 600.0 {
-                    Dp(24.0)
-                } else {
-                    Dp(40.0)
-                };
+                let inset = content_inset(width.get());
                 column()
                     .modifier(
                         Modifier::new()
