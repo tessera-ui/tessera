@@ -214,14 +214,15 @@ impl FrameScene {
                     }
                 }
             }
+            let was_transparent =
+                branch.draw.is_none() && branch.clip.is_none() && branch.child_indices.len() == 1;
             if own_changes.contains(&node_id) {
                 let fragment_changed =
                     changed.contains(&node_id) || metadata.paint_changed.contains(&node_id);
-                let prepared = metadata
-                    .get(&node_id)
-                    .and_then(|metadata| metadata.prepared_layout);
+                let node_metadata = metadata.get(&node_id);
+                let prepared = node_metadata.and_then(|metadata| metadata.prepared_layout);
                 branch.draw = prepared.and_then(|prepared| {
-                    let metadata = metadata.get(&node_id)?;
+                    let metadata = node_metadata?;
                     (!metadata.fragment.ops().is_empty()).then(|| {
                         let fragment = branch
                             .draw
@@ -255,11 +256,30 @@ impl FrameScene {
                 branch.clip = prepared
                     .filter(|prepared| prepared.clips_children)
                     .map(|prepared| {
-                        prepared.clip_region.map_or_else(
-                            || SceneClip::Rect(prepared.child_clip_rect.unwrap_or(PxRect::ZERO)),
-                            SceneClip::Shape,
-                        )
+                        node_metadata
+                            .and_then(|metadata| metadata.prepared_clip_region)
+                            .map_or_else(
+                                || {
+                                    SceneClip::Rect(
+                                        prepared.child_clip_rect.unwrap_or(PxRect::ZERO),
+                                    )
+                                },
+                                SceneClip::Shape,
+                            )
                     });
+            }
+            let is_transparent =
+                branch.draw.is_none() && branch.clip.is_none() && branch.child_indices.len() == 1;
+            if was_transparent != is_transparent && branch.child_indices.len() == 1 {
+                // Flattened wrappers can bypass child-output maintenance while
+                // descendants change visibility. Materializing the wrapper must
+                // use the current child output rather than that stale cache.
+                let (&child, &index) = branch.child_indices.iter().next().unwrap();
+                if let Some(output) = self.output(child) {
+                    branch.children.insert(index, output);
+                } else {
+                    branch.children.remove(&index);
+                }
             }
             let hidden = node.get().role == NodeRole::Layout
                 && metadata

@@ -86,6 +86,13 @@ Geometry propagation uses retained direct layout adjacency, skipping transparent
 composition wrappers. An inherited translation reuses unchanged local placement
 results and their state dependencies; local placement changes still reevaluate
 the affected modifier chain.
+Copied coordinate snapshots exclude shape-mask payloads. Window-space masks
+remain cached separately and are preserved when replay reuses measured layout.
+Shape changes still invalidate the owning scene branch and descendant hit
+testing, including changes that leave rectangular bounds unchanged.
+When paint adds or removes a wrapper's own drawing or clip, its retained child
+output is refreshed before switching between flattened and materialized scene
+branches. Descendant visibility changes must survive that switch without layout.
 Read-only geometry traversal borrows cached child lists without acquiring an
 additional shared reference for each visited node.
 Input action positions remain local and share their storage. Input consumers

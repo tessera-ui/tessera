@@ -632,6 +632,19 @@ impl Modifier {
         ))
     }
 
+    /// Observes the window-space bounds remaining after ancestor rectangular
+    /// clipping and window boundaries. Reports `None` when fully clipped or
+    /// when a previously placed layout becomes unplaced. Shape bounds are
+    /// included; occlusion by other content is not considered.
+    pub fn on_visible_window_bounds<F>(self, handler: F) -> Self
+    where
+        F: Into<CallbackWith<Option<crate::FloatRect>>>,
+    {
+        self.push_action(ModifierAction::GloballyPositioned(
+            crate::component_tree::GloballyPositionedHandler::Visible(handler.into()),
+        ))
+    }
+
     /// Uses this layout's local units as a coordinate space for descendant
     /// [`Self::on_layout_rect_in_space`] observers, including this layout.
     /// Nested spaces take precedence over their ancestors.

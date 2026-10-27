@@ -16,6 +16,7 @@ use crate::{
 use super::{FloatRect, scaled_box};
 
 thread_local! {
+    static VISIBLE_BOUNDS: RefCell<Vec<Option<FloatRect>>> = const { RefCell::new(Vec::new()) };
     static COORDINATES: RefCell<Vec<LayoutCoordinates>> = const { RefCell::new(Vec::new()) };
     static INPUT: RefCell<Vec<(bool, Option<PxPosition>, Option<PxPosition>, f32)>> = const { RefCell::new(Vec::new()) };
     static PARENT_OFFSET: Cell<Option<State<PxPosition>>> = const { Cell::new(None) };
@@ -91,7 +92,10 @@ fn size_only_observer_fixture() {
             scaled_box(scale.get()).child(move || {
                 let modifier = Modifier::new()
                     .push_placement(StateTranslation(child, false))
-                    .on_layout_size_changed(|size| SIZES.with_borrow_mut(|sizes| sizes.push(size)));
+                    .on_layout_size_changed(|size| SIZES.with_borrow_mut(|sizes| sizes.push(size)))
+                    .on_visible_window_bounds(|bounds| {
+                        VISIBLE_BOUNDS.with_borrow_mut(|items| items.push(bounds))
+                    });
                 let modifier = if late.get() {
                     modifier.on_layout_size_changed(|size| {
                         LATE_SIZES.with_borrow_mut(|sizes| sizes.push(size))
@@ -102,6 +106,56 @@ fn size_only_observer_fixture() {
                 layout().policy(SizeOnlyContent(size)).modifier(modifier);
             });
         });
+}
+
+#[test]
+fn visible_bounds_observers_clip_fractional_geometry_to_the_window_and_report_unplacement() {
+    VISIBLE_BOUNDS.with_borrow_mut(Vec::clear);
+    let mut session =
+        start_layout_test_session(layout_test(size_only_observer_fixture).viewport_px(160, 100));
+    pump_layout_test_session(&mut session, 0);
+    assert_eq!(
+        VISIBLE_BOUNDS.with_borrow(|items| items.clone()),
+        vec![Some(FloatRect {
+            x: 10.25,
+            y: 20.5,
+            width: 149.75,
+            height: 35.0,
+        })]
+    );
+    pump_layout_test_session(&mut session, 16_666_667);
+    assert_eq!(VISIBLE_BOUNDS.with_borrow(Vec::len), 1);
+    PARENT_OFFSET
+        .get()
+        .unwrap()
+        .set(PxPosition::from_f32_xy(128.5, 0.0));
+    pump_layout_test_session(&mut session, 33_333_334);
+    assert_eq!(
+        VISIBLE_BOUNDS.with_borrow(|items| *items.last().unwrap()),
+        Some(FloatRect {
+            x: 138.75,
+            y: 20.5,
+            width: 21.25,
+            height: 35.0,
+        })
+    );
+    OBSERVER_VISIBLE.get().unwrap().set(false);
+    pump_layout_test_session(&mut session, 50_000_001);
+    assert_eq!(
+        VISIBLE_BOUNDS.with_borrow(|items| *items.last().unwrap()),
+        None
+    );
+    OBSERVER_VISIBLE.get().unwrap().set(true);
+    pump_layout_test_session(&mut session, 66_666_668);
+    assert_eq!(
+        VISIBLE_BOUNDS.with_borrow(|items| *items.last().unwrap()),
+        Some(FloatRect {
+            x: 138.75,
+            y: 20.5,
+            width: 21.25,
+            height: 35.0,
+        })
+    );
 }
 
 #[test]

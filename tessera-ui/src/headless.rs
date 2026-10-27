@@ -338,6 +338,28 @@ impl HeadlessRenderer {
         });
     }
 
+    /// Starts a touch contact at the given window position.
+    pub fn touch_start(&mut self, touch_id: u64, position: PxPosition) {
+        self.cursor.handle_touch_start(touch_id, position);
+    }
+
+    /// Moves a touch contact, generating scrolling after touch slop is crossed.
+    pub fn touch_move(&mut self, touch_id: u64, position: PxPosition) {
+        if let Some(scroll) = self.cursor.handle_touch_move(touch_id, position) {
+            self.cursor.push_event(scroll);
+        }
+    }
+
+    /// Releases a touch contact and completes its gesture.
+    pub fn touch_end(&mut self, touch_id: u64) {
+        self.cursor.handle_touch_end(touch_id);
+    }
+
+    /// Cancels a touch contact without producing a tap or fling.
+    pub fn touch_cancel(&mut self, touch_id: u64) {
+        self.cursor.handle_touch_cancel(touch_id);
+    }
+
     /// Queues a keyboard event.
     ///
     /// Note that winit does not allow constructing `KeyEvent` values outside of

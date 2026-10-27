@@ -133,6 +133,7 @@ impl InputTransforms {
 /// Contains metadata of the component node.
 pub(crate) struct ComponentNodeMetaData {
     pub(super) prepared_layout: Option<super::PreparedLayoutMetadata>,
+    pub(super) prepared_clip_region: Option<crate::ClipRegion>,
     pub(super) geometry_initialized: bool,
     pub(super) observes_geometry: bool,
     pub(super) observes_size: bool,
@@ -188,6 +189,7 @@ impl ComponentNodeMetaData {
     pub fn none() -> Self {
         Self {
             prepared_layout: None,
+            prepared_clip_region: None,
             geometry_initialized: false,
             observes_geometry: false,
             observes_size: false,
@@ -408,6 +410,9 @@ pub enum GloballyPositionedHandler {
     Precise(CallbackWith<crate::FloatRect>),
     Transform(CallbackWith<crate::LocalToWindow>),
     Coordinates(CallbackWith<crate::LayoutCoordinates>),
+    /// Observes the window-space rectangle remaining after rectangular
+    /// clipping.
+    Visible(CallbackWith<Option<crate::FloatRect>>),
     /// Observes bounds in the closest declared layout coordinate space.
     InSpace(CallbackWith<crate::FloatRect>),
     /// Observes measured dimensions in local layout units.
@@ -421,6 +426,7 @@ pub(crate) struct GeometryObservation {
     pub transform: crate::LocalToWindow,
     pub coordinates: crate::LayoutCoordinates,
     pub in_space: crate::FloatRect,
+    pub visible: Option<crate::FloatRect>,
 }
 
 impl GloballyPositionedHandler {
@@ -430,6 +436,7 @@ impl GloballyPositionedHandler {
             Self::Precise(_) => previous.precise != next.precise,
             Self::Transform(_) => previous.transform != next.transform,
             Self::Coordinates(_) => previous.coordinates != next.coordinates,
+            Self::Visible(_) => previous.visible != next.visible,
             Self::InSpace(_) => previous.in_space != next.in_space,
             Self::Size(_) => previous.coordinates.local_size != next.coordinates.local_size,
         }
@@ -441,6 +448,7 @@ impl GloballyPositionedHandler {
             Self::Precise(handler) => handler.call(geometry.precise),
             Self::Transform(handler) => handler.call(geometry.transform),
             Self::Coordinates(handler) => handler.call(geometry.coordinates),
+            Self::Visible(handler) => handler.call(geometry.visible),
             Self::InSpace(handler) => handler.call(geometry.in_space),
             Self::Size(handler) => handler.call(geometry.coordinates.local_size),
         }
