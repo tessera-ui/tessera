@@ -25,8 +25,10 @@ use tessera_ui::{
     remember, scaled_box, tessera, use_context,
 };
 
-use super::super::{annotations, gap, media, spec_table, srgb, subheading, type_style};
-use super::{SIZES, context};
+use super::{
+    super::{annotations, gap, media, spec_table, srgb, subheading, type_style},
+    SIZES, context,
+};
 
 #[tessera]
 pub(super) fn figures() {
