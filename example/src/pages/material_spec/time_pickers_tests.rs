@@ -211,7 +211,29 @@ fn time_color_pairs_keep_native_roles_aligned_and_selection_independent() {
             .1
             .bounds()
             .unwrap();
-        assert!(((marker.y0 + marker.y1) / 2.0 - (hour.y0 + hour.height() * 0.24)).abs() <= 2.0);
+        assert!(marker.x1 < hour.x0);
+        let badges = snapshot
+            .nodes
+            .iter()
+            .filter_map(|(_, node)| {
+                (node.role() == Role::Note
+                    && node
+                        .label()
+                        .is_some_and(|label| label.starts_with("Time color role ")))
+                .then(|| (node.label().unwrap(), node.bounds().unwrap()))
+            })
+            .collect::<Vec<_>>();
+        for (index, (label, bounds)) in badges.iter().enumerate() {
+            for (other_label, other) in &badges[index + 1..] {
+                assert!(
+                    bounds.x1 <= other.x0
+                        || other.x1 <= bounds.x0
+                        || bounds.y1 <= other.y0
+                        || other.y1 <= bounds.y0,
+                    "time color badges overlap: {label} {bounds:?}, {other_label} {other:?}"
+                );
+            }
+        }
         let expected = if input { 13 } else { 17 };
         assert_eq!(
             snapshot

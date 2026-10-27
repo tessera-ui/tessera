@@ -1742,7 +1742,7 @@ fn full_specs() {
         spec_table(vec!["Attribute".into(), "Value".into()], vec![
             vec!["Container shape".into(), "0dp corner radius".into()],
             vec!["Container width".into(), "Container width; Max 560dp".into()],
-            vec!["Header height".into(), "56dp".into()],
+            vec!["Header height".into(), "64dp".into()],
             vec!["Close icon".into(), "24dp".into()],
             vec!["Content padding".into(), "24dp".into()],
             vec!["Padding between elements".into(), "8dp".into()],

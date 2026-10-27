@@ -1359,6 +1359,7 @@ fn time_annotation_content(
                 (14, hour, 0),
             ]
         };
+        let mut labels = Vec::with_capacity(targets.len());
         for (number, target, side) in targets {
             let ty = if target.w == container.w {
                 container.y + 28.0
@@ -1395,6 +1396,28 @@ fn time_annotation_content(
             } else {
                 ty - 16.0
             };
+            labels.push((number, target, side, x, y, ty));
+        }
+        for side in [0, 1] {
+            let mut indices = labels
+                .iter()
+                .enumerate()
+                .filter(|(_, label)| label.2 == side)
+                .map(|(index, _)| index)
+                .collect::<Vec<_>>();
+            indices.sort_by(|a, b| labels[*a].4.total_cmp(&labels[*b].4));
+            let mut next = 8.0_f64;
+            for &index in &indices {
+                labels[index].4 = labels[index].4.max(next);
+                next = labels[index].4 + 40.0;
+            }
+            let mut previous = root.h - 40.0;
+            for &index in indices.iter().rev() {
+                labels[index].4 = labels[index].4.min(previous);
+                previous = labels[index].4 - 40.0;
+            }
+        }
+        for (number, target, side, x, y, ty) in labels {
             let tx = if side == 0 {
                 target.x + 4.0
             } else if side == 1 {
@@ -1405,11 +1428,27 @@ fn time_annotation_content(
             if side == 2 {
                 dotted(&mut svg, tx, y + 32.0, ty - y - 32.0, true, ink);
             } else {
+                let end_x = if side == 0 { x + 24.0 } else { x };
+                let elbow = if side == 0 {
+                    end_x + 12.0
+                } else {
+                    end_x - 12.0
+                };
+                let center_y = y + 16.0;
+                dotted(&mut svg, tx.min(elbow), ty, (tx - elbow).abs(), false, ink);
                 dotted(
                     &mut svg,
-                    if side == 0 { x + 24.0 } else { tx },
-                    ty,
-                    if side == 0 { tx - x - 24.0 } else { x - tx },
+                    elbow,
+                    ty.min(center_y),
+                    (ty - center_y).abs(),
+                    true,
+                    ink,
+                );
+                dotted(
+                    &mut svg,
+                    elbow.min(end_x),
+                    center_y,
+                    (elbow - end_x).abs(),
                     false,
                     ink,
                 );

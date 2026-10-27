@@ -24,7 +24,7 @@ use tessera_components::{
 };
 use tessera_ui::{
     Dp, Modifier, PxPosition, PxRect, PxSize, RenderSlot, State, modifier::FocusModifierExt as _,
-    remember, tessera,
+    remember, tessera, use_context,
 };
 
 use super::{
@@ -55,6 +55,7 @@ struct Menu {
     origin: State<PxRect>,
     source: State<String>,
     result: State<String>,
+    theme: State<MaterialTheme>,
 }
 
 #[tessera]
@@ -65,6 +66,7 @@ pub(super) fn split_buttons_spec() {
         origin: remember(PxRect::default),
         source: remember(String::new),
         result: remember(|| "No option selected".to_owned()),
+        theme: remember(MaterialTheme::default),
     };
     boxed()
         .modifier(
@@ -81,6 +83,7 @@ pub(super) fn split_buttons_spec() {
             let origin = menu.origin.get();
             menu_provider()
                 .controller(menu.controller)
+                .container_color(menu.theme.get().color_scheme.surface_container_low)
                 .anchor(MenuAnchor::new(
                     PxPosition::new(anchor.x - origin.x, anchor.y - origin.y),
                     PxSize::new(anchor.width, anchor.height),
@@ -149,17 +152,21 @@ pub(super) fn split_buttons_spec() {
                     );
                 })
                 .menu_content(move || {
-                    menu_item()
-                        .label("Schedule send")
-                        .leading_icon(filled::SCHEDULE_SVG)
-                        .on_click(move || {
-                            menu.result.set("Scheduled send selected".into());
-                        });
-                    menu_item()
-                        .label("Save draft")
-                        .leading_icon(filled::EDIT_SVG)
-                        .on_click(move || {
-                            menu.result.set("Draft saved".into());
+                    material_theme()
+                        .theme(move || menu.theme.get())
+                        .child(move || {
+                            menu_item()
+                                .label("Schedule send")
+                                .leading_icon(filled::SCHEDULE_SVG)
+                                .on_click(move || {
+                                    menu.result.set("Scheduled send selected".into());
+                                });
+                            menu_item()
+                                .label("Save draft")
+                                .leading_icon(filled::EDIT_SVG)
+                                .on_click(move || {
+                                    menu.result.set("Draft saved".into());
+                                });
                         });
                 });
         });
@@ -174,6 +181,7 @@ fn example(
     controls: Option<bool>,
     compact: Option<bool>,
 ) {
+    let theme = use_context::<MaterialTheme>().unwrap();
     let enabled = remember(|| true);
     let count = remember(|| 0_u32);
     let bounds = remember(PxRect::default);
@@ -247,6 +255,7 @@ fn example(
                             {
                                 menu.controller.with_mut(MenuController::close);
                             } else {
+                                menu.theme.set(theme.get());
                                 menu.source.set(selected.clone());
                                 menu.anchor.set(bounds.get());
                                 menu.controller.with_mut(MenuController::open);

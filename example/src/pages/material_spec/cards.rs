@@ -24,7 +24,7 @@ use tessera_ui::{Dp, Modifier, RenderSlot, State, remember, tessera, use_context
 
 use super::{
     ACCENT,
-    annotations::{self, Geometry, dotted, relative, watch},
+    annotations::{self, Geometry, SpaceGeometry, dotted, relative, watch, watch_in_space},
     article::{ArticlePage, SpecSection, article},
     gap, panel, spec_table, subheading, type_style,
 };
@@ -98,7 +98,12 @@ pub(super) fn cards_spec() {
 }
 
 #[tessera]
-fn sample(variant: CardVariant, enabled: bool, #[prop(into)] label: String) {
+fn sample(
+    variant: CardVariant,
+    enabled: bool,
+    #[prop(into)] label: String,
+    modifier: Option<Modifier>,
+) {
     let actions = remember(|| 0_u32);
     column().children(move || {
         let caption = label.clone();
@@ -106,7 +111,7 @@ fn sample(variant: CardVariant, enabled: bool, #[prop(into)] label: String) {
         card()
             .variant(variant)
             .enabled(enabled)
-            .modifier(Modifier::new().width(Dp(280.0)))
+            .modifier(modifier.clone().unwrap_or_default().width(Dp(280.0)))
             .accessibility_label(label.clone())
             .on_click(move || actions.set(actions.get() + 1))
             .content(move || {
@@ -201,9 +206,20 @@ fn scheme(variant: CardVariant, dark: bool) {
 
 #[tessera]
 fn detail(variant: CardVariant) {
-    panel(RenderSlot::new(move || {
-        sample(variant, true, format!("{} card", name(variant)));
-    }));
+    let geometry = remember(SpaceGeometry::new);
+    boxed()
+        .modifier(watch_in_space(geometry, "figure").fill_max_width())
+        .children(move || {
+            panel(RenderSlot::new(move || {
+                sample(variant, true, format!("{} card", name(variant)))
+                    .modifier(watch_in_space(geometry, "container"));
+            }));
+            boxed()
+                .modifier(Modifier::new().fill_max_size())
+                .children(move || {
+                    card_container_annotations(variant, geometry);
+                });
+        });
     gap(Dp(24.0));
     text()
         .content(if variant == CardVariant::Outlined {
@@ -233,6 +249,32 @@ fn detail(variant: CardVariant) {
                 sample(variant, false, format!("{} disabled", name(variant)));
             });
     }));
+}
+
+#[tessera]
+fn card_container_annotations(variant: CardVariant, geometry: State<SpaceGeometry>) {
+    let values = geometry.with(annotations::space_geometry);
+    let (Some(root), Some(container)) = (values.get("figure"), values.get("container")) else {
+        return;
+    };
+    let mut svg = String::new();
+    let y = container.y + container.h / 2.0;
+    let left = container.x - 48.0;
+    dotted(
+        &mut svg,
+        left + 24.0,
+        y,
+        container.x - left - 20.0,
+        false,
+        "#49454f",
+    );
+    annotations::marker(1, Dp(left), Dp(y - 16.0));
+    if variant == CardVariant::Outlined {
+        let right = container.x + container.w;
+        dotted(&mut svg, right, y, 32.0, false, "#49454f");
+        annotations::marker(2, Dp(right + 32.0), Dp(y - 16.0));
+    }
+    annotations::lines(Dp(root.w), Dp(root.h), svg);
 }
 
 #[tessera]

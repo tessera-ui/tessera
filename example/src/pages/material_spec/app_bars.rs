@@ -578,6 +578,7 @@ fn search_sample(
                     search_bar()
                         .controller(view)
                         .is_active(true)
+                        .on_active_change(move |active| opened.set(active))
                         .placeholder("Search library")
                         .leading_icon(move || {
                             icon_button()

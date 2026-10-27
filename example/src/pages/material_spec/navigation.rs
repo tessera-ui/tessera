@@ -383,7 +383,7 @@ fn tokens(rail: bool) {
             vec!["Selected indicator".into(), "Secondary container".into()],
             vec!["Selected icon".into(), "On secondary container".into()],
             vec![
-                "Selected label 路 vertical / horizontal".into(),
+                "Selected label · vertical / horizontal".into(),
                 "Secondary / on secondary container".into(),
             ],
             vec![
@@ -400,9 +400,7 @@ fn tokens(rail: bool) {
 
 #[tessera]
 fn anatomy(rail: bool) {
-    panel(RenderSlot::new(move || {
-        sample("Anatomy", rail, false).menu(rail).fab(rail);
-    }));
+    native_figure(rail, false, 1, false);
     gap(Dp(24.0));
     text().content(if rail {"1  Container    2  Optional menu    3  Optional FAB    4  Icon    5  Active indicator    6  Label"}else{"1  Container    2  Icon    3  Label    4  Active indicator"}).style(type_style(16.0,24.0));
 }
@@ -1170,13 +1168,13 @@ fn measurements(rail: bool) {
                 ],
                 vec!["Collapsed item minimum height".into(), "64dp".into()],
                 vec!["Expanded item height".into(), "56dp".into()],
-                vec!["Collapsed active indicator".into(), "56 脳 32dp".into()],
+                vec!["Collapsed active indicator".into(), "56 × 32dp".into()],
                 vec!["Icon".into(), "24dp".into()],
             ]
         } else {
             vec![
                 vec!["Container height".into(), "64dp".into()],
-                vec!["Vertical item active indicator".into(), "56 脳 32dp".into()],
+                vec!["Vertical item active indicator".into(), "56 × 32dp".into()],
                 vec![
                     "Horizontal item active indicator height".into(),
                     "40dp".into(),
@@ -1565,83 +1563,136 @@ fn figure_annotation_content(rail: bool, expanded: bool, measurements: bool, val
         annotations::outline(&mut svg, icon);
         annotations::dimension("24".into(), Dp(icon.x), Dp(icon.y - 26.0));
     } else {
-        let positions: Vec<(usize, Rect, bool)> = if rail {
-            let mut points = vec![(1, container, false), (4, icon, true)];
+        let label = Rect {
+            x: if expanded {
+                icon.x + icon.w + 8.0
+            } else {
+                icon.x - 8.0
+            },
+            y: if expanded {
+                icon.y
+            } else {
+                icon.y + icon.h + 4.0
+            },
+            w: 40.0,
+            h: 20.0,
+        };
+        let indicator = Rect {
+            x: icon.x - 16.0,
+            y: icon.y - if rail && expanded { 16.0 } else { 4.0 },
+            w: 56.0,
+            h: if rail && expanded { 56.0 } else { 32.0 },
+        };
+        let mut points = if rail {
+            vec![
+                (1, container, false),
+                (4, icon, true),
+                (5, indicator, false),
+                (6, label, true),
+            ]
+        } else {
+            vec![
+                (1, container, false),
+                (2, icon, false),
+                (3, label, true),
+                (4, indicator, false),
+            ]
+        };
+        if rail {
             if let Some(menu) = relative(&values, "menu") {
-                points.push((2, menu, true));
+                points.push((2, menu, false));
             }
             if let Some(fab) = relative(&values, "fab") {
-                points.push((3, fab, true));
+                points.push((3, fab, false));
             }
-            if let Some(badge) = relative(&values, "large-badge") {
-                points.push((7, badge, true));
-            }
-            if let Some(label) = relative(&values, "badge-label") {
-                points.push((8, label, false));
-            }
-            if let Some(badge) = relative(&values, "small-badge") {
-                points.push((9, badge, true));
-            }
-            points
-        } else {
-            let mut points = vec![(1, container, false), (2, icon, true)];
-            if let Some(badge) = relative(&values, "small-badge") {
-                points.push((5, badge, true));
-            }
-            if let Some(badge) = relative(&values, "large-badge") {
-                points.push((6, badge, true));
-            }
-            if let Some(label) = relative(&values, "badge-label") {
-                points.push((7, label, false));
-            }
-            points
-        };
-        for (number, rect, trailing) in positions {
-            let y = rect.y + rect.h * 0.5;
-            let x = if trailing {
-                rect.x + rect.w + 24.0
-            } else {
-                rect.x - 40.0
-            };
-            if trailing {
-                dotted(&mut svg, rect.x + rect.w, y, 24.0, false, "#49454f");
-            } else {
-                dotted(&mut svg, x + 24.0, y, rect.x - x - 24.0, false, "#49454f");
-            }
-            annotations::marker(number, Dp(x), Dp(y - 16.0));
         }
-        let indicator_x = if rail && expanded {
-            container.x + 20.0
-        } else {
-            icon.x - 16.0
-        };
-        let indicator_y = if rail && expanded {
-            icon.y - 16.0
-        } else {
-            icon.y - 4.0
-        };
-        let indicator_number = if rail { 5 } else { 4 };
-        annotations::marker(
-            indicator_number,
-            Dp(indicator_x - 60.0),
-            Dp(indicator_y - 16.0),
-        );
-        dotted(
-            &mut svg,
-            indicator_x - 36.0,
-            indicator_y,
-            36.0,
-            false,
-            "#49454f",
-        );
-        let label_number = if rail { 6 } else { 3 };
-        let label_y = if rail && expanded {
-            icon.y + 12.0
-        } else {
-            icon.y + icon.h + 20.0
-        };
-        annotations::marker(label_number, Dp(icon.x - 12.0), Dp(label_y + 24.0));
-        dotted(&mut svg, icon.x, label_y, 24.0, true, "#49454f");
+        for (name, number) in [
+            ("large-badge", if rail { 7 } else { 6 }),
+            ("badge-label", if rail { 8 } else { 7 }),
+            ("small-badge", if rail { 9 } else { 5 }),
+        ] {
+            if let Some(rect) = relative(&values, name) {
+                points.push((number, rect, true));
+            }
+        }
+        for trailing in [false, true] {
+            let mut lane: Vec<_> = points.iter().filter(|point| point.2 == trailing).collect();
+            lane.sort_by(|a, b| {
+                let a = if rail {
+                    a.1.y + a.1.h * 0.5
+                } else {
+                    a.1.x + a.1.w * 0.5
+                };
+                let b = if rail {
+                    b.1.y + b.1.h * 0.5
+                } else {
+                    b.1.x + b.1.w * 0.5
+                };
+                a.total_cmp(&b)
+            });
+            let mut previous = -44.0;
+            let mut centers = Vec::with_capacity(lane.len());
+            for (_, rect, _) in &lane {
+                let target = if rail {
+                    rect.y + rect.h * 0.5
+                } else {
+                    rect.x + rect.w * 0.5
+                };
+                let center = target.max(previous + 44.0).max(20.0);
+                centers.push(center);
+                previous = center;
+            }
+            let limit = if rail { height.0 } else { width.0 } - 20.0;
+            for i in (0..centers.len()).rev() {
+                let next = centers.get(i + 1).map_or(limit, |next| next - 44.0);
+                centers[i] = centers[i].min(next);
+            }
+            for ((number, rect, _), center) in lane.into_iter().zip(centers) {
+                let tx = rect.x + rect.w * 0.5;
+                let ty = rect.y + rect.h * 0.5;
+                let (x, y) = if rail {
+                    (
+                        if trailing {
+                            container.x + container.w + 52.0
+                        } else {
+                            container.x - 52.0
+                        },
+                        center,
+                    )
+                } else {
+                    (
+                        center,
+                        if trailing {
+                            container.y + container.h + 56.0
+                        } else {
+                            container.y - 56.0
+                        },
+                    )
+                };
+                if rail {
+                    let edge = x + if trailing { -12.0 } else { 12.0 };
+                    let elbow = if trailing {
+                        container.x + container.w + 20.0
+                    } else {
+                        container.x - 20.0
+                    };
+                    dotted(&mut svg, edge, y, elbow - edge, false, "#49454f");
+                    dotted(&mut svg, elbow, y, ty - y, true, "#49454f");
+                    dotted(&mut svg, elbow, ty, tx - elbow, false, "#49454f");
+                } else {
+                    let edge = y + if trailing { -16.0 } else { 16.0 };
+                    let elbow = if trailing {
+                        container.y + container.h + 20.0
+                    } else {
+                        container.y - 20.0
+                    };
+                    dotted(&mut svg, x, edge, elbow - edge, true, "#49454f");
+                    dotted(&mut svg, x, elbow, tx - x, false, "#49454f");
+                    dotted(&mut svg, tx, elbow, ty - elbow, true, "#49454f");
+                }
+                annotations::marker(*number, Dp(x - 12.0), Dp(y - 16.0));
+            }
+        }
     }
     annotations::lines(width, height, svg);
 }

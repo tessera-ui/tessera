@@ -644,7 +644,11 @@ fn list_callouts(geometry: State<Geometry>) {
         };
         let (x, y, tx, ty) = match side {
             0 => (
-                target.x + target.w / 2.0 - 12.0,
+                if number == 1 {
+                    container.x + 40.0
+                } else {
+                    target.x + target.w / 2.0 - 12.0 + if number == 2 { -48.0 } else { 48.0 }
+                },
                 container.y
                     - 64.0
                     - (if number == 1 {
@@ -654,7 +658,11 @@ fn list_callouts(geometry: State<Geometry>) {
                     } else {
                         32.0
                     }),
-                target.x + target.w / 2.0,
+                if number == 1 {
+                    container.x + 16.0
+                } else {
+                    target.x + target.w / 2.0
+                },
                 target.y + 4.0,
             ),
             1 => (
@@ -685,7 +693,17 @@ fn list_callouts(geometry: State<Geometry>) {
             ),
         };
         if side == 0 {
-            dotted(&mut svg, tx, y + 32.0, ty - y - 32.0, true, "#49454f");
+            let elbow = ty - 12.0;
+            dotted(
+                &mut svg,
+                x + 12.0,
+                y + 32.0,
+                elbow - y - 32.0,
+                true,
+                "#49454f",
+            );
+            dotted(&mut svg, x + 12.0, elbow, tx - x - 12.0, false, "#49454f");
+            dotted(&mut svg, tx, elbow, ty - elbow, true, "#49454f");
         } else if side == 2 {
             dotted(&mut svg, tx, ty, y - ty, true, "#49454f");
         } else {

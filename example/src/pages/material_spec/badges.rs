@@ -428,15 +428,25 @@ fn badge_annotations(geometry: State<Geometry>, small: bool, measurements: bool)
         );
     } else {
         annotations::marker(1, Dp(badge.x + badge.w + 48.0), Dp(badge.y - 40.0));
-        annotations::dotted(&mut svg, badge.x + badge.w, badge.y, 48.0, false, "#49454f");
+        let right = badge.x + badge.w + 60.0;
+        annotations::dotted(&mut svg, badge.x + badge.w, badge.y, 60.0, false, "#49454f");
+        annotations::dotted(&mut svg, right, badge.y, -8.0, true, "#49454f");
         if !small {
             annotations::marker(2, Dp(badge.x - 72.0), Dp(badge.y + 24.0));
             annotations::dotted(
                 &mut svg,
-                badge.x - 48.0,
+                badge.x - 60.0,
                 badge.y + badge.h,
-                48.0,
+                60.0,
                 false,
+                "#49454f",
+            );
+            annotations::dotted(
+                &mut svg,
+                badge.x - 60.0,
+                badge.y + badge.h,
+                24.0 - badge.h,
+                true,
                 "#49454f",
             );
         }

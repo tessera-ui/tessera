@@ -324,7 +324,7 @@ fn measurements() {
                 "48 / 64dp".into(),
             ],
             vec!["Icon".into(), "24dp".into()],
-            vec!["Divider".into(), "1dp 路 inside the container".into()],
+            vec!["Divider".into(), "1dp · inside the container".into()],
             vec![
                 "Primary / secondary indicator height".into(),
                 "3 / 2dp".into(),

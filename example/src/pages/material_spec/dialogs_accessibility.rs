@@ -322,7 +322,7 @@ fn event_labels(scale: f64) {
                     scale,
                 );
                 placed_text("From".into(), 12.0, 16.0, 24.0, 350.0, 364.0, scale);
-                outline(335.0, 48.0, 65.0, 40.0, scale);
+                outline(332.0, 68.0, 64.0, 40.0, scale);
                 outline(23.0, 190.0, 365.0, 56.0, scale);
             } else {
                 placed_text(
@@ -371,7 +371,7 @@ fn event_labels(scale: f64) {
         "Text field".into(),
         scale,
     );
-    connector(400.0, 69.0, 440.0, scale);
+    connector(396.0, 88.0, 440.0, scale);
     connector(388.0, 219.0, 440.0, scale);
 }
 
