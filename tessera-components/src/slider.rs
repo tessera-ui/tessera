@@ -1047,13 +1047,13 @@ fn measure_slider(
     let active = children[0];
     let inactive = children[1];
 
-    // Order in render: active, inactive, [icon], [ticks], [stop], handle
     let mut current_index = 2;
 
     let icon_id = if has_inset_icon {
-        let id = children.get(current_index).copied();
-        current_index += 1;
-        id
+        let active = children[current_index];
+        let inactive = children[current_index + 1];
+        current_index += 2;
+        Some((active, inactive))
     } else {
         None
     };
@@ -1129,20 +1129,29 @@ fn measure_slider(
         }
     }
 
-    if let Some(icon_id) = icon_id
+    if let Some((active_icon, inactive_icon)) = icon_id
         && let Some(icon_size) = layout.icon_size
     {
         let icon_constraint = Constraint::new(
             AxisConstraint::at_most(icon_size.into()),
             AxisConstraint::at_most(icon_size.into()),
         );
-        let icon_measured = icon_id.measure(input, &icon_constraint)?;
-
-        // Icon placement: 8dp padding from left edge, vertically centered
-        // within the track
+        let icon_measured = active_icon.measure(input, &icon_constraint)?;
         let icon_padding = Dp(8.0).to_px();
         let icon_y = layout.track_y + Px((layout.track_height.0 - icon_measured.height.0) / 2);
-        result.place_child(icon_id, PxPosition::new(icon_padding, icon_y));
+        let required_width = icon_measured.width + icon_padding * 2;
+        if active_width >= required_width {
+            result.place_child(active_icon, PxPosition::new(icon_padding, icon_y));
+        } else if inactive_width >= required_width {
+            inactive_icon.measure(input, &icon_constraint)?;
+            result.place_child(
+                inactive_icon,
+                PxPosition::new(
+                    active_width + layout.handle_gap * 2 + handle_width + icon_padding,
+                    icon_y,
+                ),
+            );
+        }
     }
 
     if steps > 0 {
@@ -1513,6 +1522,17 @@ fn slider_content(
                 icon()
                     .painter(inset_icon.clone())
                     .tint(tint)
+                    .tint_mode(TintMode::Solid)
+                    .size(icon_size);
+                icon()
+                    .painter(inset_icon.clone())
+                    .tint(if args.disabled {
+                        scheme
+                            .on_surface
+                            .with_alpha(MaterialAlpha::DISABLED_CONTENT)
+                    } else {
+                        scheme.on_secondary_container
+                    })
                     .tint_mode(TintMode::Solid)
                     .size(icon_size);
             }

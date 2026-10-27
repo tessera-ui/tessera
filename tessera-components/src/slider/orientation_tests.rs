@@ -47,6 +47,7 @@ impl Palette {
                 let mut theme = MaterialTheme::default();
                 theme.color_scheme.primary = Color::RED;
                 theme.color_scheme.secondary_container = Color::GREEN;
+                theme.color_scheme.on_secondary_container = Color::BLACK;
                 theme.color_scheme.surface_variant = Color::BLUE;
                 theme.color_scheme.on_surface = Color::new(0.0, 0.3, 0.8, 1.0);
                 theme.color_scheme.surface = Color::new(0.2, 0.2, 0.2, 1.0);
@@ -536,6 +537,35 @@ fn check_orientation(samples: u32) {
             }
         }
     }
+
+    settings.set(Settings {
+        size: SliderSize::Medium,
+        inset_icon: true,
+        palette: Palette::Contrast,
+        ..Default::default()
+    });
+    for fraction in [0.0, 0.01] {
+        VALUE.get().unwrap().set(fraction);
+        renderer.render_frames(2);
+        let pixels = renderer.read_pixels().unwrap();
+        let mut ink = 0;
+        for y in 81..117 {
+            for x in 90..150 {
+                let offset = (y * 500 + x) * 4;
+                if pixels[offset..offset + 3]
+                    .iter()
+                    .all(|channel| *channel < 16)
+                {
+                    ink += 1;
+                }
+            }
+        }
+        assert!(
+            ink > 80,
+            "low-value inset icons must remain complete and use the inactive-track foreground, value={fraction}, ink={ink}"
+        );
+    }
+    VALUE.get().unwrap().set(0.25);
 
     for kind in [Kind::Single, Kind::Centered, Kind::Range] {
         for reversed in [false, true] {
