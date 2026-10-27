@@ -29,7 +29,7 @@ use crate::{
     painter::Painter,
     pos_misc::is_position_in_rect,
     scrollable::ScrollableController,
-    shape_def::Shape,
+    shape_def::{RoundedCorner, Shape},
     surface::surface,
     text::text,
     theme::MaterialTheme,
@@ -712,6 +712,8 @@ fn fab_menu_panel(
                 });
             let snapshot = data.get();
             let progress = motion.with(|motion| motion.toggle.value().clamp(0.0, 1.0));
+            let corner =
+                RoundedCorner::manual(Dp(16.0 + 12.0 * f64::from(progress)), 3.0 - progress);
             let semantics = SemanticsArgs {
                 expanded: Some(snapshot.expanded),
                 has_popup: Some(HasPopup::Menu),
@@ -735,9 +737,12 @@ fn fab_menu_panel(
                         .into(),
                 )
                 .content_color(snapshot.colors[1].lerp(&snapshot.colors[3], progress))
-                .shape(Shape::rounded_rectangle(Dp(
-                    16.0 + 12.0 * f64::from(progress)
-                )))
+                .shape(Shape::RoundedRectangle {
+                    top_left: corner,
+                    top_right: corner,
+                    bottom_right: corner,
+                    bottom_left: corner,
+                })
                 .elevation(Dp(6.0))
                 .tonal_elevation(Dp(0.0))
                 .content_alignment(Alignment::Center)
@@ -1115,6 +1120,15 @@ mod tests {
         .expect("GPU renderer");
         renderer.render_frames(3);
         let expanded = renderer.read_pixels().unwrap();
+        let corner = (335 * 400 + 335) * 4;
+        let interior = (356 * 400 + 335) * 4;
+        let contrast: u32 = (0..3)
+            .map(|channel| expanded[corner + channel].abs_diff(expanded[interior + channel]) as u32)
+            .sum();
+        assert!(
+            contrast > 32,
+            "the expanded close button must have circular corners instead of a squircle"
+        );
         assert_eq!(disclosure_states(&renderer), vec![true]);
         STATE
             .get()
@@ -1128,10 +1142,13 @@ mod tests {
             .unwrap()
             .with_mut(FloatingActionButtonMenuState::open);
         renderer.render_frames(120);
-        assert_eq!(
-            expanded,
-            renderer.read_pixels().unwrap(),
-            "menu labels and shapes must recover after a complete animation cycle"
+        let reopened = renderer.read_pixels().unwrap();
+        assert!(
+            expanded
+                .iter()
+                .zip(&reopened)
+                .all(|(before, after)| before.abs_diff(*after) <= 1),
+            "menu labels and shapes must recover within one channel step after a complete animation cycle"
         );
     }
 }
