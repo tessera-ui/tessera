@@ -46,6 +46,7 @@ use motion::{MenuShapeHover, MenuShapeMotion};
 mod appearance;
 mod host;
 mod motion;
+mod typeahead;
 
 const MENU_MIN_WIDTH: Dp = Dp(112.0);
 const MENU_MAX_WIDTH: Dp = Dp(280.0);
@@ -830,6 +831,7 @@ fn menu_panel(
     let focus_scope = focus_scope.expect("menu_panel requires focus scope");
     let on_dismiss = provider.on_dismiss;
     let placement = provider.placement;
+    let typeahead = remember(|| parking_lot::Mutex::new(typeahead::Registry::default()));
     let scroll = remember(ScrollableController::new);
     let color_style = provider.color_style;
     let grouped = provider.grouped;
@@ -853,6 +855,7 @@ fn menu_panel(
 
     let mut modifier = with_keyboard_input(
         Modifier::new()
+            .layout_coordinate_space()
             .focus_scope_with(focus_scope)
             .focus_traversal_policy(FocusTraversalPolicy::vertical().wrap(true)),
         move |mut input| {
@@ -869,7 +872,7 @@ fn menu_panel(
                     continue;
                 }
 
-                handled = match event.logical_key {
+                handled = match &event.logical_key {
                     winit::keyboard::Key::Named(winit::keyboard::NamedKey::Tab) => {
                         host.exit(input.key_modifiers.shift_key());
                         true
@@ -885,6 +888,9 @@ fn menu_panel(
                     {
                         apply_close_action(controller, &on_dismiss);
                         true
+                    }
+                    winit::keyboard::Key::Character(text) => {
+                        typeahead::type_text(typeahead, text.as_str(), current_frame_nanos())
                     }
                     _ => false,
                 };
@@ -968,7 +974,14 @@ fn menu_panel(
                                         if grouped { Dp::ZERO } else { Dp(2.0) },
                                     ))
                                     .cross_axis_alignment(CrossAxisAlignment::Start)
-                                    .children_shared(menu_content);
+                                    .children(move || {
+                                        provide_context(
+                                            || typeahead::MenuTypeahead(typeahead),
+                                            move || {
+                                                menu_content.render();
+                                            },
+                                        );
+                                    });
                             },
                         );
                     },
@@ -1214,6 +1227,12 @@ fn menu_item_surface(
     } else {
         remember(FocusRequester::new).get()
     };
+    let typeahead = use_context::<typeahead::MenuTypeahead>().map(|context| context.get());
+    let _typeahead_lease =
+        remember(|| typeahead.map(|context| typeahead::ItemLease::new(context.0, focus_requester)));
+    if let Some(context) = typeahead {
+        typeahead::update(context.0, focus_requester, &item.label, enabled);
+    }
     let hover = remember(MenuHoverIntent::default);
     let host = use_context::<MenuHost>().map(|host| host.get());
     let parent = use_context::<State<MenuController>>().map(|controller| controller.get());
@@ -1276,6 +1295,13 @@ fn menu_item_surface(
         Modifier::new()
     };
 
+    let modifier = if let Some(context) = typeahead {
+        modifier.on_layout_rect_in_space(move |bounds| {
+            typeahead::position(context.0, focus_requester, bounds);
+        })
+    } else {
+        modifier
+    };
     layout().modifier(modifier).child(move || {
         let on_click = if has_submenu {
             let request = submenu_request.expect("submenu request");
@@ -1579,9 +1605,132 @@ mod tests {
     use super::{MenuAnchor, MenuController, menu_item, menu_provider};
 
     thread_local! {
+        pub(super) static TYPEAHEAD: RefCell<Option<State<parking_lot::Mutex<super::typeahead::Registry>>>> = const { RefCell::new(None) };
+
+        static CHILD_TYPEAHEAD: RefCell<Option<State<parking_lot::Mutex<super::typeahead::Registry>>>> = const { RefCell::new(None) };
+        static REMOVE_DELETE: RefCell<Option<State<bool>>> = const { RefCell::new(None) };
         static MENU_CONTROLLER: RefCell<Option<State<MenuController>>> =
             const { RefCell::new(None) };
         static MAIN_STATE: RefCell<Option<State<u32>>> = const { RefCell::new(None) };
+    }
+
+    #[tessera]
+    fn typeahead_fixture() {
+        let controller = remember(|| {
+            let mut controller = MenuController::new();
+            controller.open();
+            controller
+        });
+        let remove_delete = remember(|| false);
+        MENU_CONTROLLER.with(|slot| *slot.borrow_mut() = Some(controller));
+        REMOVE_DELETE.with(|slot| *slot.borrow_mut() = Some(remove_delete));
+        material_theme().child(move || {
+            menu_provider()
+                .controller(controller)
+                .main_content(|| {
+                    crate::spacer::spacer().modifier(Modifier::new().fill_max_size());
+                })
+                .menu_content(move || {
+                    let registry = tessera_ui::use_context::<super::typeahead::MenuTypeahead>()
+                        .unwrap()
+                        .get()
+                        .0;
+                    TYPEAHEAD.with(|slot| *slot.borrow_mut() = Some(registry));
+                    menu_item().label("Preview").on_click(|| {});
+                    menu_item().label("Share").submenu_content(|| {
+                        let registry = tessera_ui::use_context::<super::typeahead::MenuTypeahead>()
+                            .unwrap()
+                            .get()
+                            .0;
+                        CHILD_TYPEAHEAD.with(|slot| *slot.borrow_mut() = Some(registry));
+                        menu_item().label("Copy link").on_click(|| {});
+                        menu_item().label("Send").on_click(|| {});
+                    });
+                    if !remove_delete.get() {
+                        menu_item().label("Delete").on_click(|| {});
+                    }
+                    menu_item().label("Duplicate").on_click(|| {});
+                    menu_item().label("Download").enabled(false).on_click(|| {});
+                });
+        });
+    }
+
+    #[cfg(not(target_family = "wasm"))]
+    #[test]
+    #[ignore = "requires a native GPU adapter"]
+    fn gpu_menu_prefix_matching_moves_focus_skips_disabled_items_and_cleans_removed_items() {
+        use tessera_ui::{
+            HeadlessConfig, HeadlessRenderer,
+            accesskit::{Action, ActionRequest, Role, TreeId},
+        };
+
+        let mut renderer = HeadlessRenderer::new(
+            Box::new(|| {
+                typeahead_fixture();
+            }),
+            vec![Box::new(crate::TesseraComponents)],
+            HeadlessConfig {
+                width: 600,
+                height: 400,
+                sample_count: 1,
+                ..Default::default()
+            },
+        )
+        .unwrap();
+        renderer.render_frames(6);
+        let registry = TYPEAHEAD.with(|slot| slot.borrow().unwrap());
+        let focused = |renderer: &HeadlessRenderer| {
+            let tree = renderer.accessibility_snapshot().unwrap();
+            tree.nodes
+                .iter()
+                .find(|(id, _)| *id == tree.focus)
+                .and_then(|(_, node)| node.label())
+                .map(str::to_owned)
+        };
+        assert_eq!(focused(&renderer).as_deref(), Some("Preview"));
+        for (text, time, expected) in [
+            ("d", 0, "Delete"),
+            ("D", 100_000_000, "Duplicate"),
+            ("e", 200_000_000, "Delete"),
+            ("du", 2_000_000_000, "Duplicate"),
+            ("do", 4_000_000_000, "Duplicate"),
+            ("d", 6_000_000_000, "Delete"),
+        ] {
+            assert!(super::typeahead::type_text(registry, text, time));
+            renderer.render_frames(2);
+            assert_eq!(
+                focused(&renderer).as_deref(),
+                Some(expected),
+                "prefix {text}"
+            );
+        }
+        REMOVE_DELETE.with(|slot| slot.borrow().unwrap().set(true));
+        renderer.render_frames(3);
+        super::typeahead::type_text(registry, "d", 8_000_000_000);
+        renderer.render_frames(2);
+        assert_eq!(focused(&renderer).as_deref(), Some("Duplicate"));
+        let tree = renderer.accessibility_snapshot().unwrap();
+        let share = tree
+            .nodes
+            .iter()
+            .find(|(_, node)| node.role() == Role::MenuItem && node.label() == Some("Share"))
+            .unwrap()
+            .0;
+        assert!(renderer.dispatch_accessibility_action(ActionRequest {
+            action: Action::Click,
+            target_node: share,
+            target_tree: TreeId::ROOT,
+            data: None,
+        }));
+        renderer.render_frames(6);
+        let child = CHILD_TYPEAHEAD.with(|slot| slot.borrow().unwrap());
+        super::typeahead::type_text(child, "s", 0);
+        renderer.render_frames(2);
+        assert_eq!(focused(&renderer).as_deref(), Some("Send"));
+        MENU_CONTROLLER.with(|slot| slot.borrow().unwrap().with_mut(MenuController::close));
+        renderer.render_frames(4);
+        assert!(!registry.is_alive());
+        assert!(!child.is_alive());
     }
 
     #[tessera]
