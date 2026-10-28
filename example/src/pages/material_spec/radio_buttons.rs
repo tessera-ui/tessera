@@ -69,7 +69,6 @@ pub(super) fn radio_buttons_spec() {
             },
         ],
     )
-    .intro(ringtone)
     .pages(vec![
         ArticlePage {
             title: "Overview",
@@ -78,11 +77,15 @@ pub(super) fn radio_buttons_spec() {
         },
         ArticlePage {
             title: "Guidelines",
-            intro: Some(RenderSlot::new(ringtone)),
+            intro: None,
             sections: vec![
                 SpecSection {
                     title: "Usage",
-                    content: RenderSlot::new(page_figures::usage),
+                    content: RenderSlot::new(|| {
+                        page_figures::usage();
+                        gap(Dp(24.0));
+                        ringtone();
+                    }),
                 },
                 SpecSection {
                     title: "Anatomy",

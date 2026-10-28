@@ -15,6 +15,7 @@ use tessera_components::{
     column::column,
     flow_row::flow_row,
     modifier::{ModifierExt as _, SemanticsArgs},
+    row::row,
     shape_def::Shape,
     snackbar::{
         SnackbarData, SnackbarDuration, SnackbarHostState, SnackbarRequest, snackbar, snackbar_host,
@@ -60,21 +61,71 @@ pub(super) fn snackbars_spec() {
     .intro(anatomy)
     .page_heading_levels(std::collections::BTreeMap::from([("Accessibility", 3)]))
     .pages(vec![
-        ArticlePage{title:"Overview",intro:Some(RenderSlot::new(snackbar_variants)),sections:vec![SpecSection{title:"Differences from M2",content:RenderSlot::new(|| {prose("Snackbars use dynamic color mappings. Messages may dismiss automatically, while actionable snackbars persist until acted on or dismissed.");gap(Dp(24.0));snackbar_figure(false,true,true,false);})}]},
-        ArticlePage{title:"Guidelines",intro:Some(RenderSlot::new(snackbar_variants)),sections:vec![
+        ArticlePage{title:"Overview",intro:Some(RenderSlot::new(|| {
+            snackbar_points(vec![
+                "Snackbars inform people about a process the app has performed or will perform.",
+                "They appear near the bottom of the screen and do not interrupt the current task.",
+                "Only one snackbar is visible at a time; it can offer a single optional action.",
+                "A snackbar without actions can dismiss automatically, while an actionable one stays until used or dismissed.",
+            ]);
+            gap(Dp(24.0)); snackbar_figure(false,true,true,false);
+        })),sections:vec![SpecSection{title:"Differences from M2",content:RenderSlot::new(|| {
+            prose("Material 3 keeps the compact, elevated notification but maps its colors through inverse theme roles. Rich guidance such as inline feedback and persistent actions now also applies to web.");
+            gap(Dp(24.0));
+            spec_table(vec!["Element".into(),"Material 3 guidance".into()],vec![
+                vec!["Container".into(),"Fully opaque inverse surface with level 3 elevation".into()],
+                vec!["Text and action".into(),"Inverse on surface and inverse primary for clear contrast".into()],
+                vec!["Duration".into(),"Message-only snackbars may dismiss after 4–10 seconds; actionable snackbars persist".into()],
+                vec!["Frequency".into(),"One at a time; never stack or place side by side".into()],
+            ]);
+            gap(Dp(24.0)); snackbar_figure(false,true,true,false);
+        })}]},
+        ArticlePage{title:"Guidelines",intro:Some(RenderSlot::new(|| {
+            snackbar_points(vec![
+                "Use a snackbar for a low-priority process update, such as a save, archive, or retry.",
+                "Keep the message short and self-contained; people should understand it without leaving the page.",
+                "Snackbars never replace dialogs for decisions that block progress or require a response.",
+            ]);
+            gap(Dp(24.0)); snackbar_figure(false,true,false,false);
+        })),sections:vec![
             SpecSection{title:"Usage",content:RenderSlot::new(snackbar_usage)},
             SpecSection{title:"Anatomy",content:RenderSlot::new(snackbar_guideline_anatomy)},
-            SpecSection{title:"Placement",content:RenderSlot::new(|| {subheading("At the bottom of a UI".into());prose("Place the snackbar above main content near the bottom, clear of navigation, floating actions and focused controls.");gap(Dp(24.0));snackbar_placement(false);})},
+            SpecSection{title:"Placement",content:RenderSlot::new(|| {subheading("At the bottom of a UI".into());prose("Place the snackbar in front of main content near the bottom, clear of navigation, floating actions and focused controls.");gap(Dp(24.0));snackbar_placement_cautions();gap(Dp(32.0));prose("In wide layouts, choose consistent leading or center alignment and keep the container away from the screen edges.");gap(Dp(24.0));snackbar_placement(false);})},
             SpecSection{title:"Responsive layout",content:RenderSlot::new(snackbar_responsive)},
-            SpecSection{title:"Behavior",content:RenderSlot::new(|| {subheading("Appearing and disappearing".into());prose("Do not block page interaction. Actionable snackbars remain until acted on; temporary web notifications also need nearby inline feedback.");gap(Dp(24.0));inline_feedback();gap(Dp(24.0));subheading("Consecutive snackbars".into());prose("Show queued notifications one at a time. Do not stack them or place them side by side.");gap(Dp(24.0));queued();})},
+            SpecSection{title:"Behavior",content:RenderSlot::new(|| {subheading("Appearing and disappearing".into());prose("Do not block page interaction. Actionable snackbars remain until acted on; temporary web notifications also need nearby inline feedback.");gap(Dp(24.0));snackbar_behavior_table();gap(Dp(24.0));inline_feedback();gap(Dp(32.0));subheading("Consecutive snackbars".into());prose("Show queued notifications one at a time. Do not stack them or place them side by side.");gap(Dp(24.0));queued();})},
         ]},
         ArticlePage{title:"Accessibility",intro:None,sections:vec![
-            SpecSection{title:"Use cases",content:RenderSlot::new(|| {prose("Announce updates without disrupting the current task. Let people reach and activate any snackbar action using assistive technology.");gap(Dp(24.0));snackbar_figure(false,true,true,false);})},
-            SpecSection{title:"Interaction & style",content:RenderSlot::new(|| {prose("Actionable messages must not time out. Use the inverse surface, inverse on-surface text and inverse primary action for a distinct notification.");gap(Dp(24.0));snackbar_figure(false,true,true,true);})},
+            SpecSection{title:"Use cases",content:RenderSlot::new(|| {snackbar_points(vec![
+                "Be alerted, but not disrupted, when a process update appears.",
+                "Move focus to an actionable snackbar and read it at a comfortable pace.",
+                "Activate the snackbar action or dismiss control using assistive technology.",
+            ]);gap(Dp(24.0));snackbar_figure(false,true,true,false);})},
+            SpecSection{title:"Interaction & style",content:RenderSlot::new(|| {
+                prose("Snackbars with actions do not auto-dismiss, so people can read and respond at their own pace. Messages without actions may dismiss after 4–10 seconds; on web, pair that timing with inline feedback.");
+                gap(Dp(24.0));
+                snackbar_points(vec![
+                    "Use the default inverse color mapping so the notification stands out without creating a color conflict.",
+                    "Keep the message and actions legible in both light and dark themes.",
+                    "Do not make a snackbar the only way to reach a core use case.",
+                ]);
+                gap(Dp(24.0)); inline_feedback();
+            })},
             SpecSection{title:"Accessibility requirements on web",content:RenderSlot::new(snackbar_web_feedback)},
-            SpecSection{title:"Focus",content:RenderSlot::new(|| {prose("Announce the message without moving focus. Snackbar actions participate in ordinary focus traversal and must not trap focus.");gap(Dp(24.0));inline_feedback();})},
-            SpecSection{title:"Keyboard navigation",content:RenderSlot::new(|| {spec_table(vec!["Key".into(),"Implemented action".into()],vec![vec!["Tab".into(),"Move between page and snackbar actions".into()],vec!["Enter or Space".into(),"Activate the focused action".into()]]);})},
-            SpecSection{title:"Labeling elements",content:RenderSlot::new(|| {prose("Snackbar text is published as a polite live status. Action labels state their function; the optional close button is named Dismiss.");gap(Dp(24.0));snackbar_figure(false,true,true,false);})},
+            SpecSection{title:"Focus",content:RenderSlot::new(|| {
+                prose("Announce the message without moving focus away from the current control by default. Snackbar actions participate in ordinary focus traversal and must not trap focus.");
+                gap(Dp(24.0));
+                spec_table(vec!["Focus step".into(),"Expected behavior".into()],vec![
+                    vec!["Page control".into(),"Keeps focus while a message-only snackbar is announced".into()],
+                    vec!["Snackbar action".into(),"Reachable with Tab; the focused action stays visible".into()],
+                    vec!["After the action".into(),"Focus returns to, or continues from, the triggering control".into()],
+                ]);
+            })},
+            SpecSection{title:"Keyboard navigation",content:RenderSlot::new(|| {spec_table(vec!["Key".into(),"Implemented action".into()],vec![vec!["Tab".into(),"Move between page controls and snackbar actions".into()],vec!["Shift + Tab".into(),"Move to the previous interactive element".into()],vec!["Enter or Space".into(),"Activate the focused action or dismiss control".into()]]);gap(Dp(16.0));prose("A message-only snackbar adds no Tab stop. Do not obscure the element that currently has focus.");})},
+            SpecSection{title:"Labeling elements",content:RenderSlot::new(|| {prose("Publish the supporting text as a polite status update. Action labels describe the outcome, such as Undo; the optional close button is named Dismiss.");gap(Dp(24.0));spec_table(vec!["Element".into(),"Accessible information in this example".into()],vec![
+                vec!["Supporting text".into(),"Status role with the complete message; announcements do not repeat".into()],
+                vec!["Undo".into(),"Named text button stating the action".into()],
+                vec!["Dismiss".into(),"Close button named for its purpose, not its icon".into()],
+            ]);})},
         ]},
     ]);
 }
@@ -176,15 +227,37 @@ fn tokens() {
 
 #[tessera]
 fn colors() {
-    column().modifier(Modifier::new().fill_max_width()).children(|| {
-        for dark in [false,true] {
-            material_theme().theme(move || MaterialTheme::from_seed(ACCENT,dark)).child(move || {
-                panel(RenderSlot::new(move || {sample(if dark {"Dark snackbar"} else {"Light snackbar"}).action(true).dismiss(true);}));
-            });
-            gap(Dp(24.0));
-        }
-        text().content("1  Inverse surface    2  Inverse on surface    3  Inverse primary    4  Inverse on surface").style(type_style(16.0,24.0));
-    });
+    row()
+        .modifier(Modifier::new().fill_max_width())
+        .children(|| {
+            for dark in [false, true] {
+                column()
+                    .modifier(Modifier::new().weight(1.0))
+                    .children(move || {
+                        subheading(if dark { "Dark theme" } else { "Light theme" }.into());
+                        gap(Dp(16.0));
+                        material_theme()
+                            .theme(move || MaterialTheme::from_seed(ACCENT, dark))
+                            .child(move || {
+                                panel(RenderSlot::new(move || {
+                                    sample(if dark {
+                                        "Dark snackbar"
+                                    } else {
+                                        "Light snackbar"
+                                    })
+                                    .action(true)
+                                    .dismiss(true);
+                                }));
+                            });
+                    });
+            }
+        });
+    gap(Dp(24.0));
+    text().content("1  Inverse surface    2  Inverse on surface    3  Inverse primary    4  Inverse on surface").style(type_style(16.0,24.0));
+    gap(Dp(8.0));
+    prose(
+        "Both themes use the same inverse roles. The container stays fully opaque and elevated so the message remains legible over content.",
+    );
 }
 
 #[tessera]
@@ -199,15 +272,115 @@ fn measurements() {
             spec_table(
                 vec!["Attribute".into(), "Value".into()],
                 vec![
-                    vec!["Single-line minimum height".into(), "48dp".into()],
-                    vec!["Two-line minimum height".into(), "68dp".into()],
+                    vec!["Official single-line minimum".into(), "48dp".into()],
+                    vec!["Official two-line minimum".into(), "64dp".into()],
+                    vec!["Current Tessera two-line minimum".into(), "68dp (native reference)".into()],
                     vec!["Message horizontal padding".into(), "16dp".into()],
                     vec!["Message vertical padding".into(), "14dp".into()],
                     vec!["Action spacing".into(), "8dp".into()],
                     vec!["Maximum width".into(), "600dp".into()],
                 ],
             );
+            prose("Official Material 3 reference: 48dp expands to 64dp for two lines at compact widths. The current Tessera native snackbar reserves 68dp for a two-line message so 14dp vertical padding plus two 20dp lines fit without clipping. This example states both values rather than presenting the native height as the official specification.");
         });
+}
+
+#[tessera]
+fn snackbar_points(items: Vec<&'static str>) {
+    column()
+        .modifier(Modifier::new().fill_max_width())
+        .children(move || {
+            for item in &items {
+                prose(format!("•  {item}"));
+                gap(Dp(12.0));
+            }
+        });
+}
+
+#[tessera]
+fn snackbar_writing_examples() {
+    let scheme = use_context::<MaterialTheme>().unwrap().get().color_scheme;
+    flow_row().item_spacing(Dp(24.0)).line_spacing(Dp(24.0)).children(move || {
+        for recommended in [true,false] {
+            column().modifier(Modifier::new().width(Dp(360.0))).children(move || {
+                boxed().alignment(Alignment::Center).modifier(
+                    Modifier::new().fill_max_width().height(Dp(184.0))
+                        .background_with_shape(scheme.surface_container_low, Shape::rounded_rectangle(Dp(24.0)))
+                        .semantics(SemanticsArgs {role:Some(Role::Note),label:Some(format!("{} snackbar text label",if recommended{"Recommended"}else{"Not recommended"})),merge_descendants:true,..Default::default()}),
+                ).children(move || {
+                    if recommended {
+                        snackbar().modifier(Modifier::new().width(Dp(320.0))).message("Photo archived");
+                    } else {
+                        snackbar().modifier(Modifier::new().width(Dp(320.0))).message("Your photo has been archived. Open the archive collection to find it again later.");
+                    }
+                });
+                gap(Dp(12.0));
+                text().content(if recommended {"Do"} else {"Don't"}).style(type_style(16.0,24.0)).color(if recommended{scheme.primary}else{scheme.error});
+                gap(Dp(8.0));
+                let guidance = if recommended {
+                    "Keep the update to one short line where possible."
+                } else {
+                    "Avoid long instructions, inline links, icons and styled text in the label."
+                };
+                prose(guidance);
+            });
+        }
+    });
+}
+
+#[tessera]
+fn snackbar_placement_cautions() {
+    spec_table(
+        vec!["Placement".into(), "Guidance".into()],
+        vec![
+            vec![
+                "Main content".into(),
+                "In front of page content near the bottom, clear of frequently used controls"
+                    .into(),
+            ],
+            vec![
+                "Navigation and FABs".into(),
+                "Never cover navigation; appear above a FAB rather than in front of or behind it"
+                    .into(),
+            ],
+            vec![
+                "Focused controls (web)".into(),
+                "Do not fully obscure an element that currently has keyboard focus".into(),
+            ],
+            vec![
+                "Screen edges".into(),
+                "Keep consistent leading or center alignment; do not sit flush against one edge"
+                    .into(),
+            ],
+        ],
+    );
+    gap(Dp(24.0));
+    snackbar_figure(false, true, true, false);
+}
+
+#[tessera]
+fn snackbar_behavior_table() {
+    spec_table(
+        vec!["Kind".into(), "Timing and interaction".into()],
+        vec![
+            vec![
+                "Message only".into(),
+                "May dismiss automatically after 4–10 seconds".into(),
+            ],
+            vec![
+                "With an action".into(),
+                "Stays on screen until the action or dismiss control is used".into(),
+            ],
+            vec![
+                "Consecutive updates".into(),
+                "Show one at a time; an updated message may replace an outdated one".into(),
+            ],
+            vec![
+                "Web".into(),
+                "Pair an auto-dismissing message with inline feedback near its trigger".into(),
+            ],
+        ],
+    );
 }
 
 #[tessera]
@@ -585,14 +758,16 @@ fn snackbar_guideline_anatomy() {
     gap(Dp(24.0));
     subheading("Text label".into());
     prose(
-        "Use a short, direct process update. Compact layouts can use two lines. Avoid inline links, decorative icons and styled text.",
+        "Use a short, direct process update. Keep the label to one line where possible; compact widths can use two lines. Avoid inline links, decorative icons and styled text.",
     );
+    gap(Dp(24.0));
+    snackbar_writing_examples();
     gap(Dp(24.0));
     snackbar_figure(true, false, false, false);
     gap(Dp(24.0));
     subheading("Container".into());
     prose(
-        "Keep the solid rectangular container and its subtle elevation so the update remains legible over content.",
+        "Keep the solid rectangular container and its subtle elevation so the update remains legible over content. Do not use a transparent or heavily altered shape.",
     );
     gap(Dp(24.0));
     snackbar_figure(false, false, false, true);

@@ -897,6 +897,7 @@ fn stage(width: f64, height: f64, content: RenderSlot) {
 
 #[tessera]
 fn native_label(value: String, x: f64, y: f64, width: f64) {
+    let scheme = use_context::<MaterialTheme>().unwrap().get().color_scheme;
     boxed()
         .alignment(Alignment::Center)
         .modifier(
@@ -905,7 +906,10 @@ fn native_label(value: String, x: f64, y: f64, width: f64) {
                 .size(Dp(width), Dp(32.0)),
         )
         .children(move || {
-            text().content(value.clone()).style(type_style(16.0, 24.0));
+            text()
+                .content(value.clone())
+                .style(type_style(16.0, 24.0))
+                .color(scheme.on_surface);
         });
 }
 

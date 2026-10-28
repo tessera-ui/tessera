@@ -5,19 +5,13 @@
 //! Inspect common, color and size tokens beside a live themed control.
 
 use tessera_components::{
-    boxed::boxed,
     button::button,
     flow_row::flow_row,
     icon_button::{IconButtonShape, IconButtonSize, IconButtonVariant, icon_button},
     material_icons::filled,
-    menus::{MenuAnchor, MenuController, MenuPlacement, menu_item, menu_provider},
-    modifier::{ModifierExt as _, SemanticsArgs},
     text::text,
 };
-use tessera_ui::{
-    Dp, Modifier, PxPosition, PxRect, PxSize, accesskit::HasPopup, modifier::FocusModifierExt as _,
-    remember, tessera,
-};
+use tessera_ui::{Dp, remember, tessera};
 
 use super::{
     super::{gap, spec_table, subheading, type_style},
@@ -28,8 +22,7 @@ use super::{
 #[path = "icon_button_tokens_tests.rs"]
 mod tests;
 
-const SETS: [&str; 10] = [
-    "Common",
+const SETS: [&str; 9] = [
     "Filled color",
     "Tonal color",
     "Outlined color",
@@ -44,77 +37,76 @@ const SETS: [&str; 10] = [
 #[tessera]
 pub(super) fn figure() {
     let selected = remember(|| 0_usize);
-    let menu = remember(MenuController::new);
-    let anchor = remember(PxRect::default);
-    let origin = remember(PxRect::default);
+    let shared = remember(|| false);
     text()
         .content("Icon button tokens are organized by common behavior, color style, and size. Choose a token set to inspect its values. Color roles resolve through the current theme.")
         .style(type_style(16.0, 24.0));
     gap(Dp(24.0));
-    boxed()
-        .modifier(
-            Modifier::new()
-                .fill_max_width()
-                .on_globally_positioned(move |rect| {
-                    if origin.get() != rect {
-                        origin.set(rect);
-                    }
-                }),
-        )
+    subheading("Color".into());
+    gap(Dp(8.0));
+    flow_row()
+        .item_spacing(Dp(8.0))
+        .line_spacing(Dp(8.0))
         .children(move || {
-            let a = anchor.get();
-            let o = origin.get();
-            menu_provider()
-                .controller(menu)
-                .placement(MenuPlacement::BelowStart)
-                .anchor(MenuAnchor::new(
-                    PxPosition::new(a.x - o.x, a.y - o.y),
-                    PxSize::new(a.width, a.height),
-                ))
-                .main_content(move || {
-                    button()
-                        .outlined()
-                        .accessibility_label(format!(
-                            "Icon button token set: {}",
-                            SETS[selected.get()]
-                        ))
-                        .modifier(
-                            Modifier::new()
-                                .on_globally_positioned(move |rect| {
-                                    if anchor.get() != rect {
-                                        anchor.set(rect);
-                                    }
-                                })
-                                .semantics(SemanticsArgs {
-                                    expanded: Some(menu.with(MenuController::is_open)),
-                                    has_popup: Some(HasPopup::Menu),
-                                    ..Default::default()
-                                }),
-                        )
-                        .on_click(move || menu.with_mut(MenuController::toggle))
-                        .child(move || {
-                            text().content(format!("{}  ▾", SETS[selected.get()]));
-                        });
-                })
-                .menu_content(move || {
-                    for (index, label) in SETS.into_iter().enumerate() {
-                        menu_item()
-                            .label(label)
-                            .on_click(move || selected.set(index));
-                    }
-                });
+            for index in 0..4 {
+                button()
+                    .tonal()
+                    .selected(selected.get() == index)
+                    .accessibility_label(format!("Show {} tokens", SETS[index]))
+                    .on_click(move || selected.set(index))
+                    .child(move || {
+                        text().content(name(STYLES[index]));
+                    });
+            }
+        });
+    gap(Dp(16.0));
+    subheading("Size".into());
+    gap(Dp(8.0));
+    flow_row()
+        .item_spacing(Dp(8.0))
+        .line_spacing(Dp(8.0))
+        .children(move || {
+            for index in 0..5 {
+                button()
+                    .tonal()
+                    .selected(selected.get() == index + 4)
+                    .accessibility_label(format!("Show {} tokens", SETS[index + 4]))
+                    .on_click(move || selected.set(index + 4))
+                    .child(move || {
+                        text().content(["XS", "S", "M", "L", "XL"][index]);
+                    });
+            }
         });
     gap(Dp(24.0));
     subheading(SETS[selected.get()].into());
     gap(Dp(16.0));
     let rows = match selected.get() {
-        0 => common_rows(),
-        1..=4 => color_rows(STYLES[selected.get() - 1]),
-        index => size_rows(SIZES[index - 5]),
+        0..=3 => color_rows(STYLES[selected.get()]),
+        index => size_rows(SIZES[index - 4]),
     };
     spec_table(vec!["Token".into(), "Value".into()], rows);
     gap(Dp(24.0));
     preview(selected.get());
+    gap(Dp(24.0));
+    button()
+        .text()
+        .accessibility_label(if shared.get() {
+            "Hide shared icon button values"
+        } else {
+            "Show shared icon button values"
+        })
+        .on_click(move || shared.set(!shared.get()))
+        .child(move || {
+            text().content(if shared.get() {
+                "Hide shared behavior summary"
+            } else {
+                "Show shared behavior summary"
+            });
+        });
+    if shared.get() {
+        gap(Dp(16.0));
+        spec_table(vec!["Shared value".into(), "Value".into()], common_rows());
+    }
 }
 
 fn rows(values: Vec<(&str, String)>) -> Vec<Vec<String>> {
@@ -160,7 +152,35 @@ fn size_rows(size: IconButtonSize) -> Vec<Vec<String>> {
             "Wide container width",
             format!("{}dp", size.width(IconButtonWidth::Wide).0),
         ),
+        (
+            "Narrow leading / trailing space",
+            format!(
+                "{}dp / {}dp",
+                (size.width(IconButtonWidth::Narrow).0 - size.icon_size().0) * 0.5,
+                (size.width(IconButtonWidth::Narrow).0 - size.icon_size().0) * 0.5
+            ),
+        ),
+        (
+            "Default leading / trailing space",
+            format!(
+                "{}dp / {}dp",
+                (size.width(IconButtonWidth::Uniform).0 - size.icon_size().0) * 0.5,
+                (size.width(IconButtonWidth::Uniform).0 - size.icon_size().0) * 0.5
+            ),
+        ),
+        (
+            "Wide leading / trailing space",
+            format!(
+                "{}dp / {}dp",
+                (size.width(IconButtonWidth::Wide).0 - size.icon_size().0) * 0.5,
+                (size.width(IconButtonWidth::Wide).0 - size.icon_size().0) * 0.5
+            ),
+        ),
         ("Round container shape", "Full".into()),
+        ("Selected round resting shape", "Square".into()),
+        ("Selected square resting shape", "Round".into()),
+        ("MD3 shape spring damping ratio", "0.9".into()),
+        ("MD3 shape spring stiffness", "1400".into()),
         (
             "Square container corner radius",
             format!("{}dp", size.square_radius().0),
@@ -256,13 +276,13 @@ fn preview(set: usize) {
     let selected = remember(|| false);
     let shape = remember(|| IconButtonShape::Round);
     let actions = remember(|| 0_u32);
-    let style = if (1..=4).contains(&set) {
-        STYLES[set - 1]
+    let style = if set < 4 {
+        STYLES[set]
     } else {
         IconButtonVariant::Filled
     };
-    let size = if set >= 5 {
-        SIZES[set - 5]
+    let size = if set >= 4 {
+        SIZES[set - 4]
     } else {
         IconButtonSize::Small
     };

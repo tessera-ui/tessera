@@ -24,6 +24,8 @@ thread_local! {
     pub(super) static GEOMETRY: Cell<Option<State<super::ObservedGeometry>>> = const { Cell::new(None) };
     pub(super) static ANNOTATION_BUILDS: Cell<usize> = const { Cell::new(0) };
     static TRANSLATION: Cell<Option<State<Dp>>> = const { Cell::new(None) };
+    static DIALOG_SOURCE: Cell<Option<super::Sample>> = const { Cell::new(None) };
+    static DIALOG_OPEN: Cell<Option<State<bool>>> = const { Cell::new(None) };
 }
 
 struct Pipelines;
@@ -39,6 +41,89 @@ fn fixture() {
     material_theme().child(|| {
         super::date_figure(super::Figure::Docked, true, false);
     });
+}
+
+#[tessera]
+fn modal_example_fixture() {
+    let source = super::Sample {
+        single: remember(|| super::single(super::DatePickerDisplayMode::Input)),
+        range: remember(|| super::range(super::DatePickerDisplayMode::Input)),
+        range_mode: remember(|| false),
+        dark: remember(|| false),
+        status: remember(String::new),
+    };
+    let draft = super::Sample {
+        single: remember(|| super::single(super::DatePickerDisplayMode::Picker)),
+        range: remember(|| super::range(super::DatePickerDisplayMode::Picker)),
+        range_mode: remember(|| false),
+        dark: remember(|| false),
+        status: remember(String::new),
+    };
+    let open = remember(|| false);
+    let input = remember(|| true);
+    DIALOG_SOURCE.set(Some(source));
+    DIALOG_OPEN.set(Some(open));
+    material_theme().child(move || {
+        tessera_components::dialog::dialog_provider()
+            .is_open(open.get())
+            .padding(Dp::ZERO)
+            .on_close_request(move || open.set(false))
+            .main_content(move || {
+                column().children(move || {
+                    super::example(source, "Input", open, input, true, draft);
+                });
+            })
+            .dialog_content(move || {
+                super::themed_picker(draft, "Modal")
+                    .modal(open)
+                    .commit_target(source);
+            });
+    });
+}
+
+fn choose_modal_day(renderer: &mut HeadlessRenderer, day: &str) {
+    activate(renderer, "Switch to calendar");
+    activate(renderer, day);
+}
+
+#[test]
+#[ignore = "requires a native GPU adapter"]
+fn date_dialog_example_commits_only_confirmed_selection() {
+    let mut renderer = reference_renderer(modal_example_fixture);
+    renderer.render_frames(4);
+    let source = DIALOG_SOURCE.get().unwrap();
+    let open = DIALOG_OPEN.get().unwrap();
+    activate(&mut renderer, "Open Input date dialog");
+    choose_modal_day(&mut renderer, "July 20, 2026");
+    activate(&mut renderer, "Modal cancel date");
+    assert!(!open.get());
+    assert_eq!(
+        source.single.with(super::DatePickerState::selected_date),
+        Some(super::date(18))
+    );
+
+    activate(&mut renderer, "Open Input date dialog");
+    choose_modal_day(&mut renderer, "July 21, 2026");
+    let outside = PxPosition::from_f32_xy(10.0, 10.0);
+    renderer.pointer_move(MOUSE_POINTER_ID, outside);
+    renderer.pointer_press(MOUSE_POINTER_ID, outside, PressKeyEventType::Left);
+    renderer.pointer_release(MOUSE_POINTER_ID, outside, PressKeyEventType::Left);
+    renderer.render_frames(4);
+    assert!(!open.get());
+    assert_eq!(
+        source.single.with(super::DatePickerState::selected_date),
+        Some(super::date(18))
+    );
+
+    activate(&mut renderer, "Open Input date dialog");
+    choose_modal_day(&mut renderer, "July 22, 2026");
+    activate(&mut renderer, "Modal confirm date");
+    assert!(!open.get());
+    assert_eq!(
+        source.single.with(super::DatePickerState::selected_date),
+        Some(super::date(22))
+    );
+    assert_eq!(source.status.get(), "Confirmed date: 2026-07-22");
 }
 
 #[tessera]

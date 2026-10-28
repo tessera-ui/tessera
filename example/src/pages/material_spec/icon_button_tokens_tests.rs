@@ -62,34 +62,11 @@ fn token_sets_select_size_values_and_keep_the_preview_live() {
     )
     .unwrap();
     renderer.render_frames(20);
-    let trigger = node(&renderer, Role::Button, "Icon button token set: Common");
-    click(&mut renderer, trigger);
-    let menu = renderer
-        .accessibility_snapshot()
-        .unwrap()
-        .nodes
-        .into_iter()
-        .find(|(_, node)| node.role() == Role::Menu)
-        .unwrap()
-        .1
-        .bounds()
-        .unwrap();
-    renderer.pointer_scroll(
-        MOUSE_POINTER_ID,
-        PxPosition::from_f32_xy(
-            ((menu.x0 + menu.x1) * 0.5) as f32,
-            ((menu.y0 + menu.y1) * 0.5) as f32,
-        ),
-        0.0,
-        -500.0,
-    );
-    renderer.render_frames(30);
-    let item = node(&renderer, Role::MenuItem, "Extra large size");
-    click(&mut renderer, item);
-    node(
-        &renderer,
-        Role::Button,
-        "Icon button token set: Extra large size",
+    let selector = node(&renderer, Role::Button, "Show Extra large size tokens");
+    click(&mut renderer, selector);
+    assert_eq!(
+        node(&renderer, Role::Button, "Show Extra large size tokens").toggled(),
+        Some(Toggled::True)
     );
     node(&renderer, Role::Cell, "136dp");
     node(&renderer, Role::Cell, "40dp");

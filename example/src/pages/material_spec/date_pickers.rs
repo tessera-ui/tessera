@@ -99,6 +99,13 @@ pub(super) fn date_pickers_spec() {
         dark: remember(|| false),
         status: remember(|| "Ready".to_owned()),
     };
+    let draft = Sample {
+        single: remember(|| single(DatePickerDisplayMode::Picker)),
+        range: remember(|| range(DatePickerDisplayMode::Picker)),
+        range_mode: remember(|| false),
+        dark: remember(|| false),
+        status: remember(|| "Ready".to_owned()),
+    };
     let modal = remember(|| false);
     let modal_input = remember(|| false);
     let mut pages = Vec::new();
@@ -145,7 +152,7 @@ pub(super) fn date_pickers_spec() {
                         content: RenderSlot::new(move || {
                             date_figure(Figure::Day, true, false);
                             gap(Dp(32.0));
-                            example(calendar, "Calendar", modal, modal_input, false);
+                            example(calendar, "Calendar", modal, modal_input, false, draft);
                             gap(Dp(24.0));
                             anatomy_legend(Figure::Day, DockedDatePickerView::Calendar);
                             gap(Dp(32.0));
@@ -169,7 +176,7 @@ pub(super) fn date_pickers_spec() {
                         content: RenderSlot::new(move || {
                             date_figure(Figure::Input, true, false);
                             gap(Dp(32.0));
-                            example(input, "Input", modal, modal_input, true);
+                            example(input, "Input", modal, modal_input, true, draft);
                             gap(Dp(24.0));
                             anatomy_legend(Figure::Input, DockedDatePickerView::Calendar);
                             gap(Dp(32.0));
@@ -198,8 +205,57 @@ pub(super) fn date_pickers_spec() {
             .pages(pages.clone());
         })
         .dialog_content(move || {
-            themed_picker(if modal_input.get() { input } else { calendar }, "Modal").modal(modal);
+            themed_picker(draft, "Modal")
+                .modal(modal)
+                .commit_target(if modal_input.get() { input } else { calendar });
         });
+}
+
+fn copy_date_sample(source: Sample, target: Sample) {
+    let (selected, month, mode) = source.single.with(|state| {
+        (
+            state.selected_date(),
+            state.displayed_month(),
+            state.display_mode(),
+        )
+    });
+    target.single.with_mut(|state| {
+        if let Some(selected) = selected {
+            state.set_selected_date(selected);
+        } else {
+            state.clear_selected_date();
+        }
+        state.set_displayed_month(month);
+        state.set_display_mode(mode);
+    });
+    let (start, end, month, mode) = source.range.with(|state| {
+        (
+            state.selected_start_date(),
+            state.selected_end_date(),
+            state.displayed_month(),
+            state.display_mode(),
+        )
+    });
+    target.range.with_mut(|state| {
+        state.set_selection(start, end);
+        state.set_displayed_month(month);
+        state.set_display_mode(mode);
+    });
+    target.range_mode.set(source.range_mode.get());
+    target.dark.set(source.dark.get());
+    target.status.set(source.status.get());
+}
+
+fn open_date_dialog(
+    source: Sample,
+    draft: Sample,
+    modal: State<bool>,
+    modal_input: State<bool>,
+    input: bool,
+) {
+    copy_date_sample(source, draft);
+    modal_input.set(input);
+    modal.set(true);
 }
 
 #[tessera]
@@ -209,6 +265,7 @@ fn example(
     modal: State<bool>,
     modal_input: State<bool>,
     input: bool,
+    draft: Sample,
 ) {
     let caption = label.clone();
     flow_row()
@@ -275,25 +332,40 @@ fn example(
         .outlined()
         .accessibility_label(format!("Open {caption} date dialog"))
         .on_click(move || {
-            modal_input.set(input);
-            modal.set(true);
+            open_date_dialog(sample, draft, modal, modal_input, input);
         })
         .child(|| {
             text().content("Open dialog");
         });
+    gap(Dp(12.0));
+    text()
+        .content("Dialog changes are a draft. OK applies them to this example; Cancel, Escape or dismissal outside leaves its date unchanged.")
+        .style(type_style(14.0, 20.0));
 }
 
 #[tessera]
-fn themed_picker(sample: Sample, #[prop(into)] label: String, modal: Option<State<bool>>) {
+fn themed_picker(
+    sample: Sample,
+    #[prop(into)] label: String,
+    modal: Option<State<bool>>,
+    commit_target: Option<Sample>,
+) {
     material_theme()
         .theme(move || MaterialTheme::from_seed(ACCENT, sample.dark.get()))
         .child(move || {
-            picker_surface(sample, label.clone()).modal_optional(modal);
+            picker_surface(sample, label.clone())
+                .modal_optional(modal)
+                .commit_target_optional(commit_target);
         });
 }
 
 #[tessera]
-fn picker_surface(sample: Sample, #[prop(into)] label: String, modal: Option<State<bool>>) {
+fn picker_surface(
+    sample: Sample,
+    #[prop(into)] label: String,
+    modal: Option<State<bool>>,
+    commit_target: Option<Sample>,
+) {
     let scheme = use_context::<MaterialTheme>()
         .expect("MaterialTheme must be provided")
         .get()
@@ -328,7 +400,8 @@ fn picker_surface(sample: Sample, #[prop(into)] label: String, modal: Option<Sta
                             .main_axis_alignment(MainAxisAlignment::End)
                             .children(move || {
                                 actions(sample, confirm_label.clone(), cancel_label.clone())
-                                    .modal_optional(modal);
+                                    .modal_optional(modal)
+                                    .commit_target_optional(commit_target);
                             });
                     });
             } else {
@@ -339,7 +412,9 @@ fn picker_surface(sample: Sample, #[prop(into)] label: String, modal: Option<Sta
                     .state(sample.single)
                     .picker_first_day_of_week(Weekday::Sunday)
                     .confirm_button(move || {
-                        confirm(sample, confirm_label.clone()).modal_optional(modal);
+                        confirm(sample, confirm_label.clone())
+                            .modal_optional(modal)
+                            .commit_target_optional(commit_target);
                     })
                     .dismiss_button(move || {
                         cancel(sample, cancel_label.clone()).modal_optional(modal);
@@ -354,13 +429,21 @@ fn actions(
     #[prop(into)] confirm_label: String,
     #[prop(into)] cancel_label: String,
     modal: Option<State<bool>>,
+    commit_target: Option<Sample>,
 ) {
     cancel(sample, cancel_label).modal_optional(modal);
-    confirm(sample, confirm_label).modal_optional(modal);
+    confirm(sample, confirm_label)
+        .modal_optional(modal)
+        .commit_target_optional(commit_target);
 }
 
 #[tessera]
-fn confirm(sample: Sample, #[prop(into)] label: String, modal: Option<State<bool>>) {
+fn confirm(
+    sample: Sample,
+    #[prop(into)] label: String,
+    modal: Option<State<bool>>,
+    commit_target: Option<Sample>,
+) {
     button()
         .text()
         .enabled(if sample.range_mode.get() {
@@ -383,6 +466,9 @@ fn confirm(sample: Sample, #[prop(into)] label: String, modal: Option<State<bool
                     .single
                     .with(|state| format!("Confirmed date: {}", formatted(state.selected_date())))
             });
+            if let Some(target) = commit_target {
+                copy_date_sample(sample, target);
+            }
             if let Some(modal) = modal {
                 modal.set(false);
             }
@@ -493,18 +579,25 @@ fn date_chapters() -> Vec<(&'static str, Vec<DateChapter>)> {
     vec![
         (
             "Overview",
-            vec![chapter(
-                "Differences from M2",
-                "Larger typography and spacing support 48dp targets. Dynamic color maps the calendar to its context. Docked, modal and modal input names describe how each picker behaves.",
-                Figure::Day,
-            )],
+            vec![
+                chapter(
+                    "Availability & resources",
+                    "Material provides design and implementation resources for date selection. Availability below describes the Material libraries; these live examples use Tessera.",
+                    Figure::None,
+                ),
+                chapter(
+                    "Differences from M2",
+                    "M3 uses larger titles and labels with more spacing for 48dp touch targets, new dynamic-color mappings and no modal shadow. The former desktop picker is now the docked date picker; the former mobile picker and input are now modal date picker and modal date input. These names describe behavior, not a device type.",
+                    Figure::Day,
+                ),
+            ],
         ),
         (
             "Guidelines",
             vec![
                 chapter(
                     "Usage",
-                    "Choose a calendar for nearby dates and text entry for dates in the distant past or future. Offer a single date or an inclusive range according to the task.",
+                    "Choose a calendar for nearby dates and text entry for dates in the distant past or future, such as a date of birth. Offer a single date for an event or an inclusive range for a reservation. Show past, present and future dates as the task allows, and distinguish today from the selected date.",
                     Figure::Docked,
                 ),
                 DateChapter {
@@ -541,12 +634,12 @@ fn date_chapters() -> Vec<(&'static str, Vec<DateChapter>)> {
                     children: vec![
                         chapter(
                             "Usage",
-                            "Keep the editable field visible when its calendar is open. Either input method can complete the task.",
+                            "Keep the editable field visible when its calendar is open. Docked pickers work well in forms with enough space beside the field. Both direct text entry and calendar selection must complete the same task; clearly describe the expected date format.",
                             Figure::Docked,
                         ),
                         chapter(
                             "Behavior",
-                            "Activate the calendar icon to reveal the picker immediately below the field; confirm or cancel to dismiss it.",
+                            "Activate the calendar icon to reveal the picker immediately below the field. Its position stays anchored while month or year menus open. OK commits the draft; Cancel dismisses it without replacing the field's saved value.",
                             Figure::Docked,
                         ),
                         chapter(
@@ -573,7 +666,7 @@ fn date_chapters() -> Vec<(&'static str, Vec<DateChapter>)> {
                         ),
                         chapter(
                             "Date range selection",
-                            "Choose a start and end date for bookings and reservations. Intermediate dates share a connected highlight; vertical scrolling reveals other months.",
+                            "Choose a start and end date for bookings and reservations. Intermediate dates share a connected highlight; vertical scrolling reveals other months. Keep the selected endpoints visible in the headline, and enable Save only after both endpoints form a valid range.",
                             Figure::Range,
                         ),
                     ],
@@ -590,17 +683,17 @@ fn date_chapters() -> Vec<(&'static str, Vec<DateChapter>)> {
                         ),
                         chapter(
                             "Behavior",
-                            "The edit and calendar controls switch entry methods without losing the current selection.",
+                            "The edit and calendar controls switch entry methods without losing the current selection. Keep format guidance with each field. Reject malformed or impossible dates and ranges ending before they start, and make the reason clear before confirmation.",
                             Figure::RangeInput,
                         ),
                         chapter(
                             "Compact breakpoint",
-                            "A full-screen picker provides readable content and touch targets in a compact window.",
+                            "A full-screen picker keeps range selection readable on compact windows, with Close and Save at the top. Preserve touch-target sizes and scroll the months rather than compressing the calendar cells.",
                             Figure::FullScreen,
                         ),
                         chapter(
                             "Medium and expanded breakpoints",
-                            "Anchor the calendar below its field on larger windows; keep the field available for direct entry.",
+                            "Use a modal dialog or docked picker where the layout has sufficient space. A docked calendar stays below its field, which remains available for direct entry. Keep calendars at their intended size rather than stretching cells across an expanded window.",
                             Figure::Docked,
                         ),
                         chapter(
@@ -642,7 +735,7 @@ fn date_chapters() -> Vec<(&'static str, Vec<DateChapter>)> {
                 ),
                 chapter(
                     "Accessible date input",
-                    "Keep typed text unchanged while editing. Validate and format on submission rather than inserting separators as each character is typed.",
+                    "Keep typed text unchanged while editing. Validate and format on submission rather than inserting separators as each character is typed. Explain the format before entry, preserve invalid input for correction, and associate validation messages with the field.",
                     Figure::Docked,
                 ),
                 chapter(
@@ -662,7 +755,7 @@ fn date_chapters() -> Vec<(&'static str, Vec<DateChapter>)> {
                 ),
                 chapter(
                     "Color contrast between dates",
-                    "Keep date text legible against both the calendar surface and the selected or range indicator.",
+                    "Keep date text legible against the calendar surface and selected or range indicators. Use at least 4.5:1 contrast for normal-size text. Use an outline for today and a filled indicator for selection so these meanings do not rely on color alone.",
                     Figure::Range,
                 ),
                 chapter(
@@ -677,7 +770,7 @@ fn date_chapters() -> Vec<(&'static str, Vec<DateChapter>)> {
                 ),
                 chapter(
                     "Screen reader verbalizations",
-                    "Announce the complete day, month, date and year so a date remains understandable outside its visual calendar context.",
+                    "Announce the complete weekday, month, date and year, plus today or selected state where applicable. For example, Sunday, August 17, 2025 remains understandable outside the calendar. Name range endpoints Start date and End date; visual weekday abbreviations are not sufficient accessible names.",
                     Figure::Day,
                 ),
             ],
@@ -696,12 +789,27 @@ fn date_chapter(chapter: DateChapter) {
             chapter.title == "Anatomy",
         );
     }
+    if chapter.title == "Availability & resources" {
+        gap(Dp(24.0));
+        date_resources();
+    }
     if chapter.title == "Keyboard navigation" {
         gap(Dp(24.0));
         spec_table(
             vec!["Keys".into(), "Actions".into()],
             vec![
-                vec!["Arrow keys".into(), "Move the focused date".into()],
+                vec![
+                    "Tab / Shift+Tab".into(),
+                    "Move between the field, calendar, navigation controls and actions".into(),
+                ],
+                vec![
+                    "Left / Right arrow".into(),
+                    "Move the focused date by one day".into(),
+                ],
+                vec![
+                    "Up / Down arrow".into(),
+                    "Move the focused date by one week".into(),
+                ],
                 vec!["Page Up / Page Down".into(), "Move by one month".into()],
                 vec![
                     "Shift + Page Up / Page Down".into(),
@@ -709,9 +817,13 @@ fn date_chapter(chapter: DateChapter) {
                 ],
                 vec![
                     "Home / End".into(),
-                    "Move to the first / last date in the month".into(),
+                    "Move to the first / last date in the week".into(),
                 ],
                 vec!["Enter / Space".into(), "Choose the focused date".into()],
+                vec![
+                    "Escape".into(),
+                    "Dismiss the modal without saving its draft".into(),
+                ],
             ],
         );
     }
@@ -775,7 +887,53 @@ fn date_canvas(width: f64, height: f64, content: RenderSlot) {
 }
 
 #[tessera]
+fn date_resources() {
+    spec_table(
+        vec!["Type".into(), "Resource".into(), "Status".into()],
+        vec![
+            vec![
+                "Design".into(),
+                "Material 3 Design Kit (Figma)".into(),
+                "Available".into(),
+            ],
+            vec![
+                "Implementation".into(),
+                "Flutter".into(),
+                "Available".into(),
+            ],
+            vec![
+                "Implementation".into(),
+                "Jetpack Compose".into(),
+                "Available".into(),
+            ],
+            vec![
+                "Implementation".into(),
+                "Android Views (MDC-Android)".into(),
+                "Available".into(),
+            ],
+            vec![
+                "Implementation".into(),
+                "Material Web".into(),
+                "Unavailable".into(),
+            ],
+        ],
+    );
+}
+
+#[tessera]
 fn date_overview() {
+    for item in [
+        "Date pickers can display past, present and future dates.",
+        "Three variants: docked date picker, modal date picker and modal date input.",
+        "Clearly distinguish important dates, including today and the selected day.",
+        "Use familiar calendar patterns and offer direct date entry.",
+    ] {
+        text()
+            .content(format!("• {item}"))
+            .style(type_style(16.0, 24.0));
+        gap(Dp(12.0));
+    }
+    gap(Dp(12.0));
     let geometry = remember(ObservedGeometry::new);
     annotations::publish_observed_geometry(geometry);
     let scheme = use_context::<MaterialTheme>().unwrap().get().color_scheme;

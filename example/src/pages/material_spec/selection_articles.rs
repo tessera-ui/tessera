@@ -144,11 +144,6 @@ fn guidelines(kind: Kind) -> Vec<Chapter> {
                 figure: Figure::Anatomy,
             },
             Chapter {
-                title: "Label text",
-                text: "An adjacent label describes what enabling the setting does. Keep text outside the handle.",
-                figure: Figure::Example,
-            },
-            Chapter {
                 title: "Placement",
                 text: "Settings commonly use vertically stacked rows with an inline label for each switch.",
                 figure: Figure::Example,
@@ -208,6 +203,7 @@ pub(super) fn selection_article(
     kind: Kind,
     sections: Vec<SpecSection>,
     example: RenderSlot,
+    overview_example: RenderSlot,
     anatomy: RenderSlot,
 ) {
     let title = match kind {
@@ -248,7 +244,7 @@ pub(super) fn selection_article(
                 Kind::Switch=>"Turn an independent setting on or off. Its effect is immediate, and the handle makes the current value clear.",
             });
             gap(Dp(32.0)); anatomy.render();
-            gap(Dp(32.0)); example.render();
+            gap(Dp(32.0)); overview_example.render();
         })),sections:vec![]},
         ArticlePage {title:"Guidelines",intro:None,sections:guide},
         ArticlePage {title:"Accessibility",intro:None,sections:access},

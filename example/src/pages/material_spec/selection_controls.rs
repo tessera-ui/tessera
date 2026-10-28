@@ -78,6 +78,9 @@ pub(super) fn checkbox_spec() {
         RenderSlot::new(|| {
             settings(false);
         }),
+        RenderSlot::new(|| {
+            settings(false);
+        }),
         RenderSlot::new(checkbox_anatomy),
     );
 }
@@ -116,6 +119,9 @@ pub(super) fn switch_spec() {
                 content: RenderSlot::new(configurations),
             },
         ],
+        RenderSlot::new(|| {
+            settings(true);
+        }),
         RenderSlot::new(|| {
             settings(true);
         }),
@@ -327,38 +333,109 @@ fn tokens(is_switch: bool) {
             });
     });
     gap(Dp(24.0));
-    if dimensions.get() {
-        measurement_table(is_switch);
+    let rows = if dimensions.get() {
+        if is_switch {
+            vec![
+                ["Track height", "md.comp.switch.track.height", "32dp"],
+                ["Track width", "md.comp.switch.track.width", "52dp"],
+                ["Handle height", "md.comp.switch.handle.height", "16dp"],
+                [
+                    "Selected handle height",
+                    "md.comp.switch.selected.handle.height",
+                    "24dp",
+                ],
+                [
+                    "Pressed handle height",
+                    "md.comp.switch.pressed.handle.height",
+                    "28dp",
+                ],
+                ["Icon size", "md.comp.switch.icon.size", "16dp"],
+                [
+                    "State layer size",
+                    "md.comp.switch.state-layer.size",
+                    "40dp",
+                ],
+            ]
+        } else {
+            vec![
+                ["Container size", "md.comp.checkbox.container.size", "18dp"],
+                [
+                    "Container shape",
+                    "md.comp.checkbox.container.shape",
+                    "2dp corner",
+                ],
+                ["Icon size", "md.comp.checkbox.icon.size", "18dp"],
+                [
+                    "State layer size",
+                    "md.comp.checkbox.state-layer.size",
+                    "40dp",
+                ],
+                ["Target size", "md.comp.checkbox.touch-target.size", "48dp"],
+            ]
+        }
+    } else if is_switch {
+        vec![
+            [
+                "Selected track",
+                "md.comp.switch.selected.track.color",
+                "Primary",
+            ],
+            [
+                "Unselected track",
+                "md.comp.switch.unselected.track.color",
+                "Surface container highest",
+            ],
+            [
+                "Selected handle",
+                "md.comp.switch.selected.handle.color",
+                "On primary",
+            ],
+            [
+                "Unselected handle",
+                "md.comp.switch.unselected.handle.color",
+                "Outline",
+            ],
+            [
+                "Selected icon",
+                "md.comp.switch.selected.icon.color",
+                "On primary container",
+            ],
+            [
+                "Unselected icon",
+                "md.comp.switch.unselected.icon.color",
+                "Surface container highest",
+            ],
+        ]
     } else {
-        spec_table(
-            vec!["Element".into(), "Selected".into(), "Unselected".into()],
-            if is_switch {
-                vec![
-                    vec![
-                        "Track".into(),
-                        "Primary".into(),
-                        "Surface container highest".into(),
-                    ],
-                    vec!["Handle".into(), "On primary".into(), "Outline".into()],
-                    vec![
-                        "Icon".into(),
-                        "On primary container".into(),
-                        "Surface container highest".into(),
-                    ],
-                ]
-            } else {
-                vec![
-                    vec!["Container".into(), "Primary".into(), "Transparent".into()],
-                    vec![
-                        "Outline".into(),
-                        "Primary".into(),
-                        "On surface variant".into(),
-                    ],
-                    vec!["Icon".into(), "On primary".into(), "—".into()],
-                ]
-            },
-        );
-    }
+        vec![
+            [
+                "Selected container",
+                "md.comp.checkbox.selected.container.color",
+                "Primary",
+            ],
+            [
+                "Selected icon",
+                "md.comp.checkbox.selected.icon.color",
+                "On primary",
+            ],
+            [
+                "Unselected outline",
+                "md.comp.checkbox.unselected.outline.color",
+                "On surface variant",
+            ],
+            [
+                "State layer",
+                "md.comp.checkbox.state-layer.color",
+                "On surface",
+            ],
+        ]
+    };
+    spec_table(
+        vec!["Element".into(), "Token".into(), "Value".into()],
+        rows.into_iter()
+            .map(|row| row.map(str::to_owned).to_vec())
+            .collect(),
+    );
 }
 
 #[tessera]

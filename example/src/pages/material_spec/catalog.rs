@@ -1750,6 +1750,7 @@ mod tests {
                 &format!("Open {} specifications", component.title),
             );
             click(&mut renderer, card);
+            renderer.render_frames(4);
             for page in [
                 "Overview",
                 "Guidelines",

@@ -425,7 +425,11 @@ fn measurement_callouts(geometry: State<SpaceGeometry>, left: Dp, right: Dp) {
     dotted(&mut svg, x1, line.y - 16.0, 32.0, true, "#49454f");
     dotted(&mut svg, x2, line.y - 16.0, 32.0, true, "#49454f");
     annotations::lines(Dp(root.w), Dp(root.h), svg);
-    annotations::dimension("1dp".into(), Dp(content.x), Dp(line.y - 32.0));
+    annotations::dimension(
+        "1dp".into(),
+        Dp(line.x + line.w * 0.5 - 16.0),
+        Dp(line.y - 48.0),
+    );
     annotations::dimension(
         if left == Dp::ZERO && right == Dp::ZERO {
             "100% available width".into()
