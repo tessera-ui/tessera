@@ -36,7 +36,13 @@ pub(crate) fn load_workspace(options: &CheckOptions<'_>) -> Result<LoadedWorkspa
     }
 
     let load_config = LoadCargoConfig {
-        load_out_dirs_from_check: true,
+        // Collecting build-script output runs a full `cargo check` over the
+        // workspace before any file is analysed. That build has no deadline,
+        // dominates the wall clock of a source-level color check, and blocks
+        // the check entirely when it cannot finish, so it is not performed
+        // here. Compilation is verified by the build command that follows the
+        // color check instead.
+        load_out_dirs_from_check: false,
         with_proc_macro_server: ProcMacroServerChoice::Sysroot,
         prefill_caches: false,
         num_worker_threads: 1,

@@ -89,6 +89,11 @@ pub fn run(options: CheckOptions<'_>) -> Result<()> {
         output::status("ColorCheck", "checking Tessera call colors");
     }
 
+    // Loading rust-analyzer may block indefinitely on cargo subprocesses or a
+    // stuck proc-macro server. A color check must always terminate, so the
+    // whole run is bounded instead of relying on those subprocesses finishing.
+    let _watchdog = watchdog::arm(watchdog::limit_from_env());
+
     let workspace = workspace::load_workspace(&options)?;
     let db = workspace.host.raw_database();
 
@@ -156,4 +161,5 @@ mod tests {
 mod analyzer;
 mod types;
 mod utils;
+mod watchdog;
 mod workspace;
