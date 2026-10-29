@@ -150,30 +150,37 @@ fn sample(
         }))
         .children(move || {
             if visible.get() {
-                let mut bar = snackbar()
-                    .modifier(Modifier::new().fill_max_width())
-                    .message(if two_lines.unwrap_or(false) {
-                        "Your photo was saved.\nIt is ready to share."
+                let message = if two_lines.unwrap_or(false) {
+                    "Your photo was saved.\nIt is ready to share."
+                } else {
+                    "Photo saved"
+                };
+                let action_label = action.unwrap_or(false).then(|| {
+                    if long_action.unwrap_or(false) {
+                        "Open photo collection".to_owned()
                     } else {
-                        "Photo saved"
-                    })
-                    .action_on_new_line(stacked.unwrap_or(false));
-                if action.unwrap_or(false) {
-                    bar = bar
-                        .action_label(if long_action.unwrap_or(false) {
-                            "Open photo collection"
-                        } else {
-                            "Undo"
-                        })
-                        .on_action(move || visible.set(false));
-                }
+                        "Undo".to_owned()
+                    }
+                });
+                let on_new_line = stacked.unwrap_or(false);
                 if dismiss.unwrap_or(false) {
-                    bar = bar
+                    snackbar()
+                        .modifier(Modifier::new().fill_max_width())
+                        .message(message)
+                        .action_label_optional(action_label)
+                        .action_on_new_line(on_new_line)
+                        .on_action(move || visible.set(false))
                         .with_dismiss_action(true)
                         .dismiss_action_label(format!("Dismiss {}", label.get()))
                         .on_dismiss(move || visible.set(false));
+                } else {
+                    snackbar()
+                        .modifier(Modifier::new().fill_max_width())
+                        .message(message)
+                        .action_label_optional(action_label)
+                        .action_on_new_line(on_new_line)
+                        .on_action(move || visible.set(false));
                 }
-                drop(bar);
             } else {
                 button()
                     .text()
@@ -504,29 +511,39 @@ fn queued() {
                             ..Default::default()
                         }))
                         .children(move || {
-                            let mut bar = snackbar()
-                                .modifier(Modifier::new().fill_max_width())
-                                .message(data.message().to_owned())
-                                .action_label_optional(data.action_label().map(str::to_owned))
-                                .action_on_new_line(stacked.get())
-                                .on_action({
-                                    let data = data.clone();
-                                    move || {
-                                        data.perform_action();
-                                        result.set("Action performed".to_owned());
-                                    }
-                                });
+                            let message = data.message().to_owned();
+                            let action_label = data.action_label().map(str::to_owned);
+                            let on_new_line = stacked.get();
                             if data.with_dismiss_action() {
-                                let data = data.clone();
-                                bar = bar
+                                let action_data = data.clone();
+                                let dismiss_data = data.clone();
+                                snackbar()
+                                    .modifier(Modifier::new().fill_max_width())
+                                    .message(message)
+                                    .action_label_optional(action_label)
+                                    .action_on_new_line(on_new_line)
+                                    .on_action(move || {
+                                        action_data.perform_action();
+                                        result.set("Action performed".to_owned());
+                                    })
                                     .with_dismiss_action(true)
                                     .dismiss_action_label("Dismiss queued snackbar")
                                     .on_dismiss(move || {
-                                        data.dismiss();
+                                        dismiss_data.dismiss();
                                         result.set("Dismissed".to_owned());
                                     });
+                            } else {
+                                let action_data = data.clone();
+                                snackbar()
+                                    .modifier(Modifier::new().fill_max_width())
+                                    .message(message)
+                                    .action_label_optional(action_label)
+                                    .action_on_new_line(on_new_line)
+                                    .on_action(move || {
+                                        action_data.perform_action();
+                                        result.set("Action performed".to_owned());
+                                    });
                             }
-                            drop(bar);
                         });
                 });
             gap(Dp(16.0));
@@ -566,30 +583,38 @@ fn snackbar_figure(two_lines: bool, action: bool, dismiss: bool, measurements: b
         )
         .children(move || {
             if visible.get() {
-                let mut bar = snackbar()
-                    .modifier(watch(geometry, "bar").width(Dp(360.0)))
-                    .message(if two_lines {
-                        "This is a two-line snackbar
+                let message = if two_lines {
+                    "This is a two-line snackbar
 with a longer message."
-                    } else {
-                        "This is a snackbar message"
-                    });
-                if action {
-                    bar = bar.action_label("Action").on_action(move || {
-                        result.set("Action performed".into());
-                        visible.set(false);
-                    });
-                }
+                } else {
+                    "This is a snackbar message"
+                };
+                let action_label = action.then(|| "Action".to_owned());
                 if dismiss {
-                    bar = bar
+                    snackbar()
+                        .modifier(watch(geometry, "bar").width(Dp(360.0)))
+                        .message(message)
+                        .action_label_optional(action_label)
+                        .on_action(move || {
+                            result.set("Action performed".into());
+                            visible.set(false);
+                        })
                         .with_dismiss_action(true)
                         .dismiss_action_label("Dismiss illustrated snackbar")
                         .on_dismiss(move || {
                             result.set("Dismissed".into());
                             visible.set(false);
                         });
+                } else {
+                    snackbar()
+                        .modifier(watch(geometry, "bar").width(Dp(360.0)))
+                        .message(message)
+                        .action_label_optional(action_label)
+                        .on_action(move || {
+                            result.set("Action performed".into());
+                            visible.set(false);
+                        });
                 }
-                drop(bar);
                 boxed()
                     .modifier(Modifier::new().fill_max_size())
                     .children(move || {

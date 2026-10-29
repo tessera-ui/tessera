@@ -308,13 +308,7 @@ fn tooltip_focus_sequence() {
 }
 
 #[tessera]
-fn sample(
-    #[prop(into)] name: String,
-    rich: bool,
-    headline: Option<bool>,
-    actions: Option<usize>,
-    controls: Option<bool>,
-) {
+fn sample(#[prop(into)] name: String, rich: bool, controls: Option<bool>) {
     let controller = remember(|| {
         let mut controller = TooltipController::new();
         controller.show();
@@ -323,48 +317,98 @@ fn sample(
     let calls = remember(|| 0_usize);
     let long = remember(|| false);
     let label = remember(|| name.clone());
-    let actions = actions.unwrap_or(if rich { 1 } else { 0 });
-    let headline = headline.unwrap_or(rich);
-    column().modifier(Modifier::new().fill_max_width().semantics(SemanticsArgs {role:Some(Role::Group),label:Some(format!("{name} tooltip preview")),merge_descendants:true,..Default::default()})).children(move || {
-        if controls.unwrap_or(false) {
-            flow_row().item_spacing(Dp(8.0)).line_spacing(Dp(8.0)).children(move || {
-                button().tonal().accessibility_label(format!("Show {}",label.get())).on_click(move ||controller.with_mut(TooltipController::show)).child(|| {text().content("Show");});
-                button().text().accessibility_label(format!("Dismiss {}",label.get())).on_click(move ||controller.with_mut(TooltipController::dismiss)).child(|| {text().content("Dismiss");});
-                button().tonal().selected(long.get()).accessibility_label(format!("{} long message",label.get())).on_click(move ||long.set(!long.get())).child(|| {text().content("Long message");});
-            });gap(Dp(16.0));
-        }
-        let mut provider = tooltip_provider(if long.get() {"Add this item to your collection so you can find it again later. You can change the collection at any time."} else if rich {"Add this item to your collection so you can find it again later."} else {"Add to favorites"})
-            .controller(controller).variant(if rich {TooltipVariant::Rich} else {TooltipVariant::Plain})
-            .placement(TooltipPlacement::Above).persistent(rich && actions>0);
-        if headline {provider=provider.headline("Rich tooltip");}
-        if rich && actions==1 {
-            provider=provider.action_label("Learn more").on_action(move ||calls.set(calls.get()+1));
-        } else if rich && actions>1 {
-            provider=provider.actions(move || {
-                flow_row().item_spacing(Dp(8.0)).children(move || {
-                    for action in ["Learn more","Dismiss"] {
-                        button().text().accessibility_label(format!("{} {action}",label.get())).on_click(move || {calls.set(calls.get()+1);controller.with_mut(TooltipController::dismiss);}).child(move || {text().content(action);});
-                    }
-                });
-            });
-        }
-        provider.child(move || {
-            boxed().modifier(Modifier::new().fill_max_width().height(Dp(240.0))).children(move || {
-                tooltip_anchor().controller(controller).modifier(Modifier::new().align(Alignment::BottomCenter)).child(move || {
-                    if rich {
-                        button().text().accessibility_label(format!("{} anchor",label.get())).on_click(move ||controller.with_mut(TooltipController::show)).child(|| {text().content("More information");});
-                    } else {
-                        icon_button().standard().icon(filled::INFO_SVG).accessibility_label(format!("{} anchor",label.get())).on_click(move ||controller.with_mut(TooltipController::show));
-                    }
-                });
-            });
+    column()
+        .modifier(Modifier::new().fill_max_width().semantics(SemanticsArgs {
+            role: Some(Role::Group),
+            label: Some(format!("{name} tooltip preview")),
+            merge_descendants: true,
+            ..Default::default()
+        }))
+        .children(move || {
+            if controls.unwrap_or(false) {
+                flow_row()
+                    .item_spacing(Dp(8.0))
+                    .line_spacing(Dp(8.0))
+                    .children(move || {
+                        button().tonal().accessibility_label(format!("Show {}", label.get()))
+                            .on_click(move || controller.with_mut(TooltipController::show))
+                            .child(|| { text().content("Show"); });
+                        button().text().accessibility_label(format!("Dismiss {}", label.get()))
+                            .on_click(move || controller.with_mut(TooltipController::dismiss))
+                            .child(|| { text().content("Dismiss"); });
+                        button().tonal().selected(long.get())
+                            .accessibility_label(format!("{} long message", label.get()))
+                            .on_click(move || long.set(!long.get()))
+                            .child(|| { text().content("Long message"); });
+                    });
+                gap(Dp(16.0));
+            }
+            let message = if long.get() {
+                "Add this item to your collection so you can find it again later. You can change the collection at any time."
+            } else if rich {
+                "Add this item to your collection so you can find it again later."
+            } else {
+                "Add to favorites"
+            };
+            if rich {
+                tooltip_provider(message)
+                    .controller(controller)
+                    .variant(TooltipVariant::Rich)
+                    .headline("Rich tooltip")
+                    .action_label("Learn more")
+                    .on_action(move || calls.set(calls.get() + 1))
+                    .placement(TooltipPlacement::Above)
+                    .persistent(true)
+                    .child(move || {
+                        boxed()
+                            .modifier(Modifier::new().fill_max_width().height(Dp(240.0)))
+                            .children(move || {
+                                tooltip_anchor()
+                                    .controller(controller)
+                                    .modifier(Modifier::new().align(Alignment::BottomCenter))
+                                    .child(move || {
+                                        button()
+                                            .text()
+                                            .accessibility_label(format!("{} anchor", label.get()))
+                                            .on_click(move || controller.with_mut(TooltipController::show))
+                                            .child(|| { text().content("More information"); });
+                                    });
+                            });
+                    });
+            } else {
+                tooltip_provider(message)
+                    .controller(controller)
+                    .variant(TooltipVariant::Plain)
+                    .placement(TooltipPlacement::Above)
+                    .child(move || {
+                        boxed()
+                            .modifier(Modifier::new().fill_max_width().height(Dp(240.0)))
+                            .children(move || {
+                                tooltip_anchor()
+                                    .controller(controller)
+                                    .modifier(Modifier::new().align(Alignment::BottomCenter))
+                                    .child(move || {
+                                        icon_button()
+                                            .standard()
+                                            .icon(filled::INFO_SVG)
+                                            .accessibility_label(format!("{} anchor", label.get()))
+                                            .on_click(move || controller.with_mut(TooltipController::show));
+                                    });
+                            });
+                    });
+            }
+            if controls.unwrap_or(false) {
+                gap(Dp(16.0));
+                text().content(format!("{} actions: {}", label.get(), calls.get()))
+                    .style(type_style(14.0, 20.0));
+                text().content(format!(
+                    "{} visibility: {}",
+                    label.get(),
+                    if controller.with(TooltipController::is_open) { "Shown" } else { "Hidden" }
+                ))
+                .style(type_style(14.0, 20.0));
+            }
         });
-        if controls.unwrap_or(false) {
-            gap(Dp(16.0));
-            text().content(format!("{} actions: {}",label.get(),calls.get())).style(type_style(14.0,20.0));
-            text().content(format!("{} visibility: {}",label.get(),if controller.with(TooltipController::is_open) {"Shown"} else {"Hidden"})).style(type_style(14.0,20.0));
-        }
-    });
 }
 
 #[tessera]
@@ -666,33 +710,93 @@ fn tooltip_configuration(number: usize, headline: bool, actions: usize, x: Dp, y
         role:Some(Role::Group),label:Some(format!("Rich tooltip configuration {number}")),merge_descendants:true,..Default::default()
     })).children(move || {
         provide_context(||MinimumInteractiveComponentEnforcement {enabled:false},move || {
-            let mut provider=tooltip_provider("Rich tooltips bring attention to a particular element or feature that warrants a person’s focus.")
-                .controller(controller).variant(TooltipVariant::Rich).placement(TooltipPlacement::Below).persistent(actions>0).popup_modifier(watch(geometry,"popup").width(Dp(312.0)));
-            if headline {provider=provider.headline("Rich tooltip");}
-            if actions>0 {
-                provider=provider.actions(move || {
-                    row().children(move || {
-                        for action in 1..=actions {
-                            button().text().accessibility_label(format!("Tooltip configuration {number} action {action}")).on_click(move || {
-                                calls.set(calls.get()+1);controller.with_mut(TooltipController::dismiss);
-                            }).child(|| {text().content("Action");});
-                        }
-                    });
-                });
-            }
-            provider.child(move || {
-                boxed().modifier(Modifier::new().required_size(Dp(328.0),Dp(popup_height+56.0))).children(move || {
-                    tooltip_anchor().controller(controller).modifier(Modifier::new().offset(Dp(8.0),Dp(8.0)).size(Dp(312.0),Dp(36.0))).child(move || {
-                        boxed().modifier(Modifier::new().size(Dp(312.0),Dp(36.0))).children(move || {
-                            surface().style(scheme.surface_container_high.into()).shape(Shape::rounded_rectangle(Dp(12.0))).modifier(Modifier::new().required_size(Dp(24.0),Dp(24.0)).border_with_shape(Dp(1.0),scheme.on_surface,Shape::rounded_rectangle(Dp(12.0))))
-                                .accessibility_label(format!("Show rich tooltip configuration {number}")).on_click(move ||controller.with_mut(TooltipController::show)).child(move || {text().content(number.to_string()).style(type_style(14.0,20.0));});
+            if headline && actions > 0 {
+                tooltip_provider("Rich tooltips bring attention to a particular element or feature that warrants a person’s focus.")
+                    .controller(controller).variant(TooltipVariant::Rich).headline("Rich tooltip")
+                    .actions(move || {
+                        row().children(move || {
+                            for action in 1..=actions {
+                                button().text().accessibility_label(format!("Tooltip configuration {number} action {action}")).on_click(move || {
+                                    calls.set(calls.get()+1);controller.with_mut(TooltipController::dismiss);
+                                }).child(|| {text().content("Action");});
+                            }
+                        });
+                    })
+                    .placement(TooltipPlacement::Below).persistent(true).popup_modifier(watch(geometry,"popup").width(Dp(312.0)))
+                    .child(move || {
+                        boxed().modifier(Modifier::new().required_size(Dp(328.0),Dp(popup_height+56.0))).children(move || {
+                            tooltip_anchor().controller(controller).modifier(Modifier::new().offset(Dp(8.0),Dp(8.0)).size(Dp(312.0),Dp(36.0))).child(move || {
+                                boxed().modifier(Modifier::new().size(Dp(312.0),Dp(36.0))).children(move || {
+                                    surface().style(scheme.surface_container_high.into()).shape(Shape::rounded_rectangle(Dp(12.0))).modifier(Modifier::new().required_size(Dp(24.0),Dp(24.0)).border_with_shape(Dp(1.0),scheme.on_surface,Shape::rounded_rectangle(Dp(12.0))))
+                                        .accessibility_label(format!("Show rich tooltip configuration {number}")).on_click(move ||controller.with_mut(TooltipController::show)).child(move || {text().content(number.to_string()).style(type_style(14.0,20.0));});
+                                });
+                            });
+                            if calls.get()>0 && !controller.with(TooltipController::is_open) {
+                                text().content(format!("Tooltip configuration {number} actions: {}",calls.get())).style(type_style(14.0,20.0)).modifier(Modifier::new().offset(Dp(8.0),Dp(48.0)));
+                            }
                         });
                     });
-                    if calls.get()>0 && !controller.with(TooltipController::is_open) {
-                        text().content(format!("Tooltip configuration {number} actions: {}",calls.get())).style(type_style(14.0,20.0)).modifier(Modifier::new().offset(Dp(8.0),Dp(48.0)));
-                    }
-                });
-            });
+            } else if headline {
+                tooltip_provider("Rich tooltips bring attention to a particular element or feature that warrants a person’s focus.")
+                    .controller(controller).variant(TooltipVariant::Rich).headline("Rich tooltip")
+                    .placement(TooltipPlacement::Below).persistent(false).popup_modifier(watch(geometry,"popup").width(Dp(312.0)))
+                    .child(move || {
+                        boxed().modifier(Modifier::new().required_size(Dp(328.0),Dp(popup_height+56.0))).children(move || {
+                            tooltip_anchor().controller(controller).modifier(Modifier::new().offset(Dp(8.0),Dp(8.0)).size(Dp(312.0),Dp(36.0))).child(move || {
+                                boxed().modifier(Modifier::new().size(Dp(312.0),Dp(36.0))).children(move || {
+                                    surface().style(scheme.surface_container_high.into()).shape(Shape::rounded_rectangle(Dp(12.0))).modifier(Modifier::new().required_size(Dp(24.0),Dp(24.0)).border_with_shape(Dp(1.0),scheme.on_surface,Shape::rounded_rectangle(Dp(12.0))))
+                                        .accessibility_label(format!("Show rich tooltip configuration {number}")).on_click(move ||controller.with_mut(TooltipController::show)).child(move || {text().content(number.to_string()).style(type_style(14.0,20.0));});
+                                });
+                            });
+                            if calls.get()>0 && !controller.with(TooltipController::is_open) {
+                                text().content(format!("Tooltip configuration {number} actions: {}",calls.get())).style(type_style(14.0,20.0)).modifier(Modifier::new().offset(Dp(8.0),Dp(48.0)));
+                            }
+                        });
+                    });
+            } else if actions > 0 {
+                tooltip_provider("Rich tooltips bring attention to a particular element or feature that warrants a person’s focus.")
+                    .controller(controller).variant(TooltipVariant::Rich)
+                    .actions(move || {
+                        row().children(move || {
+                            for action in 1..=actions {
+                                button().text().accessibility_label(format!("Tooltip configuration {number} action {action}")).on_click(move || {
+                                    calls.set(calls.get()+1);controller.with_mut(TooltipController::dismiss);
+                                }).child(|| {text().content("Action");});
+                            }
+                        });
+                    })
+                    .placement(TooltipPlacement::Below).persistent(true).popup_modifier(watch(geometry,"popup").width(Dp(312.0)))
+                    .child(move || {
+                        boxed().modifier(Modifier::new().required_size(Dp(328.0),Dp(popup_height+56.0))).children(move || {
+                            tooltip_anchor().controller(controller).modifier(Modifier::new().offset(Dp(8.0),Dp(8.0)).size(Dp(312.0),Dp(36.0))).child(move || {
+                                boxed().modifier(Modifier::new().size(Dp(312.0),Dp(36.0))).children(move || {
+                                    surface().style(scheme.surface_container_high.into()).shape(Shape::rounded_rectangle(Dp(12.0))).modifier(Modifier::new().required_size(Dp(24.0),Dp(24.0)).border_with_shape(Dp(1.0),scheme.on_surface,Shape::rounded_rectangle(Dp(12.0))))
+                                        .accessibility_label(format!("Show rich tooltip configuration {number}")).on_click(move ||controller.with_mut(TooltipController::show)).child(move || {text().content(number.to_string()).style(type_style(14.0,20.0));});
+                                });
+                            });
+                            if calls.get()>0 && !controller.with(TooltipController::is_open) {
+                                text().content(format!("Tooltip configuration {number} actions: {}",calls.get())).style(type_style(14.0,20.0)).modifier(Modifier::new().offset(Dp(8.0),Dp(48.0)));
+                            }
+                        });
+                    });
+            } else {
+                tooltip_provider("Rich tooltips bring attention to a particular element or feature that warrants a person’s focus.")
+                    .controller(controller).variant(TooltipVariant::Rich)
+                    .placement(TooltipPlacement::Below).persistent(false).popup_modifier(watch(geometry,"popup").width(Dp(312.0)))
+                    .child(move || {
+                        boxed().modifier(Modifier::new().required_size(Dp(328.0),Dp(popup_height+56.0))).children(move || {
+                            tooltip_anchor().controller(controller).modifier(Modifier::new().offset(Dp(8.0),Dp(8.0)).size(Dp(312.0),Dp(36.0))).child(move || {
+                                boxed().modifier(Modifier::new().size(Dp(312.0),Dp(36.0))).children(move || {
+                                    surface().style(scheme.surface_container_high.into()).shape(Shape::rounded_rectangle(Dp(12.0))).modifier(Modifier::new().required_size(Dp(24.0),Dp(24.0)).border_with_shape(Dp(1.0),scheme.on_surface,Shape::rounded_rectangle(Dp(12.0))))
+                                        .accessibility_label(format!("Show rich tooltip configuration {number}")).on_click(move ||controller.with_mut(TooltipController::show)).child(move || {text().content(number.to_string()).style(type_style(14.0,20.0));});
+                                });
+                            });
+                            if calls.get()>0 && !controller.with(TooltipController::is_open) {
+                                text().content(format!("Tooltip configuration {number} actions: {}",calls.get())).style(type_style(14.0,20.0)).modifier(Modifier::new().offset(Dp(8.0),Dp(48.0)));
+                            }
+                        });
+                    });
+            }
         });
     });
 }
@@ -757,21 +861,17 @@ fn tooltip_figure(rich: bool, measurements: bool, color_roles: Option<bool>) {
         .children(move || {
             tooltip_grid(Dp(figure_width),Dp(figure_height));
             provide_context(|| MinimumInteractiveComponentEnforcement { enabled: false }, move || {
-            let mut tooltip = tooltip_provider(if rich {
+            let message = if rich {
                 "Rich tooltips bring attention to a particular element or feature that warrants a person's focus."
             } else {
                 "Plain tooltip"
-            })
-            .controller(controller)
-            .variant(if rich {
-                TooltipVariant::Rich
-            } else {
-                TooltipVariant::Plain
-            })
-            .popup_modifier(if rich { watch(geometry, "popup").width(Dp(312.0)) } else { watch(geometry, "popup") })
-            .placement(TooltipPlacement::Above);
+            };
+            let popup_modifier = if rich { watch(geometry, "popup").width(Dp(312.0)) } else { watch(geometry, "popup") };
             if rich {
-                tooltip = tooltip
+                tooltip_provider(message)
+                    .controller(controller)
+                    .variant(TooltipVariant::Rich)
+                    .popup_modifier(popup_modifier)
                     .headline("Rich tooltip")
                     .actions(move || {
                         button()
@@ -789,9 +889,9 @@ fn tooltip_figure(rich: bool, measurements: bool, color_roles: Option<bool>) {
                                     .typography;
                                 text().content("Action").style(typography.label_large);
                             });
-                    });
-            }
-            tooltip.child(move || {
+                    })
+                    .placement(TooltipPlacement::Above)
+                    .child(move || {
                 boxed()
                     .modifier(Modifier::new().fill_max_size())
                     .children(move || {
@@ -805,6 +905,27 @@ fn tooltip_figure(rich: bool, measurements: bool, color_roles: Option<bool>) {
                             .child(|| { spacer().modifier(Modifier::new().size(Dp(1.0), Dp(1.0))); });
                     });
             });
+            } else {
+                tooltip_provider(message)
+                    .controller(controller)
+                    .variant(TooltipVariant::Plain)
+                    .popup_modifier(popup_modifier)
+                    .placement(TooltipPlacement::Above)
+                    .child(move || {
+                boxed()
+                    .modifier(Modifier::new().fill_max_size())
+                    .children(move || {
+                        tooltip_anchor()
+                            .controller(controller)
+                            .modifier(
+                                watch(geometry, "anchor")
+                                    .align(Alignment::TopCenter)
+                                    .offset(Dp(0.0), Dp((figure_height + popup_height) * 0.5 + 4.0)),
+                            )
+                            .child(|| { spacer().modifier(Modifier::new().size(Dp(1.0), Dp(1.0))); });
+                    });
+            });
+            }
             });
             tooltip_annotations(geometry, rich, measurements).color_roles(color_roles);
         });

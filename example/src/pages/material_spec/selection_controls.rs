@@ -147,22 +147,24 @@ pub(super) fn selection_control(
     };
     let mixed = remember(|| indeterminate);
     if is_switch {
-        let mut control = switch()
+        let show_icon = icons == 2 || (icons == 1 && checked.get());
+        switch()
             .focus_requester_optional(focus_requester)
             .checked(checked.get())
             .enabled(enabled)
             .accessibility_label(label)
-            .on_toggle(move |value| checked.set(value));
-        if icons == 2 || (icons == 1 && checked.get()) {
-            control = control.child(move || {
-                icon().painter(if checked.get() {
-                    filled::CHECK_SVG
-                } else {
-                    filled::CLOSE_SVG
-                });
+            .on_toggle(move |value| checked.set(value))
+            .child_optional(if show_icon {
+                Some(RenderSlot::new(move || {
+                    icon().painter(if checked.get() {
+                        filled::CHECK_SVG
+                    } else {
+                        filled::CLOSE_SVG
+                    });
+                }))
+            } else {
+                None
             });
-        }
-        drop(control);
     } else {
         checkbox()
             .focus_requester_optional(focus_requester)
@@ -531,21 +533,25 @@ fn measurement_table(is_switch: bool) {
             ("Icon", "Size (selected)", "16dp", 1),
             ("Icon", "Size (unselected)", "16dp", 1),
         ];
-        let mut cells = Vec::new();
-        for (index, (element, attribute, value, span)) in rows.into_iter().enumerate() {
-            for (column, text) in [element, attribute, value].into_iter().enumerate() {
-                if column == 0 && text.is_empty() {
-                    continue;
-                }
-                cells.push(tessera_components::text_table::TextTableCell {
-                    text: text.into(),
-                    row: index + 1,
-                    column,
-                    row_span: if column == 0 { span } else { 1 },
-                    ..Default::default()
-                });
-            }
-        }
+        let cells = rows
+            .into_iter()
+            .enumerate()
+            .flat_map(|(index, (element, attribute, value, span))| {
+                [element, attribute, value]
+                    .into_iter()
+                    .enumerate()
+                    .filter(|(column, text)| *column != 0 || !text.is_empty())
+                    .map(
+                        move |(column, text)| tessera_components::text_table::TextTableCell {
+                            text: text.into(),
+                            row: index + 1,
+                            column,
+                            row_span: if column == 0 { span } else { 1 },
+                            ..Default::default()
+                        },
+                    )
+            })
+            .collect::<Vec<_>>();
         super::spec_table_cells(
             ["Element", "Attribute", "Value"]
                 .map(str::to_owned)

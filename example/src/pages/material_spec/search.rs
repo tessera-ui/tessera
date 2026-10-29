@@ -40,7 +40,7 @@ mod layout_tests;
 #[tessera]
 pub(super) fn search_spec() {
     article("Search", "Search helps people find information quickly", vec![
-        SpecSection { title: "Variants", content: RenderSlot::new(|| { live_search(false, false, false); gap(Dp(16.0)); prose("When a person executes a search, results appear in a list below the search bar."); }) },
+        SpecSection { title: "Variants", content: RenderSlot::new(variants) },
         SpecSection { title: "Configurations", content: RenderSlot::new(configurations) },
         SpecSection { title: "Tokens & specs", content: RenderSlot::new(tokens) },
         SpecSection { title: "Anatomy", content: RenderSlot::new(anatomy) },
@@ -48,9 +48,10 @@ pub(super) fn search_spec() {
         SpecSection { title: "States", content: RenderSlot::new(states) },
         SpecSection { title: "Measurements", content: RenderSlot::new(measurements) },
     ]).pages(vec![
-        ArticlePage { title: "Overview", intro: Some(RenderSlot::new(|| { prose("Search provides a prominent entry point for finding messages, files and other information. A focused search can offer suggestions before typing, and relevant results as a query is entered."); gap(Dp(32.0)); live_search(false,false,false); })), sections: vec![
-            SpecSection { title: "Usage", content: RenderSlot::new(|| { prose("Use search when people manage large collections of items. Keep its entry point close to the searchable content."); }) },
-            SpecSection { title: "What's new", content: RenderSlot::new(|| { prose("The contained style keeps the search bar's rounded container visible in both unfocused and focused states. Focus expands its margins from 24dp to 12dp and reveals a separate results surface."); gap(Dp(24.0)); live_search(true,false,false); }) },
+        ArticlePage { title: "Overview", intro: Some(RenderSlot::new(overview_intro)), sections: vec![
+            SpecSection { title: "Availability & resources", content: RenderSlot::new(availability) },
+            SpecSection { title: "M3 Expressive update", content: RenderSlot::new(expressive_update) },
+            SpecSection { title: "Differences from M2 to M3 baseline", content: RenderSlot::new(differences) },
         ] },
         ArticlePage { title: "Guidelines", intro: None, sections: vec![
             SpecSection { title: "Usage", content: RenderSlot::new(|| { prose("Use search for products with many items to manage, such as messages or files. Keep the entry point easy to find."); gap(Dp(24.0)); subheading("Different ways to search".into()); prose("A search bar targets the current view. A search app bar makes global search a primary function. An icon button works when search is a secondary action."); gap(Dp(24.0)); live_search(false,false,false); gap(Dp(24.0)); subheading("Search suggestions & results".into()); prose("Use list items for suggestions and results. Add relevant leading icons, category labels, avatars or filter chips. Use gaps to separate related groups."); }) },
@@ -78,17 +79,193 @@ fn prose(#[prop(into)] value: String) {
 }
 
 #[tessera]
-fn configurations() {
-    subheading("Style".into());
-    prose(
-        "Contained search preserves a rounded filled search bar above the results. Divided search is the baseline treatment, with a divider between the field and results. Use the contained style for new designs.",
+fn caption(#[prop(into)] value: String) {
+    let scheme = use_context::<MaterialTheme>().unwrap().get().color_scheme;
+    text()
+        .content(value)
+        .color(scheme.on_surface_variant)
+        .style(type_style(14.0, 20.0));
+}
+
+#[tessera]
+fn badge(number: usize) {
+    boxed()
+        .alignment(Alignment::Center)
+        .modifier(
+            Modifier::new()
+                .size(Dp(24.0), Dp(24.0))
+                .background_with_shape(INK, Shape::Ellipse),
+        )
+        .children(move || {
+            text()
+                .content(number.to_string())
+                .style(type_style(12.0, 16.0))
+                .color(Color::WHITE);
+        });
+}
+
+#[tessera]
+fn legend(number: usize, #[prop(into)] label: String) {
+    row()
+        .cross_axis_alignment(CrossAxisAlignment::Center)
+        .modifier(Modifier::new().fill_max_width().height(Dp(32.0)))
+        .children(move || {
+            badge(number);
+            spacer().modifier(Modifier::new().width(Dp(12.0)));
+            text().content(label.clone()).style(type_style(16.0, 24.0));
+        });
+}
+
+#[tessera]
+fn bullets(items: Vec<String>) {
+    column().children(move || {
+        for item in items.clone() {
+            text()
+                .content(format!("•  {item}"))
+                .style(type_style(16.0, 24.0));
+            gap(Dp(8.0));
+        }
+    });
+}
+
+#[tessera]
+fn variants() {
+    live_search(true, false, false);
+    gap(Dp(16.0));
+    caption("When a person executes a search, results appear in a list below the search bar");
+    gap(Dp(32.0));
+    spec_table(
+        vec!["Variant".into(), "M3".into(), "M3 Expressive".into()],
+        vec![vec![
+            "Search".into(),
+            "Available".into(),
+            "Available".into(),
+        ]],
+    );
+}
+
+#[tessera]
+fn overview_intro() {
+    bullets(vec![
+        "Use search for navigating a product with queries".into(),
+        "A search bar can include a leading search icon, hinted search text, and optional trailing icons".into(),
+        "Search can display suggested keywords or phrases as a person types".into(),
+        "A search bar displays search suggestions or results in a list".into(),
+        "Use a search app bar to provide an emphasized, global entry-point".into(),
+    ]);
+    gap(Dp(32.0));
+    live_search(false, false, false);
+    gap(Dp(16.0));
+    caption("When inputting text, search suggestions or results appear below the search bar");
+}
+
+#[tessera]
+fn availability() {
+    spec_table(
+        vec!["Type".into(), "Resource".into(), "Status".into()],
+        vec![
+            vec![
+                "Design".into(),
+                "Design Kit (Figma)".into(),
+                "Available".into(),
+            ],
+            vec![
+                "Implementation".into(),
+                "Android Views (MDC-Android)".into(),
+                "Available".into(),
+            ],
+            vec![
+                "Implementation".into(),
+                "Android Views (MDC-Android): Expressive".into(),
+                "Unavailable".into(),
+            ],
+            vec![
+                "Implementation".into(),
+                "Flutter".into(),
+                "Available".into(),
+            ],
+            vec![
+                "Implementation".into(),
+                "Jetpack Compose".into(),
+                "Available".into(),
+            ],
+            vec![
+                "Implementation".into(),
+                "Jetpack Compose: Expressive".into(),
+                "Available".into(),
+            ],
+            vec!["Implementation".into(), "Web".into(), "Unavailable".into()],
+            vec![
+                "Implementation".into(),
+                "Web: Expressive".into(),
+                "Unavailable".into(),
+            ],
+        ],
     );
     gap(Dp(24.0));
+    prose(
+        "Tessera examples on this page use the native search_bar and docked_search_bar components. The contained style keeps a filled container above the results; the divided style is the baseline treatment.",
+    );
+}
+
+#[tessera]
+fn expressive_update() {
+    prose(
+        "Search has a new visual style, motion, and more flexibility for trailing icons. The search bar and search view are now collectively named search.",
+    );
+    gap(Dp(24.0));
+    subheading("February 2025".into());
+    bullets(vec![
+        "Naming: Search bar and search view are now collectively named search".into(),
+        "Configurations: Styles: Search can be contained (recommended) or divided; gaps can separate results into groups".into(),
+        "Motion: The search bar grows wider when focused".into(),
+        "Supported platforms: Jetpack Compose".into(),
+    ]);
+    gap(Dp(24.0));
     live_search(true, false, false);
+    gap(Dp(16.0));
+    caption("The contained search style features a persistent, filled search container");
+}
+
+#[tessera]
+fn differences() {
+    bullets(vec![
+        "Color: New color mappings and compatibility with dynamic color".into(),
+        "Elevation: Lower elevation and no shadow by default".into(),
+        "Name: Search was formerly known as open search bar".into(),
+        "Variants: Two official variants of search components: search bar and search view".into(),
+    ]);
+    gap(Dp(24.0));
+    live_search(true, false, false);
+    gap(Dp(16.0));
+    caption("M3 search bars are rounded, use tonal surface, and support dynamic color");
+}
+#[tessera]
+fn configurations() {
+    subheading("Style".into());
+    prose("Search comes in two styles:");
+    gap(Dp(16.0));
+    bullets(vec![
+        "Contained: Has an expressive look and feel. It uses a filled container to separate a search bar from a list of suggestions or results".into(),
+        "Divided (baseline): Doesn’t have the latest visual style, motion, or flexibility".into(),
+    ]);
+    gap(Dp(24.0));
+    live_search(true, false, false);
+    gap(Dp(16.0));
+    caption(
+        "The contained style has a persistent, filled container, expressive motion, and rounded shape",
+    );
     gap(Dp(32.0));
     live_search(true, false, true);
+    gap(Dp(16.0));
+    caption(
+        "The divided (baseline) style uses a divider to separate the search bar from suggestions and results",
+    );
     gap(Dp(32.0));
     subheading("Layout".into());
+    prose(
+        "Search suggestions and results appear in customizable lists, with two layout options: full-screen and docked.",
+    );
     gap(Dp(24.0));
     flow_row()
         .item_spacing(Dp(24.0))
@@ -99,6 +276,35 @@ fn configurations() {
             configuration_layout(true, true);
             configuration_layout(false, true);
         });
+    gap(Dp(32.0));
+    spec_table(
+        vec![
+            "Category".into(),
+            "Configuration".into(),
+            "M3".into(),
+            "M3 Expressive".into(),
+        ],
+        vec![
+            vec![
+                "Style".into(),
+                "Contained".into(),
+                "--".into(),
+                "Available".into(),
+            ],
+            vec![
+                "Style".into(),
+                "Divided".into(),
+                "Available".into(),
+                "Not recommended. Use contained.".into(),
+            ],
+            vec![
+                "Layout".into(),
+                "Docked, full-screen".into(),
+                "Available".into(),
+                "Available".into(),
+            ],
+        ],
+    );
 }
 
 #[tessera]
@@ -576,8 +782,21 @@ fn layout_examples() {
 fn anatomy() {
     search_figure(false);
     gap(Dp(16.0));
-    prose(
-        "1  Search bar container    2  Leading icon    3  Supporting text\n4  Trailing icon or avatar    5  Input text    6  Suggestions or results container",
+    column().children(|| {
+        for (number, label) in [
+            (1_usize, "Search bar container"),
+            (2, "Leading icon"),
+            (3, "Hinted search text"),
+            (4, "Trailing icon or avatar"),
+            (5, "Input text"),
+            (6, "Suggestions or results container"),
+        ] {
+            legend(number, label);
+        }
+    });
+    gap(Dp(16.0));
+    caption(
+        "Search bar anatomy: container, leading icon, hinted text, trailing actions, input text, and the suggestions or results container",
     );
     gap(Dp(32.0));
     subheading("Examples".into());
@@ -1001,6 +1220,53 @@ fn measurements() {
 
 #[tessera]
 fn tokens() {
+    prose(
+        "Use the token table to compare the search bar set with the search view set. The search bar set only contains tokens for the unfocused search bar. The search view set contains all other tokens when interacting with search, including all styles and layouts.",
+    );
+    gap(Dp(24.0));
+    spec_table(
+        vec!["Token".into(), "Value".into()],
+        vec![
+            vec![
+                "md.comp.search-bar.container.color".into(),
+                "Surface container high".into(),
+            ],
+            vec![
+                "md.comp.search-bar.container.shape".into(),
+                "Full (28dp radius)".into(),
+            ],
+            vec!["md.comp.search-bar.container.height".into(), "56dp".into()],
+            vec![
+                "md.comp.search-bar.input-text.color".into(),
+                "On surface".into(),
+            ],
+            vec![
+                "md.comp.search-bar.leading-icon.color".into(),
+                "On surface variant".into(),
+            ],
+            vec![
+                "md.comp.search-bar.trailing-icon.color".into(),
+                "On surface variant".into(),
+            ],
+            vec![
+                "md.comp.search-view.container.color".into(),
+                "Surface container low".into(),
+            ],
+            vec![
+                "md.comp.search-view.divider.color".into(),
+                "Outline variant".into(),
+            ],
+            vec![
+                "md.comp.search-view.header.color".into(),
+                "On surface variant".into(),
+            ],
+            vec![
+                "md.comp.search-view.list-item.label.color".into(),
+                "On surface".into(),
+            ],
+        ],
+    );
+    gap(Dp(24.0));
     spec_table(
         vec!["Element".into(), "Attribute".into(), "Value".into()],
         vec![

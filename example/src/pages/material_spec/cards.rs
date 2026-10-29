@@ -29,6 +29,10 @@ use super::{
     gap, panel, spec_table, subheading, type_style,
 };
 
+#[cfg(all(test, not(target_family = "wasm")))]
+#[path = "cards_figures_tests.rs"]
+mod figures_tests;
+
 const VARIANTS: [CardVariant; 3] = [
     CardVariant::Elevated,
     CardVariant::Filled,
@@ -77,7 +81,7 @@ pub(super) fn cards_spec() {
             },
         ],
     ).pages(vec![
-        ArticlePage {title:"Overview",intro:Some(RenderSlot::new(card_variants)),sections:vec![
+        ArticlePage {title:"Overview",intro:Some(RenderSlot::new(|| {prose("Cards contain related elements about a single subject. They can hold images, headlines, supporting text, buttons and lists, and their layout adapts to their contents.");gap(Dp(24.0));card_variants();})),sections:vec![
             SpecSection {title:"Differences from M2",content:RenderSlot::new(|| {prose("Cards use dynamic color mappings and lower resting elevation. Choose elevated, filled or outlined containment according to the visual emphasis needed.");gap(Dp(24.0));card_variants();})},
         ]},
         ArticlePage {title:"Guidelines",intro:None,sections:vec![
@@ -143,7 +147,7 @@ fn tokens() {
     flow_row().item_spacing(Dp(8.0)).children(move || {
         for style in VARIANTS {
             button()
-                .text()
+                .selected(variant.get() == style)
                 .accessibility_label(format!("{} card tokens", name(style)))
                 .on_click(move || variant.set(style))
                 .child(move || {
@@ -152,23 +156,103 @@ fn tokens() {
         }
     });
     gap(Dp(24.0));
-    let (container, outline, elevation, hover, dragged) = match variant.get() {
-        CardVariant::Elevated => ("Surface container low", "None", "1dp", "2dp", "4dp"),
-        CardVariant::Filled => ("Surface container highest", "None", "0dp", "1dp", "3dp"),
-        CardVariant::Outlined => ("Surface", "Outline variant · 1dp", "0dp", "1dp", "3dp"),
+    let (container, outline, shadow, tint, resting, hover, dragged) = match variant.get() {
+        CardVariant::Elevated => (
+            "Surface container low",
+            "None",
+            "#000000",
+            "Primary",
+            "1dp",
+            "2dp",
+            "4dp",
+        ),
+        CardVariant::Filled => (
+            "Surface container highest",
+            "None",
+            "None",
+            "None",
+            "0dp",
+            "1dp",
+            "3dp",
+        ),
+        CardVariant::Outlined => (
+            "Surface",
+            "Outline variant · 1dp",
+            "None",
+            "None",
+            "0dp",
+            "1dp",
+            "3dp",
+        ),
     };
+    subheading("Element tokens".to_owned());
+    gap(Dp(16.0));
     spec_table(
-        vec!["Element".into(), "Token value".into()],
+        vec!["Element".into(), "Token".into(), "Value".into()],
         vec![
-            vec!["Container".into(), container.into()],
-            vec!["Outline".into(), outline.into()],
-            vec!["Shape".into(), "12dp corners".into()],
             vec![
-                "Resting / focused / pressed elevation".into(),
-                elevation.into(),
+                "Container".into(),
+                "Container color".into(),
+                container.into(),
             ],
-            vec!["Hovered elevation".into(), hover.into()],
-            vec!["Dragged elevation".into(), dragged.into()],
+            vec![
+                "Outline".into(),
+                "Outline color and width".into(),
+                outline.into(),
+            ],
+            vec![
+                "Shape".into(),
+                "Container shape".into(),
+                "12dp corners".into(),
+            ],
+            vec!["Shadow".into(), "Shadow color".into(), shadow.into()],
+            vec![
+                "Tint".into(),
+                "Surface tint layer color".into(),
+                tint.into(),
+            ],
+            vec![
+                "Label".into(),
+                "Label text color".into(),
+                "On surface".into(),
+            ],
+            vec![
+                "Icon".into(),
+                "Icon color and size".into(),
+                "On surface variant · 24dp".into(),
+            ],
+        ],
+    );
+    gap(Dp(32.0));
+    subheading("State tokens".to_owned());
+    gap(Dp(16.0));
+    spec_table(
+        vec!["State".into(), "Change".into()],
+        vec![
+            vec![
+                "Enabled".into(),
+                format!("{resting} resting elevation with the element tokens above"),
+            ],
+            vec![
+                "Disabled".into(),
+                "Content at 38% with the shadow removed".into(),
+            ],
+            vec![
+                "Hovered".into(),
+                format!("{hover} elevation and an 8% state layer"),
+            ],
+            vec![
+                "Focused".into(),
+                format!("3dp focus indicator at {resting} elevation"),
+            ],
+            vec![
+                "Pressed (ripple)".into(),
+                "10% state layer with the ripple".into(),
+            ],
+            vec![
+                "Dragged".into(),
+                format!("{dragged} elevation without a state layer"),
+            ],
         ],
     );
 }

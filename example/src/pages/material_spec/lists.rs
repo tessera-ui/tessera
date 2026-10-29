@@ -32,6 +32,10 @@ use super::{
     gap, panel, spec_table, subheading, type_style,
 };
 
+#[cfg(all(test, not(target_family = "wasm")))]
+#[path = "lists_figures_tests.rs"]
+mod figures_tests;
+
 const ITEMS: [&str; 3] = ["Notes", "Projects", "Archive"];
 
 #[derive(Clone, Copy, PartialEq)]
@@ -75,6 +79,10 @@ pub(super) fn lists_spec() {
             SpecSection {
                 title: "Measurements",
                 content: RenderSlot::new(measurements),
+            },
+            SpecSection {
+                title: "List (baseline)",
+                content: RenderSlot::new(baseline),
             },
         ],
     ).pages(vec![
@@ -180,7 +188,24 @@ fn item(
         ListItemSelectionMode::Multiple => state.checked.get()[index],
         ListItemSelectionMode::Action => false,
     };
-    let mut control = list_item()
+    let trailing = if multi_action {
+        let label = label.clone();
+        Some(RenderSlot::new(move || {
+            icon_button()
+                .standard()
+                .icon(filled::MORE_VERT_SVG)
+                .enabled(enabled)
+                .accessibility_label(format!("{label}: {} more actions", ITEMS[index]))
+                .on_click(move || state.secondary.set(state.secondary.get() + 1));
+        }))
+    } else if selected {
+        Some(RenderSlot::new(|| {
+            icon().painter(filled::CHECK_SVG);
+        }))
+    } else {
+        None
+    };
+    list_item()
         .headline(ITEMS[index])
         .supporting_text("Folder and related documents")
         .accessibility_label(format!("{label}: {}", ITEMS[index]))
@@ -206,22 +231,8 @@ fn item(
         })
         .leading(|| {
             icon().painter(filled::FOLDER_SVG);
-        });
-    if multi_action {
-        control = control.trailing(move || {
-            icon_button()
-                .standard()
-                .icon(filled::MORE_VERT_SVG)
-                .enabled(enabled)
-                .accessibility_label(format!("{label}: {} more actions", ITEMS[index]))
-                .on_click(move || state.secondary.set(state.secondary.get() + 1));
-        });
-    } else if selected {
-        control = control.trailing(|| {
-            icon().painter(filled::CHECK_SVG);
-        });
-    }
-    drop(control);
+        })
+        .trailing_optional(trailing);
 }
 
 #[tessera]
@@ -487,6 +498,64 @@ fn measurements() {
             vec!["Unselected inner / outer corners".into(), "4 / 16dp".into()],
             vec!["Selected corner radius".into(), "16dp".into()],
             vec!["Minimum interactive target".into(), "48 × 48dp".into()],
+        ],
+    );
+}
+
+#[tessera]
+fn baseline() {
+    prose(
+        "The baseline list keeps rows flush with their container instead of using segmented shapes and gaps. Content determines a one-, two- or three-line height, and dividers stay optional.",
+    );
+    gap(Dp(24.0));
+    panel(RenderSlot::new(|| {
+        column()
+            .modifier(Modifier::new().fill_max_width())
+            .children(|| {
+                list_item()
+                    .headline("Label text")
+                    .supporting_text("Supporting text")
+                    .accessibility_label("Baseline two-line row")
+                    .leading(|| {
+                        icon().vector(filled::FOLDER_SVG);
+                    });
+                horizontal_divider();
+                list_item()
+                    .headline("Label text")
+                    .accessibility_label("Baseline one-line row")
+                    .leading(|| {
+                        icon().vector(filled::FOLDER_SVG);
+                    });
+                horizontal_divider();
+                list_item()
+                    .headline("Label text")
+                    .supporting_text("Supporting text that wraps onto another line")
+                    .accessibility_label("Baseline three-line row")
+                    .leading(|| {
+                        icon().vector(filled::FOLDER_SVG);
+                    });
+            });
+    }));
+    gap(Dp(24.0));
+    spec_table(
+        vec!["Attribute".into(), "Baseline value".into()],
+        vec![
+            vec![
+                "Row container".into(),
+                "Surface without segmented corners".into(),
+            ],
+            vec![
+                "Between rows".into(),
+                "0dp, with an optional outline variant divider".into(),
+            ],
+            vec![
+                "One / two / three-line height".into(),
+                "56 / 72 / 88dp".into(),
+            ],
+            vec![
+                "Horizontal content padding".into(),
+                "16dp leading and trailing".into(),
+            ],
         ],
     );
 }
