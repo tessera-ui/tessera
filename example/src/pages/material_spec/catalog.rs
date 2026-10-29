@@ -330,12 +330,16 @@ pub(super) fn component_pages() {
                                 super::text_fields::text_fields_spec();
                             } else if component.demo == 4 {
                                 super::tooltips::tooltips_spec();
-                            } else if component.demo == 31 || component.demo == 32 {
-                                super::navigation::navigation_spec(component.demo == 32);
+                            } else if component.demo == 31 {
+                                super::navigation_bar::navigation_bar_spec();
+                            } else if component.demo == 32 {
+                                super::navigation::navigation_spec(true);
                             } else if component.demo == 21 {
                                 super::tabs::tabs_spec();
-                            } else if component.demo == 6 || component.demo == 7 {
-                                super::activity::activity_spec(component.demo == 6);
+                            } else if component.demo == 6 {
+                                super::loading_indicator::loading_indicator_spec();
+                            } else if component.demo == 7 {
+                                super::progress_indicators::progress_indicators_spec();
                             } else if component.demo == 12 {
                                 super::badges::badges_spec();
                             } else if component.demo == 18 {
