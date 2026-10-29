@@ -284,11 +284,9 @@ pub(super) fn component_pages() {
     if let Some(index) = selected.get() {
         let component = COMPONENTS[index];
         let route = ArticleRoute {
-            initial_page: if overview_request.get() == Some(index) {
-                "Overview"
-            } else {
-                "Specs"
-            },
+            // Component pages open on Overview, matching the landing article of
+            // the official Material Design 3 component pages.
+            initial_page: "Overview",
             previous: index.checked_sub(1).map(|index| ArticleDestination {
                 title: COMPONENTS[index].title,
                 on_open: previous_article,
@@ -345,9 +343,11 @@ pub(super) fn component_pages() {
                             } else if component.demo == 22 {
                                 super::split_buttons::split_buttons_spec();
                             } else if component.demo == 8 {
-                                super::fab_menu::fab_menu_spec();
-                            } else if component.demo == 9 || component.demo == 19 {
-                                super::floating_actions::floating_actions_spec(component.demo == 9);
+                                super::fab_menus::fab_menu_spec();
+                            } else if component.demo == 9 {
+                                super::extended_fabs::extended_fabs_spec();
+                            } else if component.demo == 19 {
+                                super::floating_actions::floating_actions_spec();
                             } else if component.demo == 28 {
                                 super::date_pickers::date_pickers_spec();
                             } else if component.demo == 30 {
@@ -1094,9 +1094,9 @@ mod tests {
             Role::Button,
         );
         assert_eq!(
-            tab(&renderer, "Specs").is_selected(),
+            tab(&renderer, "Overview").is_selected(),
             Some(true),
-            "a fresh directory entry keeps its default page"
+            "a fresh directory entry opens on the Overview article"
         );
     }
 
