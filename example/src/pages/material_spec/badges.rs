@@ -38,7 +38,7 @@ use super::{
 pub(super) fn badges_spec() {
     article(
         "Badges",
-        "Highlight new activity or unread counts on navigation destinations and icons.",
+        "Badges show notifications, counts, or status information on navigation items and icons.",
         vec![
             SpecSection {
                 title: "Tokens & specs",
@@ -54,23 +54,23 @@ pub(super) fn badges_spec() {
             },
             SpecSection {
                 title: "Configuration",
-                content: RenderSlot::new(configuration),
+                content: RenderSlot::new(configuration_article),
             },
         ],
     )
     .pages(vec![
-        ArticlePage {title:"Overview",intro:Some(RenderSlot::new(badge_variants)),sections:vec![SpecSection{title:"Differences from M2",content:RenderSlot::new(|| {prose("Badges use updated color roles and support dynamic color. Keep the default error and on-error mappings.");gap(Dp(24.0));badge_figure(false,false);})}]},
+        ArticlePage {title:"Overview",intro:Some(RenderSlot::new(overview_article)),sections:vec![]},
         ArticlePage {title:"Guidelines",intro:Some(RenderSlot::new(badge_navigation)),sections:vec![
-            SpecSection{title:"Usage",content:RenderSlot::new(|| {badge_variants();gap(Dp(24.0));subheading("With other components".into());prose("Anchor badges to navigation destinations, app bars or tabs. Hide unread badges after their destination is selected.");gap(Dp(24.0));readable_badge_navigation();})},
-            SpecSection{title:"Anatomy",content:RenderSlot::new(|| {badge_figure(true,false);gap(Dp(24.0));badge_figure(false,false);prose("Small badge: container. Large badge: 1 Container, 2 Label text.");})},
+            SpecSection{title:"Usage",content:RenderSlot::new(|| {badge_variants();gap(Dp(24.0));subheading("With other components".into());prose("Anchor badges to navigation destinations, app bars or tabs. Hide unread badges after their destination is selected.");gap(Dp(24.0));spec_table(vec!["Do".into(),"Don't".into()],vec![vec!["Use a badge for new or unread activity".into(),"Use a badge as a permanent decoration".into()],vec!["Anchor inside the icon bounding box at its upper trailing edge".into(),"Place the badge over the icon or outside its bounds".into()],vec!["Clear the badge once its destination is selected".into(),"Keep a count that no longer reflects unread items".into()],vec!["Limit large badge content to four characters including a +".into(),"Let a badge label grow past four characters".into()]]);gap(Dp(24.0));readable_badge_navigation();})},
+            SpecSection{title:"Anatomy",content:RenderSlot::new(|| {badge_figure(true,false);gap(Dp(24.0));prose("1  Small badge");gap(Dp(24.0));badge_figure(false,false);gap(Dp(24.0));prose("2  Large badge container    3  Large badge label");})},
             SpecSection{title:"Container",content:RenderSlot::new(badge_container)},
-            SpecSection{title:"Placement",content:RenderSlot::new(|| {prose("Anchor at the upper trailing edge inside the icon bounds. Use a dot when space is tight, and a count when it will not collide with adjacent content.");gap(Dp(24.0));let selected=remember(|| 0_usize);navigation_examples("Rail placement",selected,3,true,false);})},
+            SpecSection{title:"Placement",content:RenderSlot::new(|| {prose("Anchor at the upper trailing edge inside the icon bounds. Use a dot when space is tight, and a count when it will not collide with adjacent content.");gap(Dp(24.0));spec_table(vec!["Context".into(),"Do".into(),"Avoid".into()],vec![vec!["Navigation rail".into(),"Large badge with a count".into(),"Clipping the badge".into()],vec!["App bar or tabs".into(),"A small dot when space is constrained".into(),"A wide label that collides with actions".into()],vec!["Icon followed by text".into(),"Anchor at the icon's trailing edge".into(),"Placing the badge over the trailing element".into()]]);gap(Dp(24.0));let selected=remember(|| 0_usize);navigation_examples("Rail placement",selected,3,true,false);})},
         ]},
         ArticlePage{title:"Accessibility",intro:None,sections:vec![
             SpecSection{title:"Use cases",content:RenderSlot::new(|| {prose("People must be able to understand unread counts and clear the notification by visiting the associated destination.");gap(Dp(24.0));readable_badge_navigation();})},
             SpecSection{title:"Interaction & style",content:RenderSlot::new(|| {prose("The navigation item owns the action. The badge itself adds information without creating another focus target. Selecting a destination clears its unread indication.");gap(Dp(24.0));readable_badge_navigation();})},
             SpecSection{title:"Visual indicators",content:RenderSlot::new(|| {prose("Keep the default color mapping so badges stand out. Custom badge colors need at least 3:1 contrast.");gap(Dp(24.0));badge_figure(false,false);})},
-            SpecSection{title:"Labeling elements",content:RenderSlot::new(|| {prose("Announce the destination followed by its count, or New notification for a dot. Do not announce the decorative badge twice.");gap(Dp(24.0));readable_badge_navigation();})},
+            SpecSection{title:"Labeling elements",content:RenderSlot::new(|| {prose("Announce the destination followed by its count, or New notification for a dot. Do not announce the decorative badge twice.");gap(Dp(16.0));prose("A large badge contributes its count to the destination's accessible name, such as Inbox, 10 unread items. A small dot announces one new notification and never a number, so counts and presence stay distinguishable without sight.");gap(Dp(24.0));spec_table(vec!["Element".into(),"Accessible information".into()],vec![vec!["Navigation item".into(),"Destination label and selected state".into()],vec!["Large badge".into(),"Count included in the destination label".into()],vec!["Small badge".into(),"One new notification".into()],vec!["Decorative badge shape".into(),"Hidden from assistive technology".into()]]);gap(Dp(24.0));readable_badge_navigation();})},
         ]},
     ])
     .hero(|| {
@@ -233,12 +233,20 @@ fn tokens() {
     panel(RenderSlot::new(specimens));
     gap(Dp(24.0));
     spec_table(
-        vec!["Element".into(), "Token value".into()],
+        vec!["Token".into(), "Value".into()],
         vec![
-            vec!["Container".into(), "Error".into()],
-            vec!["Label".into(), "On error · label small".into()],
-            vec!["Small badge".into(), "6dp circle".into()],
-            vec!["Large badge".into(), "16dp high · 8dp corners".into()],
+            vec!["Badge color".into(), "Error".into()],
+            vec!["Badge shape".into(), "Full".into()],
+            vec!["Badge size".into(), "6dp".into()],
+            vec!["Large badge color".into(), "Error".into()],
+            vec!["Large badge shape".into(), "Full".into()],
+            vec!["Large badge size".into(), "16dp".into()],
+            vec!["Large badge label color".into(), "On error".into()],
+            vec!["Large badge label font".into(), "Roboto".into()],
+            vec!["Large badge label line height".into(), "16pt".into()],
+            vec!["Large badge label size".into(), "11pt".into()],
+            vec!["Large badge label tracking".into(), "0.5pt".into()],
+            vec!["Large badge label weight".into(), "500".into()],
         ],
     );
 }
@@ -263,17 +271,49 @@ fn colors() {
                             .children(move || {
                                 let selected = remember(|| 1_usize);
                                 navigation_examples(
-                                    if dark { "Dark" } else { "Light" },
+                                    if dark {
+                                        "Dark navigation bar"
+                                    } else {
+                                        "Light navigation bar"
+                                    },
                                     selected,
                                     7,
                                     false,
                                     false,
+                                );
+                                gap(Dp(24.0));
+                                navigation_examples(
+                                    if dark {
+                                        "Dark navigation rail"
+                                    } else {
+                                        "Light navigation rail"
+                                    },
+                                    selected,
+                                    3,
+                                    true,
+                                    true,
                                 );
                             });
                     });
             });
         gap(Dp(32.0));
     }
+    subheading("Badge color roles".into());
+    spec_table(
+        vec![
+            "Placement".into(),
+            "Container".into(),
+            "Icon / label".into(),
+        ],
+        vec![
+            vec![
+                "Navigation bar".into(),
+                "Error".into(),
+                "On error when active".into(),
+            ],
+            vec!["Navigation rail".into(), "Error".into(), "On error".into()],
+        ],
+    );
 }
 
 #[tessera]
@@ -285,6 +325,10 @@ fn measurements() {
             vec!["Large badge height / radius".into(), "16dp / 8dp".into()],
             vec!["Single digit width".into(), "16dp".into()],
             vec!["Label horizontal padding".into(), "4dp".into()],
+            vec![
+                "Large badge maximum label width / height".into(),
+                "34dp / 16dp".into(),
+            ],
             vec![
                 "Small icon-corner offset · vertical / horizontal".into(),
                 "6 / 6dp".into(),
@@ -529,6 +573,213 @@ fn badge_overview_destination(number: usize) {
 }
 
 #[tessera]
+fn overview_article() {
+    badge_variants();
+    gap(Dp(16.0));
+    prose("1  Small badge on a navigation item    2  Large badge on a navigation item    3  Large badge with maximum characters on a navigation item");
+    gap(Dp(32.0));
+    subheading("Key points".into());
+    for point in [
+        "Badges can contain labels or numbers.",
+        "There are two variants: a small badge and a large badge.",
+        "Anchor badges inside the icon bounding box, at the upper trailing edge of the icon.",
+        "Limit content to four characters, including a plus sign.",
+        "Keep the default color mapping so badges stand out.",
+    ] {
+        prose(format!("• {point}"));
+    }
+    gap(Dp(32.0));
+    subheading("Availability & resources".into());
+    spec_table(
+        vec!["Type".into(), "Resource".into(), "Status".into()],
+        vec![
+            vec![
+                "Design".into(),
+                "Design Kit (Figma)".into(),
+                "Available".into(),
+            ],
+            vec![
+                "Implementation".into(),
+                "Flutter".into(),
+                "Available".into(),
+            ],
+            vec![
+                "Implementation".into(),
+                "Jetpack Compose".into(),
+                "Available".into(),
+            ],
+            vec![
+                "Implementation".into(),
+                "Android Views (MDC-Android)".into(),
+                "Available".into(),
+            ],
+            vec!["Implementation".into(), "Web".into(), "Unavailable".into()],
+        ],
+    );
+    gap(Dp(32.0));
+    subheading("Differences from M2".into());
+    prose(
+        "Color: Badges use new color mappings and support dynamic color. Keep the default error and on-error roles for readable contrast.",
+    );
+    gap(Dp(24.0));
+    badge_figure(false, false);
+}
+
+#[tessera]
+fn anatomy() {
+    prose(
+        "A small badge is a shape with no text. A large badge adds a label so it can carry a count or a short status.",
+    );
+    gap(Dp(24.0));
+    badge_figure(true, false);
+    gap(Dp(16.0));
+    prose("1  Small badge");
+    gap(Dp(24.0));
+    badge_figure(false, false);
+    gap(Dp(16.0));
+    prose("2  Large badge container    3  Large badge label");
+}
+
+#[tessera]
+fn configuration_article() {
+    anatomy();
+    gap(Dp(32.0));
+    subheading("Elements".into());
+    spec_table(
+        vec![
+            "#".into(),
+            "Element".into(),
+            "Navigation bar".into(),
+            "Navigation rail".into(),
+        ],
+        vec![
+            vec![
+                "1".into(),
+                "Small badge".into(),
+                "Upper trailing icon corner".into(),
+                "Upper trailing icon corner".into(),
+            ],
+            vec![
+                "2".into(),
+                "Large badge container".into(),
+                "Upper trailing icon corner".into(),
+                "Upper trailing icon corner".into(),
+            ],
+            vec![
+                "3".into(),
+                "Large badge label".into(),
+                "Centered in the container".into(),
+                "Centered in the container".into(),
+            ],
+            vec![
+                "4".into(),
+                "Large badge maximum character count container".into(),
+                "Four characters including a +".into(),
+                "Four characters including a +".into(),
+            ],
+            vec![
+                "5".into(),
+                "Large badge maximum character count label".into(),
+                "999+".into(),
+                "999+".into(),
+            ],
+        ],
+    );
+    gap(Dp(32.0));
+    configuration_variants();
+    gap(Dp(32.0));
+    configuration();
+}
+
+#[tessera]
+fn configuration_variants() {
+    subheading("Navigation bar and rail variants".into());
+    gap(Dp(16.0));
+    spec_table(
+        vec!["#".into(), "Destination state".into(), "Badge".into()],
+        vec![
+            vec![
+                "1".into(),
+                "Inactive bar, with label".into(),
+                "Small badge".into(),
+            ],
+            vec![
+                "2".into(),
+                "Inactive bar, with label".into(),
+                "Large number".into(),
+            ],
+            vec![
+                "3".into(),
+                "Inactive bar, with label".into(),
+                "Maximum count".into(),
+            ],
+            vec![
+                "4".into(),
+                "Active bar, with label".into(),
+                "Small badge".into(),
+            ],
+            vec![
+                "5".into(),
+                "Active bar, with label".into(),
+                "Large number".into(),
+            ],
+            vec![
+                "6".into(),
+                "Active bar, with label".into(),
+                "Maximum count".into(),
+            ],
+            vec![
+                "7".into(),
+                "Inactive bar, no label".into(),
+                "Small badge".into(),
+            ],
+            vec![
+                "8".into(),
+                "Inactive bar, no label".into(),
+                "Large number".into(),
+            ],
+            vec![
+                "9".into(),
+                "Inactive bar, no label".into(),
+                "Maximum count".into(),
+            ],
+            vec![
+                "10".into(),
+                "Active bar, no label".into(),
+                "Small badge".into(),
+            ],
+            vec![
+                "11".into(),
+                "Active bar, no label".into(),
+                "Large number".into(),
+            ],
+            vec![
+                "12".into(),
+                "Active bar, no label".into(),
+                "Maximum count".into(),
+            ],
+            vec![
+                "13".into(),
+                "Active rail, with label".into(),
+                "Small badge".into(),
+            ],
+            vec![
+                "14".into(),
+                "Active rail, no label".into(),
+                "Large number".into(),
+            ],
+            vec![
+                "15".into(),
+                "Active rail, no label".into(),
+                "Maximum count".into(),
+            ],
+        ],
+    );
+    gap(Dp(24.0));
+    panel(RenderSlot::new(specimens));
+}
+
+#[tessera]
 fn badge_navigation() {
     let selected = remember(|| 1_usize);
     panel(RenderSlot::new(move || {
@@ -545,6 +796,16 @@ fn badge_container() {
     badge_figure(true, true);
     gap(Dp(24.0));
     badge_figure(false, true);
+    gap(Dp(32.0));
+    subheading("Position in right-to-left layouts".into());
+    prose(
+        "Do: mirror the badge to the leading edge in right-to-left languages. Don't: move the badge arbitrarily or place it over the icon.",
+    );
+    gap(Dp(24.0));
+    subheading("Color".into());
+    prose(
+        "Do: use the default badge color role. Don't: use custom container or label colors below 3:1 contrast.",
+    );
     gap(Dp(24.0));
     subheading("Label text".into());
     prose(
