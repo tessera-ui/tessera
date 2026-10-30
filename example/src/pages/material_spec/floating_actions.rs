@@ -272,6 +272,7 @@ fn fab(
             .ripple_color(content)
             .enabled(enabled.unwrap_or(true))
             .accessibility_label(spoken.clone())
+            .on_click(move || activations.set(activations.get() + 1))
             .content(move || {
                 icon().painter(filled::ADD_SVG).size(Dp(icon_size));
             });
