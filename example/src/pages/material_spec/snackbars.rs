@@ -24,7 +24,8 @@ use tessera_components::{
     theme::{MaterialTheme, material_theme},
 };
 use tessera_ui::{
-    Dp, Modifier, RenderSlot, State, accesskit::Role, remember, tessera, use_context,
+    Dp, Modifier, RenderSlot, RenderSlotWith, State, accesskit::Role, remember, tessera,
+    use_context,
 };
 
 use super::{
@@ -502,7 +503,7 @@ fn queued() {
             gap(Dp(24.0));
             snackbar_host()
                 .state(state)
-                .snackbar(move |data: SnackbarData| {
+                .snackbar_shared(RenderSlotWith::new(move |data: SnackbarData| {
                     boxed()
                         .modifier(Modifier::new().width(Dp(360.0)).semantics(SemanticsArgs {
                             role: Some(Role::Group),
@@ -545,7 +546,7 @@ fn queued() {
                                     });
                             }
                         });
-                });
+                }));
             gap(Dp(16.0));
             text()
                 .content(format!("Snackbar result: {}", result.get()))
@@ -915,7 +916,7 @@ fn inline_feedback() {
             gap(Dp(24.0));
             snackbar_host()
                 .state(host)
-                .snackbar(move |data: SnackbarData| {
+                .snackbar_shared(RenderSlotWith::new(move |data: SnackbarData| {
                     let dismiss = data.clone();
                     snackbar()
                         .message(data.message().to_owned())
@@ -926,7 +927,7 @@ fn inline_feedback() {
                         })
                         .with_dismiss_action(true)
                         .on_dismiss(move || dismiss.dismiss());
-                });
+                }));
         });
 }
 

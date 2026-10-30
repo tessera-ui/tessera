@@ -3,7 +3,7 @@ use tessera_components::{
     painter::try_painter_asset, spacer::spacer, text::text, theme::MaterialTheme,
 };
 use tessera_shard::shard;
-use tessera_ui::{Dp, Modifier, remember_with_key, use_context};
+use tessera_ui::{Dp, Modifier, RenderSlot, remember_with_key, use_context};
 
 use crate::res;
 
@@ -24,25 +24,40 @@ pub fn home_page() {
         .estimated_item_size(Dp(120.0))
         .content_padding(Dp(16.0))
         .cross_axis_alignment(CrossAxisAlignment::Start)
-        .item(move || {
-            text()
-                .content("Hello From Tessera!")
-                .style(theme.with(|t| t.typography.headline_large));
+        .item({
+            let content = RenderSlot::new(move || {
+                text()
+                    .content("Hello From Tessera!")
+                    .style(theme.with(|t| t.typography.headline_large));
+                });
+            move || content.render()
         })
-        .item(|| {
-            spacer().modifier(Modifier::new().height(Dp(5.0)));
+        .item({
+            let content = RenderSlot::new(|| {
+                spacer().modifier(Modifier::new().height(Dp(5.0)));
+                });
+            move || content.render()
         })
-        .item(move || {
-            icon().size(Dp(200.0)).painter(logo_painter.get());
+        .item({
+            let content = RenderSlot::new(move || {
+                icon().size(Dp(200.0)).painter(logo_painter.get());
+                });
+            move || content.render()
         })
-        .item(|| {
-            spacer().modifier(Modifier::new().height(Dp(5.0)));
+        .item({
+            let content = RenderSlot::new(|| {
+                spacer().modifier(Modifier::new().height(Dp(5.0)));
+                });
+            move || content.render()
         })
-        .item(|| {
-            text().content(r#"This is a sample application for the Tessera UI framework!
+        .item({
+            let content = RenderSlot::new(|| {
+                text().content(r#"This is a sample application for the Tessera UI framework!
 
 Tessera is a modern UI framework based on Rust, aiming to provide high performance, ease of use, and cross-platform support.
 
 The purpose of this sample application is to showcase Tessera's capabilities and some of its components."#);
+            });
+            move || content.render()
         });
 }

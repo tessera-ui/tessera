@@ -195,11 +195,13 @@ pub(super) fn button_preview(
         .enabled(enabled)
         .accessibility_label(label.clone())
         .accessibility_description(format!("Activations: {}", activations.get()))
-        .leading_icon_optional(with_icon.unwrap_or(false).then(|| {
-            RenderSlot::new(|| {
+        .leading_icon_optional(if with_icon.unwrap_or(false) {
+            Some(RenderSlot::new(|| {
                 icon().painter(filled::EDIT_SVG);
-            })
-        }))
+            }))
+        } else {
+            None
+        })
         .on_click(move || {
             activations.set(activations.get() + 1);
             if toggle {
@@ -1955,11 +1957,13 @@ fn playground() {
                     .enabled(enabled.get())
                     .accessibility_label("Live button")
                     .accessibility_description(format!("Activations: {}", activations.get()))
-                    .leading_icon_optional(with_icon.get().then(|| {
-                        RenderSlot::new(|| {
+                    .leading_icon_optional(if with_icon.get() {
+                        Some(RenderSlot::new(|| {
                             icon().painter(filled::EDIT_SVG);
-                        })
-                    }))
+                        }))
+                    } else {
+                        None
+                    })
                     .on_click(move || {
                         activations.set(activations.get() + 1);
                         if toggle.get() && style.get() != ButtonVariant::Text {

@@ -709,7 +709,7 @@ fn tooltip_configuration(number: usize, headline: bool, actions: usize, x: Dp, y
     boxed().modifier(Modifier::new().offset(Dp(x.0-8.0),Dp(y.0-48.0)).required_size(Dp(328.0),Dp(popup_height+56.0)).semantics(SemanticsArgs {
         role:Some(Role::Group),label:Some(format!("Rich tooltip configuration {number}")),merge_descendants:true,..Default::default()
     })).children(move || {
-        provide_context(||MinimumInteractiveComponentEnforcement {enabled:false},move || {
+        let content = RenderSlot::new(move || {
             if headline && actions > 0 {
                 tooltip_provider("Rich tooltips bring attention to a particular element or feature that warrants a person’s focus.")
                     .controller(controller).variant(TooltipVariant::Rich).headline("Rich tooltip")
@@ -798,6 +798,10 @@ fn tooltip_configuration(number: usize, headline: bool, actions: usize, x: Dp, y
                     });
             }
         });
+        provide_context(
+            || MinimumInteractiveComponentEnforcement { enabled: false },
+            move || content.render(),
+        );
     });
 }
 
@@ -860,7 +864,7 @@ fn tooltip_figure(rich: bool, measurements: bool, color_roles: Option<bool>) {
         )
         .children(move || {
             tooltip_grid(Dp(figure_width),Dp(figure_height));
-            provide_context(|| MinimumInteractiveComponentEnforcement { enabled: false }, move || {
+            let content = RenderSlot::new(move || {
             let message = if rich {
                 "Rich tooltips bring attention to a particular element or feature that warrants a person's focus."
             } else {
@@ -927,6 +931,10 @@ fn tooltip_figure(rich: bool, measurements: bool, color_roles: Option<bool>) {
             });
             }
             });
+            provide_context(
+                || MinimumInteractiveComponentEnforcement { enabled: false },
+                move || content.render(),
+            );
             tooltip_annotations(geometry, rich, measurements).color_roles(color_roles);
         });
     if !color_roles {

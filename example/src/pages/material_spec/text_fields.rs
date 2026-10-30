@@ -262,7 +262,7 @@ fn sample(
                         field = field.presentation_state(InteractionVisualState::Focus);
                     }
                     if icons.get() {
-                        field = field.leading_icon(move || {
+                        field = field.leading_icon_shared(RenderSlot::new(move || {
                             boxed()
                                 .modifier(Modifier::new().semantics(SemanticsArgs {
                                     role: Some(Role::Group),
@@ -273,9 +273,9 @@ fn sample(
                                 .children(|| {
                                     icon().painter(filled::SEARCH_SVG).size(Dp(24.0));
                                 });
-                        });
+                        }));
                         if value.with(|value| !value.is_empty()) {
-                            field = field.trailing_icon(move || {
+                            field = field.trailing_icon_shared(RenderSlot::new(move || {
                                 icon_button()
                                     .standard()
                                     .color_style(IconButtonColorStyle::Inherited)
@@ -287,17 +287,17 @@ fn sample(
                                         controller.with_mut(|controller| controller.set_text(""));
                                         value.set(String::new());
                                     });
-                            });
+                            }));
                         }
                     }
                     if affixes.get() {
                         field = field
-                            .prefix(|| {
+                            .prefix_shared(RenderSlot::new(|| {
                                 text().content("$");
-                            })
-                            .suffix(|| {
+                            }))
+                            .suffix_shared(RenderSlot::new(|| {
                                 text().content(".00");
-                            });
+                            }));
                     }
                     if secure.get() {
                         field = field
@@ -669,11 +669,11 @@ fn field_figure(outlined: bool, error: bool, multiline: bool, measurements: bool
                                 } else {
                                     TextFieldLineLimit::SingleLine
                                 })
-                                .leading_icon(|| {
+                                .leading_icon_shared(RenderSlot::new(|| {
                                     icon().painter(filled::SEARCH_SVG).size(Dp(24.0));
-                                });
+                                }));
                             if error || populated {
-                                field = field.trailing_icon(move || {
+                                field = field.trailing_icon_shared(RenderSlot::new(move || {
                                     if error {
                                         boxed()
                                             .modifier(Modifier::new().semantics(SemanticsArgs {
@@ -697,7 +697,7 @@ fn field_figure(outlined: bool, error: bool, multiline: bool, measurements: bool
                                                 value.set(String::new());
                                             });
                                     }
-                                });
+                                }));
                             }
                             drop(field);
                             gap(Dp(4.0));
@@ -1022,7 +1022,7 @@ fn form_field(label: String, outlined: bool, mode: u8) {
                     .line_limit(TextFieldLineLimit::MultiLine);
             }
             if mode == 4 {
-                field = field.prefix(|| {
+                field = field.prefix_shared(RenderSlot::new(|| {
                     text()
                         .content("$")
                         .modifier(Modifier::new().semantics(SemanticsArgs {
@@ -1030,10 +1030,10 @@ fn form_field(label: String, outlined: bool, mode: u8) {
                             label: Some("US dollars".into()),
                             ..Default::default()
                         }));
-                });
+                }));
             }
             if mode == 5 {
-                field = field.suffix(|| {
+                field = field.suffix_shared(RenderSlot::new(|| {
                     text()
                         .content("@gmail.com")
                         .modifier(Modifier::new().semantics(SemanticsArgs {
@@ -1041,10 +1041,10 @@ fn form_field(label: String, outlined: bool, mode: u8) {
                             label: Some("at gmail dot com".into()),
                             ..Default::default()
                         }));
-                });
+                }));
             }
             if mode == 7 {
-                field = field.trailing_icon(|| {
+                field = field.trailing_icon_shared(RenderSlot::new(|| {
                     boxed()
                         .modifier(Modifier::new().semantics(SemanticsArgs {
                             role: Some(Role::Image),
@@ -1054,7 +1054,7 @@ fn form_field(label: String, outlined: bool, mode: u8) {
                         .children(|| {
                             icon().painter(filled::ERROR_SVG).size(Dp(24.0));
                         });
-                });
+                }));
             }
             if mode == 9 {
                 if !show.get() {
@@ -1062,7 +1062,7 @@ fn form_field(label: String, outlined: bool, mode: u8) {
                         .obfuscation_char('•')
                         .context_menu(TextFieldContextMenu::secure_default());
                 }
-                field = field.trailing_icon(move || {
+                field = field.trailing_icon_shared(RenderSlot::new(move || {
                     icon_button()
                         .standard()
                         .icon(if show.get() {
@@ -1076,7 +1076,7 @@ fn form_field(label: String, outlined: bool, mode: u8) {
                             "Show password"
                         })
                         .on_click(move || show.set(!show.get()));
-                });
+                }));
             }
             drop(field);
             gap(Dp(4.0));
@@ -1413,7 +1413,7 @@ fn field_error_icon_example(password: bool, scale: f64) {
                 )
                 .accessibility_label(if password { "Password" } else { "Username" })
                 .accessibility_description(support)
-                .trailing_icon(move || {
+                .trailing_icon_shared(RenderSlot::new(move || {
                     boxed()
                         .modifier(Modifier::new().semantics(SemanticsArgs {
                             role: Some(Role::Image),
@@ -1426,7 +1426,7 @@ fn field_error_icon_example(password: bool, scale: f64) {
                                 .size(Dp(24.0 * scale))
                                 .tint(scheme.error);
                         });
-                });
+                }));
             if password {
                 field = field
                     .obfuscation_char('•')
@@ -1609,20 +1609,20 @@ fn field_icon_input(
             next
         });
     if kind == 1 {
-        field = field.leading_icon(move || {
+        field = field.leading_icon_shared(RenderSlot::new(move || {
             icon()
                 .painter(filled::CALENDAR_TODAY_SVG)
                 .size(Dp(24.0 * scale));
-        });
+        }));
     } else if kind == 2 {
-        field = field.trailing_icon(move || {
+        field = field.trailing_icon_shared(RenderSlot::new(move || {
             icon()
                 .painter(filled::ERROR_SVG)
                 .size(Dp(24.0 * scale))
                 .tint(scheme.error);
-        });
+        }));
     } else if kind == 3 && value.with(|value| !value.is_empty()) {
-        field = field.trailing_icon(move || {
+        field = field.trailing_icon_shared(RenderSlot::new(move || {
             icon_button()
                 .standard()
                 .color_style(IconButtonColorStyle::Inherited)
@@ -1633,24 +1633,24 @@ fn field_icon_input(
                     controller.with_mut(|controller| controller.set_text(""));
                     value.set(String::new());
                 });
-        });
+        }));
     } else if kind == 4 {
-        field = field.trailing_icon(move || {
+        field = field.trailing_icon_shared(RenderSlot::new(move || {
             icon().painter(filled::MIC_SVG).size(Dp(24.0 * scale));
-        });
+        }));
     } else if kind == 5 {
-        field = field.trailing_icon(move || {
+        field = field.trailing_icon_shared(RenderSlot::new(move || {
             icon_button()
                 .standard()
                 .color_style(IconButtonColorStyle::Inherited)
                 .icon(filled::ARROW_DROP_DOWN_SVG)
                 .accessibility_label("Choose icon example category")
                 .on_click(move || menu.with_mut(MenuController::toggle));
-        });
+        }));
     } else if kind == 6 {
-        field = field.trailing_icon(move || {
+        field = field.trailing_icon_shared(RenderSlot::new(move || {
             field_payment_image(scale);
-        });
+        }));
     }
     drop(field);
 }
@@ -1801,11 +1801,11 @@ fn field_anatomy_item(populated: bool, outlined: bool, geometry: State<SpaceGeom
                     value.set(next.clone());
                     next
                 })
-                .leading_icon(|| {
+                .leading_icon_shared(RenderSlot::new(|| {
                     icon().painter(filled::SEARCH_SVG).size(Dp(24.0));
-                });
+                }));
             if value.with(|value| !value.is_empty()) {
-                field = field.trailing_icon(move || {
+                field = field.trailing_icon_shared(RenderSlot::new(move || {
                     icon_button()
                         .standard()
                         .icon(filled::CANCEL_SVG)
@@ -1815,7 +1815,7 @@ fn field_anatomy_item(populated: bool, outlined: bool, geometry: State<SpaceGeom
                             controller.with_mut(|controller| controller.set_text(""));
                             value.set(String::new());
                         });
-                });
+                }));
             }
             drop(field);
             gap(Dp(4.0));
@@ -2459,14 +2459,14 @@ fn field_state_item(
                         .width(Dp(180.0 * scale))
                         .height(Dp(56.0 * scale)),
                 )
-                .leading_icon(move || {
+                .leading_icon_shared(RenderSlot::new(move || {
                     icon().painter(filled::SEARCH_SVG).size(Dp(24.0 * scale));
-                });
+                }));
             if error
                 || populated
                 || (state_example && presentation == InteractionVisualState::Focus)
             {
-                field = field.trailing_icon(move || {
+                field = field.trailing_icon_shared(RenderSlot::new(move || {
                     if error {
                         icon()
                             .painter(filled::ERROR_SVG)
@@ -2484,7 +2484,7 @@ fn field_state_item(
                                 controller.with_mut(|controller| controller.set_text(""));
                             });
                     }
-                });
+                }));
             }
             drop(field);
             gap(Dp(4.0 * scale));
@@ -2638,12 +2638,12 @@ fn field_configuration_item(outlined: bool, row: usize, populated: bool, scale: 
                     next
                 });
             if row == 2 || row == 3 {
-                field = field.leading_icon(move || {
+                field = field.leading_icon_shared(RenderSlot::new(move || {
                     icon().painter(filled::SEARCH_SVG).size(Dp(24.0 * scale));
-                });
+                }));
             }
             if (row == 1 || row == 3) && value.with(|value| !value.is_empty()) {
-                field = field.trailing_icon(move || {
+                field = field.trailing_icon_shared(RenderSlot::new(move || {
                     icon_button()
                         .standard()
                         .color_style(IconButtonColorStyle::Inherited)
@@ -2654,17 +2654,17 @@ fn field_configuration_item(outlined: bool, row: usize, populated: bool, scale: 
                             controller.with_mut(|controller| controller.set_text(""));
                             value.set(String::new());
                         });
-                });
+                }));
             }
             if row == 4 {
-                field = field.prefix(|| {
+                field = field.prefix_shared(RenderSlot::new(|| {
                     text().content("$");
-                });
+                }));
             }
             if row == 5 {
-                field = field.suffix(|| {
+                field = field.suffix_shared(RenderSlot::new(|| {
                     text().content("lbs");
-                });
+                }));
             }
             drop(field);
             if row == 0 {
@@ -2830,7 +2830,7 @@ fn field_measurement_item(
                             next
                         });
                     if variant == 1 {
-                        field = field.leading_icon(move || {
+                        field = field.leading_icon_shared(RenderSlot::new(move || {
                             boxed()
                                 .modifier(
                                     watch_in_space(
@@ -2853,9 +2853,9 @@ fn field_measurement_item(
                                 .children(|| {
                                     icon().painter(filled::SEARCH_SVG).size(Dp(24.0));
                                 });
-                        });
+                        }));
                         if value.with(|value| !value.is_empty()) {
-                            field = field.trailing_icon(move || {
+                            field = field.trailing_icon_shared(RenderSlot::new(move || {
                                 icon_button()
                                     .standard()
                                     .icon(filled::CANCEL_SVG)
@@ -2871,7 +2871,7 @@ fn field_measurement_item(
                                             value.nonempty[usize::from(populated)] = false
                                         });
                                     });
-                            });
+                            }));
                         }
                     }
                     drop(field);

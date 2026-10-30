@@ -296,7 +296,7 @@ fn sample(
                                                 status.set("Back selected".to_owned())
                                             });
                                     })
-                                    .action(move || {
+                                    .action_shared(RenderSlot::new(move || {
                                         let mut action = icon_button()
                                             .icon(filled::SEARCH_SVG)
                                             .accessibility_label(format!("{} search", label.get()))
@@ -311,7 +311,7 @@ fn sample(
                                                 .color_style(IconButtonColorStyle::Inherited)
                                         };
                                         drop(action);
-                                    });
+                                    }));
                                 if logo.get() {
                                     bar = bar.title_content(brand);
                                 }
@@ -1121,7 +1121,7 @@ fn figure_bar(
                 .accessibility_label("Figure back")
                 .on_click(move || actions.set(actions.get() + 1));
         })
-        .action(move || {
+        .action_shared(RenderSlot::new(move || {
             let mut action = icon_button()
                 .modifier(watch(geometry, "trailing"))
                 .icon(filled::SEARCH_SVG)
@@ -1141,7 +1141,7 @@ fn figure_bar(
                 .icon(filled::CALENDAR_TODAY_SVG)
                 .accessibility_label("Figure calendar")
                 .on_click(move || actions.set(actions.get() + 1));
-        });
+        }));
     if !measurements {
         bar = bar.subtitle("Subtitle");
     }

@@ -9,7 +9,7 @@ use std::{cell::Cell, time::Duration};
 
 use tessera_ui::{
     Dp, HeadlessConfig, HeadlessRenderer, MOUSE_POINTER_ID, Modifier, PressKeyEventType,
-    PxPosition, State,
+    PxPosition, RenderSlotWith, State,
     accesskit::{Action, ActionRequest, Node, NodeId, Role, TreeId},
     remember, tessera,
 };
@@ -202,5 +202,70 @@ fn host_actions_queue_timeout_and_unavailable_origins_restore_focus_msaa4() {
     crate::test_utils::run_isolated_test(
         "snackbar::host_tests::host_actions_queue_timeout_and_unavailable_origins_restore_focus_msaa4",
         || check(4),
+    );
+}
+
+#[tessera]
+fn custom_slot_fixture() {
+    let host = remember(SnackbarHostState::new);
+    HOST.set(Some(host));
+    material_theme().child(move || {
+        snackbar_host()
+            .state(host)
+            .snackbar_shared(RenderSlotWith::new(|data: super::SnackbarData| {
+                text()
+                    .content(data.message().to_owned())
+                    .accessibility_label(format!("Custom notification: {}", data.message()));
+            }));
+    });
+}
+
+#[test]
+#[ignore = "requires a native GPU adapter"]
+fn custom_host_slot_renders_current_queued_message() {
+    crate::test_utils::run_isolated_test(
+        "snackbar::host_tests::custom_host_slot_renders_current_queued_message",
+        || {
+            let mut renderer = HeadlessRenderer::new(
+                Box::new(custom_slot_fixture),
+                vec![Box::new(crate::TesseraComponents)],
+                HeadlessConfig {
+                    width: 400,
+                    height: 200,
+                    sample_count: 1,
+                    ..Default::default()
+                },
+            )
+            .unwrap();
+            renderer.render_frames(3);
+            let host = HOST.get().unwrap();
+            for message in ["Saved", "Uploaded"] {
+                host.with_mut(|host| {
+                    let mut request = SnackbarRequest::new(message);
+                    request.duration = Some(SnackbarDuration::Indefinite);
+                    host.show_snackbar(request);
+                });
+                renderer.render_frames(3);
+                let label = format!("Custom notification: {message}");
+                assert!(
+                    renderer
+                        .accessibility_snapshot()
+                        .unwrap()
+                        .nodes
+                        .iter()
+                        .any(|(_, node)| node.label() == Some(label.as_str()))
+                );
+                host.with_mut(SnackbarHostState::dismiss_current);
+                renderer.render_frames(3);
+                assert!(
+                    !renderer
+                        .accessibility_snapshot()
+                        .unwrap()
+                        .nodes
+                        .iter()
+                        .any(|(_, node)| node.label() == Some(label.as_str()))
+                );
+            }
+        },
     );
 }

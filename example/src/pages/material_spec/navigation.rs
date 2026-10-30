@@ -536,12 +536,13 @@ fn color_specimen(rail: bool, initially_expanded: bool, dark: bool, backdrop: Co
                                                         });
                                                 });
                                             if index >= 2 {
-                                                item = item.badge(move || {
-                                                    navigation_badge(
-                                                        if index == 2 { 1 } else { 2 },
-                                                        geometry,
-                                                    );
-                                                });
+                                                item =
+                                                    item.badge_shared(RenderSlot::new(move || {
+                                                        navigation_badge(
+                                                            if index == 2 { 1 } else { 2 },
+                                                            geometry,
+                                                        );
+                                                    }));
                                             }
                                             drop(item);
                                         }
@@ -1394,9 +1395,13 @@ fn native_figure(rail: bool, expanded: bool, annotation: usize, badges: bool) {
                                                                     "New items"
                                                                 },
                                                             )
-                                                            .badge(move || {
-                                                                navigation_badge(index, geometry);
-                                                            });
+                                                            .badge_shared(RenderSlot::new(
+                                                                move || {
+                                                                    navigation_badge(
+                                                                        index, geometry,
+                                                                    );
+                                                                },
+                                                            ));
                                                     }
                                                     drop(item);
                                                 }

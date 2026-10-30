@@ -812,51 +812,52 @@ fn chip_diagram(variant: ChipVariant, measurements: bool) {
                 ),
         )
         .children(move || {
+            let content = RenderSlot::new(move || {
+                if removed.get() {
+                    button()
+                        .outlined()
+                        .on_click(move || removed.set(false))
+                        .child(|| {
+                            text().content("Restore input chip");
+                        });
+                } else if variant == ChipVariant::Input {
+                    chip()
+                        .input(format!("{} chip", name(variant)))
+                        .modifier(watch(geometry, "chip"))
+                        .shape_style(ChipShapeStyle::Standard)
+                        .selected(selected.get())
+                        .on_click(move || selected.set(!selected.get()))
+                        .leading_icon(filled::IMAGE_SVG)
+                        .on_remove(move || removed.set(true));
+                } else if variant == ChipVariant::Filter {
+                    chip()
+                        .filter(format!("{} chip", name(variant)))
+                        .modifier(watch(geometry, "chip"))
+                        .shape_style(ChipShapeStyle::Standard)
+                        .selected(selected.get())
+                        .on_click(move || selected.set(!selected.get()))
+                        .leading_icon(filled::ADD_SVG)
+                        .trailing_icon(filled::ARROW_DROP_DOWN_SVG);
+                } else if variant == ChipVariant::Assist {
+                    chip()
+                        .assist(format!("{} chip", name(variant)))
+                        .modifier(watch(geometry, "chip"))
+                        .shape_style(ChipShapeStyle::Standard)
+                        .selected(selected.get())
+                        .on_click(move || selected.set(!selected.get()))
+                        .leading_icon(filled::ADD_SVG);
+                } else {
+                    chip()
+                        .suggestion(format!("{} chip", name(variant)))
+                        .modifier(watch(geometry, "chip"))
+                        .shape_style(ChipShapeStyle::Standard)
+                        .selected(selected.get())
+                        .on_click(move || selected.set(!selected.get()));
+                }
+            });
             provide_context(
                 || MinimumInteractiveComponentEnforcement { enabled: false },
-                move || {
-                    if removed.get() {
-                        button()
-                            .outlined()
-                            .on_click(move || removed.set(false))
-                            .child(|| {
-                                text().content("Restore input chip");
-                            });
-                    } else if variant == ChipVariant::Input {
-                        chip()
-                            .input(format!("{} chip", name(variant)))
-                            .modifier(watch(geometry, "chip"))
-                            .shape_style(ChipShapeStyle::Standard)
-                            .selected(selected.get())
-                            .on_click(move || selected.set(!selected.get()))
-                            .leading_icon(filled::IMAGE_SVG)
-                            .on_remove(move || removed.set(true));
-                    } else if variant == ChipVariant::Filter {
-                        chip()
-                            .filter(format!("{} chip", name(variant)))
-                            .modifier(watch(geometry, "chip"))
-                            .shape_style(ChipShapeStyle::Standard)
-                            .selected(selected.get())
-                            .on_click(move || selected.set(!selected.get()))
-                            .leading_icon(filled::ADD_SVG)
-                            .trailing_icon(filled::ARROW_DROP_DOWN_SVG);
-                    } else if variant == ChipVariant::Assist {
-                        chip()
-                            .assist(format!("{} chip", name(variant)))
-                            .modifier(watch(geometry, "chip"))
-                            .shape_style(ChipShapeStyle::Standard)
-                            .selected(selected.get())
-                            .on_click(move || selected.set(!selected.get()))
-                            .leading_icon(filled::ADD_SVG);
-                    } else {
-                        chip()
-                            .suggestion(format!("{} chip", name(variant)))
-                            .modifier(watch(geometry, "chip"))
-                            .shape_style(ChipShapeStyle::Standard)
-                            .selected(selected.get())
-                            .on_click(move || selected.set(!selected.get()));
-                    }
-                },
+                move || content.render(),
             );
             if !removed.get() {
                 boxed()

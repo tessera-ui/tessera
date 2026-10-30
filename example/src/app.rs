@@ -17,8 +17,8 @@ use tessera_components::{
 };
 use tessera_shard::{RouterController, RouterDestination, shard_home};
 use tessera_ui::{
-    Color, Dp, FrameNanosControl, Modifier, State, current_frame_nanos, provide_context,
-    receive_frame_nanos, remember, tessera, use_context,
+    Color, Dp, FrameNanosControl, Modifier, RenderSlot, State, current_frame_nanos,
+    provide_context, receive_frame_nanos, remember, tessera, use_context,
 };
 
 use crate::pages::{
@@ -36,131 +36,129 @@ pub fn app() {
         let side_sheet_controller = remember(|| SideSheetController::new(true));
         let nav_controller = remember(|| RouterController::with_root(HomePageDestination {}));
         let selected = remember(|| None::<usize>);
-        provide_context(
-            || MaterialNavigation(selected),
-            || {
-                scaffold()
-                    .top_bar(move || {
-                        #[cfg(not(target_arch = "wasm32"))]
-                        {
-                            top_app_bar()
-                                .title(
-                                    if nav_controller.with(|c| {
+        let content = RenderSlot::new(move || {
+            scaffold()
+                .top_bar(move || {
+                    #[cfg(not(target_arch = "wasm32"))]
+                    {
+                        top_app_bar()
+                            .title(
+                                if nav_controller
+                                    .with(|c| c.current_is::<MaterialComponentsPageDestination>())
+                                {
+                                    "Material Design 3"
+                                } else {
+                                    "Examples"
+                                },
+                            )
+                            .title_area_modifier(Modifier::new().window_drag_region())
+                            .navigation_icon(move || {
+                                navigation_button(
+                                    selected,
+                                    side_sheet_controller,
+                                    nav_controller.with(|c| {
                                         c.current_is::<MaterialComponentsPageDestination>()
-                                    }) {
-                                        "Material Design 3"
-                                    } else {
-                                        "Examples"
-                                    },
-                                )
-                                .title_area_modifier(Modifier::new().window_drag_region())
-                                .navigation_icon(move || {
-                                    navigation_button(
-                                        selected,
-                                        side_sheet_controller,
-                                        nav_controller.with(|c| {
-                                            c.current_is::<MaterialComponentsPageDestination>()
-                                        }),
-                                    );
-                                })
-                                .window_control_minimize()
-                                .window_control_toggle_maximize()
-                                .window_control_close();
-                        }
-
-                        #[cfg(target_arch = "wasm32")]
-                        {
-                            top_app_bar()
-                                .navigation_icon(move || {
-                                    navigation_button(
-                                        selected,
-                                        side_sheet_controller,
-                                        nav_controller.with(|c| {
-                                            c.current_is::<MaterialComponentsPageDestination>()
-                                        }),
-                                    );
-                                })
-                                .title(
-                                    if nav_controller.with(|c| {
-                                        c.current_is::<MaterialComponentsPageDestination>()
-                                    }) {
-                                        "Material Design 3"
-                                    } else {
-                                        "Examples"
-                                    },
+                                    }),
                                 );
-                        }
-                    })
-                    .content(move || {
-                        surface()
-                            .modifier(Modifier::new().fill_max_size())
-                            .child(move || {
-                                modal_side_sheet_provider()
-                                    .controller(side_sheet_controller)
-                                    .main_content(move || {
-                                        shard_home().controller(nav_controller);
-                                    })
-                                    .side_sheet_content(move || {
-                                        column()
-                                            .modifier(Modifier::new().fill_max_width())
-                                            .children(move || {
-                                                nav_item(
-                                                    "Home",
-                                                    HomePageDestination {},
-                                                    nav_controller,
-                                                    side_sheet_controller,
-                                                );
+                            })
+                            .window_control_minimize()
+                            .window_control_toggle_maximize()
+                            .window_control_close();
+                    }
 
-                                                spacer().modifier(Modifier::new().height(Dp(8.0)));
+                    #[cfg(target_arch = "wasm32")]
+                    {
+                        top_app_bar()
+                            .navigation_icon(move || {
+                                navigation_button(
+                                    selected,
+                                    side_sheet_controller,
+                                    nav_controller.with(|c| {
+                                        c.current_is::<MaterialComponentsPageDestination>()
+                                    }),
+                                );
+                            })
+                            .title(
+                                if nav_controller
+                                    .with(|c| c.current_is::<MaterialComponentsPageDestination>())
+                                {
+                                    "Material Design 3"
+                                } else {
+                                    "Examples"
+                                },
+                            );
+                    }
+                })
+                .content(move || {
+                    surface()
+                        .modifier(Modifier::new().fill_max_size())
+                        .child(move || {
+                            modal_side_sheet_provider()
+                                .controller(side_sheet_controller)
+                                .main_content(move || {
+                                    shard_home().controller(nav_controller);
+                                })
+                                .side_sheet_content(move || {
+                                    column()
+                                        .modifier(Modifier::new().fill_max_width())
+                                        .children(move || {
+                                            nav_item(
+                                                "Home",
+                                                HomePageDestination {},
+                                                nav_controller,
+                                                side_sheet_controller,
+                                            );
 
-                                                nav_item(
-                                                    "Basic Components",
-                                                    BasicComponentsPageDestination {},
-                                                    nav_controller,
-                                                    side_sheet_controller,
-                                                );
+                                            spacer().modifier(Modifier::new().height(Dp(8.0)));
 
-                                                spacer().modifier(Modifier::new().height(Dp(8.0)));
+                                            nav_item(
+                                                "Basic Components",
+                                                BasicComponentsPageDestination {},
+                                                nav_controller,
+                                                side_sheet_controller,
+                                            );
 
-                                                nav_item(
-                                                    "Material Components",
-                                                    MaterialComponentsPageDestination {},
-                                                    nav_controller,
-                                                    side_sheet_controller,
-                                                );
+                                            spacer().modifier(Modifier::new().height(Dp(8.0)));
 
-                                                spacer().modifier(Modifier::new().height(Dp(8.0)));
+                                            nav_item(
+                                                "Material Components",
+                                                MaterialComponentsPageDestination {},
+                                                nav_controller,
+                                                side_sheet_controller,
+                                            );
 
-                                                nav_item(
-                                                    "Glass Components",
-                                                    GlassComponentsPageDestination {},
-                                                    nav_controller,
-                                                    side_sheet_controller,
-                                                );
+                                            spacer().modifier(Modifier::new().height(Dp(8.0)));
 
-                                                spacer().modifier(Modifier::new().height(Dp(8.0)));
+                                            nav_item(
+                                                "Glass Components",
+                                                GlassComponentsPageDestination {},
+                                                nav_controller,
+                                                side_sheet_controller,
+                                            );
 
-                                                nav_item(
-                                                    "Custom Shader",
-                                                    CustomShaderPageDestination {},
-                                                    nav_controller,
-                                                    side_sheet_controller,
-                                                );
+                                            spacer().modifier(Modifier::new().height(Dp(8.0)));
 
-                                                spacer().modifier(Modifier::new().height(Dp(8.0)));
+                                            nav_item(
+                                                "Custom Shader",
+                                                CustomShaderPageDestination {},
+                                                nav_controller,
+                                                side_sheet_controller,
+                                            );
 
-                                                nav_item(
-                                                    "Animation",
-                                                    AnimationPageDestination {},
-                                                    nav_controller,
-                                                    side_sheet_controller,
-                                                );
-                                            });
-                                    });
-                            });
-                    });
-            },
-        );
+                                            spacer().modifier(Modifier::new().height(Dp(8.0)));
+
+                                            nav_item(
+                                                "Animation",
+                                                AnimationPageDestination {},
+                                                nav_controller,
+                                                side_sheet_controller,
+                                            );
+                                        });
+                                });
+                        });
+                });
+        });
+        provide_context(|| MaterialNavigation(selected), move || content.render());
     });
 }
 

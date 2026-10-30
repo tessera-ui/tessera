@@ -498,7 +498,7 @@ fn native_tabs_figure(
                                                             unread.set(false);
                                                         }
                                                     })
-                                                    .title(move || {
+                                                    .title_shared(RenderSlot::new(move || {
                                                         native_tab_title(
                                                             index,
                                                             icons,
@@ -508,7 +508,7 @@ fn native_tabs_figure(
                                                             primary,
                                                             false,
                                                         );
-                                                    });
+                                                    }));
                                             }
                                         });
                                 });

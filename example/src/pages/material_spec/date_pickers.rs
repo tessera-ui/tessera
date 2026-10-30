@@ -1510,10 +1510,10 @@ fn date_figure(
                             .modifier(watch_observed(geometry,"field").width(Dp(312.0)).height(Dp(56.0)).semantics(SemanticsArgs {test_tag:Some("docked-date-field".into()), merge_descendants:true,..Default::default()})).min_width(Dp::ZERO)
                             .on_change(move |raw: String| {draft.set(raw.clone());raw})
                             .on_submit(move || {submit_docked_date(state,controller,draft,committed,committed_draft,error);})
-                            .trailing_icon(move || {icon_button().standard().icon(filled::CALENDAR_TODAY_SVG).accessibility_label("Toggle event date calendar").on_click(move || {
+                            .trailing_icon_shared(RenderSlot::new(move || {icon_button().standard().icon(filled::CALENDAR_TODAY_SVG).accessibility_label("Toggle event date calendar").on_click(move || {
                                 if open.get() {restore_docked_date(state,controller,draft,committed,committed_draft,error);}
                                 open.set(!open.get());FocusManager::current().defer_keyboard_until_layout();
-                            });});
+                            });}));
                         gap(Dp(4.0));text().content(if error.with(String::is_empty) {"MM/DD/YYYY".to_owned()} else {error.get()}).style(type_style(12.0,16.0)).color(if error.with(String::is_empty) {scheme.on_surface_variant} else {scheme.error});
                     });
                     if open.get() {
@@ -3199,7 +3199,7 @@ fn docked_configuration(number: usize, initial_view: DockedDatePickerView) {
                 .on_submit(move || {
                     submit_docked_date(state, controller, draft, committed, committed_draft, error);
                 })
-                .trailing_icon(move || {
+                .trailing_icon_shared(RenderSlot::new(move || {
                     icon_button()
                         .standard()
                         .icon(filled::CALENDAR_TODAY_SVG)
@@ -3218,7 +3218,7 @@ fn docked_configuration(number: usize, initial_view: DockedDatePickerView) {
                             open.set(!open.get());
                             FocusManager::current().defer_keyboard_until_layout();
                         });
-                });
+                }));
             gap(Dp(4.0));
             text()
                 .content(if error.with(String::is_empty) {

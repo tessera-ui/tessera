@@ -2,7 +2,8 @@
 //!
 //! ## Usage
 //!
-//! Compare selection models, states, density and dimensions of connected segments.
+//! Compare selection models, states, density and dimensions of connected
+//! segments.
 
 use tessera_components::{
     button::button,
@@ -19,7 +20,9 @@ use tessera_components::{
     text::text,
     theme::{MaterialTheme, material_theme},
 };
-use tessera_ui::{Dp, Modifier, RenderSlot, State, accesskit::Role, remember, tessera, use_context};
+use tessera_ui::{
+    Dp, Modifier, RenderSlot, State, accesskit::Role, remember, tessera, use_context,
+};
 
 use super::{
     ACCENT,
@@ -224,9 +227,9 @@ fn segmented_row(
             if multi {
                 multi_choice_segmented_button_row()
                     .modifier(Modifier::new().fill_max_width())
-                    .content({
+                    .content_shared({
                         let segment_caption = caption.clone();
-                        move || {
+                        RenderSlot::new(move || {
                             segments(
                                 segment_caption.clone(),
                                 selected,
@@ -236,14 +239,14 @@ fn segmented_row(
                                 show_checks,
                                 height,
                             );
-                        }
+                        })
                     });
             } else {
                 single_choice_segmented_button_row()
                     .modifier(Modifier::new().fill_max_width())
-                    .content({
+                    .content_shared({
                         let segment_caption = caption.clone();
-                        move || {
+                        RenderSlot::new(move || {
                             segments(
                                 segment_caption.clone(),
                                 selected,
@@ -253,7 +256,7 @@ fn segmented_row(
                                 show_checks,
                                 height,
                             );
-                        }
+                        })
                     });
             }
             gap(Dp(16.0));
@@ -559,7 +562,10 @@ fn colors() {
         vec!["Element".into(), "Color role".into()],
         vec![
             vec!["Selected container".into(), "Secondary container".into()],
-            vec!["Selected label and icon".into(), "On secondary container".into()],
+            vec![
+                "Selected label and icon".into(),
+                "On secondary container".into(),
+            ],
             vec!["Unselected label and icon".into(), "On surface".into()],
             vec!["Outline".into(), "Outline".into()],
             vec!["State layer".into(), "On surface".into()],
@@ -847,7 +853,8 @@ fn accessibility_keyboard() {
             ],
             vec![
                 "Space or Enter".into(),
-                "Selects the focused segment; in a single-select group it clears the previous one".into(),
+                "Selects the focused segment; in a single-select group it clears the previous one"
+                    .into(),
             ],
             vec![
                 "Space or Enter on a selected segment".into(),
@@ -878,10 +885,7 @@ fn accessibility_labeling() {
                 "Selected segment".into(),
                 "Toggled state announced together with the label".into(),
             ],
-            vec![
-                "Icon".into(),
-                "Decorative when the label is present".into(),
-            ],
+            vec!["Icon".into(), "Decorative when the label is present".into()],
         ],
     );
 }

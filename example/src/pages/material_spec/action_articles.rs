@@ -656,9 +656,9 @@ pub(super) fn action_article(
         },
     ]);
     if kind == Kind::Segmented {
-        article = article.intro(move || {
+        article = article.intro_shared(RenderSlot::new(move || {
             recommendation(kind);
-        });
+        }));
     }
     drop(article);
 }

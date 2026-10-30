@@ -7,8 +7,8 @@
 use std::{collections::VecDeque, time::Duration};
 
 use tessera_ui::{
-    Callback, CallbackWith, Color, Dp, FocusManager, FocusRestorationTarget, FocusScopeNode,
-    Modifier, State,
+    Callback, Color, Dp, FocusManager, FocusRestorationTarget, FocusScopeNode, Modifier,
+    RenderSlotWith, State,
     accesskit::{Live, Role},
     current_frame_nanos,
     layout::layout,
@@ -624,7 +624,7 @@ pub fn snackbar(
 pub fn snackbar_host(
     modifier: Option<Modifier>,
     state: Option<State<SnackbarHostState>>,
-    snackbar: Option<CallbackWith<SnackbarData>>,
+    snackbar: Option<RenderSlotWith<SnackbarData>>,
 ) {
     let modifier = modifier.unwrap_or_default();
     let state = state.unwrap_or_else(|| remember(SnackbarHostState::default));
@@ -684,7 +684,7 @@ pub fn snackbar_host(
             return;
         };
         if let Some(snackbar_slot) = snackbar_slot {
-            snackbar_slot.call(data.clone());
+            snackbar_slot.render(data.clone());
         } else {
             layout()
                 .modifier(Modifier::new().padding(SnackbarDefaults::HOST_PADDING))

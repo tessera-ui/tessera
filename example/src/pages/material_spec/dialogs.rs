@@ -1116,7 +1116,7 @@ fn dialog_scene_input(
                     .line_height(Dp(24.0 * scale))
                     .modifier(Modifier::new().size(Dp(width * scale), Dp(56.0 * scale)));
                 if dropdown {
-                    field = field.trailing_icon(move || {
+                    field = field.trailing_icon_shared(RenderSlot::new(move || {
                         button()
                             .text()
                             .accessibility_label(format!("Choose {}", name.get()))
@@ -1128,7 +1128,7 @@ fn dialog_scene_input(
                                     .vector(filled::ARROW_DROP_DOWN_SVG)
                                     .size(Dp(24.0 * scale));
                             });
-                    });
+                    }));
                 }
                 drop(field);
             });

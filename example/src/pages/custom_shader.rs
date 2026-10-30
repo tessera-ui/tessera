@@ -6,7 +6,7 @@ use tessera_components::{
 use tessera_shard::shard;
 use tessera_ui::{
     Dp, DrawCommand, EntryRegistry, FrameNanosControl, Modifier, PipelineContext, RenderModule,
-    State, TesseraPackage,
+    RenderSlot, State, TesseraPackage,
     layout::layout,
     px::{Px, PxRect, PxSize},
     receive_frame_nanos, remember,
@@ -67,36 +67,54 @@ pub fn custom_shader_page() {
         .estimated_item_size(Dp(120.0))
         .content_padding(Dp(16.0))
         .item_spacing(Dp(14.0))
-        .item(move || {
-            text()
-                .content("Custom Shader")
-                .style(theme.with(|t| t.typography.headline_large));
+        .item({
+            let content = RenderSlot::new(move || {
+                text()
+                    .content("Custom Shader")
+                    .style(theme.with(|t| t.typography.headline_large));
+            });
+            move || content.render()
         })
-        .item(move || {
-            text().content("A ray tracing demo.");
+        .item({
+            let content = RenderSlot::new(move || {
+                text().content("A ray tracing demo.");
+            });
+            move || content.render()
         })
-        .item(move || {
-            raymarch_canvas(
-                Modifier::new()
-                    .size(RAYMARCH_CANVAS_WIDTH, RAYMARCH_CANVAS_HEIGHT)
-                    .clip_to_bounds()
-                    .border(
-                        Dp(1.0),
-                        theme.with(|t| t.color_scheme.outline.with_alpha(0.7)),
-                    ),
-                time_scale_slider,
-            );
+        .item({
+            let content = RenderSlot::new(move || {
+                raymarch_canvas(
+                    Modifier::new()
+                        .size(RAYMARCH_CANVAS_WIDTH, RAYMARCH_CANVAS_HEIGHT)
+                        .clip_to_bounds()
+                        .border(
+                            Dp(1.0),
+                            theme.with(|t| t.color_scheme.outline.with_alpha(0.7)),
+                        ),
+                    time_scale_slider,
+                );
+            });
+            move || content.render()
         })
-        .item(move || {
-            text().content(format!("Time scale {:.2}x", time_scale));
+        .item({
+            let content = RenderSlot::new(move || {
+                text().content(format!("Time scale {:.2}x", time_scale));
+            });
+            move || content.render()
         })
-        .item(move || {
-            text().content("Animation Speed");
+        .item({
+            let content = RenderSlot::new(move || {
+                text().content("Animation Speed");
+            });
+            move || content.render()
         })
-        .item(move || {
-            slider()
-                .value(time_scale_slider.get())
-                .on_change(move |value| time_scale_slider.set(value.clamp(0.0, 1.0)));
+        .item({
+            let content = RenderSlot::new(move || {
+                slider()
+                    .value(time_scale_slider.get())
+                    .on_change(move |value| time_scale_slider.set(value.clamp(0.0, 1.0)));
+            });
+            move || content.render()
         });
 }
 

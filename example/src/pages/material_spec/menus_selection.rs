@@ -19,8 +19,8 @@ use tessera_components::{
     theme::{MaterialTheme, material_theme},
 };
 use tessera_ui::{
-    Color, Dp, LayoutCoordinates, Modifier, accesskit::Role, modifier::FocusModifierExt as _,
-    remember, scaled_box, tessera, use_context,
+    Color, Dp, LayoutCoordinates, Modifier, RenderSlot, accesskit::Role,
+    modifier::FocusModifierExt as _, remember, scaled_box, tessera, use_context,
 };
 
 use super::super::annotations;
@@ -133,9 +133,9 @@ fn selection_column(multiple: bool) {
                         .focus_background_color(Color::TRANSPARENT)
                         .cursor_color(Color::TRANSPARENT)
                         .focus_border_width(Dp(3.0))
-                        .trailing_icon(|| {
+                        .trailing_icon_shared(RenderSlot::new(|| {
                             icon().vector(filled::ARROW_DROP_UP_SVG).size(Dp(24.0));
-                        });
+                        }));
                 });
             boxed()
                 .modifier(Modifier::new().fill_max_width().semantics(SemanticsArgs {

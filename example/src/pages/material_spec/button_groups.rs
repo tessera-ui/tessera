@@ -21,7 +21,7 @@ use tessera_components::{
     text::text,
     theme::MaterialTheme,
 };
-use tessera_ui::{Dp, Modifier, RenderSlot, remember, tessera, use_context};
+use tessera_ui::{CallbackWith, Dp, Modifier, RenderSlot, remember, tessera, use_context};
 
 use super::{
     INK,
@@ -253,8 +253,8 @@ fn sample(
                 .selection_required(required)
                 .enabled(enabled)
                 .state(state)
-                .child(
-                    move || {
+                .child_shared(
+                    RenderSlot::new(move || {
                         if icons {
                             row().children(move || {
                                 icon().painter(filled::EDIT_SVG);
@@ -264,11 +264,11 @@ fn sample(
                         } else {
                             text().content("One");
                         }
-                    },
-                    |_| {},
+                    }),
+                    CallbackWith::new(|_| {}),
                 )
-                .child(
-                    move || {
+                .child_shared(
+                    RenderSlot::new(move || {
                         if icons {
                             row().children(move || {
                                 icon().painter(filled::EDIT_SVG);
@@ -278,11 +278,11 @@ fn sample(
                         } else {
                             text().content("Two");
                         }
-                    },
-                    |_| {},
+                    }),
+                    CallbackWith::new(|_| {}),
                 )
-                .child(
-                    move || {
+                .child_shared(
+                    RenderSlot::new(move || {
                         if icons {
                             row().children(move || {
                                 icon().painter(filled::EDIT_SVG);
@@ -292,8 +292,8 @@ fn sample(
                         } else {
                             text().content("Three");
                         }
-                    },
-                    |_| {},
+                    }),
+                    CallbackWith::new(|_| {}),
                 );
             if status {
                 gap(Dp(16.0));
@@ -638,8 +638,8 @@ fn playground() {
                     .selection_required(required.get())
                     .enabled(enabled.get())
                     .state(state)
-                    .child(
-                        move || {
+                    .child_shared(
+                        RenderSlot::new(move || {
                             if icons.get() {
                                 row().children(move || {
                                     icon().painter(filled::EDIT_SVG);
@@ -649,11 +649,11 @@ fn playground() {
                             } else {
                                 text().content("One");
                             }
-                        },
-                        |_| {},
+                        }),
+                        CallbackWith::new(|_| {}),
                     )
-                    .child(
-                        move || {
+                    .child_shared(
+                        RenderSlot::new(move || {
                             if icons.get() {
                                 row().children(move || {
                                     icon().painter(filled::EDIT_SVG);
@@ -663,11 +663,11 @@ fn playground() {
                             } else {
                                 text().content("Two");
                             }
-                        },
-                        |_| {},
+                        }),
+                        CallbackWith::new(|_| {}),
                     )
-                    .child(
-                        move || {
+                    .child_shared(
+                        RenderSlot::new(move || {
                             if icons.get() {
                                 row().children(move || {
                                     icon().painter(filled::EDIT_SVG);
@@ -677,8 +677,8 @@ fn playground() {
                             } else {
                                 text().content("Three");
                             }
-                        },
-                        |_| {},
+                        }),
+                        CallbackWith::new(|_| {}),
                     );
                 gap(Dp(24.0));
                 text()

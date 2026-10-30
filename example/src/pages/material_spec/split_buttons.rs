@@ -25,8 +25,7 @@ use tessera_components::{
 };
 use tessera_ui::{
     Color, Dp, Modifier, PxPosition, PxRect, PxSize, RenderSlot, State,
-    modifier::FocusModifierExt as _,
-    remember, tessera, use_context,
+    modifier::FocusModifierExt as _, remember, tessera, use_context,
 };
 
 use super::{
@@ -371,9 +370,9 @@ fn demo(
         .modifier(Modifier::new().fill_max_width())
         .children(move || {
             split_button_layout()
-                .leading_button({
+                .leading_button_shared({
                     let label = leading_label.clone();
-                    move || {
+                    RenderSlot::new(move || {
                         split_leading_button()
                             .size(size)
                             .variant(variant)
@@ -383,22 +382,20 @@ fn demo(
                             .content(move || {
                                 icon().painter(filled::EDIT_SVG);
                                 spacer().modifier(
-                                    Modifier::new()
-                                        .width(SplitButtonDefaults::icon_spacing(size)),
+                                    Modifier::new().width(SplitButtonDefaults::icon_spacing(size)),
                                 );
                                 text().content("Edit");
                             });
-                    }
+                    })
                 })
-                .trailing_button({
+                .trailing_button_shared({
                     let label = trailing_label.clone();
                     let source = caption_label.clone();
-                    move || {
+                    RenderSlot::new(move || {
                         let name = label.clone();
                         let selected = source.clone();
-                        let theme_value = use_context::<MaterialTheme>()
-                            .expect("MaterialTheme")
-                            .get();
+                        let theme_value =
+                            use_context::<MaterialTheme>().expect("MaterialTheme").get();
                         split_trailing_button()
                             .size(size)
                             .variant(variant)
@@ -431,7 +428,7 @@ fn demo(
                             .content(|| {
                                 icon().painter(filled::ARROW_DROP_DOWN_SVG);
                             });
-                    }
+                    })
                 });
             gap(Dp(12.0));
             text()
@@ -569,7 +566,13 @@ fn configurations(menu: Menu) {
             legend(index + 1, variant_name(variant));
             gap(Dp(16.0));
             panel(RenderSlot::new(move || {
-                demo(menu, variant_name(variant), variant, SplitButtonSize::Small, true);
+                demo(
+                    menu,
+                    variant_name(variant),
+                    variant,
+                    SplitButtonSize::Small,
+                    true,
+                );
             }));
             gap(Dp(24.0));
         }
@@ -646,13 +649,13 @@ fn tokens() {
     });
     gap(Dp(32.0));
     spec_table(
-        vec!["Variant".into(), "Container".into(), "Label and icon".into()],
         vec![
-            vec![
-                "Filled".into(),
-                "Primary".into(),
-                "On primary".into(),
-            ],
+            "Variant".into(),
+            "Container".into(),
+            "Label and icon".into(),
+        ],
+        vec![
+            vec!["Filled".into(), "Primary".into(), "On primary".into()],
             vec![
                 "Tonal".into(),
                 "Secondary container".into(),
@@ -726,7 +729,9 @@ fn anatomy(menu: Menu) {
         legend(4, "Trailing button");
     });
     gap(Dp(16.0));
-    caption("The leading button holds the main action; the trailing button opens its related actions");
+    caption(
+        "The leading button holds the main action; the trailing button opens its related actions",
+    );
 }
 
 #[tessera]
@@ -774,13 +779,13 @@ fn colors(menu: Menu) {
         });
     gap(Dp(24.0));
     spec_table(
-        vec!["Variant".into(), "Container color".into(), "Label color".into()],
         vec![
-            vec![
-                "Filled".into(),
-                "Primary".into(),
-                "On primary".into(),
-            ],
+            "Variant".into(),
+            "Container color".into(),
+            "Label color".into(),
+        ],
+        vec![
+            vec!["Filled".into(), "Primary".into(), "On primary".into()],
             vec![
                 "Tonal".into(),
                 "Secondary container".into(),
@@ -869,26 +874,14 @@ fn measurements() {
                 "Inner corner".into(),
                 "4dp · 12dp active".into(),
             ],
-            vec![
-                "Outlined".into(),
-                "Divider / outline".into(),
-                "1dp".into(),
-            ],
-            vec![
-                "Segments".into(),
-                "Space between".into(),
-                "2dp".into(),
-            ],
+            vec!["Outlined".into(), "Divider / outline".into(), "1dp".into()],
+            vec!["Segments".into(), "Space between".into(), "2dp".into()],
             vec![
                 "Trailing segment".into(),
                 "Minimum width".into(),
                 "48dp".into(),
             ],
-            vec![
-                "Trailing segment".into(),
-                "Icon size".into(),
-                "22dp".into(),
-            ],
+            vec!["Trailing segment".into(), "Icon size".into(), "22dp".into()],
         ],
     );
     gap(Dp(24.0));
@@ -1112,7 +1105,9 @@ fn initial_focus() {
         "Focus should land on the leading button, then move to the trailing button. This can depend on the operating system’s settings.",
     );
     gap(Dp(16.0));
-    prose("In right-to-left layouts the order is mirrored, so focus starts on the leading segment at the right edge.");
+    prose(
+        "In right-to-left layouts the order is mirrored, so focus starts on the leading segment at the right edge.",
+    );
     gap(Dp(24.0));
     caption("Left to right: leading then trailing. Right to left: mirrored");
 }
@@ -1151,7 +1146,12 @@ fn labeling() {
     );
     gap(Dp(24.0));
     spec_table(
-        vec!["Element".into(), "Label".into(), "Role".into(), "State".into()],
+        vec![
+            "Element".into(),
+            "Label".into(),
+            "Role".into(),
+            "State".into(),
+        ],
         vec![
             vec![
                 "Leading button".into(),
