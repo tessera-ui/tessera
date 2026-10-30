@@ -886,12 +886,15 @@ fn tooltip_figure(rich: bool, measurements: bool, color_roles: Option<bool>) {
                                 controller.with_mut(TooltipController::dismiss);
                                 actions.set(actions.get() + 1);
                             })
-                            .child(|| {
+                            .child(move || {
                                 let typography = use_context::<MaterialTheme>()
                                     .unwrap()
                                     .get()
                                     .typography;
-                                text().content("Action").style(typography.label_large);
+                                text()
+                                    .modifier(watch(geometry, "action_label"))
+                                    .content("Action")
+                                    .style(typography.label_large);
                             });
                     })
                     .placement(TooltipPlacement::Above)
@@ -1012,6 +1015,9 @@ fn tooltip_annotation_content(values: Geometry, rich: bool, measurements: bool, 
             let Some(action) = relative(&values, "action") else {
                 return;
             };
+            let Some(action_label) = relative(&values, "action_label") else {
+                return;
+            };
             vec![
                 (1, headline, headline.x + 40.0, true),
                 (2, popup, popup.x + popup.w - 88.0, true),
@@ -1026,7 +1032,12 @@ fn tooltip_annotation_content(values: Geometry, rich: bool, measurements: bool, 
                     popup.x + popup.w - 64.0,
                     false,
                 ),
-                (4, action, action.x + 20.0, false),
+                (
+                    4,
+                    action_label,
+                    action_label.x + action_label.w * 0.5,
+                    false,
+                ),
             ]
         } else {
             vec![

@@ -91,12 +91,56 @@ fn activate(renderer: &mut HeadlessRenderer, label: &str) {
     renderer.render_frames(4);
 }
 
+fn settle_color_pair_geometry(renderer: &mut HeadlessRenderer) {
+    let mut previous = None;
+    let mut history = Vec::new();
+    let mut stable_frames = 0;
+    for _ in 0..16 {
+        renderer.step_frame();
+        let snapshot = renderer.accessibility_snapshot().unwrap();
+        let mut geometry: Vec<_> = snapshot
+            .nodes
+            .iter()
+            .filter(|(_, node)| {
+                matches!(node.role(), Role::Dialog | Role::Tooltip)
+                    || (node.role() == Role::Note
+                        && node
+                            .label()
+                            .is_some_and(|label| label.starts_with("Tooltip color role ")))
+                    || (matches!(node.role(), Role::Button | Role::Label)
+                        && node.label() == Some("Action"))
+            })
+            .map(|(id, node)| {
+                (
+                    *id,
+                    node.role(),
+                    node.label().map(str::to_owned),
+                    node.bounds(),
+                )
+            })
+            .collect();
+        geometry.sort_by_key(|(id, _, _, _)| id.0);
+        stable_frames = if previous.as_ref() == Some(&geometry) {
+            stable_frames + 1
+        } else {
+            1
+        };
+        history.push((renderer.frame_index(), geometry.clone()));
+        previous = Some(geometry);
+        if stable_frames == 3 {
+            return;
+        }
+    }
+    panic!("tooltip color geometry did not stabilize within 16 frames: {history:#?}");
+}
+
 #[test]
 #[ignore = "requires a native GPU adapter"]
 fn tooltip_color_pairs_keep_native_popups_and_annotations_in_both_themes() {
     for rich in [false, true] {
         RICH.set(rich);
-        let renderer = reference_renderer(color_fixture);
+        let mut renderer = reference_renderer(color_fixture);
+        settle_color_pair_geometry(&mut renderer);
         let snapshot = renderer.accessibility_snapshot().unwrap();
         let kind = if rich { "Rich" } else { "Plain" };
         semantic_node(
@@ -161,7 +205,31 @@ fn tooltip_color_pairs_keep_native_popups_and_annotations_in_both_themes() {
                     .1
                     .bounds()
                     .unwrap();
-                assert!(((marker.y0 + marker.y1) - (action.y0 + action.y1)).abs() <= 2.0);
+                let action_label = snapshot
+                    .nodes
+                    .iter()
+                    .find(|(_, node)| {
+                        node.role() == Role::Label
+                            && node.label() == Some("Action")
+                            && node.bounds().is_some_and(|bounds| {
+                                bounds.x0 >= popup.x0 && bounds.x1 <= popup.x1
+                            })
+                    })
+                    .expect("rich tooltip action text")
+                    .1
+                    .bounds()
+                    .unwrap();
+                assert!(
+                    action_label.x0 >= action.x0
+                        && action_label.x1 <= action.x1
+                        && action_label.y0 >= action.y0
+                        && action_label.y1 <= action.y1,
+                    "action text {action_label:?} must remain inside its native button {action:?}"
+                );
+                assert!(
+                    ((marker.y0 + marker.y1) - (action_label.y0 + action_label.y1)).abs() <= 2.0,
+                    "rich tooltip color marker {marker:?} must align with its primary action text {action_label:?} inside {popup:?}"
+                );
             } else {
                 assert!(marker.y1 < popup.y0);
             }
@@ -345,7 +413,7 @@ fn live_tooltips_keep_trigger_actions_and_replace_the_active_explanation() {
     )
     .expect("native tooltip examples");
     renderer.render_frames(4);
-    let favorite = bounds(&renderer, "Favorite tooltip action");
+    let favorite = bounds(&renderer, "Add to favorites");
     renderer.pointer_move(
         MOUSE_POINTER_ID,
         PxPosition::from_f32_xy(
@@ -370,7 +438,8 @@ fn live_tooltips_keep_trigger_actions_and_replace_the_active_explanation() {
             .unwrap()
             .nodes
             .iter()
-            .any(|(_, node)| node.label() == Some("Favorite: on; tooltip actions: 0")),
+            .any(|(_, node)| node.label()
+                == Some("Favorite: on; tooltip actions: 0; rich tooltip: hidden")),
         "tooltip hover must preserve the trigger's actual toggle action"
     );
     let about = bounds(&renderer, "About collections");
@@ -403,10 +472,8 @@ fn live_tooltips_keep_trigger_actions_and_replace_the_active_explanation() {
             .any(|(_, node)| node.role() == Role::Dialog && node.label() == Some("Collections"))
     );
     assert!(
-        snapshot
-            .nodes
-            .iter()
-            .any(|(_, node)| node.label() == Some("Favorite: on; tooltip actions: 1")),
+        snapshot.nodes.iter().any(|(_, node)| node.label()
+            == Some("Favorite: on; tooltip actions: 1; rich tooltip: hidden")),
         "the real rich tooltip action updates its owner"
     );
 }
