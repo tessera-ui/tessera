@@ -2226,6 +2226,121 @@ mod native_field_regressions {
                 .any(|(_, node)| node.value() == Some("secret"))
         );
     }
+    thread_local! {
+        static EMPTY_VIEWPORT_CASE: Cell<(bool, bool)> = const { Cell::new((false, false)) };
+    }
+
+    #[tessera]
+    fn empty_viewport_fixture() {
+        let (label, leading) = EMPTY_VIEWPORT_CASE.get();
+        let editor = remember(|| TextInputController::new(Dp(16.0), Some(Dp(24.0))));
+        EDITOR.set(Some(editor));
+        crate::theme::material_theme().child(move || {
+            boxed()
+                .modifier(Modifier::new().fill_max_size())
+                .children(move || {
+                    let mut field = TextFieldBuilder::outlined()
+                        .controller(editor)
+                        .modifier(
+                            Modifier::new()
+                                .offset(Dp(24.0), Dp(32.0))
+                                .size(Dp(327.0), Dp(56.0)),
+                        )
+                        .min_width(Dp::ZERO)
+                        .min_height(Dp(56.0))
+                        .padding(Dp(16.0))
+                        .font_size(Dp(16.0))
+                        .line_height(Dp(24.0))
+                        .accessibility_label("Viewport editor");
+                    if label {
+                        field = field.label("Value");
+                    }
+                    if leading {
+                        field = field.leading_icon(|| {
+                            crate::icon::icon()
+                                .vector(crate::material_icons::filled::SEARCH_SVG)
+                                .size(Dp(24.0));
+                        });
+                    }
+                    drop(field);
+                });
+        });
+    }
+
+    #[test]
+    #[ignore = "requires a native GPU adapter for editor geometry and pointer editing"]
+    fn empty_editor_viewport_keeps_its_hit_region_through_edits_and_clear() {
+        crate::test_utils::run_isolated_test(
+            "text_field::native_field_regressions::empty_editor_viewport_keeps_its_hit_region_through_edits_and_clear",
+            || {
+                for (label, leading, left, width) in [
+                    (false, false, 40.0, 295.0),
+                    (true, false, 40.0, 295.0),
+                    (true, true, 76.0, 259.0),
+                ] {
+                    EMPTY_VIEWPORT_CASE.set((label, leading));
+                    let mut renderer = HeadlessRenderer::new(
+                        Box::new(empty_viewport_fixture),
+                        vec![Box::new(crate::TesseraComponents)],
+                        HeadlessConfig {
+                            width: 400,
+                            height: 160,
+                            sample_count: 1,
+                            frame_time: Duration::from_nanos(16_666_667),
+                            ..Default::default()
+                        },
+                    )
+                    .unwrap();
+                    renderer.render_frames(6);
+                    let editor = EDITOR.get().unwrap();
+                    let check_bounds = |renderer: &HeadlessRenderer| {
+                        let tree = renderer.accessibility_snapshot().unwrap();
+                        let (id, node) = tree
+                            .nodes
+                            .iter()
+                            .find(|(_, node)| {
+                                node.role() == Role::TextInput
+                                    && node.label() == Some("Viewport editor")
+                            })
+                            .unwrap();
+                        let bounds = node.bounds().unwrap();
+                        assert_eq!(
+                            (bounds.x0, bounds.y0, bounds.width(), bounds.height()),
+                            (left, 48.0, width, 24.0),
+                            "editor viewport must not shrink to text or caret: label={label}, leading={leading}"
+                        );
+                        *id
+                    };
+                    let click_fixed = |renderer: &mut HeadlessRenderer| {
+                        let point = PxPosition::from_f32_xy(224.0, 60.0);
+                        renderer.pointer_move(MOUSE_POINTER_ID, point);
+                        renderer.step_frame();
+                        renderer.pointer_press(MOUSE_POINTER_ID, point, PressKeyEventType::Left);
+                        renderer.step_frame();
+                        renderer.pointer_release(MOUSE_POINTER_ID, point, PressKeyEventType::Left);
+                        renderer.render_frames(3);
+                    };
+                    let id = check_bounds(&renderer);
+                    click_fixed(&mut renderer);
+                    assert_eq!(renderer.accessibility_snapshot().unwrap().focus, id);
+                    renderer.inject_ime_event(Ime::Commit("Q".into()));
+                    renderer.render_frames(3);
+                    assert_eq!(editor.with(|editor| editor.text()), "Q");
+                    check_bounds(&renderer);
+                    editor.with_mut(|editor| editor.set_text(""));
+                    tessera_ui::FocusManager::current().clear_focus(true);
+                    renderer.render_frames(4);
+                    check_bounds(&renderer);
+                    click_fixed(&mut renderer);
+                    assert_eq!(renderer.accessibility_snapshot().unwrap().focus, id);
+                    renderer.inject_ime_event(Ime::Commit("R".into()));
+                    renderer.render_frames(3);
+                    assert_eq!(editor.with(|editor| editor.text()), "R");
+                    check_bounds(&renderer);
+                }
+            },
+        );
+    }
 }
 
 #[cfg(all(test, not(target_family = "wasm")))]

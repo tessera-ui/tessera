@@ -18,6 +18,8 @@ use tessera_ui::{
 };
 
 use crate::{
+    alignment::Alignment,
+    boxed::boxed,
     modifier::{InteractionState, InteractionVisualState, ModifierExt as _},
     pos_misc::is_position_inside_bounds,
     shape_def::{RoundedCorner, Shape},
@@ -606,11 +608,14 @@ fn text_input_editor(props: TextInputProps) {
     if editor_args.with(|args| args != &current) {
         editor_args.set(current);
     }
-    layout().modifier(modifier).child(move || {
-        text_input_padded_content()
-            .props(editor_args)
-            .controller(controller);
-    });
+    boxed()
+        .alignment(Alignment::TopStart)
+        .modifier(modifier)
+        .children(move || {
+            text_input_padded_content()
+                .props(editor_args)
+                .controller(controller);
+        });
 }
 
 #[tessera]
