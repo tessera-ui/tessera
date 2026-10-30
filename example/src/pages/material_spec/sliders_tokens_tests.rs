@@ -98,7 +98,7 @@ fn contains_text(renderer: &HeadlessRenderer, expected: &str) -> bool {
 fn menu_options(renderer: &HeadlessRenderer) -> Vec<(NodeId, Node)> {
     nodes(renderer)
         .into_iter()
-        .filter(|(_, node)| matches!(node.role(), Role::MenuItem | Role::MenuItemRadio))
+        .filter(|(_, node)| node.role() == Role::MenuItemRadio)
         .collect()
 }
 

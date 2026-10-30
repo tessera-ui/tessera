@@ -59,6 +59,7 @@ pub(super) fn slider_spec() {
         ArticlePage{title:"Overview",intro:Some(RenderSlot::new(||{
             prose("Sliders select a value or range along a track. Use standard, centered, or range variants, show the full available range, and apply changes immediately.");gap(Dp(32.0));variants();
         })),sections:vec![
+            section("Availability & resources",RenderSlot::new(availability)),
             section("M3 Expressive update",RenderSlot::new(||{prose("The May 2025 update adds horizontal and vertical orientations, five sizes from XS to XL, and an optional inset icon for standard sliders. Continuous sliders are now called standard sliders; discrete sliders use the stops configuration.");gap(Dp(24.0));configurations();})),
             section("Previous updates",RenderSlot::new(||{subheading("Visual refresh to improve non-text contrast".into());prose("The December 2023 refresh adds centered and range configurations, refreshed color mappings, end stops, larger value labels, and a vertical handle that narrows when pressed.");gap(Dp(24.0));anatomy();})),
             section("Differences from M2",RenderSlot::new(||{prose("Material 3 replaces the circular handle with a vertical handle and introduces dynamic color roles. End stops keep the extent of the inactive track distinguishable.");gap(Dp(24.0));colors();})),
@@ -76,14 +77,14 @@ pub(super) fn slider_spec() {
             section("Behaviors",RenderSlot::new(||{
                 subheading("Select & drag".into());prose("Drag the handle to update a continuous value or snap between stops.");gap(Dp(24.0));sample("Drag a continuous value".into(),0,SliderSize::Medium,false,0);
                 gap(Dp(32.0));subheading("Select jump".into());prose("Select the track to move the handle to that position, or the nearest stop.");gap(Dp(24.0));sample("Jump between stops".into(),0,SliderSize::Medium,false,9);
-                gap(Dp(32.0));subheading("Select & arrow".into());prose("Tab to a handle and use arrow keys to adjust it. Space with arrows moves a larger interval.");gap(Dp(24.0));value_example();
+                gap(Dp(32.0));subheading("Select & arrow".into());prose("Tab to a handle and use arrow keys to adjust it. In Tessera, Page Up and Page Down move a larger interval, while Home and End select an endpoint.");gap(Dp(24.0));value_example();
             })),
         ]},
         ArticlePage{title:"Accessibility",intro:None,sections:vec![
             section("Use cases",RenderSlot::new(||{prose("Assistive technology must identify each slider, adjust its handle along the range, and report the selected value. Range sliders expose both handles separately.");gap(Dp(24.0));sample("Price range".into(),2,SliderSize::Medium,false,0);})),
             section("Interaction & style",RenderSlot::new(||{prose("The handle narrows and the value appears during touch, pointer, or keyboard interaction.");gap(Dp(24.0));states();gap(Dp(24.0));subheading("Focus and navigation".into());prose("Initial focus lands on the handle. Arrow keys adjust its value without requiring pointer precision.");gap(Dp(24.0));value_example();})),
             section("Color contrast",RenderSlot::new(||{prose("The end of the inactive track needs a visual anchor with at least 3:1 contrast against the background. Use an end stop or a contrasting icon or label at the endpoint.");gap(Dp(24.0));colors();})),
-            section("Keyboard navigation",RenderSlot::new(||{spec_table(vec!["Keys".into(),"Actions".into()],vec![vec!["Tab".into(),"Focus a slider handle".into()],vec!["Arrows".into(),"Change by one value or stop".into()],vec!["Space & Arrows".into(),"Change by a larger interval".into()],vec!["Home or End".into(),"Select the first or last value".into()]]);gap(Dp(24.0));value_example();})),
+            section("Keyboard navigation",RenderSlot::new(||{spec_table(vec!["Keys".into(),"Actions".into()],vec![vec!["Tab".into(),"Focus a slider handle".into()],vec!["Arrows".into(),"Change by one value or stop".into()],vec!["Page Up or Page Down".into(),"Change by a larger interval".into()],vec!["Home or End".into(),"Select the first or last value".into()]]);gap(Dp(24.0));value_example();})),
             section("Labeling elements",RenderSlot::new(||{prose("The accessibility label should match the adjacent visible label and use the slider role. Label external icon controls as buttons. Include units when they clarify the value.");gap(Dp(24.0));sample("Volume".into(),0,SliderSize::Medium,false,0).leading_icon(filled::VOLUME_UP_SVG);})),
         ]},
     ]);
@@ -91,6 +92,39 @@ pub(super) fn slider_spec() {
 
 fn section(title: &'static str, content: RenderSlot) -> SpecSection {
     SpecSection { title, content }
+}
+
+#[tessera]
+fn availability() {
+    spec_table(
+        vec!["Type".into(), "Resource".into(), "Status".into()],
+        vec![
+            vec![
+                "Design".into(),
+                "Design Kit (Figma)".into(),
+                "Available".into(),
+            ],
+            vec![
+                "Implementation".into(),
+                "Jetpack Compose: Expressive".into(),
+                "Available".into(),
+            ],
+            vec![
+                "Implementation".into(),
+                "Android Views (MDC-Android): Expressive".into(),
+                "Unavailable".into(),
+            ],
+            vec![
+                "Implementation".into(),
+                "Web: Expressive".into(),
+                "Unavailable".into(),
+            ],
+        ],
+    );
+    gap(Dp(24.0));
+    prose(
+        "Tessera examples on this page use the native slider with standard, centered and range configurations, five sizes, both orientations and an optional inset icon.",
+    );
 }
 
 #[tessera]
@@ -135,6 +169,10 @@ fn value_example() {
     });
     #[cfg(all(test, not(target_family = "wasm")))]
     size_figure_tests::VALUE_EDITOR.set(Some(editor));
+    text()
+        .content("Keyboard-adjustable value")
+        .style(type_style(16.0, 24.0));
+    gap(Dp(8.0));
     row()
         .cross_axis_alignment(CrossAxisAlignment::Center)
         .modifier(Modifier::new().fill_max_width())

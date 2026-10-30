@@ -1388,9 +1388,17 @@ fn presentation_uses_native_handle_geometry_without_starting_interaction() {
                             (64, 20)
                         }
                     );
-                    controller.with(|controller| controller.focus.request_focus());
+                    assert!(renderer.dispatch_accessibility_action(
+                        tessera_ui::accesskit::ActionRequest {
+                            action: tessera_ui::accesskit::Action::Focus,
+                            target_tree: tessera_ui::accesskit::TreeId::ROOT,
+                            target_node: id,
+                            data: None,
+                        }
+                    ));
                     renderer.render_frames(3);
                     assert!(controller.with(|controller| controller.is_focused()));
+                    assert!(controller.with(|controller| controller.focus.is_focus_visible()));
                     assert_eq!(
                         renderer.read_pixels().unwrap(),
                         focus_preview,

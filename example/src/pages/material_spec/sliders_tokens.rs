@@ -5,12 +5,16 @@
 //! Inspect dimensions and color roles across slider sizes.
 
 use tessera_components::{
+    alignment::CrossAxisAlignment,
     boxed::boxed,
     button::button,
     column::column,
     flow_row::flow_row,
-    menus::{MenuAnchor, MenuController, menu_item, menu_provider},
+    icon::icon,
+    material_icons::filled,
+    menus::{MenuAnchor, MenuController, MenuItemSelectionMode, menu_item, menu_provider},
     modifier::ModifierExt as _,
+    row::row,
     text::text,
 };
 use tessera_ui::{
@@ -124,7 +128,15 @@ fn token_menu(
                                 }))
                                 .on_click(move || controller.with_mut(MenuController::open))
                                 .child(move || {
-                                    text().content(format!("{}  ▾", SET_NAMES[selected.get()]));
+                                    row()
+                                        .cross_axis_alignment(CrossAxisAlignment::Center)
+                                        .children(move || {
+                                            text().content(SET_NAMES[selected.get()]);
+                                            boxed().modifier(Modifier::new().width(Dp(8.0)));
+                                            icon()
+                                                .vector(filled::ARROW_DROP_DOWN_SVG)
+                                                .size(Dp(18.0));
+                                        });
                                 });
                             button()
                                 .text()
@@ -191,6 +203,7 @@ fn token_menu(
                 menu_item()
                     .label(label)
                     .selected(selected.get() == index)
+                    .selection_mode(MenuItemSelectionMode::Radio)
                     .on_click(move || {
                         selected.set(index);
                     });
