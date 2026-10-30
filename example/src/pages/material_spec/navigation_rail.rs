@@ -28,12 +28,13 @@ use tessera_ui::{
 use super::{
     ACCENT, INK,
     article::{ArticlePage, SpecSection, article},
-    gap, panel, spec_table, subheading, type_style,
+    gap,
+    navigation::{NAMES, navigation_color_roles},
+    panel, spec_table, subheading, type_style,
 };
 
 const DO_COLOR: Color = Color::from_rgb(0.121, 0.478, 0.196);
 const DONT_COLOR: Color = Color::from_rgb(0.741, 0.161, 0.161);
-const NAMES: [&str; 5] = ["Home", "Inbox", "Saved", "Media", "Settings"];
 
 #[tessera]
 pub(super) fn navigation_rail_spec() {
@@ -697,20 +698,21 @@ fn colors() {
     gap(Dp(24.0));
     spec_table(
         vec!["Element".into(), "Color role".into()],
-        vec![
-            vec!["Container".into(), "Surface container (optional)".into()],
-            vec!["Active icon".into(), "On secondary container".into()],
-            vec!["Active indicator".into(), "Secondary container".into()],
-            vec![
-                "Active label".into(),
-                "Secondary (vertical) · On secondary container (horizontal)".into(),
-            ],
-            vec!["Inactive icon".into(), "On surface variant".into()],
-            vec!["Inactive label".into(), "On surface variant".into()],
-            vec!["Badge container".into(), "Error".into()],
-            vec!["Badge label".into(), "On error".into()],
-            vec!["Small badge".into(), "Error".into()],
-        ],
+        [
+            "Container",
+            "Active icon",
+            "Active indicator",
+            "Active label",
+            "Inactive icon",
+            "Inactive label",
+            "Badge container",
+            "Badge label",
+            "Small badge",
+        ]
+        .into_iter()
+        .zip(navigation_color_roles(true, false))
+        .map(|(element, role)| vec![element.into(), role.replace(" / ", " · ")])
+        .collect(),
     );
 }
 
