@@ -72,7 +72,7 @@ fn paragraph(#[prop(into)] value: String) {
 }
 
 #[tessera]
-fn labeling_figure(kind: usize) {
+pub(super) fn labeling_figure(kind: usize) {
     super::text_fields::field_canvas(
         676.0,
         300.0,
@@ -531,7 +531,16 @@ fn counter_diagram(scale: f64) {
         "".into(),
         scale,
     );
-    labeled_field(3, -140.0, 90.0, 327.0, scale);
+    boxed()
+        .modifier(Modifier::new().fill_max_size().semantics(SemanticsArgs {
+            role: Some(Role::Group),
+            label: Some("Character count labeling example".into()),
+            merge_descendants: true,
+            ..Default::default()
+        }))
+        .children(move || {
+            labeled_field(3, -140.0, 90.0, 327.0, scale);
+        });
     editable_field(-138.5, 190.5, 327.0, "Next input".into(), "".into(), scale);
     rectangle(187.0, 154.0, 62.0, 5.0, srgb(132, 69, 143), scale);
     highlight(139.0, 133.0, 47.0, 48.0, 6.0, scale);
@@ -614,7 +623,7 @@ fn labeled_field(kind: usize, x: f64, y: f64, width: f64, scale: f64) {
         0 => "Amount",
         1 | 4 => "Email",
         2 => "ZIP code",
-        3 => "Character count example",
+        3 => "Label",
         _ => "Username*",
     };
     let mut field = TextFieldBuilder::outlined()
@@ -639,7 +648,7 @@ fn labeled_field(kind: usize, x: f64, y: f64, width: f64, scale: f64) {
             next
         });
     if kind >= 2 {
-        field = field.label(if kind == 3 { "Label" } else { name });
+        field = field.label(name);
     }
     if kind == 1 {
         field = field

@@ -8,7 +8,8 @@ use std::{cell::Cell, time::Duration};
 
 use tessera_components::scrollable::ScrollableController;
 use tessera_ui::{
-    HeadlessConfig, HeadlessRenderer, MOUSE_POINTER_ID, PressKeyEventType, PxPosition,
+    CursorEventContent, GestureState, HeadlessConfig, HeadlessRenderer, MOUSE_POINTER_ID,
+    PointerChange, PressKeyEventType, PxPosition,
     accesskit::{Action, ActionRequest, Node, NodeId, Role, TreeId},
     winit::event::Ime,
 };
@@ -58,6 +59,9 @@ fn fixture() {
             19 => {
                 super::super::text_fields_accessibility::labeling();
             }
+            22 => {
+                super::super::text_fields_accessibility::labeling_figure(6);
+            }
             20 | 21 => {
                 material_theme()
                     .theme(|| MaterialTheme::from_seed(ACCENT, KIND.get() == 21))
@@ -80,6 +84,7 @@ fn renderer(kind: usize) -> HeadlessRenderer {
             width: match kind {
                 3..=13 | 15 | 16 | 20 | 21 => 1024,
                 17..=19 => 676,
+                22 => 1363,
                 _ => 900,
             },
             height: if kind == 19 { 5000 } else { 1600 },
@@ -101,6 +106,74 @@ fn node(renderer: &HeadlessRenderer, label: &str, role: Role) -> (NodeId, Node) 
         .find(|(_, node)| node.role() == role && node.label() == Some(label))
         .unwrap_or_else(|| panic!("missing {label} {role:?}"))
 }
+fn group_descendants(renderer: &HeadlessRenderer, label: &str) -> Vec<(NodeId, Node)> {
+    let nodes = renderer.accessibility_snapshot().unwrap().nodes;
+    let root = nodes
+        .iter()
+        .find(|(_, node)| node.role() == Role::Group && node.label() == Some(label))
+        .unwrap_or_else(|| panic!("missing group {label}"));
+    let mut pending = root.1.children().to_vec();
+    let mut descendants = Vec::new();
+    while let Some(id) = pending.pop() {
+        let (_, node) = nodes
+            .iter()
+            .find(|(current, _)| *current == id)
+            .expect("a published child must exist in the accessibility snapshot");
+        pending.extend_from_slice(node.children());
+        descendants.push((id, node.clone()));
+    }
+    descendants
+}
+
+fn group_node(renderer: &HeadlessRenderer, label: &str, role: Role) -> (NodeId, Node) {
+    let mut matches = group_descendants(renderer, label)
+        .into_iter()
+        .filter(|(_, node)| node.role() == role);
+    let found = matches
+        .next()
+        .unwrap_or_else(|| panic!("missing {role:?} within {label}"));
+    assert!(
+        matches.next().is_none(),
+        "expected a unique {role:?} within {label}"
+    );
+    found
+}
+
+fn sample_node(renderer: &HeadlessRenderer, group: &str, role: Role) -> (NodeId, Node) {
+    let found = group_node(renderer, group, role);
+    let label = found
+        .1
+        .label()
+        .expect("the editor must announce its visible label");
+    assert!(matches!(label, "Label" | "Label text"));
+    assert!(
+        group_descendants(renderer, group)
+            .iter()
+            .any(|(_, node)| { node.role() == Role::Label && node.label() == Some(label) }),
+        "the editor name must match visible label text in its own preview"
+    );
+    found
+}
+
+fn act_in_group(renderer: &mut HeadlessRenderer, group: &str, role: Role, action: Action) {
+    let id = group_node(renderer, group, role).0;
+    assert!(renderer.dispatch_accessibility_action(ActionRequest {
+        action,
+        target_tree: TreeId::ROOT,
+        target_node: id,
+        data: None,
+    }));
+    renderer.render_frames(4);
+}
+
+fn group_input_value(renderer: &HeadlessRenderer, group: &str) -> String {
+    group_node(renderer, group, Role::TextInput)
+        .1
+        .value()
+        .unwrap_or_default()
+        .to_owned()
+}
+
 fn exists(renderer: &HeadlessRenderer, label: &str, role: Role) -> bool {
     renderer
         .accessibility_snapshot()
@@ -140,17 +213,23 @@ fn input_value(renderer: &HeadlessRenderer, label: &str) -> String {
 fn constrained_showcase_preserves_rapid_ime_clear_focus_and_state_restrictions() {
     for kind in [0, 14] {
         let mut renderer = renderer(kind);
+        assert_eq!(
+            sample_node(&renderer, "Regression field preview", Role::TextInput)
+                .1
+                .label(),
+            Some("Label")
+        );
         act(
             &mut renderer,
             "Clear Regression icon",
             Role::Button,
             Action::Click,
         );
-        assert_eq!(input_value(&renderer, "Regression input"), "");
+        assert_eq!(group_input_value(&renderer, "Regression field preview"), "");
         assert!(!exists(&renderer, "Clear Regression icon", Role::Button));
-        act(
+        act_in_group(
             &mut renderer,
-            "Regression input",
+            "Regression field preview",
             Role::TextInput,
             Action::Focus,
         );
@@ -164,18 +243,21 @@ fn constrained_showcase_preserves_rapid_ime_clear_focus_and_state_restrictions()
             "focused empty single-line field must not grow to wrap its placeholder"
         );
         commit(&mut renderer, "alpha👩‍💻");
-        assert_eq!(input_value(&renderer, "Regression input"), "alpha👩‍💻");
+        assert_eq!(
+            group_input_value(&renderer, "Regression field preview"),
+            "alpha👩‍💻"
+        );
         assert!(exists(&renderer, "Regression value: alpha👩‍💻", Role::Label));
         assert!(exists(&renderer, "Clear Regression icon", Role::Button));
-        act(
+        act_in_group(
             &mut renderer,
-            "Regression input",
+            "Regression field preview",
             Role::TextInput,
             Action::Focus,
         );
-        act(
+        act_in_group(
             &mut renderer,
-            "Regression input",
+            "Regression field preview",
             Role::TextInput,
             Action::Click,
         );
@@ -188,7 +270,10 @@ fn constrained_showcase_preserves_rapid_ime_clear_focus_and_state_restrictions()
         );
         node(&renderer, "$", Role::Label);
         node(&renderer, ".00", Role::Label);
-        assert_eq!(input_value(&renderer, "Regression input"), "alpha👩‍💻");
+        assert_eq!(
+            group_input_value(&renderer, "Regression field preview"),
+            "alpha👩‍💻"
+        );
         assert_eq!(
             node(&renderer, "Regression container", Role::Group)
                 .1
@@ -205,7 +290,7 @@ fn constrained_showcase_preserves_rapid_ime_clear_focus_and_state_restrictions()
             Action::Click,
         );
         assert_eq!(
-            node(&renderer, "Regression input", Role::PasswordInput)
+            sample_node(&renderer, "Regression field preview", Role::PasswordInput)
                 .1
                 .value(),
             None,
@@ -218,7 +303,10 @@ fn constrained_showcase_preserves_rapid_ime_clear_focus_and_state_restrictions()
             Role::Button,
             Action::Click,
         );
-        assert_eq!(input_value(&renderer, "Regression input"), "alpha👩‍💻");
+        assert_eq!(
+            group_input_value(&renderer, "Regression field preview"),
+            "alpha👩‍💻"
+        );
         act(
             &mut renderer,
             "Regression read only",
@@ -235,14 +323,17 @@ fn constrained_showcase_preserves_rapid_ime_clear_focus_and_state_restrictions()
                 .1
                 .is_disabled()
         );
-        act(
+        act_in_group(
             &mut renderer,
-            "Regression input",
+            "Regression field preview",
             Role::TextInput,
             Action::Focus,
         );
         commit(&mut renderer, "ignored");
-        assert_eq!(input_value(&renderer, "Regression input"), "alpha👩‍💻");
+        assert_eq!(
+            group_input_value(&renderer, "Regression field preview"),
+            "alpha👩‍💻"
+        );
         act(
             &mut renderer,
             "Regression read only",
@@ -256,7 +347,7 @@ fn constrained_showcase_preserves_rapid_ime_clear_focus_and_state_restrictions()
             Action::Click,
         );
         assert!(
-            node(&renderer, "Regression input", Role::TextInput)
+            sample_node(&renderer, "Regression field preview", Role::TextInput)
                 .1
                 .is_disabled()
         );
@@ -266,7 +357,10 @@ fn constrained_showcase_preserves_rapid_ime_clear_focus_and_state_restrictions()
                 .is_disabled()
         );
         commit(&mut renderer, "ignored while disabled");
-        assert_eq!(input_value(&renderer, "Regression input"), "alpha👩‍💻");
+        assert_eq!(
+            group_input_value(&renderer, "Regression field preview"),
+            "alpha👩‍💻"
+        );
         act(
             &mut renderer,
             "Regression enabled",
@@ -286,11 +380,11 @@ fn constrained_showcase_preserves_rapid_ime_clear_focus_and_state_restrictions()
             Role::Button,
             Action::Click,
         );
-        assert_eq!(input_value(&renderer, "Regression input"), "");
+        assert_eq!(group_input_value(&renderer, "Regression field preview"), "");
         assert!(!exists(&renderer, "Clear Regression icon", Role::Button));
-        act(
+        act_in_group(
             &mut renderer,
-            "Regression input",
+            "Regression field preview",
             Role::TextInput,
             Action::Focus,
         );
@@ -317,17 +411,21 @@ fn constrained_showcase_preserves_rapid_ime_clear_focus_and_state_restrictions()
             96.0,
             "multiline configuration must use its declared minimum height"
         );
-        act(
+        act_in_group(
             &mut renderer,
-            "Regression input",
+            "Regression field preview",
             Role::MultilineTextInput,
             Action::Focus,
         );
         commit(&mut renderer, "first\nsecond");
         assert_eq!(
-            node(&renderer, "Regression input", Role::MultilineTextInput)
-                .1
-                .value(),
+            sample_node(
+                &renderer,
+                "Regression field preview",
+                Role::MultilineTextInput
+            )
+            .1
+            .value(),
             Some("first\nsecond")
         );
         assert!(exists(&renderer, "Regression submissions: 1", Role::Label));
@@ -345,6 +443,64 @@ fn counter_overflow_and_password_visibility_keep_real_editor_values() {
         assert_eq!(input_value(&renderer, "Description"), value);
         node(&renderer, "Character count: 101 of 100", Role::Label);
         node(&renderer, "Use 100 characters or fewer", Role::Alert);
+        assert_eq!(
+            node(&renderer, "Description", Role::TextInput)
+                .1
+                .description(),
+            Some("Use 100 characters or fewer")
+        );
+        // The overflow value is one word, so a real double-click selects it.
+        // Recorded intervals keep multi-click recognition independent of GPU
+        // time.
+        let bounds = node(&renderer, "Description", Role::TextInput)
+            .1
+            .bounds()
+            .unwrap();
+        let position = PxPosition::from_f32_xy(
+            ((bounds.x0 + bounds.x1) / 2.0) as f32,
+            ((bounds.y0 + bounds.y1) / 2.0) as f32,
+        );
+        renderer.pointer_move(MOUSE_POINTER_ID, position);
+        renderer.step_frame();
+        let base = tessera_ui::time::Instant::now();
+        for (milliseconds, content) in [
+            (0, CursorEventContent::Pressed(PressKeyEventType::Left)),
+            (10, CursorEventContent::Released(PressKeyEventType::Left)),
+            (80, CursorEventContent::Pressed(PressKeyEventType::Left)),
+            (90, CursorEventContent::Released(PressKeyEventType::Left)),
+        ] {
+            renderer.inject_pointer(PointerChange::new(
+                base + Duration::from_millis(milliseconds),
+                MOUSE_POINTER_ID,
+                content,
+                GestureState::TapCandidate,
+            ));
+            renderer.step_frame();
+        }
+        renderer.inject_ime_event(Ime::Commit("Corrected".into()));
+        renderer.render_frames(4);
+        assert_eq!(input_value(&renderer, "Description"), "Corrected");
+        node(&renderer, "Character count: 9 of 100", Role::Label);
+        node(&renderer, "Supporting text", Role::Label);
+        assert_eq!(
+            node(&renderer, "Description", Role::TextInput)
+                .1
+                .description(),
+            Some("Supporting text")
+        );
+        assert!(!exists(
+            &renderer,
+            "Use 100 characters or fewer",
+            Role::Alert
+        ));
+        assert!(
+            !renderer
+                .accessibility_snapshot()
+                .unwrap()
+                .nodes
+                .iter()
+                .any(|(_, node)| node.role() == Role::Alert)
+        );
     }
     {
         let mut renderer = renderer(2);
@@ -520,21 +676,39 @@ fn accessibility_labeling_diagrams_keep_native_actions_values_and_live_callouts(
         .unwrap();
     assert!(error.y0 >= zip.bounds().unwrap().y1);
 
-    assert_eq!(input_value(&renderer, "Character count example"), "Input");
+    assert_eq!(
+        group_input_value(&renderer, "Character count labeling example"),
+        "Input"
+    );
     node(
         &renderer,
         "Character count, 5 of 20 characters entered",
         Role::Label,
     );
-    act(
+    assert_eq!(
+        group_node(
+            &renderer,
+            "Character count labeling example",
+            Role::TextInput
+        )
+        .1
+        .label(),
+        Some("Label")
+    );
+    assert!(
+        group_descendants(&renderer, "Character count labeling example")
+            .iter()
+            .any(|(_, node)| node.role() == Role::Label && node.label() == Some("Label"))
+    );
+    act_in_group(
         &mut renderer,
-        "Character count example",
+        "Character count labeling example",
         Role::TextInput,
         Action::Focus,
     );
     commit(&mut renderer, "é中🦀");
     assert_eq!(
-        input_value(&renderer, "Character count example"),
+        group_input_value(&renderer, "Character count labeling example"),
         "é中🦀Input"
     );
     let counter = node(
@@ -685,14 +859,18 @@ fn outlined_anatomy_uses_one_reference_artboard_and_retains_input_on_resize() {
             pixel(panel.x0 + 16.0, panel.y0 + 16.0),
             "Anatomy capsules retain their open interior"
         );
-        let input = format!("{prefix}Outlined populated anatomy input");
-        assert_eq!(input_value(&renderer, &input), "Input text");
+        let input = format!("{prefix}Outlined populated anatomy field preview");
+        assert_eq!(
+            sample_node(&renderer, &input, Role::TextInput).1.label(),
+            Some("Label text")
+        );
+        assert_eq!(group_input_value(&renderer, &input), "Input text");
         pointer_click(
             &mut renderer,
             &format!("Clear {prefix}Outlined populated anatomy icon"),
             Role::Button,
         );
-        assert_eq!(input_value(&renderer, &input), "");
+        assert_eq!(group_input_value(&renderer, &input), "");
         renderer.resize(512, 1600);
         renderer.render_frames(4);
         let panel = node(
@@ -704,7 +882,7 @@ fn outlined_anatomy_uses_one_reference_artboard_and_retains_input_on_resize() {
         .bounds()
         .unwrap();
         assert_eq!((panel.width(), panel.height()), (512.0, 150.0));
-        assert_eq!(input_value(&renderer, &input), "");
+        assert_eq!(group_input_value(&renderer, &input), "");
     }
 }
 
@@ -762,7 +940,7 @@ fn specs_anatomy_keeps_original_inputs_and_publishes_ten_geometry_callouts() {
         );
     }
     assert_eq!(
-        input_value(&renderer, "Filled populated anatomy input"),
+        group_input_value(&renderer, "Filled populated anatomy field preview"),
         "Input text"
     );
     let pixels = renderer.read_pixels().unwrap();
@@ -805,8 +983,14 @@ fn specs_anatomy_keeps_original_inputs_and_publishes_ten_geometry_callouts() {
         "Clear Filled populated anatomy icon",
         Role::Button,
     );
-    assert_eq!(input_value(&renderer, "Filled populated anatomy input"), "");
-    assert_eq!(input_value(&renderer, "Filled empty anatomy input"), "");
+    assert_eq!(
+        group_input_value(&renderer, "Filled populated anatomy field preview"),
+        ""
+    );
+    assert_eq!(
+        group_input_value(&renderer, "Filled empty anatomy field preview"),
+        ""
+    );
     renderer.resize(512, 1600);
     renderer.render_frames(4);
     let panel = node(&renderer, "Light filled anatomy panel", Role::Group)
@@ -828,7 +1012,10 @@ fn specs_anatomy_keeps_original_inputs_and_publishes_ten_geometry_callouts() {
         (152.0, 42.5, 12.0, 16.0),
         "Narrow anatomy must scale its reference coordinates without reflow"
     );
-    assert_eq!(input_value(&renderer, "Filled populated anatomy input"), "");
+    assert_eq!(
+        group_input_value(&renderer, "Filled populated anatomy field preview"),
+        ""
+    );
 }
 
 #[test]
@@ -1281,4 +1468,53 @@ fn pointer_click(renderer: &mut HeadlessRenderer, label: &str, role: Role) {
     renderer.pointer_press(MOUSE_POINTER_ID, position, PressKeyEventType::Left);
     renderer.pointer_release(MOUSE_POINTER_ID, position, PressKeyEventType::Left);
     renderer.render_frames(5);
+}
+
+#[test]
+#[ignore = "requires a native GPU adapter"]
+fn required_labeling_field_accepts_pointer_focus_and_editing_at_scaled_artboard_widths() {
+    let mut renderer = renderer(22);
+    for width in [1363, 676, 320] {
+        renderer.resize(width, 1000);
+        renderer.render_frames(8);
+        let (id, field) = node(&renderer, "Username*", Role::TextInput);
+        let bounds = field.bounds().unwrap();
+        let scale = f64::from(width) / 676.0;
+        for (actual, expected) in [
+            (bounds.x0, 378.0 * scale),
+            (bounds.y0, 123.0 * scale),
+            (bounds.width(), 295.0 * scale),
+            (bounds.height(), 24.0 * scale),
+        ] {
+            assert!(
+                (actual - expected).abs() <= 1.0,
+                "semantic input must match the independently mapped canonical inner field at {width}: {bounds:?}, actual {actual}, expected {expected}"
+            );
+        }
+        let before = renderer.read_pixels().unwrap();
+        let position = PxPosition::from_f32_xy((500.0 * scale) as f32, (135.0 * scale) as f32);
+        renderer.pointer_move(MOUSE_POINTER_ID, position);
+        renderer.pointer_press(MOUSE_POINTER_ID, position, PressKeyEventType::Left);
+        renderer.pointer_release(MOUSE_POINTER_ID, position, PressKeyEventType::Left);
+        renderer.render_frames(3);
+        assert_eq!(
+            renderer.accessibility_snapshot().unwrap().focus,
+            id,
+            "the visible required field receives pointer focus at {width}"
+        );
+        commit(&mut renderer, "Q");
+        assert!(input_value(&renderer, "Username*").contains('Q'));
+        let after = renderer.read_pixels().unwrap();
+        let mut changed = false;
+        for y in (123.0 * scale).floor() as usize..(147.0 * scale).ceil() as usize {
+            for x in (378.0 * scale).floor() as usize..(673.0 * scale).ceil() as usize {
+                let offset = (y * width as usize + x) * 4;
+                changed |= before[offset..offset + 3] != after[offset..offset + 3];
+            }
+        }
+        assert!(
+            changed,
+            "the independently mapped visible editor must repaint after real input at {width}"
+        );
+    }
 }

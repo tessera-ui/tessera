@@ -90,6 +90,11 @@ fn sample(
     preview_width: Option<Dp>,
     anatomy_geometry: Option<State<SpaceGeometry>>,
 ) {
+    let visible_label = if anatomy_geometry.is_some() {
+        "Label text"
+    } else {
+        "Label"
+    };
     let initial = if populated.unwrap_or(true) {
         if anatomy_geometry.is_some() {
             "Input text"
@@ -233,13 +238,9 @@ fn sample(
                         .min_width(Dp::ZERO)
                         .min_height(Dp(if multiline.get() { 96.0 } else { 56.0 }))
                         .controller(controller)
-                        .label(if anatomy_geometry.is_some() {
-                            "Label text"
-                        } else {
-                            "Label"
-                        })
+                        .label(visible_label)
                         .placeholder("Placeholder")
-                        .accessibility_label(format!("{} input", label.get()))
+                        .accessibility_label(visible_label)
                         .accessibility_description(if invalid.get() {
                             "Please check your input"
                         } else {
@@ -1218,7 +1219,7 @@ fn field_guideline_anatomy() {
     gap(Dp(24.0));
     subheading("Icons & images".into());
     prose(
-        "Use optional 24dp images or icons to clarify input or expose an actual action, such as clearing entered text.",
+        "Use optional 24dp images or icons to clarify input or expose an actual action, such as clearing entered text. The microphone below is a non-interactive icon illustration; this example does not record or transcribe audio.",
     );
     gap(Dp(24.0));
     field_icons_diagram();
