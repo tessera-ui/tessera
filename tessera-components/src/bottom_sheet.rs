@@ -16,7 +16,7 @@ use tessera_ui::{
     State, current_frame_nanos, current_frame_time,
     layout::{MeasureScope, PlacementResult, PlacementScope, layout},
     modifier::FocusModifierExt as _,
-    provide_context, receive_frame_nanos, remember, tessera,
+    provide_context, receive_frame_nanos, remember, remember_with_key, tessera,
     time::Instant,
     use_context, winit,
 };
@@ -24,6 +24,7 @@ use tessera_ui::{
 use crate::{
     alignment::CrossAxisAlignment,
     animation::{
+        material_motion::{Scalar, Spec},
         sheet_drag::SheetDrag,
         visibility_motion::{VisibilityMotion, VisibilitySample},
     },
@@ -68,6 +69,9 @@ pub struct BottomSheetController {
     is_dragging: bool,
     drag: SheetDrag,
     expansion: BottomSheetExpansion,
+    resize: Scalar,
+    resize_origin: BottomSheetExpansion,
+    resize_range: Dp,
     can_resize: bool,
 }
 
@@ -80,6 +84,9 @@ impl BottomSheetController {
             is_dragging: false,
             drag: SheetDrag::new(),
             expansion: BottomSheetExpansion::PartiallyExpanded,
+            resize: Scalar::new(0.0),
+            resize_origin: BottomSheetExpansion::PartiallyExpanded,
+            resize_range: Dp::ZERO,
             can_resize: true,
         }
     }
@@ -108,6 +115,7 @@ impl BottomSheetController {
             self.is_open = false;
             self.is_dragging = false;
             self.drag.settle(current_frame_nanos());
+            self.resize.snap(self.expansion_fraction());
         }
     }
 
@@ -124,20 +132,22 @@ impl BottomSheetController {
     /// Selects the expanded height without opening a closed sheet.
     pub fn expand(&mut self) {
         self.expansion = BottomSheetExpansion::Expanded;
+        self.resize.snap(1.0);
     }
 
     /// Selects the partial height without opening a closed sheet.
     pub fn partially_expand(&mut self) {
         self.expansion = BottomSheetExpansion::PartiallyExpanded;
+        self.resize.snap(0.0);
     }
 
     /// Switches between partial and expanded heights without changing
     /// visibility.
     pub fn toggle_expansion(&mut self) {
-        self.expansion = match self.expansion {
-            BottomSheetExpansion::PartiallyExpanded => BottomSheetExpansion::Expanded,
-            BottomSheetExpansion::Expanded => BottomSheetExpansion::PartiallyExpanded,
-        };
+        match self.expansion {
+            BottomSheetExpansion::PartiallyExpanded => self.expand(),
+            BottomSheetExpansion::Expanded => self.partially_expand(),
+        }
     }
 
     /// Returns whether the sheet is currently animating in either direction.
@@ -146,26 +156,74 @@ impl BottomSheetController {
     }
 
     fn is_animating_at(&self, frame: u64) -> bool {
-        self.motion.sample(frame).active || (self.is_open && self.drag.sample(frame).1)
+        let mut resize = self.resize;
+        resize.advance(frame);
+        self.motion.sample(frame).active
+            || (self.is_open && (self.drag.sample(frame).1 || resize.is_animating()))
     }
 
-    fn snapshot(&self) -> (bool, VisibilitySample, f32) {
+    fn snapshot(&self) -> (bool, VisibilitySample, f32, f64) {
+        let frame = current_frame_nanos();
+        let mut resize = self.resize;
+        resize.advance(frame);
         (
             self.is_open,
-            self.motion.sample(current_frame_nanos()),
+            self.motion.sample(frame),
             self.drag_offset(),
+            resize.value.clamp(0.0, 1.0),
         )
+    }
+
+    fn resize_fraction(&self) -> f64 {
+        let mut resize = self.resize;
+        resize.advance(current_frame_nanos());
+        resize.value.clamp(0.0, 1.0)
+    }
+
+    fn expansion_fraction(&self) -> f64 {
+        match self.expansion {
+            BottomSheetExpansion::PartiallyExpanded => 0.0,
+            BottomSheetExpansion::Expanded => 1.0,
+        }
     }
 
     fn set_dragging(&mut self, dragging: bool) {
         self.is_dragging = dragging;
         if dragging {
-            self.drag.grab(current_frame_nanos());
+            let frame = current_frame_nanos();
+            self.drag.grab(frame);
+            self.resize.advance(frame);
+            self.resize.snap(self.resize.value.clamp(0.0, 1.0));
+            self.resize_origin = self.expansion;
         }
     }
 
     fn apply_drag_delta(&mut self, delta_y: f32) -> f32 {
-        self.drag.apply_delta(delta_y, current_frame_nanos())
+        if !self.is_dragging {
+            self.set_dragging(true);
+        }
+        let frame = current_frame_nanos();
+        let mut remaining = delta_y;
+        let mut consumed = 0.0;
+        if remaining < 0.0 && self.drag_offset() > 0.0 {
+            let delta = self.drag.apply_delta(remaining, frame);
+            consumed += delta;
+            remaining -= delta;
+        }
+        if self.resize_range.0 > 0.0 {
+            self.resize.advance(frame);
+            let before = self.resize.value.clamp(0.0, 1.0);
+            let after =
+                (before - Dp::from_pixels_f32(remaining).0 / self.resize_range.0).clamp(0.0, 1.0);
+            self.resize.snap(after);
+            let delta = Dp((before - after) * self.resize_range.0).to_pixels_f32();
+            consumed += delta;
+            remaining -= delta;
+        }
+        if remaining > 0.0 {
+            consumed += self.drag.apply_delta(remaining, frame);
+        }
+        consumed
     }
 
     fn drag_offset(&self) -> f32 {
@@ -174,8 +232,40 @@ impl BottomSheetController {
 
     fn complete_drag(&mut self, velocity: f32) -> bool {
         self.is_dragging = false;
-        self.drag
-            .release(current_frame_nanos(), velocity, 56.0, 125.0)
+        let frame = current_frame_nanos();
+        self.resize.advance(frame);
+        if self.resize_range.0 > 0.0 && self.resize.value > 0.0 {
+            let velocity = Dp::from_pixels_f32(velocity).0;
+            let expanded = if velocity.abs() >= 125.0 {
+                velocity < 0.0
+            } else {
+                self.resize.value >= 0.5
+            };
+            self.expansion = if expanded {
+                BottomSheetExpansion::Expanded
+            } else {
+                BottomSheetExpansion::PartiallyExpanded
+            };
+            self.resize.velocity = -velocity / self.resize_range.0;
+            self.resize
+                .start_to(self.expansion_fraction(), Spec::Spatial, frame);
+            self.drag.settle(frame);
+            false
+        } else {
+            if self.resize_range.0 > 0.0 {
+                self.partially_expand();
+            }
+            self.drag.release(frame, velocity, 56.0, 125.0)
+        }
+    }
+
+    fn cancel_drag(&mut self) {
+        self.is_dragging = false;
+        self.expansion = self.resize_origin;
+        let frame = current_frame_nanos();
+        self.resize
+            .retarget(self.expansion_fraction(), Spec::Spatial, frame);
+        self.drag.settle(frame);
     }
 }
 
@@ -309,10 +399,7 @@ fn handle_drag_gestures(
     }
     if cancelled {
         velocity_tracker.set(None);
-        controller.with_mut(|c| {
-            c.is_dragging = false;
-            c.drag.settle(current_frame_nanos());
-        });
+        controller.with_mut(BottomSheetController::cancel_drag);
     }
 }
 
@@ -324,9 +411,10 @@ fn place_bottom_sheet_if_present(
     is_open: bool,
     drag_offset: f32,
     progress: f32,
-    expansion: BottomSheetExpansion,
+    resize_fraction: f64,
     partial_height: Option<Dp>,
     controller: State<BottomSheetController>,
+    resize_range: State<Option<Dp>>,
 ) {
     let children = input.children();
     if children.len() <= 2 {
@@ -346,12 +434,11 @@ fn place_bottom_sheet_if_present(
         .resolve_max()
         .unwrap_or(Px(0));
 
-    // M3 Spec: Max width 640dp.
     let max_width_px = Dp(640.0).to_px();
-    let is_large_screen = parent_width >= max_width_px;
+    let is_large_screen = parent_width > max_width_px;
 
     let sheet_width = if is_large_screen {
-        max_width_px
+        max_width_px.min((parent_width - Dp(112.0).to_px()).max(Px::ZERO))
     } else {
         parent_width
     };
@@ -373,14 +460,16 @@ fn place_bottom_sheet_if_present(
     let partial_height = partial_height
         .map(|height| height.to_px().max(Dp(48.0).to_px()).min(max_height))
         .unwrap_or(natural_size.height);
-    let can_resize = partial_height < max_height;
-    if controller.with(|controller| controller.can_resize != can_resize) {
-        controller.with_mut(|controller| controller.can_resize = can_resize);
+    let range = Dp::from(max_height - partial_height);
+    if resize_range.get() != Some(range) {
+        resize_range.set(Some(range));
+        controller.with_mut(|controller| {
+            controller.resize_range = range;
+            controller.can_resize = range.0 > 0.0;
+        });
     }
-    let height = match expansion {
-        BottomSheetExpansion::PartiallyExpanded => partial_height,
-        BottomSheetExpansion::Expanded => max_height,
-    };
+    let height = partial_height
+        + Px::from_f32(((max_height - partial_height).to_f32() * resize_fraction as f32).round());
     let child_size = if height == natural_size.height {
         natural_size
     } else {
@@ -491,7 +580,10 @@ fn build_bottom_sheet_nested_scroll_connection(
             move |input: PreScrollInput| {
                 if input.source != tessera_ui::ScrollEventSource::Touch
                     || input.available.y >= 0.0
-                    || controller.with(|c| c.drag_offset()) <= 0.0
+                    || controller.with(|c| {
+                        c.drag_offset() <= 0.0
+                            && (c.resize_fraction() >= 1.0 || c.resize_range.0 <= 0.0)
+                    })
                 {
                     return ScrollDelta::ZERO;
                 }
@@ -513,16 +605,25 @@ fn build_bottom_sheet_nested_scroll_connection(
         }))
         .with_pre_fling_handler(CallbackWith::new({
             move |input: PreFlingInput| {
-                if controller.with(|c| c.drag_offset()) <= 0.0 {
+                if controller.with(|c| !c.is_dragging && c.drag_offset() <= 0.0) {
                     return ScrollVelocity::ZERO;
                 }
 
+                let resizing =
+                    controller.with(|c| c.resize_range.0 > 0.0 && c.resize_fraction() > 0.0);
                 let should_close = controller.with_mut(|c| c.complete_drag(input.available.y));
                 if should_close {
                     on_close.call();
                 }
 
-                ScrollVelocity::new(0.0, input.available.y.max(0.0))
+                ScrollVelocity::new(
+                    0.0,
+                    if resizing {
+                        input.available.y
+                    } else {
+                        input.available.y.max(0.0)
+                    },
+                )
             }
         }))
         .with_parent(parent)
@@ -702,8 +803,10 @@ pub fn bottom_sheet_provider(
     }
 
     // Snapshot state to minimize locking overhead.
-    let (is_open, visibility, drag_offset) = controller.with(|c| c.snapshot());
-    let expansion = controller.with(BottomSheetController::expansion);
+    let (is_open, visibility, drag_offset, resize_fraction) = controller.with(|c| c.snapshot());
+    // Separate anchor feedback keeps dismissal state out of measurement
+    // dependencies.
+    let resize_range = remember_with_key(controller, || None::<Dp>);
     let is_animating = controller.with(|c| c.is_animating());
     let bottom_sheet_open_state = remember(|| false);
     let mut just_opened = false;
@@ -749,9 +852,10 @@ pub fn bottom_sheet_provider(
             progress,
             is_open,
             drag_offset,
-            expansion,
+            resize_fraction,
             partial_height,
             controller,
+            resize_range,
         })
         .child(move || {
             let bottom_sheet_content = bottom_sheet_content;
@@ -806,14 +910,17 @@ struct BottomSheetLayout {
     progress: f32,
     is_open: bool,
     drag_offset: f32,
-    expansion: BottomSheetExpansion,
+    resize_fraction: f64,
     partial_height: Option<Dp>,
     controller: State<BottomSheetController>,
+    resize_range: State<Option<Dp>>,
 }
 
 impl tessera_ui::LayoutModifierNode for BottomSheetLayout {
     fn measure_eq(&self, other: &Self) -> bool {
-        self.expansion == other.expansion && self.partial_height == other.partial_height
+        self.resize_fraction == other.resize_fraction
+            && self.partial_height == other.partial_height
+            && self.resize_range == other.resize_range
     }
 
     fn place_children(
@@ -877,9 +984,10 @@ impl tessera_ui::LayoutModifierNode for BottomSheetLayout {
             self.is_open,
             self.drag_offset,
             self.progress,
-            self.expansion,
+            self.resize_fraction,
             self.partial_height,
             self.controller,
+            self.resize_range,
         );
 
         Ok(result.with_size(main_content_size.size()))
