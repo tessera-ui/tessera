@@ -706,13 +706,6 @@ impl tessera_ui::LayoutModifierNode for TopAppBarLayout {
                 children[0],
                 PxPosition::new(left, top + (toolbar_height - navigation.height) / 2),
             );
-            result.place_child(
-                children[2],
-                PxPosition::new(
-                    width - right - actions.width,
-                    top + (toolbar_height - actions.height) / 2,
-                ),
-            );
         }
         let title_x = if self.alignment == AppBarTitleAlignment::Center {
             ((width - title.width) / 2)
@@ -743,6 +736,15 @@ impl tessera_ui::LayoutModifierNode for TopAppBarLayout {
                 inset
             };
             result.place_child(children[3], PxPosition::new(x, top + toolbar_height));
+        }
+        if toolbar_visible {
+            result.place_child(
+                children[2],
+                PxPosition::new(
+                    width - right - actions.width,
+                    top + (toolbar_height - actions.height) / 2,
+                ),
+            );
         }
         Ok(result)
     }

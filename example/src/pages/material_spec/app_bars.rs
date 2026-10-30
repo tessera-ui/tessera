@@ -29,8 +29,8 @@ use tessera_components::{
     theme::{MaterialTheme, material_theme},
 };
 use tessera_ui::{
-    Dp, Modifier, PxRect, RenderSlot, State, accesskit::Role, modifier::FocusModifierExt as _,
-    remember, remember_with_key, tessera, use_context,
+    Dp, LayoutCoordinates, Modifier, RenderSlot, State, accesskit::Role,
+    modifier::FocusModifierExt as _, remember, remember_with_key, tessera, use_context,
 };
 
 use super::{
@@ -70,6 +70,10 @@ pub(super) fn app_bars_spec() {
                 title: "Measurements",
                 content: RenderSlot::new(measurements),
             },
+            SpecSection {
+                title: "Baseline app bars",
+                content: RenderSlot::new(baseline_app_bars),
+            },
         ],
     ).pages(vec![
         ArticlePage {
@@ -77,12 +81,31 @@ pub(super) fn app_bars_spec() {
                 paragraph("App bars identify the current page and keep navigation and one or two essential actions within reach. Choose search, small, medium flexible or large flexible layouts.".into());
                 gap(Dp(32.0)); variants();
             })), sections: vec![
+                section("Availability & resources", RenderSlot::new(|| {
+                    spec_table(
+                        vec!["Type".into(), "Resource".into(), "Status".into()],
+                        vec![
+                            vec!["Design".into(), "Design Kit (Figma)".into(), "Available".into()],
+                            vec!["Implementation".into(), "Flutter".into(), "Available".into()],
+                            vec!["Implementation".into(), "Jetpack Compose".into(), "Available".into()],
+                            vec!["Implementation".into(), "Jetpack Compose: Expressive".into(), "Available".into()],
+                            vec!["Implementation".into(), "Android Views (MDC-Android)".into(), "Available".into()],
+                            vec!["Implementation".into(), "Android Views (MDC-Android): Expressive".into(), "Available".into()],
+                            vec!["Implementation".into(), "Web".into(), "Unavailable".into()],
+                            vec!["Implementation".into(), "Web: Expressive".into(), "Unavailable".into()],
+                        ],
+                    );
+                    gap(Dp(24.0));
+                    paragraph("Tessera examples use the native top_app_bar component for the small, medium flexible and large flexible variants, and the native search bar inside an app bar for the search variant.".into());
+                })),
                 section("M3 Expressive update", RenderSlot::new(|| {
-                    paragraph("Search app bar adds an emphasized search entry point. Flexible app bars replace baseline medium and large variants, with larger titles, optional subtitles, text alignment and richer action treatments.".into());
+                    paragraph("Renamed from top app bar to app bar, and added the search app bar. Baseline medium and large app bars are no longer recommended. Medium flexible and large flexible app bars reduce overall height and add a larger title, an optional subtitle, leading or centered text alignment and text wrapping.".into());
+                    gap(Dp(16.0));
+                    paragraph("The small app bar also gained a subtitle, a center-aligned text option and more flexible elements for imagery and filled buttons.".into());
                     gap(Dp(24.0)); sample("Expressive overview", TopAppBarVariant::MediumFlexible).subtitle(true).controls(true);
                 })),
                 section("Differences from M2", RenderSlot::new(|| {
-                    paragraph("App bars use theme color roles and a contrasting container on scroll. Flexible variants make page titles more prominent while retaining compact navigation and action targets.".into());
+                    paragraph("Color: new color mappings with dynamic color support.\nOn scroll: no drop shadow; a color fill separates the bar from content.\nTypography: larger default text.\nLayout: smaller default height.".into());
                     gap(Dp(24.0)); app_figure(TopAppBarVariant::Small, false);
                 })),
             ],
@@ -90,57 +113,72 @@ pub(super) fn app_bars_spec() {
         ArticlePage {
             title: "Guidelines", intro: None, sections: vec![
                 section("Usage", RenderSlot::new(|| {
-                    paragraph("Use page-specific navigation, a brief headline and one primary action. If a second action is essential, keep its emphasis lower. Put larger action collections in a toolbar.".into());
-                    gap(Dp(24.0)); app_figure(TopAppBarVariant::Small, false);
-                    gap(Dp(32.0)); subheading("Baseline app bars".into());
-                    paragraph("Use medium flexible and large flexible for new layouts instead of the baseline medium and large app bars.".into());
+                    paragraph("App bars show information about the page, key actions, and navigation actions like Back or Menu. Use one action, or two only when the second is essential. The primary action changes or exits the whole page, such as Send, Save, or Edit.".into());
+                    gap(Dp(16.0));
+                    paragraph("When a product has many page actions, place them in a toolbar instead of adding them here, and avoid an overflow menu in the app bar when possible. To emphasize a single important action, give one icon button a filled or tonal style; never place two filled or tonal buttons side by side.".into());
+                    gap(Dp(24.0)); app_figure(TopAppBarVariant::Small, false).filled_action(true);
+                    gap(Dp(16.0));
+                    paragraph("Use a filled or tonal button for important actions. Do not put multiple filled or tonal buttons in the app bar.".into());
+                    gap(Dp(32.0)); subheading("Variants".into());
+                    paragraph("Search app bar for home pages where search is key to the product. Small for dense layouts or a scrolled page. Medium flexible to show a larger headline that can collapse into a small app bar on scroll. Large flexible to emphasize the page headline.".into());
                 })),
                 section("Search app bar", RenderSlot::new(|| {
-                    paragraph("Search should open a search view. The hint includes Search and identifies the scope. Keep common actions closest to the leading edge.".into());
+                    paragraph("A search app bar replaces heading text with a search field and provides an emphasized entry point to the search view. The search bar should always include the word Search, and can identify the search scope, such as Search in messages.".into());
                     gap(Dp(24.0)); search_sample();
                     gap(Dp(32.0)); subheading("Buttons in search app bar".into());
-                    paragraph("Use a leading navigation or product element and at most two trailing icons with an avatar on compact windows.".into());
+                    paragraph("The leading element can be a product logo, either purely cosmetic or opening a known destination. On compact windows, do not use more than two trailing icon buttons next to an avatar; move additional actions into a toolbar.".into());
                     gap(Dp(24.0)); subheading("Large screens".into());
-                    paragraph("Larger windows can reveal up to four trailing actions. The search field fills available space until 312dp, then grows at half the rate.".into());
+                    paragraph("Larger windows allow up to four trailing icons. The search field fills the space between leading and trailing elements until it reaches 312dp, then grows at half the rate of the remaining space.".into());
                     gap(Dp(24.0)); subheading("Alternate color options".into());
-                    paragraph("Prefer surface container for search; surface bright can distinguish the field on darker backgrounds.".into());
+                    paragraph("By default the search container uses surface container so it stands out from the app background. On darker backgrounds use a lighter role such as surface bright, and keep at least 3:1 contrast between the search label and its container.".into());
                 })),
                 section("Anatomy", RenderSlot::new(|| {
                     app_figure(TopAppBarVariant::MediumFlexible, false);
                     for (title, body) in [
-                        ("Container", "Keep the container rectangular, at its default height and across the full window width."),
-                        ("Adding logos", "Use a meaningful image without disrupting navigation or actions."),
-                        ("Leading button", "Use Back to return or Menu to open product navigation."),
-                        ("Headline", "Keep small headlines on one line; flexible headlines can wrap to two lines without truncating."),
-                        ("Subtitle", "Align supporting context with its headline."),
-                        ("Trailing icon buttons", "Prefer filled symbols and emphasize only one primary action."),
+                        ("Container", "The container holds navigation, headline and actions at the top of a screen. Keep its straight corners, default height and full window width; do not reduce the height or add curved corners, which imply the bar can expand."),
+                        ("Adding logos", "Use a high-quality, relevant image. It can replace all text in a small app bar and appears above the text in other variants without disrupting navigation or actions."),
+                        ("Leading button", "Use Back to return to the previous screen, or Menu to open product navigation. Keep the leading button aligned to the leading edge."),
+                        ("Headline", "Describe the current page, section, or product briefly. Flexible headlines can wrap to a second line; small headlines stay on one line and are never truncated."),
+                        ("Subtitle", "Small uses label medium, medium flexible uses label large, and large flexible uses title medium. Align it with its headline."),
+                        ("Trailing icon buttons", "Place up to two actions after the headline, most-used closest to the leading edge. Prefer filled icons for visibility; only one action may use a filled or tonal style."),
                     ] { gap(Dp(24.0)); subheading(title.into()); paragraph(body.into()); }
                 })),
                 section("Adaptive design", RenderSlot::new(|| {
                     subheading("Resizing".into());
-                    paragraph("The app bar fills its window. Reduce trailing actions into overflow when needed, and keep search between its leading and trailing controls.".into());
+                    paragraph("The app bar container spans the available width. In an adaptive layout, move secondary actions into an overflow menu at smaller breakpoints and restore them when space returns. The examples here keep their actions visible while the search field resizes between its leading and trailing controls.".into());
                     gap(Dp(24.0)); search_sample();
                     gap(Dp(32.0)); subheading("Presentation".into());
-                    paragraph("Align navigation and actions to the leading and trailing edges so right-to-left layouts can mirror their placement.".into());
+                    paragraph("Align navigation and actions to the leading and trailing edges, and mirror their placement for right-to-left layouts.".into());
                 })),
                 section("Behavior", RenderSlot::new(|| {
                     subheading("Scrolling".into());
-                    paragraph("A contrasting container separates scrolled content. Flexible bars can compress into a small bar and expand again at the page top.".into());
+                    paragraph("A contrasting container separates scrolled content; the bar can hide while scrolling up and reveal while scrolling down. Medium flexible and large flexible bars can compress into a small app bar on scroll and stay small until the page returns to the top. Never transform an app bar into a search app bar.".into());
                     gap(Dp(24.0)); sample("Scrolling app bar", TopAppBarVariant::MediumFlexible).subtitle(true).controls(true);
+                    gap(Dp(32.0)); subheading("Search and transparency".into());
+                    paragraph("Selecting the search field opens the search view. To focus on body content, a bar can stay transparent on scroll so its actions float above the content; in that case give the icon buttons a container fill.".into());
+                    gap(Dp(24.0)); search_sample();
                 })),
             ],
         },
         ArticlePage {
             title: "Accessibility", intro: None, sections: vec![
-                section("Use cases", RenderSlot::new(|| { paragraph("Communicate the current page, expose navigation and page actions, and keep those actions accessible as content scrolls.".into()); })),
+                section("Use cases", RenderSlot::new(|| {
+                    paragraph("Assistive technology should let people understand which page they are visiting, take actions or navigate to a new destination, and keep access to app bar actions while the content is scrolled.".into());
+                    gap(Dp(24.0)); app_figure(TopAppBarVariant::Small, false);
+                })),
                 section("Interaction & style", RenderSlot::new(|| {
-                    for (title, body) in [("Touch", "Each action retains a 48×48dp target and ripple feedback."), ("Cursor", "Hover and pressed states identify the interactive icon button."), ("Keyboard or switch", "A focus indicator identifies the action that will activate."), ("Initial focus", "The leading navigation button is the first focus target, followed by trailing actions.")] {
+                    for (title, body) in [
+                        ("Touch", "Tapping an app bar icon button shows a touch ripple as interaction feedback, and every action keeps a 48×48dp target."),
+                        ("Cursor", "Hover shows a state layer and a click adds a ripple, in both active and inactive states."),
+                        ("Keyboard or switch", "A focus indicator identifies the action that will activate. Put the leading button first in the app bar's keyboard traversal order."),
+                        ("Tab and activation", "Tab moves focus from the leading button to each trailing action. Space or Enter activates the focused action."),
+                    ] {
                         subheading(title.into()); paragraph(body.into()); gap(Dp(24.0));
                     }
                     sample("Accessible app bar", TopAppBarVariant::Small).controls(true);
                 })),
                 section("Color", RenderSlot::new(|| {
-                    paragraph("Prefer the default search container and label colors. Custom colors need at least 3:1 contrast between label and container.".into());
+                    paragraph("On search app bars, use the default color roles when possible: the search container uses surface container and the search label uses on surface variant. On darker backgrounds the container can use surface bright. When mapping other roles, keep at least 3:1 contrast between the search text and its container.".into());
                     gap(Dp(24.0)); search_sample();
                 })),
                 section("Keyboard navigation", RenderSlot::new(|| {
@@ -148,7 +186,9 @@ pub(super) fn app_bars_spec() {
                     gap(Dp(24.0)); sample("Keyboard app bar", TopAppBarVariant::Small).controls(true);
                 })),
                 section("Labeling elements", RenderSlot::new(|| {
-                    paragraph("The headline names the page. Label icon buttons with their action, such as Back or Search, and add context only when it clarifies the destination.".into());
+                    paragraph("Keep the headline text and its accessibility label consistent. Expose a page title or heading role when implementing screen-reader heading navigation, and add context to the label when it helps people understand which page they are on. The native text titles in these examples currently expose a text label.".into());
+                    gap(Dp(16.0));
+                    paragraph("Label each icon button by the action it performs, such as Back, Search, or View on map. Screen readers read the label followed by the Button role.".into());
                     gap(Dp(24.0)); app_figure(TopAppBarVariant::Small, false);
                 })),
             ],
@@ -269,7 +309,8 @@ fn sample(
                                 ..Default::default()
                             }))
                             .children(move || {
-                                let mut bar = top_app_bar()
+                                let logo_slot = RenderSlot::new(brand);
+                                top_app_bar()
                                     .variant(variant.get())
                                     .title("Library")
                                     .subtitle_optional(
@@ -286,6 +327,7 @@ fn sample(
                                         merge_descendants: true,
                                         ..Default::default()
                                     }))
+                                    .title_content_optional(logo.get().then_some(logo_slot))
                                     .navigation_icon(move || {
                                         icon_button()
                                             .standard()
@@ -297,25 +339,31 @@ fn sample(
                                             });
                                     })
                                     .action_shared(RenderSlot::new(move || {
-                                        let mut action = icon_button()
-                                            .icon(filled::SEARCH_SVG)
-                                            .accessibility_label(format!("{} search", label.get()))
-                                            .on_click(move || {
-                                                status.set("Search selected".to_owned())
-                                            });
-                                        action = if filled_action.get() {
-                                            action.filled()
+                                        if filled_action.get() {
+                                            icon_button()
+                                                .filled()
+                                                .icon(filled::SEARCH_SVG)
+                                                .accessibility_label(format!(
+                                                    "{} search",
+                                                    label.get()
+                                                ))
+                                                .on_click(move || {
+                                                    status.set("Search selected".to_owned())
+                                                });
                                         } else {
-                                            action
+                                            icon_button()
                                                 .standard()
                                                 .color_style(IconButtonColorStyle::Inherited)
-                                        };
-                                        drop(action);
+                                                .icon(filled::SEARCH_SVG)
+                                                .accessibility_label(format!(
+                                                    "{} search",
+                                                    label.get()
+                                                ))
+                                                .on_click(move || {
+                                                    status.set("Search selected".to_owned())
+                                                });
+                                        }
                                     }));
-                                if logo.get() {
-                                    bar = bar.title_content(brand);
-                                }
-                                drop(bar);
                             });
                     });
                     if controls.unwrap_or(false) {
@@ -454,8 +502,8 @@ fn search_sample(
                             merge_descendants: true,
                             ..Default::default()
                         })
-                        .on_globally_positioned(move |bounds: PxRect| {
-                            let next = Dp::from_pixels_f32(bounds.width.to_f32());
+                        .on_layout_coordinates(move |coordinates: LayoutCoordinates| {
+                            let next = Dp::from_pixels_f32(coordinates.local_size.width.to_f32());
                             if width.get() != next {
                                 width.set(next);
                             }
@@ -492,7 +540,13 @@ fn search_sample(
                                     } else {
                                         312.0 + (available - 312.0) * 0.5
                                     };
-                                    let mut field = search_bar()
+                                    let leading_icon = RenderSlot::new(|| {
+                                        icon().vector(filled::SEARCH_SVG).size(Dp(24.0));
+                                    });
+                                    let trailing_icon = RenderSlot::new(|| {
+                                        icon().vector(filled::MIC_SVG).size(Dp(24.0));
+                                    });
+                                    search_bar()
                                         .modifier(
                                             geometry
                                                 .map(|geometry| watch(geometry, "search"))
@@ -513,17 +567,13 @@ fn search_sample(
                                             if active {
                                                 opened.set(true);
                                             }
-                                        });
-                                    if specimen == Some(1) {
-                                        field = field.trailing_icon(|| {
-                                            icon().vector(filled::MIC_SVG).size(Dp(24.0));
-                                        });
-                                    } else if specimen.is_none() {
-                                        field = field.leading_icon(|| {
-                                            icon().vector(filled::SEARCH_SVG).size(Dp(24.0));
-                                        });
-                                    }
-                                    drop(field);
+                                        })
+                                        .leading_icon_optional(
+                                            specimen.is_none().then_some(leading_icon),
+                                        )
+                                        .trailing_icon_optional(
+                                            (specimen == Some(1)).then_some(trailing_icon),
+                                        );
                                     if specimen == Some(0) {
                                         boxed()
                                             .alignment(Alignment::Center)
@@ -676,8 +726,37 @@ fn tokens() {
             vec!["Small headline".into(), "Title large".into()],
             vec!["Medium flexible headline".into(), "Headline medium".into()],
             vec!["Large flexible headline".into(), "Display small".into()],
+            vec!["Search container".into(), "Surface container".into()],
+            vec!["Search label".into(), "On surface variant".into()],
+            vec![
+                "Search container on darker surfaces".into(),
+                "Surface bright".into(),
+            ],
         ],
     );
+}
+
+#[tessera]
+fn baseline_app_bars() {
+    paragraph("The baseline medium and large app bars are no longer recommended in M3 Expressive. Use the medium flexible and large flexible app bars instead: they look similar but support multiple lines, use a shorter height, and can hold a wider variety of elements such as images.".into());
+    gap(Dp(24.0));
+    panel(RenderSlot::new(|| {
+        for (label, variant) in [
+            (
+                "Medium flexible replaces baseline medium",
+                TopAppBarVariant::MediumFlexible,
+            ),
+            (
+                "Large flexible replaces baseline large",
+                TopAppBarVariant::LargeFlexible,
+            ),
+        ] {
+            sample(label, variant).subtitle(true);
+            gap(Dp(32.0));
+        }
+    }));
+    gap(Dp(16.0));
+    paragraph("Baseline medium and large placed the headline in a taller container and did not support multi-line headlines or subtitles. Their flexible replacements keep the same compact navigation and action targets while letting the title wrap to two lines.".into());
 }
 
 #[tessera]
@@ -754,8 +833,12 @@ fn measurements() {
             vec!["Navigation and action target".into(), "48dp".into()],
             vec!["Icon size".into(), "24dp".into()],
             vec!["Title inset without navigation".into(), "16dp".into()],
+            vec!["Search field height".into(), "56dp".into()],
+            vec!["Search field growth threshold".into(), "312dp".into()],
         ],
     );
+    gap(Dp(24.0));
+    paragraph("Flexible app bars hug their text contents, so a subtitle or a wrapping headline can make the bar taller. The small app bar stays 64dp tall with or without a subtitle. Navigation and action targets stay at 48dp.".into());
 }
 
 #[tessera]
@@ -837,7 +920,11 @@ fn search_figure(measurements: bool) {
         .modifier(
             watch(geometry, "figure")
                 .fill_max_width()
-                .height(Dp(figure_width / (2048.0 / 610.0)))
+                .height(Dp(if figure_width < 800.0 {
+                    520.0
+                } else {
+                    (figure_width / (2048.0 / 610.0)).max(260.0)
+                }))
                 .background_with_shape(
                     scheme.surface_container_low,
                     Shape::rounded_rectangle(Dp(24.0)),
@@ -879,22 +966,45 @@ fn search_pair_item(variant: usize, measurements: bool) {
                 .map(|r| Dp::from_pixels_f32(r.width.to_f32()).0)
         })
         .unwrap_or(1024.0);
+    let stacked = width < 800.0;
     boxed()
-        .modifier(watch(geometry, "figure").fill_max_size())
+        .modifier(
+            watch(geometry, "figure")
+                .fill_max_width()
+                .height(Dp(if stacked {
+                    260.0
+                } else {
+                    (width / (2048.0 / 610.0)).max(260.0)
+                }))
+                .offset(
+                    Dp(0.0),
+                    Dp(if stacked { variant as f64 * 260.0 } else { 0.0 }),
+                ),
+        )
         .children(move || {
             boxed()
                 .alignment(Alignment::Center)
                 .modifier(
                     Modifier::new()
-                        .align(if variant == 0 {
+                        .align(if stacked {
+                            Alignment::Center
+                        } else if variant == 0 {
                             Alignment::CenterStart
                         } else {
                             Alignment::CenterEnd
                         })
-                        .width(Dp(width * (824.0 / 2048.0) + 44.0))
+                        .width(Dp(if stacked {
+                            (width - 68.0).max(44.0)
+                        } else {
+                            width * (824.0 / 2048.0) + 44.0
+                        }))
                         .offset(
-                            Dp((width * (152.0 / 2048.0) - 22.0)
-                                * if variant == 0 { 1.0 } else { -1.0 }),
+                            Dp(if stacked {
+                                0.0
+                            } else {
+                                (width * (152.0 / 2048.0) - 22.0)
+                                    * if variant == 0 { 1.0 } else { -1.0 }
+                            }),
                             Dp(0.0),
                         )
                         .padding_all(Dp(22.0)),
@@ -938,7 +1048,7 @@ fn search_annotations(geometry: State<Geometry>, measurements: bool) {
         );
         dotted(
             &mut svg,
-            search.x + search.w + 12.0,
+            container.x + container.w + 12.0,
             search.y,
             search.h,
             true,
@@ -946,7 +1056,7 @@ fn search_annotations(geometry: State<Geometry>, measurements: bool) {
         );
         annotations::dimension(
             format!("{:.0}", search.h),
-            Dp(search.x + search.w + 16.0),
+            Dp(container.x + container.w + 16.0),
             Dp(search.y + 12.0),
         );
         for rect in [
@@ -1036,7 +1146,7 @@ fn app_figure(variant: TopAppBarVariant, measurements: bool, filled_action: Opti
         })
         .unwrap_or(1024.0);
     let figure_height = if measurements {
-        figure_width / (2048.0 / 600.0)
+        (figure_width / (2048.0 / 600.0)).max(240.0)
     } else {
         360.0
     };
@@ -1099,7 +1209,7 @@ fn figure_bar(
     filled_action: Option<bool>,
     actions: State<usize>,
 ) {
-    let mut bar = top_app_bar()
+    top_app_bar()
         .modifier(watch(geometry, "container"))
         .variant(variant)
         .title(if measurements {
@@ -1122,42 +1232,52 @@ fn figure_bar(
                 .on_click(move || actions.set(actions.get() + 1));
         })
         .action_shared(RenderSlot::new(move || {
-            let mut action = icon_button()
-                .modifier(watch(geometry, "trailing"))
-                .icon(filled::SEARCH_SVG)
-                .accessibility_label("Figure search")
-                .on_click(move || actions.set(actions.get() + 1));
-            action = if filled_action.unwrap_or(false) {
-                action.filled()
+            if filled_action.unwrap_or(false) {
+                icon_button()
+                    .modifier(watch(geometry, "trailing"))
+                    .filled()
+                    .icon(filled::SEARCH_SVG)
+                    .accessibility_label("Figure search")
+                    .on_click(move || actions.set(actions.get() + 1));
             } else {
-                action
+                icon_button()
+                    .modifier(watch(geometry, "trailing"))
                     .standard()
                     .color_style(IconButtonColorStyle::Inherited)
-            };
-            drop(action);
+                    .icon(filled::SEARCH_SVG)
+                    .accessibility_label("Figure search")
+                    .on_click(move || actions.set(actions.get() + 1));
+            }
             icon_button()
+                .modifier(watch(geometry, "trailing-last"))
                 .standard()
                 .color_style(IconButtonColorStyle::Inherited)
                 .icon(filled::CALENDAR_TODAY_SVG)
                 .accessibility_label("Figure calendar")
                 .on_click(move || actions.set(actions.get() + 1));
-        }));
-    if !measurements {
-        bar = bar.subtitle("Subtitle");
-    }
-    drop(bar);
+        }))
+        .subtitle_optional((!measurements).then(|| "Subtitle".to_owned()));
 }
 
 #[tessera]
 fn app_annotations(geometry: State<Geometry>, measurements: bool, variant: TopAppBarVariant) {
     let values = geometry.get();
-    let (Some(root), Some(container), Some(leading), Some(trailing), Some(title)) = (
+    let (
+        Some(root),
+        Some(container),
+        Some(leading),
+        Some(trailing),
+        Some(trailing_last),
+        Some(title),
+    ) = (
         values.get("figure"),
         relative(&values, "container"),
         relative(&values, "leading"),
         relative(&values, "trailing"),
+        relative(&values, "trailing-last"),
         relative(&values, "title"),
-    ) else {
+    )
+    else {
         return;
     };
     let theme = use_context::<MaterialTheme>().unwrap().get();
@@ -1206,9 +1326,9 @@ fn app_annotations(geometry: State<Geometry>, measurements: bool, variant: TopAp
                 h: container.h,
             },
             Rect {
-                x: trailing.x + trailing.w,
+                x: trailing_last.x + trailing_last.w,
                 y: container.y,
-                w: container.x + container.w - trailing.x - trailing.w,
+                w: (container.x + container.w - trailing_last.x - trailing_last.w).max(0.0),
                 h: container.h,
             },
             Rect {
@@ -1229,18 +1349,27 @@ fn app_annotations(geometry: State<Geometry>, measurements: bool, variant: TopAp
                 container.y - 32.0,
             ),
             (
-                format!("{:.0}", container.x + container.w - trailing.x - trailing.w),
+                format!(
+                    "{:.0}",
+                    (container.x + container.w - trailing_last.x - trailing_last.w).max(0.0)
+                ),
                 container.x + container.w - 8.0,
                 container.y - 32.0,
-            ),
-            (
-                format!("{:.0}", container.y + container.h - title.y - title.h),
-                title.x + title.w + 8.0,
-                title.y + title.h,
             ),
         ] {
             annotations::dimension(label, Dp(x), Dp(y));
         }
+        if variant != TopAppBarVariant::Small {
+            annotations::dimension(
+                format!(
+                    "{:.0}",
+                    (container.y + container.h - title.y - title.h).max(0.0)
+                ),
+                Dp(title.x + title.w + 8.0),
+                Dp(title.y + title.h),
+            );
+        }
+        annotations::outline(&mut svg, trailing_last);
         annotations::outline(&mut svg, title);
         annotations::outline(&mut svg, leading);
         annotations::outline(&mut svg, trailing);
@@ -1256,7 +1385,7 @@ fn app_annotations(geometry: State<Geometry>, measurements: bool, variant: TopAp
             (
                 3,
                 Rect {
-                    w: trailing.w + 48.0,
+                    w: trailing_last.x + trailing_last.w - trailing.x,
                     ..trailing
                 },
                 trailing.x + 24.0,
@@ -1322,7 +1451,8 @@ mod tests {
     use std::cell::Cell;
 
     use tessera_ui::{
-        HeadlessConfig, HeadlessRenderer, MOUSE_POINTER_ID, PressKeyEventType, PxPosition,
+        HeadlessConfig, HeadlessRenderer, MOUSE_POINTER_ID, PressKeyEventType, PxPosition, PxRect,
+        scaled_box,
     };
 
     use super::*;
@@ -1330,7 +1460,8 @@ mod tests {
     #[derive(Clone, Copy)]
     enum Case {
         Bar(TopAppBarVariant),
-        Search(f64),
+        Search(f64, f32),
+        SearchMeasurements(f64),
     }
 
     thread_local! {
@@ -1358,12 +1489,21 @@ mod tests {
                     Case::Bar(variant) => {
                         app_figure(variant, true);
                     }
-                    Case::Search(width) => {
+                    Case::SearchMeasurements(width) => {
                         boxed()
                             .modifier(Modifier::new().width(Dp(width)))
-                            .children(move || {
-                                search_sample().geometry(geometry);
+                            .children(|| {
+                                search_figure(true);
                             });
+                    }
+                    Case::Search(width, scale) => {
+                        scaled_box(scale).child(move || {
+                            boxed()
+                                .modifier(Modifier::new().required_size(Dp(width), Dp(320.0)))
+                                .children(move || {
+                                    search_sample().geometry(geometry);
+                                });
+                        });
                     }
                 });
         });
@@ -1416,6 +1556,37 @@ mod tests {
                 .expect("native bar bounds");
             assert_eq!(bar.width(), 360.0);
             assert_eq!(bar.height(), height);
+            let calendar = snapshot
+                .nodes
+                .iter()
+                .find(|(_, node)| {
+                    node.role() == Role::Button && node.label() == Some("Figure calendar")
+                })
+                .expect("last native action")
+                .1
+                .bounds()
+                .unwrap();
+            assert_eq!(bar.x1 - calendar.x1, 4.0);
+            assert!(
+                snapshot
+                    .nodes
+                    .iter()
+                    .any(|(_, node)| node.label() == Some("Dimension 4"))
+            );
+            assert!(
+                !snapshot
+                    .nodes
+                    .iter()
+                    .any(|(_, node)| matches!(node.label(), Some("Dimension 52" | "Dimension -0")))
+            );
+            if variant == TopAppBarVariant::Small {
+                assert!(
+                    !snapshot
+                        .nodes
+                        .iter()
+                        .any(|(_, node)| node.label() == Some("Dimension 0"))
+                );
+            }
             let back = snapshot
                 .nodes
                 .iter()
@@ -1429,7 +1600,7 @@ mod tests {
             assert!(back.width() >= 48.0 && back.height() >= 48.0);
         }
         for (width, field_width) in [(400.0, 280.0), (600.0, 396.0), (1000.0, 596.0)] {
-            let mut renderer = renderer(Case::Search(width));
+            let mut renderer = renderer(Case::Search(width, 1.0));
             let geometry = GEOMETRY.get().expect("search geometry").get();
             let bar = geometry.get("container").expect("actual app bar container");
             let field = *geometry.get("search").expect("actual native search field");
@@ -1478,6 +1649,68 @@ mod tests {
                     .any(|(_, node)| node.role() == Role::Dialog
                         && node.label() == Some("Search library view"))
             );
+        }
+        for scale in [0.5, 1.5] {
+            let _renderer = renderer(Case::Search(600.0, scale));
+            let geometry = GEOMETRY.get().expect("scaled search geometry").get();
+            let bar = geometry.get("container").expect("scaled app bar container");
+            let field = geometry.get("search").expect("scaled native search field");
+            assert_eq!(bar.width.to_f32(), 600.0 * scale);
+            assert_eq!(bar.height.to_f32(), 64.0 * scale);
+            assert_eq!(field.width.to_f32(), 396.0 * scale);
+            assert_eq!(field.height.to_f32(), 56.0 * scale);
+            assert_eq!((field.y - bar.y).to_f32(), 4.0 * scale);
+        }
+    }
+    #[test]
+    #[ignore = "Requires a GPU adapter for the real component pipelines"]
+    fn search_measurement_callouts_stay_outside_native_controls_at_both_layouts() {
+        for width in [1200.0, 600.0, 320.0] {
+            let renderer = renderer(Case::SearchMeasurements(width));
+            let snapshot = renderer
+                .accessibility_snapshot()
+                .expect("measurement semantics");
+            let labels: Vec<_> = snapshot
+                .nodes
+                .iter()
+                .filter(|(_, node)| {
+                    node.role() == Role::Note && node.label() == Some("Dimension 56")
+                })
+                .map(|(_, node)| node.bounds().unwrap())
+                .collect();
+            assert_eq!(labels.len(), 2, "both real search measurements at {width}");
+            let controls: Vec<_> = snapshot
+                .nodes
+                .iter()
+                .filter(|(_, node)| {
+                    matches!(
+                        node.role(),
+                        Role::Button | Role::TextInput | Role::SearchInput
+                    )
+                })
+                .filter_map(|(_, node)| node.bounds())
+                .collect();
+            assert!(!controls.is_empty());
+            for label in &labels {
+                assert!(
+                    label.x0 >= 0.0 && label.x1 <= width,
+                    "callout within figure at {width}: {label:?}"
+                );
+                for control in &controls {
+                    assert!(
+                        label.x1 <= control.x0
+                            || label.x0 >= control.x1
+                            || label.y1 <= control.y0
+                            || label.y0 >= control.y1,
+                        "56dp callout overlaps a native control at {width}: {label:?} / {control:?}"
+                    );
+                }
+            }
+            if width < 800.0 {
+                assert_eq!((labels[0].y0 - labels[1].y0).abs(), 260.0);
+            } else {
+                assert_eq!(labels[0].y0, labels[1].y0);
+            }
         }
     }
 }
