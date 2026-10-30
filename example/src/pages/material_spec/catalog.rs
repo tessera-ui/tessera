@@ -891,6 +891,7 @@ mod tests {
     }
 
     fn article_contents_links(renderer: &mut HeadlessRenderer, article: &str) -> Vec<String> {
+        compose_navigation_target(renderer, article, Role::Heading);
         for _ in 0..48 {
             let snapshot = renderer.accessibility_snapshot().unwrap();
             if let Some(contents) = snapshot
@@ -2445,6 +2446,7 @@ mod tests {
             }
             renderer.resize(390, 900);
             renderer.render_frames(8);
+            compose_navigation_target(&mut renderer, component.title, Role::Heading);
             let title = renderer
                 .accessibility_snapshot()
                 .unwrap()
