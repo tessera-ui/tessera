@@ -55,9 +55,9 @@ pub(super) fn menus_spec() {
         SpecSection { title: "Measurements", content: RenderSlot::new(|| {menu_figure(false, true, MenuColorStyle::Standard);}) },
         SpecSection { title: "Menu (baseline)", content: RenderSlot::new(baseline) },
     ]).pages(vec![
-        ArticlePage { title: "Overview", intro: Some(RenderSlot::new(|| { prose("Show related actions in context without keeping every action on screen. Vertical menus use expressive shapes, optional groups, selection and two color styles."); gap(Dp(32.0)); launch(); })), sections: vec![
-            SpecSection { title: "Usage", content: RenderSlot::new(|| { prose("Use menus for temporary choices, overflow actions and contextual commands. Use a toolbar when actions need to remain visible."); gap(Dp(24.0)); variants(); }) },
-            SpecSection { title: "What's new", content: RenderSlot::new(|| { prose("Vertical menus add rounded groups, standard and vibrant colors, additional selection states and shape changes as focus moves between submenus."); }) },
+        ArticlePage { title: "Overview", intro: Some(RenderSlot::new(|| { prose("Menus display a list of choices on a temporary surface. Use a menu to show a temporary set of actions; use a toolbar when actions must stay on screen. Menus can open from icon buttons, split buttons, text fields or a secondary click."); gap(Dp(32.0)); launch(); })), sections: vec![
+            SpecSection { title: "M3 Expressive update", content: RenderSlot::new(|| { prose("Vertical menus add rounded groups, refined submenu motion, standard and vibrant colors and additional selection states. Gaps can join groups for a more flexible layout. Vertical menus are recommended for new designs, and the baseline menu remains available."); gap(Dp(24.0)); variants(); }) },
+            SpecSection { title: "Differences from M2", content: RenderSlot::new(|| { prose("Color: new color mappings and compatibility with dynamic color keep menu surfaces distinct from the content behind them. Variants: the dropdown menu and the exposed dropdown menu are both referred to as a menu, because they differ only in the element that opens them."); }) },
         ] },
         ArticlePage { title: "Guidelines", intro: None, sections: vec![
             SpecSection { title: "Usage", content: RenderSlot::new(|| { prose("Use menus for temporary sets of actions. Keep vibrant menus for higher emphasis. Open them from a button, icon, field or contextual secondary click."); gap(Dp(24.0)); launch(); gap(Dp(32.0)); subheading("Menu groups".into()); prose("Bundle related actions with a divider or a small gap. Use no more than one or two gaps. Use dividers instead of gaps in scrolling menus."); gap(Dp(24.0)); configurations(); }) },
@@ -770,27 +770,44 @@ fn menu_color_figure(style: MenuColorStyle, dark: bool) {
                                 boxed()
                                     .modifier(watch(geometry, COLOR_ROWS[index]).fill_max_width())
                                     .children(move || {
-                                        let mut item = menu_item()
-                                            .label(format!("Item {}", index + 1))
-                                            .selection_mode(MenuItemSelectionMode::Radio)
-                                            .selected(selected.get() == index)
-                                            .color_style(style)
-                                            .close_on_click(false)
-                                            .on_click(move || selected.set(index));
                                         if index == 0 {
-                                            item = item.leading_icon(filled::VISIBILITY_SVG);
-                                        }
-                                        if index == 1 {
-                                            item = item
+                                            menu_item()
+                                                .label(format!("Item {}", index + 1))
+                                                .selection_mode(MenuItemSelectionMode::Radio)
+                                                .selected(selected.get() == index)
+                                                .color_style(style)
+                                                .close_on_click(false)
+                                                .leading_icon(filled::VISIBILITY_SVG)
+                                                .on_click(move || selected.set(index));
+                                        } else if index == 1 {
+                                            menu_item()
+                                                .label(format!("Item {}", index + 1))
+                                                .selection_mode(MenuItemSelectionMode::Radio)
+                                                .selected(selected.get() == index)
+                                                .color_style(style)
+                                                .close_on_click(false)
                                                 .leading_icon(filled::CONTENT_COPY_SVG)
-                                                .trailing_text("⌘C");
-                                        }
-                                        if index == 2 {
-                                            item = item
+                                                .trailing_text("⌘C")
+                                                .on_click(move || selected.set(index));
+                                        } else if index == 2 {
+                                            menu_item()
+                                                .label(format!("Item {}", index + 1))
+                                                .selection_mode(MenuItemSelectionMode::Radio)
+                                                .selected(selected.get() == index)
+                                                .color_style(style)
+                                                .close_on_click(false)
                                                 .leading_icon(filled::EDIT_SVG)
-                                                .trailing_icon(filled::ARROW_RIGHT_SVG);
+                                                .trailing_icon(filled::ARROW_RIGHT_SVG)
+                                                .on_click(move || selected.set(index));
+                                        } else {
+                                            menu_item()
+                                                .label(format!("Item {}", index + 1))
+                                                .selection_mode(MenuItemSelectionMode::Radio)
+                                                .selected(selected.get() == index)
+                                                .color_style(style)
+                                                .close_on_click(false)
+                                                .on_click(move || selected.set(index));
                                         }
-                                        drop(item);
                                     });
                             }
                         });

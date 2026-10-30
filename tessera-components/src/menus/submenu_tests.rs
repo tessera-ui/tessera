@@ -3,7 +3,7 @@ use std::cell::Cell;
 use tessera_ui::{
     Color, Dp, FocusRequester, HeadlessConfig, HeadlessRenderer, MOUSE_POINTER_ID, Modifier,
     PressKeyEventType, PxPosition, State,
-    accesskit::{Rect, Role},
+    accesskit::{Action, ActionRequest, HasPopup, Node, NodeId, Rect, Role, Toggled, TreeId},
     remember, tessera,
 };
 
@@ -13,7 +13,7 @@ use crate::{
     theme::{MaterialTheme, material_theme},
 };
 
-use super::{MenuAnchor, MenuController, menu_item, menu_provider};
+use super::{MenuAnchor, MenuController, MenuItemSelectionMode, menu_item, menu_provider};
 
 thread_local! {
     static ROOT: Cell<Option<State<MenuController>>> = const { Cell::new(None) };
@@ -293,4 +293,221 @@ fn gpu_submenus_escape_parent_clip_and_close_the_complete_chain() {
 #[ignore = "requires a native GPU adapter"]
 fn gpu_submenus_escape_parent_clip_and_close_the_complete_chain_msaa() {
     check_submenu_chain(4);
+}
+
+thread_local! {
+    static TRAILING: Cell<Option<State<u8>>> = const { Cell::new(None) };
+}
+
+#[tessera]
+fn disclosure_fixture() {
+    let trailing = remember(|| 0_u8);
+    TRAILING.set(Some(trailing));
+    material_theme().child(move || {
+        menu_provider()
+            .is_open(true)
+            .modifier(Modifier::new().width(Dp(240.0)))
+            .menu_content(move || {
+                let mut item = menu_item().label("Share").submenu_content(|| {
+                    menu_item().label("Copy link").on_click(|| {});
+                });
+                match trailing.get() {
+                    1 => item = item.trailing_text("Hint"),
+                    2 => item = item.trailing_icon(crate::material_icons::filled::STAR_SVG),
+                    _ => {}
+                }
+                drop(item);
+            });
+    });
+}
+
+#[test]
+#[ignore = "requires a native GPU adapter"]
+fn gpu_submenu_disclosure_remains_visible_with_custom_trailing_content() {
+    crate::test_utils::run_isolated_test(
+        "menus::submenu_tests::gpu_submenu_disclosure_remains_visible_with_custom_trailing_content",
+        || {
+            let mut renderer = HeadlessRenderer::new(
+                Box::new(disclosure_fixture),
+                vec![Box::new(crate::TesseraComponents)],
+                HeadlessConfig {
+                    width: 400,
+                    height: 300,
+                    sample_count: 1,
+                    ..Default::default()
+                },
+            )
+            .unwrap();
+            renderer.render_frames(30);
+            let item = bounds(&renderer, "Share");
+            let crop = |pixels: Vec<u8>| {
+                let mut region = Vec::new();
+                for y in (item.y0 as usize + 16)..(item.y0 as usize + 32) {
+                    for x in (item.x1 as usize - 36)..(item.x1 as usize - 16) {
+                        let offset = (y * 400 + x) * 4;
+                        region.extend_from_slice(&pixels[offset..offset + 4]);
+                    }
+                }
+                region
+            };
+            let initial = crop(renderer.read_pixels().unwrap());
+            assert!(
+                initial.chunks_exact(4).any(|pixel| pixel != &initial[..4]),
+                "the disclosure region must contain painted arrow pixels"
+            );
+            for variant in [1, 2] {
+                TRAILING.get().unwrap().set(variant);
+                renderer.render_frames(30);
+                let changed = crop(renderer.read_pixels().unwrap());
+                assert_eq!(
+                    initial, changed,
+                    "trailing content must not replace the arrow"
+                );
+            }
+        },
+    );
+}
+
+thread_local! {
+    static CHECKED_ROOT: Cell<Option<State<MenuController>>> = const { Cell::new(None) };
+    static CHECKED_CONFIG: Cell<Option<State<(MenuItemSelectionMode, bool)>>> = const { Cell::new(None) };
+    static CHECKED_CALLS: Cell<Option<State<(usize, usize)>>> = const { Cell::new(None) };
+}
+
+#[tessera]
+fn checked_branch_fixture() {
+    let controller = remember(MenuController::new);
+    let config = remember(|| (MenuItemSelectionMode::Checkbox, false));
+    let calls = remember(|| (0_usize, 0_usize));
+    CHECKED_ROOT.set(Some(controller));
+    CHECKED_CONFIG.set(Some(config));
+    CHECKED_CALLS.set(Some(calls));
+    material_theme().child(move || {
+        menu_provider()
+            .controller(controller)
+            .menu_content(move || {
+                menu_item()
+                    .label("Checked branch")
+                    .selection_mode(config.get().0)
+                    .selected(config.get().1)
+                    .close_on_click(true)
+                    .on_click(move || calls.with_mut(|calls| calls.0 += 1))
+                    .submenu_content(move || {
+                        menu_item()
+                            .label("Checked child leaf")
+                            .close_on_click(true)
+                            .on_click(move || calls.with_mut(|calls| calls.1 += 1));
+                    });
+            });
+    });
+}
+
+fn checked_node(renderer: &HeadlessRenderer, label: &str, role: Role) -> (NodeId, Node) {
+    renderer
+        .accessibility_snapshot()
+        .unwrap()
+        .nodes
+        .into_iter()
+        .find(|(_, node)| node.role() == role && node.label() == Some(label))
+        .unwrap_or_else(|| panic!("missing {role:?} {label}"))
+}
+
+fn checked_action(renderer: &mut HeadlessRenderer, label: &str, role: Role, action: Action) {
+    let target_node = checked_node(renderer, label, role).0;
+    assert!(renderer.dispatch_accessibility_action(ActionRequest {
+        action,
+        target_tree: TreeId::ROOT,
+        target_node,
+        data: None,
+    }));
+    renderer.render_frames(12);
+}
+
+#[test]
+#[ignore = "requires a native GPU adapter"]
+fn gpu_checkable_branches_preserve_controlled_state_and_expand_before_leaf_activation() {
+    crate::test_utils::run_isolated_test(
+        "menus::submenu_tests::gpu_checkable_branches_preserve_controlled_state_and_expand_before_leaf_activation",
+        || {
+            let mut renderer = HeadlessRenderer::new(
+                Box::new(checked_branch_fixture),
+                vec![Box::new(crate::TesseraComponents)],
+                HeadlessConfig {
+                    width: 700,
+                    height: 300,
+                    sample_count: 1,
+                    ..Default::default()
+                },
+            )
+            .unwrap();
+            renderer.render_frames(4);
+            let controller = CHECKED_ROOT.get().unwrap();
+            let config = CHECKED_CONFIG.get().unwrap();
+            let calls = CHECKED_CALLS.get().unwrap();
+            let mut completed_leaves = 0;
+            for (mode, role) in [
+                (MenuItemSelectionMode::Radio, Role::MenuItemRadio),
+                (MenuItemSelectionMode::Checkbox, Role::MenuItemCheckBox),
+            ] {
+                for selected in [false, true] {
+                    config.set((mode, selected));
+                    controller.with_mut(MenuController::open);
+                    renderer.render_frames(12);
+                    let checked = if selected {
+                        Toggled::True
+                    } else {
+                        Toggled::False
+                    };
+                    let before = checked_node(&renderer, "Checked branch", role).1;
+                    assert_eq!(before.toggled(), Some(checked));
+                    assert_eq!(before.is_selected(), None);
+                    assert_eq!(before.has_popup(), Some(HasPopup::Menu));
+                    assert_eq!(before.is_expanded(), Some(false));
+                    checked_action(&mut renderer, "Checked branch", role, Action::Focus);
+                    assert_focus(&renderer, "Checked branch");
+                    assert_eq!(calls.get(), (0, completed_leaves));
+                    assert_eq!(
+                        checked_node(&renderer, "Checked branch", role)
+                            .1
+                            .is_expanded(),
+                        Some(false)
+                    );
+                    checked_action(&mut renderer, "Checked branch", role, Action::Click);
+                    assert!(controller.with(MenuController::is_open));
+                    assert_eq!(calls.get(), (0, completed_leaves));
+                    assert_eq!(config.get(), (mode, selected));
+                    let opened = checked_node(&renderer, "Checked branch", role).1;
+                    assert_eq!(opened.toggled(), Some(checked));
+                    assert_eq!(opened.has_popup(), Some(HasPopup::Menu));
+                    assert_eq!(opened.is_expanded(), Some(true));
+                    checked_action(
+                        &mut renderer,
+                        "Checked child leaf",
+                        Role::MenuItem,
+                        Action::Focus,
+                    );
+                    assert_focus(&renderer, "Checked child leaf");
+                    assert_eq!(calls.get(), (0, completed_leaves));
+                    checked_action(
+                        &mut renderer,
+                        "Checked child leaf",
+                        Role::MenuItem,
+                        Action::Click,
+                    );
+                    completed_leaves += 1;
+                    assert_eq!(calls.get(), (0, completed_leaves));
+                    assert!(!controller.with(MenuController::is_open));
+                    assert_eq!(config.get(), (mode, selected));
+                    controller.with_mut(MenuController::open);
+                    renderer.render_frames(12);
+                    let reopened = checked_node(&renderer, "Checked branch", role).1;
+                    assert_eq!(reopened.toggled(), Some(checked));
+                    assert_eq!(reopened.is_expanded(), Some(false));
+                    assert_eq!(calls.get(), (0, completed_leaves));
+                    controller.with_mut(MenuController::close);
+                    renderer.render_frames(12);
+                }
+            }
+        },
+    );
 }

@@ -816,6 +816,24 @@ fn menu_provider_content(provider: Option<MenuProviderConfig>) {
         });
 }
 
+fn closes_submenu(
+    is_submenu: bool,
+    placement: MenuPlacement,
+    key: winit::keyboard::NamedKey,
+) -> bool {
+    is_submenu
+        && matches!(
+            (placement, key),
+            (
+                MenuPlacement::RightStart,
+                winit::keyboard::NamedKey::ArrowLeft
+            ) | (
+                MenuPlacement::LeftStart,
+                winit::keyboard::NamedKey::ArrowRight
+            )
+        )
+}
+
 #[tessera]
 fn menu_panel(
     provider: Option<MenuProviderConfig>,
@@ -831,6 +849,7 @@ fn menu_panel(
     let focus_scope = focus_scope.expect("menu_panel requires focus scope");
     let on_dismiss = provider.on_dismiss;
     let placement = provider.placement;
+    let is_submenu = provider.parent_request.is_some();
     let typeahead = remember(|| parking_lot::Mutex::new(typeahead::Registry::default()));
     let scroll = remember(ScrollableController::new);
     let color_style = provider.color_style;
@@ -877,14 +896,8 @@ fn menu_panel(
                         host.exit(input.key_modifiers.shift_key());
                         true
                     }
-                    winit::keyboard::Key::Named(winit::keyboard::NamedKey::ArrowLeft)
-                        if placement == MenuPlacement::RightStart =>
-                    {
-                        apply_close_action(controller, &on_dismiss);
-                        true
-                    }
-                    winit::keyboard::Key::Named(winit::keyboard::NamedKey::ArrowRight)
-                        if placement == MenuPlacement::LeftStart =>
+                    winit::keyboard::Key::Named(key)
+                        if closes_submenu(is_submenu, placement, *key) =>
                     {
                         apply_close_action(controller, &on_dismiss);
                         true
@@ -1071,23 +1084,28 @@ impl Default for MenuItemConfig {
 /// - `supporting_text` — optional supporting text below the label
 /// - `trailing_text` — optional trailing text such as a shortcut hint
 /// - `leading_icon` — optional icon shown on the leading side
-/// - `trailing_icon` — optional icon shown on the trailing side
-/// - `submenu_content` — optional submenu opened by activation or mouse dwell
+/// - `trailing_icon` — optional trailing icon before the submenu disclosure
+///   arrow
+/// - `submenu_content` — optional submenu opened by activation or mouse dwell;
+///   branch activation opens this submenu instead of calling `on_click`.
 /// - `submenu_placement` — optional submenu placement override
-/// - `selected` — whether the item renders as selected
-/// - `selection_mode` — optional radio or checkbox semantics; omitted for an
-///   action
+/// - `selected` — caller-owned visual and checked state; activation never
+///   changes it automatically.
+/// - `selection_mode` — optional radio or checkbox semantics for a leaf or a
+///   submenu branch; omit it for an ordinary action.
 /// - `position` — item position within its group, controlling corner shapes
 /// - `shape` — optional fixed item shape override
 /// - `container_color` — optional item background override
 /// - `color_style` — optional standard or vibrant color override
 /// - `enabled` — whether the item can be activated
-/// - `close_on_click` — whether activation closes the surrounding menu
+/// - `close_on_click` — whether selecting a leaf closes the menu chain; submenu
+///   expansion does not close the chain.
 /// - `height` — optional item height override
 /// - `label_color` — optional label text color override
 /// - `supporting_color` — optional supporting or trailing text color override
 /// - `disabled_color` — optional disabled content color override
-/// - `on_click` — optional activation callback
+/// - `on_click` — optional leaf activation callback; `submenu_content` takes
+///   precedence when both are provided.
 ///
 /// ## Examples
 /// ```
@@ -1348,14 +1366,10 @@ fn menu_item_surface(
                     })
                     .push_semantics(MenuItemDisclosure(expanded)),
             )
-            .accessibility_role(if !has_submenu {
-                match item.selection_mode {
-                    Some(MenuItemSelectionMode::Radio) => Role::MenuItemRadio,
-                    Some(MenuItemSelectionMode::Checkbox) => Role::MenuItemCheckBox,
-                    None => Role::MenuItem,
-                }
-            } else {
-                Role::MenuItem
+            .accessibility_role(match item.selection_mode {
+                Some(MenuItemSelectionMode::Radio) => Role::MenuItemRadio,
+                Some(MenuItemSelectionMode::Checkbox) => Role::MenuItemCheckBox,
+                None => Role::MenuItem,
             })
             .accessibility_toggled_optional(selection)
             .accessibility_label(item.label.clone())
@@ -1425,9 +1439,21 @@ fn menu_item_surface(
                                         .content(trailing)
                                         .style(theme.typography.label_small)
                                         .color(supporting_color);
-                                } else {
+                                }
+                                if has_submenu {
+                                    if item.trailing_icon.is_some() || item.trailing_text.is_some()
+                                    {
+                                        spacer()
+                                            .modifier(Modifier::new().width(MENU_TRAILING_SPACING));
+                                    }
                                     icon()
-                                        .painter(filled::CHEVRON_RIGHT_SVG)
+                                        .painter(
+                                            if item.submenu_placement == MenuPlacement::LeftStart {
+                                                filled::CHEVRON_LEFT_SVG
+                                            } else {
+                                                filled::CHEVRON_RIGHT_SVG
+                                            },
+                                        )
                                         .size(MENU_LEADING_SIZE)
                                         .tint(supporting_color);
                                 }
@@ -1903,3 +1929,37 @@ mod placement_tests;
 #[cfg(test)]
 #[path = "menus/motion_tests.rs"]
 mod motion_tests;
+
+#[cfg(test)]
+mod navigation_tests {
+    use tessera_ui::winit::keyboard::NamedKey;
+
+    use super::{MenuPlacement, closes_submenu};
+
+    #[test]
+    fn horizontal_close_key_applies_only_to_submenus_and_their_return_direction() {
+        for (placement, close, open) in [
+            (
+                MenuPlacement::RightStart,
+                NamedKey::ArrowLeft,
+                NamedKey::ArrowRight,
+            ),
+            (
+                MenuPlacement::LeftStart,
+                NamedKey::ArrowRight,
+                NamedKey::ArrowLeft,
+            ),
+        ] {
+            assert!(!closes_submenu(false, placement, close));
+            assert!(!closes_submenu(false, placement, open));
+            assert!(closes_submenu(true, placement, close));
+            assert!(!closes_submenu(true, placement, open));
+            assert!(!closes_submenu(true, placement, NamedKey::ArrowDown));
+        }
+        assert!(!closes_submenu(
+            true,
+            MenuPlacement::BelowStart,
+            NamedKey::ArrowLeft
+        ));
+    }
+}
