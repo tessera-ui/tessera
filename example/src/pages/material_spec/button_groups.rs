@@ -15,7 +15,7 @@ use tessera_components::{
     flow_row::flow_row,
     icon::icon,
     material_icons::filled,
-    modifier::ModifierExt as _,
+    modifier::{ModifierExt as _, SemanticsArgs},
     row::row,
     spacer::spacer,
     text::text,
@@ -246,6 +246,10 @@ fn sample(
                 .style(type_style(16.0, 24.0));
             gap(Dp(16.0));
             button_groups()
+                .modifier(Modifier::new().semantics(SemanticsArgs {
+                    label: Some(label.clone()),
+                    ..Default::default()
+                }))
                 .style(style)
                 .size(size)
                 .shape_style(shape)
@@ -623,6 +627,10 @@ fn playground() {
                     });
                 gap(Dp(32.0));
                 button_groups()
+                    .modifier(Modifier::new().semantics(SemanticsArgs {
+                        label: Some("Configured group".into()),
+                        ..Default::default()
+                    }))
                     .style(style.get())
                     .size(size.get())
                     .shape_style(if square.get() {
