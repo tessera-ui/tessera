@@ -333,7 +333,7 @@ pub(super) fn component_pages() {
                             } else if component.demo == 31 {
                                 super::navigation_bar::navigation_bar_spec();
                             } else if component.demo == 32 {
-                                super::navigation::navigation_spec(true);
+                                super::navigation_rail::navigation_rail_spec();
                             } else if component.demo == 21 {
                                 super::tabs::tabs_spec();
                             } else if component.demo == 6 {

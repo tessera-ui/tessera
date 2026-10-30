@@ -7,8 +7,9 @@ use std::time::Duration;
 
 use tessera_foundation::gesture::TapRecognizer;
 use tessera_ui::{
-    AxisConstraint, Callback, Color, ComputedData, Constraint, Dp, FocusTraversalPolicy,
-    LayoutResult, MeasurementError, Modifier, Px, PxPosition, PxSize, RenderSlot, State,
+    AxisConstraint, Callback, Color, ComputedData, Constraint, Dp, FocusProperties, FocusScopeNode,
+    FocusTraversalPolicy, LayoutResult, MeasurementError, Modifier, Px, PxPosition, PxSize,
+    RenderSlot, State,
     accesskit::Role,
     current_frame_nanos,
     layout::{MeasureScope, layout},
@@ -21,10 +22,15 @@ use crate::{
     animation,
     badge::BadgeDefaults,
     column::column,
-    modifier::{InteractionState, ModifierExt, Padding, PointerEventContext, SelectableArgs},
+    modal_focus::{ModalFocusState, modal_focus_modifier},
+    modifier::{
+        InteractionState, ModifierExt, Padding, PointerEventContext, SelectableArgs, SemanticsArgs,
+        with_keyboard_input,
+    },
+    overlay_semantics::{dialog_semantics, overlay_background},
     ripple_state::{RippleSpec, RippleState},
     row::row,
-    shape_def::Shape,
+    shape_def::{RoundedCorner, Shape},
     surface::{SurfaceStyle, surface},
     text::text,
     theme::{ContentColor, MaterialTheme},
@@ -746,7 +752,6 @@ pub fn navigation_rail_item(
 }
 
 /// # navigation_rail
-/// # navigation_rail
 ///
 /// Navigation rail that switches between collapsed and expanded layouts for
 /// primary destinations.
@@ -847,48 +852,268 @@ pub fn navigation_rail(
                 .style(scheme.surface.into())
                 .block_input(true)
                 .child(move || {
-                    let content_context = composition.clone();
-                    column()
-                        .modifier(Modifier::new().fill_max_size().padding(Padding::new(
-                            Dp::ZERO,
-                            TOP_PADDING,
-                            Dp::ZERO,
-                            Dp::ZERO,
-                        )))
-                        .main_axis_alignment(MainAxisAlignment::Start)
-                        .cross_axis_alignment(CrossAxisAlignment::Start)
-                        .children(move || {
-                            if let Some(header) = header {
-                                row()
-                                    .modifier(Modifier::new().padding(Padding::new(
-                                        ITEM_HORIZONTAL_PADDING,
-                                        Dp::ZERO,
-                                        Dp::ZERO,
-                                        Dp::ZERO,
-                                    )))
-                                    .children(move || {
-                                        header.render();
-                                    });
-                                layout().modifier(Modifier::new().height(HEADER_BOTTOM_PADDING));
-                            }
-
-                            let provided_context = content_context.clone();
-                            let content_context = content_context.clone();
-                            provide_context(
-                                move || provided_context.clone(),
-                                move || {
-                                    let current =
-                                        use_context::<NavigationRailCompositionContext>().unwrap();
-                                    if current.get() != content_context {
-                                        current.set(content_context.clone());
-                                    }
-                                    content.render();
-                                },
-                            );
-                        });
+                    navigation_rail_content()
+                        .composition(composition.clone())
+                        .header_optional(header)
+                        .content_shared(content);
                 });
         }
     });
+}
+
+#[tessera]
+fn navigation_rail_content(
+    composition: Option<NavigationRailCompositionContext>,
+    header: Option<RenderSlot>,
+    content: Option<RenderSlot>,
+) {
+    let content_context = composition.expect("rail content requires item composition");
+    let content = content.unwrap_or_default();
+    column()
+        .modifier(Modifier::new().fill_max_size().padding(Padding::new(
+            Dp::ZERO,
+            TOP_PADDING,
+            Dp::ZERO,
+            Dp::ZERO,
+        )))
+        .main_axis_alignment(MainAxisAlignment::Start)
+        .cross_axis_alignment(CrossAxisAlignment::Start)
+        .children(move || {
+            if let Some(header) = header {
+                row()
+                    .modifier(Modifier::new().padding(Padding::new(
+                        ITEM_HORIZONTAL_PADDING,
+                        Dp::ZERO,
+                        Dp::ZERO,
+                        Dp::ZERO,
+                    )))
+                    .children(move || {
+                        header.render();
+                    });
+                layout().modifier(Modifier::new().height(HEADER_BOTTOM_PADDING));
+            }
+
+            let provided_context = content_context.clone();
+            let content_context = content_context.clone();
+            provide_context(
+                move || provided_context.clone(),
+                move || {
+                    let current = use_context::<NavigationRailCompositionContext>().unwrap();
+                    if current.get() != content_context {
+                        current.set(content_context.clone());
+                    }
+                    content.render();
+                },
+            );
+        });
+}
+
+/// # modal_navigation_rail
+///
+/// Show an expanded navigation rail above page content for space-constrained
+/// navigation.
+///
+/// ## Usage
+///
+/// Open primary and secondary destinations from a menu without moving the page
+/// layout.
+///
+/// ## Parameters
+///
+/// - `is_open` — whether the modal rail is visible; defaults to false.
+/// - `on_close_request` — dismissal callback for the scrim and Escape key.
+/// - `accessibility_label` — accessible name for the modal navigation dialog.
+/// - `main_content` — page content displayed behind the rail.
+/// - `header` — optional menu or action displayed above destinations.
+/// - `content` — expanded destination items; close the rail in their activation
+///   callbacks.
+///
+/// ## Examples
+///
+/// ```
+/// use tessera_components::{
+///     button::button,
+///     navigation_rail::{modal_navigation_rail, navigation_rail_item},
+///     text::text,
+///     theme::material_theme,
+/// };
+/// use tessera_ui::{remember, tessera};
+///
+/// #[tessera]
+/// fn navigation() {
+///     let open = remember(|| false);
+///     let selected = remember(|| 0usize);
+///     assert!(!open.get());
+///     material_theme().child(move || {
+///         modal_navigation_rail()
+///             .is_open(open.get())
+///             .accessibility_label("Mail navigation")
+///             .on_close_request(move || open.set(false))
+///             .main_content(move || {
+///                 button().on_click(move || open.set(true)).child(|| {
+///                     text().content("Open navigation");
+///                 });
+///             })
+///             .content(move || {
+///                 navigation_rail_item()
+///                     .label("Inbox")
+///                     .selected(selected.get() == 0)
+///                     .on_click(move || {
+///                         selected.set(0);
+///                         open.set(false);
+///                     });
+///             });
+///     });
+/// }
+/// navigation();
+/// ```
+#[tessera]
+pub fn modal_navigation_rail(
+    is_open: Option<bool>,
+    on_close_request: Option<Callback>,
+    #[prop(into)] accessibility_label: Option<String>,
+    main_content: Option<RenderSlot>,
+    header: Option<RenderSlot>,
+    content: Option<RenderSlot>,
+) {
+    let is_open = is_open.unwrap_or(false);
+    let on_close_request = on_close_request.unwrap_or_default();
+    let main_content = main_content.unwrap_or_default();
+    let content = content.unwrap_or_default();
+    let scheme = use_context::<MaterialTheme>()
+        .expect("MaterialTheme must be provided")
+        .get()
+        .color_scheme;
+    let scope = remember(FocusScopeNode::new).get();
+    let focus = remember(ModalFocusState::default);
+    let was_open = remember(|| false);
+    let just_opened = is_open && !was_open.get();
+    if was_open.get() != is_open {
+        was_open.set(is_open);
+    }
+    let modifier = modal_focus_modifier(Modifier::new(), focus, is_open, scope);
+    layout()
+        .modifier(modifier)
+        .policy(ModalNavigationRailLayout)
+        .child(move || {
+            overlay_background(main_content, is_open);
+            if is_open {
+                surface()
+                    .style(scheme.scrim.with_alpha(0.32).into())
+                    .modifier(
+                        Modifier::new()
+                            .fill_max_size()
+                            .semantics(SemanticsArgs {
+                                hidden: true,
+                                ..Default::default()
+                            })
+                            .focusable()
+                            .focus_properties(
+                                FocusProperties::new()
+                                    .can_focus(false)
+                                    .can_request_focus(false)
+                                    .skip_traversal(true),
+                            ),
+                    )
+                    .on_click_shared(on_close_request)
+                    .show_ripple(false)
+                    .show_state_layer(false)
+                    .block_input(true)
+                    .child(|| {});
+                let modifier = dialog_semantics(
+                    with_keyboard_input(
+                        Modifier::new()
+                            .focus_scope_with(scope)
+                            .focus_properties(FocusProperties::new().skip_traversal(true))
+                            .focus_traversal_policy(
+                                FocusTraversalPolicy::linear()
+                                    .wrap(true)
+                                    .tab_navigation(true),
+                            ),
+                        Box::new(move |input: tessera_ui::KeyboardInput<'_>| {
+                            input.keyboard_events.retain(|event| {
+                                !modal_rail_key(event.physical_key, event.state, on_close_request)
+                            });
+                        }),
+                    ),
+                    accessibility_label.clone(),
+                    true,
+                );
+                if just_opened {
+                    scope.request_focus();
+                }
+                surface()
+                    .modifier(modifier.fill_max_size())
+                    .style(scheme.surface_container_low.into())
+                    .elevation(Dp(1.0))
+                    .shape(Shape::RoundedRectangle {
+                        top_left: RoundedCorner::ZERO,
+                        top_right: RoundedCorner::manual(Dp(16.0), 2.0),
+                        bottom_right: RoundedCorner::manual(Dp(16.0), 2.0),
+                        bottom_left: RoundedCorner::ZERO,
+                    })
+                    .block_input(true)
+                    .child(move || {
+                        navigation_rail_content()
+                            .composition(NavigationRailCompositionContext {
+                                icon_position: NavigationRailIconPosition::Start,
+                                indicator_start_width: Dp(
+                                    EXPANDED_MIN_WIDTH.0 - ITEM_HORIZONTAL_PADDING.0 * 2.0
+                                ),
+                                item_min_height: START_ICON_ITEM_MIN_HEIGHT,
+                                item_spacing: ITEM_VERTICAL_SPACING_EXPANDED,
+                            })
+                            .header_optional(header)
+                            .content_shared(content);
+                    });
+            }
+        });
+}
+
+fn modal_rail_key(
+    key: tessera_ui::winit::keyboard::PhysicalKey,
+    state: tessera_ui::winit::event::ElementState,
+    on_close: Callback,
+) -> bool {
+    if state == tessera_ui::winit::event::ElementState::Pressed
+        && key
+            == tessera_ui::winit::keyboard::PhysicalKey::Code(
+                tessera_ui::winit::keyboard::KeyCode::Escape,
+            )
+    {
+        on_close.call();
+        true
+    } else {
+        false
+    }
+}
+
+#[derive(Clone, PartialEq)]
+struct ModalNavigationRailLayout;
+
+impl tessera_ui::LayoutModifierNode for ModalNavigationRailLayout {
+    fn measure(&self, scope: &mut MeasureScope<'_>) -> Result<LayoutResult, MeasurementError> {
+        let children = scope.children();
+        let main = children[0];
+        let constraint = scope.parent_constraint().without_min();
+        let main_size = main.measure(scope, &constraint)?;
+        let size = ComputedData {
+            width: scope.parent_constraint().width().clamp(main_size.width),
+            height: scope.parent_constraint().height().clamp(main_size.height),
+        };
+        let mut result = LayoutResult::new(size);
+        result.place_child(main, PxPosition::ZERO);
+        if children.len() > 1 {
+            children[1].measure(scope, &Constraint::exact(size.width, size.height))?;
+            result.place_child(children[1], PxPosition::ZERO);
+            children[2].measure(
+                scope,
+                &Constraint::exact(size.width.min(EXPANDED_MIN_WIDTH.to_px()), size.height),
+            )?;
+            result.place_child(children[2], PxPosition::ZERO);
+        }
+        Ok(result)
+    }
 }
 
 /// Per-item selection animation for a navigation rail destination.
@@ -1116,5 +1341,204 @@ mod tests {
         }
 
         snapshot.node("rail-search-active").exists();
+    }
+}
+
+#[cfg(all(test, not(target_family = "wasm")))]
+mod modal_tests {
+    use std::cell::{Cell, RefCell};
+
+    use tessera_ui::{
+        HeadlessConfig, HeadlessRenderer, MOUSE_POINTER_ID, PressKeyEventType,
+        accesskit::{Action, ActionRequest, Node, NodeId, TreeId},
+        winit::{
+            event::ElementState,
+            keyboard::{KeyCode, PhysicalKey},
+        },
+    };
+
+    use crate::{button::button, text::text, theme::material_theme};
+
+    use super::*;
+
+    thread_local! {
+        static OPEN: Cell<Option<State<bool>>> = const { Cell::new(None) };
+        static SELECTED: Cell<Option<State<usize>>> = const { Cell::new(None) };
+        static CLOSE: RefCell<Option<Callback>> = const { RefCell::new(None) };
+    }
+
+    #[tessera]
+    fn fixture() {
+        let open = remember(|| false);
+        let selected = remember(|| 0usize);
+        OPEN.set(Some(open));
+        SELECTED.set(Some(selected));
+        let close = Callback::new(move || open.set(false));
+        CLOSE.with_borrow_mut(|value| *value = Some(close));
+        material_theme().child(move || {
+            modal_navigation_rail()
+                .is_open(open.get())
+                .accessibility_label("Mail destinations")
+                .on_close_request_shared(close)
+                .main_content(move || {
+                    column()
+                        .modifier(Modifier::new().size(Dp(600.0), Dp(480.0)))
+                        .children(move || {
+                            button()
+                                .accessibility_label("Open rail")
+                                .on_click(move || open.set(true))
+                                .child(|| {
+                                    text().content("Open rail");
+                                });
+                        });
+                })
+                .header(move || {
+                    button()
+                        .accessibility_label("Close rail")
+                        .on_click(move || open.set(false))
+                        .child(|| {
+                            text().content("Close rail");
+                        });
+                })
+                .content(move || {
+                    for (index, label) in ["Inbox", "Saved"].into_iter().enumerate() {
+                        navigation_rail_item()
+                            .label(label)
+                            .selected(selected.get() == index)
+                            .on_click(move || {
+                                selected.set(index);
+                                open.set(false);
+                            });
+                    }
+                });
+        });
+    }
+
+    fn node(renderer: &HeadlessRenderer, role: Role, label: &str) -> (NodeId, Node) {
+        renderer
+            .accessibility_snapshot()
+            .unwrap()
+            .nodes
+            .into_iter()
+            .find(|(_, node)| {
+                node.role() == role && node.label() == Some(label) && !node.is_hidden()
+            })
+            .unwrap_or_else(|| panic!("missing visible {role:?}: {label}"))
+    }
+
+    fn action(renderer: &mut HeadlessRenderer, target: NodeId, action: Action) {
+        assert!(renderer.dispatch_accessibility_action(ActionRequest {
+            action,
+            target_tree: TreeId::ROOT,
+            target_node: target,
+            data: None,
+        }));
+        renderer.render_frames(4);
+    }
+
+    #[test]
+    fn escape_adapter_dismisses_only_pressed_escape() {
+        use tessera_ui::testing::{
+            layout_test, pump_layout_test_session, start_layout_test_session,
+        };
+
+        let mut session = start_layout_test_session(layout_test(fixture).viewport_px(600, 480));
+        pump_layout_test_session(&mut session, 0);
+        let open = OPEN.get().unwrap();
+        let close = CLOSE.with_borrow(|close| close.unwrap());
+        open.set(true);
+        assert!(!modal_rail_key(
+            PhysicalKey::Code(KeyCode::Enter),
+            ElementState::Pressed,
+            close
+        ));
+        assert!(open.get());
+        assert!(!modal_rail_key(
+            PhysicalKey::Code(KeyCode::Escape),
+            ElementState::Released,
+            close
+        ));
+        assert!(open.get());
+        assert!(modal_rail_key(
+            PhysicalKey::Code(KeyCode::Escape),
+            ElementState::Pressed,
+            close
+        ));
+        assert!(!open.get());
+    }
+
+    #[test]
+    #[ignore = "Requires a native GPU adapter for modal semantics, input and focus restoration"]
+    fn modal_scrim_destination_and_escape_adapter_restore_origin_without_focus_activation() {
+        crate::test_utils::run_isolated_test(
+            "navigation_rail::modal_tests::modal_scrim_destination_and_escape_adapter_restore_origin_without_focus_activation",
+            || {
+                let mut renderer = HeadlessRenderer::new(
+                    Box::new(fixture),
+                    vec![Box::new(crate::TesseraComponents)],
+                    HeadlessConfig {
+                        width: 600,
+                        height: 480,
+                        sample_count: 1,
+                        ..Default::default()
+                    },
+                )
+                .unwrap();
+                renderer.render_frames(4);
+                for dismiss in 0..3 {
+                    let origin = node(&renderer, Role::Button, "Open rail").0;
+                    action(&mut renderer, origin, Action::Focus);
+                    action(&mut renderer, origin, Action::Click);
+                    assert!(OPEN.get().unwrap().get());
+                    let snapshot = renderer.accessibility_snapshot().unwrap();
+                    assert!(!snapshot.nodes.iter().any(|(id, _)| *id == origin));
+                    let dialog = node(&renderer, Role::Dialog, "Mail destinations").1;
+                    let bounds = dialog.bounds().unwrap();
+                    assert_eq!(
+                        (bounds.x0, bounds.y0, bounds.width(), bounds.height()),
+                        (0.0, 0.0, 220.0, 480.0)
+                    );
+                    node(&renderer, Role::Button, "Close rail");
+                    node(&renderer, Role::Tab, "Inbox");
+                    let saved = node(&renderer, Role::Tab, "Saved").0;
+                    let selected = SELECTED.get().unwrap().get();
+                    action(&mut renderer, saved, Action::Focus);
+                    assert_eq!(renderer.accessibility_snapshot().unwrap().focus, saved);
+                    assert_eq!(SELECTED.get().unwrap().get(), selected);
+                    assert!(OPEN.get().unwrap().get());
+                    match dismiss {
+                        0 => {
+                            let point = PxPosition::from_f32_xy(550.0, 240.0);
+                            renderer.pointer_move(MOUSE_POINTER_ID, point);
+                            renderer.pointer_press(
+                                MOUSE_POINTER_ID,
+                                point,
+                                PressKeyEventType::Left,
+                            );
+                            renderer.pointer_release(
+                                MOUSE_POINTER_ID,
+                                point,
+                                PressKeyEventType::Left,
+                            );
+                        }
+                        1 => action(&mut renderer, saved, Action::Click),
+                        _ => {
+                            assert!(modal_rail_key(
+                                PhysicalKey::Code(KeyCode::Escape),
+                                ElementState::Pressed,
+                                CLOSE.with_borrow(|close| close.unwrap())
+                            ));
+                        }
+                    }
+                    renderer.render_frames(6);
+                    assert!(!OPEN.get().unwrap().get());
+                    assert_eq!(renderer.accessibility_snapshot().unwrap().focus, origin);
+                    assert_eq!(
+                        SELECTED.get().unwrap().get(),
+                        if dismiss == 0 { 0 } else { 1 }
+                    );
+                }
+            },
+        );
     }
 }
