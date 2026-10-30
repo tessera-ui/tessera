@@ -1117,6 +1117,8 @@ impl PartialEq for LazyListLayout {
             && self.composed_item_indices == other.composed_item_indices
             && self.sticky_indices == other.sticky_indices
             && self.scroll_offset == other.scroll_offset
+            && self.controller == other.controller
+            && self.scroll_controller == other.scroll_controller
     }
 }
 
@@ -2117,7 +2119,7 @@ mod tests {
         AxisConstraint, ComputedData, Dp, LayoutResult, MeasurementError, Modifier,
         NoopDrawModifier, Px, PxPosition, RenderSlotWith, State,
         layout::{MeasureScope, layout},
-        receive_frame_nanos, remember, tessera,
+        receive_frame_nanos, remember, remember_with_key, tessera,
     };
 
     use crate::{
@@ -2255,6 +2257,99 @@ mod tests {
     #[test]
     fn lazy_row_applies_programmatic_positions_after_mounting() {
         check_programmatic_position(true);
+    }
+
+    thread_local! {
+        static LIST_GENERATION: Cell<Option<State<u64>>> = const { Cell::new(None) };
+        static REPLACED_LIST: Cell<Option<State<LazyListController>>> = const { Cell::new(None) };
+    }
+
+    #[tessera]
+    fn replaceable_list_fixture(horizontal: bool) {
+        let generation = remember(|| 0_u64);
+        LIST_GENERATION.set(Some(generation));
+        let controller = remember_with_key(generation.get(), LazyListController::new);
+        REPLACED_LIST.set(Some(controller));
+        let items = RenderSlotWith::new(|index| {
+            fixed_test_box()
+                .tag(format!("replacement_{index}"))
+                .width(20)
+                .height(20);
+        });
+        material_theme().child(move || {
+            if horizontal {
+                lazy_row()
+                    .modifier(Modifier::new().size(Dp(100.0), Dp(40.0)))
+                    .controller(controller)
+                    .estimated_item_size(Dp(20.0))
+                    .items_with_key_shared(100, |index| index, items);
+            } else {
+                lazy_column()
+                    .modifier(Modifier::new().size(Dp(40.0), Dp(100.0)))
+                    .controller(controller)
+                    .estimated_item_size(Dp(20.0))
+                    .items_with_key_shared(100, |index| index, items);
+            }
+        });
+    }
+
+    #[test]
+    fn replacing_lazy_list_controllers_refreshes_retained_layout_and_scroll_ownership() {
+        crate::test_utils::run_isolated_test(
+            "lazy_list::tests::replacing_lazy_list_controllers_refreshes_retained_layout_and_scroll_ownership",
+            || {
+                tessera_ui::dp::set_scale_factor(1.0);
+                for horizontal in [false, true] {
+                    let mut session = tessera_ui::testing::start_layout_test_session(
+                        tessera_ui::testing::layout_test(move || {
+                            replaceable_list_fixture(horizontal);
+                        })
+                        .viewport_px(120, 120),
+                    );
+                    tessera_ui::testing::pump_layout_test_session(&mut session, 0);
+                    let mut time = 0;
+                    for generation in 1..=4 {
+                        let previous = REPLACED_LIST.get().unwrap();
+                        LIST_GENERATION.get().unwrap().set(generation);
+                        time += 16_666_667;
+                        tessera_ui::testing::pump_layout_test_session(&mut session, time);
+                        time += 16_666_667;
+                        let snapshot =
+                            tessera_ui::testing::pump_layout_test_session(&mut session, time);
+                        assert!(
+                            !previous.is_alive(),
+                            "the old keyed controller was actually released"
+                        );
+                        let current = REPLACED_LIST.get().unwrap();
+                        assert!(current.is_alive());
+                        assert!(
+                            current != previous,
+                            "the controller identity must change with its key"
+                        );
+                        snapshot.node("replacement_0").position(0, 0);
+                        current.with_mut(|controller| {
+                            controller.scroll_to(
+                                if horizontal { Dp(80.0) } else { Dp::ZERO },
+                                if horizontal { Dp::ZERO } else { Dp(80.0) },
+                            )
+                        });
+                        time += 16_666_667;
+                        tessera_ui::testing::pump_layout_test_session(&mut session, time);
+                        time += 16_666_667;
+                        let snapshot =
+                            tessera_ui::testing::pump_layout_test_session(&mut session, time);
+                        snapshot.node("replacement_4").position(0, 0);
+                        current.with_mut(|controller| controller.scroll_to(Dp::ZERO, Dp::ZERO));
+                        time += 16_666_667;
+                        tessera_ui::testing::pump_layout_test_session(&mut session, time);
+                        time += 16_666_667;
+                        let snapshot =
+                            tessera_ui::testing::pump_layout_test_session(&mut session, time);
+                        snapshot.node("replacement_0").position(0, 0);
+                    }
+                }
+            },
+        );
     }
 
     #[derive(Clone, PartialEq)]
