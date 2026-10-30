@@ -416,3 +416,59 @@ fn gpu_tabs_semantics_focus_and_geometry() {
         || check_tabs(1),
     );
 }
+
+#[tessera]
+fn named_nontext_tabs_fixture() {
+    material_theme().child(|| {
+        tabs()
+            .modifier(Modifier::new().width(Dp(360.0)))
+            .content(|| {
+                tab()
+                    .icon(filled::FLIGHT_SVG)
+                    .accessibility_label("Flights");
+                tab()
+                    .label("")
+                    .icon(filled::HOTEL_SVG)
+                    .accessibility_label("Hotels");
+                tab().accessibility_label("Saved trips").title(|| {
+                    crate::icon::icon().painter(filled::STAR_SVG).size(Dp(24.0));
+                });
+            });
+    });
+}
+
+#[test]
+#[ignore = "requires a native GPU adapter"]
+fn gpu_icon_only_and_custom_tabs_publish_the_authored_accessible_name() {
+    crate::test_utils::run_isolated_test(
+        "tabs::accessibility_tests::gpu_icon_only_and_custom_tabs_publish_the_authored_accessible_name",
+        || {
+            let mut renderer = HeadlessRenderer::new(
+                Box::new(named_nontext_tabs_fixture),
+                vec![Box::new(crate::TesseraComponents)],
+                HeadlessConfig {
+                    width: 500,
+                    height: 200,
+                    sample_count: 1,
+                    ..Default::default()
+                },
+            )
+            .unwrap();
+            renderer.render_frames(12);
+            let tree = renderer.accessibility_snapshot().unwrap();
+            let names = tree
+                .nodes
+                .iter()
+                .filter(|(_, node)| node.role() == Role::Tab)
+                .map(|(_, node)| node.label().expect("non-text tabs need authored names"))
+                .collect::<Vec<_>>();
+            assert_eq!(names.len(), 3);
+            for label in ["Flights", "Hotels", "Saved trips"] {
+                assert!(names.contains(&label));
+                let (id, _) = control(&renderer, label, Role::Tab);
+                action(&mut renderer, id, Action::Focus);
+                assert_eq!(focused(&renderer).as_deref(), Some(label));
+            }
+        },
+    );
+}

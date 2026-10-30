@@ -3,11 +3,13 @@
 //! ## Usage
 //!
 //! Use to organize related destinations into a horizontal tab strip.
+use std::{any::TypeId, sync::Arc};
+
 use tessera_foundation::gesture::{ScrollRecognizer, ScrollSettings};
 use tessera_ui::{
     AxisConstraint, Callback, Color, ComputedData, Constraint, Dp, FocusManager, FocusProperties,
-    FocusRequester, FocusState, LayoutResult, MeasurementError, Modifier, Px, PxPosition,
-    RenderSlot, State,
+    FocusRequester, FocusState, LayoutResult, MeasurementError, Modifier, ParentDataMap,
+    ParentDataModifierNode, Px, PxPosition, RenderSlot, State,
     accesskit::Role,
     layout::{MeasureScope, layout},
     modifier::{FocusModifierExt as _, ModifierCapabilityExt as _},
@@ -404,6 +406,15 @@ enum TabTitle {
 }
 
 #[derive(Clone, Copy, PartialEq)]
+struct TabIndicatorPadding(Dp);
+
+impl ParentDataModifierNode for TabIndicatorPadding {
+    fn apply_parent_data(&self, data: &mut ParentDataMap) {
+        data.insert(TypeId::of::<Self>(), Arc::new(*self));
+    }
+}
+
+#[derive(Clone, Copy, PartialEq)]
 struct TabActivation {
     selection: State<usize>,
     controlled: bool,
@@ -466,10 +477,12 @@ impl TabBuilder {
 /// - `selected` — optional controlled selection; otherwise follows the tab row.
 /// - `on_click` — callback invoked when the tab is activated.
 /// - `enabled` — whether this tab can be focused or activated.
-/// - `title` — custom title slot rendered in the tab row.
+/// - `title` — custom title slot; primary indicators match its intrinsic width.
+///   The slot owns its content padding.
 /// - `label` — built-in Material text label for the tab.
 /// - `icon` — built-in Material icon for the tab.
-/// - `accessibility_label` — optional accessibility label override.
+/// - `accessibility_label` — accessible name override. Authors must provide a
+///   nonempty name for icon-only tabs and non-text custom titles.
 ///
 /// ## Examples
 ///
@@ -563,7 +576,7 @@ pub fn tab(
         panic!("tab requires title(), label(), icon(), or label_with_icon()");
     };
     let accessibility_label = accessibility_label.or_else(|| match &title {
-        TabTitle::Label { text, .. } => Some(text.clone()),
+        TabTitle::Label { text, .. } if !text.trim().is_empty() => Some(text.clone()),
         _ => None,
     });
     let label_color = if !enabled {
@@ -819,7 +832,14 @@ impl tessera_ui::LayoutModifierNode for TabsLayout {
             })
             .unwrap_or(active_tab);
 
-        let horizontal_padding = self.args.tab_padding.to_px().to_f32() * 2.0;
+        let title_padding = title_ids
+            .iter()
+            .map(|title| {
+                title
+                    .parent_data::<TabIndicatorPadding>(input)
+                    .map_or(0.0, |padding| padding.0.to_px().to_f32() * 2.0)
+            })
+            .collect::<Vec<_>>();
         let indicator_min_width: Px = self.args.indicator_min_width.into();
         let available_width = parent_constraint.width.resolve_max();
 
@@ -874,7 +894,7 @@ impl tessera_ui::LayoutModifierNode for TabsLayout {
                 .iter()
                 .enumerate()
                 .map(|(index, &id)| {
-                    id.probe(
+                    id.probe_intrinsic(
                         input,
                         &Constraint::new(
                             AxisConstraint::at_most(tab_widths[index]),
@@ -891,7 +911,7 @@ impl tessera_ui::LayoutModifierNode for TabsLayout {
                     if match_content_size {
                         let intrinsic_width = intrinsic_results[idx].width.min(tab_widths[idx]);
                         let content_width =
-                            (intrinsic_width.to_f32() - horizontal_padding).max(0.0);
+                            (intrinsic_width.to_f32() - title_padding[idx]).max(0.0);
                         Px::saturating_from_f32(content_width).max(indicator_min_width)
                     } else {
                         tab_widths[idx]
@@ -939,7 +959,7 @@ impl tessera_ui::LayoutModifierNode for TabsLayout {
             let intrinsic_results: Vec<_> = title_ids
                 .iter()
                 .map(|&id| {
-                    id.probe(
+                    id.probe_intrinsic(
                         input,
                         &Constraint::new(
                             AxisConstraint::NONE,
@@ -954,7 +974,7 @@ impl tessera_ui::LayoutModifierNode for TabsLayout {
                 let tab_width = tab_widths.get(idx).copied().unwrap_or(Px(0));
                 if match_content_size {
                     let intrinsic_width = intrinsic_results[idx].width.min(tab_width);
-                    let content_width = (intrinsic_width.to_f32() - horizontal_padding).max(0.0);
+                    let content_width = (intrinsic_width.to_f32() - title_padding[idx]).max(0.0);
                     let indicator_width =
                         Px::saturating_from_f32(content_width).max(indicator_min_width);
                     indicator_widths.push(indicator_width);
@@ -1551,6 +1571,10 @@ fn tab_trigger(args: Option<TabTriggerArgs>) {
                 .can_focus(args.enabled),
         )
         .push_parent_data(target)
+        .push_parent_data(TabIndicatorPadding(match &args.title {
+            TabTitle::Custom(_) => Dp::ZERO,
+            TabTitle::Label { .. } => args.tab_padding,
+        }))
         .push_keyboard_input(TabNavigation {
             controller,
             requester,
@@ -1812,5 +1836,270 @@ mod tests {
         // With the regression the shared counter keeps growing, so the click
         // selects the last tab and this probe never appears.
         snapshot.node("hotels-active").exists();
+    }
+}
+
+#[cfg(test)]
+mod custom_title_tests {
+    use std::cell::Cell;
+
+    use tessera_ui::{Dp, Modifier, Px, State, remember, tessera, use_context};
+
+    use crate::{modifier::ModifierExt as _, spacer::spacer, theme::material_theme};
+
+    use super::{TabsCompositionContext, TabsController, tab, tabs};
+
+    thread_local! {
+        static CONTROLLER: Cell<Option<State<TabsController>>> = const { Cell::new(None) };
+        static SELECTED: Cell<Option<State<usize>>> = const { Cell::new(None) };
+        static SCROLLABLE: Cell<Option<State<bool>>> = const { Cell::new(None) };
+    }
+
+    #[tessera]
+    fn fixture() {
+        let selected = remember(|| 0usize);
+        let scrollable = remember(|| false);
+        SELECTED.set(Some(selected));
+        SCROLLABLE.set(Some(scrollable));
+        material_theme().child(move || {
+            tabs()
+                .selected(selected)
+                .scrollable(scrollable.get())
+                .modifier(Modifier::new().width(Dp(300.0)))
+                .content(|| {
+                    CONTROLLER.set(Some(
+                        use_context::<TabsCompositionContext>()
+                            .unwrap()
+                            .get()
+                            .controller,
+                    ));
+                    tab().accessibility_label("Eighty").title(|| {
+                        spacer().modifier(Modifier::new().width(Dp(80.0)).height(Dp(24.0)));
+                    });
+                    tab().accessibility_label("One twenty").title(|| {
+                        spacer().modifier(Modifier::new().width(Dp(120.0)).height(Dp(24.0)));
+                    });
+                });
+        });
+    }
+
+    #[test]
+    fn primary_custom_title_indicator_uses_unpadded_slot_width_in_both_row_modes() {
+        let mut session = tessera_ui::testing::start_layout_test_session(
+            tessera_ui::testing::layout_test(fixture).viewport_px(300, 100),
+        );
+        let mut frame = 0_u64;
+        tessera_ui::testing::pump_layout_test_session(&mut session, frame);
+        let selected = SELECTED.get().unwrap();
+        let scrollable = SCROLLABLE.get().unwrap();
+        let controller = CONTROLLER.get().unwrap();
+        for scrolling in [false, true] {
+            scrollable.set(scrolling);
+            for (index, width) in [(0, 80), (1, 120)] {
+                selected.set(index);
+                for _ in 0..90 {
+                    frame += 16_666_667;
+                    tessera_ui::testing::pump_layout_test_session(&mut session, frame);
+                }
+                assert_eq!(controller.with(|c| c.indicator_width.value_px()), Px(width));
+            }
+        }
+    }
+}
+
+#[cfg(all(test, not(target_family = "wasm")))]
+mod small_custom_title_tests {
+    use std::{cell::Cell, time::Duration};
+
+    use tessera_ui::{
+        Color, Dp, HeadlessConfig, HeadlessRenderer, Modifier, Px, State,
+        accesskit::{Action, ActionRequest, Node, NodeId, Role, TreeId},
+        remember, tessera, use_context,
+    };
+
+    use crate::{
+        modifier::ModifierExt as _,
+        spacer::spacer,
+        theme::{MaterialTheme, material_theme},
+    };
+
+    use super::{TabsCompositionContext, TabsController, tab, tabs};
+
+    thread_local! {
+        static CONTROLLER: Cell<Option<State<TabsController>>> = const { Cell::new(None) };
+        static SELECTED: Cell<Option<State<usize>>> = const { Cell::new(None) };
+        static SCROLLABLE: Cell<Option<State<bool>>> = const { Cell::new(None) };
+    }
+
+    #[tessera]
+    fn fixture() {
+        let selected = remember(|| 0usize);
+        let scrollable = remember(|| false);
+        SELECTED.set(Some(selected));
+        SCROLLABLE.set(Some(scrollable));
+        material_theme()
+            .theme(|| {
+                let mut theme = MaterialTheme::default();
+                theme.color_scheme.primary = Color::RED;
+                theme.color_scheme.surface = Color::WHITE;
+                theme
+            })
+            .child(move || {
+                tabs()
+                    .selected(selected)
+                    .scrollable(scrollable.get())
+                    .min_scrollable_tab_width(Dp::ZERO)
+                    .edge_padding(Dp::ZERO)
+                    .modifier(Modifier::new().width(Dp(300.0)))
+                    .content(|| {
+                        CONTROLLER.set(Some(
+                            use_context::<TabsCompositionContext>()
+                                .unwrap()
+                                .get()
+                                .controller,
+                        ));
+                        tab().accessibility_label("Small title").title(|| {
+                            spacer().modifier(
+                                Modifier::new()
+                                    .width(Dp(32.0))
+                                    .height(Dp(16.0))
+                                    .background(Color::BLUE),
+                            );
+                        });
+                        tab().accessibility_label("Minimum title").title(|| {
+                            spacer().modifier(
+                                Modifier::new()
+                                    .width(Dp(16.0))
+                                    .height(Dp(16.0))
+                                    .background(Color::BLUE),
+                            );
+                        });
+                    });
+            });
+    }
+
+    fn node(renderer: &HeadlessRenderer, label: &str, role: Role) -> (NodeId, Node) {
+        renderer
+            .accessibility_snapshot()
+            .unwrap()
+            .nodes
+            .into_iter()
+            .find(|(_, node)| node.role() == role && node.label() == Some(label))
+            .unwrap_or_else(|| panic!("missing {role:?} {label}"))
+    }
+
+    #[test]
+    #[ignore = "requires a native GPU adapter"]
+    fn gpu_small_custom_title_indicators_exclude_minimum_interactive_padding() {
+        crate::test_utils::run_isolated_test(
+            "tabs::small_custom_title_tests::gpu_small_custom_title_indicators_exclude_minimum_interactive_padding",
+            || {
+                let mut renderer = HeadlessRenderer::new(
+                    Box::new(fixture),
+                    vec![Box::new(crate::TesseraComponents)],
+                    HeadlessConfig {
+                        width: 300,
+                        height: 100,
+                        sample_count: 1,
+                        frame_time: Duration::from_millis(20),
+                        ..Default::default()
+                    },
+                )
+                .unwrap();
+                renderer.render_frames(12);
+                let selected = SELECTED.get().unwrap();
+                let scrollable = SCROLLABLE.get().unwrap();
+                let controller = CONTROLLER.get().unwrap();
+                for scrolling in [false, true] {
+                    scrollable.set(scrolling);
+                    renderer.render_frames(90);
+                    for (index, label, visual_width, indicator_width) in
+                        [(0, "Small title", 32, 32), (1, "Minimum title", 16, 24)]
+                    {
+                        let target_node = node(&renderer, label, Role::Tab).0;
+                        assert!(renderer.dispatch_accessibility_action(ActionRequest {
+                            action: Action::Click,
+                            target_tree: TreeId::ROOT,
+                            target_node,
+                            data: None,
+                        }));
+                        renderer.render_frames(90);
+                        assert_eq!(selected.get(), index);
+                        assert_eq!(
+                            renderer.accessibility_snapshot().unwrap().focus,
+                            target_node
+                        );
+                        tessera_ui::FocusManager::current().clear_focus(true);
+                        renderer.render_frames(12);
+                        assert_ne!(
+                            renderer.accessibility_snapshot().unwrap().focus,
+                            target_node
+                        );
+                        assert_eq!(selected.get(), index);
+                        let target = node(&renderer, label, Role::Tab).1.bounds().unwrap();
+                        assert_eq!(target.x1 - target.x0, if scrolling { 48.0 } else { 150.0 });
+                        assert_eq!(target.y1 - target.y0, 48.0);
+                        let center = (target.x0 + target.x1) * 0.5;
+                        assert_eq!(
+                            controller.with(|c| c.indicator_width_px()),
+                            Px(indicator_width)
+                        );
+                        let pixels = renderer.read_pixels().unwrap();
+                        let width = renderer.physical_size().width;
+                        let mut visual = Vec::new();
+                        for y in target.y0 as u32..target.y1 as u32 {
+                            for x in target.x0 as u32..target.x1 as u32 {
+                                let offset = ((y * width + x) * 4) as usize;
+                                if pixels[offset] < 30
+                                    && pixels[offset + 1] < 30
+                                    && pixels[offset + 2] > 240
+                                {
+                                    visual.push((x, y));
+                                }
+                            }
+                        }
+                        assert!(
+                            !visual.is_empty(),
+                            "no blue title paint within {target:?} after clearing focus"
+                        );
+                        let left = visual.iter().map(|(x, _)| *x).min().unwrap();
+                        let right = visual.iter().map(|(x, _)| *x).max().unwrap() + 1;
+                        let top = visual.iter().map(|(_, y)| *y).min().unwrap();
+                        let bottom = visual.iter().map(|(_, y)| *y).max().unwrap() + 1;
+                        assert_eq!(
+                            (right - left, bottom - top),
+                            (visual_width as u32, 16),
+                            "title paint bbox={:?}",
+                            (left, top, right, bottom)
+                        );
+                        assert_eq!(visual.len(), visual_width * 16);
+                        assert_eq!((f64::from(left) + f64::from(right)) * 0.5, center);
+                        assert_eq!(
+                            (f64::from(top) + f64::from(bottom)) * 0.5,
+                            (target.y0 + target.y1) * 0.5,
+                            "the full natural title paint must remain centered within the interaction target",
+                        );
+                        let y = target.y1 as u32 - 1;
+                        let painted = (0..width)
+                            .filter(|x| {
+                                let offset = ((y * width + x) * 4) as usize;
+                                pixels[offset] > 240
+                                    && pixels[offset + 1] < 30
+                                    && pixels[offset + 2] < 30
+                            })
+                            .collect::<Vec<_>>();
+                        assert_eq!(painted.len(), indicator_width as usize);
+                        assert_eq!(
+                            (f64::from(*painted.first().unwrap())
+                                + f64::from(*painted.last().unwrap())
+                                + 1.0)
+                                * 0.5,
+                            center,
+                            "the visual indicator must remain centered within the full interaction target",
+                        );
+                    }
+                }
+            },
+        );
     }
 }

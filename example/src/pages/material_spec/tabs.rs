@@ -23,16 +23,16 @@ use tessera_components::{
     theme::{MaterialTheme, material_theme},
 };
 use tessera_ui::{
-    Dp, Modifier, RenderSlot, RenderSlotWith, State, accesskit::Role,
-    modifier::FocusModifierExt as _, remember, tessera, use_context,
+    Dp, Modifier, RenderSlot, State, accesskit::Role, modifier::FocusModifierExt as _, remember,
+    tessera, use_context,
 };
 
 use super::{
     ACCENT,
     annotations::{self, Geometry, Rect, dotted, relative, watch},
-    article::SpecSection,
+    article::{ArticlePage, SpecSection, article},
     gap,
-    navigation::article_pages::{Figure, Kind, detailed_article, figure_marker},
+    navigation::article_pages::figure_marker,
     panel, spec_table, subheading, type_style,
 };
 
@@ -40,10 +40,9 @@ const DESTINATIONS: [&str; 5] = ["Flights", "Hotels", "Trains", "Buses", "Ferrie
 
 #[tessera]
 pub(super) fn tabs_spec() {
-    detailed_article(
-        Kind::Tabs,
+    article(
         "Tabs",
-        "Tabs organize content across different screens, data sets, and other interactions",
+        "Tabs organize content across different screens and views",
         vec![
             SpecSection {
                 title: "Tokens and specs",
@@ -66,10 +65,353 @@ pub(super) fn tabs_spec() {
                 content: RenderSlot::new(measurements),
             },
         ],
-        RenderSlotWith::new(move |figure| {
-            chapter_figure(figure);
-        }),
+    )
+    .pages(vec![
+        ArticlePage {
+            title: "Overview",
+            intro: Some(RenderSlot::new(overview_intro)),
+            sections: vec![
+                SpecSection {
+                    title: "Usage",
+                    content: RenderSlot::new(overview_usage),
+                },
+                SpecSection {
+                    title: "Differences from M2",
+                    content: RenderSlot::new(differences),
+                },
+            ],
+        },
+        ArticlePage {
+            title: "Guidelines",
+            intro: None,
+            sections: vec![
+                SpecSection {
+                    title: "Usage",
+                    content: RenderSlot::new(guidelines_usage),
+                },
+                SpecSection {
+                    title: "Anatomy",
+                    content: RenderSlot::new(anatomy),
+                },
+                SpecSection {
+                    title: "Choosing the tab variant",
+                    content: RenderSlot::new(choosing_variant),
+                },
+                SpecSection {
+                    title: "Placement",
+                    content: RenderSlot::new(placement),
+                },
+                SpecSection {
+                    title: "Responsive layout",
+                    content: RenderSlot::new(responsive),
+                },
+                SpecSection {
+                    title: "Behavior",
+                    content: RenderSlot::new(behavior),
+                },
+            ],
+        },
+        ArticlePage {
+            title: "Accessibility",
+            intro: None,
+            sections: vec![
+                SpecSection {
+                    title: "Use cases",
+                    content: RenderSlot::new(use_cases),
+                },
+                SpecSection {
+                    title: "Interaction & style",
+                    content: RenderSlot::new(interaction_style),
+                },
+                SpecSection {
+                    title: "Initial focus",
+                    content: RenderSlot::new(initial_focus),
+                },
+                SpecSection {
+                    title: "Keyboard navigation",
+                    content: RenderSlot::new(keyboard_navigation),
+                },
+                SpecSection {
+                    title: "Labeling elements",
+                    content: RenderSlot::new(labelling),
+                },
+            ],
+        },
+    ]);
+}
+
+#[tessera]
+fn paragraph(value: String) {
+    text()
+        .content(value)
+        .style(type_style(16.0, 24.0))
+        .modifier(Modifier::new().fill_max_width());
+}
+
+#[tessera]
+fn overview_intro() {
+    paragraph(
+        "Use tabs to group content into helpful categories. Primary tabs display an app's main content destinations at the top of the screen, often under a top app bar. Secondary tabs display related content within a content area and always sit below primary tabs."
+            .into(),
     );
+}
+
+#[tessera]
+fn overview_usage() {
+    paragraph(
+        "Tabs can scroll horizontally, so a UI can include as many tabs as needed. Keep every tab at the same hierarchy level and place tabs next to each other as peers."
+            .into(),
+    );
+    gap(Dp(32.0));
+    native_tabs_figure(true, false, false, 0, 3);
+    gap(Dp(24.0));
+    native_tabs_figure(false, false, false, 0, 2);
+    gap(Dp(32.0));
+    paragraph(
+        "Use tabs to group related content into clearly defined sets. Avoid tabs for sequential content that must be read in a particular order; create hierarchy inside the content with typography and open space instead."
+            .into(),
+    );
+}
+
+#[tessera]
+fn differences() {
+    paragraph(
+        "Color: tabs use new color mappings and remain compatible with dynamic color. The container, active indicator and label colors follow the same roles as other Material components."
+            .into(),
+    );
+    gap(Dp(24.0));
+    paragraph(
+        "Layout: icons and labels are vertically centered within the container, and the active indicator hugs the label instead of the full tab width."
+            .into(),
+    );
+    gap(Dp(32.0));
+    native_tabs_figure(true, true, false, 0, 3);
+}
+
+#[tessera]
+fn guidelines_usage() {
+    paragraph(
+        "Tabs organize groups of related content that share the same level of hierarchy. Labels can combine an icon with short text, and every set is unified by one topic."
+            .into(),
+    );
+    gap(Dp(32.0));
+    native_tabs_figure(true, true, false, 0, 3);
+    gap(Dp(24.0));
+    native_tabs_figure(false, false, false, 0, 2);
+    gap(Dp(32.0));
+    paragraph(
+        "Use tabs to categorize related groups of content into clearly defined sets. Don't use tabs to move through sequential content that needs to be read in a particular order; instead create hierarchy with typography and open space."
+            .into(),
+    );
+}
+
+#[tessera]
+fn anatomy() {
+    paragraph(
+        "A tab row combines a container, an optional icon, an optional badge, the label, the divider and one active indicator."
+            .into(),
+    );
+    gap(Dp(32.0));
+    native_tabs_figure(true, true, false, 1, 3);
+    gap(Dp(24.0));
+    native_tabs_figure(false, false, false, 1, 2);
+    gap(Dp(32.0));
+    subheading("Container".into());
+    gap(Dp(16.0));
+    paragraph(
+        "The container holds every tab in the set, extends across its content region and is divided into equal sections, one per tab. Its divider separates the row from the content below, which may scroll under it."
+            .into(),
+    );
+    gap(Dp(24.0));
+    subheading("Icon and badge (optional)".into());
+    gap(Dp(16.0));
+    paragraph(
+        "Icons communicate the kind of content inside a tab and should be simple and recognizable. Keep the same icon treatment across a set, and rely on text labels when an icon's meaning may be unclear. Badges highlight notifications or updates for one tab and are limited to four characters, including a plus sign."
+            .into(),
+    );
+    gap(Dp(24.0));
+    subheading("Label and active indicator".into());
+    gap(Dp(16.0));
+    paragraph(
+        "Labels clearly and succinctly describe the content of a tab. The active indicator underlines the selected tab while its label and icon change color, so selection never relies on the underline alone."
+            .into(),
+    );
+}
+
+#[tessera]
+fn choosing_variant() {
+    paragraph(
+        "Use primary tabs when a single set is needed at the top of a content pane. Add secondary tabs when a screen needs another level of hierarchy; their indicator is simpler, but their function is identical."
+            .into(),
+    );
+    gap(Dp(32.0));
+    nested_tabs();
+    gap(Dp(32.0));
+    paragraph(
+        "Tabs can join components such as app bars, sit inside a specific UI region, or be nested in cards and sheets. A tab row always controls the region displayed below it."
+            .into(),
+    );
+}
+
+#[tessera]
+fn placement() {
+    paragraph(
+        "Tabs are displayed in a single row, and each tab is connected to the content it represents. As a set, all tabs are unified by a shared topic."
+            .into(),
+    );
+    gap(Dp(32.0));
+    tab_placement();
+    gap(Dp(32.0));
+    paragraph(
+        "Secondary tabs are always placed below primary tabs. They are found within existing content to help users reach greater detail."
+            .into(),
+    );
+}
+
+#[tessera]
+fn responsive() {
+    paragraph(
+        "For fixed tabs, size every tab from the width of the widest label and align the set to the center or leading edge of the body region with fluid margins. Avoid more than four visible fixed tabs; from five tabs the container becomes cramped."
+            .into(),
+    );
+    gap(Dp(32.0));
+    native_tabs_figure(true, false, false, 0, 4);
+    gap(Dp(32.0));
+    paragraph(
+        "When a set cannot fit on screen, use scrollable tabs. The first visible tab is offset 52dp from the leading edge and each tab is as wide as its label, which keeps longer titles readable."
+            .into(),
+    );
+    gap(Dp(32.0));
+    native_tabs_figure(true, false, true, 0, 5);
+}
+
+#[tessera]
+fn behavior() {
+    paragraph(
+        "Tab selection updates the content region below the set. Every tab can be hovered, focused and pressed, and the indicator moves into position once a new tab is engaged."
+            .into(),
+    );
+    gap(Dp(32.0));
+    native_tabs_figure(true, true, false, 0, 3);
+    gap(Dp(32.0));
+    subheading("Fixed tabs".into());
+    gap(Dp(16.0));
+    paragraph(
+        "Fixed tabs display every tab at once, which suits quick switching between related content such as transportation methods on a map. Tap an individual tab, or swipe left and right inside the content area when it holds no competing swipeable content."
+            .into(),
+    );
+    gap(Dp(24.0));
+    subheading("Scrollable tabs".into());
+    gap(Dp(16.0));
+    paragraph(
+        "Scrollable tabs hold longer labels and larger sets when all tabs cannot fit on screen. Padding stays consistent and offscreen tabs remain reachable by scrolling."
+            .into(),
+    );
+    gap(Dp(24.0));
+    native_tabs_figure(true, false, true, 0, 5);
+    gap(Dp(24.0));
+    subheading("Scrolling content".into());
+    gap(Dp(16.0));
+    paragraph(
+        "Tabs attached to a screen can stay at the top while content scrolls, or move offscreen and return when the page scrolls upward. Keep a tab row attached to its app bar so both move as one unit instead of scrolling behind it."
+            .into(),
+    );
+}
+
+#[tessera]
+fn use_cases() {
+    paragraph(
+        "Users should be able to invoke navigation to a new destination with assistive technology, select an action or destination from an offscreen tab, and keep access to primary actions while the content is scrolled."
+            .into(),
+    );
+}
+
+#[tessera]
+fn interaction_style() {
+    subheading("Touch".into());
+    gap(Dp(16.0));
+    paragraph(
+        "When a user taps a tab, a touch ripple appears as interaction feedback and the selected indicator becomes active and shifts into position once the touch has been engaged."
+            .into(),
+    );
+    gap(Dp(24.0));
+    native_tabs_figure(true, true, false, 0, 3);
+    gap(Dp(24.0));
+    subheading("Scrollable".into());
+    gap(Dp(16.0));
+    paragraph(
+        "Scrollable tabs are used when a set cannot fit on screen and are best for browsing on touch interfaces. Swipe the row left or right, or use arrow keys, to reach every tab; avoid looping the row infinitely, which traps screen reader users. Select an individual tab with a tap, or with Space or Enter."
+            .into(),
+    );
+    gap(Dp(24.0));
+    native_tabs_figure(true, false, true, 0, 5);
+    gap(Dp(24.0));
+    subheading("Cursor".into());
+    gap(Dp(16.0));
+    paragraph(
+        "Hovering a tab shows a hover state as a visual cue that the tab is interactive. Clicking an active or inactive tab ripples and shifts the indicator into position."
+            .into(),
+    );
+    gap(Dp(24.0));
+    subheading("Keyboard".into());
+    gap(Dp(16.0));
+    paragraph(
+        "Tabbing into the row shows a focus indicator on the active tab. Arrow keys move focus between tabs, Space or Enter activates the focused tab, and the same keys operate the items of an overflow menu."
+            .into(),
+    );
+    gap(Dp(24.0));
+    subheading("Density".into());
+    gap(Dp(16.0));
+    paragraph(
+        "Don't apply density to tabs by default, because it lowers targets below 48 x 48dp. Offer density as an explicit choice and keep every control that changes it at least 48 x 48dp."
+            .into(),
+    );
+}
+
+#[tessera]
+fn initial_focus() {
+    paragraph(
+        "On arrow or tab entry, the active indicator appears on the first interactive tab so the user knows which destination is selected. Further presses move to additional tabs, then to the next element on the page."
+            .into(),
+    );
+    gap(Dp(32.0));
+    native_tabs_figure(true, true, false, 0, 3);
+    gap(Dp(32.0));
+    paragraph(
+        "Use arrow and tab keys to move through the set, and reserve Space or Enter for completing the action."
+            .into(),
+    );
+}
+
+#[tessera]
+fn keyboard_navigation() {
+    spec_table(
+        vec!["Keys".into(), "Actions".into()],
+        vec![
+            vec![
+                "Arrow".into(),
+                "Focus lands on the next available navigation destination".into(),
+            ],
+            vec![
+                "Space / Enter".into(),
+                "Activates the focused navigation destination".into(),
+            ],
+            vec![
+                "Arrow".into(),
+                "Allows navigation through the items of an overflow menu".into(),
+            ],
+        ],
+    );
+}
+
+#[tessera]
+fn labelling() {
+    paragraph(
+        "When the visible text is ambiguous or a tab shows an icon alone, its accessibility label must describe the destination. Include extra context such as an unread count without changing the visible label."
+            .into(),
+    );
+    gap(Dp(32.0));
+    native_tabs_figure(true, true, false, 0, 3);
 }
 
 #[tessera]
@@ -169,29 +511,31 @@ fn sample(#[prop(into)] label: String, primary: bool, controls: Option<bool>) {
                 .min_tab_height(Dp(if icons.get() && primary { 64.0 } else { 48.0 }))
                 .modifier(Modifier::new().fill_max_width())
                 .content(move || {
-                    for (index, name) in DESTINATIONS
-                        .into_iter()
-                        .take(if scrollable.get() { 5 } else { 3 })
-                        .enumerate()
-                    {
-                        let mut item = tab()
-                            .label(name)
-                            .enabled(index != 1 || enabled.get())
-                            .accessibility_label(if index == 1 && badge.get() {
-                                format!("{name}, 3 new items")
-                            } else {
-                                name.into()
-                            })
-                            .on_click(move || count.set(count.get() + 1));
-                        if icons.get() && primary {
-                            item = item.icon(destination_asset(index));
-                        }
+                    let visible = if scrollable.get() { 5 } else { 3 };
+                    for (index, name) in DESTINATIONS.into_iter().take(visible).enumerate() {
+                        let available = index != 1 || enabled.get();
                         if index == 1 && badge.get() {
-                            item = item.title_shared(RenderSlot::new(move || {
-                                badge_title(name, icons.get() && primary, index);
-                            }));
+                            tab()
+                                .enabled(available)
+                                .accessibility_label(format!("{name}, 3 new items"))
+                                .on_click(move || count.set(count.get() + 1))
+                                .title_shared(RenderSlot::new(move || {
+                                    badge_title(name, icons.get() && primary, index);
+                                }));
+                        } else if icons.get() && primary {
+                            tab()
+                                .label(name)
+                                .icon(destination_asset(index))
+                                .enabled(available)
+                                .accessibility_label(name.to_string())
+                                .on_click(move || count.set(count.get() + 1));
+                        } else {
+                            tab()
+                                .label(name)
+                                .enabled(available)
+                                .accessibility_label(name.to_string())
+                                .on_click(move || count.set(count.get() + 1));
                         }
-                        let _ = item;
                     }
                 });
             gap(Dp(24.0));
@@ -344,48 +688,6 @@ fn destination_asset(index: usize) -> tessera_components::material_icons::Asset 
         filled::DIRECTIONS_BUS_SVG,
         filled::DIRECTIONS_BOAT_SVG,
     ][index]
-}
-
-#[tessera]
-fn chapter_figure(figure: Figure) {
-    match figure {
-        Figure::None => {}
-        Figure::Anatomy => {
-            native_tabs_figure(true, true, false, 1, 3);
-            gap(Dp(32.0));
-            native_tabs_figure(false, false, false, 1, 3);
-        }
-        Figure::Overview => {
-            native_tabs_figure(true, false, false, 0, 3);
-            gap(Dp(32.0));
-            native_tabs_figure(false, false, false, 0, 3);
-        }
-        Figure::Badges => {
-            native_tabs_figure(true, true, false, 1, 3);
-            gap(Dp(32.0));
-            native_tabs_figure(false, false, false, 1, 3);
-        }
-        Figure::Fixed => {
-            native_tabs_figure(true, false, false, 0, 3);
-        }
-        Figure::Scrollable | Figure::Labels => {
-            native_tabs_figure(true, false, true, 0, 5);
-        }
-        Figure::Nested => {
-            nested_tabs();
-        }
-        Figure::Placement => {
-            tab_placement();
-        }
-        Figure::Adaptive => {
-            native_tabs_figure(true, true, false, 2, 4);
-            gap(Dp(32.0));
-            native_tabs_figure(true, false, true, 2, 5);
-        }
-        Figure::Keyboard | Figure::Selection | Figure::States | Figure::Scaling => {
-            native_tabs_figure(true, true, false, 0, 3);
-        }
-    }
 }
 
 const LABEL_KEYS: [&str; 5] = ["label0", "label1", "label2", "label3", "label4"];
@@ -556,7 +858,6 @@ fn native_tab_title(
         .unwrap_or(theme.color_scheme.on_surface);
     column()
         .cross_axis_alignment(CrossAxisAlignment::Center)
-        .modifier(Modifier::new().padding_symmetric(Dp(16.0 * scale), Dp::ZERO))
         .children(move || {
             if icons && !inline {
                 boxed()
