@@ -325,7 +325,10 @@ pub(super) fn component_pages() {
                             } else if component.demo == 1 {
                                 super::app_bars::app_bars_spec();
                             } else if component.demo == 20 {
-                                super::segmented::segmented_spec();
+                                super::segmented::segmented_spec(Callback::new(move || {
+                                    overview_request.set(Some(0));
+                                    selected.set(Some(0));
+                                }));
                             } else if component.demo == 24 {
                                 super::text_fields::text_fields_spec();
                             } else if component.demo == 4 {

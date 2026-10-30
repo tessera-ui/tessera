@@ -21,7 +21,7 @@ use tessera_components::{
     theme::{MaterialTheme, material_theme},
 };
 use tessera_ui::{
-    Dp, Modifier, RenderSlot, State, accesskit::Role, remember, tessera, use_context,
+    Callback, Dp, Modifier, RenderSlot, State, accesskit::Role, remember, tessera, use_context,
 };
 
 use super::{
@@ -55,7 +55,7 @@ fn selection_summary(mask: u8) -> String {
 }
 
 #[tessera]
-pub(super) fn segmented_spec() {
+pub(super) fn segmented_spec(on_recommended: Callback) {
     article(
         "Segmented buttons",
         "Segmented buttons help people select options, switch views, or sort elements.",
@@ -89,7 +89,9 @@ pub(super) fn segmented_spec() {
                 },
                 SpecSection {
                     title: "M3 Expressive update",
-                    content: RenderSlot::new(expressive_update),
+                    content: RenderSlot::new(move || {
+                        expressive_update(on_recommended.clone());
+                    }),
                 },
                 SpecSection {
                     title: "Differences from M2",
@@ -334,10 +336,18 @@ fn availability() {
 }
 
 #[tessera]
-fn expressive_update() {
+fn expressive_update(on_recommended: Callback) {
     prose(
         "Segmented buttons are no longer recommended in the Material 3 expressive update. Products that adopt the expressive style should use a connected button group instead, which keeps most of the same functionality with an updated visual design.",
     );
+    gap(Dp(16.0));
+    button()
+        .text()
+        .accessibility_label("Open recommended button groups")
+        .on_click_shared(on_recommended)
+        .child(|| {
+            text().content("Open recommended button groups");
+        });
 }
 
 #[tessera]
