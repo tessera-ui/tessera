@@ -4,7 +4,7 @@
 //!
 //! Keep token menus connected to readable values and real icon-button actions.
 
-use tessera_components::theme::material_theme;
+use tessera_components::{column::column, theme::material_theme};
 use tessera_ui::{
     HeadlessConfig, HeadlessRenderer, MOUSE_POINTER_ID, PressKeyEventType, PxPosition,
     accesskit::{Node, Role, Toggled},
@@ -21,7 +21,9 @@ impl tessera_ui::RenderModule for Pipelines {
 
 #[tessera]
 fn fixture() {
-    material_theme().child(super::figure);
+    material_theme().child(|| {
+        column().children(super::figure);
+    });
 }
 
 fn node(renderer: &HeadlessRenderer, role: Role, label: &str) -> Node {

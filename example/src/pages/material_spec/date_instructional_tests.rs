@@ -8,8 +8,8 @@ use std::{cell::Cell, time::Duration};
 
 use tessera_components::theme::material_theme;
 use tessera_ui::{
-    FocusDirection, HeadlessConfig, HeadlessRenderer, MOUSE_POINTER_ID, PressKeyEventType,
-    PxPosition,
+    CursorEventContent, FocusDirection, GestureState, HeadlessConfig, HeadlessRenderer,
+    MOUSE_POINTER_ID, PointerChange, PressKeyEventType, PxPosition,
     accesskit::{Action, ActionRequest, Node, NodeId, Role, TreeId},
 };
 
@@ -18,6 +18,7 @@ use super::*;
 thread_local! {
     static KIND: Cell<Illustration> = const { Cell::new(Illustration::EntryMethods) };
     pub(super) static ENTRY_DRAFT: Cell<Option<State<String>>> = const { Cell::new(None) };
+    static LAST_SELECTION_PRESS: Cell<Option<tessera_ui::time::Instant>> = const { Cell::new(None) };
     pub(super) static ENTRY_CHANGES: Cell<usize> = const { Cell::new(0) };
     pub(super) static CLEAR_STATE: Cell<Option<State<DatePickerState>>> = const { Cell::new(None) };
     pub(super) static CLEAR_COMMITTED: Cell<Option<State<Option<CalendarDate>>>> = const { Cell::new(None) };
@@ -627,10 +628,35 @@ fn assert_pointer_editor_focus(renderer: &HeadlessRenderer, editor: &str, contex
 }
 
 fn select_editor_line_with_pointer(renderer: &mut HeadlessRenderer, editor: &str) {
-    for _ in 0..3 {
-        input_article_target(renderer, editor, Some(Role::TextInput), None);
-        assert_pointer_editor_focus(renderer, editor, "native triple-click selection");
+    let target = reveal_article_target(renderer, editor, Some(Role::TextInput));
+    let bounds = target.bounds().unwrap();
+    let pointer = PxPosition::from_f32_xy(
+        ((bounds.x0 + bounds.x1) * 0.5) as f32,
+        ((bounds.y0 + bounds.y1) * 0.5) as f32,
+    );
+    renderer.pointer_move(MOUSE_POINTER_ID, pointer);
+    renderer.render_frames(1);
+    let now = tessera_ui::time::Instant::now();
+    let base =
+        LAST_SELECTION_PRESS.get().map_or(now, |last| last.max(now)) + Duration::from_secs(1);
+    for (milliseconds, content) in [
+        (0, CursorEventContent::Pressed(PressKeyEventType::Left)),
+        (10, CursorEventContent::Released(PressKeyEventType::Left)),
+        (80, CursorEventContent::Pressed(PressKeyEventType::Left)),
+        (90, CursorEventContent::Released(PressKeyEventType::Left)),
+        (160, CursorEventContent::Pressed(PressKeyEventType::Left)),
+        (170, CursorEventContent::Released(PressKeyEventType::Left)),
+    ] {
+        renderer.inject_pointer(PointerChange::new(
+            base + Duration::from_millis(milliseconds),
+            MOUSE_POINTER_ID,
+            content,
+            GestureState::TapCandidate,
+        ));
     }
+    LAST_SELECTION_PRESS.set(Some(base + Duration::from_millis(170)));
+    renderer.render_frames(2);
+    assert_pointer_editor_focus(renderer, editor, "native triple-click selection");
 }
 
 fn probe_article_editor_pointer_and_queued_commits(renderer: &mut HeadlessRenderer) {

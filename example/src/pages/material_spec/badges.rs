@@ -576,7 +576,9 @@ fn badge_overview_destination(number: usize) {
 fn overview_article() {
     badge_variants();
     gap(Dp(16.0));
-    prose("1  Small badge on a navigation item    2  Large badge on a navigation item    3  Large badge with maximum characters on a navigation item");
+    prose(
+        "1  Small badge on a navigation item    2  Large badge on a navigation item    3  Large badge with maximum characters on a navigation item",
+    );
     gap(Dp(32.0));
     subheading("Key points".into());
     for point in [
@@ -846,12 +848,15 @@ fn readable_badge_navigation() {
 
 #[cfg(all(test, not(target_family = "wasm")))]
 mod form_article_tests {
-    use super::*;
-    use std::{cell::Cell, time::Duration};
+    use std::{cell::Cell, collections::BTreeMap, time::Duration};
+
     use tessera_ui::{
         HeadlessConfig, HeadlessRenderer,
         accesskit::{Action, ActionRequest, NodeId, TreeId},
     };
+
+    use super::*;
+
     struct Pipelines;
     impl tessera_ui::RenderModule for Pipelines {
         fn register_pipelines(&self, context: &mut tessera_ui::PipelineContext<'_>) {
@@ -882,13 +887,15 @@ mod form_article_tests {
             .find(|(_, node)| node.label() == Some(label) && node.role() == role)
             .unwrap_or_else(|| panic!("missing {label} {role:?}"))
             .0;
-        assert!(renderer.dispatch_accessibility_action(ActionRequest {
-            action: Action::Click,
-            target_tree: TreeId::ROOT,
-            target_node: id,
-            data: None
-        }));
-        renderer.render_frames(4);
+        for action in [Action::Focus, Action::Click] {
+            assert!(renderer.dispatch_accessibility_action(ActionRequest {
+                action,
+                target_tree: TreeId::ROOT,
+                target_node: id,
+                data: None
+            }));
+            renderer.render_frames(4);
+        }
         id
     }
     fn contains(renderer: &HeadlessRenderer, label: &str, role: Role) -> bool {
@@ -987,22 +994,56 @@ mod form_article_tests {
                 [("Guidelines", guidelines), ("Accessibility", accessibility)]
             {
                 activate(&mut renderer, tab, Role::Tab);
-                let mut actual = renderer
-                    .accessibility_snapshot()
-                    .unwrap()
-                    .nodes
-                    .into_iter()
-                    .filter_map(|(_, node)| {
-                        (node.role() == Role::Heading
-                            && node.level()
-                                == Some(if kind == 1 && tab == "Accessibility" {
-                                    3
-                                } else {
-                                    2
-                                }))
-                        .then(|| node.label().unwrap().to_owned())
-                    })
-                    .collect::<Vec<_>>();
+                let level = if kind == 1 && tab == "Accessibility" {
+                    3
+                } else {
+                    2
+                };
+                let mut observed = BTreeMap::new();
+                let collect =
+                    |renderer: &HeadlessRenderer, observed: &mut BTreeMap<NodeId, String>| {
+                        for (id, node) in renderer.accessibility_snapshot().unwrap().nodes {
+                            if node.role() == Role::Heading && node.level() == Some(level) {
+                                observed.insert(id, node.label().unwrap().to_owned());
+                            }
+                        }
+                    };
+                collect(&renderer, &mut observed);
+                if !(kind == 1 && tab == "Accessibility") {
+                    for section in &expected {
+                        activate(&mut renderer, tab, Role::Tab);
+                        activate(&mut renderer, section, Role::Link);
+                        renderer.render_frames(12);
+                        let snapshot = renderer.accessibility_snapshot().unwrap();
+                        let heading = snapshot
+                            .nodes
+                            .iter()
+                            .find(|(_, node)| {
+                                node.role() == Role::Heading
+                                    && node.level() == Some(level)
+                                    && node.label() == Some(*section)
+                            })
+                            .unwrap_or_else(|| {
+                                panic!(
+                                    "the real contents action must reveal article {kind} {tab} chapter {section}; published headings: {:?}",
+                                    snapshot
+                                        .nodes
+                                        .iter()
+                                        .filter(|(_, node)| node.role() == Role::Heading)
+                                        .map(|(id, node)| (id, node.label(), node.level(), node.bounds()))
+                                        .collect::<Vec<_>>()
+                                )
+                            });
+                        let bounds = heading.1.bounds().unwrap();
+                        assert!(
+                            bounds.y0 >= 0.0
+                                && bounds.y0 < f64::from(renderer.physical_size().height),
+                            "article {kind} {tab} did not reveal {section}: {bounds:?}"
+                        );
+                        collect(&renderer, &mut observed);
+                    }
+                }
+                let mut actual = observed.into_values().collect::<Vec<_>>();
                 actual.sort();
                 expected.sort();
                 assert_eq!(actual, expected, "article {kind} {tab}");

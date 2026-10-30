@@ -41,6 +41,17 @@ fn reveal(
     role: Option<Role>,
     direction: f32,
 ) -> (tessera_ui::accesskit::NodeId, Node) {
+    let scroll_x = (renderer.physical_size().width.min(907) as f32 - 37.0).max(1.0);
+    reveal_with_scroll_x(renderer, label, role, direction, scroll_x)
+}
+
+fn reveal_with_scroll_x(
+    renderer: &mut HeadlessRenderer,
+    label: &str,
+    role: Option<Role>,
+    direction: f32,
+    scroll_x: f32,
+) -> (tessera_ui::accesskit::NodeId, Node) {
     for _ in 0..48 {
         if let Some(target) = find(renderer, label, role) {
             let bounds = target.1.bounds().unwrap();
@@ -57,20 +68,14 @@ fn reveal(
             }
             renderer.pointer_scroll(
                 MOUSE_POINTER_ID,
-                PxPosition::from_f32_xy(
-                    (renderer.physical_size().width.min(907) as f32 - 37.0).max(1.0),
-                    430.0,
-                ),
+                PxPosition::from_f32_xy(scroll_x, 430.0),
                 0.0,
                 (430.0 - center).clamp(-1000.0, 1000.0) as f32,
             );
         } else {
             renderer.pointer_scroll(
                 MOUSE_POINTER_ID,
-                PxPosition::from_f32_xy(
-                    (renderer.physical_size().width.min(907) as f32 - 37.0).max(1.0),
-                    430.0,
-                ),
+                PxPosition::from_f32_xy(scroll_x, 430.0),
                 0.0,
                 direction,
             );
@@ -143,6 +148,21 @@ fn text_field_route_compacts_navigation_and_reveals_retained_outlined_callouts_a
     );
     let specs = reveal(&mut renderer, "Specs", Some(Role::Tab), 800.0);
     assert_eq!(specs.1.bounds().unwrap().height(), 79.0);
+    assert_eq!(
+        find(&renderer, "Overview", Some(Role::Tab))
+            .unwrap()
+            .1
+            .is_selected(),
+        Some(true)
+    );
+    click(&mut renderer, "Specs", Some(Role::Tab), 800.0, None);
+    assert_eq!(
+        find(&renderer, "Specs", Some(Role::Tab))
+            .unwrap()
+            .1
+            .is_selected(),
+        Some(true)
+    );
     click(
         &mut renderer,
         "Filled text field",
@@ -541,6 +561,14 @@ fn saving_date_range_configuration_preserves_article_position() {
         -600.0,
         None,
     );
+    click(&mut renderer, "Specs", Some(Role::Tab), -800.0, None);
+    assert_eq!(
+        find(&renderer, "Specs", Some(Role::Tab))
+            .unwrap()
+            .1
+            .is_selected(),
+        Some(true)
+    );
     click(
         &mut renderer,
         "Modal date picker",
@@ -548,11 +576,13 @@ fn saving_date_range_configuration_preserves_article_position() {
         -600.0,
         None,
     );
-    let target = reveal(
+    let scroll_x = renderer.physical_size().width as f32 - 22.0;
+    let target = reveal_with_scroll_x(
         &mut renderer,
         "Save configuration date range",
         Some(Role::Button),
         -500.0,
+        scroll_x,
     );
     let heading = find(
         &renderer,
@@ -623,20 +653,23 @@ fn carousel_collection_page_keeps_return_visible_and_restores_article_position()
             None,
         );
         if width == 390 {
-            click(
-                &mut renderer,
-                "Go to next tab",
-                Some(Role::Button),
-                -700.0,
-                None,
-            );
-            click(
-                &mut renderer,
-                "Go to next tab",
-                Some(Role::Button),
-                -700.0,
-                None,
-            );
+            for page in ["Specs", "Guidelines", "Accessibility"] {
+                click(
+                    &mut renderer,
+                    "Go to next tab",
+                    Some(Role::Button),
+                    -700.0,
+                    None,
+                );
+                assert_eq!(
+                    find(&renderer, page, Some(Role::Tab))
+                        .unwrap()
+                        .1
+                        .is_selected(),
+                    Some(true),
+                    "the next-tab arrow must select {page}"
+                );
+            }
         } else {
             click(
                 &mut renderer,
@@ -646,6 +679,13 @@ fn carousel_collection_page_keeps_return_visible_and_restores_article_position()
                 None,
             );
         }
+        assert_eq!(
+            find(&renderer, "Accessibility", Some(Role::Tab))
+                .unwrap()
+                .1
+                .is_selected(),
+            Some(true)
+        );
         click(
             &mut renderer,
             "Keyboard navigation",
@@ -784,4 +824,101 @@ fn article_body_and_contents_share_responsive_gutters_and_bounded_desktop_width(
             "contents and body must share a gutter at {width}"
         );
     }
+}
+
+#[test]
+#[ignore = "requires a native GPU adapter for actual directory and article navigation"]
+fn required_field_remains_pointer_editable_after_article_tab_and_scrolled_reveal() {
+    let mut renderer = HeadlessRenderer::new(
+        Box::new(crate::app::app),
+        vec![Box::new(Pipelines)],
+        HeadlessConfig {
+            width: 1650,
+            height: 1200,
+            sample_count: 1,
+            ..Default::default()
+        },
+    )
+    .unwrap();
+    renderer.render_frames(8);
+    click(&mut renderer, "Material Components", None, -600.0, None);
+    renderer.render_frames(60);
+    click(
+        &mut renderer,
+        "Open Text fields specifications",
+        None,
+        -600.0,
+        None,
+    );
+    click(&mut renderer, "Accessibility", Some(Role::Tab), 800.0, None);
+    assert_eq!(
+        find(&renderer, "Accessibility", Some(Role::Tab))
+            .unwrap()
+            .1
+            .is_selected(),
+        Some(true)
+    );
+    click(
+        &mut renderer,
+        "Labeling elements",
+        Some(Role::Link),
+        -600.0,
+        None,
+    );
+    reveal(&mut renderer, "*required", Some(Role::Label), -600.0);
+    let support = find(&renderer, "*required", Some(Role::Label))
+        .unwrap()
+        .1
+        .bounds()
+        .unwrap();
+    let scale = support.height() / 16.0;
+    let (id, field) = find(&renderer, "Username*", Some(Role::TextInput)).unwrap();
+    let bounds = field.bounds().unwrap();
+    for (actual, expected) in [
+        (bounds.x0, support.x0),
+        (bounds.y0, support.y0 - 44.0 * scale),
+        (bounds.width(), 295.0 * scale),
+        (bounds.height(), 24.0 * scale),
+    ] {
+        assert!(
+            (actual - expected).abs() <= 2.0,
+            "required editor {bounds:?} must match its independently positioned supporting label {support:?}"
+        );
+    }
+    let before = renderer.read_pixels().unwrap();
+    let point = PxPosition::from_f32_xy(
+        (support.x0 + 122.0 * scale) as f32,
+        (support.y0 - 32.0 * scale) as f32,
+    );
+    renderer.pointer_move(MOUSE_POINTER_ID, point);
+    renderer.pointer_press(MOUSE_POINTER_ID, point, PressKeyEventType::Left);
+    renderer.pointer_release(MOUSE_POINTER_ID, point, PressKeyEventType::Left);
+    renderer.render_frames(3);
+    assert_eq!(field.description(), Some("Required"));
+    assert_eq!(
+        renderer.accessibility_snapshot().unwrap().focus,
+        id,
+        "the visible required editor must receive pointer focus after article scrolling"
+    );
+    renderer.inject_text("Q");
+    renderer.render_frames(2);
+    assert_eq!(
+        find(&renderer, "Username*", Some(Role::TextInput))
+            .unwrap()
+            .1
+            .value(),
+        Some("Q")
+    );
+    let after = renderer.read_pixels().unwrap();
+    let mut changed = false;
+    for y in bounds.y0.floor().max(0.0) as usize..bounds.y1.ceil().min(1200.0) as usize {
+        for x in bounds.x0.floor().max(0.0) as usize..bounds.x1.ceil().min(1650.0) as usize {
+            let offset = (y * 1650 + x) * 4;
+            changed |= before[offset..offset + 3] != after[offset..offset + 3];
+        }
+    }
+    assert!(
+        changed,
+        "real article input must repaint the visible editor after scrolling"
+    );
 }

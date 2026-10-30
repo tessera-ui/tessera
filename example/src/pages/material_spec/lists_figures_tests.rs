@@ -103,14 +103,15 @@ fn click(renderer: &mut HeadlessRenderer, bounds: tessera_ui::accesskit::Rect) {
 fn baseline_rows_stay_flush_and_publish_their_measurements() {
     let renderer = renderer(baseline_fixture);
     let rows = [
-        "Baseline one-line row",
         "Baseline two-line row",
+        "Baseline one-line row",
         "Baseline three-line row",
     ]
     .map(|label| labeled(&renderer, label).1.bounds().unwrap());
     assert!(
-        rows[0].y1 <= rows[1].y0 + 0.01 && rows[1].y1 <= rows[2].y0 + 0.01,
-        "baseline rows must stack without segmented gaps: {rows:?}"
+        (rows[1].y0 - rows[0].y1 - 1.0).abs() <= 0.01
+            && (rows[2].y0 - rows[1].y1 - 1.0).abs() <= 0.01,
+        "baseline rows must stack with only their 1dp dividers: {rows:?}"
     );
     for row in rows {
         assert!(

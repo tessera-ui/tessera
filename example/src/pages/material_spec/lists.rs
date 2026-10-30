@@ -1008,11 +1008,11 @@ fn list_focus() {
 
 #[cfg(all(test, not(target_family = "wasm")))]
 mod collection_article_tests {
-    use std::{cell::Cell, time::Duration};
+    use std::{cell::Cell, collections::BTreeMap, time::Duration};
 
     use tessera_ui::{
         HeadlessConfig, HeadlessRenderer, MOUSE_POINTER_ID, PressKeyEventType, PxPosition,
-        accesskit::Node,
+        accesskit::{Node, NodeId},
     };
 
     use super::*;
@@ -1056,7 +1056,52 @@ mod collection_article_tests {
     }
 
     fn click(renderer: &mut HeadlessRenderer, node: Node) {
-        let bounds = node.bounds().unwrap();
+        let target = renderer
+            .accessibility_snapshot()
+            .unwrap()
+            .nodes
+            .into_iter()
+            .find(|(_, current)| {
+                current.role() == node.role()
+                    && current.label() == node.label()
+                    && current.bounds() == node.bounds()
+            })
+            .expect("published pointer target")
+            .0;
+        let mut bounds = node.bounds().unwrap();
+        let top = if node.role() == Role::Tab { 0.0 } else { 100.0 };
+        for _ in 0..48 {
+            let center = (bounds.y0 + bounds.y1) * 0.5;
+            let height = f64::from(renderer.physical_size().height);
+            if center >= top && center < height - 24.0 {
+                break;
+            }
+            renderer.pointer_scroll(
+                MOUSE_POINTER_ID,
+                PxPosition::from_f32_xy(
+                    renderer.physical_size().width as f32 - 30.0,
+                    renderer.physical_size().height as f32 * 0.5,
+                ),
+                0.0,
+                (height * 0.5 - center).clamp(-2000.0, 2000.0) as f32,
+            );
+            renderer.render_frames(12);
+            bounds = renderer
+                .accessibility_snapshot()
+                .unwrap()
+                .nodes
+                .into_iter()
+                .find(|(id, _)| *id == target)
+                .expect("retained pointer target after scrolling")
+                .1
+                .bounds()
+                .unwrap();
+        }
+        let center = (bounds.y0 + bounds.y1) * 0.5;
+        assert!(
+            center >= top && center < f64::from(renderer.physical_size().height) - 24.0,
+            "scrolling must reveal the actual pointer target: {bounds:?}"
+        );
         let position = PxPosition::from_f32_xy(
             ((bounds.x0 + bounds.x1) / 2.0) as f32,
             ((bounds.y0 + bounds.y1) / 2.0) as f32,
@@ -1065,6 +1110,19 @@ mod collection_article_tests {
         renderer.pointer_press(MOUSE_POINTER_ID, position, PressKeyEventType::Left);
         renderer.pointer_release(MOUSE_POINTER_ID, position, PressKeyEventType::Left);
         renderer.render_frames(4);
+    }
+
+    fn reveal_section(renderer: &mut HeadlessRenderer, tab: &str, section: &str) {
+        let target = node(renderer, tab, Role::Tab);
+        click(renderer, target);
+        let contents = node(renderer, section, Role::Link);
+        click(renderer, contents);
+        renderer.render_frames(12);
+        let bounds = node(renderer, section, Role::Heading).bounds().unwrap();
+        assert!(
+            bounds.y0 >= 0.0 && bounds.y0 < f64::from(renderer.physical_size().height),
+            "the contents action must reveal {section}: {bounds:?}"
+        );
     }
 
     #[test]
@@ -1092,6 +1150,7 @@ mod collection_article_tests {
                 1,
                 vec![
                     "Usage",
+                    "Variants",
                     "Anatomy",
                     "Assist chips",
                     "Filter chips",
@@ -1149,21 +1208,41 @@ mod collection_article_tests {
             for (tab, expected) in [("Guidelines", guidelines), ("Accessibility", accessibility)] {
                 let target = node(&renderer, tab, Role::Tab);
                 click(&mut renderer, target);
-                let mut headings = renderer
-                    .accessibility_snapshot()
-                    .unwrap()
-                    .nodes
-                    .into_iter()
-                    .filter_map(|(_, node)| {
-                        (node.role() == Role::Heading && node.level() == Some(2))
-                            .then(|| node.label().unwrap().to_owned())
-                    })
-                    .collect::<Vec<_>>();
+                let mut observed = BTreeMap::new();
+                let collect =
+                    |renderer: &HeadlessRenderer, observed: &mut BTreeMap<NodeId, String>| {
+                        for (id, node) in renderer.accessibility_snapshot().unwrap().nodes {
+                            if node.role() == Role::Heading && node.level() == Some(2) {
+                                observed.insert(id, node.label().unwrap().to_owned());
+                            }
+                        }
+                    };
+                collect(&renderer, &mut observed);
+                for section in &expected {
+                    reveal_section(&mut renderer, tab, section);
+                    collect(&renderer, &mut observed);
+                    if kind == 1 && tab == "Guidelines" && *section == "Variants" {
+                        node(&renderer, "Input chip", Role::Cell);
+                        node(&renderer, "Suggestion chip", Role::Cell);
+                        node(
+                            &renderer,
+                            "Input chips represent discrete pieces of information entered by a person",
+                            Role::Cell,
+                        );
+                        node(
+                            &renderer,
+                            "Suggestion chips help narrow a person’s intent by presenting dynamically-generated suggestions",
+                            Role::Cell,
+                        );
+                    }
+                }
+                let mut headings = observed.into_values().collect::<Vec<_>>();
                 headings.sort();
                 let mut expected = expected;
                 expected.sort();
                 assert_eq!(headings, expected, "article {kind} {tab}");
                 if tab == "Guidelines" && matches!(kind, 0 | 2 | 3) {
+                    reveal_section(&mut renderer, tab, "Anatomy");
                     for number in 1..=if kind == 0 {
                         6
                     } else if kind == 2 {
@@ -1176,8 +1255,51 @@ mod collection_article_tests {
                 }
             }
             if kind == 1 {
-                let remove = node(&renderer, "Remove Alex", Role::Button);
-                click(&mut renderer, remove);
+                reveal_section(&mut renderer, "Accessibility", "Labeling elements");
+                let before = renderer.accessibility_snapshot().unwrap();
+                let alex_count = before
+                    .nodes
+                    .iter()
+                    .filter(|(_, node)| {
+                        node.label() == Some("Alex") && node.role() == Role::CheckBox
+                    })
+                    .count();
+                assert!(
+                    alex_count > 0,
+                    "the live recipient examples must be composed"
+                );
+                let sam_ids = before
+                    .nodes
+                    .iter()
+                    .filter_map(|(id, node)| {
+                        (node.label() == Some("Sam") && node.role() == Role::CheckBox)
+                            .then_some(*id)
+                    })
+                    .collect::<Vec<_>>();
+                assert_eq!(sam_ids.len(), alex_count);
+                for remaining in (0..alex_count).rev() {
+                    let remove = node(&renderer, "Remove Alex", Role::Button);
+                    click(&mut renderer, remove);
+                    let snapshot = renderer.accessibility_snapshot().unwrap();
+                    assert_eq!(
+                        snapshot
+                            .nodes
+                            .iter()
+                            .filter(|(_, node)| {
+                                node.label() == Some("Alex") && node.role() == Role::CheckBox
+                            })
+                            .count(),
+                        remaining,
+                        "a remove action must affect only its own recipient example"
+                    );
+                    for id in &sam_ids {
+                        assert!(snapshot.nodes.iter().any(|(current, node)| {
+                            current == id
+                                && node.label() == Some("Sam")
+                                && node.role() == Role::CheckBox
+                        }));
+                    }
+                }
                 let snapshot = renderer.accessibility_snapshot().unwrap();
                 assert!(
                     !snapshot
@@ -1187,10 +1309,42 @@ mod collection_article_tests {
                             && node.role() == Role::CheckBox)
                 );
                 node(&renderer, "Sam", Role::CheckBox);
-                let restore = node(&renderer, "Restore recipients", Role::Button);
-                click(&mut renderer, restore);
+                let restores = snapshot
+                    .nodes
+                    .iter()
+                    .filter_map(|(id, node)| {
+                        (node.label() == Some("Restore recipients") && node.role() == Role::Button)
+                            .then_some(*id)
+                    })
+                    .collect::<Vec<_>>();
+                assert_eq!(restores.len(), alex_count);
+                for (index, id) in restores.into_iter().enumerate() {
+                    let restore = renderer
+                        .accessibility_snapshot()
+                        .unwrap()
+                        .nodes
+                        .into_iter()
+                        .find(|(current, _)| *current == id)
+                        .expect("retained restore action")
+                        .1;
+                    click(&mut renderer, restore);
+                    assert_eq!(
+                        renderer
+                            .accessibility_snapshot()
+                            .unwrap()
+                            .nodes
+                            .iter()
+                            .filter(|(_, node)| {
+                                node.label() == Some("Alex") && node.role() == Role::CheckBox
+                            })
+                            .count(),
+                        index + 1,
+                        "restore must rebuild only its own removed recipient"
+                    );
+                }
                 node(&renderer, "Alex", Role::CheckBox);
             } else if kind == 2 {
+                reveal_section(&mut renderer, "Accessibility", "Interaction & style");
                 let secondary = node(
                     &renderer,
                     "Accessible multiple actions: Notes more actions",

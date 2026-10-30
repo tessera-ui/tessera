@@ -102,6 +102,15 @@ fn date_dialog_example_commits_only_confirmed_selection() {
         Some(super::date(18))
     );
 
+    renderer.render_frames(30);
+    assert!(
+        !renderer
+            .accessibility_snapshot()
+            .unwrap()
+            .nodes
+            .iter()
+            .any(|(_, node)| node.role() == Role::Dialog)
+    );
     activate(&mut renderer, "Open Input date dialog");
     choose_modal_day(&mut renderer, "July 21, 2026");
     let outside = PxPosition::from_f32_xy(10.0, 10.0);
@@ -115,6 +124,15 @@ fn date_dialog_example_commits_only_confirmed_selection() {
         Some(super::date(18))
     );
 
+    renderer.render_frames(30);
+    assert!(
+        !renderer
+            .accessibility_snapshot()
+            .unwrap()
+            .nodes
+            .iter()
+            .any(|(_, node)| node.role() == Role::Dialog)
+    );
     activate(&mut renderer, "Open Input date dialog");
     choose_modal_day(&mut renderer, "July 22, 2026");
     activate(&mut renderer, "Modal confirm date");

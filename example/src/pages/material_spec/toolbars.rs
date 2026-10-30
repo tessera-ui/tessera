@@ -1053,9 +1053,9 @@ mod tests {
     #[test]
     fn live_toolbar_figures_fit_real_interactive_controls_inside_64dp_cross_axis() {
         for (variant, expanded, expected_width, expected_height, count) in [
-            (Variant::Floating, true, 208, 64, 4),
+            (Variant::Floating, true, 220, 64, 4),
             (Variant::Floating, false, 64, 64, 1),
-            (Variant::Vertical, true, 64, 208, 4),
+            (Variant::Vertical, true, 64, 220, 4),
             (Variant::Docked, true, 600, 64, 4),
         ] {
             CONFIGURATION.set((variant, expanded));
@@ -1072,6 +1072,30 @@ mod tests {
                 assert!(action.x >= container.x && action.y >= container.y);
                 assert!(action.x + action.width <= container.x + container.width);
                 assert!(action.y + action.height <= container.y + container.height);
+                if variant != Variant::Docked {
+                    assert_eq!(
+                        (action.width, action.height),
+                        (Dp(48.0).to_px(), Dp(48.0).to_px())
+                    );
+                    let main = Dp([8.0, 60.0, 112.0, 164.0][index]).to_px();
+                    let cross = Dp(8.0).to_px();
+                    assert_eq!(
+                        (action.x - container.x, action.y - container.y),
+                        if variant == Variant::Vertical {
+                            (cross, main)
+                        } else {
+                            (main, cross)
+                        }
+                    );
+                    if index + 1 == count {
+                        let trailing = if variant == Variant::Vertical {
+                            container.y + container.height - action.y - action.height
+                        } else {
+                            container.x + container.width - action.x - action.width
+                        };
+                        assert_eq!(trailing, Dp(8.0).to_px());
+                    }
+                }
             }
         }
     }
