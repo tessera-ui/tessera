@@ -609,6 +609,20 @@ fn configurations(menu: Menu) {
                     SplitButtonSize::Medium,
                     true,
                 );
+                demo(
+                    menu,
+                    "L",
+                    SplitButtonVariant::Tonal,
+                    SplitButtonSize::Large,
+                    true,
+                );
+                demo(
+                    menu,
+                    "XL",
+                    SplitButtonVariant::Tonal,
+                    SplitButtonSize::ExtraLarge,
+                    true,
+                );
             });
     }));
     gap(Dp(24.0));
