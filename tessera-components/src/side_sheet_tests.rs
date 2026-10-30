@@ -20,6 +20,7 @@ use crate::{
     boxed::boxed,
     column::column,
     modifier::{ModifierExt as _, SemanticsArgs},
+    navigation_drawer::navigation_drawer_item,
     navigation_rail::{navigation_rail, navigation_rail_item},
     theme::material_theme,
 };
@@ -29,11 +30,13 @@ use super::{SideSheetPosition, modal_side_sheet_provider, standard_side_sheet_pr
 thread_local! {
     static CASE: Cell<(bool, SideSheetPosition, i32)> = const { Cell::new((true, SideSheetPosition::Start, 600)) };
     static OPEN: Cell<Option<State<bool>>> = const { Cell::new(None) };
+    static DIMENSIONS: Cell<Option<State<(Dp, Dp)>>> = const { Cell::new(None) };
 }
 
 fn tag(name: &str) -> Modifier {
     Modifier::new().semantics(SemanticsArgs {
         test_tag: Some(name.to_owned()),
+        merge_descendants: true,
         ..Default::default()
     })
 }
@@ -159,6 +162,177 @@ fn intrinsic_hosts_bound_side_sheets_and_keep_destinations_separate_and_scrims_c
                     }
                 }
             }
+        },
+    );
+}
+
+#[tessera]
+fn configured_fixture() {
+    let (_, _, width) = CASE.get();
+    let open = remember(|| true);
+    let dimensions = remember(|| (Dp(360.0), Dp::ZERO));
+    OPEN.set(Some(open));
+    DIMENSIONS.set(Some(dimensions));
+    material_theme().child(move || {
+        column()
+            .modifier(Modifier::new().fill_max_size())
+            .children(move || {
+                boxed()
+                    .modifier(tag("configured-host").size(Dp(f64::from(width)), Dp(480.0)))
+                    .children(move || {
+                        modal_side_sheet_provider()
+                            .is_open(open.get())
+                            .position(SideSheetPosition::Start)
+                            .max_width(dimensions.with(|value| value.0))
+                            .content_padding(dimensions.with(|value| value.1))
+                            .on_close_request(move || open.set(false))
+                            .main_content(|| {
+                                boxed().modifier(Modifier::new().fill_max_size());
+                            })
+                            .side_sheet_content(|| {
+                                column()
+                                    .modifier(
+                                        tag("configured-sheet")
+                                            .fill_max_size()
+                                            .padding_all(Dp(12.0)),
+                                    )
+                                    .children(|| {
+                                        navigation_drawer_item()
+                                            .label("Inbox")
+                                            .modifier(tag("configured-destination"));
+                                    });
+                            });
+                    });
+            });
+    });
+}
+
+fn tap_configured(
+    session: &mut tessera_ui::testing::LayoutTestSession<impl Fn()>,
+    point: PxPosition,
+    frame: &mut u64,
+) {
+    let origin = Instant::now();
+    for content in [
+        CursorEventContent::Pressed(PressKeyEventType::Left),
+        CursorEventContent::Released(PressKeyEventType::Left),
+    ] {
+        *frame += 16_666_667;
+        pump_layout_test_session_with_input(
+            session,
+            *frame,
+            vec![
+                PointerChange::new(
+                    origin + Duration::from_nanos(*frame),
+                    MOUSE_POINTER_ID,
+                    content,
+                    GestureState::TapCandidate,
+                )
+                .with_position(point),
+            ],
+            Some(point),
+        );
+    }
+}
+
+#[test]
+fn configured_modal_width_and_padding_remeasure_the_actual_sheet_and_preserve_scrim_boundary() {
+    crate::test_utils::run_isolated_test(
+        "side_sheet::host_tests::configured_modal_width_and_padding_remeasure_the_actual_sheet_and_preserve_scrim_boundary",
+        || {
+            for width in [600, 320] {
+                CASE.set((true, SideSheetPosition::Start, width));
+                let mut session = start_layout_test_session(
+                    layout_test(configured_fixture).viewport_px(800, 600),
+                );
+                pump_layout_test_session(&mut session, 0);
+                let mut frame = 1_000_000_000;
+                let initial = pump_layout_test_session(&mut session, frame);
+                initial.node("configured-host").size(width, 480);
+                initial
+                    .node("configured-sheet")
+                    .size(width.min(360), 480)
+                    .position(0, 0);
+                initial
+                    .node("configured-destination")
+                    .size(width.min(360) - 24, 56)
+                    .position(12, 12);
+                let dimensions = DIMENSIONS.get().unwrap();
+                dimensions.with_mut(|value| value.0 = Dp(300.0));
+                frame += 16_666_667;
+                let resized = pump_layout_test_session(&mut session, frame);
+                resized.node("configured-sheet").size(300, 480);
+                resized.node("configured-destination").size(276, 56);
+                dimensions.with_mut(|value| value.1 = Dp(16.0));
+                frame += 16_666_667;
+                let padded = pump_layout_test_session(&mut session, frame);
+                padded
+                    .node("configured-sheet")
+                    .size(268, 448)
+                    .position(16, 16);
+                padded
+                    .node("configured-destination")
+                    .size(244, 56)
+                    .position(28, 28);
+                if width == 600 {
+                    dimensions.set((Dp(360.0), Dp::ZERO));
+                    frame += 16_666_667;
+                    pump_layout_test_session(&mut session, frame);
+                    tap_configured(
+                        &mut session,
+                        PxPosition::from_f32_xy(355.0, 240.0),
+                        &mut frame,
+                    );
+                    assert!(
+                        OPEN.get().unwrap().get(),
+                        "the sheet's blank ending inset must still block scrim activation"
+                    );
+                    tap_configured(
+                        &mut session,
+                        PxPosition::from_f32_xy(380.0, 240.0),
+                        &mut frame,
+                    );
+                    assert!(
+                        !OPEN.get().unwrap().get(),
+                        "the old 360–400dp sheet band must now belong to the scrim"
+                    );
+                }
+            }
+        },
+    );
+}
+
+#[test]
+fn configured_modal_dimensions_keep_nonfinite_and_negative_inputs_out_of_constraints() {
+    crate::test_utils::run_isolated_test(
+        "side_sheet::host_tests::configured_modal_dimensions_keep_nonfinite_and_negative_inputs_out_of_constraints",
+        || {
+            CASE.set((true, SideSheetPosition::Start, 600));
+            let mut session =
+                start_layout_test_session(layout_test(configured_fixture).viewport_px(800, 600));
+            pump_layout_test_session(&mut session, 0);
+            pump_layout_test_session(&mut session, 1_000_000_000);
+            let dimensions = DIMENSIONS.get().unwrap();
+            for (index, value) in [f64::NAN, f64::INFINITY, f64::NEG_INFINITY]
+                .into_iter()
+                .enumerate()
+            {
+                dimensions.set((Dp(value), Dp(value)));
+                let snapshot = pump_layout_test_session(
+                    &mut session,
+                    1_100_000_000 + index as u64 * 16_666_667,
+                );
+                snapshot
+                    .node("configured-sheet")
+                    .size(352, 432)
+                    .position(24, 24);
+            }
+            dimensions.set((Dp(360.0), Dp(-16.0)));
+            let snapshot = pump_layout_test_session(&mut session, 1_200_000_000);
+            snapshot
+                .node("configured-sheet")
+                .size(360, 480)
+                .position(0, 0);
         },
     );
 }

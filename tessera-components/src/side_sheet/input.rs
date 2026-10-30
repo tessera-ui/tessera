@@ -22,7 +22,7 @@ use crate::{
     pos_misc::is_position_inside_bounds,
 };
 
-use super::{SideSheetController, SideSheetPosition};
+use super::{SideSheetController, SideSheetPosition, side_sheet_dimension};
 
 struct SheetPointerGesture {
     recognizer: DragRecognizer,
@@ -186,12 +186,14 @@ impl PointerInputModifierNode for SheetPointerNode {
 
 #[tessera]
 pub(super) fn side_sheet_body(
+    content_padding: Option<Dp>,
     controller: Option<State<SideSheetController>>,
     position: Option<State<SideSheetPosition>>,
     on_close: Option<Callback>,
     nested_scroll_connection: Option<NestedScrollConnection>,
     content: Option<RenderSlot>,
 ) {
+    let content_padding = side_sheet_dimension(content_padding, Dp(24.0));
     let controller = controller.expect("sheet body requires its controller");
     let position = position.expect("sheet body requires its edge state");
     let on_close = on_close.unwrap_or_default();
@@ -211,7 +213,7 @@ pub(super) fn side_sheet_body(
     boxed().modifier(modifier).children(move || {
         let nested_scroll_connection = nested_scroll_connection.clone();
         layout()
-            .modifier(Modifier::new().padding_all(Dp(24.0)))
+            .modifier(Modifier::new().padding_all(content_padding))
             .child(move || {
                 provide_context(
                     || nested_scroll_connection.clone(),

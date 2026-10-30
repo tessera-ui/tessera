@@ -89,15 +89,11 @@ pub fn navigation_drawer(
             })
             .into(),
         )
-        .shape(if modal {
-            Shape::RoundedRectangle {
-                top_left: square,
-                top_right: round,
-                bottom_right: round,
-                bottom_left: square,
-            }
-        } else {
-            Shape::RECTANGLE
+        .shape(Shape::RoundedRectangle {
+            top_left: square,
+            top_right: round,
+            bottom_right: round,
+            bottom_left: square,
         })
         .elevation(if modal { Dp(1.0) } else { Dp(0.0) })
         .block_input(false)
@@ -353,6 +349,55 @@ mod tests {
             }
             pump_layout_test_session(&mut session, (index as u64 + 1) * 100_000_000);
             assert_eq!(SELECTED.get().unwrap().get(), 1);
+        }
+    }
+
+    #[tessera]
+    fn shape_fixture() {
+        material_theme()
+            .theme(|| {
+                let mut theme = MaterialTheme::default();
+                theme.color_scheme.surface = tessera_ui::Color::BLACK;
+                theme
+            })
+            .child(|| {
+                column()
+                    .modifier(
+                        Modifier::new()
+                            .fill_max_size()
+                            .background(tessera_ui::Color::WHITE),
+                    )
+                    .children(|| {
+                        navigation_drawer().modifier(Modifier::new().height(Dp(100.0)));
+                    });
+            });
+    }
+
+    #[test]
+    #[ignore = "Requires a native GPU adapter to verify navigation drawer corner pixels"]
+    fn standard_drawer_rounds_only_the_ending_corners() {
+        let mut renderer = tessera_ui::HeadlessRenderer::new(
+            Box::new(shape_fixture),
+            vec![Box::new(crate::TesseraComponents)],
+            tessera_ui::HeadlessConfig {
+                width: 400,
+                height: 120,
+                sample_count: 1,
+                ..Default::default()
+            },
+        )
+        .unwrap();
+        renderer.render_frames(3);
+        let pixels = renderer.read_pixels().unwrap();
+        let pixel = |x: usize, y: usize| -> [u8; 4] {
+            let offset = (y * 400 + x) * 4;
+            pixels[offset..offset + 4].try_into().unwrap()
+        };
+        for (x, y) in [(0, 0), (0, 99), (343, 0), (343, 99), (359, 16), (359, 83)] {
+            assert_eq!(pixel(x, y), [0, 0, 0, 255]);
+        }
+        for (x, y) in [(359, 0), (359, 99), (356, 2), (356, 97)] {
+            assert_eq!(pixel(x, y), [255; 4]);
         }
     }
 }

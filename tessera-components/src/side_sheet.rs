@@ -39,6 +39,11 @@ const MAX_SHEET_WIDTH: Dp = Dp(400.0);
 const CORNER_RADIUS: Dp = Dp(16.0);
 const MODAL_ELEVATION: Dp = Dp(1.0);
 
+fn side_sheet_dimension(value: Option<Dp>, default: Dp) -> Dp {
+    let value = value.filter(|value| value.0.is_finite()).unwrap_or(default);
+    Dp(value.0.max(0.0))
+}
+
 /// Defines how the side sheet behaves relative to the main content.
 #[derive(Default, Clone, Copy, PartialEq)]
 enum SideSheetType {
@@ -333,6 +338,7 @@ fn place_side_sheet_if_present(
     input: &mut MeasureScope<'_>,
     result: &mut LayoutResult,
     host_size: PxSize,
+    max_width: Dp,
     is_open: bool,
     progress: f32,
     position: SideSheetPosition,
@@ -347,7 +353,7 @@ fn place_side_sheet_if_present(
     let parent_width = host_size.width;
     let parent_height = host_size.height;
 
-    let max_width_px = MAX_SHEET_WIDTH.to_px();
+    let max_width_px = max_width.to_px();
     let sheet_width = if parent_width > max_width_px {
         max_width_px
     } else {
@@ -386,6 +392,10 @@ fn place_side_sheet_if_present(
 /// - `on_close_request` — optional close-request callback.
 /// - `position` — side sheet edge position.
 /// - `is_open` — declarative open state.
+/// - `max_width` — maximum surface width, constrained by the host; defaults to
+///   400dp.
+/// - `content_padding` — inset inside the surface; defaults to 24dp. Negative
+///   dimensions become zero; non-finite dimensions use their defaults.
 /// - `controller` — optional external controller.
 /// - `main_content` — optional main content rendered behind the sheet.
 /// - `side_sheet_content` — optional side sheet content.
@@ -405,6 +415,8 @@ fn place_side_sheet_if_present(
 ///             .accessibility_label("Filters")
 ///             .on_close_request(|| {})
 ///             .is_open(true)
+///             .max_width(tessera_ui::Dp(360.0))
+///             .content_padding(tessera_ui::Dp::ZERO)
 ///             .main_content(|| { /* main content */ })
 ///             .side_sheet_content(|| { /* side sheet content */ });
 ///     });
@@ -417,6 +429,8 @@ pub fn modal_side_sheet_provider(
     on_close_request: Option<Callback>,
     position: Option<SideSheetPosition>,
     is_open: Option<bool>,
+    max_width: Option<Dp>,
+    content_padding: Option<Dp>,
     controller: Option<State<SideSheetController>>,
     main_content: Option<RenderSlot>,
     side_sheet_content: Option<RenderSlot>,
@@ -429,6 +443,8 @@ pub fn modal_side_sheet_provider(
         .on_close_request_shared(on_close_request.unwrap_or_default())
         .position(position)
         .is_open(is_open)
+        .max_width_optional(max_width)
+        .content_padding_optional(content_padding)
         .main_content_shared(main_content.unwrap_or_else(RenderSlot::empty))
         .side_sheet_content_shared(side_sheet_content.unwrap_or_else(RenderSlot::empty))
         .controller_optional(controller);
@@ -500,6 +516,8 @@ pub fn standard_side_sheet_provider(
 #[tessera]
 fn side_sheet_provider_inner(
     accessibility_label: Option<String>,
+    max_width: Option<Dp>,
+    content_padding: Option<Dp>,
     sheet_type: Option<SideSheetType>,
     on_close_request: Option<Callback>,
     position: Option<SideSheetPosition>,
@@ -508,6 +526,8 @@ fn side_sheet_provider_inner(
     main_content: Option<RenderSlot>,
     side_sheet_content: Option<RenderSlot>,
 ) {
+    let max_width = side_sheet_dimension(max_width, MAX_SHEET_WIDTH);
+    let content_padding = side_sheet_dimension(content_padding, Dp(24.0));
     let sheet_type = sheet_type.unwrap_or(SideSheetType::Modal);
     let on_close_request = on_close_request.unwrap_or_default();
     let position = position.unwrap_or_default();
@@ -530,6 +550,8 @@ fn side_sheet_provider_inner(
 
     side_sheet_provider_render()
         .accessibility_label_optional(accessibility_label)
+        .max_width(max_width)
+        .content_padding(content_padding)
         .sheet_type(sheet_type)
         .on_close_request_shared(on_close_request)
         .position(position)
@@ -541,6 +563,8 @@ fn side_sheet_provider_inner(
 #[tessera]
 fn side_sheet_provider_render(
     accessibility_label: Option<String>,
+    max_width: Option<Dp>,
+    content_padding: Option<Dp>,
     sheet_type: Option<SideSheetType>,
     on_close_request: Option<Callback>,
     position: Option<SideSheetPosition>,
@@ -548,6 +572,8 @@ fn side_sheet_provider_render(
     main_content: Option<RenderSlot>,
     side_sheet_content: Option<RenderSlot>,
 ) {
+    let max_width = side_sheet_dimension(max_width, MAX_SHEET_WIDTH);
+    let content_padding = side_sheet_dimension(content_padding, Dp(24.0));
     let sheet_type = sheet_type.unwrap_or(SideSheetType::Modal);
     let position = position.unwrap_or_default();
     let on_close_request = on_close_request.unwrap_or_default();
@@ -613,6 +639,7 @@ fn side_sheet_provider_render(
             }),
         )
         .policy(SideSheetLayout {
+            max_width,
             progress,
             is_open,
             position,
@@ -666,6 +693,7 @@ fn side_sheet_provider_render(
                 }
 
                 side_sheet_content_wrapper()
+                    .content_padding(content_padding)
                     .nested_scroll_connection(nested_scroll_connection.clone())
                     .accessibility_label_optional(accessibility_label.clone())
                     .focus_scope(focus_scope)
@@ -682,6 +710,7 @@ fn side_sheet_provider_render(
 #[tessera]
 fn side_sheet_content_wrapper(
     accessibility_label: Option<String>,
+    content_padding: Option<Dp>,
     nested_scroll_connection: Option<NestedScrollConnection>,
     focus_scope: Option<FocusScopeNode>,
     sheet_type: Option<SideSheetType>,
@@ -691,6 +720,7 @@ fn side_sheet_content_wrapper(
     just_opened: Option<bool>,
     content: Option<RenderSlot>,
 ) {
+    let content_padding = side_sheet_dimension(content_padding, Dp(24.0));
     let sheet_type = sheet_type.unwrap_or(SideSheetType::Modal);
     let position = position.expect("sheet wrapper requires its edge state");
     let just_opened = just_opened.unwrap_or(false);
@@ -746,6 +776,7 @@ fn side_sheet_content_wrapper(
                 .block_input(true)
                 .child(move || {
                     side_sheet_body()
+                        .content_padding(content_padding)
                         .controller(controller)
                         .position(position)
                         .on_close_shared(on_close_request)
@@ -760,6 +791,7 @@ fn side_sheet_content_wrapper(
                 .block_input(true)
                 .child(move || {
                     side_sheet_body()
+                        .content_padding(content_padding)
                         .controller(controller)
                         .position(position)
                         .on_close_shared(on_close_request)
@@ -772,6 +804,7 @@ fn side_sheet_content_wrapper(
 
 #[derive(Clone, PartialEq)]
 struct SideSheetLayout {
+    max_width: Dp,
     progress: f32,
     is_open: bool,
     position: SideSheetPosition,
@@ -779,8 +812,8 @@ struct SideSheetLayout {
 }
 
 impl tessera_ui::LayoutModifierNode for SideSheetLayout {
-    fn measure_eq(&self, _other: &Self) -> bool {
-        true
+    fn measure_eq(&self, other: &Self) -> bool {
+        self.max_width == other.max_width
     }
 
     fn place_children(
@@ -838,6 +871,7 @@ impl tessera_ui::LayoutModifierNode for SideSheetLayout {
             input,
             &mut result,
             host_size,
+            self.max_width,
             self.is_open,
             self.progress,
             self.position,
