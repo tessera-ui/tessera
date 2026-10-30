@@ -102,6 +102,28 @@ pub(super) fn carousel_spec() {
                     collection(CarouselVariant::MultiBrowse, true);
                 })),
                 sections: vec![
+                    SpecSection { title: "Availability & resources", content: RenderSlot::new(|| {
+                        spec_table(
+                            vec!["Type".into(), "Resource".into(), "Status".into()],
+                            vec![
+                                vec!["Design".into(), "Design kit (Figma)".into(), "Available".into()],
+                                vec!["Implementation".into(), "Flutter".into(), "Available".into()],
+                                vec!["Implementation".into(), "Jetpack Compose".into(), "Available".into()],
+                                vec![
+                                    "Implementation".into(),
+                                    "Android Views (MDC-Android)".into(),
+                                    "Available".into(),
+                                ],
+                                vec![
+                                    "Implementation".into(),
+                                    "Web (upstream)".into(),
+                                    "Unavailable".into(),
+                                ],
+                            ],
+                        );
+                        gap(Dp(24.0));
+                        paragraph("This page implements all six layouts natively, so the live collections below run the real carousel component instead of a recording.".into());
+                    }) },
                     SpecSection { title: "Updates", content: RenderSlot::new(|| {
                         paragraph("November 2025: uncontained multi-aspect ratio joins multi-browse, uncontained, hero, center-aligned hero and full-screen layouts.".into());
                         gap(Dp(24.0));
@@ -134,18 +156,40 @@ pub(super) fn carousel_spec() {
                         subheading("Item text (optional)".into());
                         paragraph("Keep text brief and readable. Prefer uncontained layouts for longer text, and avoid more than two lines at compact breakpoints.".into());
                     }) },
-                    SpecSection { title: "Adaptive design", content: RenderSlot::new(|| {
-                        paragraph("Wider containers reveal more large and medium items. At compact breakpoints, show up to three items when they contain text. Full-screen always shows one item.".into());
-                        gap(Dp(24.0));
+                    SpecSection { title: "Multi-browse", content: RenderSlot::new(|| {
+                        paragraph(guidance(CarouselVariant::MultiBrowse).into());
+                        gap(Dp(32.0));
+                        collection(CarouselVariant::MultiBrowse, true);
+                    }) },
+                    SpecSection { title: "Uncontained", content: RenderSlot::new(|| {
+                        paragraph(guidance(CarouselVariant::Uncontained).into());
+                        gap(Dp(32.0));
+                        collection(CarouselVariant::Uncontained, true);
+                    }) },
+                    SpecSection { title: "Uncontained multi-aspect ratio", content: RenderSlot::new(|| {
+                        paragraph(guidance(CarouselVariant::UncontainedMultiAspectRatio).into());
+                        gap(Dp(32.0));
+                        collection(CarouselVariant::UncontainedMultiAspectRatio, true);
+                    }) },
+                    SpecSection { title: "Hero", content: RenderSlot::new(|| {
+                        paragraph(guidance(CarouselVariant::Hero).into());
+                        gap(Dp(32.0));
+                        collection(CarouselVariant::Hero, true);
+                    }) },
+                    SpecSection { title: "Center-aligned hero", content: RenderSlot::new(|| {
+                        paragraph(guidance(CarouselVariant::CenteredHero).into());
+                        gap(Dp(32.0));
                         collection(CarouselVariant::CenteredHero, true);
                     }) },
-                    SpecSection { title: "Behavior", content: RenderSlot::new(|| {
-                        subheading("Scrolling".into());
-                        paragraph("Use free scrolling for uncontained collections. Multi-browse, hero and full-screen snap into their layout when released. Full-screen scrolls vertically and must stop at an item boundary.".into());
-                        gap(Dp(24.0));
-                        collection(CarouselVariant::Hero, true);
+                    SpecSection { title: "Full-screen", content: RenderSlot::new(|| {
+                        paragraph(guidance(CarouselVariant::FullScreen).into());
                         gap(Dp(32.0));
                         collection(CarouselVariant::FullScreen, false);
+                    }) },
+                    SpecSection { title: "Accessibility requirements on scrolling pages", content: RenderSlot::new(|| {
+                        paragraph("On vertically-scrolling pages, carousels need an accessible way to view all items without horizontally scrolling. This requirement doesn't apply to full-screen carousels. Add a Show all button below the carousel that opens a dedicated vertically-scrolling page of every item, or an arrow icon button when the carousel has a header.".into());
+                        gap(Dp(24.0));
+                        collection(CarouselVariant::MultiBrowse, true);
                     }) },
                 ],
             },
@@ -183,7 +227,7 @@ pub(super) fn carousel_spec() {
                         paragraph("Give the collection a descriptive label and name each item's content and position in the set. The controls below expose individual labels such as Open collection 1 of 6.".into());
                     }) },
                     SpecSection { title: "Reduced motion", content: RenderSlot::new(|| {
-                        paragraph("Without dynamic masking, use equal-size items and remove parallax. The uncontained alternative keeps all content at its natural size and lets it reach the container edge.".into());
+                        paragraph("When reduced motion is enabled, remove parallax and stop expanding items as they enter the viewport. Use equal-size items that reach the container edge; hero layouts may still preview a partially visible next item. The uncontained collection below demonstrates this alternative; it is not an automatic system-preference switch.".into());
                         gap(Dp(24.0));
                         collection(CarouselVariant::Uncontained, true);
                     }) },
@@ -213,14 +257,41 @@ fn description(variant: CarouselVariant) -> &'static str {
     }
 }
 
+fn guidance(variant: CarouselVariant) -> &'static str {
+    match variant {
+        CarouselVariant::MultiBrowse => {
+            "Multi-browse is best for browsing many items at once, like photos or event feeds. Snap-scrolling keeps items recognizable and consistently sized. On larger screens more large and medium items are visible. At compact breakpoints show up to three items when they have text, and avoid this layout when items need a lot of text or complicated imagery."
+        }
+        CarouselVariant::Uncontained => {
+            "Uncontained is most similar to a traditional carousel: every item keeps a single size and scrolls to the edge of the container, so nothing is cropped. Both default and snap-scrolling work well here. Because items don't change size, more text or other UI can sit above or below each item."
+        }
+        CarouselVariant::UncontainedMultiAspectRatio => {
+            "Uncontained multi-aspect ratio uses the uncontained layout with items of various widths. Item widths can range from 9:16 for the minimum width to 16:9 for the maximum width. Only use it when the items genuinely have various widths."
+        }
+        CarouselVariant::Hero => {
+            "Hero spotlights content that needs more attention, such as movies, shows or media thumbnails. It shows one large item while previewing what comes next, and larger screens reveal more large items. Use snap-scrolling so people cycle through items one at a time."
+        }
+        CarouselVariant::CenteredHero => {
+            "Center-aligned hero adds a previewed item on the leading side, so a large item sits centered between small items. Use snap-scrolling so the centered item stays in focus while scrolling."
+        }
+        CarouselVariant::FullScreen => {
+            "Full-screen is best for immersive experiences like video articles, featured headlines or visually rich items, and can carry text and other UI over the image. It works best with content taller than it is wide, scrolls vertically, and only works in portrait orientation at compact and medium breakpoints. Use snap-scrolling, never default scrolling."
+        }
+    }
+}
+
 #[tessera]
 fn paragraph(content: String) {
     text().content(content).style(type_style(16.0, 24.0));
 }
 
+fn initial_item(variant: CarouselVariant) -> usize {
+    usize::from(variant == CarouselVariant::CenteredHero)
+}
+
 #[tessera]
 fn collection(variant: CarouselVariant, allow_all: bool) {
-    let controller = remember(CarouselController::default);
+    let controller = remember(|| CarouselController::new(initial_item(variant)));
     let all = remember(|| false);
     let selected = remember(|| 0_usize);
     hosted_dialog(all)
@@ -313,7 +384,9 @@ fn carousel_content(
     controller: State<CarouselController>,
     selected: State<usize>,
     geometry: Option<State<Geometry>>,
+    enabled: Option<bool>,
 ) {
+    let enabled = enabled.unwrap_or(true);
     let modifier = geometry
         .map(|geometry| watch(geometry, "container"))
         .unwrap_or_default();
@@ -332,6 +405,11 @@ fn carousel_content(
                 .modifier(
                     (if variant == CarouselVariant::FullScreen {
                         modifier.clone().width(Dp(280.0))
+                    } else if matches!(
+                        variant,
+                        CarouselVariant::Hero | CarouselVariant::CenteredHero
+                    ) {
+                        modifier.clone().width(Dp(400.0))
                     } else {
                         modifier.clone().fill_max_width()
                     })
@@ -354,7 +432,17 @@ fn carousel_content(
                         .variant(variant)
                         .height(height)
                         .controller(controller)
-                        .preferred_item_width(Dp(180.0))
+                        .user_scroll_enabled(enabled)
+                        .preferred_item_width(Dp(
+                            if matches!(
+                                variant,
+                                CarouselVariant::Hero | CarouselVariant::CenteredHero
+                            ) {
+                                320.0
+                            } else {
+                                180.0
+                            },
+                        ))
                         .item_aspect_ratios(ratios.clone())
                         .min_small_item_width(Dp(40.0))
                         .max_small_item_width(Dp(56.0))
@@ -405,7 +493,9 @@ fn carousel_content(
                             } else {
                                 Modifier::new()
                             };
-                            media_item(item.index, selected).modifier(modifier.fill_max_size());
+                            media_item(item.index, selected)
+                                .enabled(enabled)
+                                .modifier(modifier.fill_max_size());
                         });
                 });
         });
@@ -449,7 +539,12 @@ fn item_geometry(geometry: State<Geometry>, name: &'static str) -> Modifier {
 }
 
 #[tessera]
-fn media_item(index: usize, selected: State<usize>, modifier: Option<Modifier>) {
+fn media_item(
+    index: usize,
+    selected: State<usize>,
+    modifier: Option<Modifier>,
+    enabled: Option<bool>,
+) {
     let scheme = use_context::<MaterialTheme>().unwrap().get().color_scheme;
     let (background, foreground) = match index % 3 {
         0 => (scheme.primary_container, scheme.on_primary_container),
@@ -458,6 +553,7 @@ fn media_item(index: usize, selected: State<usize>, modifier: Option<Modifier>) 
     };
     button()
         .modifier(modifier.unwrap_or_default())
+        .enabled(enabled.unwrap_or(true))
         .shape(Shape::RECTANGLE)
         .padding(Dp(0.0))
         .color(background)
@@ -483,8 +579,13 @@ fn media_item(index: usize, selected: State<usize>, modifier: Option<Modifier>) 
 #[tessera]
 fn layout_figure(variant: CarouselVariant, measurements: bool) {
     let geometry = remember(Geometry::new);
-    let controller = remember(CarouselController::default);
+    let controller = remember(|| CarouselController::new(initial_item(variant)));
     let selected = remember(|| 0_usize);
+    #[cfg(all(test, not(target_family = "wasm")))]
+    {
+        tests::GEOMETRY.set(Some(geometry));
+        tests::CONTROLLER.set(Some(controller));
+    }
     let scheme = use_context::<MaterialTheme>().unwrap().get().color_scheme;
     boxed()
         .alignment(Alignment::TopStart)
@@ -544,6 +645,42 @@ fn layout_figure(variant: CarouselVariant, measurements: bool) {
     } else {
         "1  Container\n2  Large carousel item\n3  Small carousel item".into()
     });
+    if measurements && variant != CarouselVariant::FullScreen {
+        gap(Dp(16.0));
+        paragraph("These measurements show padding at the collection ends, not permanent viewport gutters. Inspect each end to reveal its actual padding; items at the opposite edge may reach the viewport boundary.".into());
+        gap(Dp(8.0));
+        row().children(move || {
+            button()
+                .text()
+                .accessibility_label("Inspect collection start")
+                .on_click(move || controller.with_mut(|controller| controller.jump_to_item(0)))
+                .child(|| {
+                    text().content("Collection start");
+                });
+            button()
+                .text()
+                .accessibility_label("Inspect collection end")
+                .on_click(move || controller.with_mut(|controller| controller.jump_to_item(5)))
+                .child(|| {
+                    text().content("Collection end");
+                });
+        });
+    }
+}
+
+fn collection_edge_padding(values: &Geometry) -> [f64; 2] {
+    let Some(container) = values.get("container") else {
+        return [0.0; 2];
+    };
+    let start = values
+        .get("item0")
+        .map(|item| (item.x - container.x).to_f32())
+        .unwrap_or(0.0);
+    let end = values
+        .get("item5")
+        .map(|item| (container.x + container.width - item.x - item.width).to_f32())
+        .unwrap_or(0.0);
+    [start, end].map(|gap| Dp::from_pixels_f32(gap.max(0.0)).0)
 }
 
 #[tessera]
@@ -567,49 +704,37 @@ fn carousel_annotation_content(values: Geometry, measurements: bool, variant: Ca
     annotations::outline(&mut svg, container);
     if measurements {
         let full = variant == CarouselVariant::FullScreen;
-        let start = if full { 0.0 } else { 16.0 };
-        let end = if matches!(
-            variant,
-            CarouselVariant::FullScreen
-                | CarouselVariant::Uncontained
-                | CarouselVariant::UncontainedMultiAspectRatio
-        ) {
-            0.0
-        } else {
-            16.0
-        };
-        for (x, padding) in [(container.x, start), (container.x + container.w - end, end)] {
+        let [start, end] = collection_edge_padding(&values);
+        for (edge, x, padding, label_x) in [
+            ("start", container.x, start, container.x),
+            (
+                "end",
+                container.x + container.w - end,
+                end,
+                container.x + container.w - 72.0,
+            ),
+        ] {
+            if padding <= 0.5 {
+                continue;
+            }
             svg.push_str(&format!(
                 "<rect x='{x}' y='{}' width='{padding}' height='{}' fill='#e883aa' fill-opacity='.32'/>",
                 container.y, container.h
             ));
+            dotted(
+                &mut svg,
+                x,
+                container.y + container.h + 20.0,
+                padding,
+                false,
+                "#b14e70",
+            );
+            annotations::dimension(
+                format!("{padding:.0} {edge}"),
+                Dp(label_x),
+                Dp(container.y + container.h + 24.0),
+            );
         }
-        dotted(
-            &mut svg,
-            container.x,
-            container.y + container.h + 20.0,
-            start,
-            false,
-            "#b14e70",
-        );
-        dotted(
-            &mut svg,
-            container.x + container.w - end,
-            container.y + container.h + 20.0,
-            end,
-            false,
-            "#b14e70",
-        );
-        annotations::dimension(
-            format!("{start:.0}"),
-            Dp(container.x),
-            Dp(container.y + container.h + 24.0),
-        );
-        annotations::dimension(
-            format!("{end:.0}"),
-            Dp(container.x + container.w - 20.0),
-            Dp(container.y + container.h + 24.0),
-        );
         annotations::dimension(
             if full { "0" } else { "8" }.into(),
             Dp(container.x + container.w / 2.0),
@@ -686,10 +811,32 @@ fn carousel_annotation_content(values: Geometry, measurements: bool, variant: Ca
 fn measurement_table(variant: CarouselVariant) {
     let full = variant == CarouselVariant::FullScreen;
     let mut rows = vec![
-        vec!["Alignment".into(), "Vertically centered".into()],
+        vec![
+            "Alignment".into(),
+            if full {
+                "Centered"
+            } else {
+                "Vertically centered"
+            }
+            .into(),
+        ],
         vec![
             "Leading padding".into(),
             if full { "0dp" } else { "16dp" }.into(),
+        ],
+        vec![
+            "Trailing padding".into(),
+            if matches!(
+                variant,
+                CarouselVariant::FullScreen
+                    | CarouselVariant::Uncontained
+                    | CarouselVariant::UncontainedMultiAspectRatio
+            ) {
+                "0dp"
+            } else {
+                "16dp"
+            }
+            .into(),
         ],
         vec![
             "Top/bottom padding".into(),
@@ -709,8 +856,16 @@ fn measurement_table(variant: CarouselVariant) {
     ) {
         rows.push(vec![
             "Large item width".into(),
-            "Dynamic, or user-set".into(),
+            if variant == CarouselVariant::MultiBrowse {
+                "Dynamic, or user-set"
+            } else {
+                "Dynamic"
+            }
+            .into(),
         ]);
+        if variant == CarouselVariant::MultiBrowse {
+            rows.push(vec!["Medium item width".into(), "Dynamic".into()]);
+        }
         rows.push(vec!["Small item width".into(), "40–56dp, dynamic".into()]);
     }
     spec_table(vec!["Attribute".into(), "Value".into()], rows);
@@ -757,9 +912,25 @@ fn tokens() {
         vec!["Token".into(), "Value".into()],
         vec![
             vec!["Container color".into(), "Surface".into()],
-            vec!["Item shape".into(), "28dp".into()],
-            vec!["Small item width".into(), "40–56dp".into()],
-            vec!["Item spacing".into(), "8dp; full-screen 16dp".into()],
+            vec!["Container shape".into(), "Rectangle".into()],
+            vec!["Item corner radius".into(), "28dp".into()],
+            vec![
+                "Alignment".into(),
+                "Vertically centered; full-screen centered".into(),
+            ],
+            vec!["Leading padding".into(), "16dp; full-screen 0dp".into()],
+            vec![
+                "Trailing padding".into(),
+                "16dp; uncontained and full-screen 0dp".into(),
+            ],
+            vec!["Top/bottom padding".into(), "8dp; full-screen 0dp".into()],
+            vec![
+                "Padding between elements".into(),
+                "8dp; full-screen 16dp".into(),
+            ],
+            vec!["Large item width".into(), "Dynamic, or user-set".into()],
+            vec!["Medium item width".into(), "Dynamic".into()],
+            vec!["Small item width".into(), "40–56dp, dynamic".into()],
         ],
     );
 }
@@ -773,23 +944,57 @@ fn colors() {
 
 #[tessera]
 fn states() {
-    paragraph("Enabled, hovered, focused, pressed and disabled item states use the state treatment of the interactive content. Hover or activate an item to inspect its real state layer and ripple.".into());
+    paragraph("Enabled, hovered, focused, pressed and disabled item states use the state treatment of the interactive content. Hover, focus with Tab or activate an enabled item to inspect its real state layer and ripple.".into());
     gap(Dp(24.0));
+    subheading("Enabled".into());
+    gap(Dp(16.0));
     collection(CarouselVariant::MultiBrowse, true);
+    gap(Dp(32.0));
+    subheading("Disabled".into());
+    gap(Dp(16.0));
+    let controller = remember(CarouselController::default);
+    let selected = remember(|| 0_usize);
+    carousel_content(CarouselVariant::MultiBrowse, controller, selected).enabled(false);
 }
 
 #[tessera]
 fn usage() {
-    paragraph("Choose multi-browse for visual collections, uncontained for stable widths and longer text, hero to emphasize one item, and full-screen for immersive portrait media. Provide an alternative vertical collection on scrolling pages.".into());
+    paragraph("Carousels display a scrollable list of items. Carousel items emphasize visuals, but can also contain brief text that adapts to the item size.".into());
+    gap(Dp(16.0));
+    paragraph("All six layouts can be start- or center-aligned, though center-aligned hero is the most common centered carousel. Carousels scroll in two ways: default scrolling, recommended for uncontained layouts, and snap-scrolling, where scrolled items return to the carousel's layout and which is recommended for multi-browse, hero and full-screen layouts.".into());
     gap(Dp(32.0));
-    for variant in VARIANTS {
-        subheading(name(variant).into());
-        gap(Dp(16.0));
-        paragraph(description(variant).into());
-        gap(Dp(24.0));
-        collection(variant, variant != CarouselVariant::FullScreen);
-        gap(Dp(40.0));
-    }
+    collection(CarouselVariant::MultiBrowse, true);
+    gap(Dp(32.0));
+    spec_table(
+        vec!["Layout".into(), "Best used for".into()],
+        vec![
+            vec![
+                "Multi-browse".into(),
+                "Browsing many visual items at once (like photos), dynamic designs".into(),
+            ],
+            vec![
+                "Uncontained".into(),
+                "Highly-customized or text-heavy carousels, stacked image and text, traditional carousel behavior".into(),
+            ],
+            vec![
+                "Uncontained multi-aspect ratio".into(),
+                "Collections whose items have their own width and aspect ratio".into(),
+            ],
+            vec![
+                "Hero".into(),
+                "Spotlighting very large visual items (like a movie or featured app)".into(),
+            ],
+            vec!["Center-aligned hero".into(), "Centered, large visual items".into()],
+            vec![
+                "Full-screen".into(),
+                "Vertically-scrolling video or image feeds, immersive experiences".into(),
+            ],
+        ],
+    );
+    gap(Dp(32.0));
+    paragraph("Carousel items must be fully visible on-screen, except for the uncontained layout. When scrolled, items automatically change size and snap into place to maintain the same layout.".into());
+    gap(Dp(16.0));
+    paragraph("• Do set the large carousel item size so images and text stay easy to read and recognize.\n• Don't set carousel items so small that the image isn't recognizable.".into());
 }
 
 #[cfg(all(test, not(target_family = "wasm")))]
@@ -797,14 +1002,19 @@ mod tests {
     use std::cell::Cell;
 
     use tessera_components::theme::material_theme;
-    use tessera_ui::{HeadlessConfig, HeadlessRenderer};
+    use tessera_ui::{
+        HeadlessConfig, HeadlessRenderer, MOUSE_POINTER_ID, PressKeyEventType, PxPosition,
+        accesskit::{Action, ActionRequest, TreeId},
+    };
 
     use super::*;
 
     thread_local! {
         static VARIANT: Cell<CarouselVariant> = const { Cell::new(CarouselVariant::MultiBrowse) };
-        static GEOMETRY: Cell<Option<State<Geometry>>> = const { Cell::new(None) };
-        static CONTROLLER: Cell<Option<State<CarouselController>>> = const { Cell::new(None) };
+        pub(super) static GEOMETRY: Cell<Option<State<Geometry>>> = const { Cell::new(None) };
+        pub(super) static CONTROLLER: Cell<Option<State<CarouselController>>> = const { Cell::new(None) };
+        static ENABLED: Cell<bool> = const { Cell::new(true) };
+        static SELECTED: Cell<Option<State<usize>>> = const { Cell::new(None) };
     }
 
     struct ComponentPipelines;
@@ -819,19 +1029,31 @@ mod tests {
     fn fixture() {
         let variant = VARIANT.get();
         material_theme().child(move || {
-            let controller = remember(CarouselController::default);
+            let controller = remember(|| CarouselController::new(initial_item(variant)));
             let selected = remember(|| 0_usize);
             let geometry = remember(Geometry::new);
             GEOMETRY.set(Some(geometry));
             CONTROLLER.set(Some(controller));
+            SELECTED.set(Some(selected));
             boxed()
                 .alignment(Alignment::TopStart)
                 .modifier(Modifier::new().fill_max_size())
                 .children(move || {
                     column()
-                        .modifier(Modifier::new().width(Dp(400.0)))
+                        .modifier(Modifier::new().width(Dp(
+                            if matches!(
+                                variant,
+                                CarouselVariant::Hero | CarouselVariant::CenteredHero
+                            ) {
+                                720.0
+                            } else {
+                                400.0
+                            },
+                        )))
                         .children(move || {
-                            carousel_content(variant, controller, selected).geometry(geometry);
+                            carousel_content(variant, controller, selected)
+                                .geometry(geometry)
+                                .enabled(ENABLED.get());
                         });
                 });
         });
@@ -839,7 +1061,175 @@ mod tests {
 
     #[test]
     #[ignore = "Requires a GPU adapter for the real component pipelines"]
+    fn disabled_carousel_preview_blocks_activation_and_scrolling() {
+        VARIANT.set(CarouselVariant::MultiBrowse);
+        for enabled in [false, true] {
+            ENABLED.set(enabled);
+            let mut renderer = HeadlessRenderer::new(
+                Box::new(fixture),
+                vec![Box::new(ComponentPipelines)],
+                HeadlessConfig {
+                    width: 800,
+                    height: 600,
+                    sample_count: 1,
+                    ..Default::default()
+                },
+            )
+            .expect("headless carousel renderer");
+            renderer.render_frames(8);
+            let tree = renderer
+                .accessibility_snapshot()
+                .expect("carousel semantics");
+            let item = tree
+                .nodes
+                .iter()
+                .find(|(_, node)| node.label() == Some("Open collection 1 of 6"))
+                .expect("first collection item");
+            assert_eq!(item.1.is_disabled(), !enabled);
+            let bounds = item.1.bounds().expect("visible first item");
+            let point = PxPosition::from_f32_xy(
+                ((bounds.x0 + bounds.x1) * 0.5) as f32,
+                ((bounds.y0 + bounds.y1) * 0.5) as f32,
+            );
+            renderer.pointer_move(MOUSE_POINTER_ID, point);
+            renderer.pointer_press(MOUSE_POINTER_ID, point, PressKeyEventType::Left);
+            renderer.step_frame();
+            renderer.pointer_release(MOUSE_POINTER_ID, point, PressKeyEventType::Left);
+            renderer.render_frames(4);
+            assert_eq!(SELECTED.get().unwrap().get(), usize::from(enabled));
+            renderer.pointer_scroll(MOUSE_POINTER_ID, point, -120.0, 0.0);
+            renderer.render_frames(120);
+            let offset = CONTROLLER
+                .get()
+                .unwrap()
+                .with(CarouselController::scroll_offset);
+            if enabled {
+                assert!(offset.0 > 0.0, "enabled preview must respond to scrolling");
+            } else {
+                assert_eq!(offset, Dp(0.0), "disabled preview must not scroll");
+            }
+        }
+        ENABLED.set(true);
+    }
+
+    #[tessera]
+    fn measurement_fixture() {
+        material_theme().child(|| {
+            column()
+                .modifier(Modifier::new().width(Dp(496.0)))
+                .children(|| {
+                    layout_figure(CarouselVariant::MultiBrowse, true);
+                });
+        });
+    }
+
+    #[test]
+    #[ignore = "Requires a GPU adapter for real carousel measurement annotations and actions"]
+    fn measurement_annotations_follow_collection_edges_and_end_inspection_action() {
+        let mut renderer = HeadlessRenderer::new(
+            Box::new(measurement_fixture),
+            vec![Box::new(ComponentPipelines)],
+            HeadlessConfig {
+                width: 800,
+                height: 700,
+                sample_count: 1,
+                ..Default::default()
+            },
+        )
+        .expect("measurement renderer");
+        renderer.render_frames(8);
+        let geometry = GEOMETRY.get().unwrap();
+        assert_eq!(collection_edge_padding(&geometry.get()), [16.0, 0.0]);
+        let tree = renderer.accessibility_snapshot().unwrap();
+        assert!(
+            tree.nodes
+                .iter()
+                .any(|(_, node)| node.label() == Some("Dimension 16 start"))
+        );
+        assert!(
+            !tree
+                .nodes
+                .iter()
+                .any(|(_, node)| node.label() == Some("Dimension 16 end"))
+        );
+        let target_node = tree
+            .nodes
+            .iter()
+            .find(|(_, node)| node.label() == Some("Inspect collection end"))
+            .unwrap()
+            .0;
+        assert!(renderer.dispatch_accessibility_action(ActionRequest {
+            action: Action::Click,
+            target_tree: TreeId::ROOT,
+            target_node,
+            data: None
+        }));
+        renderer.render_frames(8);
+        assert_eq!(
+            CONTROLLER
+                .get()
+                .unwrap()
+                .with(CarouselController::current_item),
+            5
+        );
+        assert_eq!(collection_edge_padding(&geometry.get()), [0.0, 16.0]);
+        let tree = renderer.accessibility_snapshot().unwrap();
+        assert!(
+            tree.nodes
+                .iter()
+                .any(|(_, node)| node.label() == Some("Dimension 16 end"))
+        );
+        assert!(
+            !tree
+                .nodes
+                .iter()
+                .any(|(_, node)| node.label() == Some("Dimension 16 start"))
+        );
+    }
+
+    fn assert_hero_geometry(values: &Geometry, variant: CarouselVariant, target: usize) {
+        let container = values.get("container").unwrap();
+        let large = values.get(item_name(target)).expect("hero item visible");
+        let items: Vec<_> = values
+            .iter()
+            .filter(|(name, _)| name.starts_with("item"))
+            .map(|(_, rect)| rect)
+            .collect();
+        assert!(
+            large.width > Dp(240.0).to_px(),
+            "hero remains the dominant item: {large:?}"
+        );
+        assert_eq!(
+            items
+                .iter()
+                .filter(|item| item.width > Dp(180.0).to_px())
+                .count(),
+            1,
+            "exactly one large item in the controlled hero viewport: {values:?}"
+        );
+        assert!(
+            items
+                .iter()
+                .any(|item| item.width > tessera_ui::Px::ZERO && item.width <= Dp(56.0).to_px()),
+            "hero retains a small preview: {values:?}"
+        );
+        if variant == CarouselVariant::CenteredHero {
+            assert!(
+                ((large.x + large.width / 2) - (container.x + container.width / 2))
+                    .0
+                    .abs()
+                    <= 1,
+                "large item is centered between previews: {values:?}"
+            );
+            assert!(items.iter().any(|item| item.x < large.x));
+            assert!(items.iter().any(|item| item.x > large.x));
+        }
+    }
+
+    #[test]
+    #[ignore = "Requires a GPU adapter for the real component pipelines"]
     fn live_carousel_figures_keep_horizontal_and_portrait_viewports() {
+        ENABLED.set(true);
         for variant in VARIANTS {
             VARIANT.set(variant);
             let mut renderer = HeadlessRenderer::new(
@@ -895,11 +1285,33 @@ mod tests {
             );
             let geometry = GEOMETRY.get().expect("observed figure geometry");
             let controller = CONTROLLER.get().expect("figure controller");
+            if matches!(
+                variant,
+                CarouselVariant::Hero | CarouselVariant::CenteredHero
+            ) {
+                assert_hero_geometry(&geometry.get(), variant, initial_item(variant));
+            }
             for target in [5, 0, 3] {
                 controller.with_mut(|controller| controller.jump_to_item(target));
                 renderer.render_frames(8);
                 let values = geometry.get();
                 let container = values.get("container").expect("container geometry");
+                if variant == CarouselVariant::MultiBrowse {
+                    if target == 0 {
+                        assert_eq!(collection_edge_padding(&values), [16.0, 0.0]);
+                    }
+                    if target == 5 {
+                        assert_eq!(collection_edge_padding(&values), [0.0, 16.0]);
+                    }
+                }
+                if target == 3
+                    && matches!(
+                        variant,
+                        CarouselVariant::Hero | CarouselVariant::CenteredHero
+                    )
+                {
+                    assert_hero_geometry(&values, variant, target);
+                }
                 let visible: Vec<_> = values
                     .iter()
                     .filter(|(name, _)| name.starts_with("item"))
