@@ -515,13 +515,13 @@ fn search_sample(
                                             }
                                         });
                                     if specimen == Some(1) {
-                                        field = field.trailing_icon(|| {
+                                        field = field.trailing_icon_shared(RenderSlot::new(|| {
                                             icon().vector(filled::MIC_SVG).size(Dp(24.0));
-                                        });
+                                        }));
                                     } else if specimen.is_none() {
-                                        field = field.leading_icon(|| {
+                                        field = field.leading_icon_shared(RenderSlot::new(|| {
                                             icon().vector(filled::SEARCH_SVG).size(Dp(24.0));
-                                        });
+                                        }));
                                     }
                                     drop(field);
                                     if specimen == Some(0) {

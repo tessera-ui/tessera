@@ -46,7 +46,7 @@ use super::{
 #[path = "navigation_figures_tests.rs"]
 mod tests;
 
-const NAMES: [&str; 5] = ["Home", "Inbox", "Saved", "Media", "Settings"];
+pub(super) const NAMES: [&str; 5] = ["Home", "Inbox", "Saved", "Media", "Settings"];
 
 #[tessera]
 pub(super) fn navigation_spec(rail: bool) {
@@ -530,7 +530,7 @@ fn color_specimen(rail: bool, initially_expanded: bool, dark: bool, backdrop: Co
                                                 .on_click(move || selected.set(index))
                                                 .icon(move || {
                                                     boxed()
-                                                        .modifier(watch(geometry, ICON_KEYS[index]))
+                                                        .modifier(watch(geometry, NAMES[index]))
                                                         .children(move || {
                                                             figure_icon(selected.get() == index);
                                                         });
@@ -562,7 +562,7 @@ fn color_specimen(rail: bool, initially_expanded: bool, dark: bool, backdrop: Co
                                                 .on_click(move || selected.set(index))
                                                 .icon(move || {
                                                     boxed()
-                                                        .modifier(watch(geometry, ICON_KEYS[index]))
+                                                        .modifier(watch(geometry, NAMES[index]))
                                                         .children(move || {
                                                             figure_icon(selected.get() == index);
                                                         });
@@ -619,7 +619,7 @@ fn navigation_grid_content(values: Geometry, dark: bool) {
     annotations::lines(width, height, svg);
 }
 
-fn navigation_color_roles(rail: bool, baseline: bool) -> Vec<&'static str> {
+pub(super) fn navigation_color_roles(rail: bool, baseline: bool) -> Vec<&'static str> {
     if rail && baseline {
         vec![
             "On secondary container",
@@ -702,11 +702,8 @@ fn navigation_color_annotation_content(
     let (Some(root), Some(container), Some(active), Some(inactive)) = (
         values.get("figure"),
         relative(&values, "container"),
-        relative(&values, ICON_KEYS[selected]),
-        relative(
-            &values,
-            ICON_KEYS[(selected + 1) % if rail { 4 } else { 3 }],
-        ),
+        relative(&values, NAMES[selected]),
+        relative(&values, NAMES[(selected + 1) % if rail { 4 } else { 3 }]),
     ) else {
         return;
     };
@@ -1108,7 +1105,7 @@ fn baseline_destination(
                                 ),
                             );
                             boxed()
-                                .modifier(watch(geometry, ICON_KEYS[index]))
+                                .modifier(watch(geometry, NAMES[index]))
                                 .children(move || {
                                     badged_box()
                                         .content(move || {
@@ -1203,8 +1200,6 @@ fn layouts() {
         gap(Dp(32.0));
     }
 }
-
-const ICON_KEYS: [&str; 5] = ["icon0", "icon1", "icon2", "icon3", "icon4"];
 
 #[tessera]
 fn chapter_figure(rail: bool, figure: Figure) {
@@ -1378,7 +1373,7 @@ fn native_figure(rail: bool, expanded: bool, annotation: usize, badges: bool) {
                                                             boxed()
                                                                 .modifier(watch(
                                                                     geometry,
-                                                                    ICON_KEYS[index],
+                                                                    NAMES[index],
                                                                 ))
                                                                 .children(move || {
                                                                     figure_icon(
@@ -1437,7 +1432,7 @@ fn native_figure(rail: bool, expanded: bool, annotation: usize, badges: bool) {
                                                             boxed()
                                                                 .modifier(watch(
                                                                     geometry,
-                                                                    ICON_KEYS[index],
+                                                                    NAMES[index],
                                                                 ))
                                                                 .children(move || {
                                                                     if badges && index > 1 {

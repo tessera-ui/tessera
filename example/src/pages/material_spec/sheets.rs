@@ -169,12 +169,12 @@ fn sheet_article(side: bool, open: State<bool>, action: State<String>) {
     result } },
     ]);
     if !side {
-        article = article.intro(move || {
+        article = article.intro_shared(RenderSlot::new(move || {
         prose(if side { "A standard sheet leaves the main content available. A modal sheet appears above a scrim and requires dismissal before returning to the page." } else { "Modal bottom sheets appear above a scrim. Standard sheets remain part of the page without a scrim; both share container and drag-handle measurements." });
         gap(Dp(32.0));
         figure(side, true, false);
         legend(side, true);
-    });
+    }));
     }
     drop(article);
 }

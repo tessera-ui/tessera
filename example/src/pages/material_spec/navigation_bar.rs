@@ -28,12 +28,13 @@ use tessera_ui::{
 use super::{
     ACCENT, INK,
     article::{ArticlePage, SpecSection, article},
-    gap, panel, spec_table, type_style,
+    gap,
+    navigation::NAMES,
+    panel, spec_table, type_style,
 };
 
 const DO_COLOR: Color = Color::from_rgb(0.121, 0.478, 0.196);
 const DONT_COLOR: Color = Color::from_rgb(0.741, 0.161, 0.161);
-const NAMES: [&str; 5] = ["Home", "Inbox", "Saved", "Media", "Settings"];
 
 #[tessera]
 pub(super) fn navigation_bar_spec() {
@@ -271,16 +272,12 @@ fn bar_demo(
     let selected = remember(|| 0_usize);
     let caption_text = label.clone();
     column()
-        .modifier(
-            Modifier::new()
-                .fill_max_width()
-                .semantics(SemanticsArgs {
-                    role: Some(Role::Group),
-                    label: Some(format!("{label} navigation bar example")),
-                    merge_descendants: true,
-                    ..Default::default()
-                }),
-        )
+        .modifier(Modifier::new().fill_max_width().semantics(SemanticsArgs {
+            role: Some(Role::Group),
+            label: Some(format!("{label} navigation bar example")),
+            merge_descendants: true,
+            ..Default::default()
+        }))
         .children(move || {
             navigation_bar().content(move || {
                 for (index, name) in NAMES.into_iter().take(count).enumerate() {
@@ -338,7 +335,10 @@ fn bar_demo(
             });
             gap(Dp(16.0));
             text()
-                .content(format!("{caption_text} destination: {}", NAMES[selected.get()]))
+                .content(format!(
+                    "{caption_text} destination: {}",
+                    NAMES[selected.get()]
+                ))
                 .style(type_style(14.0, 20.0));
         });
 }
@@ -356,12 +356,7 @@ fn overview() {
     ]);
     gap(Dp(32.0));
     panel(RenderSlot::new(|| {
-        bar_demo(
-            "Overview",
-            4,
-            NavigationBarLabelBehavior::AlwaysShow,
-            0,
-        );
+        bar_demo("Overview", 4, NavigationBarLabelBehavior::AlwaysShow, 0);
     }));
     gap(Dp(16.0));
     caption("A navigation bar shows the app's primary destinations and highlights the active one");
@@ -403,19 +398,15 @@ fn expressive_update() {
     );
     gap(Dp(16.0));
     bullets(vec![
-        "Active indicator 56 × 32dp in the native component (M3 reference: 64 × 32dp, 16dp radius)".into(),
+        "Active indicator 56 × 32dp in the native component (M3 reference: 64 × 32dp, 16dp radius)"
+            .into(),
         "Selected icon switches from outlined to filled".into(),
         "Labels can always show, or appear only for the selected destination".into(),
         "Badges can mark a destination with unread activity".into(),
     ]);
     gap(Dp(24.0));
     panel(RenderSlot::new(|| {
-        bar_demo(
-            "Expressive",
-            5,
-            NavigationBarLabelBehavior::SelectedOnly,
-            3,
-        );
+        bar_demo("Expressive", 5, NavigationBarLabelBehavior::SelectedOnly, 3);
     }));
     gap(Dp(16.0));
     caption("Five destinations with selected-only labels and a badge on Inbox");
@@ -430,33 +421,29 @@ fn differences() {
     ]);
     gap(Dp(24.0));
     panel(RenderSlot::new(|| {
-        bar_demo(
-            "Differences",
-            3,
-            NavigationBarLabelBehavior::AlwaysShow,
-            0,
-        );
+        bar_demo("Differences", 3, NavigationBarLabelBehavior::AlwaysShow, 0);
     }));
     gap(Dp(16.0));
-    caption("M3 navigation bars highlight the active destination with an indicator and a filled icon");
+    caption(
+        "M3 navigation bars highlight the active destination with an indicator and a filled icon",
+    );
 }
 
 #[tessera]
 fn variants() {
     panel(RenderSlot::new(|| {
-        bar_demo(
-            "Variant",
-            4,
-            NavigationBarLabelBehavior::AlwaysShow,
-            0,
-        );
+        bar_demo("Variant", 4, NavigationBarLabelBehavior::AlwaysShow, 0);
     }));
     gap(Dp(16.0));
     caption("There is one navigation bar variant, holding three to five destinations");
     gap(Dp(32.0));
     spec_table(
         vec!["Variant".into(), "M3".into(), "M3 Expressive".into()],
-        vec![vec!["Navigation bar".into(), "Available".into(), "Available".into()]],
+        vec![vec![
+            "Navigation bar".into(),
+            "Available".into(),
+            "Available".into(),
+        ]],
     );
 }
 
@@ -582,12 +569,7 @@ fn tokens() {
 #[tessera]
 fn anatomy() {
     panel(RenderSlot::new(|| {
-        bar_demo(
-            "Anatomy",
-            4,
-            NavigationBarLabelBehavior::AlwaysShow,
-            0,
-        );
+        bar_demo("Anatomy", 4, NavigationBarLabelBehavior::AlwaysShow, 0);
     }));
     gap(Dp(24.0));
     column().children(|| {
@@ -609,24 +591,14 @@ fn colors() {
     );
     gap(Dp(24.0));
     panel(RenderSlot::new(|| {
-        bar_demo(
-            "Light",
-            4,
-            NavigationBarLabelBehavior::AlwaysShow,
-            0,
-        );
+        bar_demo("Light", 4, NavigationBarLabelBehavior::AlwaysShow, 0);
     }));
     gap(Dp(24.0));
     material_theme()
         .theme(|| MaterialTheme::from_seed(ACCENT, true))
         .child(|| {
             panel(RenderSlot::new(|| {
-                bar_demo(
-                    "Dark",
-                    4,
-                    NavigationBarLabelBehavior::AlwaysShow,
-                    0,
-                );
+                bar_demo("Dark", 4, NavigationBarLabelBehavior::AlwaysShow, 0);
             }));
         });
     gap(Dp(24.0));
@@ -637,7 +609,10 @@ fn colors() {
             vec!["Active indicator".into(), "Secondary container".into()],
             vec!["Active icon".into(), "On secondary container".into()],
             vec!["Active label".into(), "Secondary".into()],
-            vec!["Inactive icon and label".into(), "On surface variant".into()],
+            vec![
+                "Inactive icon and label".into(),
+                "On surface variant".into(),
+            ],
         ],
     );
 }
@@ -649,12 +624,7 @@ fn states() {
     );
     gap(Dp(24.0));
     panel(RenderSlot::new(|| {
-        bar_demo(
-            "States",
-            4,
-            NavigationBarLabelBehavior::AlwaysShow,
-            0,
-        );
+        bar_demo("States", 4, NavigationBarLabelBehavior::AlwaysShow, 0);
     }));
     gap(Dp(16.0));
     caption("Active and inactive destinations; hover, focus and press add state layers");
@@ -685,21 +655,13 @@ fn measurements() {
                 "16dp (full round)".into(),
             ],
             vec!["Icon".into(), "Size".into(), "24dp".into()],
-            vec![
-                "Label".into(),
-                "Typography".into(),
-                "Label medium".into(),
-            ],
+            vec!["Label".into(), "Typography".into(), "Label medium".into()],
             vec![
                 "Destination".into(),
                 "Minimum target".into(),
                 "48 × 48dp".into(),
             ],
-            vec![
-                "Indicator to label".into(),
-                "Gap".into(),
-                "4dp".into(),
-            ],
+            vec!["Indicator to label".into(), "Gap".into(), "4dp".into()],
             vec![
                 "Destinations".into(),
                 "Recommended count".into(),
@@ -709,15 +671,12 @@ fn measurements() {
     );
     gap(Dp(24.0));
     panel(RenderSlot::new(|| {
-        bar_demo(
-            "Measurements",
-            4,
-            NavigationBarLabelBehavior::AlwaysShow,
-            0,
-        );
+        bar_demo("Measurements", 4, NavigationBarLabelBehavior::AlwaysShow, 0);
     }));
     gap(Dp(16.0));
-    caption("Native values are shown first; the M3 reference values are noted where the component differs");
+    caption(
+        "Native values are shown first; the M3 reference values are noted where the component differs",
+    );
 }
 
 #[tessera]
@@ -746,12 +705,7 @@ fn guide_anatomy() {
     prose("A navigation bar contains an active indicator, icons and labels for each destination.");
     gap(Dp(24.0));
     panel(RenderSlot::new(|| {
-        bar_demo(
-            "Anatomy",
-            4,
-            NavigationBarLabelBehavior::AlwaysShow,
-            0,
-        );
+        bar_demo("Anatomy", 4, NavigationBarLabelBehavior::AlwaysShow, 0);
     }));
     gap(Dp(24.0));
     column().children(|| {
@@ -763,7 +717,9 @@ fn guide_anatomy() {
         legend(6, "Inactive label");
     });
     gap(Dp(16.0));
-    caption("The indicator highlights the active destination while other destinations stay inactive");
+    caption(
+        "The indicator highlights the active destination while other destinations stay inactive",
+    );
 }
 
 #[tessera]
@@ -773,15 +729,12 @@ fn guide_color() {
     );
     gap(Dp(24.0));
     panel(RenderSlot::new(|| {
-        bar_demo(
-            "Primary",
-            4,
-            NavigationBarLabelBehavior::AlwaysShow,
-            0,
-        );
+        bar_demo("Primary", 4, NavigationBarLabelBehavior::AlwaysShow, 0);
     }));
     gap(Dp(16.0));
-    caption("The active destination uses the secondary container indicator and on secondary container icon");
+    caption(
+        "The active destination uses the secondary container indicator and on secondary container icon",
+    );
 }
 
 #[tessera]
@@ -791,12 +744,7 @@ fn adaptive_design() {
     );
     gap(Dp(24.0));
     panel(RenderSlot::new(|| {
-        bar_demo(
-            "Adaptive",
-            4,
-            NavigationBarLabelBehavior::AlwaysShow,
-            0,
-        );
+        bar_demo("Adaptive", 4, NavigationBarLabelBehavior::AlwaysShow, 0);
     }));
     gap(Dp(16.0));
     caption("Above 600dp the icon moves before the label and destinations center in the bar");
@@ -817,12 +765,7 @@ fn behavior() {
     );
     gap(Dp(24.0));
     panel(RenderSlot::new(|| {
-        bar_demo(
-            "Behavior",
-            4,
-            NavigationBarLabelBehavior::AlwaysShow,
-            0,
-        );
+        bar_demo("Behavior", 4, NavigationBarLabelBehavior::AlwaysShow, 0);
     }));
     gap(Dp(16.0));
     caption("Tap a destination to move the indicator and swap the icon to its filled variant");
@@ -848,12 +791,7 @@ fn interaction_style() {
     caption("Every destination keeps a 48dp target even when the label is hidden");
     gap(Dp(24.0));
     panel(RenderSlot::new(|| {
-        bar_demo(
-            "Targets",
-            4,
-            NavigationBarLabelBehavior::SelectedOnly,
-            0,
-        );
+        bar_demo("Targets", 4, NavigationBarLabelBehavior::SelectedOnly, 0);
     }));
 }
 
@@ -863,7 +801,9 @@ fn initial_focus() {
         "When the bar receives focus, focus lands on the selected destination, or on the first destination when none is selected.",
     );
     gap(Dp(16.0));
-    prose("Moving focus between destinations does not change the selected view until a destination is activated.");
+    prose(
+        "Moving focus between destinations does not change the selected view until a destination is activated.",
+    );
 }
 
 #[tessera]
@@ -895,7 +835,12 @@ fn labeling() {
     );
     gap(Dp(24.0));
     spec_table(
-        vec!["Element".into(), "Label".into(), "Role".into(), "State".into()],
+        vec![
+            "Element".into(),
+            "Label".into(),
+            "Role".into(),
+            "State".into(),
+        ],
         vec![
             vec![
                 "Destination".into(),

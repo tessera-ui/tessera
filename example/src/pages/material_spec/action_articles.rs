@@ -26,11 +26,8 @@ pub(super) enum Kind {
     Buttons,
     Groups,
     Icons,
-    Fab,
     ExtendedFab,
-    FabMenu,
     Segmented,
-    Split,
 }
 
 #[derive(Clone, Copy, Default, PartialEq)]
@@ -69,11 +66,8 @@ fn title(kind: Kind) -> &'static str {
         Kind::Buttons => "Buttons",
         Kind::Groups => "Button groups",
         Kind::Icons => "Icon buttons",
-        Kind::Fab => "Floating action buttons",
         Kind::ExtendedFab => "Extended FABs",
-        Kind::FabMenu => "FAB menu",
         Kind::Segmented => "Segmented buttons",
-        Kind::Split => "Split buttons",
     }
 }
 
@@ -88,20 +82,11 @@ fn summary(kind: Kind) -> &'static str {
         Kind::Icons => {
             "Use recognizable icons for common actions. Default buttons perform actions; toggle buttons communicate selection through icon and shape changes."
         }
-        Kind::Fab => {
-            "Keep one constructive primary action prominent above the content. Choose among FAB, medium and large sizes; use an extended FAB when an icon needs a label."
-        }
         Kind::ExtendedFab => {
             "Keep a primary action visible with a concise text label and optional icon. Small, medium and large sizes provide different emphasis."
         }
-        Kind::FabMenu => {
-            "Open two to six related actions from a FAB. Match the menu color set to its trigger and retain clear labels and icons."
-        }
         Kind::Segmented => {
             "Compare single and multiple selection among two to five related options. Connected button groups are recommended for current Expressive interfaces."
-        }
-        Kind::Split => {
-            "Pair a primary action with a separate menu button for related alternatives. Both targets remain independently operable across five size options."
         }
     }
 }
@@ -223,38 +208,6 @@ fn guidelines(kind: Kind) -> Vec<Chapter> {
                 Behavior,
             ),
         ],
-        Kind::Fab => vec![
-            chapter(
-                "Usage",
-                "Promote one primary action. Medium suits many layouts; larger sizes provide more emphasis. The old small FAB is no longer recommended.",
-                &[],
-                Example,
-            ),
-            chapter(
-                "Actions",
-                "Prefer constructive actions such as creating, sharing or starting a process. Keep minor or destructive commands elsewhere.",
-                &[],
-                Behavior,
-            ),
-            chapter(
-                "Anatomy",
-                "Use a clear filled icon and a container that contrasts with its background.",
-                &["Container", "Icon"],
-                Anatomy,
-            ),
-            chapter(
-                "Adaptive design",
-                "Use reachable placement in compact windows and consider a navigation rail in expanded layouts.",
-                &[],
-                Example,
-            ),
-            chapter(
-                "Behaviors",
-                "Keep the FAB above scrolling content. Transitions may expand it or replace it as the surrounding page changes.",
-                &["Appearing", "Expanding", "Scrolling", "Moving across tabs"],
-                Behavior,
-            ),
-        ],
         Kind::ExtendedFab => vec![
             chapter(
                 "Usage",
@@ -284,32 +237,6 @@ fn guidelines(kind: Kind) -> Vec<Chapter> {
                 "Behavior",
                 "Expansion reveals the label; collapsing reduces occupied space. Scrolling can drive the transition.",
                 &["Appearing", "Expanding", "Transforming", "Scrolling"],
-                Behavior,
-            ),
-        ],
-        Kind::FabMenu => vec![
-            chapter(
-                "Usage",
-                "Open two to six closely related actions from a FAB at the same anchor. Match the primary, secondary or tertiary color set.",
-                &["Color sets"],
-                Example,
-            ),
-            chapter(
-                "Anatomy",
-                "Retain readable labels and meaningful icons. Rounded menu items hug their content; the close button stays available.",
-                &[],
-                Anatomy,
-            ),
-            chapter(
-                "Adaptive layout",
-                "Keep the same corner anchor. Increase margins for large windows and let short layouts scroll behind the close button.",
-                &[],
-                Example,
-            ),
-            chapter(
-                "Behavior",
-                "The FAB becomes the close button. Menu items enter from the anchored corner and may expand into their destination.",
-                &["Appearing", "Scrolling", "Expanding"],
                 Behavior,
             ),
         ],
@@ -348,26 +275,6 @@ fn guidelines(kind: Kind) -> Vec<Chapter> {
                 "Behavior",
                 "A selected icon can become a checkmark. Selection remains distinguishable beyond color.",
                 &[],
-                Behavior,
-            ),
-        ],
-        Kind::Split => vec![
-            chapter(
-                "Usage",
-                "Use the leading action directly and conceal related alternatives in the trailing menu. Match size to neighboring actions and emphasis.",
-                &[],
-                Example,
-            ),
-            chapter(
-                "Anatomy",
-                "Keep the leading label brief and retain the trailing expand icon. Mirror the order for right-to-left layouts.",
-                &[],
-                Anatomy,
-            ),
-            chapter(
-                "Behavior",
-                "The trailing button rotates inward by 180 degrees and changes shape. Align the menu to a button edge with a 4dp gap.",
-                &["Menu placement"],
                 Behavior,
             ),
         ],
@@ -435,20 +342,11 @@ fn accessibility(kind: Kind) -> Vec<Chapter> {
                 Kind::Icons => {
                     "Keep the icon distinguishable from its surface with sufficient contrast."
                 }
-                Kind::Fab => {
-                    "Keep the icon legible against its container. Omit an unavailable FAB rather than displaying it disabled."
-                }
                 Kind::ExtendedFab => {
                     "Place the primary action where it is easy to reach without obscuring other targets."
                 }
-                Kind::FabMenu => {
-                    "Retain 48dp targets and keep the close button visible while menu items scroll."
-                }
                 Kind::Segmented => {
                     "Use keyboard traversal and a checkmark or other non-color cue for selection."
-                }
-                Kind::Split => {
-                    "Both parts need at least 48dp targets, including extra-small and small presentations."
                 }
             },
             match kind {
@@ -459,17 +357,13 @@ fn accessibility(kind: Kind) -> Vec<Chapter> {
             Anatomy,
         ),
     ];
-    match kind {
-        Kind::Fab=>{
-            pages.push(chapter("Focus","Give the primary action an efficient position in the focus order and expose its purpose when focused.",&[],Behavior));
-            pages.push(chapter("Layout & position","Keep focus indicators and underlying interactive elements visible. Adapt position to the available window.",&[],Example));
-        },
-        Kind::ExtendedFab|Kind::FabMenu|Kind::Split=>pages.push(chapter("Initial focus",match kind {
-            Kind::FabMenu=>"Opening retains focus on the close button. Continue through the menu items from top to bottom.",
-            Kind::Split=>"Focus the leading action before the trailing menu button.",
-            _=>"Treat the icon and visible label as one target and prioritize the primary action in the page order.",
-        },&[],Behavior)),
-        _=>{},
+    if kind == Kind::ExtendedFab {
+        pages.push(chapter(
+            "Initial focus",
+            "Treat the icon and visible label as one target and prioritize the primary action in the page order.",
+            &[],
+            Behavior,
+        ));
     }
     pages.push(chapter(
         "Keyboard navigation",
@@ -478,9 +372,7 @@ fn accessibility(kind: Kind) -> Vec<Chapter> {
         Keyboard,
     ));
     pages.push(chapter("Labeling elements",match kind {
-        Kind::Icons|Kind::Fab=>"Name the action rather than the appearance of the icon.",
-        Kind::FabMenu=>"Name each menu action and communicate whether its trigger is expanded or collapsed.",
-        Kind::Split=>"Use the visible leading label and a distinct trailing label that describes the additional choices and expanded state.",
+        Kind::Icons=>"Name the action rather than the appearance of the icon.",
         _=>"Use names consistent with visible labels and provide useful context without repeating the control role.",
     },&[],Example));
     if kind == Kind::Icons {
@@ -547,7 +439,6 @@ fn detail(kind: Kind, title: &str) -> &'static str {
         "Expanding" => "A container transform can connect the action to its destination.",
         "Transforming" => "The extended action can reduce to an icon-only FAB.",
         "Scrolling" => match kind {
-            Kind::FabMenu => "Keep the close button visible while items scroll behind it.",
             Kind::ExtendedFab => {
                 "Collapse the label on downward scrolling and restore it on return."
             }

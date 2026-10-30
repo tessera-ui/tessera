@@ -1,8 +1,10 @@
-//! Progress indicator specifications with live determinate and indeterminate samples.
+//! Progress indicator specifications with live determinate and indeterminate
+//! samples.
 //!
 //! ## Usage
 //!
-//! Compare linear and circular progress, wavy expressive shapes and reporting states.
+//! Compare linear and circular progress, wavy expressive shapes and reporting
+//! states.
 
 use tessera_components::{
     button::button,
@@ -16,8 +18,8 @@ use tessera_components::{
     wavy_progress::{circular_wavy_progress_indicator, linear_wavy_progress_indicator},
 };
 use tessera_ui::{
-    Dp, FrameNanosControl, Modifier, RenderSlot, current_frame_nanos, receive_frame_nanos, remember,
-    tessera, use_context,
+    Dp, FrameNanosControl, Modifier, RenderSlot, current_frame_nanos, receive_frame_nanos,
+    remember, tessera, use_context,
 };
 
 use super::{
@@ -126,12 +128,10 @@ pub(super) fn progress_indicators_spec() {
         panel(RenderSlot::new(|| {
             linear_sample("Preview".to_owned(), true, 0.6, true, false);
             gap(Dp(32.0));
-            flow_row()
-                .item_spacing(Dp(48.0))
-                .children(|| {
-                    circular_sample("Preview determinate".to_owned(), true, 0.65, true, false);
-                    circular_sample("Preview indeterminate".to_owned(), false, 0.0, true, false);
-                });
+            flow_row().item_spacing(Dp(48.0)).children(|| {
+                circular_sample("Preview determinate".to_owned(), true, 0.65, true, false);
+                circular_sample("Preview indeterminate".to_owned(), false, 0.0, true, false);
+            });
         }));
     });
 }
@@ -210,7 +210,8 @@ fn auto_determinate() {
             if !running.get() {
                 return FrameNanosControl::Stop;
             }
-            let elapsed = (frame_nanos.saturating_sub(last.get()) as f32 / 1_000_000_000.0).min(0.1);
+            let elapsed =
+                (frame_nanos.saturating_sub(last.get()) as f32 / 1_000_000_000.0).min(0.1);
             last.set(frame_nanos);
             let next = (progress.get() + elapsed / 5.0).min(1.0);
             progress.set(next);
@@ -272,20 +273,30 @@ fn overview_intro() {
     panel(RenderSlot::new(|| {
         linear_sample("Overview determinate".to_owned(), true, 0.4, false, false);
         gap(Dp(24.0));
-        linear_sample("Overview indeterminate".to_owned(), false, 0.0, false, false);
+        linear_sample(
+            "Overview indeterminate".to_owned(),
+            false,
+            0.0,
+            false,
+            false,
+        );
         gap(Dp(32.0));
-        flow_row()
-            .item_spacing(Dp(48.0))
-            .children(|| {
-                circular_sample("Overview circular determinate".to_owned(), true, 0.4, false, false);
-                circular_sample(
-                    "Overview circular indeterminate".to_owned(),
-                    false,
-                    0.0,
-                    false,
-                    false,
-                );
-            });
+        flow_row().item_spacing(Dp(48.0)).children(|| {
+            circular_sample(
+                "Overview circular determinate".to_owned(),
+                true,
+                0.4,
+                false,
+                false,
+            );
+            circular_sample(
+                "Overview circular indeterminate".to_owned(),
+                false,
+                0.0,
+                false,
+                false,
+            );
+        });
     }));
     gap(Dp(24.0));
     for point in [
@@ -337,12 +348,22 @@ fn expressive_update() {
     panel(RenderSlot::new(|| {
         linear_sample("Expressive linear".to_owned(), true, 0.55, true, false);
         gap(Dp(32.0));
-        flow_row()
-            .item_spacing(Dp(48.0))
-            .children(|| {
-                circular_sample("Expressive circular determinate".to_owned(), true, 0.6, true, false);
-                circular_sample("Expressive circular indeterminate".to_owned(), false, 0.0, true, false);
-            });
+        flow_row().item_spacing(Dp(48.0)).children(|| {
+            circular_sample(
+                "Expressive circular determinate".to_owned(),
+                true,
+                0.6,
+                true,
+                false,
+            );
+            circular_sample(
+                "Expressive circular indeterminate".to_owned(),
+                false,
+                0.0,
+                true,
+                false,
+            );
+        });
     }));
 }
 
@@ -364,12 +385,22 @@ fn variants() {
         gap(Dp(32.0));
         linear_sample("Variant indeterminate".to_owned(), false, 0.0, false, false);
         gap(Dp(32.0));
-        flow_row()
-            .item_spacing(Dp(48.0))
-            .children(|| {
-                circular_sample("Variant circular determinate".to_owned(), true, 0.5, false, false);
-                circular_sample("Variant circular indeterminate".to_owned(), false, 0.0, false, false);
-            });
+        flow_row().item_spacing(Dp(48.0)).children(|| {
+            circular_sample(
+                "Variant circular determinate".to_owned(),
+                true,
+                0.5,
+                false,
+                false,
+            );
+            circular_sample(
+                "Variant circular indeterminate".to_owned(),
+                false,
+                0.0,
+                false,
+                false,
+            );
+        });
     }));
     gap(Dp(32.0));
     subheading("Wavy variants".into());
@@ -379,12 +410,22 @@ fn variants() {
         gap(Dp(32.0));
         linear_sample("Wavy indeterminate".to_owned(), false, 0.0, true, false);
         gap(Dp(32.0));
-        flow_row()
-            .item_spacing(Dp(48.0))
-            .children(|| {
-                circular_sample("Wavy circular determinate".to_owned(), true, 0.5, true, false);
-                circular_sample("Wavy circular indeterminate".to_owned(), false, 0.0, true, false);
-            });
+        flow_row().item_spacing(Dp(48.0)).children(|| {
+            circular_sample(
+                "Wavy circular determinate".to_owned(),
+                true,
+                0.5,
+                true,
+                false,
+            );
+            circular_sample(
+                "Wavy circular indeterminate".to_owned(),
+                false,
+                0.0,
+                true,
+                false,
+            );
+        });
     }));
 }
 
@@ -515,17 +556,23 @@ fn tokens() {
 
 #[tessera]
 fn anatomy() {
-    prose("A linear progress indicator contains a track, an active indicator and a stop indicator.");
+    prose(
+        "A linear progress indicator contains a track, an active indicator and a stop indicator.",
+    );
     gap(Dp(24.0));
     panel(RenderSlot::new(|| {
         linear_sample("Anatomy linear".to_owned(), true, 0.6, false, false);
         gap(Dp(32.0));
-        flow_row()
-            .item_spacing(Dp(48.0))
-            .children(|| {
-                circular_sample("Anatomy circular".to_owned(), true, 0.6, false, false);
-                circular_sample("Anatomy circular track".to_owned(), false, 0.0, false, false);
-            });
+        flow_row().item_spacing(Dp(48.0)).children(|| {
+            circular_sample("Anatomy circular".to_owned(), true, 0.6, false, false);
+            circular_sample(
+                "Anatomy circular track".to_owned(),
+                false,
+                0.0,
+                false,
+                false,
+            );
+        });
     }));
     gap(Dp(16.0));
     prose("Linear: 1  Track    2  Active indicator    3  Stop indicator");
@@ -568,7 +615,12 @@ fn colors() {
                                 );
                                 gap(Dp(32.0));
                                 circular_sample(
-                                    if dark { "Dark circular" } else { "Light circular" }.to_owned(),
+                                    if dark {
+                                        "Dark circular"
+                                    } else {
+                                        "Light circular"
+                                    }
+                                    .to_owned(),
                                     true,
                                     0.5,
                                     false,
@@ -586,7 +638,10 @@ fn colors() {
             vec!["Active indicator".into(), "Primary".into()],
             vec!["Track".into(), "Secondary container".into()],
             vec!["Stop indicator".into(), "Primary".into()],
-            vec!["Track on a surface container".into(), "Surface container highest".into()],
+            vec![
+                "Track on a surface container".into(),
+                "Surface container highest".into(),
+            ],
         ],
     );
 }
@@ -742,7 +797,13 @@ fn accessibility_use_cases() {
     }
     gap(Dp(24.0));
     panel(RenderSlot::new(|| {
-        linear_sample("Accessible determinate".to_owned(), true, 0.75, false, false);
+        linear_sample(
+            "Accessible determinate".to_owned(),
+            true,
+            0.75,
+            false,
+            false,
+        );
     }));
 }
 
@@ -753,9 +814,21 @@ fn accessibility_interaction() {
     );
     gap(Dp(24.0));
     panel(RenderSlot::new(|| {
-        linear_sample("Accessible indeterminate".to_owned(), false, 0.0, false, false);
+        linear_sample(
+            "Accessible indeterminate".to_owned(),
+            false,
+            0.0,
+            false,
+            false,
+        );
         gap(Dp(32.0));
-        circular_sample("Accessible circular indeterminate".to_owned(), false, 0.0, false, false);
+        circular_sample(
+            "Accessible circular indeterminate".to_owned(),
+            false,
+            0.0,
+            false,
+            false,
+        );
     }));
 }
 

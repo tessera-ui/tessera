@@ -9,8 +9,8 @@ use tessera_components::{
     boxed::boxed,
     column::column,
     floating_action_button_menu::{
-        FloatingActionButtonMenuAlignment, FloatingActionButtonMenuColor, FloatingActionButtonMenuItem,
-        FloatingActionButtonMenuState, floating_action_button_menu,
+        FloatingActionButtonMenuAlignment, FloatingActionButtonMenuColor,
+        FloatingActionButtonMenuItem, FloatingActionButtonMenuState, floating_action_button_menu,
     },
     material_icons::filled,
     modifier::{ModifierExt as _, Padding, SemanticsArgs},
@@ -261,16 +261,12 @@ fn menu_demo(
     let theme = use_context::<MaterialTheme>().expect("MaterialTheme").get();
     let caption_text = label.clone();
     column()
-        .modifier(
-            Modifier::new()
-                .fill_max_width()
-                .semantics(SemanticsArgs {
-                    role: Some(Role::Group),
-                    label: Some(format!("{label} FAB menu example")),
-                    merge_descendants: true,
-                    ..Default::default()
-                }),
-        )
+        .modifier(Modifier::new().fill_max_width().semantics(SemanticsArgs {
+            role: Some(Role::Group),
+            label: Some(format!("{label} FAB menu example")),
+            merge_descendants: true,
+            ..Default::default()
+        }))
         .children(move || {
             floating_action_button_menu()
                 .state(state)
@@ -313,13 +309,9 @@ fn menu_demo(
                                     Dp(24.0),
                                 )))
                                 .children(move || {
-                                    text()
-                                        .content("Create")
-                                        .style(theme.typography.title_large);
+                                    text().content("Create").style(theme.typography.title_large);
                                     gap(Dp(8.0));
-                                    text()
-                                        .content(status.get())
-                                        .style(type_style(16.0, 24.0));
+                                    text().content(status.get()).style(type_style(16.0, 24.0));
                                 });
                         });
                 });
@@ -463,7 +455,9 @@ fn variants() {
 #[tessera]
 fn configurations() {
     subheading("Color set".into());
-    prose("FAB menus come in three color sets. Each set colors the close button and the items together.");
+    prose(
+        "FAB menus come in three color sets. Each set colors the close button and the items together.",
+    );
     gap(Dp(24.0));
     for (number, color) in [
         FloatingActionButtonMenuColor::Primary,
@@ -690,12 +684,7 @@ fn colors() {
         .theme(|| MaterialTheme::from_seed(ACCENT, true))
         .child(|| {
             panel(RenderSlot::new(|| {
-                menu_demo(
-                    "Dark",
-                    FloatingActionButtonMenuColor::Primary,
-                    false,
-                    true,
-                );
+                menu_demo("Dark", FloatingActionButtonMenuColor::Primary, false, true);
             }));
         });
     gap(Dp(24.0));
@@ -712,16 +701,8 @@ fn colors() {
                 "Item label and icon".into(),
                 "On primary container".into(),
             ],
-            vec![
-                "Primary".into(),
-                "Close button".into(),
-                "Primary".into(),
-            ],
-            vec![
-                "Primary".into(),
-                "Close icon".into(),
-                "On primary".into(),
-            ],
+            vec!["Primary".into(), "Close button".into(), "Primary".into()],
+            vec!["Primary".into(), "Close icon".into(), "On primary".into()],
             vec![
                 "Secondary".into(),
                 "Item container".into(),
@@ -752,16 +733,8 @@ fn colors() {
                 "Item label and icon".into(),
                 "On tertiary container".into(),
             ],
-            vec![
-                "Tertiary".into(),
-                "Close button".into(),
-                "Tertiary".into(),
-            ],
-            vec![
-                "Tertiary".into(),
-                "Close icon".into(),
-                "On tertiary".into(),
-            ],
+            vec!["Tertiary".into(), "Close button".into(), "Tertiary".into()],
+            vec!["Tertiary".into(), "Close icon".into(), "On tertiary".into()],
         ],
     );
 }
@@ -773,7 +746,9 @@ fn states() {
     );
     gap(Dp(32.0));
     subheading("Close button".into());
-    prose("Enabled, hovered, focused and pressed states share the same close button colors. Hover, focus with Tab, or press and hold in the live sample below.");
+    prose(
+        "Enabled, hovered, focused and pressed states share the same close button colors. Hover, focus with Tab, or press and hold in the live sample below.",
+    );
     gap(Dp(24.0));
     panel(RenderSlot::new(|| {
         menu_demo(
@@ -787,7 +762,9 @@ fn states() {
     caption("Close button states: enabled, hovered, focused, pressed");
     gap(Dp(32.0));
     subheading("Menu item".into());
-    prose("Menu items keep their own hover, focus and pressed state layers while the menu stays open.");
+    prose(
+        "Menu items keep their own hover, focus and pressed state layers while the menu stays open.",
+    );
     gap(Dp(24.0));
     panel(RenderSlot::new(|| {
         menu_demo(
@@ -810,26 +787,14 @@ fn measurements() {
     spec_table(
         vec!["Element".into(), "Attribute".into(), "Value".into()],
         vec![
-            vec![
-                "Menu item".into(),
-                "Container height".into(),
-                "56dp".into(),
-            ],
+            vec!["Menu item".into(), "Container height".into(), "56dp".into()],
             vec![
                 "Menu item".into(),
                 "Horizontal padding".into(),
                 "24dp".into(),
             ],
-            vec![
-                "Menu item".into(),
-                "Icon size".into(),
-                "24dp".into(),
-            ],
-            vec![
-                "Menu item".into(),
-                "Icon to label gap".into(),
-                "8dp".into(),
-            ],
+            vec!["Menu item".into(), "Icon size".into(), "24dp".into()],
+            vec!["Menu item".into(), "Icon to label gap".into(), "8dp".into()],
             vec![
                 "Menu items".into(),
                 "Spacing between items".into(),
@@ -840,11 +805,7 @@ fn measurements() {
                 "Container size".into(),
                 "56 × 56dp".into(),
             ],
-            vec![
-                "Menu".into(),
-                "Window margin".into(),
-                "16dp".into(),
-            ],
+            vec!["Menu".into(), "Window margin".into(), "16dp".into()],
             vec![
                 "Menu items".into(),
                 "Minimum target size".into(),
@@ -865,7 +826,8 @@ fn measurements() {
     caption("FAB menu size measurements");
     gap(Dp(24.0));
     bullets(vec![
-        "The FAB menu animates from the top trailing edge of the FAB to ensure a smooth animation".into(),
+        "The FAB menu animates from the top trailing edge of the FAB to ensure a smooth animation"
+            .into(),
         "The FAB should always have a 16dp margin from the window edge".into(),
         "The close button and FAB share the same trailing edge".into(),
     ]);
@@ -899,7 +861,9 @@ fn usage() {
         );
     }));
     gap(Dp(16.0));
-    caption("In RTL languages, the FAB menu is left-aligned and the icon and text placement is mirrored");
+    caption(
+        "In RTL languages, the FAB menu is left-aligned and the icon and text placement is mirrored",
+    );
     gap(Dp(32.0));
     prose(
         "FAB menus can contain 2–6 items. These should be closely related under a single action, like Share.",
@@ -1020,7 +984,9 @@ fn behavior() {
         );
     }));
     gap(Dp(16.0));
-    caption("Open the menu with the FAB, choose an action, then reopen it to confirm the reported action");
+    caption(
+        "Open the menu with the FAB, choose an action, then reopen it to confirm the reported action",
+    );
 }
 
 #[tessera]
@@ -1083,9 +1049,18 @@ fn keyboard() {
     spec_table(
         vec!["Keys".into(), "Actions".into()],
         vec![
-            vec!["Tab".into(), "Navigate to the next interactive element".into()],
-            vec!["Space or Enter".into(), "Activate the focused button or item".into()],
-            vec!["Escape".into(), "Close the menu and return focus to the FAB".into()],
+            vec![
+                "Tab".into(),
+                "Navigate to the next interactive element".into(),
+            ],
+            vec![
+                "Space or Enter".into(),
+                "Activate the focused button or item".into(),
+            ],
+            vec![
+                "Escape".into(),
+                "Close the menu and return focus to the FAB".into(),
+            ],
         ],
     );
     gap(Dp(24.0));
@@ -1105,10 +1080,17 @@ fn keyboard() {
 
 #[tessera]
 fn labeling() {
-    prose("On Android, a FAB menu’s close button should include a state to tell screen readers what action will occur when it’s toggled. The close button should be labeled:");
+    prose(
+        "On Android, a FAB menu’s close button should include a state to tell screen readers what action will occur when it’s toggled. The close button should be labeled:",
+    );
     gap(Dp(16.0));
     spec_table(
-        vec!["Element".into(), "Label".into(), "Role".into(), "State".into()],
+        vec![
+            "Element".into(),
+            "Label".into(),
+            "Role".into(),
+            "State".into(),
+        ],
         vec![
             vec![
                 "Close button".into(),
@@ -1125,7 +1107,9 @@ fn labeling() {
         ],
     );
     gap(Dp(24.0));
-    caption("On Android, the close button accessibility labels should include a toggle menu label, button role, and an expanded or collapsed state");
+    caption(
+        "On Android, the close button accessibility labels should include a toggle menu label, button role, and an expanded or collapsed state",
+    );
     gap(Dp(24.0));
     prose(
         "FAB menu items should be labeled with the same text people see on screen, so the announced action matches the visible label.",

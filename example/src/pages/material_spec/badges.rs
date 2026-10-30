@@ -576,7 +576,9 @@ fn badge_overview_destination(number: usize) {
 fn overview_article() {
     badge_variants();
     gap(Dp(16.0));
-    prose("1  Small badge on a navigation item    2  Large badge on a navigation item    3  Large badge with maximum characters on a navigation item");
+    prose(
+        "1  Small badge on a navigation item    2  Large badge on a navigation item    3  Large badge with maximum characters on a navigation item",
+    );
     gap(Dp(32.0));
     subheading("Key points".into());
     for point in [

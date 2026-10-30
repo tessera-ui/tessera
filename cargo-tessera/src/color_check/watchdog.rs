@@ -2,7 +2,7 @@
 //!
 //! ## Usage
 //!
-//! Guarantee that `tessera check` terminates even when rust-analyzer blocks on a subprocess.
+//! Keep color checks responsive when semantic analysis stops making progress.
 
 use std::{
     env,

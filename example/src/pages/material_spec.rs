@@ -19,7 +19,6 @@ use tessera_components::{
 use tessera_ui::{Color, Dp, Modifier, RenderSlot, tessera};
 
 mod action_articles;
-mod activity;
 mod annotations;
 mod app_bars;
 mod article;
