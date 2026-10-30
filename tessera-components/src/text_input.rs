@@ -985,6 +985,21 @@ fn auto_scroll_drag_selection(
     });
 }
 
+fn handle_editor_escape(
+    controller: &mut TextInputController,
+    state: winit::event::ElementState,
+    on_change: CallbackWith<String, String>,
+    input_transform: Option<CallbackWith<String, String>>,
+) -> bool {
+    if state != winit::event::ElementState::Pressed
+        || (controller.composition().is_none() && !controller.has_selection())
+    {
+        return false;
+    }
+    controller.apply_action_with_pipeline(GlyphonAction::Escape, on_change, input_transform);
+    true
+}
+
 fn handle_text_input_keyboard(
     input: &mut tessera_ui::KeyboardInput<'_>,
     args: &TextInputProps,
@@ -1001,6 +1016,12 @@ fn handle_text_input_keyboard(
     let mut all_actions = Vec::new();
     let mut should_block_keyboard = false;
     for key_event in input.keyboard_events.iter().cloned() {
+        if key_event.logical_key == winit::keyboard::Key::Named(winit::keyboard::NamedKey::Escape) {
+            should_block_keyboard |= controller.with_mut(|controller| {
+                handle_editor_escape(controller, key_event.state, *on_change, *input_transform)
+            });
+            continue;
+        }
         if let Some(behavior) =
             single_line_key_behavior(args.single_line, key_event.state, &key_event.logical_key)
         {
@@ -1679,7 +1700,8 @@ mod tests {
 
     use glyphon::{Action as GlyphonAction, Edit as _};
     use tessera_ui::{
-        Color, ComputedData, Dp, Px, PxPosition, PxSize, accesskit::Role, time::Instant, winit,
+        CallbackWith, Color, ComputedData, Dp, Px, PxPosition, PxSize, accesskit::Role,
+        time::Instant, winit,
     };
 
     use crate::text_edit_core::{
@@ -1691,11 +1713,94 @@ mod tests {
         ClipboardShortcutBehavior, DISABLED_FILL_ALPHA, DISABLED_OUTLINE_ALPHA,
         DragSelectionPointerPosition, FieldVisualState, SingleLineKeyBehavior, build_ime_request,
         clipboard_shortcut_for_key, default_fill_color, default_outline_color,
-        deletion_motion_for_key, drag_selection_pointer_position_with_scroll, resolve_border_width,
-        should_expose_submit_accessibility_action, single_line_key_behavior,
+        deletion_motion_for_key, drag_selection_pointer_position_with_scroll, handle_editor_escape,
+        resolve_border_width, should_expose_submit_accessibility_action, single_line_key_behavior,
         text_content_origin_from_values, text_input_accessibility_role,
         text_viewport_size_from_origin,
     };
+
+    #[test]
+    fn escape_disposition_leaves_a_plain_caret_unhandled_without_mutating_text() {
+        let mut controller = TextEditorController::new(Dp(16.0), Some(Dp(24.0)));
+        controller.set_text_and_selection("café", TextSelection::collapsed(5));
+        assert!(!handle_editor_escape(
+            &mut controller,
+            winit::event::ElementState::Pressed,
+            CallbackWith::identity(),
+            None,
+        ));
+        assert_eq!(controller.text(), "café");
+        assert_eq!(controller.selection(), TextSelection::collapsed(5));
+        assert!(controller.composition().is_none());
+    }
+
+    #[test]
+    fn escape_disposition_cancels_a_nonempty_selection_once_without_editing_text() {
+        let mut controller = TextEditorController::new(Dp(16.0), Some(Dp(24.0)));
+        controller.set_text_and_selection("café", TextSelection { start: 0, end: 3 });
+        assert_eq!(controller.selection(), TextSelection { start: 0, end: 3 });
+        assert!(handle_editor_escape(
+            &mut controller,
+            winit::event::ElementState::Pressed,
+            CallbackWith::identity(),
+            None,
+        ));
+        assert_eq!(controller.text(), "café");
+        assert_eq!(controller.selection(), TextSelection::collapsed(3));
+        assert!(controller.composition().is_none());
+        assert!(!handle_editor_escape(
+            &mut controller,
+            winit::event::ElementState::Pressed,
+            CallbackWith::identity(),
+            None,
+        ));
+    }
+
+    #[test]
+    fn escape_disposition_clears_active_composition_and_selection_before_becoming_unhandled() {
+        let mut controller = TextEditorController::new(Dp(16.0), Some(Dp(24.0)));
+        controller.set_text_and_selection("preedit", TextSelection { start: 2, end: 5 });
+        controller.set_composition(Some(ImeComposition {
+            range: 0..7,
+            selection: TextSelection { start: 2, end: 5 },
+        }));
+        assert!(handle_editor_escape(
+            &mut controller,
+            winit::event::ElementState::Pressed,
+            CallbackWith::identity(),
+            None,
+        ));
+        assert_eq!(controller.text(), "preedit");
+        assert_eq!(controller.selection(), TextSelection::collapsed(5));
+        assert!(controller.composition().is_none());
+        assert!(!handle_editor_escape(
+            &mut controller,
+            winit::event::ElementState::Pressed,
+            CallbackWith::identity(),
+            None,
+        ));
+    }
+
+    #[test]
+    fn escape_release_does_not_cancel_an_owned_selection_or_composition() {
+        let mut controller = TextEditorController::new(Dp(16.0), Some(Dp(24.0)));
+        let selection = TextSelection { start: 0, end: 3 };
+        let composition = ImeComposition {
+            range: 0..3,
+            selection: selection.clone(),
+        };
+        controller.set_text_and_selection("abc", selection.clone());
+        controller.set_composition(Some(composition.clone()));
+        assert!(!handle_editor_escape(
+            &mut controller,
+            winit::event::ElementState::Released,
+            CallbackWith::identity(),
+            None,
+        ));
+        assert_eq!(controller.text(), "abc");
+        assert_eq!(controller.selection(), selection);
+        assert_eq!(controller.composition(), Some(&composition));
+    }
 
     fn plan_ime_event_for_state(
         selection: TextSelection,

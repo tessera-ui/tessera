@@ -27,7 +27,7 @@ use tessera_components::{
     theme::{MaterialTheme, material_theme},
 };
 use tessera_ui::{
-    Callback, Dp, LayoutCoordinates, Modifier, PxPosition, PxSize, RenderSlot, State,
+    Callback, Color, Dp, LayoutCoordinates, Modifier, PxPosition, PxSize, RenderSlot, State,
     accesskit::Role, modifier::FocusModifierExt as _, provide_context, remember, scaled_box,
     tessera, use_context,
 };
@@ -99,52 +99,566 @@ pub(super) fn dialogs_spec() {
     let discard = remember(|| false);
     let close = Callback::new(move || request_dialog_close(open, full, discard, draft));
     dialog_provider()
-        .role(if full.get() {DialogRole::Dialog} else {DialogRole::AlertDialog})
+        .role(if full.get() {
+            DialogRole::Dialog
+        } else {
+            DialogRole::AlertDialog
+        })
         .is_open(open.get())
         .full_screen(full.get())
-        .accessibility_label(if full.get() { "New event" } else { "Reset settings?" })
+        .accessibility_label(if full.get() {
+            "New event"
+        } else {
+            "Reset settings?"
+        })
         .on_close_request_shared(close)
         .main_content(move || {
-            article("Dialogs", "Dialogs provide important prompts in a user flow", vec![
-                SpecSection { title: "Tokens & specs", content: RenderSlot::new(tokens) },
-                SpecSection { title: "Basic dialogs", content: RenderSlot::new(basic_specs) },
-                SpecSection { title: "Full-screen dialogs", content: RenderSlot::new(full_specs) },
-            ])
+            article(
+                "Dialogs",
+                "Dialogs provide important prompts in a user flow",
+                vec![
+                    SpecSection {
+                        title: "Tokens & specs",
+                        content: RenderSlot::new(tokens),
+                    },
+                    SpecSection {
+                        title: "Basic dialogs",
+                        content: RenderSlot::new(basic_specs),
+                    },
+                    SpecSection {
+                        title: "Full-screen dialogs",
+                        content: RenderSlot::new(full_specs),
+                    },
+                ],
+            )
             .pages(vec![
-                ArticlePage { title: "Overview", intro: Some(RenderSlot::new(move || {
-                    prose("Dialogs interrupt a flow for one important decision or task. Basic dialogs support brief confirmations; full-screen dialogs provide room for a longer task.");
-                    gap(Dp(32.0));
-                    dialog_overview_pair();
-                    gap(Dp(32.0));
-                    launch(open, full, saved);
-                })), sections: vec![] },
-                ArticlePage { title: "Guidelines", intro: None, sections: vec![
-                    SpecSection { title: "Usage", content: RenderSlot::new(|| { prose("Reserve dialogs for critical information or decisions that must interrupt the current task. Use a snackbar for lower-priority feedback."); }) },
-                    SpecSection { title: "Anatomy", content: RenderSlot::new(|| { basic_figure(false); }) },
-                    SpecSection { title: "Basic dialog", content: RenderSlot::new(|| { prose("Use a clear headline that describes the decision. Place the dismissive action before the confirming action at the trailing edge; provide no more than two actions."); }) },
-                    SpecSection { title: "Full-screen dialog", content: RenderSlot::new(|| { prose("Use a full-screen dialog for a sequence of related tasks. The close icon dismisses the task; a clearly named action commits it. Confirm before discarding unsaved changes."); gap(Dp(24.0)); full_figure(); }) },
-                    SpecSection { title: "Adaptive design", content: RenderSlot::new(|| { prose("At compact widths, a task can occupy the full screen. At larger widths, use a centered basic dialog and retain margins around the container."); }) },
-                    SpecSection { title: "Behavior", content: RenderSlot::new(move || { prose("Keep focus within an open dialog. Closing it returns focus to its trigger. When content scrolls, keep the title and actions available."); gap(Dp(24.0)); launch(open, full, saved); }) },
-                ] },
-                ArticlePage { title: "Accessibility", intro: None, sections: vec![
-                    SpecSection { title: "Use cases", content: RenderSlot::new(move || { prose("People using assistive technology must be able to open and close the dialog, edit its inputs, submit the task and reach any scrolling content."); gap(Dp(24.0)); launch(open, full, saved); }) },
-                    SpecSection { title: "Interaction & style", content: RenderSlot::new(accessibility::interaction_style) },
-                    SpecSection { title: "Initial focus", content: RenderSlot::new(accessibility::initial_focus) },
-                    SpecSection { title: "Keyboard navigation", content: RenderSlot::new(|| { spec_table(vec!["Keys".into(),"Action".into()], vec![vec!["Tab".into(),"Next dialog control; wrap at the end".into()],vec!["Shift + Tab".into(),"Previous dialog control; wrap at the start".into()],vec!["Space or Enter".into(),"Activate the focused control".into()],vec!["Escape".into(),"Close the dialog".into()]]); }) },
-                    SpecSection { title: "Labeling elements", content: RenderSlot::new(accessibility::labeling) },
-                ] },
+                ArticlePage {
+                    title: "Overview",
+                    intro: Some(RenderSlot::new(move || {
+                        overview_intro(open, full, saved);
+                    })),
+                    sections: vec![
+                        SpecSection {
+                            title: "Availability & resources",
+                            content: RenderSlot::new(availability),
+                        },
+                        SpecSection {
+                            title: "Differences from M2",
+                            content: RenderSlot::new(differences),
+                        },
+                    ],
+                },
+                ArticlePage {
+                    title: "Guidelines",
+                    intro: Some(RenderSlot::new(|| {
+                        prose("A basic dialog and a full-screen dialog serve different tasks. The basic dialog interrupts a single decision; the full-screen dialog holds a sequence of related fields.");
+                        gap(Dp(24.0));
+                        variant_pair();
+                    })),
+                    sections: vec![
+                        SpecSection {
+                            title: "Usage",
+                            content: RenderSlot::new(usage_section),
+                        },
+                        SpecSection {
+                            title: "Anatomy",
+                            content: RenderSlot::new(anatomy_section),
+                        },
+                        SpecSection {
+                            title: "Basic dialog",
+                            content: RenderSlot::new(basic_guidance),
+                        },
+                        SpecSection {
+                            title: "Full-screen dialog",
+                            content: RenderSlot::new(full_guidance),
+                        },
+                        SpecSection {
+                            title: "Adaptive design",
+                            content: RenderSlot::new(adaptive_section),
+                        },
+                        SpecSection {
+                            title: "Behavior",
+                            content: RenderSlot::new(move || {
+                                behavior_section(open, full, saved);
+                            }),
+                        },
+                    ],
+                },
+                ArticlePage {
+                    title: "Accessibility",
+                    intro: None,
+                    sections: vec![
+                        SpecSection {
+                            title: "Use cases",
+                            content: RenderSlot::new(move || {
+                                use_cases(open, full, saved);
+                            }),
+                        },
+                        SpecSection {
+                            title: "Interaction & style",
+                            content: RenderSlot::new(interaction_style_section),
+                        },
+                        SpecSection {
+                            title: "Initial focus",
+                            content: RenderSlot::new(initial_focus_section),
+                        },
+                        SpecSection {
+                            title: "Keyboard navigation",
+                            content: RenderSlot::new(keyboard_section),
+                        },
+                        SpecSection {
+                            title: "Labeling elements",
+                            content: RenderSlot::new(labeling_section),
+                        },
+                    ],
+                },
             ]);
         })
         .dialog_content(move || {
             if full.get() {
                 event_dialog(draft, open, saved, discard, close);
             } else {
-                basic_dialog().headline("Reset settings?")
-                    .supporting_text("This will reset your app preferences back to their default settings.")
-                    .dismiss_button(move || { action("Cancel".into(), Callback::new(move || open.set(false))); })
-                    .confirm_button(move || { action("Accept".into(), Callback::new(move || { saved.set(true); open.set(false); })); });
+                basic_dialog()
+                    .headline("Reset settings?")
+                    .supporting_text(
+                        "This will reset your app preferences back to their default settings. The following accounts will also be signed out.",
+                    )
+                    .dismiss_button(move || {
+                        action("Cancel".into(), Callback::new(move || open.set(false)));
+                    })
+                    .confirm_button(move || {
+                        action(
+                            "Accept".into(),
+                            Callback::new(move || {
+                                saved.set(true);
+                                open.set(false);
+                            }),
+                        );
+                    });
             }
         });
+}
+
+const DO_COLOR: Color = Color::from_rgb(0.121, 0.478, 0.196);
+const DONT_COLOR: Color = Color::from_rgb(0.741, 0.161, 0.161);
+
+#[tessera]
+fn bullets(items: Vec<String>) {
+    column().children(move || {
+        for item in items.clone() {
+            text()
+                .content(format!("•  {item}"))
+                .style(type_style(16.0, 24.0))
+                .color(INK);
+            gap(Dp(8.0));
+        }
+    });
+}
+
+#[tessera]
+fn caption(#[prop(into)] value: String) {
+    let scheme = use_context::<MaterialTheme>().unwrap().get().color_scheme;
+    text()
+        .content(value)
+        .color(scheme.on_surface_variant)
+        .style(type_style(14.0, 20.0));
+}
+
+#[tessera]
+fn guidance_line(#[prop(into)] mark: String, #[prop(into)] note: String, color: Color) {
+    let scheme = use_context::<MaterialTheme>().unwrap().get().color_scheme;
+    row()
+        .cross_axis_alignment(CrossAxisAlignment::Center)
+        .modifier(Modifier::new().fill_max_width())
+        .children(move || {
+            let mark = mark.clone();
+            boxed()
+                .alignment(Alignment::Center)
+                .modifier(
+                    Modifier::new()
+                        .padding_symmetric(Dp(12.0), Dp(4.0))
+                        .background_with_shape(color, Shape::rounded_rectangle(Dp(8.0))),
+                )
+                .children(move || {
+                    text()
+                        .content(mark.clone())
+                        .style(type_style(14.0, 20.0))
+                        .color(Color::WHITE);
+                });
+            spacer().modifier(Modifier::new().width(Dp(12.0)));
+            text()
+                .content(note.clone())
+                .color(scheme.on_surface_variant)
+                .style(type_style(14.0, 20.0));
+        });
+}
+
+#[tessera]
+fn do_dont(#[prop(into)] good: String, #[prop(into)] bad: String) {
+    column().children(move || {
+        guidance_line("Do", good.clone(), DO_COLOR);
+        gap(Dp(12.0));
+        guidance_line("Don't", bad.clone(), DONT_COLOR);
+    });
+}
+
+#[tessera]
+fn variant_pair() {
+    dialog_overview_pair();
+    gap(Dp(16.0));
+    caption("Basic and full-screen dialog.");
+}
+
+#[tessera]
+fn overview_intro(open: State<bool>, full: State<bool>, saved: State<bool>) {
+    prose("Use dialogs to make sure users act on information.");
+    gap(Dp(16.0));
+    bullets(vec![
+        "Two variants: basic dialogs interrupt users with urgent information, details, or actions. They're often used for alerts, quick selection, or confirmation. Full-screen dialogs fill the entire screen, displaying actions that require a series of tasks to complete. They're often used for creating a calendar entry.".into(),
+        "Should be dedicated to completing a single task".into(),
+        "Can also display information relevant to the task".into(),
+        "Commonly used to confirm high-risk actions like deleting progress".into(),
+    ]);
+    gap(Dp(32.0));
+    variant_pair();
+    gap(Dp(32.0));
+    launch(open, full, saved);
+}
+
+#[tessera]
+fn availability() {
+    spec_table(
+        vec!["Type".into(), "Resource".into(), "Status".into()],
+        vec![
+            vec![
+                "Design".into(),
+                "Design Kit (Figma)".into(),
+                "Available".into(),
+            ],
+            vec![
+                "Implementation".into(),
+                "Flutter".into(),
+                "Available".into(),
+            ],
+            vec![
+                "Implementation".into(),
+                "Jetpack Compose".into(),
+                "Available".into(),
+            ],
+            vec![
+                "Implementation".into(),
+                "Android Views (MDC-Android)".into(),
+                "Available".into(),
+            ],
+            vec!["Implementation".into(), "Web".into(), "Available".into()],
+        ],
+    );
+}
+
+#[tessera]
+fn differences() {
+    bullets(vec![
+        "Color: new color mappings and compatibility with dynamic color".into(),
+        "Layout: greater padding to account for the increased corner-radius and title size".into(),
+        "Position: option for custom basic dialog positioning".into(),
+        "Shape: increased corner-radius".into(),
+        "Typography: larger and darker headline".into(),
+    ]);
+    gap(Dp(24.0));
+    basic_figure(false);
+    gap(Dp(16.0));
+    caption("Basic dialog with rounded corner, larger headline.");
+}
+
+#[tessera]
+fn usage_section() {
+    prose(
+        "A dialog is a modal window that appears in front of app content to provide critical information or ask for a decision. Dialogs disable all app functionality when they appear, and remain on screen until confirmed, dismissed, or a required action has been taken.",
+    );
+    gap(Dp(16.0));
+    prose(
+        "Dialogs are purposefully interruptive, so they should be used sparingly. A less disruptive alternative is to use a dropdown menu, which provides options without interrupting a user's experience.",
+    );
+    gap(Dp(24.0));
+    do_dont(
+        "Use dialogs for prompts that block an app's normal operation, and for critical information that requires a specific user task, decision, or acknowledgement.",
+        "Don't use dialogs for low- or medium-priority information. Instead use a snackbar, which can be dismissed or disappear automatically.",
+    );
+    gap(Dp(32.0));
+    subheading("Similar components".into());
+    gap(Dp(12.0));
+    prose(
+        "Snackbars are also designed to show important messages. Choose the right component based on the importance of the message; this messaging strategy helps avoid overusing dialogs.",
+    );
+    gap(Dp(16.0));
+    spec_table(
+        vec![
+            "Component".into(),
+            "Importance".into(),
+            "Action needed".into(),
+        ],
+        vec![
+            vec![
+                "Snackbar".into(),
+                "Low importance".into(),
+                "Optional: snackbars may not have a button".into(),
+            ],
+            vec![
+                "Dialog".into(),
+                "High importance".into(),
+                "Required: dialogs request a decision or acknowledgement".into(),
+            ],
+        ],
+    );
+    gap(Dp(24.0));
+    caption("Dialog in front of app content");
+}
+
+#[tessera]
+fn anatomy_section() {
+    prose(
+        "A dialog is composed of a container, an optional icon, an optional headline, supporting text, an optional divider and up to two actions. The headline states the purpose of the dialog; the buttons carry the decision.",
+    );
+    gap(Dp(24.0));
+    basic_figure(false);
+    gap(Dp(24.0));
+    subheading("Headline (optional)".into());
+    gap(Dp(12.0));
+    prose(
+        "A dialog's purpose should be communicated by its headline and buttons or actionable items. Headlines should contain a brief, clear statement or question, and avoid apologies, alarm, or ambiguity.",
+    );
+    gap(Dp(16.0));
+    do_dont(
+        "A specific question such as \"Use location service?\" explains what is involved in the request and provides clear actions.",
+        "An ambiguous question such as \"Are you sure?\" does not describe the consequence of the decision.",
+    );
+    gap(Dp(24.0));
+    prose(
+        "Headlines should always be succinct. They can wrap to a second line if necessary, and be truncated. In full-screen dialogs, long or variable-length headlines can be placed in the content area instead of the app bar.",
+    );
+    gap(Dp(32.0));
+    subheading("Buttons".into());
+    gap(Dp(12.0));
+    prose(
+        "Dialog actions are most often represented as text buttons and allow users to confirm, dismiss, or acknowledge something. Buttons are aligned to the trailing edge of the dialog for easier interaction, and the confirmation button is always closest to the edge. Alignment responds automatically for right-to-left languages, where the confirmation button is aligned to the left edge.",
+    );
+    gap(Dp(16.0));
+    do_dont(
+        "Disable confirming actions until a required choice is made. Dismissive actions are never disabled.",
+        "Don't place dismissive actions to the right of confirming actions. Place them to the left of confirming actions.",
+    );
+    gap(Dp(24.0));
+    prose(
+        "Dialogs contain a maximum of two actions. If a single action is provided it must be an acknowledgement action; if two actions are provided, one must be confirming and the other dismissing. Stacked buttons accommodate longer button text but take up more room, and confirming actions appear above dismissive actions. A third action such as Learn more is not recommended because it navigates away from the dialog.",
+    );
+}
+
+#[tessera]
+fn basic_guidance() {
+    prose(
+        "Basic dialogs interrupt users with urgent information, details, or actions. Common use cases include alerts, quick selection, and confirmation.",
+    );
+    gap(Dp(16.0));
+    prose(
+        "Basic dialogs require a person to take action before they close, and they can give people the ability to confirm a choice before committing to it.",
+    );
+    gap(Dp(16.0));
+    prose(
+        "Basic dialogs most often appear as alerts or lists, but can have a variety of layouts and component combinations, including date pickers and time pickers.",
+    );
+    gap(Dp(24.0));
+    do_dont(
+        "Two text buttons next to one another keep the decision compact and predictable.",
+        "Avoid presenting unclear choices such as Cancel when no clear action is proposed.",
+    );
+}
+
+#[tessera]
+fn full_guidance() {
+    prose(
+        "Full-screen dialogs fill the entire screen, containing actions that require a series of tasks to complete. One example is creating a calendar entry with the event title, date, location and time.",
+    );
+    gap(Dp(16.0));
+    prose(
+        "Because they take up the entire screen, full-screen dialogs are the only dialogs over which other dialogs can appear. Use a container transform pattern to transition a FAB into a full-screen dialog.",
+    );
+    gap(Dp(24.0));
+    subheading("When to use".into());
+    gap(Dp(12.0));
+    bullets(vec![
+        "Dialogs that include components which require keyboard input, such as form fields".into(),
+        "When changes aren't saved instantly".into(),
+        "When components within the dialog open additional dialogs".into(),
+    ]);
+    gap(Dp(16.0));
+    prose(
+        "Full-screen dialogs are for compact breakpoints only, such as mobile devices. For medium and expanded breakpoints, use a basic dialog.",
+    );
+    gap(Dp(24.0));
+    subheading("Saving selections".into());
+    gap(Dp(12.0));
+    prose(
+        "To save a selection in a full-screen dialog, use Save. The close icon dismisses the dialog; when a full-screen dialog is closed without being saved, a basic dialog appears in front of it to confirm that its selections should be discarded without saving changes.",
+    );
+    gap(Dp(16.0));
+    do_dont(
+        "A clearly named action such as Create makes it clear that the event will be created.",
+        "Don't trigger a basic dialog when the confirming action is selected, and don't use the confirming action to dismiss the full-screen dialog.",
+    );
+    gap(Dp(24.0));
+    subheading("Error messages".into());
+    gap(Dp(12.0));
+    prose(
+        "Errors about the dialog fields should always appear inline where they occur. General errors such as network issues preventing saving or submitting should appear in a basic dialog when the confirming action fails. Show all errors on the page at once so people can fix everything before trying again.",
+    );
+    gap(Dp(24.0));
+    full_figure();
+}
+
+#[tessera]
+fn adaptive_section() {
+    subheading("Medium breakpoint".into());
+    gap(Dp(12.0));
+    prose(
+        "Basic dialogs appear in a center position by default. Their position can be overridden to provide a more ergonomic experience.",
+    );
+    gap(Dp(24.0));
+    subheading("Expanded breakpoint".into());
+    gap(Dp(12.0));
+    prose(
+        "Dialogs on expanded breakpoints, like desktop, are modal windows above a scrim. This puts the dialog at the forefront of a person's view, calling attention to the action prompted in the dialog.",
+    );
+    gap(Dp(16.0));
+    prose(
+        "Basic dialogs can be custom-positioned anywhere on larger screens, respecting margins to prevent edge collision.",
+    );
+    gap(Dp(24.0));
+    spec_table(
+        vec!["Attribute".into(), "Value".into()],
+        vec![
+            vec!["Default position".into(), "Center".into()],
+            vec![
+                "Custom placement margin".into(),
+                "56dp from screen edges".into(),
+            ],
+        ],
+    );
+    gap(Dp(16.0));
+    caption(
+        "Custom placement area for basic dialogs that respects a 56dp margin from the edges of the screen",
+    );
+}
+
+#[tessera]
+fn behavior_section(open: State<bool>, full: State<bool>, saved: State<bool>) {
+    subheading("Appearing".into());
+    gap(Dp(12.0));
+    prose(
+        "Dialogs appear without warning, requiring users to stop their current task. They should be used sparingly, as not every choice or setting warrants interruption. Dialogs use an enter and exit transition pattern to appear on screen.",
+    );
+    gap(Dp(24.0));
+    subheading("Position".into());
+    gap(Dp(12.0));
+    prose(
+        "Dialogs retain focus until dismissed or an action has been taken, such as choosing a setting. They shouldn't be obscured by other elements or appear partially on screen, with the exception of full-screen dialogs.",
+    );
+    gap(Dp(24.0));
+    subheading("Scrolling".into());
+    gap(Dp(12.0));
+    prose(
+        "Most dialog content should avoid scrolling. Even when scrolling is required, the dialog title is pinned at the top, with buttons pinned at the bottom. Dialogs don't scroll with elements outside of the dialog, such as the background.",
+    );
+    gap(Dp(24.0));
+    launch(open, full, saved);
+}
+
+#[tessera]
+fn use_cases(open: State<bool>, full: State<bool>, saved: State<bool>) {
+    prose("People should be able to use assistive technology to:");
+    gap(Dp(12.0));
+    bullets(vec![
+        "Open and close a dialog".into(),
+        "Provide and submit other inputs if the dialog is interactive, such as a text field or selectable list".into(),
+        "Scroll the dialog to access all of its contents if that content extends beyond the container of the dialog".into(),
+    ]);
+    gap(Dp(24.0));
+    launch(open, full, saved);
+}
+
+#[tessera]
+fn interaction_style_section() {
+    subheading("Use sparingly".into());
+    gap(Dp(12.0));
+    prose(
+        "Dialogs are purposefully interruptive. This means they appear in front of app content and disrupt the flow of content for people who may, for example, be using a screen reader to navigate the page.",
+    );
+    gap(Dp(16.0));
+    prose(
+        "As such, dialogs should be used sparingly and only to provide critical information. Less critical information should be presented in a non-blocking way within the flow of app content.",
+    );
+    gap(Dp(16.0));
+    do_dont(
+        "Present non-critical information using other UI within the flow of app content.",
+        "Avoid putting non-critical information in a dialog.",
+    );
+    gap(Dp(32.0));
+    subheading("200% text size".into());
+    gap(Dp(12.0));
+    prose(
+        "Avoid excessive text wrapping or truncation by choosing concise strings. On Android, headlines should be kept concise enough to fit within four lines after the text size is increased to 200%. If a headline exceeds this limit and gets truncated, provide an alternative way to access the full content in a single tap.",
+    );
+    gap(Dp(32.0));
+    subheading("Elements within dialogs".into());
+    gap(Dp(12.0));
+    prose(
+        "Because dialogs can contain various elements within them, refer to the relevant accessibility guidelines for each element. Common examples include text fields, typography and buttons.",
+    );
+    gap(Dp(24.0));
+    accessibility::interaction_style();
+}
+
+#[tessera]
+fn initial_focus_section() {
+    prose(
+        "When a dialog appears, focus should automatically land on the first interactive element within the dialog.",
+    );
+    gap(Dp(16.0));
+    prose(
+        "The tab key moves focus through the next interactive elements in a cycle, and the shift and tab keys together move focus in the opposite direction. The space or enter key triggers or commits the action of the focused element.",
+    );
+    gap(Dp(24.0));
+    accessibility::initial_focus();
+}
+
+#[tessera]
+fn keyboard_section() {
+    spec_table(
+        vec!["Keys".into(), "Actions".into()],
+        vec![
+            vec![
+                "Tab".into(),
+                "Focus lands on the next interactive element contained in the dialog, or the first element if focus is currently on the last element".into(),
+            ],
+            vec![
+                "Shift + Tab".into(),
+                "Focus lands on the previous interactive element contained in the dialog, or the last element if focus is currently on the first element".into(),
+            ],
+            vec![
+                "Space or Enter".into(),
+                "Triggers or commits the action of the focused element".into(),
+            ],
+            vec!["Escape".into(), "Closes the dialog".into()],
+        ],
+    );
+}
+
+#[tessera]
+fn labeling_section() {
+    prose(
+        "The accessibility label for a dialog is typically the same as the dialog's title or headline. On web, basic dialogs should have the alert dialog role.",
+    );
+    gap(Dp(24.0));
+    accessibility::labeling();
 }
 
 #[tessera]
@@ -1747,6 +2261,8 @@ fn full_specs() {
             vec!["Content padding".into(), "24dp".into()],
             vec!["Padding between elements".into(), "8dp".into()],
         ]);
+        gap(Dp(24.0));
+        prose("The official full-screen measurement diagram shows a 64dp header, while its accompanying table lists 56dp for both the header and bottom action bar. This example follows the diagram's 64dp header; the conflicting table value is not presented as an equivalent measurement.");
     });
 }
 

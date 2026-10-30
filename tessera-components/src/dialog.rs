@@ -22,12 +22,12 @@ use crate::{
     boxed::boxed,
     button::button,
     column::column,
+    flow_row::flow_row,
     icon_button::{IconButtonColorStyle, icon_button},
     material_icons::filled,
     modal_focus::{ModalFocusState, modal_focus_modifier},
     modifier::{ModifierExt, SemanticsArgs, with_keyboard_input},
-    overlay_semantics::{dialog_semantics_with_role, overlay_background},
-    row::row,
+    overlay_semantics::overlay_background,
     scrollable::ScrollableController,
     shape_def::{RoundedCorner, Shape},
     spacer::spacer,
@@ -52,6 +52,47 @@ impl DialogRole {
             Self::Dialog => Role::Dialog,
             Self::AlertDialog => Role::AlertDialog,
         }
+    }
+}
+
+#[derive(Clone, Default, PartialEq)]
+struct DialogContentAccessibility {
+    label: Option<String>,
+    description: Option<String>,
+}
+
+#[derive(Clone, Copy)]
+struct DialogAccessibilityContext {
+    content: State<Option<State<DialogContentAccessibility>>>,
+}
+
+struct DialogAccessibilityRegistration {
+    context: DialogAccessibilityContext,
+    content: State<DialogContentAccessibility>,
+}
+
+impl Drop for DialogAccessibilityRegistration {
+    fn drop(&mut self) {
+        if self.context.content.is_alive() && self.context.content.get() == Some(self.content) {
+            self.context.content.set(None);
+        }
+    }
+}
+
+#[tessera]
+fn register_dialog_accessibility(label: Option<String>, description: Option<String>) {
+    let Some(context) = use_context::<DialogAccessibilityContext>() else {
+        return;
+    };
+    let context = context.get();
+    let content = remember(DialogContentAccessibility::default);
+    let next = DialogContentAccessibility { label, description };
+    if content.get() != next {
+        content.set(next);
+    }
+    remember(move || DialogAccessibilityRegistration { context, content });
+    if context.content.get() != Some(content) {
+        context.content.set(Some(content));
     }
 }
 
@@ -135,6 +176,7 @@ fn make_keyboard_handler(
 #[tessera]
 fn dialog_content_wrapper(
     accessibility_label: Option<String>,
+    accessibility_description: Option<String>,
     role: Option<DialogRole>,
     alpha: Option<f32>,
     padding: Option<Dp>,
@@ -151,22 +193,35 @@ fn dialog_content_wrapper(
     let on_close_request = on_close_request.unwrap_or_default();
     let content = content.expect("dialog_content_wrapper requires content");
     let focus_scope = focus_scope.expect("modal content requires its focus scope");
-    let modifier = dialog_semantics_with_role(
-        with_keyboard_input(
-            Modifier::new()
-                .focus_scope_with(focus_scope)
-                .focus_properties(FocusProperties::new().skip_traversal(true))
-                .focus_traversal_policy(
-                    FocusTraversalPolicy::linear()
-                        .wrap(true)
-                        .tab_navigation(true),
-                ),
-            make_keyboard_handler(on_close_request),
-        ),
-        accessibility_label,
-        true,
-        role.unwrap_or_default().accessibility_role(),
-    );
+    let context = DialogAccessibilityContext {
+        content: remember(|| None),
+    };
+    let inferred = context
+        .content
+        .get()
+        .filter(|content| content.is_alive())
+        .map(|content| content.get())
+        .unwrap_or_default();
+    let modifier = with_keyboard_input(
+        Modifier::new()
+            .focus_scope_with(focus_scope)
+            .focus_properties(FocusProperties::new().skip_traversal(true))
+            .focus_traversal_policy(
+                FocusTraversalPolicy::linear()
+                    .wrap(true)
+                    .tab_navigation(true),
+            ),
+        make_keyboard_handler(on_close_request),
+    )
+    .semantics(SemanticsArgs {
+        role: Some(role.unwrap_or_default().accessibility_role()),
+        label: accessibility_label.or(inferred.label),
+        description: accessibility_description.or(inferred.description),
+        modal: true,
+        focusable: true,
+        merge_descendants: true,
+        ..Default::default()
+    });
     if just_opened {
         focus_scope.request_focus();
     }
@@ -220,7 +275,7 @@ fn dialog_content_wrapper(
                                 layout()
                                     .modifier(Modifier::new().padding_all(padding))
                                     .child(move || {
-                                        content.render();
+                                        provide_context(move || context, move || content.render());
                                     });
                             });
                     });
@@ -280,7 +335,11 @@ impl tessera_ui::DrawModifierNode for DialogContentLayout {
 ///
 /// ## Parameters
 ///
-/// - `accessibility_label` — accessible name describing the dialog or sheet.
+/// - `accessibility_label` — accessible name overriding the standard content
+///   title.
+/// - `accessibility_description` — description overriding basic supporting
+///   text; provide this for custom content that needs a concise accessible
+///   summary.
 /// - `role` — dialog purpose; use [`DialogRole::AlertDialog`] for an urgent
 ///   message that requires a response. Defaults to [`DialogRole::Dialog`].
 /// - `on_close_request` — optional close-request callback.
@@ -321,6 +380,7 @@ impl tessera_ui::DrawModifierNode for DialogContentLayout {
 #[tessera]
 pub fn dialog_provider(
     #[prop(into)] accessibility_label: Option<String>,
+    #[prop(into)] accessibility_description: Option<String>,
     role: Option<DialogRole>,
     on_close_request: Option<Callback>,
     padding: Option<Dp>,
@@ -354,6 +414,7 @@ pub fn dialog_provider(
     }
     dialog_provider_render()
         .accessibility_label_optional(accessibility_label)
+        .accessibility_description_optional(accessibility_description)
         .role(role.unwrap_or_default())
         .on_close_request_shared(on_close_request)
         .padding(padding)
@@ -366,6 +427,7 @@ pub fn dialog_provider(
 #[tessera]
 fn dialog_provider_render(
     accessibility_label: Option<String>,
+    accessibility_description: Option<String>,
     role: Option<DialogRole>,
     on_close_request: Option<Callback>,
     padding: Option<Dp>,
@@ -442,6 +504,7 @@ fn dialog_provider_render(
 
             dialog_content_wrapper()
                 .accessibility_label_optional(accessibility_label.clone())
+                .accessibility_description_optional(accessibility_description.clone())
                 .role(role.unwrap_or_default())
                 .focus_scope(focus_scope)
                 .alpha(content_alpha)
@@ -513,6 +576,7 @@ pub fn full_screen_dialog(
     on_confirm: Option<Callback>,
     content: Option<RenderSlot>,
 ) {
+    register_dialog_accessibility().label_optional(title.clone());
     let title = title.unwrap_or_default();
     let confirm_label = confirm_label.unwrap_or_else(|| "Save".to_owned());
     let content = content.unwrap_or_else(RenderSlot::empty);
@@ -623,6 +687,13 @@ pub fn basic_dialog(
     confirm_button: Option<RenderSlot>,
     dismiss_button: Option<RenderSlot>,
 ) {
+    register_dialog_accessibility()
+        .label_optional(headline.clone())
+        .description_optional(if content.is_none() {
+            supporting_text.clone()
+        } else {
+            None
+        });
     let supporting_text = supporting_text.unwrap_or_default();
     let theme = use_context::<MaterialTheme>()
         .expect("MaterialTheme must be provided")
@@ -708,22 +779,15 @@ pub fn basic_dialog(
                                 current: action_color,
                             },
                             || {
-                                row()
+                                flow_row()
                                     .modifier(Modifier::new().fill_max_width())
                                     .main_axis_alignment(MainAxisAlignment::End)
+                                    .item_spacing(Dp(8.0))
+                                    .line_spacing(Dp(8.0))
                                     .children(move || {
-                                        let has_dismiss = dismiss_button.is_some();
-                                        let has_confirm = confirm_button.is_some();
-
                                         if let Some(dismiss) = dismiss_button.as_ref() {
                                             let dismiss = *dismiss;
                                             dismiss.render();
-                                        }
-
-                                        if has_dismiss && has_confirm {
-                                            {
-                                                spacer().modifier(Modifier::new().width(Dp(8.0)));
-                                            };
                                         }
 
                                         if let Some(confirm) = confirm_button.as_ref() {
@@ -816,3 +880,6 @@ impl tessera_ui::LayoutModifierNode for BasicDialogLayout {
         Ok(result.with_size(ComputedData { width, height }))
     }
 }
+
+#[cfg(all(test, not(target_family = "wasm")))]
+mod action_tests;
