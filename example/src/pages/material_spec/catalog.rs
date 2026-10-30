@@ -386,8 +386,10 @@ pub(super) fn component_pages() {
                                 super::toolbars::toolbars_spec();
                             } else if component.demo == 11 {
                                 super::drawers::drawers_spec();
-                            } else if component.demo == 33 || component.demo == 34 {
-                                super::sheets::sheets_spec(component.demo == 34);
+                            } else if component.demo == 33 {
+                                super::sheets::sheets_spec(false);
+                            } else if component.demo == 34 {
+                                super::side_sheets::side_sheets_spec();
                             } else {
                                 unreachable!("unregistered component article");
                             }

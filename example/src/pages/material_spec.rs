@@ -55,6 +55,7 @@ mod segmented;
 mod selection_articles;
 mod selection_controls;
 mod sheets;
+mod side_sheets;
 mod sliders;
 mod sliders_tokens;
 mod snackbars;
