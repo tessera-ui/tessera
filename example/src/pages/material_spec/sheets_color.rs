@@ -180,8 +180,7 @@ fn color_half(side: bool, modal: bool, dark: bool, notice: State<String>) {
             } else {
                 boxed()
                     .modifier(
-                        // The frame extends above the half; `size` would clamp it to
-                        // the half height and leave only a sliver of the phone.
+                        // `size` would clamp this frame to the half height.
                         at(298.0, -480.0)
                             .required_size(Dp(428.0), Dp(909.0))
                             .background_with_shape(

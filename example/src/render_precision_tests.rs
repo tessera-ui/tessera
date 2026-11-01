@@ -240,8 +240,7 @@ fn check_dark_surface(format: TextureFormat, sample_count: u32) {
                 surface,
                 (surface.y0 + surface.y1) * 0.5,
             ),
-            // Only the wrapper is observed; the sample is in the native rail's empty lower
-            // container.
+            // Sample the empty lower rail inside the observed wrapper.
             (
                 "native collapsed rail container",
                 rail_wrapper,
