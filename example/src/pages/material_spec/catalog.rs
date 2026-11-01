@@ -441,12 +441,7 @@ pub(super) fn component_pages() {
                             .enumerate()
                             .filter(|(_, component)| component.category == category)
                             .collect::<Vec<_>>();
-                        for (group_index, group) in entries.chunks(3).enumerate() {
-                            if group_index > 0 {
-                                gap(Dp(8.0));
-                            }
-                            directory_group(group.to_vec(), selected, width.get());
-                        }
+                        directory_group(entries, selected, width.get());
                     }
                     gap(Dp(64.0));
                 });
@@ -1261,9 +1256,9 @@ mod tests {
         );
         assert_eq!(third.y0, card.y1 + 8.0);
         assert_eq!(
-            next_group.y0,
-            third.y1 + 8.0,
-            "three-card groups must retain the official row breaks"
+            (next_group.x0, next_group.y0),
+            (adjacent.x0, third.y0),
+            "a category fills the slot beside its third card"
         );
         click(&mut renderer, card);
         let back = bounds(&renderer, "Back to components");
@@ -4107,9 +4102,9 @@ mod tests {
         assert_eq!(first.y0, second.y0);
         assert_eq!(third.y0, first.y1 + 8.0);
         assert_eq!(
-            next_group.y0,
-            third.y1 + 8.0,
-            "Three-card groups retain their real empty slot"
+            (next_group.x0, next_group.y0),
+            (second.x0, third.y0),
+            "a category fills the slot beside its third card"
         );
         renderer.pointer_scroll(
             MOUSE_POINTER_ID,
@@ -4148,5 +4143,128 @@ mod tests {
             bounds(&renderer, "Open Button groups specifications").width(),
             434.0
         );
+    }
+
+    /// Asserts row-major packing of every category and returns each row height.
+    fn assert_directory_packing(renderer: &HeadlessRenderer, columns: usize) -> Vec<f64> {
+        let nodes = renderer.accessibility_snapshot().unwrap().nodes;
+        let gap = f64::from(tessera_ui::Px::from(Dp(8.0)).0);
+        let mut row_heights = Vec::new();
+        for category in 0..6 {
+            let cards = COMPONENTS
+                .iter()
+                .filter(|component| component.category == category)
+                .map(|component| {
+                    let label = format!("Open {} specifications", component.title);
+                    let mut matches = nodes
+                        .iter()
+                        .filter(|(_, node)| node.label() == Some(label.as_str()));
+                    let card = matches
+                        .next()
+                        .unwrap_or_else(|| panic!("missing {label}"))
+                        .1
+                        .bounds()
+                        .unwrap();
+                    assert!(matches.next().is_none(), "duplicate {label}");
+                    card
+                })
+                .collect::<Vec<_>>();
+            for (index, card) in cards.iter().enumerate() {
+                let (row, column) = (index / columns, index % columns);
+                let row_start = cards[row * columns];
+                let context = format!("category {category} card {index} at {columns} columns");
+                assert_eq!(card.width(), cards[0].width(), "{context}: width");
+                assert_eq!(card.x0, cards[column].x0, "{context}: column");
+                assert_eq!(card.y0, row_start.y0, "{context}: row top");
+                assert_eq!(card.height(), row_start.height(), "{context}: row height");
+                if column > 0 {
+                    assert_eq!(card.x0, cards[index - 1].x1 + gap, "{context}: follows");
+                } else if row > 0 {
+                    assert_eq!(card.y0, cards[index - columns].y1 + gap, "{context}: wraps");
+                }
+            }
+            row_heights.extend(cards.chunks(columns).map(|row| row[0].height()));
+        }
+        row_heights
+    }
+
+    #[test]
+    #[ignore = "requires a native GPU adapter; runs in a fresh child process"]
+    fn directory_packs_each_category_in_reading_order_across_breakpoints_and_resizes() {
+        let name = "pages::material_spec::catalog::tests::directory_packs_each_category_in_reading_order_across_breakpoints_and_resizes";
+        if std::env::var("TESSERA_DIRECTORY_PACKING_TEST").as_deref() != Ok(name) {
+            let output = std::process::Command::new(std::env::current_exe().unwrap())
+                .args([
+                    "--exact",
+                    name,
+                    "--include-ignored",
+                    "--test-threads=1",
+                    "--nocapture",
+                ])
+                .env("TESSERA_DIRECTORY_PACKING_TEST", name)
+                .output()
+                .unwrap();
+            assert!(
+                output.status.success(),
+                "{}\n{}",
+                String::from_utf8_lossy(&output.stdout),
+                String::from_utf8_lossy(&output.stderr)
+            );
+            assert!(String::from_utf8_lossy(&output.stdout).contains("test result: ok. 1 passed;"));
+            return;
+        }
+        // A 1650x1200 browser viewport at device pixel ratio 1.5 is the
+        // default window, where the directory shows two columns.
+        let mut renderer = HeadlessRenderer::new(
+            Box::new(fixture),
+            vec![Box::new(ComponentPipelines)],
+            HeadlessConfig {
+                width: 1650,
+                height: 1200,
+                scale_factor: 1.5,
+                sample_count: 1,
+                frame_time: Duration::from_nanos(16_666_667),
+                ..Default::default()
+            },
+        )
+        .unwrap();
+        renderer.render_frames(8);
+        let heights = assert_directory_packing(&renderer, 2);
+        assert!(
+            heights.iter().any(|height| *height != heights[0]),
+            "rows keep their natural content heights"
+        );
+        for (width, columns) in [
+            (930, 2),
+            (900, 1),
+            (930, 2),
+            (1950, 2),
+            (1980, 3),
+            (1650, 2),
+            (1980, 3),
+            (900, 1),
+            (1650, 2),
+        ] {
+            renderer.resize(width, 1200);
+            renderer.render_frames(8);
+            assert_directory_packing(&renderer, columns);
+        }
+        let top = bounds(&renderer, "Open Button groups specifications");
+        renderer.pointer_scroll(
+            MOUSE_POINTER_ID,
+            PxPosition::from_f32_xy(800.0, 600.0),
+            0.0,
+            -1500.0,
+        );
+        renderer.render_frames(120);
+        assert!(bounds(&renderer, "Open Button groups specifications").y0 < top.y0);
+        assert_directory_packing(&renderer, 2);
+        let cards = bounds(&renderer, "Open Cards specifications");
+        click(&mut renderer, cards);
+        renderer.render_frames(8);
+        let back = bounds(&renderer, "Back to components");
+        click(&mut renderer, back);
+        renderer.render_frames(8);
+        assert_directory_packing(&renderer, 2);
     }
 }
