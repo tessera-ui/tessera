@@ -302,8 +302,10 @@ pub struct RenderCore {
     surface: Option<wgpu::Surface<'static>>,
     /// WGPU queue
     queue: wgpu::Queue,
-    /// WGPU surface configuration
+    /// Presentation and final output configuration.
     config: wgpu::SurfaceConfiguration,
+    /// Color-target configuration used for drawing.
+    draw_config: wgpu::SurfaceConfiguration,
     /// size of the window
     size: winit::dpi::PhysicalSize<u32>,
     /// if size is changed
@@ -344,7 +346,7 @@ pub struct RenderResources<'a> {
     pub device: &'a wgpu::Device,
     /// WGPU queue used by pipelines that upload data.
     pub queue: &'a wgpu::Queue,
-    /// Surface configuration used for render pipeline setup.
+    /// Configuration of the color targets used by render pipelines.
     pub surface_config: &'a wgpu::SurfaceConfiguration,
     /// Optional pipeline cache when supported by the adapter.
     pub pipeline_cache: Option<&'a wgpu::PipelineCache>,
@@ -358,7 +360,7 @@ impl RenderCore {
         RenderResources {
             device: &self.device,
             queue: &self.queue,
-            surface_config: &self.config,
+            surface_config: &self.draw_config,
             pipeline_cache: self.pipeline_cache.as_ref(),
             sample_count: self.targets.sample_count,
         }
@@ -474,7 +476,7 @@ impl RenderCore {
         let RenderCore {
             device,
             queue,
-            config,
+            draw_config,
             pipeline_cache,
             targets,
             pipelines,
@@ -483,7 +485,7 @@ impl RenderCore {
         let resources = RenderResources {
             device,
             queue,
-            surface_config: config,
+            surface_config: draw_config,
             pipeline_cache: pipeline_cache.as_ref(),
             sample_count: targets.sample_count,
         };
@@ -491,7 +493,7 @@ impl RenderCore {
             resources,
             external_textures: self.external_textures.clone(),
             frame_size,
-            surface_format: config.format,
+            surface_format: draw_config.format,
             sample_count: targets.sample_count,
             frame_index,
         };

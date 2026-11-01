@@ -62,17 +62,20 @@ pub(super) fn text_fields_spec() {
             },
         ],
     ).pages(vec![
-        ArticlePage{title:"Overview",intro:Some(RenderSlot::new(overview_variants)),sections:vec![SpecSection{title:"Differences from M2",content:RenderSlot::new(|| {prose("Text fields use updated color mappings and dynamic color, with distinct filled and outlined treatments.");gap(Dp(24.0));field_variant_hero(false);})}]},
+        ArticlePage{title:"Overview",intro:Some(RenderSlot::new(overview_variants)),sections:vec![
+            SpecSection{title:"Availability & resources",content:RenderSlot::new(availability)},
+            SpecSection{title:"Differences from M2",content:RenderSlot::new(differences)},
+        ]},
         ArticlePage{title:"Guidelines",intro:Some(RenderSlot::new(field_variants)),sections:vec![
-            SpecSection{title:"Usage",content:RenderSlot::new(|| {prose("Use text fields for contact, payment and other text entry. Both variants provide the same editing functionality.");gap(Dp(24.0));contact_form(false);gap(Dp(24.0));subheading("Outlined text fields".into());prose("Outlined fields have less visual emphasis and can simplify forms containing many inputs.");gap(Dp(24.0));contact_form(true);})},
-            SpecSection{title:"Choosing text fields",content:RenderSlot::new(|| {subheading("Choosing text fields".into());prose("Choose the variant that suits the app's style and remains distinct from surrounding content.");gap(Dp(24.0));field_variants();gap(Dp(24.0));subheading("Using both text field variants on the same screen".into());prose("Keep one variant within each region. If both are needed, separate their regions rather than intermixing fields within the same form.");gap(Dp(24.0));contact_form(false);})},
+            SpecSection{title:"Usage",content:RenderSlot::new(|| {prose("Use a text field when someone needs to enter text into a UI, such as filling in contact or payment information. Both variants of text fields use a container to provide a visual cue for interaction and provide the same functionality.");gap(Dp(24.0));contact_form(false);gap(Dp(24.0));subheading("Outlined text fields".into());prose("Outlined text fields have less visual emphasis than filled text fields. When they appear in places like forms, where many text fields are placed together, their reduced emphasis helps simplify the layout.");gap(Dp(24.0));contact_form(true);})},
+            SpecSection{title:"Choosing text fields",content:RenderSlot::new(|| {subheading("Choosing text fields".into());prose("Both variants of text field provide the same functionality. The variant used can depend on style alone. Choose the variant that works best with an app's visual style, best accommodates the UI's goals, and is most distinct from other components and surrounding content.");gap(Dp(24.0));field_variants();gap(Dp(24.0));subheading("Using both text field variants on the same screen".into());prose("If both variants of text field are used in a UI, they should be used consistently within different sections, and not intermixed within the same region.");gap(Dp(24.0));guidance::variant_regions();})},
             SpecSection{title:"Anatomy",content:RenderSlot::new(field_guideline_anatomy)},
-            SpecSection{title:"Adaptive design",content:RenderSlot::new(|| {prose("Constrain fields on large screens instead of stretching inputs across the full display. Compact forms can use available width.");gap(Dp(24.0));contact_form(true);gap(Dp(24.0));subheading("Density".into());prose("Dense layouts suit information-heavy workflows only when people choose them.");gap(Dp(24.0));subheading("Avoid applying density by default".into());prose("Keep default interaction targets at least 48 × 48. Controls for reverting a density choice must also remain easy to reach.");gap(Dp(24.0));field_figure(true,false,false,true);})},
+            SpecSection{title:"Adaptive design",content:RenderSlot::new(|| {prose("For compact breakpoints, text fields can span the full width of the display. For medium and expanded breakpoints, text fields should be bound by flexible margins or other containers, and should not span the full width of a large screen.");gap(Dp(24.0));contact_form(true);gap(Dp(24.0));subheading("Density".into());prose("Dense text fields enable people to scan and take action on large amounts of information.");gap(Dp(24.0));subheading("Avoid applying density by default".into());prose("Don't apply density to text fields by default. This lowers their targets below the recommended 48 × 48 CSS pixels. Instead, give people a way to choose a higher density. Keep all targets that revert the density setting at a minimum of 48 × 48 CSS pixels each.");gap(Dp(24.0));field_figure(true,false,false,true);})},
         ]},
         ArticlePage{title:"Accessibility",intro:None,sections:vec![
-            SpecSection{title:"Use cases",content:RenderSlot::new(|| {prose("Let people navigate to a field, enter information, understand supporting and error text, and reach interactive trailing icons.");gap(Dp(24.0));panel(RenderSlot::new(|| {form_field("Password".into(),true,9);}));})},
-            SpecSection{title:"Interaction & style",content:RenderSlot::new(|| {prose("Both variants have the same functionality. Clear container boundaries and changes in stroke show interaction. Outlined containers should contrast against their background by at least 3:1.");gap(Dp(24.0));field_figure(false,false,false,true);gap(Dp(24.0));field_figure(true,false,false,true);})},
-            SpecSection{title:"Keyboard navigation",content:RenderSlot::new(|| {spec_table(vec!["Key".into(),"Action".into()],vec![vec!["Tab".into(),"Focus an enabled field or interactive trailing icon".into()]]);gap(Dp(24.0));contact_form(true);})},
+            SpecSection{title:"Use cases",content:RenderSlot::new(|| {prose("User should be able to:");gap(Dp(16.0));bullets(vec!["Navigate to and activate a text field with assistive technology".into(),"Input information into the text field".into(),"Receive and understand supporting text and error messages".into(),"Navigate to and select interactive icons".into()]);gap(Dp(24.0));panel(RenderSlot::new(|| {form_field("Password".into(),true,9);}));})},
+            SpecSection{title:"Interaction & style",content:RenderSlot::new(|| {prose("The containers for both filled and outlined text fields provide the same functionality. Changes to color and thickness of stroke help provide clear visual cues for interaction. Make sure the container outline has a minimum contrast of 3:1 to the background.");gap(Dp(24.0));field_figure(false,false,false,true);gap(Dp(24.0));field_figure(true,false,false,true);gap(Dp(24.0));guidance::outline_contrast();})},
+            SpecSection{title:"Keyboard navigation",content:RenderSlot::new(|| {spec_table(vec!["Key".into(),"Action".into()],vec![vec!["Tab".into(),"Focus lands on (non-disabled) text field".into()]]);gap(Dp(24.0));contact_form(true);})},
             SpecSection{title:"Labeling elements",content:RenderSlot::new(field_accessibility_labels)},
         ]},
     ]);
@@ -407,6 +410,7 @@ fn detail(outlined: bool) {
             });
             gap(Dp(112.0));
             subheading(format!("{title} color"));
+            prose("Color values are implemented through design tokens. For design, this means working with color values that correspond with tokens. For implementation, a color value will be a token that references a value.");
             gap(Dp(24.0));
             for dark in [false, true] {
                 field_color_scheme(outlined, dark);
@@ -440,42 +444,54 @@ fn detail(outlined: bool) {
             });
             gap(Dp(88.0));
             subheading(format!("{title} states"));
+            prose("States are visual representations used to communicate the status of a component or interactive element.");
             gap(Dp(24.0));
             for dark in [false, true] {
                 field_state_matrix(outlined, false, dark);
             }
             gap(Dp(24.0));
             anatomy_legend(vec![
-                "Enabled, empty",
-                "Focused, empty",
-                "Hovered, empty",
-                "Disabled, empty",
-                "Enabled, populated",
-                "Focused, populated",
-                "Hovered, populated",
-                "Disabled, populated",
+                "Enabled (empty)",
+                "Focused (empty)",
+                "Hovered (empty)",
+                "Disabled (empty)",
+                "Enabled (populated)",
+                "Focused (populated)",
+                "Hovered (populated)",
+                "Disabled (populated)",
             ]);
             gap(Dp(112.0));
             subheading(format!("{title} error states"));
+            prose("Error states are visual representations used to communicate the status of a component or interactive element. An error message can display instructions on how to fix it. Error messages are displayed below the text field as supporting text until fixed.");
             gap(Dp(24.0));
             for dark in [false, true] {
                 field_state_matrix(outlined, true, dark);
             }
             gap(Dp(24.0));
             anatomy_legend(vec![
-                "Enabled error, empty",
-                "Focused error, empty",
-                "Hovered error, empty",
-                "Enabled error, populated",
-                "Focused error, populated",
-                "Hovered error, populated",
+                "Enabled (empty)",
+                "Focused (empty)",
+                "Hovered (empty)",
+                "Enabled (populated)",
+                "Focused (populated)",
+                "Hovered (populated)",
             ]);
             gap(Dp(112.0));
             subheading(format!("{title} measurements"));
             gap(Dp(24.0));
             for variant in 0..3 {
                 field_measurements(outlined, variant);
-                gap(Dp(24.0));
+                gap(Dp(16.0));
+                text()
+                    .content(
+                        [
+                            "Padding and size measurements without icons",
+                            "Padding and size measurements with icons",
+                            "Padding and size measurements with supporting text and character count",
+                        ][variant],
+                    )
+                    .style(type_style(14.0, 20.0));
+                gap(Dp(32.0));
             }
             spec_table(
                 vec!["Attribute".into(), "Value".into()],
@@ -532,12 +548,12 @@ fn detail(outlined: bool) {
             gap(Dp(24.0));
             anatomy_legend(vec![
                 "Supporting text",
-                "Trailing clear icon",
+                "Trailing icon",
                 "Leading icon",
                 "Leading and trailing icons",
                 "Prefix",
                 "Suffix",
-                "Multiline input",
+                "Multi-line text field",
             ]);
             gap(Dp(48.0));
             subheading("Try the configuration options".into());
@@ -587,8 +603,15 @@ fn anatomy_legend(items: Vec<&'static str>) {
     });
 }
 
+#[path = "text_fields_guidance.rs"]
+mod guidance;
+
+#[path = "text_fields_tokens.rs"]
+mod token_sets;
+
 #[tessera]
 fn tokens() {
+    token_sets::token_sets();
     spec_table(
         vec!["Element".into(), "Token value".into()],
         vec![
@@ -794,8 +817,111 @@ fn field_annotation_geometry(
 }
 
 #[tessera]
+fn bullets(items: Vec<String>) {
+    for item in items {
+        row().children(move || {
+            text()
+                .content("•")
+                .style(type_style(16.0, 24.0))
+                .modifier(Modifier::new().width(Dp(24.0)));
+            text()
+                .content(item.clone())
+                .style(type_style(16.0, 24.0))
+                .modifier(Modifier::new().weight(1.0));
+        });
+        gap(Dp(12.0));
+    }
+}
+
+#[tessera]
 fn overview_variants() {
+    bullets(vec![
+        "Make sure text fields look interactive".into(),
+        "Two variants: filled and outlined".into(),
+        "The text field's state (blank, with input, error, etc) should be visible at a glance"
+            .into(),
+        "Keep labels and error messages brief and easy to act on".into(),
+        "Text fields commonly appear in forms and dialogs".into(),
+    ]);
+    gap(Dp(48.0));
     field_variant_hero(true);
+    gap(Dp(16.0));
+    anatomy_legend(vec!["Filled text field", "Outlined text field"]);
+}
+
+#[tessera]
+fn availability() {
+    spec_table(
+        vec!["Type".into(), "Resource".into(), "Status".into()],
+        vec![
+            vec![
+                "Design".into(),
+                "Design Kit (Figma)".into(),
+                "Available".into(),
+            ],
+            vec![
+                "Implementation".into(),
+                "Flutter".into(),
+                "Available".into(),
+            ],
+            vec![
+                "Implementation".into(),
+                "Jetpack Compose".into(),
+                "Available".into(),
+            ],
+            vec![
+                "Implementation".into(),
+                "Android Views (MDC-Android)".into(),
+                "Available".into(),
+            ],
+            vec!["Implementation".into(), "Web".into(), "Available".into()],
+        ],
+    );
+}
+
+#[tessera]
+fn differences() {
+    bullets(vec![
+        "Color: New color mappings and compatibility with dynamic color".into(),
+    ]);
+    gap(Dp(24.0));
+    panel(RenderSlot::new(|| {
+        row()
+            .main_axis_alignment(MainAxisAlignment::Center)
+            .modifier(Modifier::new().fill_max_width())
+            .children(|| {
+                m2_difference_field(false);
+                spacer().modifier(Modifier::new().width(Dp(32.0)));
+                m2_difference_field(true);
+            });
+    }));
+    gap(Dp(16.0));
+    text()
+        .content("Text fields have new color mappings")
+        .style(type_style(14.0, 20.0));
+}
+
+#[tessera]
+fn m2_difference_field(outlined: bool) {
+    let field = if outlined {
+        TextFieldBuilder::outlined()
+    } else {
+        TextFieldBuilder::filled()
+    };
+    field
+        .label("Name")
+        .initial_text("Pietersen")
+        .accessibility_label(if outlined {
+            "Outlined name"
+        } else {
+            "Filled name"
+        })
+        .min_width(Dp::ZERO)
+        .presentation_state(InteractionVisualState::Focus)
+        .modifier(Modifier::new().width(Dp(220.0)))
+        .trailing_icon_shared(RenderSlot::new(|| {
+            icon().painter(filled::CANCEL_SVG).size(Dp(24.0));
+        }));
 }
 
 #[tessera]
@@ -1145,23 +1271,25 @@ fn field_guideline_anatomy() {
     gap(Dp(24.0));
     subheading("Containers".into());
     prose(
-        "Filled containers have rounded top corners and a bottom indicator. Outlined containers have a rounded outline around the field.",
+        "Containers improve the discoverability of text fields by creating contrast between the text field and surrounding content. The container of an outlined text field has rounded corners, while the container of a filled text field has rounded top corners and square bottom corners.",
     );
     gap(Dp(24.0));
     field_container_diagram();
     gap(Dp(24.0));
     subheading("Label text".into());
     prose(
-        "Keep labels short, visible and aligned with input. Do not truncate labels or wrap them across lines.",
+        "Label text tells people what information is requested. Every text field should have a label. Label text should be aligned with the input text and always visible. It shouldn't be truncated or take up multiple lines.",
     );
     gap(Dp(24.0));
     panel(RenderSlot::new(|| {
         form_field("Label".into(), false, 0);
     }));
     gap(Dp(24.0));
+    guidance::label_misuse();
+    gap(Dp(24.0));
     subheading("Adjacent label".into());
     prose(
-        "An adjacent label aligns to the leading edge and must name the field for assistive technology.",
+        "A text field doesn't require a label if the field's purpose is indicated by a separate, adjacent label. Adjacent labels should be aligned to the leading edge of the text field container.",
     );
     gap(Dp(24.0));
     panel(RenderSlot::new(|| {
@@ -1170,7 +1298,7 @@ fn field_guideline_anatomy() {
     gap(Dp(24.0));
     subheading("Required text indicator".into());
     prose(
-        "Append an asterisk to every required label and explain it in supporting text or at the start of the form.",
+        "To show a field is required, display an asterisk (*) next to the label text, and explain that asterisks indicate required fields in supporting text or a single note at the beginning of the form. Indicate all required fields.",
     );
     gap(Dp(24.0));
     panel(RenderSlot::new(|| {
@@ -1179,12 +1307,10 @@ fn field_guideline_anatomy() {
     gap(Dp(24.0));
     subheading("Input text".into());
     prose(
-        "Use a single line for short responses, multiline input for longer answers and a fixed-height text area when substantial text is expected.",
+        "Input text is text a person has entered into a text field. Single-line fields display only one line of text, multi-line fields grow to accommodate multiple lines, and text areas are fixed-height fields.",
     );
     gap(Dp(24.0));
-    panel(RenderSlot::new(|| {
-        form_field("Description".into(), true, 3);
-    }));
+    guidance::input_modes();
     gap(Dp(24.0));
     subheading("Prefix text".into());
     panel(RenderSlot::new(|| {
@@ -1197,7 +1323,9 @@ fn field_guideline_anatomy() {
     }));
     gap(Dp(24.0));
     subheading("Supporting text & character counter".into());
-    prose("Describe the requested input and show the used/maximum count when a limit exists.");
+    prose(
+        "Supporting text conveys additional information about the input field, such as how it will be used. If there is a character or word limit, include a counter that displays the ratio of characters used and the total limit.",
+    );
     gap(Dp(24.0));
     panel(RenderSlot::new(|| {
         form_field("Description".into(), false, 6);
@@ -1205,15 +1333,19 @@ fn field_guideline_anatomy() {
     gap(Dp(24.0));
     subheading("Error text".into());
     prose(
-        "Replace supporting text with an actionable error message to avoid shifting surrounding content.",
+        "For text fields that validate their content, such as passwords, replace supporting text with error text. Swapping supporting text with error text prevents new lines of text from bumping content and changing the layout.",
     );
     gap(Dp(24.0));
     panel(RenderSlot::new(|| {
         form_field("Email".into(), true, 7);
     }));
     gap(Dp(24.0));
+    guidance::error_swap();
+    gap(Dp(24.0));
     subheading("Error icon".into());
-    prose("An error icon provides an additional cue alongside color and error text.");
+    prose(
+        "It's strongly recommended to show an error icon when the text field is in the error state. This highlights the error for people with visual impairments and provides an additional sensory indicator.",
+    );
     gap(Dp(24.0));
     field_error_icon_diagram();
     gap(Dp(24.0));
@@ -1225,7 +1357,9 @@ fn field_guideline_anatomy() {
     field_icons_diagram();
     gap(Dp(24.0));
     subheading("Read-only fields".into());
-    prose("Keep read-only fields visually consistent and label their state clearly.");
+    prose(
+        "Read-only text fields display pre-filled text that people cannot edit. A read-only text field is styled the same as a regular text field and is clearly labeled as read-only.",
+    );
     gap(Dp(24.0));
     panel(RenderSlot::new(|| {
         form_field("Read-only label".into(), false, 8);

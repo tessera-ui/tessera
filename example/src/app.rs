@@ -30,12 +30,40 @@ use crate::pages::{
 #[derive(Clone, Copy)]
 pub(crate) struct MaterialNavigation(pub State<Option<usize>>);
 
+#[cfg(test)]
+#[derive(Clone, Copy)]
+pub(crate) struct AppNavigationTestHandles {
+    pub router: State<RouterController>,
+    pub material: State<Option<usize>>,
+    pub directory: State<SideSheetController>,
+}
+
+#[cfg(test)]
+thread_local! {
+    static TEST_NAVIGATION: std::cell::Cell<Option<AppNavigationTestHandles>> = const {
+        std::cell::Cell::new(None)
+    };
+}
+
+#[cfg(test)]
+pub(crate) fn test_navigation() -> AppNavigationTestHandles {
+    TEST_NAVIGATION
+        .get()
+        .expect("mounted example app navigation")
+}
+
 #[tessera]
 pub fn app() {
     material_theme().child(|| {
         let side_sheet_controller = remember(|| SideSheetController::new(true));
         let nav_controller = remember(|| RouterController::with_root(HomePageDestination {}));
         let selected = remember(|| None::<usize>);
+        #[cfg(test)]
+        TEST_NAVIGATION.set(Some(AppNavigationTestHandles {
+            router: nav_controller,
+            material: selected,
+            directory: side_sheet_controller,
+        }));
         let content = RenderSlot::new(move || {
             scaffold()
                 .top_bar(move || {
@@ -158,7 +186,31 @@ pub fn app() {
                         });
                 });
         });
-        provide_context(|| MaterialNavigation(selected), move || content.render());
+        let rail_shell = RenderSlot::new(move || {
+            crate::pages::live_rail_host(
+                side_sheet_controller,
+                nav_controller,
+                selected,
+                content.clone(),
+            );
+        });
+        let side_sheet_shell = RenderSlot::new(move || {
+            crate::pages::live_side_sheet_host(
+                side_sheet_controller,
+                nav_controller,
+                selected,
+                rail_shell.clone(),
+            );
+        });
+        let shell = RenderSlot::new(move || {
+            crate::pages::live_drawer_host(
+                side_sheet_controller,
+                nav_controller,
+                selected,
+                side_sheet_shell.clone(),
+            );
+        });
+        provide_context(|| MaterialNavigation(selected), move || shell.render());
     });
 }
 

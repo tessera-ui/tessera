@@ -39,7 +39,7 @@ impl PlacementModifierNode for ExactOffset {
     }
 }
 
-fn at(x: f64, y: f64) -> Modifier {
+pub(super) fn at(x: f64, y: f64) -> Modifier {
     Modifier::new().push_placement(ExactOffset { x: Dp(x), y: Dp(y) })
 }
 
@@ -180,8 +180,10 @@ fn color_half(side: bool, modal: bool, dark: bool, notice: State<String>) {
             } else {
                 boxed()
                     .modifier(
+                        // The frame extends above the half; `size` would clamp it to
+                        // the half height and leave only a sliver of the phone.
                         at(298.0, -480.0)
-                            .size(Dp(428.0), Dp(909.0))
+                            .required_size(Dp(428.0), Dp(909.0))
                             .background_with_shape(
                                 scheme.outline_variant,
                                 Shape::rounded_rectangle(Dp(28.0)),
@@ -190,7 +192,7 @@ fn color_half(side: bool, modal: bool, dark: bool, notice: State<String>) {
                     .children(move || {
                         spacer().modifier(
                             at(8.0, 8.0)
-                                .size(Dp(412.0), Dp(893.0))
+                                .required_size(Dp(412.0), Dp(893.0))
                                 .background_with_shape(
                                     scheme.surface,
                                     Shape::rounded_rectangle(Dp(20.0)),
@@ -199,7 +201,7 @@ fn color_half(side: bool, modal: bool, dark: bool, notice: State<String>) {
                         spacer().modifier(
                             at(8.0, 8.0)
                                 .then(watch_precise(geometry, "scrim"))
-                                .size(Dp(412.0), Dp(893.0))
+                                .required_size(Dp(412.0), Dp(893.0))
                                 .background_with_shape(
                                     scheme.scrim.with_alpha(0.32),
                                     Shape::rounded_rectangle(Dp(20.0)),
@@ -223,7 +225,7 @@ fn color_half(side: bool, modal: bool, dark: bool, notice: State<String>) {
                     )
                     .children(move || {
                         spacer().modifier(
-                            at(190.0, 16.0)
+                            at(190.0, 22.0)
                                 .then(watch_precise(geometry, "handle"))
                                 .size(Dp(32.0), Dp(4.0))
                                 .background_with_shape(scheme.on_surface_variant, Shape::CAPSULE),

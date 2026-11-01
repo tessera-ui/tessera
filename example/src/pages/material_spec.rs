@@ -18,6 +18,12 @@ use tessera_components::{
 };
 use tessera_ui::{Color, Dp, Modifier, RenderSlot, tessera};
 
+#[cfg(all(target_family = "wasm", feature = "md3-diagnostics"))]
+pub(crate) use self::drawers::{diagnostic_drawer_figures, diagnostic_drawer_observations};
+pub(crate) use self::{
+    drawers::live_drawer_host, navigation_rail::live_rail_host, side_sheets::live_side_sheet_host,
+};
+
 mod action_articles;
 mod annotations;
 mod app_bars;
@@ -65,6 +71,14 @@ mod text_fields_accessibility;
 mod time_pickers;
 mod toolbars;
 mod tooltips;
+
+pub(crate) fn drawer_article_selected(selected: Option<usize>) -> bool {
+    selected.is_some() && selected == catalog::component_index(11)
+}
+
+pub(crate) fn rail_article_selected(selected: Option<usize>) -> bool {
+    selected.is_some() && selected == catalog::component_index(32)
+}
 
 const BACKGROUND: Color = Color::from_rgb(0.991102097, 0.964686248, 1.000000000);
 const PANEL: Color = Color::from_rgb(0.938685728, 0.879622397, 0.921581856);

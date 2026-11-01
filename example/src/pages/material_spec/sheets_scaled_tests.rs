@@ -60,21 +60,12 @@ fn fixture() {
                         spacer().modifier(Modifier::new().height(Dp(160.0)));
                         match SCENE.get() {
                             0 => {
-                                figure(false, true, false);
+                                figures::anatomy_figure(false);
                             }
                             1 => {
-                                figure(false, true, true);
+                                figures::measurements_figure();
                             }
                             2 => {
-                                figure(true, false, false);
-                            }
-                            3 => {
-                                figure(true, true, false);
-                            }
-                            4 => {
-                                figure(true, true, true);
-                            }
-                            5 => {
                                 music_context();
                             }
                             _ => {
@@ -160,11 +151,10 @@ fn renderer(scene: usize, samples: u32) -> HeadlessRenderer {
     renderer
 }
 
-fn assert_figure(scene: usize, width: f32) {
+fn assert_figure(renderer: &HeadlessRenderer, scene: usize, width: f32) {
     let geometry = GEOMETRY.get().unwrap().get();
     let root = geometry["figure"];
-    let canonical_width = if scene >= 2 { 1280.0 } else { 1024.0 };
-    assert_eq!(root.local_to_window.scale(), width / canonical_width);
+    assert_eq!(root.local_to_window.scale(), width / 1024.0);
     assert_eq!(
         (
             root.local_to_window.translation().x,
@@ -172,30 +162,58 @@ fn assert_figure(scene: usize, width: f32) {
         ),
         (10.25, 80.5)
     );
-    assert_eq!(root.local_size.width.0, canonical_width as i32);
-    assert_eq!(root.local_size.height.0, [502, 836, 1045, 1045, 500][scene]);
+    assert_eq!(root.local_size.width.0, 1024);
+    assert_eq!(root.local_size.height.0, [502, 836][scene]);
+    let near = |actual: f64, expected: f64| (actual - expected).abs() < 0.01;
     let container = annotations::relative_precise(&geometry, "container").unwrap();
-    assert!((container.w - if scene >= 2 { 400.0 } else { 640.0 }).abs() < 0.001);
+    let top = [166.0, 399.0][scene];
+    assert!(
+        near(container.x, 192.0) && near(container.y, top) && near(container.w, 640.0),
+        "the 640dp sheet must stay centred on the canonical stage: {container:?}"
+    );
+    let handle = annotations::relative_precise(&geometry, "handle").unwrap();
+    assert!(
+        near(handle.x + handle.w / 2.0, 512.0) && near(handle.y, top + 22.0),
+        "the drag handle must keep the 22dp top padding from the measurements table: {handle:?}"
+    );
+    let screen = annotations::relative_precise(&geometry, "screen").unwrap();
+    assert!(
+        near(container.y + container.h, screen.y + screen.h),
+        "the sheet must reach the bottom of the phone screen: container={container:?}, screen={screen:?}"
+    );
+    if scene == 0 {
+        let scale = f64::from(width) / 1024.0;
+        for (number, center) in [(1, 284.0), (2, 512.0), (3, 969.0)] {
+            let bounds = node(
+                renderer,
+                &format!("Bottom sheet marker {number}"),
+                Role::Note,
+            )
+            .bounds()
+            .unwrap();
+            let x = ((bounds.x0 + bounds.x1) / 2.0 - 10.25) / scale;
+            assert!(
+                (x - center).abs() < 0.01,
+                "anatomy marker {number} must stay on its leader line: {x}"
+            );
+        }
+        let marker = node(renderer, "Bottom sheet marker 1", Role::Note)
+            .bounds()
+            .unwrap();
+        assert!(((marker.y1 - 80.5) / scale - 137.0).abs() < 0.01);
+    }
 }
 
 #[test]
-#[ignore = "requires a native GPU adapter for fractional sheet diagram geometry and pointer input"]
-fn sheet_diagrams_keep_canonical_annotations_and_native_actions_after_resize() {
+#[ignore = "requires a native GPU adapter for fractional sheet diagram geometry"]
+fn sheet_diagrams_keep_markers_on_native_geometry_after_resize() {
     for samples in [1, 4] {
-        for scene in 0..5 {
+        for scene in 0..2 {
             let mut renderer = renderer(scene, samples);
-            assert_figure(scene, 640.0);
+            assert_figure(&renderer, scene, 640.0);
             renderer.resize(512, 800);
             renderer.render_frames(16);
-            assert_figure(scene, 512.0);
-            if scene >= 2 {
-                click(&mut renderer, "Sheet figure close", Role::Button);
-                assert_eq!(NOTICE.get().unwrap().get(), "Sheet close action selected");
-                if scene >= 3 {
-                    click(&mut renderer, "Sheet figure back", Role::Button);
-                    assert_eq!(NOTICE.get().unwrap().get(), "Back action selected");
-                }
-            }
+            assert_figure(&renderer, scene, 512.0);
         }
     }
 }
@@ -204,7 +222,7 @@ fn sheet_diagrams_keep_canonical_annotations_and_native_actions_after_resize() {
 #[ignore = "requires a native GPU adapter for scaled music and filter controls"]
 fn narrow_sheet_contexts_keep_playback_photo_updates_and_reopened_filter_state() {
     for samples in [1, 4] {
-        let mut music = renderer(5, samples);
+        let mut music = renderer(2, samples);
         music.resize(512, 800);
         music.render_frames(16);
         let pause = node(&music, "Pause", Role::Button).bounds().unwrap();
@@ -234,7 +252,7 @@ fn narrow_sheet_contexts_keep_playback_photo_updates_and_reopened_filter_state()
             "Next must update the real cropped cover photo"
         );
         drop(music);
-        let mut filters = renderer(6, samples);
+        let mut filters = renderer(3, samples);
         filters.resize(512, 800);
         filters.render_frames(16);
         assert_eq!(

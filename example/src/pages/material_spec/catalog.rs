@@ -683,7 +683,9 @@ mod tests {
         let nodes = renderer.accessibility_snapshot().unwrap().nodes;
         let root = nodes
             .iter()
-            .find(|(_, node)| node.role() == Role::Group && node.label() == Some(group))
+            .find(|(_, node)| {
+                matches!(node.role(), Role::Group | Role::Navigation) && node.label() == Some(group)
+            })
             .unwrap_or_else(|| panic!("missing group {group}"));
         let mut descendants = root.1.children().to_vec();
         while let Some(id) = descendants.pop() {
@@ -2003,6 +2005,7 @@ mod tests {
                         .bounds()
                         .unwrap();
                     click(&mut renderer, access);
+                    activate_navigation(&mut renderer, "Keyboard navigation", Role::Link);
                     let brush = control(&renderer, "Brush");
                     click(&mut renderer, brush.bounds().unwrap());
                     bounds(&renderer, "Brush activated");
@@ -2441,7 +2444,11 @@ mod tests {
             }
             renderer.resize(390, 900);
             renderer.render_frames(8);
-            compose_navigation_target(&mut renderer, component.title, Role::Heading);
+            let article_title = match component.demo {
+                22 => "Split button",
+                _ => component.title,
+            };
+            compose_navigation_target(&mut renderer, article_title, Role::Heading);
             let title = renderer
                 .accessibility_snapshot()
                 .unwrap()
@@ -2450,12 +2457,7 @@ mod tests {
                 .find(|(_, node)| {
                     node.role() == Role::Heading
                         && node.level() == Some(1)
-                        && node.label()
-                            == Some(if component.demo == 19 {
-                                "Floating action buttons (FABs)"
-                            } else {
-                                component.title
-                            })
+                        && node.label() == Some(article_title)
                 })
                 .expect("article title")
                 .1
@@ -2767,7 +2769,15 @@ mod tests {
                     );
                     let clear = control(&renderer, "Clear Configured Filled");
                     click(&mut renderer, clear.bounds().unwrap());
-                    let input = bounds(&renderer, "Configured Filled input");
+                    let input = scoped_node(
+                        &renderer,
+                        "Configured Filled field preview",
+                        "Label",
+                        Role::TextInput,
+                    )
+                    .expect("configured editable field")
+                    .bounds()
+                    .unwrap();
                     click(&mut renderer, input);
                     renderer.inject_text("Ada");
                     renderer.render_frames(8);
@@ -2778,7 +2788,15 @@ mod tests {
                         Toggled::False,
                         Toggled::True,
                     );
-                    let input = bounds(&renderer, "Configured Filled input");
+                    let input = scoped_node(
+                        &renderer,
+                        "Configured Filled field preview",
+                        "Label",
+                        Role::TextInput,
+                    )
+                    .expect("configured editable field")
+                    .bounds()
+                    .unwrap();
                     click(&mut renderer, input);
                     renderer.inject_text("ignored");
                     renderer.render_frames(8);
@@ -2818,7 +2836,15 @@ mod tests {
                     );
                     let clear = control(&renderer, "Clear Configured Outlined");
                     click(&mut renderer, clear.bounds().unwrap());
-                    let input = bounds(&renderer, "Configured Outlined input");
+                    let input = scoped_node(
+                        &renderer,
+                        "Configured Outlined field preview",
+                        "Label",
+                        Role::TextInput,
+                    )
+                    .expect("configured editable field")
+                    .bounds()
+                    .unwrap();
                     click(&mut renderer, input);
                     renderer.inject_text("Paris");
                     renderer.render_frames(8);
@@ -2842,176 +2868,72 @@ mod tests {
                     );
                 }
                 4 => {
-                    let plain = scoped_node(
-                        &renderer,
-                        "Configured Plain tooltip preview",
-                        "Add to favorites",
-                        Role::Tooltip,
-                    )
-                    .unwrap()
-                    .bounds()
-                    .unwrap();
-                    assert_eq!(plain.height(), 24.0);
-                    assert!(plain.width() <= 200.0);
-                    let dismiss = control(&renderer, "Dismiss Configured Plain");
-                    click(&mut renderer, dismiss.bounds().unwrap());
-                    bounds(&renderer, "Configured Plain visibility: Hidden");
-                    let show = control(&renderer, "Show Configured Plain");
-                    click(&mut renderer, show.bounds().unwrap());
-                    bounds(&renderer, "Configured Plain visibility: Shown");
-                    toggle(
-                        &mut renderer,
-                        "Configured Plain long message",
-                        Toggled::False,
-                        Toggled::True,
+                    select_article_page(&mut renderer, "Guidelines");
+                    activate_navigation(&mut renderer, "Behavior", Role::Link);
+                    let favorite = control(&renderer, "Add to favorites");
+                    click(&mut renderer, favorite.bounds().unwrap());
+                    control(&renderer, "Remove from favorites");
+                    let about = control(&renderer, "About collections");
+                    click(&mut renderer, about.bounds().unwrap());
+                    let snapshot = renderer.accessibility_snapshot().unwrap();
+                    assert!(
+                        snapshot
+                            .nodes
+                            .iter()
+                            .any(|(_, node)| node.role() == Role::Dialog
+                                && node.label() == Some("Collections"))
                     );
-                    let popup=scoped_node(&renderer,"Configured Plain tooltip preview","Add this item to your collection so you can find it again later. You can change the collection at any time.",Role::Tooltip).unwrap().bounds().unwrap();
-                    assert!(popup.height() > 24.0 && popup.width() <= 200.0);
-                    activate_navigation(&mut renderer, "Rich tooltip", Role::Link);
-                    let rich = scoped_node(
-                        &renderer,
-                        "Configured Rich tooltip preview",
-                        "Rich tooltip",
-                        Role::Dialog,
-                    )
-                    .unwrap()
-                    .bounds()
-                    .unwrap();
-                    assert!(rich.width() <= 320.0);
-                    let action = scoped_node(
-                        &renderer,
-                        "Configured Rich tooltip preview",
-                        "Learn more",
-                        Role::Button,
-                    )
-                    .unwrap();
+                    let action = control(&renderer, "Got it");
                     click(&mut renderer, action.bounds().unwrap());
-                    renderer.render_frames(5);
-                    bounds(&renderer, "Configured Rich actions: 1");
-                    bounds(&renderer, "Configured Rich visibility: Hidden");
-                    let show = control(&renderer, "Show Configured Rich");
-                    click(&mut renderer, show.bounds().unwrap());
-                    bounds(&renderer, "Configured Rich visibility: Shown");
+                    bounds(&renderer, "Collection guidance acknowledged.");
                 }
                 31 => {
-                    renderer.render_frames(5);
-                    let horizontal = scoped_node(
-                        &renderer,
-                        "Configured navigation preview",
-                        "Inbox",
-                        Role::Tab,
-                    )
-                    .unwrap()
-                    .bounds()
-                    .unwrap();
-                    let layout = control(&renderer, "Cycle navigation item layout");
-                    click(&mut renderer, layout.bounds().unwrap());
-                    renderer.render_frames(30);
-                    let vertical = scoped_node(
-                        &renderer,
-                        "Configured navigation preview",
-                        "Inbox",
-                        Role::Tab,
-                    )
-                    .unwrap()
-                    .bounds()
-                    .unwrap();
-                    assert!(
-                        vertical.width() > horizontal.width(),
-                        "vertical {vertical:?}, horizontal {horizontal:?}"
-                    );
-                    assert_eq!(vertical.height(), 64.0);
-                    click(&mut renderer, vertical);
-                    bounds(&renderer, "Configured destination: Inbox");
-                    for _ in 0..2 {
-                        let count = control(&renderer, "Cycle navigation destination count");
-                        click(&mut renderer, count.bounds().unwrap());
-                    }
-                    let settings = scoped_node(
-                        &renderer,
-                        "Configured navigation preview",
-                        "Settings",
-                        Role::Tab,
-                    )
-                    .unwrap();
-                    click(&mut renderer, settings.bounds().unwrap());
-                    bounds(&renderer, "Configured destination: Settings");
-                    let count = control(&renderer, "Cycle navigation destination count");
-                    click(&mut renderer, count.bounds().unwrap());
+                    let group = "Configured navigation bar example";
+                    let saved = scoped_node(&renderer, group, "Saved", Role::Tab)
+                        .expect("configured Saved destination");
+                    assert_eq!(saved.bounds().unwrap().height(), 72.0);
+                    click(&mut renderer, saved.bounds().unwrap());
                     bounds(&renderer, "Configured destination: Saved");
-                    assert!(
-                        scoped_node(
-                            &renderer,
-                            "Configured navigation preview",
-                            "Settings",
-                            Role::Tab
-                        )
-                        .is_none()
-                    );
+                    let count = control(&renderer, "Cycle destination count");
+                    click(&mut renderer, count.bounds().unwrap());
+                    let settings = scoped_node(&renderer, group, "Settings", Role::Tab)
+                        .expect("fifth destination");
+                    assert_eq!(settings.bounds().unwrap().height(), 72.0);
+                    let count = control(&renderer, "Cycle destination count");
+                    click(&mut renderer, count.bounds().unwrap());
+                    assert!(scoped_node(&renderer, group, "Settings", Role::Tab).is_none());
+                    bounds(&renderer, "Configured destination: Saved");
+                    let labels = control(&renderer, "Toggle selected-only labels");
+                    click(&mut renderer, labels.bounds().unwrap());
+                    assert!(scoped_node(&renderer, group, "Saved", Role::Tab).is_some());
+                    let badge = control(&renderer, "Toggle Inbox badge");
+                    click(&mut renderer, badge.bounds().unwrap());
+                    assert!(scoped_node(&renderer, group, "Inbox", Role::Tab).is_some());
                 }
                 32 => {
-                    let collapsed = scoped_node(
-                        &renderer,
-                        "Configured navigation preview",
-                        "Inbox",
-                        Role::Tab,
-                    )
-                    .unwrap()
-                    .bounds()
-                    .unwrap();
-                    click(&mut renderer, collapsed);
-                    bounds(&renderer, "Configured destination: Inbox");
-                    toggle(
-                        &mut renderer,
-                        "Expand navigation rail",
-                        Toggled::False,
-                        Toggled::True,
-                    );
+                    select_article_page(&mut renderer, "Guidelines");
+                    activate_navigation(&mut renderer, "Behavior", Role::Link);
+                    let group = "Interactive mail navigation";
+                    let inbox = scoped_node(&renderer, group, "Inbox", Role::Tab)
+                        .expect("interactive Inbox destination");
+                    click(&mut renderer, inbox.bounds().unwrap());
+                    bounds(&renderer, "Collapsed destination: Inbox");
+                    let expand = control(&renderer, "Expand navigation rail");
+                    click(&mut renderer, expand.bounds().unwrap());
                     renderer.render_frames(30);
-                    let expanded = scoped_node(
-                        &renderer,
-                        "Configured navigation preview",
-                        "Inbox",
-                        Role::Tab,
-                    )
-                    .unwrap()
-                    .bounds()
-                    .unwrap();
-                    assert_eq!(collapsed.width(), 96.0);
-                    assert_eq!(expanded.width(), 220.0);
-                    toggle(
-                        &mut renderer,
-                        "Hide collapsed rail",
-                        Toggled::False,
-                        Toggled::True,
-                    );
-                    toggle(
-                        &mut renderer,
-                        "Expand navigation rail",
-                        Toggled::True,
-                        Toggled::False,
-                    );
+                    bounds(&renderer, "Expanded destination: Inbox");
+                    let selected = scoped_node(&renderer, group, "Inbox", Role::Tab).unwrap();
+                    assert_eq!(selected.is_selected(), Some(true));
+                    let collapse = control(&renderer, "Collapse navigation rail");
+                    click(&mut renderer, collapse.bounds().unwrap());
                     renderer.render_frames(30);
-                    assert!(
-                        scoped_node(
-                            &renderer,
-                            "Configured navigation preview",
-                            "Inbox",
-                            Role::Tab
-                        )
-                        .is_none()
+                    bounds(&renderer, "Collapsed destination: Inbox");
+                    assert_eq!(
+                        scoped_node(&renderer, group, "Inbox", Role::Tab)
+                            .unwrap()
+                            .is_selected(),
+                        Some(true)
                     );
-                    bounds(&renderer, "Configured destination: Inbox");
-                    toggle(
-                        &mut renderer,
-                        "Expand navigation rail",
-                        Toggled::False,
-                        Toggled::True,
-                    );
-                    renderer.render_frames(30);
-                    let compose = control(&renderer, "Configured compose");
-                    click(&mut renderer, compose.bounds().unwrap());
-                    bounds(&renderer, "Configured compositions: 1");
                 }
                 21 => {
                     let flights =
@@ -3126,75 +3048,51 @@ mod tests {
                     assert_eq!(contained.bounds(), indicator.bounds());
                 }
                 7 => {
-                    for label in ["Configured linear progress", "Configured circular progress"] {
-                        let indicator = scoped_node(
-                            &renderer,
+                    let labels = [
+                        "Configuration linear linear progress",
+                        "Configuration circular circular progress",
+                    ];
+                    let indicator = |renderer: &HeadlessRenderer, label: &str| {
+                        scoped_node(
+                            renderer,
                             "Progress indicators specifications",
                             label,
                             Role::ProgressIndicator,
                         )
-                        .unwrap();
-                        assert_eq!(indicator.numeric_value(), Some(0.5));
+                        .expect("configured progress indicator")
+                    };
+                    for label in labels {
+                        assert_eq!(indicator(&renderer, label).numeric_value(), Some(0.5));
                     }
-                    let advance = control(&renderer, "Advance progress");
-                    click(&mut renderer, advance.bounds().unwrap());
-                    bounds(&renderer, "Task progress: 75%");
-                    toggle(
-                        &mut renderer,
-                        "Wavy progress",
-                        Toggled::False,
-                        Toggled::True,
+                    assert_eq!(
+                        indicator(&renderer, labels[1]).bounds().unwrap().height(),
+                        40.0
                     );
-                    toggle(
-                        &mut renderer,
-                        "Thick progress",
-                        Toggled::False,
-                        Toggled::True,
+                    let wavy = control(&renderer, "Progress configuration wavy");
+                    click(&mut renderer, wavy.bounds().unwrap());
+                    assert_eq!(
+                        indicator(&renderer, labels[1]).bounds().unwrap().height(),
+                        48.0
                     );
-                    toggle(
-                        &mut renderer,
-                        "Pause wave animation",
-                        Toggled::False,
-                        Toggled::True,
+                    let thick = control(&renderer, "Progress configuration thick");
+                    click(&mut renderer, thick.bounds().unwrap());
+                    assert_eq!(
+                        indicator(&renderer, labels[1]).bounds().unwrap().height(),
+                        56.0
                     );
-                    let circular = scoped_node(
-                        &renderer,
-                        "Progress indicators specifications",
-                        "Configured circular progress",
-                        Role::ProgressIndicator,
-                    )
-                    .unwrap();
-                    assert_eq!(circular.bounds().unwrap().height(), 52.0);
-                    assert_eq!(circular.numeric_value(), Some(0.75));
-                    toggle(
-                        &mut renderer,
-                        "Indeterminate progress",
-                        Toggled::False,
-                        Toggled::True,
-                    );
-                    for label in ["Configured linear progress", "Configured circular progress"] {
-                        assert_eq!(
-                            scoped_node(
-                                &renderer,
-                                "Progress indicators specifications",
-                                label,
-                                Role::ProgressIndicator
-                            )
-                            .unwrap()
-                            .numeric_value(),
-                            None
-                        );
+                    for label in labels {
+                        assert_eq!(indicator(&renderer, label).numeric_value(), Some(0.5));
                     }
-                    bounds(&renderer, "Task progress: indeterminate");
-                    toggle(
-                        &mut renderer,
-                        "Indeterminate progress",
-                        Toggled::True,
-                        Toggled::False,
-                    );
-                    let reset = control(&renderer, "Reset progress");
-                    click(&mut renderer, reset.bounds().unwrap());
-                    bounds(&renderer, "Task progress: 0%");
+                    let determinate = control(&renderer, "Progress configuration determinate");
+                    click(&mut renderer, determinate.bounds().unwrap());
+                    for label in labels {
+                        assert_eq!(indicator(&renderer, label).numeric_value(), None);
+                    }
+                    let determinate = control(&renderer, "Progress configuration determinate");
+                    click(&mut renderer, determinate.bounds().unwrap());
+                    for label in labels {
+                        assert_eq!(indicator(&renderer, label).numeric_value(), Some(0.5));
+                    }
                 }
                 12 => {
                     assert_eq!(bounds(&renderer, "Small badge specimen").width(), 6.0);
@@ -3641,16 +3539,27 @@ mod tests {
                     );
                 }
                 14 => {
-                    let full = bounds(&renderer, "Full width measurement");
-                    let inset = bounds(&renderer, "Inset measurement");
-                    let middle = bounds(&renderer, "Middle inset measurement");
-                    assert_eq!(full.height(), 1.0);
-                    assert_eq!(inset.height(), 1.0);
-                    assert_eq!(middle.height(), 1.0);
-                    assert_eq!(inset.x0 - full.x0, 16.0);
-                    assert_eq!(inset.x1, full.x1);
-                    assert_eq!(middle.x0 - full.x0, 16.0);
-                    assert_eq!(full.x1 - middle.x1, 16.0);
+                    let thickness = bounds(&renderer, "Dimension 1dp thickness");
+                    let width = bounds(&renderer, "Dimension available width");
+                    assert_eq!(thickness.width(), 24.0);
+                    assert_eq!(width.width(), 236.0);
+                    let snapshot = renderer.accessibility_snapshot().unwrap();
+                    for label in [
+                        "Divider full-width",
+                        "Divider inset left margin",
+                        "Divider middle-inset right margin",
+                        "100%",
+                        "16dp",
+                    ] {
+                        assert!(
+                            snapshot
+                                .nodes
+                                .iter()
+                                .any(|(_, node)| node.role() == Role::Cell
+                                    && node.label() == Some(label)),
+                            "missing divider measurement {label}"
+                        );
+                    }
                 }
                 15 => {
                     toggle(
@@ -3771,7 +3680,7 @@ mod tests {
                         Toggled::False,
                         Toggled::True,
                     );
-                    activate_navigation(&mut renderer, "Filter chip", Role::Link);
+                    activate_navigation(&mut renderer, "Tokens & specs", Role::Link);
                     let selector = control(&renderer, "Filter chip tokens");
                     click(&mut renderer, selector.bounds().unwrap());
                     assert!(
@@ -3922,7 +3831,7 @@ mod tests {
                         renderer.resize(900, 1200);
                         renderer.render_frames(8);
                     }
-                    let links = article_contents_links(&mut renderer, component.title);
+                    let links = article_contents_links(&mut renderer, article_title);
                     let section = if last { links.last() } else { links.first() }
                         .expect("composed contents must expose a navigation target")
                         .as_str();
@@ -3981,6 +3890,29 @@ mod tests {
                     );
                     if component.demo == 12 && section == "Configuration" {
                         let add = control(&renderer, "Add unread item");
+                        let add_bounds = add.bounds().unwrap();
+                        if add_bounds.y0 < 0.0 || add_bounds.y1 > 1200.0 {
+                            renderer.pointer_scroll(
+                                MOUSE_POINTER_ID,
+                                PxPosition::from_f32_xy(896.0, 600.0),
+                                0.0,
+                                (600.0 - (add_bounds.y0 + add_bounds.y1) * 0.5) as f32,
+                            );
+                            renderer.render_frames(40);
+                        }
+                        let before = renderer
+                            .accessibility_snapshot()
+                            .unwrap()
+                            .nodes
+                            .into_iter()
+                            .find(|(_, node)| {
+                                node.role() == Role::Heading && node.label() == Some(section)
+                            })
+                            .unwrap()
+                            .1
+                            .bounds()
+                            .unwrap();
+                        let add = control(&renderer, "Add unread item");
                         click(&mut renderer, add.bounds().unwrap());
                         bounds(&renderer, "Unread count: 8");
                         renderer.render_frames(5);
@@ -3997,7 +3929,7 @@ mod tests {
                             .bounds()
                             .unwrap();
                         assert_eq!(
-                            after, heading,
+                            after, before,
                             "activating a control must not reclamp a section jump"
                         );
                     }

@@ -40,6 +40,15 @@ fn filters_fixture() {
     });
 }
 
+#[tessera]
+fn tokens_fixture() {
+    material_theme().child(|| {
+        column().children(|| {
+            token_browser();
+        });
+    });
+}
+
 fn renderer(fixture: fn()) -> HeadlessRenderer {
     let mut renderer = HeadlessRenderer::new(
         Box::new(fixture),
@@ -79,6 +88,39 @@ fn click(renderer: &mut HeadlessRenderer, label: &str, role: Role) {
     renderer.pointer_press(MOUSE_POINTER_ID, position, PressKeyEventType::Left);
     renderer.pointer_release(MOUSE_POINTER_ID, position, PressKeyEventType::Left);
     renderer.render_frames(4);
+}
+
+fn labelled(renderer: &HeadlessRenderer, label: &str) -> bool {
+    renderer
+        .accessibility_snapshot()
+        .unwrap()
+        .nodes
+        .iter()
+        .any(|(_, node)| node.label() == Some(label))
+}
+
+#[test]
+#[ignore = "requires a native GPU adapter"]
+fn token_folders_reveal_and_hide_their_tokens_when_selected() {
+    let mut renderer = renderer(tokens_fixture);
+    let width = "Drag handle width: 32dp";
+    assert!(!labelled(&renderer, "Drag handle tokens"));
+    click(&mut renderer, "Enabled tokens", Role::ListItem);
+    for group in [
+        "Container tokens",
+        "Drag handle tokens",
+        "Focus indicator tokens",
+    ] {
+        assert!(labelled(&renderer, group), "Enabled must reveal {group}");
+    }
+    assert!(!labelled(&renderer, width));
+    click(&mut renderer, "Drag handle tokens", Role::ListItem);
+    assert!(labelled(&renderer, width));
+    assert!(labelled(&renderer, "Drag handle opacity: 0.4"));
+    assert!(!labelled(&renderer, "Focus indicator thickness: 3dp"));
+    click(&mut renderer, "Enabled tokens", Role::ListItem);
+    assert!(!labelled(&renderer, "Drag handle tokens"));
+    assert!(!labelled(&renderer, width));
 }
 
 #[test]

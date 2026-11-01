@@ -5,14 +5,14 @@
 //! Organize primary destinations and account sections in spacious layouts.
 
 use tessera_ui::{
-    Callback, Dp, Modifier, RenderSlot, accesskit::Role, modifier::FocusModifierExt as _,
-    provide_context, remember, tessera, use_context,
+    Callback, Dp, FocusRequester, Modifier, RenderSlot, accesskit::Role,
+    modifier::FocusModifierExt as _, provide_context, remember, tessera, use_context,
 };
 
 use crate::{
     alignment::CrossAxisAlignment,
     column::column,
-    modifier::{InteractionState, ModifierExt, SelectableArgs},
+    modifier::{InteractionState, ModifierExt, Padding, SelectableArgs},
     ripple_state::{RippleSpec, RippleState},
     row::row,
     shape_def::{RoundedCorner, Shape},
@@ -173,6 +173,7 @@ pub fn navigation_drawer_item(
     };
     let interaction = remember(InteractionState::new);
     let ripple = remember(RippleState::new);
+    let focus = remember(FocusRequester::new).get();
     let modifier = modifier
         .unwrap_or_default()
         .fill_max_width()
@@ -184,6 +185,7 @@ pub fn navigation_drawer_item(
             role: Some(Role::Tab),
             label: Some(label.clone()),
             interaction_state: Some(interaction),
+            focus_requester: Some(focus),
             on_press: Some(
                 (move |ctx: crate::modifier::PointerEventContext| {
                     ripple.with_mut(|state| {
@@ -222,16 +224,19 @@ pub fn navigation_drawer_item(
         .enabled(enabled)
         .block_input(false)
         .interaction_state(interaction)
+        .focus_requester(focus)
+        .show_focus_indicator(true)
         .ripple_state(ripple)
         .ripple_color(foreground)
         .child(move || {
             let label = label.clone();
             row()
-                .modifier(
-                    Modifier::new()
-                        .fill_max_size()
-                        .padding_symmetric(Dp(16.0), Dp(0.0)),
-                )
+                .modifier(Modifier::new().fill_max_size().padding(Padding::new(
+                    Dp(16.0),
+                    Dp::ZERO,
+                    Dp(24.0),
+                    Dp::ZERO,
+                )))
                 .cross_axis_alignment(CrossAxisAlignment::Center)
                 .children(move || {
                     if let Some(icon) = &icon {
@@ -285,28 +290,41 @@ mod tests {
         SELECTED.set(Some(selected));
         material_theme().child(move || {
             column().children(move || {
-                navigation_drawer().content(move || {
-                    navigation_drawer_item()
-                        .label("Inbox")
-                        .selected(selected.get() == 0)
-                        .on_click(move || selected.set(0));
-                    navigation_drawer_item()
-                        .label("Saved")
-                        .selected(selected.get() == 1)
-                        .modifier(Modifier::new().semantics(SemanticsArgs {
-                            test_tag: Some("saved".into()),
-                            ..Default::default()
-                        }))
-                        .on_click(move || selected.set(1));
-                    navigation_drawer_item()
-                        .label("Disabled")
-                        .enabled(false)
-                        .modifier(Modifier::new().semantics(SemanticsArgs {
-                            test_tag: Some("disabled".into()),
-                            ..Default::default()
-                        }))
-                        .on_click(move || selected.set(2));
-                });
+                navigation_drawer()
+                    .modifier(Modifier::new().semantics(SemanticsArgs {
+                        test_tag: Some("drawer".into()),
+                        ..Default::default()
+                    }))
+                    .content(move || {
+                        navigation_drawer_item()
+                            .label("Inbox")
+                            .selected(selected.get() == 0)
+                            .on_click(move || selected.set(0));
+                        navigation_drawer_item()
+                            .label("Saved")
+                            .badge(|| {
+                                text().content("24").modifier(Modifier::new().semantics(
+                                    SemanticsArgs {
+                                        test_tag: Some("saved-badge".into()),
+                                        ..Default::default()
+                                    },
+                                ));
+                            })
+                            .selected(selected.get() == 1)
+                            .modifier(Modifier::new().semantics(SemanticsArgs {
+                                test_tag: Some("saved".into()),
+                                ..Default::default()
+                            }))
+                            .on_click(move || selected.set(1));
+                        navigation_drawer_item()
+                            .label("Disabled")
+                            .enabled(false)
+                            .modifier(Modifier::new().semantics(SemanticsArgs {
+                                test_tag: Some("disabled".into()),
+                                ..Default::default()
+                            }))
+                            .on_click(move || selected.set(2));
+                    });
             });
         });
     }
@@ -322,6 +340,16 @@ mod tests {
         let snapshot = pump_layout_test_session(&mut session, 0);
         snapshot.node("saved").size(336, 56);
         let saved = snapshot.node("saved").bounds();
+        let badge = snapshot.node("saved-badge").bounds();
+        let drawer = snapshot.node("drawer").bounds();
+        assert_eq!(
+            (saved.x + saved.width - badge.x - badge.width).to_f32(),
+            24.0
+        );
+        assert_eq!(
+            (drawer.x + drawer.width - badge.x - badge.width).to_f32(),
+            36.0
+        );
         let disabled = snapshot.node("disabled").bounds();
         for (index, bounds) in [saved, disabled].into_iter().enumerate() {
             let cursor = Some(PxPosition::from_f32_xy(

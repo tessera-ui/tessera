@@ -204,6 +204,9 @@ enum WebCommands {
         /// Override package/binary name (-p)
         #[arg(long, short)]
         package: Option<String>,
+        /// Features to activate for color checking and the web build
+        #[arg(short = 'F', long, value_delimiter = ',')]
+        features: Vec<String>,
     },
     /// Rebuild and serve a Tessera app for browser development
     Dev {
@@ -613,8 +616,12 @@ fn run() -> Result<()> {
                 WebCommands::Init { package } => {
                     web::init(package.as_deref())?;
                 }
-                WebCommands::Build { release, package } => {
-                    web::build(release, package.as_deref())?;
+                WebCommands::Build {
+                    release,
+                    package,
+                    features,
+                } => {
+                    web::build(release, package.as_deref(), &features)?;
                 }
                 WebCommands::Dev {
                     release,

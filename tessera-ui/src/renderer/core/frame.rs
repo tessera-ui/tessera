@@ -524,7 +524,7 @@ impl RenderCore {
 
         let device = &self.device;
         let queue = &self.queue;
-        let config = &self.config;
+        let config = &self.draw_config;
         let blit = &self.blit;
         let pipelines = &mut self.pipelines;
         let targets = &mut self.targets;
@@ -624,11 +624,7 @@ impl RenderCore {
             target: output_view,
             bind_group_layout: &blit.bind_group_layout,
             sampler: &blit.sampler,
-            pipeline: if self.surface.is_some() {
-                &blit.present_pipeline
-            } else {
-                &blit.pipeline
-            },
+            pipeline: &blit.present_pipeline,
             target_size,
             scissor_rect: None,
         });
@@ -692,8 +688,8 @@ impl RenderCore {
     /// pixels in row-major order with a top-left origin.
     ///
     /// The returned buffer has `width * height * 4` bytes and no row padding.
-    /// The offscreen target uses an sRGB format, so the bytes are sRGB-encoded,
-    /// matching what PNG and most image consumers expect.
+    /// RGBA8 presentation bytes are sRGB-encoded even when the output texture
+    /// uses a non-sRGB format, matching PNG and most image consumers.
     pub fn read_offscreen_rgba(&self) -> Result<Vec<u8>, OffscreenReadbackError> {
         self.read_texture_rgba(self.targets.offscreen_copy.texture())
     }
@@ -1655,15 +1651,20 @@ mod tests {
     #[cfg(all(feature = "headless", not(target_family = "wasm")))]
     #[test]
     #[ignore = "requires a GPU adapter"]
-    fn unorm_presentation_encodes_srgb_without_changing_internal_copies() {
+    fn unorm_output_encodes_srgb_and_internal_linear_copies_remain_linear() {
         let core = pollster::block_on(RenderCore::new_offscreen(
             winit::dpi::PhysicalSize::new(1, 1),
             wgpu::TextureFormat::Rgba8Unorm,
             1,
         ));
-        for (pipeline, expected) in [
-            (&core.blit.pipeline, 55_u8),
-            (&core.blit.present_pipeline, 128),
+        for (target, pipeline, expected) in [
+            (&core.targets.scene_sample, &core.blit.pipeline, 128_u8),
+            (&core.compute.target_a, &core.blit.pipeline_rgba, 55),
+            (
+                &core.targets.offscreen_copy,
+                &core.blit.present_pipeline,
+                128,
+            ),
         ] {
             let mut encoder = core.device.create_command_encoder(&Default::default());
             {
@@ -1689,7 +1690,7 @@ mod tests {
                 encoder: &mut encoder,
                 device: &core.device,
                 source: &core.targets.offscreen,
-                target: &core.targets.offscreen_copy,
+                target,
                 bind_group_layout: &core.blit.bind_group_layout,
                 sampler: &core.blit.sampler,
                 pipeline,
@@ -1697,7 +1698,9 @@ mod tests {
                 scissor_rect: None,
             });
             core.queue.submit(Some(encoder.finish()));
-            let pixels = core.read_offscreen_rgba().expect("GPU pixels");
+            let pixels = core
+                .read_texture_rgba(target.texture())
+                .expect("GPU pixels");
             for channel in &pixels[..3] {
                 assert!(
                     channel.abs_diff(expected) <= 1,

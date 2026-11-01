@@ -2810,6 +2810,102 @@ mod tests {
         assert!(!RuntimePendingWork::capture(false).requires_redraw());
     }
 
+    thread_local! {
+        static COLD_CHILD_RECT: Cell<Option<PxRect>> = const { Cell::new(None) };
+        static COLD_OBSERVER_WRITES: Cell<usize> = const { Cell::new(0) };
+        static COLD_REDRAW_WAKES: Cell<usize> = const { Cell::new(0) };
+        static COLD_WRITE_WAKE_COUNTS: Cell<(usize, usize)> = const { Cell::new((0, 0)) };
+    }
+
+    #[crate::tessera(crate)]
+    fn cold_geometry_child() {
+        layout().policy(FocusLeafLayout).modifier(
+            Modifier::new().on_globally_positioned(|rect| COLD_CHILD_RECT.set(Some(rect))),
+        );
+    }
+
+    #[crate::tessera(crate)]
+    fn cold_geometry_fixture() {
+        let observed = remember(|| None::<PxRect>);
+        layout()
+            .modifier(Modifier::new().on_globally_positioned(move |rect| {
+                if observed.get() != Some(rect) {
+                    let before = COLD_REDRAW_WAKES.get();
+                    observed.set(Some(rect));
+                    COLD_WRITE_WAKE_COUNTS.set((before, COLD_REDRAW_WAKES.get()));
+                    COLD_OBSERVER_WRITES.set(COLD_OBSERVER_WRITES.get() + 1);
+                }
+            }))
+            .child(move || {
+                layout().policy(FocusLeafLayout);
+                if observed.get().is_some() {
+                    cold_geometry_child();
+                }
+            });
+    }
+
+    #[test]
+    fn first_geometry_publication_wakes_the_runtime_until_its_conditional_child_is_placed() {
+        struct WakerGuard;
+        impl Drop for WakerGuard {
+            fn drop(&mut self) {
+                crate::runtime::clear_redraw_waker();
+            }
+        }
+
+        COLD_CHILD_RECT.set(None);
+        COLD_OBSERVER_WRITES.set(0);
+        COLD_REDRAW_WAKES.set(0);
+        COLD_WRITE_WAKE_COUNTS.set((0, 0));
+        let mut session = start_layout_test_session(layout_test(cold_geometry_fixture));
+        let _guard = WakerGuard;
+        crate::runtime::install_redraw_waker(std::sync::Arc::new(|| {
+            COLD_REDRAW_WAKES.set(COLD_REDRAW_WAKES.get() + 1);
+        }));
+        pump_layout_test_session(&mut session, 0);
+        assert_eq!(COLD_CHILD_RECT.get(), None);
+        assert_eq!(COLD_OBSERVER_WRITES.get(), 1);
+        let (before, after) = COLD_WRITE_WAKE_COUNTS.get();
+        assert!(
+            after > before,
+            "the observer's state write must request a new frame"
+        );
+        assert!(
+            RuntimePendingWork::capture(false).requires_redraw(),
+            "the first geometry callback must leave its subscribed child pending at frame end"
+        );
+        let mut frame = 0;
+        while RuntimePendingWork::capture(false).requires_redraw() {
+            frame += 1;
+            assert!(
+                frame <= 8,
+                "geometry publication must settle without continuous redraw"
+            );
+            pump_layout_test_session(&mut session, frame * 16_666_667);
+        }
+        assert_eq!(
+            COLD_CHILD_RECT.get(),
+            Some(PxRect::new(
+                crate::Px(0),
+                crate::Px(0),
+                crate::Px(64),
+                crate::Px(24)
+            )),
+            "a frame requested by the geometry update must place the newly inserted child"
+        );
+        assert_eq!(COLD_OBSERVER_WRITES.get(), 1);
+        assert!(!RuntimePendingWork::capture(false).requires_redraw());
+        let wakes = COLD_REDRAW_WAKES.get();
+        pump_layout_test_session(&mut session, (frame + 1) * 16_666_667);
+        assert_eq!(COLD_OBSERVER_WRITES.get(), 1);
+        assert_eq!(
+            COLD_REDRAW_WAKES.get(),
+            wakes,
+            "an unchanged idle layout must not wake again"
+        );
+        assert!(!RuntimePendingWork::capture(false).requires_redraw());
+    }
+
     #[test]
     fn web_canvas_size_tracks_css_density_and_fractional_dimensions() {
         assert_eq!(

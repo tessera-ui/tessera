@@ -294,10 +294,7 @@ fn fixture() {
                                 vec![scheme.on_surface.with_alpha(0.38)],
                                 vec![scheme.on_surface.with_alpha(0.12)],
                                 vec![scheme.surface, scheme.on_surface.with_alpha(0.38)],
-                                vec![
-                                    scheme.on_surface.with_alpha(0.38),
-                                    scheme.on_surface.with_alpha(0.12),
-                                ],
+                                vec![scheme.inverse_on_surface],
                                 vec![
                                     scheme.on_surface.with_alpha(0.12),
                                     scheme.on_surface.with_alpha(0.38),
@@ -525,8 +522,8 @@ fn check_orientation(samples: u32) {
         let vertical_icon = renderer.read_pixels().unwrap();
         for y in 0..36 {
             for x in 0..36 {
-                let source = ((81 + y) * 500 + 72 + x) * 4;
-                let target = (((if reversed { 432 } else { 72 }) + y) * 500 + 81 + x) * 4;
+                let source = ((81 + y) * 500 + 69 + x) * 4;
+                let target = (((if reversed { 435 } else { 69 }) + y) * 500 + 81 + x) * 4;
                 for channel in 0..4 {
                     assert!(
                         horizontal_icon[source + channel].abs_diff(vertical_icon[target + channel])
@@ -549,6 +546,7 @@ fn check_orientation(samples: u32) {
         renderer.render_frames(2);
         let pixels = renderer.read_pixels().unwrap();
         let mut ink = 0;
+        let mut first_ink = usize::MAX;
         for y in 81..117 {
             for x in 90..150 {
                 let offset = (y * 500 + x) * 4;
@@ -557,6 +555,7 @@ fn check_orientation(samples: u32) {
                     .all(|channel| *channel < 16)
                 {
                     ink += 1;
+                    first_ink = first_ink.min(x);
                 }
             }
         }
@@ -564,6 +563,12 @@ fn check_orientation(samples: u32) {
             ink > 80,
             "low-value inset icons must remain complete and use the inactive-track foreground, value={fraction}, ink={ink}"
         );
+        if fraction == 0.0 {
+            assert_eq!(
+                first_ink, 100,
+                "a zero-value M inset icon starts 6dp after the handle and its trailing gap"
+            );
+        }
     }
     VALUE.get().unwrap().set(0.25);
 

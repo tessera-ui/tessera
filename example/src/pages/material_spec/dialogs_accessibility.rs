@@ -478,7 +478,7 @@ fn use_sparingly() {
         });
 }
 
-fn photo_data() -> ImageData {
+pub(super) fn photo_data() -> ImageData {
     static PHOTO: OnceLock<ImageData> = OnceLock::new();
     PHOTO
         .get_or_init(|| {

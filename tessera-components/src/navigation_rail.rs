@@ -7,9 +7,9 @@ use std::time::Duration;
 
 use tessera_foundation::gesture::TapRecognizer;
 use tessera_ui::{
-    AxisConstraint, Callback, Color, ComputedData, Constraint, Dp, FocusProperties, FocusScopeNode,
-    FocusTraversalPolicy, LayoutResult, MeasurementError, Modifier, Px, PxPosition, PxSize,
-    RenderSlot, State,
+    AxisConstraint, Callback, Color, ComputedData, Constraint, Dp, FocusProperties, FocusRequester,
+    FocusScopeNode, FocusTraversalPolicy, LayoutResult, MeasurementError, Modifier, Px, PxPosition,
+    PxSize, RenderSlot, State,
     accesskit::Role,
     current_frame_nanos,
     layout::{MeasureScope, layout},
@@ -43,12 +43,12 @@ mod destination_tests;
 const ANIMATION_DURATION: Duration = Duration::from_millis(300);
 const COLLAPSED_WIDTH: Dp = Dp(96.0);
 const EXPANDED_MIN_WIDTH: Dp = Dp(220.0);
-const TOP_PADDING: Dp = Dp(44.0);
+const TOP_PADDING: Dp = Dp(36.0);
 const HEADER_BOTTOM_PADDING: Dp = Dp(40.0);
 const ITEM_HORIZONTAL_PADDING: Dp = Dp(20.0);
 const ITEM_VERTICAL_SPACING_COLLAPSED: Dp = Dp(4.0);
 const ITEM_VERTICAL_SPACING_EXPANDED: Dp = Dp(0.0);
-const TOP_ICON_ITEM_MIN_HEIGHT: Dp = Dp(64.0);
+const TOP_ICON_ITEM_MIN_HEIGHT: Dp = Dp(56.0);
 const START_ICON_ITEM_MIN_HEIGHT: Dp = Dp(56.0);
 const INDICATOR_TOP_WIDTH: Dp = Dp(56.0);
 const INDICATOR_TOP_HEIGHT: Dp = Dp(32.0);
@@ -96,6 +96,7 @@ fn navigation_rail_item_view_content(
     interaction_state: Option<State<InteractionState>>,
     ripple_state: Option<State<RippleState>>,
     indicator_geometry: Option<State<RailRippleGeometry>>,
+    focus_requester: Option<FocusRequester>,
 ) {
     let item = item.unwrap_or_default();
     let icon_position = icon_position.unwrap_or_default();
@@ -103,6 +104,7 @@ fn navigation_rail_item_view_content(
     let item_min_height = item_min_height.unwrap_or(Dp(0.0));
     let interaction_state = interaction_state.expect("interaction_state must be set");
     let ripple_state = ripple_state.expect("ripple_state must be set");
+    let focus_requester = focus_requester.expect("focus_requester must be set");
     let theme = use_context::<MaterialTheme>()
         .expect("MaterialTheme must be provided")
         .get();
@@ -168,6 +170,8 @@ fn navigation_rail_item_view_content(
                 ))
                 .enabled(true)
                 .interaction_state(interaction_state)
+                .focus_requester(focus_requester)
+                .show_focus_indicator(true)
                 .ripple_color(ripple_color)
                 .child(move || {
                     surface()
@@ -553,6 +557,7 @@ fn navigation_rail_item_view(
     let interaction_state = remember(InteractionState::new);
     let ripple_state = remember(RippleState::new);
     let tap_recognizer = remember(TapRecognizer::default);
+    let focus = remember(FocusRequester::new).get();
 
     let label = item.label.clone();
     let description = item.accessibility_description.clone();
@@ -612,6 +617,7 @@ fn navigation_rail_item_view(
         label: Some(label),
         description,
         interaction_state: Some(interaction_state),
+        focus_requester: Some(focus),
         on_press: Some(on_press.into()),
         on_release: Some(on_release.into()),
         tap_recognizer: Some(tap_recognizer),
@@ -635,7 +641,8 @@ fn navigation_rail_item_view(
                 .item_min_height(item_min_height)
                 .interaction_state(interaction_state)
                 .ripple_state(ripple_state)
-                .indicator_geometry(indicator_geometry);
+                .indicator_geometry(indicator_geometry)
+                .focus_requester(focus);
         }
     });
 }

@@ -10,6 +10,7 @@ struct SliderSpecs {
     handle_height: Dp,
     track_corner_radius: Dp,
     icon_size: Option<Dp>,
+    icon_padding: Dp,
 }
 
 fn get_slider_specs(size: SliderSize) -> SliderSpecs {
@@ -19,30 +20,35 @@ fn get_slider_specs(size: SliderSize) -> SliderSpecs {
             handle_height: Dp(44.0),
             track_corner_radius: Dp(8.0),
             icon_size: None,
+            icon_padding: Dp(0.0),
         },
         SliderSize::Small => SliderSpecs {
             track_height: Dp(24.0),
             handle_height: Dp(44.0),
             track_corner_radius: Dp(8.0),
             icon_size: None,
+            icon_padding: Dp(0.0),
         },
         SliderSize::Medium => SliderSpecs {
             track_height: Dp(40.0),
             handle_height: Dp(52.0),
             track_corner_radius: Dp(12.0),
             icon_size: Some(Dp(24.0)),
+            icon_padding: Dp(6.0),
         },
         SliderSize::Large => SliderSpecs {
             track_height: Dp(56.0),
             handle_height: Dp(68.0),
             track_corner_radius: Dp(16.0),
             icon_size: Some(Dp(24.0)),
+            icon_padding: Dp(6.0),
         },
         SliderSize::ExtraLarge => SliderSpecs {
             track_height: Dp(96.0),
             handle_height: Dp(108.0),
             track_corner_radius: Dp(28.0),
             icon_size: Some(Dp(32.0)),
+            icon_padding: Dp(8.0),
         },
     }
 }
@@ -67,6 +73,7 @@ pub(super) struct SliderLayout {
     pub stop_indicator_y: Px,
     pub show_stop_indicator: bool,
     pub icon_size: Option<Dp>,
+    pub icon_padding: Dp,
 }
 
 impl SliderLayout {
@@ -212,6 +219,7 @@ fn slider_layout_from_parts(
         stop_indicator_y: Px((component_height.0 - stop_indicator_diameter.0) / 2),
         show_stop_indicator,
         icon_size: specs.icon_size,
+        icon_padding: specs.icon_padding,
     }
 }
 

@@ -263,6 +263,9 @@ pub(super) fn outline(svg: &mut String, rect: Rect) {
 
 #[tessera]
 pub(super) fn lines(width: Dp, height: Dp, svg: String) {
+    if svg.trim().is_empty() {
+        return;
+    }
     let vector = remember_with_key((width.0.to_bits(), height.0.to_bits(), svg.clone()), || {
         format!(
             "<svg xmlns='http://www.w3.org/2000/svg' width='{}' height='{}'>{svg}</svg>",

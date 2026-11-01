@@ -300,6 +300,30 @@ fn assert_pixels(
                 &pixels[i..i + 4]
             );
         }
+        if !side {
+            let pixel = |x: f32, y: f32| {
+                let point = root
+                    .local_to_window
+                    .map_point(PxPosition::from_f32_xy(x, y));
+                let i = (point.y.floor() as usize * width + point.x.floor() as usize) * 4;
+                [pixels[i], pixels[i + 1], pixels[i + 2]]
+            };
+            let frame = pixel(302.0, 250.0);
+            let outline = color_bytes(scheme.outline_variant);
+            assert!(
+                (0..3).all(|c| (frame[c] as i16 - outline[c] as i16).abs() <= 3),
+                "The {} phone frame must reach the sheet: {frame:?} versus {outline:?}",
+                if dark { "dark" } else { "light" }
+            );
+            let luminance = |rgb: [u8; 3]| rgb.iter().map(|&c| i32::from(c)).sum::<i32>();
+            let surface = color_bytes(scheme.surface);
+            let scrim = pixel(400.0, 60.0);
+            assert!(
+                luminance(scrim) + 6 < luminance([surface[0], surface[1], surface[2]]),
+                "The {} scrim must dim the screen above the sheet: {scrim:?} versus {surface:?}",
+                if dark { "dark" } else { "light" }
+            );
+        }
     }
 }
 

@@ -77,14 +77,14 @@ pub(super) fn slider_spec() {
             section("Behaviors",RenderSlot::new(||{
                 subheading("Select & drag".into());prose("Drag the handle to update a continuous value or snap between stops.");gap(Dp(24.0));sample("Drag a continuous value".into(),0,SliderSize::Medium,false,0);
                 gap(Dp(32.0));subheading("Select jump".into());prose("Select the track to move the handle to that position, or the nearest stop.");gap(Dp(24.0));sample("Jump between stops".into(),0,SliderSize::Medium,false,9);
-                gap(Dp(32.0));subheading("Select & arrow".into());prose("Tab to a handle and use arrow keys to adjust it. In Tessera, Page Up and Page Down move a larger interval, while Home and End select an endpoint.");gap(Dp(24.0));value_example();
+                gap(Dp(32.0));subheading("Select & arrow".into());prose("Tab moves focus to the handle. Arrow keys change the value by one value or stop indicator. Hold Space while pressing an arrow key to change it by a larger interval. Home and End select the first and last values.");gap(Dp(24.0));value_example();
             })),
         ]},
         ArticlePage{title:"Accessibility",intro:None,sections:vec![
             section("Use cases",RenderSlot::new(||{prose("Assistive technology must identify each slider, adjust its handle along the range, and report the selected value. Range sliders expose both handles separately.");gap(Dp(24.0));sample("Price range".into(),2,SliderSize::Medium,false,0);})),
             section("Interaction & style",RenderSlot::new(||{prose("The handle narrows and the value appears during touch, pointer, or keyboard interaction.");gap(Dp(24.0));states();gap(Dp(24.0));subheading("Focus and navigation".into());prose("Initial focus lands on the handle. Arrow keys adjust its value without requiring pointer precision.");gap(Dp(24.0));value_example();})),
             section("Color contrast",RenderSlot::new(||{prose("The end of the inactive track needs a visual anchor with at least 3:1 contrast against the background. Use an end stop or a contrasting icon or label at the endpoint.");gap(Dp(24.0));colors();})),
-            section("Keyboard navigation",RenderSlot::new(||{spec_table(vec!["Keys".into(),"Actions".into()],vec![vec!["Tab".into(),"Focus a slider handle".into()],vec!["Arrows".into(),"Change by one value or stop".into()],vec!["Page Up or Page Down".into(),"Change by a larger interval".into()],vec!["Home or End".into(),"Select the first or last value".into()]]);gap(Dp(24.0));value_example();})),
+            section("Keyboard navigation",RenderSlot::new(||{spec_table(vec!["Keys".into(),"Actions".into()],vec![vec!["Tab".into(),"Moves focus to the slider handle".into()],vec!["Arrows".into(),"Increase and decrease the value by one value or one stop indicator".into()],vec!["Space & Arrows".into(),"Increase and decrease the value by one interval or one stop indicator".into()],vec!["Home or End".into(),"Set the slider to the first and last values on the slider".into()]]);gap(Dp(24.0));value_example();})),
             section("Labeling elements",RenderSlot::new(||{prose("The accessibility label should match the adjacent visible label and use the slider role. Label external icon controls as buttons. Include units when they clarify the value.");gap(Dp(24.0));sample("Volume".into(),0,SliderSize::Medium,false,0).leading_icon(filled::VOLUME_UP_SVG);})),
         ]},
     ]);
@@ -990,20 +990,7 @@ fn color_annotation_geometry(
     let height = Dp(root.h);
     let scale = width.0 / 512.0;
     let center = top.y + top.h * 0.5;
-    let base = Dp(4.0).to_px().0;
-    let handle_pixels =
-        if controller.with(|controller| controller.is_dragging() || controller.is_focused()) {
-            (base / 2).max(1)
-        } else {
-            base
-        };
-    let handle_width = Dp::from_pixels_f32(handle_pixels as f32).0;
-    let gap = Dp::from_pixels_f32(Dp(6.0).to_px().to_f32()).0;
-    let active_width = Dp::from_pixels_f32(
-        (Dp((top.w - handle_width - gap * 2.0).max(0.0)).to_pixels_f32() * value).round(),
-    )
-    .0;
-    let handle = top.x + gap + handle_width * 0.5 + active_width;
+    let handle = handle_center_x(top, value, controller);
     let line = if dark { "#e6e1e5" } else { "#49454f" };
     let mut svg = String::new();
     let upper = center - 110.0;
@@ -1235,6 +1222,7 @@ fn slider_figure(measurements: bool) {
             let geometry = remember(PreciseGeometry::new);
             let value = remember(|| 0.5_f32);
             let inset = remember(|| 0.5_f32);
+            let controller = remember(SliderController::new);
             let scheme = use_context::<MaterialTheme>().unwrap().get().color_scheme;
             let width = 1024.0;
             let height = width / 2.1649;
@@ -1267,6 +1255,7 @@ fn slider_figure(measurements: bool) {
                                                 watch_precise(geometry, "standard")
                                                     .fill_max_width(),
                                             )
+                                            .controller(controller)
                                             .size(SliderSize::ExtraSmall)
                                             .value(value.get())
                                             .on_change(move |v| value.set(v))
@@ -1294,7 +1283,7 @@ fn slider_figure(measurements: bool) {
                                     });
                             });
                     });
-                    slider_annotations(geometry, value.get(), measurements);
+                    slider_annotations(geometry, value.get(), controller, measurements);
                 });
         }),
     );
@@ -1318,18 +1307,40 @@ fn figure_grid(width: Dp, height: Dp) {
 }
 
 #[tessera]
-fn slider_annotations(geometry: State<PreciseGeometry>, value: f32, measurements: bool) {
+fn slider_annotations(
+    geometry: State<PreciseGeometry>,
+    value: f32,
+    controller: State<SliderController>,
+    measurements: bool,
+) {
     slider_annotation_geometry(
         annotations::relative_precise_geometry(&geometry.get()),
         value,
+        controller,
         measurements,
     );
+}
+
+fn handle_center_x(rect: Rect, value: f32, controller: State<SliderController>) -> f64 {
+    let base = Dp(4.0).to_px().0;
+    let handle_pixels = if controller.with(|c| c.is_dragging() || c.is_focused()) {
+        (base / 2).max(1)
+    } else {
+        base
+    };
+    let gap_pixels = Dp(6.0).to_px().0;
+    let track_pixels = (Dp(rect.w).to_px().0 - handle_pixels - gap_pixels * 2).max(0);
+    // The native slider truncates the active track to whole pixels.
+    let active_pixels = (track_pixels as f32 * value.clamp(0.0, 1.0)) as i32;
+    let center = active_pixels as f32 + gap_pixels as f32 + handle_pixels as f32 / 2.0;
+    rect.x + Dp::from_pixels_f32(center).0
 }
 
 #[tessera]
 fn slider_annotation_geometry(
     values: std::collections::BTreeMap<&'static str, Rect>,
     value: f32,
+    controller: State<SliderController>,
     measurements: bool,
 ) {
     let (Some(root), Some(top), Some(bottom)) = (
@@ -1341,7 +1352,7 @@ fn slider_annotation_geometry(
     };
     let mut svg = String::new();
     let center = top.y + top.h * 0.5;
-    let handle = top.x + 2.0 + (top.w - 4.0) * value as f64;
+    let handle = handle_center_x(top, value, controller);
     if measurements {
         annotations::outline(&mut svg, top);
         annotations::outline(&mut svg, bottom);
@@ -2333,6 +2344,86 @@ mod size_figure_tests {
                 .1
                 .numeric_value(),
             Some(0.5)
+        );
+    }
+
+    #[tessera]
+    fn anatomy_fixture() {
+        material_theme().child(|| {
+            boxed()
+                .alignment(Alignment::TopStart)
+                .modifier(Modifier::new().fill_max_size())
+                .children(|| {
+                    column()
+                        .modifier(Modifier::new().width(Dp(1024.0)))
+                        .children(anatomy);
+                });
+        });
+    }
+
+    fn painted_handle_center(renderer: &HeadlessRenderer, slider: &Node, width: u32) -> f64 {
+        let bounds = slider.bounds().unwrap();
+        let row = ((bounds.y0 + bounds.y1) * 0.5 - 18.0).round() as u32;
+        let pixels = renderer.read_pixels().unwrap();
+        let mut sum = 0.0;
+        let mut count = 0.0;
+        for x in bounds.x0.ceil() as u32..bounds.x1.floor() as u32 {
+            let offset = ((row * width + x) * 4) as usize;
+            let ink: u32 = pixels[offset..offset + 3].iter().map(|c| *c as u32).sum();
+            if ink < 450 {
+                sum += x as f64 + 0.5;
+                count += 1.0;
+            }
+        }
+        assert!(count > 0.0, "the handle must paint above the track");
+        sum / count
+    }
+
+    #[test]
+    #[ignore = "Requires a native GPU adapter for the actual slider and annotation pipelines"]
+    fn anatomy_handle_callout_follows_the_painted_handle_away_from_the_midpoint() {
+        let mut renderer = HeadlessRenderer::new(
+            Box::new(anatomy_fixture),
+            vec![Box::new(Pipelines)],
+            HeadlessConfig {
+                width: 1100,
+                height: 600,
+                sample_count: 1,
+                frame_time: Duration::from_nanos(16_666_667),
+                ..Default::default()
+            },
+        )
+        .expect("native slider anatomy renderer");
+        renderer.render_frames(6);
+        for step in 0..5 {
+            let slider = node(&renderer, "Slider anatomy", Role::Slider).1;
+            let painted = painted_handle_center(&renderer, &slider, 1100);
+            let marker = node(&renderer, "Anatomy marker 4", Role::Note)
+                .1
+                .bounds()
+                .unwrap();
+            let callout = (marker.x0 + marker.x1) * 0.5;
+            assert!(
+                (callout - painted).abs() <= 0.75,
+                "handle callout {callout} must stay on the painted handle {painted}, value={:?}",
+                slider.numeric_value()
+            );
+            if step < 4 {
+                value_action(
+                    &mut renderer,
+                    "Slider anatomy",
+                    Role::Slider,
+                    Action::Increment,
+                );
+            }
+        }
+        let value = node(&renderer, "Slider anatomy", Role::Slider)
+            .1
+            .numeric_value()
+            .unwrap();
+        assert!(
+            (value - 0.9).abs() < 1e-6,
+            "four increments reach 0.9, got {value}"
         );
     }
 

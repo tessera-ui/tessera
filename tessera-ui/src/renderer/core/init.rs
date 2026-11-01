@@ -309,17 +309,49 @@ impl RenderCore {
                 desired_maximum_frame_latency: 2,
             },
         };
+        let mut draw_config = config.clone();
+        // sRGB attachments preserve low tones while GPU blending stays linear.
+        draw_config.format = match config.format {
+            TextureFormat::Rgba8Unorm => TextureFormat::Rgba8UnormSrgb,
+            TextureFormat::Bgra8Unorm => TextureFormat::Bgra8UnormSrgb,
+            format => format,
+        };
+        if draw_config.format != config.format {
+            let features = adapter.get_texture_format_features(draw_config.format);
+            let usage = wgpu::TextureUsages::RENDER_ATTACHMENT
+                | wgpu::TextureUsages::TEXTURE_BINDING
+                | wgpu::TextureUsages::COPY_SRC
+                | wgpu::TextureUsages::COPY_DST;
+            assert!(
+                features.allowed_usages.contains(usage),
+                "Scene format {:?} does not support required drawing usages",
+                draw_config.format
+            );
+            assert!(
+                features.flags.sample_count_supported(sample_count),
+                "Scene format {:?} does not support {sample_count} samples",
+                draw_config.format
+            );
+        }
+        info!(
+            "Presentation format: {:?}; scene format: {:?}; alpha mode: {:?}; surface: {}",
+            config.format,
+            draw_config.format,
+            config.alpha_mode,
+            surface.is_some(),
+        );
 
         // Create pipeline cache if supported
         let pipeline_cache = initialize_cache(&device, &adapter_info);
 
         // Create MSAA Target
-        let (msaa_texture, msaa_view) = Self::make_msaa_resources(&device, sample_count, &config);
+        let (msaa_texture, msaa_view) =
+            Self::make_msaa_resources(&device, sample_count, &draw_config);
 
         // Create Pass Targets (Offscreen and Compute)
-        let offscreen_texture = Self::create_pass_target(&device, &config, "Offscreen");
+        let offscreen_texture = Self::create_pass_target(&device, &draw_config, "Offscreen");
         let offscreen_copy_texture = Self::create_pass_target(&device, &config, "Offscreen Copy");
-        let scene_sample_texture = Self::create_pass_target(&device, &config, "Scene Sample");
+        let scene_sample_texture = Self::create_pass_target(&device, &draw_config, "Scene Sample");
         let compute_target_a = Self::create_compute_pass_target(
             &device,
             &config,
@@ -394,7 +426,7 @@ impl RenderCore {
                 cache: pipeline_cache.as_ref(),
             })
         };
-        let blit_pipeline = create_blit_pipeline("Blit Pipeline", config.format, "fs_main");
+        let blit_pipeline = create_blit_pipeline("Blit Pipeline", draw_config.format, "fs_main");
         let blit_pipeline_rgba = create_blit_pipeline(
             "Blit Pipeline Rgba8",
             wgpu::TextureFormat::Rgba8Unorm,
@@ -459,7 +491,7 @@ impl RenderCore {
             });
 
         let pipelines = RenderPipelines {
-            clipper: super::clip::ShapeClipper::new(&device, config.format, sample_count),
+            clipper: super::clip::ShapeClipper::new(&device, draw_config.format, sample_count),
             drawer,
             compute_registry: ComputePipelineRegistry::new(),
             composite_registry: CompositePipelineRegistry::new(),
@@ -509,6 +541,7 @@ impl RenderCore {
             surface,
             queue,
             config,
+            draw_config,
             size,
             size_changed: false,
             pipelines,
@@ -641,6 +674,8 @@ impl RenderCore {
     }
 
     pub(crate) fn rebuild_pass_targets(&mut self) {
+        self.draw_config.width = self.config.width;
+        self.draw_config.height = self.config.height;
         self.local_textures.clear();
         self.pipelines.clipper.reset_targets();
         self.targets.offscreen.texture().destroy();
@@ -649,11 +684,12 @@ impl RenderCore {
         self.compute.target_a.texture().destroy();
         self.compute.target_b.texture().destroy();
 
-        self.targets.offscreen = Self::create_pass_target(&self.device, &self.config, "Offscreen");
+        self.targets.offscreen =
+            Self::create_pass_target(&self.device, &self.draw_config, "Offscreen");
         self.targets.offscreen_copy =
             Self::create_pass_target(&self.device, &self.config, "Offscreen Copy");
         self.targets.scene_sample =
-            Self::create_pass_target(&self.device, &self.config, "Scene Sample");
+            Self::create_pass_target(&self.device, &self.draw_config, "Scene Sample");
         self.compute.target_a = Self::create_compute_pass_target(
             &self.device,
             &self.config,
@@ -671,8 +707,11 @@ impl RenderCore {
             if let Some(t) = self.targets.msaa_texture.take() {
                 t.destroy();
             }
-            let (msaa_texture, msaa_view) =
-                Self::make_msaa_resources(&self.device, self.targets.sample_count, &self.config);
+            let (msaa_texture, msaa_view) = Self::make_msaa_resources(
+                &self.device,
+                self.targets.sample_count,
+                &self.draw_config,
+            );
             self.targets.msaa_texture = msaa_texture;
             self.targets.msaa_view = msaa_view;
         }

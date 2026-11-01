@@ -7,8 +7,9 @@ use std::time::Duration;
 
 use tessera_foundation::gesture::TapRecognizer;
 use tessera_ui::{
-    AxisConstraint, Callback, Color, ComputedData, Constraint, Dp, FocusTraversalPolicy,
-    LayoutResult, MeasurementError, Modifier, Px, PxPosition, PxSize, RenderSlot, State,
+    AxisConstraint, Callback, Color, ComputedData, Constraint, Dp, FocusRequester,
+    FocusTraversalPolicy, LayoutResult, MeasurementError, Modifier, Px, PxPosition, PxSize,
+    RenderSlot, State,
     accesskit::Role,
     current_frame_nanos,
     layout::{MeasureScope, layout},
@@ -70,11 +71,13 @@ fn navigation_bar_item_view_content(
     selection_fraction: Option<f32>,
     interaction_state: Option<State<InteractionState>>,
     ripple_state: Option<State<RippleState>>,
+    focus_requester: Option<FocusRequester>,
 ) {
     let item = item.unwrap_or_default();
     let selection_fraction = selection_fraction.unwrap_or(0.0);
     let interaction_state = interaction_state.expect("interaction_state must be set");
     let ripple_state = ripple_state.expect("ripple_state must be set");
+    let focus_requester = focus_requester.expect("focus_requester must be set");
     let theme = use_context::<MaterialTheme>()
         .expect("MaterialTheme must be provided")
         .get();
@@ -136,6 +139,8 @@ fn navigation_bar_item_view_content(
                 .shape(Shape::CAPSULE)
                 .enabled(true)
                 .interaction_state(interaction_state)
+                .focus_requester(focus_requester)
+                .show_focus_indicator(true)
                 .ripple_color(ripple_color)
                 .child(move || {
                     surface()
@@ -420,6 +425,7 @@ fn navigation_bar_item_view(
     let interaction_state = remember(InteractionState::new);
     let ripple_state = remember(RippleState::new);
     let tap_recognizer = remember(TapRecognizer::default);
+    let focus = remember(FocusRequester::new).get();
 
     let label = item.label.clone();
 
@@ -448,6 +454,7 @@ fn navigation_bar_item_view(
         label: Some(label),
         description: item.accessibility_description.clone(),
         interaction_state: Some(interaction_state),
+        focus_requester: Some(focus),
         on_press: Some(on_press.into()),
         on_release: Some(on_release.into()),
         tap_recognizer: Some(tap_recognizer),
@@ -462,7 +469,8 @@ fn navigation_bar_item_view(
                 .item(item.clone())
                 .selection_fraction(selection_fraction)
                 .interaction_state(interaction_state)
-                .ripple_state(ripple_state);
+                .ripple_state(ripple_state)
+                .focus_requester(focus);
         }
     });
 }

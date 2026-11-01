@@ -1449,6 +1449,39 @@ mod tests {
     }
 
     #[test]
+    fn resizing_items_keep_content_centered_in_their_mask_instead_of_scrolling_rigidly() {
+        let mut state = CarouselController::new(0);
+        state.configure(configuration(CarouselVariant::MultiBrowse, 10));
+        let before = state.masks.clone();
+        let delta = 24.0;
+        assert!(state.move_by(delta));
+        let mut resized = 0;
+        for &(index, center, width) in &before {
+            let Some(&(_, next_center, next_width)) =
+                state.masks.iter().find(|mask| mask.0 == index)
+            else {
+                continue;
+            };
+            if (next_width - width).abs() < 0.5 {
+                continue;
+            }
+            resized += 1;
+            let shift = center - next_center;
+            assert!(
+                shift > 0.0 && (shift - delta).abs() > 0.5,
+                "item {index} content must move with its mask center, not rigidly with the scroll: \
+                 shift {shift}, scroll {delta}, before {before:?}, after {:?}",
+                state.masks
+            );
+        }
+        assert!(
+            resized > 0,
+            "scrolling must resize at least one visible item: {before:?} -> {:?}",
+            state.masks
+        );
+    }
+
+    #[test]
     fn navigation_realigns_the_current_item_after_free_scrolling() {
         for variant in [
             CarouselVariant::Uncontained,

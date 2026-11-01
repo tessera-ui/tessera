@@ -1092,7 +1092,8 @@ mod form_article_tests {
                             .iter()
                             .any(|(id, node)| *id == trigger && node.label() == Some("Saved"))
                     );
-                    activate(&mut renderer, "Undo", Role::Button);
+                    assert!(contains(&renderer, "All changes saved", Role::Status));
+                    activate(&mut renderer, "Saved", Role::Button);
                     assert!(
                         renderer
                             .accessibility_snapshot()

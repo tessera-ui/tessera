@@ -50,6 +50,7 @@ pub(super) struct SliderKeyboardModifierNode {
     pub model: SliderKeyboardModel,
     pub steps: usize,
     pub disabled: bool,
+    pub space_held: State<bool>,
     pub on_change: CallbackWith<f32>,
 }
 
@@ -60,6 +61,7 @@ fn key_target(
     min: f32,
     max: f32,
     steps: usize,
+    larger: bool,
 ) -> Option<f32> {
     let intervals = if steps == 0 {
         100
@@ -68,18 +70,19 @@ fn key_target(
     };
     let delta = 1.0 / intervals as f32;
     let page = (intervals / 10).clamp(1, 10) as f32;
+    let arrow = if larger { page * delta } else { delta };
     let sign = if axis.reversed { -1.0 } else { 1.0 };
     let vertical = axis.orientation == SliderOrientation::Vertical;
     let next = match key {
-        Key::Named(NamedKey::ArrowUp) if vertical => value - sign * delta,
-        Key::Named(NamedKey::ArrowDown) if vertical => value + sign * delta,
+        Key::Named(NamedKey::ArrowUp) if vertical => value - sign * arrow,
+        Key::Named(NamedKey::ArrowDown) if vertical => value + sign * arrow,
         Key::Named(NamedKey::ArrowRight | NamedKey::ArrowLeft) if vertical => return None,
-        Key::Named(NamedKey::ArrowRight) => value + sign * delta,
-        Key::Named(NamedKey::ArrowLeft) => value - sign * delta,
+        Key::Named(NamedKey::ArrowRight) => value + sign * arrow,
+        Key::Named(NamedKey::ArrowLeft) => value - sign * arrow,
         Key::Named(NamedKey::PageUp) if vertical => value - sign * page * delta,
         Key::Named(NamedKey::PageDown) if vertical => value + sign * page * delta,
-        Key::Named(NamedKey::ArrowUp) => value + delta,
-        Key::Named(NamedKey::ArrowDown) => value - delta,
+        Key::Named(NamedKey::ArrowUp) => value + arrow,
+        Key::Named(NamedKey::ArrowDown) => value - arrow,
         Key::Named(NamedKey::PageUp) => value + page * delta,
         Key::Named(NamedKey::PageDown) => value - page * delta,
         Key::Named(NamedKey::Home) => return Some(min),
@@ -95,13 +98,21 @@ impl SliderKeyboardModifierNode {
         {
             return false;
         }
+        if *key == Key::Named(NamedKey::Space) {
+            let held = state == ElementState::Pressed;
+            if self.space_held.get() != held {
+                self.space_held.set(held);
+            }
+            return true;
+        }
         let (value, min, max) = self.model.snapshot();
         let value = if value.is_nan() {
             min
         } else {
             value.clamp(min, max)
         };
-        let Some(next) = key_target(self.axis, key, value, min, max, self.steps) else {
+        let larger = self.space_held.get();
+        let Some(next) = key_target(self.axis, key, value, min, max, self.steps, larger) else {
             return false;
         };
         if state == ElementState::Pressed && (next - value).abs() > f32::EPSILON {
@@ -613,7 +624,16 @@ mod tests {
             (NamedKey::PageDown, 0.4),
         ] {
             assert!(
-                (key_target(SliderAxis::default(), &Key::Named(key), 0.5, 0.0, 1.0, 0).unwrap()
+                (key_target(
+                    SliderAxis::default(),
+                    &Key::Named(key),
+                    0.5,
+                    0.0,
+                    1.0,
+                    0,
+                    false
+                )
+                .unwrap()
                     - expected)
                     .abs()
                     < 0.000001
@@ -627,7 +647,8 @@ mod tests {
                     0.5,
                     0.0,
                     1.0,
-                    steps
+                    steps,
+                    false
                 )
                 .unwrap()
                     - next)
@@ -641,7 +662,8 @@ mod tests {
                     0.5,
                     0.0,
                     1.0,
-                    steps
+                    steps,
+                    false
                 )
                 .unwrap()
                     - page)
@@ -660,7 +682,8 @@ mod tests {
                 0.5,
                 0.2,
                 0.8,
-                0
+                0,
+                false
             ),
             Some(0.2)
         );
@@ -671,7 +694,8 @@ mod tests {
                 0.5,
                 0.2,
                 0.8,
-                0
+                0,
+                false
             ),
             Some(0.8)
         );
@@ -682,7 +706,8 @@ mod tests {
                 0.5,
                 0.2,
                 0.8,
-                0
+                0,
+                false
             )
             .unwrap()
                 - 0.51)
@@ -696,7 +721,8 @@ mod tests {
                 0.75,
                 0.0,
                 0.8,
-                3
+                3,
+                false
             ),
             Some(0.8)
         );
@@ -707,7 +733,8 @@ mod tests {
                 0.25,
                 0.2,
                 1.0,
-                3
+                3,
+                false
             ),
             Some(0.2)
         );
@@ -729,12 +756,15 @@ mod tests {
                 (NamedKey::End, 1.0),
             ] {
                 assert_eq!(
-                    key_target(axis, &Key::Named(key), 0.5, 0.0, 1.0, 3),
+                    key_target(axis, &Key::Named(key), 0.5, 0.0, 1.0, 3, false),
                     Some(expected)
                 );
             }
             for key in [NamedKey::ArrowLeft, NamedKey::ArrowRight, NamedKey::Tab] {
-                assert_eq!(key_target(axis, &Key::Named(key), 0.5, 0.0, 1.0, 3), None);
+                assert_eq!(
+                    key_target(axis, &Key::Named(key), 0.5, 0.0, 1.0, 3, false),
+                    None
+                );
             }
         }
         let reversed = SliderAxis {
@@ -748,12 +778,21 @@ mod tests {
                 0.5,
                 0.0,
                 1.0,
-                3
+                3,
+                false
             ),
             Some(0.25)
         );
         assert_eq!(
-            key_target(reversed, &Key::Named(NamedKey::ArrowLeft), 0.5, 0.0, 1.0, 3),
+            key_target(
+                reversed,
+                &Key::Named(NamedKey::ArrowLeft),
+                0.5,
+                0.0,
+                1.0,
+                3,
+                false
+            ),
             Some(0.75)
         );
     }
@@ -768,6 +807,7 @@ mod tests {
             model: SliderKeyboardModel::Single(value),
             steps: 0,
             disabled: false,
+            space_held: tessera_ui::remember(|| false),
             on_change: CallbackWith::new(move |value| recorded.lock().push(value)),
         };
         assert!(node.handle_key(
@@ -795,6 +835,22 @@ mod tests {
         }
         assert_eq!(changes.lock().len(), 3);
         assert!((value.get() - 0.53).abs() < 0.000001);
+        let space = Key::Named(NamedKey::Space);
+        assert!(node.handle_key(&space, ElementState::Pressed, ModifiersState::empty()));
+        assert!(node.handle_key(
+            &Key::Named(NamedKey::ArrowRight),
+            ElementState::Pressed,
+            ModifiersState::empty()
+        ));
+        assert!((value.get() - 0.63).abs() < 0.000001);
+        assert!(node.handle_key(&space, ElementState::Released, ModifiersState::empty()));
+        assert!(node.handle_key(
+            &Key::Named(NamedKey::ArrowLeft),
+            ElementState::Pressed,
+            ModifiersState::empty()
+        ));
+        assert!((value.get() - 0.62).abs() < 0.000001);
+        assert_eq!(changes.lock().len(), 5);
         node.handle_key(
             &Key::Named(NamedKey::End),
             ElementState::Pressed,
@@ -805,7 +861,7 @@ mod tests {
             ElementState::Pressed,
             ModifiersState::empty()
         ));
-        assert_eq!(changes.lock().len(), 4);
+        assert_eq!(changes.lock().len(), 6);
         node.disabled = true;
         assert!(!node.handle_key(
             &Key::Named(NamedKey::Home),
@@ -819,6 +875,7 @@ mod tests {
             model: SliderKeyboardModel::Start(range),
             steps: 0,
             disabled: false,
+            space_held: tessera_ui::remember(|| false),
             on_change: CallbackWith::new(move |_| recorded_range(range)),
         };
         let end = SliderKeyboardModifierNode {
@@ -826,6 +883,7 @@ mod tests {
             model: SliderKeyboardModel::End(range),
             steps: 0,
             disabled: false,
+            space_held: tessera_ui::remember(|| false),
             on_change: CallbackWith::new(move |_| recorded_range(range)),
         };
         for key in [

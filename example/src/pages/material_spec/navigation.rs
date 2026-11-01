@@ -30,15 +30,13 @@ use tessera_components::{
     theme::{MaterialTheme, material_theme},
 };
 use tessera_ui::{
-    Callback, Color, Dp, FocusTraversalPolicy, Modifier, RenderSlot, RenderSlotWith, State,
-    accesskit::Role, modifier::FocusModifierExt as _, remember, tessera, use_context,
+    Callback, Color, Dp, FocusTraversalPolicy, Modifier, RenderSlot, State, accesskit::Role,
+    modifier::FocusModifierExt as _, remember, tessera, use_context,
 };
 
-use self::article_pages::{Figure, Kind, detailed_article};
 use super::{
     ACCENT,
     annotations::{self, Geometry, Rect, dotted, relative, watch},
-    article::SpecSection,
     gap, panel, spec_table, subheading, type_style,
 };
 
@@ -47,87 +45,6 @@ use super::{
 mod tests;
 
 pub(super) const NAMES: [&str; 5] = ["Home", "Inbox", "Saved", "Media", "Settings"];
-
-#[tessera]
-pub(super) fn navigation_spec(rail: bool) {
-    let mut sections = vec![
-        SpecSection {
-            title: "Variants",
-            content: RenderSlot::new(move || {
-                variants(rail);
-            }),
-        },
-        SpecSection {
-            title: "Configurations",
-            content: RenderSlot::new(move || {
-                configurations(rail);
-            }),
-        },
-        SpecSection {
-            title: "Tokens & specs",
-            content: RenderSlot::new(move || {
-                tokens(rail);
-            }),
-        },
-        SpecSection {
-            title: "Anatomy",
-            content: RenderSlot::new(move || {
-                anatomy(rail);
-            }),
-        },
-        SpecSection {
-            title: "Color",
-            content: RenderSlot::new(move || {
-                colors(rail);
-            }),
-        },
-        SpecSection {
-            title: "States",
-            content: RenderSlot::new(move || {
-                states(rail);
-            }),
-        },
-        SpecSection {
-            title: "Measurements",
-            content: RenderSlot::new(move || {
-                measurements(rail);
-            }),
-        },
-    ];
-    if rail {
-        sections.push(SpecSection {
-            title: "Common layouts",
-            content: RenderSlot::new(layouts),
-        });
-    }
-    sections.push(SpecSection {
-        title: if rail {
-            "Baseline navigation rail"
-        } else {
-            "Baseline navigation bar"
-        },
-        content: RenderSlot::new(move || {
-            baseline(rail);
-        }),
-    });
-    detailed_article(
-        if rail { Kind::Rail } else { Kind::Bar },
-        if rail {
-            "Navigation rail"
-        } else {
-            "Navigation bar"
-        },
-        if rail {
-            "Navigation rails let people switch between UI views on mid-sized devices"
-        } else {
-            "Navigation bars let people switch between UI views on smaller devices"
-        },
-        sections,
-        RenderSlotWith::new(move |figure| {
-            chapter_figure(rail, figure);
-        }),
-    );
-}
 
 #[tessera]
 fn sample(
@@ -1198,82 +1115,6 @@ fn layouts() {
             sample(label, true, false).menu(menu).fab(fab);
         }));
         gap(Dp(32.0));
-    }
-}
-
-#[tessera]
-fn chapter_figure(rail: bool, figure: Figure) {
-    match figure {
-        Figure::None => {}
-        Figure::Anatomy => {
-            native_figure(rail, false, 1, true);
-            gap(Dp(32.0));
-            native_figure(rail, true, 1, true);
-        }
-        Figure::Badges => {
-            native_figure(rail, false, 1, true);
-            if rail {
-                gap(Dp(32.0));
-                native_figure(true, true, 1, true);
-            }
-        }
-        Figure::Adaptive => {
-            if rail {
-                modal_rail();
-                gap(Dp(32.0));
-            }
-            native_figure(rail, false, 0, false);
-            gap(Dp(32.0));
-            native_figure(rail, true, 0, false);
-        }
-        Figure::Placement => {
-            placement(rail);
-        }
-        Figure::Scaling => {
-            let theme = use_context::<MaterialTheme>().unwrap().get();
-            for scale in [1.5, 2.0] {
-                subheading(format!("{}× text", scale));
-                gap(Dp(16.0));
-                let mut scaled = theme.clone();
-                scaled.typography.label_medium.font_size =
-                    scaled.typography.label_medium.font_size * scale;
-                scaled.typography.label_medium.line_height = scaled
-                    .typography
-                    .label_medium
-                    .line_height
-                    .map(|height| height * scale);
-                scaled.typography.label_large.font_size =
-                    scaled.typography.label_large.font_size * scale;
-                scaled.typography.label_large.line_height = scaled
-                    .typography
-                    .label_large
-                    .line_height
-                    .map(|height| height * scale);
-                material_theme()
-                    .theme(move || scaled.clone())
-                    .child(move || {
-                        native_figure(rail, false, 2, false);
-                    });
-                gap(Dp(24.0));
-            }
-        }
-        Figure::Labels => {
-            native_figure(rail, false, 0, false);
-            gap(Dp(24.0));
-            spec_table(
-                vec!["Visible label".into(), "Additional description".into()],
-                vec![
-                    vec!["Inbox".into(), "3 unread messages".into()],
-                    vec!["Saved".into(), "Saved places".into()],
-                ],
-            );
-        }
-        Figure::Keyboard | Figure::Selection | Figure::States => {
-            native_figure(rail, false, 0, true);
-        }
-        Figure::Overview | Figure::Fixed | Figure::Scrollable | Figure::Nested => {
-            native_figure(rail, false, 0, false);
-        }
     }
 }
 

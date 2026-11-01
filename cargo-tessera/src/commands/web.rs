@@ -93,12 +93,12 @@ pub fn init(package: Option<&str>) -> Result<()> {
     Ok(())
 }
 
-pub fn build(release: bool, package: Option<&str>) -> Result<()> {
+pub fn build(release: bool, package: Option<&str>, features: &[String]) -> Result<()> {
     let project_dir = resolve_project_dir(package)?;
     let metadata = load_project_metadata(&project_dir)?;
 
     output::status("Building", format!("web app `{}`", metadata.package_name));
-    build_project(&project_dir, &metadata, release)?;
+    build_project(&project_dir, &metadata, release, features)?;
     output::status(
         "Finished",
         format!(
@@ -121,7 +121,7 @@ pub fn dev(release: bool, package: Option<&str>, port: u16) -> Result<()> {
     output::status("Watching", "for file changes");
     output::note("Refresh the browser after rebuilds.");
 
-    build_project(&project_dir, &metadata, release)?;
+    build_project(&project_dir, &metadata, release, &[])?;
 
     let listener = TcpListener::bind(("127.0.0.1", port))
         .with_context(|| format!("Failed to bind development server on port {port}"))?;
@@ -192,7 +192,7 @@ pub fn dev(release: bool, package: Option<&str>, port: u16) -> Result<()> {
 
         if pending_change && last_change.elapsed() >= BUILD_DEBOUNCE_WINDOW {
             output::status("Building", "web app");
-            match build_project(&project_dir, &metadata, release) {
+            match build_project(&project_dir, &metadata, release, &[]) {
                 Ok(()) => output::status(
                     "Finished",
                     format!(
@@ -207,12 +207,7 @@ pub fn dev(release: bool, package: Option<&str>, port: u16) -> Result<()> {
     }
 }
 
-fn build_project(project_dir: &Path, metadata: &ProjectMetadata, release: bool) -> Result<()> {
-    color_check::run(color_check::CheckOptions::new(
-        Some(&metadata.package_name),
-        Some(WASM_TARGET),
-    ))?;
-
+fn web_build_command(project_dir: &Path, release: bool, features: &[String]) -> Command {
     let mut cmd = Command::new("cargo");
     cmd.arg("build")
         .arg("--manifest-path")
@@ -224,13 +219,33 @@ fn build_project(project_dir: &Path, metadata: &ProjectMetadata, release: bool) 
         cmd.arg("--release");
     }
 
+    if !features.is_empty() {
+        cmd.arg("--features").arg(features.join(","));
+    }
+    cmd
+}
+
+fn build_project(
+    project_dir: &Path,
+    metadata: &ProjectMetadata,
+    release: bool,
+    features: &[String],
+) -> Result<()> {
+    let mut options =
+        color_check::CheckOptions::new(Some(&metadata.package_name), Some(WASM_TARGET));
+    options.features = color_check::FeatureSelection::Selected {
+        features,
+        no_default_features: false,
+    };
+    color_check::run(options)?;
+
+    let mut cmd = web_build_command(project_dir, release, features);
     let status = cmd
         .status()
         .context("Failed to run cargo build for web target")?;
     if !status.success() {
         bail!("Web build failed");
     }
-
     let output_dir = project_dir.join(WEB_OUTPUT_DIR);
     fs::create_dir_all(&output_dir)
         .with_context(|| format!("Failed to create {}", output_dir.display()))?;
@@ -718,6 +733,43 @@ mod tests {
     use super::*;
 
     static NEXT_FIXTURE_ID: AtomicU64 = AtomicU64::new(0);
+
+    #[test]
+    fn web_build_forwards_selected_features_without_changing_default_builds() {
+        for (release, features) in [
+            (false, Vec::new()),
+            (true, vec!["diagnostics".to_string(), "extra".to_string()]),
+        ] {
+            let command = web_build_command(Path::new("app"), release, &features);
+            let actual: Vec<_> = command
+                .get_args()
+                .map(|arg| arg.to_string_lossy().into_owned())
+                .collect();
+            let mut expected = vec![
+                "build".to_string(),
+                "--manifest-path".to_string(),
+                Path::new("app")
+                    .join("Cargo.toml")
+                    .to_string_lossy()
+                    .into_owned(),
+                "--target".to_string(),
+                WASM_TARGET.to_string(),
+            ];
+            if release {
+                expected.push("--release".to_string());
+            }
+            if !features.is_empty() {
+                expected.extend(["--features".to_string(), "diagnostics,extra".to_string()]);
+            }
+            assert_eq!(actual, expected);
+            assert!(
+                command
+                    .get_envs()
+                    .any(|(key, value)| key == "TESSERA_ASSET_BACKEND"
+                        && value == Some(std::ffi::OsStr::new("embed")))
+            );
+        }
+    }
 
     struct Fixture(PathBuf);
 

@@ -1,5 +1,9 @@
 mod app;
+#[cfg(all(target_family = "wasm", feature = "md3-diagnostics"))]
+mod md3_diagnostics;
 mod pages;
+#[cfg(all(test, not(target_family = "wasm")))]
+mod render_precision_tests;
 pub mod res;
 
 use tessera_ui::{
@@ -7,6 +11,7 @@ use tessera_ui::{
     renderer::{TesseraConfig, WindowConfig},
 };
 
+#[cfg(not(all(target_family = "wasm", feature = "md3-diagnostics")))]
 use app::app;
 use pages::custom_shader::CustomShaderPackage;
 
@@ -17,7 +22,11 @@ use wasm_bindgen::{JsValue, prelude::wasm_bindgen};
 
 #[tessera_ui::entry]
 pub fn run() -> EntryPoint {
-    EntryPoint::new(app)
+    #[cfg(all(target_family = "wasm", feature = "md3-diagnostics"))]
+    let entry = EntryPoint::new(md3_diagnostics::diagnostic_app);
+    #[cfg(not(all(target_family = "wasm", feature = "md3-diagnostics")))]
+    let entry = EntryPoint::new(app);
+    entry
         .config(TesseraConfig {
             sample_count: 4,
             window: WindowConfig {

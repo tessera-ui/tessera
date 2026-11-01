@@ -754,7 +754,7 @@ const TOKEN_SETS: [&[Token]; 6] = [
         Token {
             group: "Inactive track",
             section: "Inactive track",
-            name: "Slider large inactive track trailing shape\nmd.comp.slider.large.inactive.track.height",
+            name: "Slider large inactive track height\nmd.comp.slider.large.inactive.track.height",
             value: "56dp",
         },
         Token {

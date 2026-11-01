@@ -21,7 +21,7 @@ use crate::{
     button::button,
     icon_button::{IconButtonVariant, icon_button},
     material_icons::filled,
-    modifier::{ModifierExt as _, Padding, SemanticsArgs},
+    modifier::{ModifierExt as _, Padding, SemanticsArgs, with_keyboard_input},
     shape_def::Shape,
     surface::surface,
     text::text,
@@ -444,7 +444,8 @@ impl SnackbarDefaults {
 /// - `dismiss_action_label` — accessible close-button name; defaults to
 ///   Dismiss.
 /// - `on_action` — optional action callback.
-/// - `on_dismiss` — optional dismiss callback.
+/// - `on_dismiss` — optional dismiss callback, also invoked when Escape is
+///   pressed while one of the snackbar controls has focus.
 ///
 /// ## Examples
 ///
@@ -516,6 +517,15 @@ pub fn snackbar(
     } else {
         None
     };
+    let modifier = if let Some(on_dismiss) = on_dismiss {
+        with_keyboard_input(modifier, move |input: tessera_ui::KeyboardInput<'_>| {
+            input
+                .keyboard_events
+                .retain(|event| !dismiss_key(event.physical_key, event.state, on_dismiss));
+        })
+    } else {
+        modifier
+    };
 
     surface()
         .modifier(modifier)
@@ -575,6 +585,24 @@ pub fn snackbar(
                     }
                 });
         });
+}
+
+fn dismiss_key(
+    key: tessera_ui::winit::keyboard::PhysicalKey,
+    state: tessera_ui::winit::event::ElementState,
+    on_dismiss: Callback,
+) -> bool {
+    if state == tessera_ui::winit::event::ElementState::Pressed
+        && key
+            == tessera_ui::winit::keyboard::PhysicalKey::Code(
+                tessera_ui::winit::keyboard::KeyCode::Escape,
+            )
+    {
+        on_dismiss.call();
+        true
+    } else {
+        false
+    }
 }
 
 /// # snackbar_host

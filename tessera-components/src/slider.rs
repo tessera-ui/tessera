@@ -89,6 +89,7 @@ struct RangeThumbAccessibility {
     max: f32,
     value_label: Option<String>,
     keyboard_model: SliderKeyboardModel,
+    space_held: State<bool>,
     on_change: CallbackWith<f32>,
 }
 
@@ -259,6 +260,7 @@ fn apply_range_thumb_pointer_modifier(
         model: accessibility.keyboard_model,
         steps: accessibility.steps,
         disabled: accessibility.disabled,
+        space_held: accessibility.space_held,
         on_change: accessibility.on_change,
     })
     .push_semantics(RangeSliderThumbSemanticsModifierNode { accessibility })
@@ -328,6 +330,7 @@ fn apply_slider_pointer_modifier(
     drag_recognizer: State<DragRecognizer>,
     clamped_value: f32,
     keyboard_value: State<f32>,
+    space_held: State<bool>,
 ) -> Modifier {
     let modifier = if !args.disabled {
         base.hover_cursor_icon(tessera_ui::winit::window::CursorIcon::Pointer)
@@ -340,6 +343,7 @@ fn apply_slider_pointer_modifier(
             model: SliderKeyboardModel::Single(keyboard_value),
             steps: args.steps,
             disabled: args.disabled,
+            space_held,
             on_change: args.on_change,
         })
         .push_semantics(SliderSemanticsModifierNode {
@@ -399,6 +403,7 @@ fn apply_centered_slider_pointer_modifier(
     drag_recognizer: State<DragRecognizer>,
     clamped_value: f32,
     keyboard_value: State<f32>,
+    space_held: State<bool>,
 ) -> Modifier {
     let modifier = if !args.disabled {
         base.hover_cursor_icon(tessera_ui::winit::window::CursorIcon::Pointer)
@@ -411,6 +416,7 @@ fn apply_centered_slider_pointer_modifier(
             model: SliderKeyboardModel::Single(keyboard_value),
             steps: args.steps,
             disabled: args.disabled,
+            space_held,
             on_change: args.on_change,
         })
         .push_semantics(SliderSemanticsModifierNode {
@@ -1137,7 +1143,7 @@ fn measure_slider(
             AxisConstraint::at_most(icon_size.into()),
         );
         let icon_measured = active_icon.measure(input, &icon_constraint)?;
-        let icon_padding = Dp(8.0).to_px();
+        let icon_padding = layout.icon_padding.to_px();
         let icon_y = layout.track_y + Px((layout.track_height.0 - icon_measured.height.0) / 2);
         let required_width = icon_measured.width + icon_padding * 2;
         if active_width >= required_width {
@@ -1212,9 +1218,7 @@ fn slider_colors(args: &SliderConfig, scheme: &MaterialColorScheme) -> SliderCol
             inactive_track: scheme
                 .on_surface
                 .with_alpha(MaterialAlpha::DISABLED_CONTAINER),
-            active_tick: scheme
-                .on_surface
-                .with_alpha(MaterialAlpha::DISABLED_CONTAINER),
+            active_tick: scheme.inverse_on_surface,
             inactive_tick: scheme
                 .on_surface
                 .with_alpha(MaterialAlpha::DISABLED_CONTENT),
@@ -1243,9 +1247,7 @@ fn range_slider_colors(args: &RangeSliderConfig, scheme: &MaterialColorScheme) -
             inactive_track: scheme
                 .on_surface
                 .with_alpha(MaterialAlpha::DISABLED_CONTAINER),
-            active_tick: scheme
-                .on_surface
-                .with_alpha(MaterialAlpha::DISABLED_CONTAINER),
+            active_tick: scheme.inverse_on_surface,
             inactive_tick: scheme
                 .on_surface
                 .with_alpha(MaterialAlpha::DISABLED_CONTENT),
@@ -1427,6 +1429,10 @@ fn slider_content(
     if keyboard_value.get() != clamped_value {
         keyboard_value.set(clamped_value);
     }
+    let space_held = remember(|| false);
+    if space_held.get() && !controller.with(|c| c.is_focused()) {
+        space_held.set(false);
+    }
     let visual = controller.with(|c| c.visual_state(&args));
     let base_handle_width = args.thumb_diameter.to_px();
     let pressed_handle_width = Px((base_handle_width.0 / 2).max(1));
@@ -1449,6 +1455,7 @@ fn slider_content(
         drag_recognizer,
         clamped_value,
         keyboard_value,
+        space_held,
     );
 
     let indicator_anchor = if args.value_indicator != SliderValueIndicatorVisibility::Hidden {
@@ -1911,6 +1918,10 @@ fn centered_slider_content(
     if keyboard_value.get() != clamped_value {
         keyboard_value.set(clamped_value);
     }
+    let space_held = remember(|| false);
+    if space_held.get() && !controller.with(|c| c.is_focused()) {
+        space_held.set(false);
+    }
     let visual = controller.with(|c| c.visual_state(&args));
     let base_handle_width = args.thumb_diameter.to_px();
     let pressed_handle_width = Px((base_handle_width.0 / 2).max(1));
@@ -1933,6 +1944,7 @@ fn centered_slider_content(
         drag_recognizer,
         clamped_value,
         keyboard_value,
+        space_held,
     );
 
     let indicator_anchor = if args.value_indicator != SliderValueIndicatorVisibility::Hidden {
@@ -2389,6 +2401,16 @@ fn range_slider_content(
     if keyboard_values.get() != (start, end) {
         keyboard_values.set((start, end));
     }
+    let start_space_held = remember(|| false);
+    let end_space_held = remember(|| false);
+    let (start_focused, end_focused) =
+        state.with(|s| (s.focus_start.is_focused(), s.focus_end.is_focused()));
+    if start_space_held.get() && !start_focused {
+        start_space_held.set(false);
+    }
+    if end_space_held.get() && !end_focused {
+        end_space_held.set(false);
+    }
 
     let base_handle_width = args.thumb_diameter.to_px();
     let pressed_handle_width = Px((base_handle_width.0 / 2).max(1));
@@ -2527,6 +2549,7 @@ fn range_slider_content(
                     min: 0.0,
                     max: end,
                     keyboard_model: SliderKeyboardModel::Start(keyboard_values),
+                    space_held: start_space_held,
                     on_change: CallbackWith::new(move |new_start: f32| {
                         let on_change = render_data.with(|(args, ..)| args.on_change);
                         if keyboard_values.get().0 != new_start {
@@ -2565,6 +2588,7 @@ fn range_slider_content(
                     min: start,
                     max: 1.0,
                     keyboard_model: SliderKeyboardModel::End(keyboard_values),
+                    space_held: end_space_held,
                     on_change: CallbackWith::new(move |new_end: f32| {
                         let on_change = render_data.with(|(args, ..)| args.on_change);
                         if keyboard_values.get().1 != new_end {

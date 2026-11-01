@@ -114,3 +114,70 @@ fn queued_article_message_only_timeout_advances_to_persistent_action_without_mov
             .all(|(_, node)| node.role() != Role::Status)
     );
 }
+
+#[tessera]
+fn configurations_fixture() {
+    material_theme().child(|| {
+        configurations();
+    });
+}
+
+#[tessera]
+fn inline_feedback_fixture() {
+    material_theme().child(|| {
+        inline_feedback();
+    });
+}
+
+fn renderer(root: fn()) -> HeadlessRenderer {
+    let mut renderer = HeadlessRenderer::new(
+        Box::new(root),
+        vec![Box::new(Pipelines)],
+        HeadlessConfig {
+            width: 900,
+            height: 1400,
+            sample_count: 1,
+            frame_time: Duration::from_millis(100),
+            ..Default::default()
+        },
+    )
+    .unwrap();
+    renderer.render_frames(3);
+    renderer
+}
+
+#[test]
+#[ignore = "requires a native GPU adapter"]
+fn configuration_figure_uses_native_one_two_and_stacked_line_heights() {
+    let renderer = renderer(configurations_fixture);
+    for (name, height) in [
+        ("Single line", 48.0),
+        ("Single line with action", 48.0),
+        ("Two lines", 68.0),
+        ("Two lines with action", 68.0),
+        ("Two lines with longer action", 120.0),
+    ] {
+        let bounds = node(&renderer, name, Role::Group).1.bounds().unwrap();
+        assert_eq!(bounds.height(), height, "snackbar configuration {name}");
+    }
+}
+
+#[test]
+#[ignore = "requires a native GPU adapter"]
+fn inline_feedback_keeps_saved_label_after_message_only_snackbar_times_out() {
+    let mut renderer = renderer(inline_feedback_fixture);
+    action(&mut renderer, "Save", Action::Click);
+    assert_message(&renderer, "All changes saved");
+    node(&renderer, "Saved", Role::Button);
+    renderer.render_frames(60);
+    assert!(
+        renderer
+            .accessibility_snapshot()
+            .unwrap()
+            .nodes
+            .iter()
+            .all(|(_, node)| node.role() != Role::Status),
+        "the message-only snackbar must auto-dismiss"
+    );
+    node(&renderer, "Saved", Role::Button);
+}

@@ -110,6 +110,8 @@ mod modal_focus;
 pub mod modifier;
 pub mod navigation_bar;
 pub mod navigation_drawer;
+#[cfg(all(test, not(target_family = "wasm")))]
+mod navigation_focus_tests;
 pub mod navigation_rail;
 mod nested_scroll;
 mod overlay_semantics;

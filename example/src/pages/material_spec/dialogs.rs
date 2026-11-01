@@ -42,6 +42,9 @@ use super::{
 #[path = "dialogs_accessibility.rs"]
 mod accessibility;
 
+#[path = "dialogs_tokens.rs"]
+mod token_sets;
+
 #[cfg(all(test, not(target_family = "wasm")))]
 #[path = "dialogs_tests.rs"]
 mod regression_tests;
@@ -119,7 +122,7 @@ pub(super) fn dialogs_spec() {
                 vec![
                     SpecSection {
                         title: "Tokens & specs",
-                        content: RenderSlot::new(tokens),
+                        content: RenderSlot::new(token_sets::tokens),
                     },
                     SpecSection {
                         title: "Basic dialogs",
@@ -150,11 +153,7 @@ pub(super) fn dialogs_spec() {
                 },
                 ArticlePage {
                     title: "Guidelines",
-                    intro: Some(RenderSlot::new(|| {
-                        prose("A basic dialog and a full-screen dialog serve different tasks. The basic dialog interrupts a single decision; the full-screen dialog holds a sequence of related fields.");
-                        gap(Dp(24.0));
-                        variant_pair();
-                    })),
+                    intro: Some(RenderSlot::new(guideline_hero)),
                     sections: vec![
                         SpecSection {
                             title: "Usage",
@@ -241,6 +240,7 @@ pub(super) fn dialogs_spec() {
 
 const DO_COLOR: Color = Color::from_rgb(0.121, 0.478, 0.196);
 const DONT_COLOR: Color = Color::from_rgb(0.741, 0.161, 0.161);
+const CAUTION_COLOR: Color = Color::from_rgb(0.659, 0.373, 0.0);
 
 #[tessera]
 fn bullets(items: Vec<String>) {
@@ -289,8 +289,44 @@ fn guidance_line(#[prop(into)] mark: String, #[prop(into)] note: String, color: 
             text()
                 .content(note.clone())
                 .color(scheme.on_surface_variant)
-                .style(type_style(14.0, 20.0));
+                .style(type_style(14.0, 20.0))
+                .modifier(Modifier::new().weight(1.0));
         });
+}
+
+#[tessera]
+fn legend(items: Vec<String>) {
+    let scheme = use_context::<MaterialTheme>().unwrap().get().color_scheme;
+    column().children(move || {
+        for (index, item) in items.clone().into_iter().enumerate() {
+            row()
+                .cross_axis_alignment(CrossAxisAlignment::Center)
+                .children(move || {
+                    boxed()
+                        .alignment(Alignment::Center)
+                        .modifier(
+                            Modifier::new()
+                                .size(Dp(24.0), Dp(32.0))
+                                .background_with_shape(
+                                    scheme.on_surface,
+                                    Shape::rounded_rectangle(Dp(12.0)),
+                                ),
+                        )
+                        .children(move || {
+                            text()
+                                .content((index + 1).to_string())
+                                .style(type_style(12.0, 16.0))
+                                .color(scheme.surface);
+                        });
+                    spacer().modifier(Modifier::new().width(Dp(12.0)));
+                    text()
+                        .content(item.clone())
+                        .style(type_style(14.0, 20.0))
+                        .color(scheme.on_surface_variant);
+                });
+            gap(Dp(6.0));
+        }
+    });
 }
 
 #[tessera]
@@ -302,11 +338,715 @@ fn do_dont(#[prop(into)] good: String, #[prop(into)] bad: String) {
     });
 }
 
+#[derive(Clone, Copy, Default, PartialEq)]
+enum Verdict {
+    #[default]
+    Note,
+    Do,
+    Dont,
+    Caution,
+}
+
+#[derive(Clone, Copy, Default, PartialEq)]
+enum Backdrop {
+    #[default]
+    Photos,
+    Snackbar,
+    Product,
+    Surface,
+}
+
+fn labels(values: &[&str]) -> Vec<String> {
+    values.iter().map(|value| (*value).to_owned()).collect()
+}
+
+fn product_data() -> ImageData {
+    static PRODUCT: OnceLock<ImageData> = OnceLock::new();
+    PRODUCT
+        .get_or_init(|| {
+            include_bytes!("../../../assets/material_spec/dialog-guideline-product.png")
+                .as_slice()
+                .try_into_image_data()
+                .expect("dialog product example")
+        })
+        .clone()
+}
+
+#[tessera]
+fn verdict_band(verdict: Verdict) {
+    let (color, vector, label) = match verdict {
+        Verdict::Do => (DO_COLOR, filled::CHECK_CIRCLE_SVG, "Do"),
+        Verdict::Dont => (DONT_COLOR, filled::CANCEL_SVG, "Don't"),
+        Verdict::Caution => (CAUTION_COLOR, filled::WARNING_SVG, "Caution"),
+        Verdict::Note => (INK, filled::INFO_SVG, "Note"),
+    };
+    column()
+        .modifier(Modifier::new().fill_max_width())
+        .children(move || {
+            boxed().modifier(
+                Modifier::new()
+                    .fill_max_width()
+                    .height(Dp(4.0))
+                    .background_with_shape(color, Shape::rounded_rectangle(Dp(2.0))),
+            );
+            gap(Dp(12.0));
+            row()
+                .cross_axis_alignment(CrossAxisAlignment::Center)
+                .children(move || {
+                    icon().vector(vector).tint(color).size(Dp(20.0));
+                    spacer().modifier(Modifier::new().width(Dp(8.0)));
+                    text()
+                        .content(label)
+                        .color(color)
+                        .style(type_style(16.0, 24.0));
+                });
+        });
+}
+
+#[tessera]
+fn guidance_card(
+    verdict: Verdict,
+    #[prop(into)] note: String,
+    scene: RenderSlot,
+    wide: Option<bool>,
+) {
+    let canonical_width = if wide.unwrap_or(false) { 720.0 } else { 400.0 };
+    column()
+        .modifier(Modifier::new().fill_max_width())
+        .children(move || {
+            let scene = scene.clone();
+            boxed()
+                .modifier(
+                    Modifier::new()
+                        .fill_max_width()
+                        .clip_shape(Shape::rounded_rectangle(Dp(24.0))),
+                )
+                .children(move || {
+                    dialog_canvas(canonical_width, 320.0, scene.clone());
+                });
+            if verdict != Verdict::Note {
+                gap(Dp(4.0));
+                verdict_band(verdict);
+            }
+            gap(Dp(16.0));
+            caption(note.clone());
+        });
+}
+
+#[tessera]
+fn guidance_pair(
+    first_verdict: Verdict,
+    #[prop(into)] first_note: String,
+    first: RenderSlot,
+    second_verdict: Verdict,
+    #[prop(into)] second_note: String,
+    second: RenderSlot,
+) {
+    let width = remember(|| Dp(1024.0));
+    boxed()
+        .modifier(Modifier::new().fill_max_width().on_layout_coordinates(
+            move |coordinates: LayoutCoordinates| {
+                let next = Dp::from_pixels_f32(coordinates.local_size.width.to_f32());
+                if width.get() != next {
+                    width.set(next);
+                }
+            },
+        ))
+        .children(move || {
+            let (first, second) = (first.clone(), second.clone());
+            let (first_note, second_note) = (first_note.clone(), second_note.clone());
+            if width.get().0 < 640.0 {
+                column()
+                    .modifier(Modifier::new().fill_max_width())
+                    .children(move || {
+                        guidance_card(first_verdict, first_note.clone(), first.clone());
+                        gap(Dp(32.0));
+                        guidance_card(second_verdict, second_note.clone(), second.clone());
+                    });
+            } else {
+                row()
+                    .cross_axis_alignment(CrossAxisAlignment::Start)
+                    .modifier(Modifier::new().fill_max_width())
+                    .children(move || {
+                        let (first, second) = (first.clone(), second.clone());
+                        let (first_note, second_note) = (first_note.clone(), second_note.clone());
+                        boxed()
+                            .modifier(Modifier::new().weight(1.0))
+                            .children(move || {
+                                guidance_card(first_verdict, first_note.clone(), first.clone());
+                            });
+                        spacer().modifier(Modifier::new().width(Dp(24.0)));
+                        boxed()
+                            .modifier(Modifier::new().weight(1.0))
+                            .children(move || {
+                                guidance_card(second_verdict, second_note.clone(), second.clone());
+                            });
+                    });
+            }
+        });
+}
+
+#[tessera]
+fn guide_marker() {
+    let scheme = use_context::<MaterialTheme>().unwrap().get().color_scheme;
+    boxed()
+        .alignment(Alignment::Center)
+        .modifier(
+            Modifier::new()
+                .size(Dp(20.0), Dp(20.0))
+                .background_with_shape(scheme.on_surface, Shape::Ellipse)
+                .semantics(SemanticsArgs {
+                    role: Some(Role::Note),
+                    label: Some("Marker 1".into()),
+                    ..Default::default()
+                }),
+        )
+        .children(move || {
+            text()
+                .content("1")
+                .style(type_style(12.0, 16.0))
+                .color(scheme.surface);
+        });
+}
+
+#[tessera]
+fn mock_action(label: String, disabled: bool, marked: bool) {
+    let scheme = use_context::<MaterialTheme>().unwrap().get().color_scheme;
+    let color = if disabled {
+        scheme.on_surface.with_alpha(0.38)
+    } else {
+        scheme.primary
+    };
+    let outline = if marked {
+        scheme.on_surface
+    } else {
+        Color::TRANSPARENT
+    };
+    row()
+        .cross_axis_alignment(CrossAxisAlignment::Center)
+        .modifier(
+            Modifier::new()
+                .height(Dp(40.0))
+                .border_with_shape(Dp(1.0), outline, Shape::rounded_rectangle(Dp(20.0)))
+                .padding_symmetric(Dp(12.0), Dp(0.0)),
+        )
+        .children(move || {
+            if marked {
+                guide_marker();
+                spacer().modifier(Modifier::new().width(Dp(8.0)));
+            }
+            text()
+                .content(label.clone())
+                .style(type_style(14.0, 20.0))
+                .color(color);
+        });
+}
+
+#[tessera]
+fn mock_dialog(
+    #[prop(into)] headline: String,
+    width: f64,
+    actions: Vec<String>,
+    #[prop(into)] body: Option<String>,
+    disabled: Option<usize>,
+    marked: Option<usize>,
+    stacked: Option<bool>,
+    content: Option<RenderSlot>,
+) {
+    let scheme = use_context::<MaterialTheme>().unwrap().get().color_scheme;
+    let stacked = stacked.unwrap_or(false);
+    let label = format!("Example dialog: {headline}");
+    column()
+        .modifier(
+            Modifier::new()
+                .width(Dp(width))
+                .background_with_shape(
+                    scheme.surface_container_high,
+                    Shape::rounded_rectangle(Dp(28.0)),
+                )
+                .padding_all(Dp(24.0))
+                .semantics(SemanticsArgs {
+                    role: Some(Role::Group),
+                    label: Some(label),
+                    merge_descendants: true,
+                    ..Default::default()
+                }),
+        )
+        .children(move || {
+            let (actions, content) = (actions.clone(), content.clone());
+            text()
+                .content(headline.clone())
+                .style(type_style(24.0, 32.0))
+                .color(scheme.on_surface);
+            if let Some(body) = body.clone() {
+                gap(Dp(16.0));
+                text()
+                    .content(body)
+                    .style(type_style(14.0, 20.0))
+                    .color(scheme.on_surface_variant);
+            }
+            if let Some(content) = content {
+                gap(Dp(16.0));
+                content.render();
+            }
+            gap(Dp(24.0));
+            if stacked {
+                column()
+                    .cross_axis_alignment(CrossAxisAlignment::End)
+                    .modifier(Modifier::new().fill_max_width())
+                    .children(move || {
+                        for (index, action) in actions.clone().into_iter().enumerate() {
+                            if index > 0 {
+                                gap(Dp(8.0));
+                            }
+                            mock_action(action, disabled == Some(index), marked == Some(index));
+                        }
+                    });
+            } else {
+                row()
+                    .main_axis_alignment(MainAxisAlignment::End)
+                    .cross_axis_alignment(CrossAxisAlignment::Center)
+                    .modifier(Modifier::new().fill_max_width())
+                    .children(move || {
+                        for (index, action) in actions.clone().into_iter().enumerate() {
+                            if index > 0 {
+                                spacer().modifier(Modifier::new().width(Dp(8.0)));
+                            }
+                            mock_action(action, disabled == Some(index), marked == Some(index));
+                        }
+                    });
+            }
+        });
+}
+
+#[tessera]
+fn scrimmed(dialog: RenderSlot) {
+    let scheme = use_context::<MaterialTheme>().unwrap().get().color_scheme;
+    boxed()
+        .alignment(Alignment::Center)
+        .modifier(Modifier::new().fill_max_size())
+        .children(move || {
+            spacer().modifier(
+                Modifier::new()
+                    .fill_max_size()
+                    .background(scheme.scrim.with_alpha(0.32)),
+            );
+            dialog.render();
+        });
+}
+
+#[tessera]
+fn placeholder_lines() {
+    let scheme = use_context::<MaterialTheme>().unwrap().get().color_scheme;
+    column()
+        .modifier(
+            Modifier::new()
+                .fill_max_size()
+                .background(scheme.surface)
+                .padding_all(Dp(24.0)),
+        )
+        .children(move || {
+            for width in [200.0, 320.0, 280.0, 300.0, 240.0, 320.0, 180.0] {
+                spacer().modifier(
+                    Modifier::new()
+                        .size(Dp(width), Dp(12.0))
+                        .background_with_shape(
+                            scheme.outline_variant,
+                            Shape::rounded_rectangle(Dp(6.0)),
+                        ),
+                );
+                gap(Dp(20.0));
+            }
+        });
+}
+
+#[tessera]
+fn backdrop_scene(backdrop: Backdrop, dialog: Option<RenderSlot>) {
+    let scheme = use_context::<MaterialTheme>().unwrap().get().color_scheme;
+    let dialog = dialog.unwrap_or_else(RenderSlot::empty);
+    boxed()
+        .alignment(Alignment::Center)
+        .modifier(
+            Modifier::new()
+                .fill_max_size()
+                .clip_to_bounds()
+                .background(scheme.surface_container_high),
+        )
+        .children(move || {
+            let dialog = dialog.clone();
+            if backdrop == Backdrop::Product {
+                image()
+                    .raster(product_data())
+                    .modifier(Modifier::new().required_size(Dp(400.0), Dp(325.0)));
+            } else if backdrop == Backdrop::Surface {
+                placeholder_lines();
+                scrimmed(dialog);
+            } else {
+                boxed()
+                    .alignment(if backdrop == Backdrop::Snackbar {
+                        Alignment::BottomCenter
+                    } else {
+                        Alignment::Center
+                    })
+                    .modifier(Modifier::new().fill_max_size())
+                    .children(move || {
+                        image()
+                            .raster(accessibility::photo_data())
+                            .modifier(Modifier::new().required_size(Dp(720.0), Dp(639.0)));
+                    });
+                if backdrop == Backdrop::Photos {
+                    scrimmed(dialog);
+                }
+            }
+        });
+}
+
+#[tessera]
+fn radio_options(selected: Option<usize>) {
+    let scheme = use_context::<MaterialTheme>().unwrap().get().color_scheme;
+    column()
+        .modifier(Modifier::new().fill_max_width())
+        .children(move || {
+            for (index, label) in ["Callisto", "Ganymede", "Luna"].into_iter().enumerate() {
+                let chosen = selected == Some(index);
+                let ring = if chosen {
+                    scheme.primary
+                } else {
+                    scheme.on_surface_variant
+                };
+                row()
+                    .cross_axis_alignment(CrossAxisAlignment::Center)
+                    .modifier(Modifier::new().fill_max_width().height(Dp(40.0)))
+                    .children(move || {
+                        boxed()
+                            .alignment(Alignment::Center)
+                            .modifier(Modifier::new().size(Dp(20.0), Dp(20.0)).border_with_shape(
+                                Dp(2.0),
+                                ring,
+                                Shape::Ellipse,
+                            ))
+                            .children(move || {
+                                if chosen {
+                                    spacer().modifier(
+                                        Modifier::new()
+                                            .size(Dp(10.0), Dp(10.0))
+                                            .background_with_shape(scheme.primary, Shape::Ellipse),
+                                    );
+                                }
+                            });
+                        spacer().modifier(Modifier::new().width(Dp(16.0)));
+                        text()
+                            .content(label)
+                            .style(type_style(16.0, 24.0))
+                            .color(scheme.on_surface);
+                    });
+            }
+        });
+}
+
+#[tessera]
+fn full_screen_scene(
+    #[prop(into)] title: String,
+    #[prop(into)] action: String,
+    #[prop(into)] headline: Option<String>,
+    marked: Option<bool>,
+    overlay: Option<RenderSlot>,
+) {
+    let scheme = use_context::<MaterialTheme>().unwrap().get().color_scheme;
+    let marked = marked.unwrap_or(false);
+    let mark_title = marked && headline.is_none();
+    boxed()
+        .modifier(
+            Modifier::new()
+                .fill_max_size()
+                .clip_to_bounds()
+                .background(scheme.surface),
+        )
+        .children(move || {
+            let (title, action, headline) = (title.clone(), action.clone(), headline.clone());
+            column()
+                .modifier(Modifier::new().fill_max_size())
+                .children(move || {
+                    let (title, action, headline) =
+                        (title.clone(), action.clone(), headline.clone());
+                    row()
+                        .cross_axis_alignment(CrossAxisAlignment::Center)
+                        .modifier(
+                            Modifier::new()
+                                .fill_max_width()
+                                .height(Dp(56.0))
+                                .padding_symmetric(Dp(16.0), Dp(0.0)),
+                        )
+                        .children(move || {
+                            icon()
+                                .vector(filled::CLOSE_SVG)
+                                .size(Dp(24.0))
+                                .tint(scheme.on_surface);
+                            spacer().modifier(Modifier::new().width(Dp(16.0)));
+                            text()
+                                .content(title.clone())
+                                .style(type_style(22.0, 28.0))
+                                .color(scheme.on_surface);
+                            if mark_title {
+                                spacer().modifier(Modifier::new().width(Dp(8.0)));
+                                guide_marker();
+                            }
+                            spacer().modifier(Modifier::new().weight(1.0));
+                            text()
+                                .content(action.clone())
+                                .style(type_style(14.0, 20.0))
+                                .color(scheme.primary);
+                        });
+                    column()
+                        .modifier(Modifier::new().fill_max_width().padding_all(Dp(24.0)))
+                        .children(move || {
+                            if let Some(headline) = headline.clone() {
+                                row()
+                                    .cross_axis_alignment(CrossAxisAlignment::Center)
+                                    .modifier(Modifier::new().fill_max_width())
+                                    .children(move || {
+                                        text()
+                                            .content(headline.clone())
+                                            .style(type_style(24.0, 32.0))
+                                            .color(scheme.on_surface)
+                                            .modifier(Modifier::new().weight(1.0));
+                                        if marked {
+                                            spacer().modifier(Modifier::new().width(Dp(8.0)));
+                                            guide_marker();
+                                        }
+                                    });
+                                gap(Dp(24.0));
+                            }
+                            for (caption, value) in [
+                                ("Location", "Mountain View"),
+                                ("Date", "Fri, Aug 8, 7:00 PM"),
+                            ] {
+                                text()
+                                    .content(caption)
+                                    .style(type_style(12.0, 16.0))
+                                    .color(scheme.on_surface_variant);
+                                gap(Dp(4.0));
+                                text()
+                                    .content(value)
+                                    .style(type_style(16.0, 24.0))
+                                    .color(scheme.on_surface);
+                                gap(Dp(8.0));
+                                spacer().modifier(
+                                    Modifier::new()
+                                        .fill_max_width()
+                                        .height(Dp(1.0))
+                                        .background(scheme.outline_variant),
+                                );
+                                gap(Dp(16.0));
+                            }
+                        });
+                });
+            if let Some(overlay) = overlay.clone() {
+                scrimmed(overlay);
+            }
+        });
+}
+
+#[tessera]
+fn calendar_scene() {
+    let scheme = use_context::<MaterialTheme>().unwrap().get().color_scheme;
+    boxed()
+        .modifier(
+            Modifier::new()
+                .fill_max_size()
+                .background(scheme.surface)
+                .padding_all(Dp(16.0)),
+        )
+        .children(move || {
+            column()
+                .modifier(Modifier::new().fill_max_width())
+                .children(move || {
+                    text()
+                        .content("August 2025")
+                        .style(type_style(22.0, 28.0))
+                        .color(scheme.on_surface);
+                    gap(Dp(12.0));
+                    row()
+                        .modifier(Modifier::new().fill_max_width())
+                        .children(move || {
+                            for day in ["S", "M", "T", "W", "T", "F", "S"] {
+                                boxed()
+                                    .alignment(Alignment::Center)
+                                    .modifier(Modifier::new().weight(1.0).height(Dp(24.0)))
+                                    .children(move || {
+                                        text()
+                                            .content(day)
+                                            .style(type_style(12.0, 16.0))
+                                            .color(scheme.on_surface_variant);
+                                    });
+                            }
+                        });
+                    for week in 0..6_i32 {
+                        row()
+                            .modifier(Modifier::new().fill_max_width())
+                            .children(move || {
+                                for weekday in 0..7_i32 {
+                                    // August 1, 2025 falls on a Friday.
+                                    let date = week * 7 + weekday - 4;
+                                    boxed()
+                                        .alignment(Alignment::Center)
+                                        .modifier(Modifier::new().weight(1.0).height(Dp(30.0)))
+                                        .children(move || {
+                                            if (1..=31).contains(&date) {
+                                                text()
+                                                    .content(date.to_string())
+                                                    .style(type_style(14.0, 20.0))
+                                                    .color(scheme.on_surface);
+                                            }
+                                        });
+                                }
+                            });
+                    }
+                });
+            boxed()
+                .alignment(Alignment::BottomEnd)
+                .modifier(Modifier::new().fill_max_size())
+                .children(move || {
+                    boxed()
+                        .alignment(Alignment::Center)
+                        .modifier(
+                            Modifier::new()
+                                .size(Dp(56.0), Dp(56.0))
+                                .background_with_shape(
+                                    scheme.primary_container,
+                                    Shape::rounded_rectangle(Dp(16.0)),
+                                )
+                                .semantics(SemanticsArgs {
+                                    role: Some(Role::Image),
+                                    label: Some("Floating action button".into()),
+                                    ..Default::default()
+                                }),
+                        )
+                        .children(move || {
+                            icon()
+                                .vector(filled::ADD_SVG)
+                                .size(Dp(24.0))
+                                .tint(scheme.on_primary_container);
+                        });
+                });
+        });
+}
+
+#[tessera]
+fn saving_scene() {
+    let scheme = use_context::<MaterialTheme>().unwrap().get().color_scheme;
+    row()
+        .modifier(
+            Modifier::new()
+                .fill_max_size()
+                .background(scheme.surface_container_high)
+                .padding_all(Dp(8.0)),
+        )
+        .children(move || {
+            boxed()
+                .modifier(
+                    Modifier::new()
+                        .weight(1.0)
+                        .fill_max_height()
+                        .clip_shape(Shape::rounded_rectangle(Dp(16.0))),
+                )
+                .children(|| {
+                    calendar_scene();
+                });
+            spacer().modifier(Modifier::new().width(Dp(16.0)));
+            boxed()
+                .modifier(
+                    Modifier::new()
+                        .weight(1.0)
+                        .fill_max_height()
+                        .clip_shape(Shape::rounded_rectangle(Dp(16.0))),
+                )
+                .children(|| {
+                    full_screen_scene("New event", "Save").overlay(|| {
+                        mock_dialog(
+                            "Discard changes?",
+                            280.0,
+                            labels(&["Keep editing", "Discard"]),
+                        )
+                        .body("Discard the changes you've made to this event?");
+                    });
+                });
+        });
+}
+
 #[tessera]
 fn variant_pair() {
     dialog_overview_pair();
     gap(Dp(16.0));
     caption("Basic and full-screen dialog.");
+    gap(Dp(12.0));
+    legend(vec!["Basic dialog".into(), "Full-screen dialog".into()]);
+}
+
+#[tessera]
+fn guideline_hero() {
+    let scheme = use_context::<MaterialTheme>().unwrap().get().color_scheme;
+    let notice = remember(String::new);
+    boxed()
+        .alignment(Alignment::Center)
+        .modifier(
+            Modifier::new()
+                .fill_max_width()
+                .padding_symmetric(Dp(24.0), Dp(32.0))
+                .background_with_shape(
+                    scheme.surface_container_low,
+                    Shape::rounded_rectangle(Dp(24.0)),
+                ),
+        )
+        .children(move || {
+            column()
+                .modifier(
+                    Modifier::new()
+                        .width(Dp(312.0))
+                        .background_with_shape(
+                            scheme.surface_container_high,
+                            Shape::rounded_rectangle(Dp(28.0)),
+                        )
+                        .padding_all(Dp(24.0))
+                        .semantics(SemanticsArgs {
+                            role: Some(Role::Group),
+                            label: Some("Basic dialog in isolation".into()),
+                            ..Default::default()
+                        }),
+                )
+                .children(move || {
+                    text()
+                        .content("Basic dialog title")
+                        .style(type_style(24.0, 32.0))
+                        .color(scheme.on_surface);
+                    gap(Dp(16.0));
+                    text()
+                        .content("A dialog is a type of modal window that appears in front of app content to provide critical information, or prompt for a decision to be made.")
+                        .style(type_style(14.0, 20.0))
+                        .color(scheme.on_surface_variant);
+                    gap(Dp(24.0));
+                    row()
+                        .main_axis_alignment(MainAxisAlignment::End)
+                        .modifier(Modifier::new().fill_max_width())
+                        .children(move || {
+                            action(
+                                "Action 2".into(),
+                                Callback::new(move || notice.set("Action 2 selected".into())),
+                            );
+                            spacer().modifier(Modifier::new().width(Dp(8.0)));
+                            action(
+                                "Action 1".into(),
+                                Callback::new(move || notice.set("Action 1 selected".into())),
+                            );
+                        });
+                });
+        });
+    gap(Dp(16.0));
+    caption(if notice.with(String::is_empty) {
+        "A basic dialog".to_owned()
+    } else {
+        notice.get()
+    });
 }
 
 #[tessera]
@@ -367,7 +1107,7 @@ fn differences() {
     gap(Dp(24.0));
     basic_figure(false);
     gap(Dp(16.0));
-    caption("Basic dialog with rounded corner, larger headline.");
+    caption("New updates to color, layout, position, shape, and typography");
 }
 
 #[tessera]
@@ -380,16 +1120,49 @@ fn usage_section() {
         "Dialogs are purposefully interruptive, so they should be used sparingly. A less disruptive alternative is to use a dropdown menu, which provides options without interrupting a user's experience.",
     );
     gap(Dp(24.0));
-    do_dont(
-        "Use dialogs for prompts that block an app's normal operation, and for critical information that requires a specific user task, decision, or acknowledgement.",
+    dialog_overview_pair();
+    gap(Dp(16.0));
+    caption("There are two variants of dialogs:");
+    gap(Dp(12.0));
+    legend(vec!["Basic dialog".into(), "Full-screen dialog".into()]);
+    gap(Dp(32.0));
+    guidance_pair(
+        Verdict::Do,
+        "Use dialogs for prompts that block an app's normal operation, and for critical information that requires a specific user task, decision, or acknowledgement",
+        RenderSlot::new(|| {
+            backdrop_scene(Backdrop::Photos).dialog(|| {
+                mock_dialog(
+                    "Delete selected images?",
+                    312.0,
+                    labels(&["Cancel", "Delete"]),
+                );
+            });
+        }),
+        Verdict::Dont,
         "Don't use dialogs for low- or medium-priority information. Instead use a snackbar, which can be dismissed or disappear automatically.",
+        RenderSlot::new(|| {
+            backdrop_scene(Backdrop::Photos).dialog(|| {
+                mock_dialog("Upload completed", 312.0, labels(&["OK"]));
+            });
+        }),
     );
     gap(Dp(32.0));
     subheading("Similar components".into());
     gap(Dp(12.0));
+    prose("Snackbars are also designed to show important messages.");
+    gap(Dp(12.0));
     prose(
-        "Snackbars are also designed to show important messages. Choose the right component based on the importance of the message; this messaging strategy helps avoid overusing dialogs.",
+        "Choose the right component based on the importance of the message. This component messaging strategy helps avoid overusing dialogs.",
     );
+    gap(Dp(16.0));
+    guidance_card(
+        Verdict::Note,
+        "Snackbars can disappear automatically",
+        RenderSlot::new(|| {
+            backdrop_scene(Backdrop::Snackbar);
+        }),
+    )
+    .wide(true);
     gap(Dp(16.0));
     spec_table(
         vec![
@@ -401,75 +1174,258 @@ fn usage_section() {
             vec![
                 "Snackbar".into(),
                 "Low importance".into(),
-                "Optional: snackbars may not have a button".into(),
+                "Optional: Snackbars may not have a button, and can disappear automatically".into(),
             ],
             vec![
                 "Dialog".into(),
                 "High importance".into(),
-                "Required: dialogs request a decision or acknowledgement".into(),
+                "Required: Dialogs block the main content until an action is confirmed".into(),
             ],
         ],
     );
-    gap(Dp(24.0));
-    caption("Dialog in front of app content");
 }
 
 #[tessera]
 fn anatomy_section() {
-    prose(
-        "A dialog is composed of a container, an optional icon, an optional headline, supporting text, an optional divider and up to two actions. The headline states the purpose of the dialog; the buttons carry the decision.",
-    );
-    gap(Dp(24.0));
+    subheading("Basic dialog".into());
+    gap(Dp(16.0));
     basic_figure(false);
-    gap(Dp(24.0));
+    gap(Dp(16.0));
+    legend(
+        [
+            "Container",
+            "Icon (optional)",
+            "Headline (optional)",
+            "Supporting text",
+            "Divider (optional)",
+            "Buttons label text",
+            "Scrim",
+        ]
+        .map(String::from)
+        .to_vec(),
+    );
+    gap(Dp(32.0));
+    subheading("Full-screen dialog".into());
+    gap(Dp(16.0));
+    full_spec_figure(0);
+    gap(Dp(16.0));
+    legend(
+        [
+            "Container",
+            "Header region",
+            "Icon (close affordance)",
+            "Headline (optional)",
+            "Button label text",
+            "Divider (optional)",
+        ]
+        .map(String::from)
+        .to_vec(),
+    );
+    gap(Dp(32.0));
+    subheading("Container and scrim".into());
+    gap(Dp(12.0));
+    prose(
+        "Dialog containers appear above other screen elements and hold the dialog's headline, text, buttons, and list items.",
+    );
+    gap(Dp(12.0));
+    prose(
+        "To focus attention on the dialog, surfaces behind the container are scrimmed with a temporary overlay to make them less prominent.",
+    );
+    gap(Dp(12.0));
+    guidance_card(
+        Verdict::Note,
+        "Basic dialogs appear over a background scrim",
+        RenderSlot::new(|| {
+            backdrop_scene(Backdrop::Photos).dialog(|| {
+                mock_dialog("Permanently delete?", 312.0, labels(&["Cancel", "Delete"]));
+            });
+        }),
+    )
+    .wide(true);
+    gap(Dp(32.0));
     subheading("Headline (optional)".into());
     gap(Dp(12.0));
     prose(
-        "A dialog's purpose should be communicated by its headline and buttons or actionable items. Headlines should contain a brief, clear statement or question, and avoid apologies, alarm, or ambiguity.",
+        "A dialog's purpose should be communicated by its headline and buttons or actionable items.",
     );
+    gap(Dp(12.0));
+    prose("Headlines should:");
+    gap(Dp(8.0));
+    bullets(vec![
+        "Contain a brief, clear statement or question".into(),
+        "Avoid apologies (\u{201c}Sorry for the interruption\u{201d}), alarm (\u{201c}Warning!\u{201d}), or ambiguity (\u{201c}Are you sure?\u{201d})".into(),
+    ]);
     gap(Dp(16.0));
-    do_dont(
-        "A specific question such as \"Use location service?\" explains what is involved in the request and provides clear actions.",
-        "An ambiguous question such as \"Are you sure?\" does not describe the consequence of the decision.",
+    guidance_pair(
+        Verdict::Do,
+        "This dialog title poses a specific question, concisely explains what's involved in the request, and provides clear actions",
+        RenderSlot::new(|| {
+            backdrop_scene(Backdrop::Surface).dialog(|| {
+                mock_dialog("Use location service?", 312.0, labels(&["Disagree", "Agree"])).body(
+                    "Let Google help apps determine location. This means sending anonymous location data to Google, even when no apps are running.",
+                );
+            });
+        }),
+        Verdict::Dont,
+        "Don't use dialog titles that pose an ambiguous question",
+        RenderSlot::new(|| {
+            backdrop_scene(Backdrop::Surface).dialog(|| {
+                mock_dialog("Are you sure?", 312.0, labels(&["No", "Yes"]));
+            });
+        }),
     );
     gap(Dp(24.0));
     prose(
-        "Headlines should always be succinct. They can wrap to a second line if necessary, and be truncated. In full-screen dialogs, long or variable-length headlines can be placed in the content area instead of the app bar.",
+        "Headlines should always be succinct. They can wrap to a second line if necessary, and be truncated.",
+    );
+    gap(Dp(12.0));
+    prose(
+        "In full-screen dialogs, long headlines or headlines of variable lengths (such as translations), can be placed in the content area instead of the app bar.",
+    );
+    gap(Dp(16.0));
+    guidance_pair(
+        Verdict::Caution,
+        "Avoid placing long headlines in a full-screen dialog's app bar (1), as the truncated text may lead to misunderstanding",
+        RenderSlot::new(|| {
+            full_screen_scene("Reserve a table fo\u{2026}", "Save").marked(true);
+        }),
+        Verdict::Do,
+        "Find ways to shorten app bar text, and place longer headlines into the content area (1) of a full-screen dialog",
+        RenderSlot::new(|| {
+            full_screen_scene("New booking", "Save")
+                .headline("Reserve a table for four at Mountain View Bistro")
+                .marked(true);
+        }),
     );
     gap(Dp(32.0));
     subheading("Buttons".into());
     gap(Dp(12.0));
     prose(
-        "Dialog actions are most often represented as text buttons and allow users to confirm, dismiss, or acknowledge something. Buttons are aligned to the trailing edge of the dialog for easier interaction, and the confirmation button is always closest to the edge. Alignment responds automatically for right-to-left languages, where the confirmation button is aligned to the left edge.",
+        "Dialog actions are most often represented as buttons and allow users to confirm, dismiss, or acknowledge something.",
+    );
+    gap(Dp(12.0));
+    prose(
+        "Buttons are aligned to the trailing edge of the dialog for easier interaction. The confirmation button is always closest to the edge.",
+    );
+    gap(Dp(12.0));
+    prose(
+        "Button alignment responds automatically for right-to-left languages, where the confirmation button is aligned to the left edge.",
     );
     gap(Dp(16.0));
-    do_dont(
-        "Disable confirming actions until a required choice is made. Dismissive actions are never disabled.",
-        "Don't place dismissive actions to the right of confirming actions. Place them to the left of confirming actions.",
+    guidance_pair(
+        Verdict::Do,
+        "Disable confirming actions (1) until a choice is made. Dismissive actions are never disabled.",
+        RenderSlot::new(|| {
+            backdrop_scene(Backdrop::Surface).dialog(|| {
+                mock_dialog("Phone ringtone", 312.0, labels(&["Cancel", "OK"]))
+                    .disabled(1)
+                    .marked(1)
+                    .content(|| {
+                        radio_options();
+                    });
+            });
+        }),
+        Verdict::Dont,
+        "Don't place dismissive actions (1) to the right of confirming actions. Instead, place them to the left of confirming actions.",
+        RenderSlot::new(|| {
+            backdrop_scene(Backdrop::Surface).dialog(|| {
+                mock_dialog("Phone ringtone", 312.0, labels(&["OK", "Cancel"]))
+                    .marked(1)
+                    .content(|| {
+                        radio_options().selected(1);
+                    });
+            });
+        }),
+    );
+    gap(Dp(32.0));
+    guidance_pair(
+        Verdict::Do,
+        "A single action may be provided only if it's an acknowledgement",
+        RenderSlot::new(|| {
+            backdrop_scene(Backdrop::Product);
+        }),
+        Verdict::Dont,
+        "Avoid presenting people with unclear choices. Cancel doesn't make sense here because no clear action is proposed.",
+        RenderSlot::new(|| {
+            backdrop_scene(Backdrop::Surface).dialog(|| {
+                mock_dialog("Out of stock", 312.0, labels(&["Cancel", "Got it"]))
+                    .body("The item in your cart is no longer available");
+            });
+        }),
+    );
+    gap(Dp(24.0));
+    prose("Dialogs should contain a maximum of two actions.");
+    gap(Dp(8.0));
+    bullets(vec![
+        "If a single action is provided, it must be an acknowledgement action".into(),
+        "If two actions are provided, one must be a confirming action, and the other a dismissing action".into(),
+    ]);
+    gap(Dp(16.0));
+    guidance_pair(
+        Verdict::Do,
+        "Display two text buttons next to one another",
+        RenderSlot::new(|| {
+            backdrop_scene(Backdrop::Surface).dialog(|| {
+                mock_dialog(
+                    "Use location service?",
+                    312.0,
+                    labels(&["Disagree", "Agree"]),
+                );
+            });
+        }),
+        Verdict::Caution,
+        "Stacked buttons accommodate longer button text, but take up more room. Confirming actions appear above dismissive actions.",
+        RenderSlot::new(|| {
+            backdrop_scene(Backdrop::Surface).dialog(|| {
+                mock_dialog(
+                    "Turn on speed boost?",
+                    312.0,
+                    labels(&["Turn on speed boost", "No thanks"]),
+                )
+                .stacked(true);
+            });
+        }),
     );
     gap(Dp(24.0));
     prose(
-        "Dialogs contain a maximum of two actions. If a single action is provided it must be an acknowledgement action; if two actions are provided, one must be confirming and the other dismissing. Stacked buttons accommodate longer button text but take up more room, and confirming actions appear above dismissive actions. A third action such as Learn more is not recommended because it navigates away from the dialog.",
+        "Providing a third action, such as Learn more, is not recommended as it navigates the user away from the dialog, leaving the dialog task unfinished.",
     );
+    gap(Dp(12.0));
+    prose(
+        "Rather than adding a third action, an inline expansion can display more information. If more extensive information is needed, provide it prior to entering the dialog.",
+    );
+    gap(Dp(16.0));
+    guidance_card(
+        Verdict::Caution,
+        "The Learn more action (1) navigates away from this dialog, potentially leaving it in an indeterminate state",
+        RenderSlot::new(|| {
+            backdrop_scene(Backdrop::Surface).dialog(|| {
+                mock_dialog(
+                    "Use location service?",
+                    360.0,
+                    labels(&["Learn more", "Disagree", "Agree"]),
+                )
+                .marked(0);
+            });
+        }),
+    )
+    .wide(true);
 }
 
 #[tessera]
 fn basic_guidance() {
     prose(
-        "Basic dialogs interrupt users with urgent information, details, or actions. Common use cases include alerts, quick selection, and confirmation.",
+        "Basic dialogs interrupt users with urgent information, details, or actions. Common use cases for basic dialogs include alerts, quick selection, and confirmation.",
     );
     gap(Dp(16.0));
-    prose(
-        "Basic dialogs require a person to take action before they close, and they can give people the ability to confirm a choice before committing to it.",
+    caption("Basic dialogs require a person to take action before it will close");
+    gap(Dp(8.0));
+    caption(
+        "Basic dialogs can give people the ability to provide confirmation of a choice before committing to it",
     );
     gap(Dp(16.0));
     prose(
         "Basic dialogs most often appear as alerts or lists, but can have a variety of layouts and component combinations, including date pickers and time pickers.",
-    );
-    gap(Dp(24.0));
-    do_dont(
-        "Two text buttons next to one another keep the decision compact and predictable.",
-        "Avoid presenting unclear choices such as Cancel when no clear action is proposed.",
     );
 }
 
@@ -501,9 +1457,28 @@ fn full_guidance() {
         "To save a selection in a full-screen dialog, use Save. The close icon dismisses the dialog; when a full-screen dialog is closed without being saved, a basic dialog appears in front of it to confirm that its selections should be discarded without saving changes.",
     );
     gap(Dp(16.0));
-    do_dont(
+    guidance_card(
+        Verdict::Note,
+        "When a full-screen dialog is closed without saving, a basic dialog confirms that changes should be discarded",
+        RenderSlot::new(|| {
+            saving_scene();
+        }),
+    )
+    .wide(true);
+    gap(Dp(32.0));
+    guidance_pair(
+        Verdict::Do,
         "A clearly named action such as Create makes it clear that the event will be created.",
+        RenderSlot::new(|| {
+            full_screen_scene("New event", "Create");
+        }),
+        Verdict::Dont,
         "Don't trigger a basic dialog when the confirming action is selected, and don't use the confirming action to dismiss the full-screen dialog.",
+        RenderSlot::new(|| {
+            full_screen_scene("New event", "Save").overlay(|| {
+                mock_dialog("Save event?", 280.0, labels(&["Cancel", "Save"]));
+            });
+        }),
     );
     gap(Dp(24.0));
     subheading("Error messages".into());
@@ -763,42 +1738,25 @@ fn action(label: String, callback: Callback) {
 }
 
 #[tessera]
-fn tokens() {
-    spec_table(
-        vec!["Element".into(), "Token value".into()],
-        vec![
-            vec!["Container".into(), "Surface container high".into()],
-            vec!["Icon".into(), "Secondary · 24dp".into()],
-            vec!["Headline".into(), "On surface · Headline small".into()],
-            vec![
-                "Supporting text".into(),
-                "On surface variant · Body medium".into(),
-            ],
-            vec!["Actions".into(), "Primary · Label large".into()],
-            vec!["Basic shape".into(), "28dp corner radius".into()],
-        ],
-    );
-}
-
-#[tessera]
 fn basic_specs() {
     column()
         .modifier(Modifier::new().fill_max_width())
         .children(|| {
             basic_figure(false);
             gap(Dp(24.0));
-            for (number, label) in [
-                (1, "Container"),
-                (2, "Icon (optional)"),
-                (3, "Headline (optional)"),
-                (4, "Supporting text"),
-                (5, "Divider (optional)"),
-                (6, "Button label text"),
-                (7, "Scrim"),
-            ] {
-                prose(format!("{number}  {label}"));
-                gap(Dp(12.0));
-            }
+            legend(
+                [
+                    "Container",
+                    "Icon (optional)",
+                    "Headline (optional)",
+                    "Supporting text",
+                    "Divider (optional)",
+                    "Button label text",
+                    "Scrim",
+                ]
+                .map(String::from)
+                .to_vec(),
+            );
             gap(Dp(56.0));
             subheading("Basic dialog color".into());
             gap(Dp(24.0));
@@ -2238,31 +3196,53 @@ fn full_specs() {
     column().modifier(Modifier::new().fill_max_width()).children(|| {
         full_spec_figure(0);
         gap(Dp(24.0));
-        prose("1  Container   2  Header   3  Close affordance   4  Headline   5  Text button   6  Divider");
+        legend(
+            [
+                "Container",
+                "Header",
+                "Icon (close affordance)",
+                "Headline (optional)",
+                "Text button",
+                "Divider (optional)",
+            ]
+            .map(String::from)
+            .to_vec(),
+        );
         gap(Dp(56.0));
         subheading("Full-screen dialog color".into());
         gap(Dp(24.0));
         full_spec_figure(1);
         gap(Dp(24.0));
-        for (index, role) in ["Surface container high", "On surface", "On surface", "Primary", "On surface variant"].into_iter().enumerate() {
-            prose(format!("{}  {role}", index + 1));
-            gap(Dp(12.0));
-        }
+        caption("Full-screen dialog color roles used for light and dark themes:");
+        gap(Dp(12.0));
+        legend(
+            ["Surface container high", "On surface", "On surface", "Primary", "On surface variant"]
+                .map(String::from)
+                .to_vec(),
+        );
         gap(Dp(44.0));
         subheading("Full-screen dialog measurements".into());
         gap(Dp(24.0));
         full_spec_figure(2);
         gap(Dp(24.0));
+        prose("Full-screen dialog padding and size measurements");
+        gap(Dp(24.0));
         spec_table(vec!["Attribute".into(), "Value".into()], vec![
             vec!["Container shape".into(), "0dp corner radius".into()],
+            vec!["Container height".into(), "Dynamic".into()],
             vec!["Container width".into(), "Container width; Max 560dp".into()],
-            vec!["Header height".into(), "64dp".into()],
-            vec!["Close icon".into(), "24dp".into()],
-            vec!["Content padding".into(), "24dp".into()],
+            vec!["Header height".into(), "56dp".into()],
+            vec!["Header width".into(), "Container width".into()],
+            vec!["Headline text alignment".into(), "Start-aligned".into()],
+            vec!["Divider height".into(), "1dp".into()],
+            vec!["Icon (close affordance) size".into(), "24dp".into()],
+            vec!["Bottom action bar height".into(), "56dp".into()],
+            vec!["Bottom action bar width".into(), "Container width".into()],
+            vec!["Top/left/right padding".into(), "24dp".into()],
             vec!["Padding between elements".into(), "8dp".into()],
         ]);
         gap(Dp(24.0));
-        prose("The official full-screen measurement diagram shows a 64dp header, while its accompanying table lists 56dp for both the header and bottom action bar. This example follows the diagram's 64dp header; the conflicting table value is not presented as an equivalent measurement.");
+        caption("The official measurement diagram labels the header region as 64dp, while the official table and the header container height token both specify 56dp. The table above follows the official table and token.");
     });
 }
 

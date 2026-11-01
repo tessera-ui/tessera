@@ -5,11 +5,14 @@
 //! Explore toolbar action groups, placement and keyboard navigation.
 
 use tessera_components::{
-    alignment::{Alignment, CrossAxisAlignment},
+    alignment::{Alignment, CrossAxisAlignment, MainAxisAlignment},
     boxed::boxed,
     button::button,
     column::column,
-    floating_action_button::{FloatingActionButtonElevation, floating_action_button},
+    divider::vertical_divider,
+    floating_action_button::{
+        FloatingActionButtonElevation, FloatingActionButtonSize, floating_action_button,
+    },
     flow_row::flow_row,
     icon::icon,
     icon_button::icon_button,
@@ -20,19 +23,26 @@ use tessera_components::{
     spacer::spacer,
     surface::{SurfaceStyle, surface},
     text::text,
+    text_field::text_field,
+    text_table::TextTableCell,
     theme::MaterialTheme,
     toolbar::{ToolbarColorStyle, ToolbarOrientation, docked_toolbar, floating_toolbar},
 };
 use tessera_ui::{
-    Dp, LayoutCoordinates, Modifier, RenderSlot, State, accesskit::Role,
-    modifier::FocusModifierExt as _, remember, tessera, use_context,
+    Color, Dp, LayoutCoordinates, Modifier, RenderSlot, State, accesskit::Role,
+    modifier::FocusModifierExt as _, provide_context, remember, tessera, use_context,
 };
 
 use super::{
+    INK,
     annotations::{self, Geometry, dotted, relative, watch},
     article::{ArticlePage, SpecSection, article},
-    gap, panel, spec_table, subheading, type_style,
+    gap, panel, spec_table, spec_table_cells, subheading, type_style,
 };
+
+const DO_COLOR: Color = Color::from_rgb(0.121, 0.478, 0.196);
+const DONT_COLOR: Color = Color::from_rgb(0.741, 0.161, 0.161);
+const CAUTION_COLOR: Color = Color::from_rgb(0.62, 0.38, 0.0);
 
 #[derive(Clone, Copy, Default, PartialEq)]
 enum Variant {
@@ -45,144 +55,108 @@ enum Variant {
 
 #[tessera]
 pub(super) fn toolbars_spec() {
-    article("Toolbars", "Toolbars display frequently used actions relevant to the current page", vec![
-        SpecSection { title: "Variants", content: RenderSlot::new(variants) },
-        SpecSection { title: "Configurations", content: RenderSlot::new(configurations) },
-        SpecSection { title: "Tokens & specs", content: RenderSlot::new(tokens) },
-        SpecSection { title: "Anatomy", content: RenderSlot::new(|| {
-            figure(Variant::Floating, ToolbarColorStyle::Standard, false);
-            gap(Dp(32.0));
-            subheading("Flexibility & slots".into());
-            paragraph("A toolbar provides a container for placed components. Slots can contain icon buttons, buttons, text fields and other actions. Emphasize one primary action and keep related controls consistent.".into());
-            gap(Dp(24.0));
-            slots();
-        }) },
-        SpecSection { title: "Color", content: RenderSlot::new(|| {
-            subheading("Standard".into());
-            paragraph("Surface container; primary filled action; secondary container toggle; primary standard action.".into());
-            gap(Dp(24.0));
-            figure(Variant::Floating, ToolbarColorStyle::Standard, false);
-            gap(Dp(32.0));
-            subheading("Vibrant".into());
-            paragraph("Primary container; primary filled action; surface container toggle; on primary container standard action.".into());
-            gap(Dp(24.0));
-            figure(Variant::Floating, ToolbarColorStyle::Vibrant, false);
-        }) },
-        SpecSection { title: "Measurements", content: RenderSlot::new(measurements) },
-        SpecSection { title: "Bottom app bar (baseline)", content: RenderSlot::new(|| {
-            paragraph("The baseline bottom app bar uses an 80dp container with 48dp action targets and a 56dp FAB. For new page actions, prefer the expressive docked toolbar and its shorter, more flexible 64dp container.".into());
-            gap(Dp(24.0));
-            baseline_figure();
-        }) },
-    ])
-        .pages(vec![
-            ArticlePage {
-                title: "Overview",
-                intro: Some(RenderSlot::new(|| {
-                    paragraph("Use docked toolbars for persistent page actions and floating toolbars for contextual actions. Both support standard and vibrant colors; floating toolbars also support vertical layouts and an adjacent FAB.".into());
-                    gap(Dp(32.0));
-                    configurations();
-                })),
-                sections: vec![
-                    SpecSection { title: "M3 Expressive update", content: RenderSlot::new(|| {
-                        paragraph("Docked toolbar replaces the baseline bottom app bar with a shorter container and more flexible slots. Floating toolbar adds horizontal and vertical orientations, vibrant colors and optional FAB pairing.".into());
-                        gap(Dp(24.0));
-                        figure(Variant::WithFab, ToolbarColorStyle::Vibrant, false);
-                    }) },
-                    SpecSection { title: "Differences from M2", content: RenderSlot::new(|| {
-                        paragraph("Compared with M2, the baseline Material 3 bottom app bar introduces dynamic color, removes the shadow, uses a taller 80dp container and places the FAB inside that container. M3 Expressive then replaces that baseline with a shorter 64dp docked toolbar, flexible content and an optional FAB alongside a floating toolbar.".into());
-                    }) },
-                ],
+    article(
+        "Toolbars",
+        "Toolbars display frequently used actions relevant to the current page",
+        vec![
+            SpecSection {
+                title: "Variants",
+                content: RenderSlot::new(spec_variants),
             },
-            ArticlePage {
-                title: "Guidelines",
-                intro: None,
-                sections: vec![
-                    SpecSection { title: "Usage", content: RenderSlot::new(|| {
-                        paragraph("Use toolbar actions for the current page. Docked spans the window; floating hugs its controls. Use an overflow menu when more actions are needed. Keep toolbars separate from primary navigation bars.".into());
-                        gap(Dp(24.0));
-                        variants();
-                        gap(Dp(32.0));
-                        subheading("Toolbars & navigation bars".into());
-                        paragraph("Show navigation on primary pages and actions on subsequent pages. Do not combine a navigation bar and toolbar navigation in the same compact view.".into());
-                    }) },
-                    SpecSection { title: "Anatomy", content: RenderSlot::new(|| {
-                        figure(Variant::Floating, ToolbarColorStyle::Standard, false);
-                        gap(Dp(32.0));
-                        subheading("Container".into());
-                        paragraph("Keep docked containers rectangular. A floating container must remain entirely on screen, with at least 48×48dp targets for its actions.".into());
-                        gap(Dp(24.0));
-                        subheading("Elevation".into());
-                        paragraph("Floating toolbars use 6dp elevation by default. Remove elevation only when the background already makes the floating surface visually distinct. The FAB has its own elevation tokens: 1dp alongside an expanded toolbar and 3dp for the collapsed medium FAB.".into());
-                        gap(Dp(24.0));
-                        subheading("Flexibility & slots".into());
-                        slots();
-                        gap(Dp(24.0));
-                        subheading("Floating toolbar with FAB".into());
-                        paragraph("Pair one high-priority action with a unified set of toolbar controls. Avoid emphasizing several actions at once.".into());
-                        gap(Dp(24.0));
-                        figure(Variant::WithFab, ToolbarColorStyle::Vibrant, false);
-                    }) },
-                    SpecSection { title: "Position & orientation", content: RenderSlot::new(|| {
-                        paragraph("Docked toolbars belong at the bottom. Horizontal floating toolbars need at least 16dp outside margins. Use vertical floating toolbars at larger breakpoints with at least 24dp margins, opposite a navigation rail.".into());
-                        gap(Dp(24.0));
-                        figure(Variant::Vertical, ToolbarColorStyle::Standard, true);
-                    }) },
-                    SpecSection { title: "Adaptive design", content: RenderSlot::new(|| {
-                        subheading("Resizing".into());
-                        paragraph("Docked toolbars fill the available width. Floating containers hug their actions and reveal more actions at larger breakpoints. Collapse trailing actions into overflow before the toolbar reaches its outside margins.".into());
-                        gap(Dp(24.0));
-                        figure(Variant::Docked, ToolbarColorStyle::Standard, true);
-                        gap(Dp(32.0));
-                        subheading("Presentation".into());
-                        paragraph("Use one toolbar in compact windows. Larger windows can separate related groups on opposite edges. Keep actions within reach and avoid covering content.".into());
-                        gap(Dp(24.0));
-                        subheading("Right-to-left languages".into());
-                        paragraph("Mirror directional icons and text. Reverse action order only when the sequence has meaning, keeping Next at the trailing edge.".into());
-                    }) },
-                    SpecSection { title: "Behavior", content: RenderSlot::new(|| {
-                        subheading("Scrolling".into());
-                        paragraph("Toolbars can remain visible, move offscreen, or collapse to one primary action. Choose one transition at a time. The controls below demonstrate the expanded and collapsed slot sets.".into());
-                        gap(Dp(24.0));
-                        collapsing_example();
-                    }) },
-                ],
+            SpecSection {
+                title: "Configurations",
+                content: RenderSlot::new(spec_configurations),
             },
-            ArticlePage {
-                title: "Accessibility",
-                intro: None,
-                sections: vec![
-                    SpecSection { title: "Use cases", content: RenderSlot::new(|| {
-                        paragraph("People must be able to reach and activate all page actions, choose menu destinations, return using Back and retain access to actions when content scrolls or collapses.".into());
-                    }) },
-                    SpecSection { title: "Interaction & style", content: RenderSlot::new(|| {
-                        paragraph("The toolbar container has no activation action. Its placed controls supply their own hover, focus and ripple feedback.".into());
-                        gap(Dp(24.0));
-                        subheading("Touch".into());
-                        paragraph("Activate any icon button below to inspect its ripple and action result.".into());
-                        gap(Dp(24.0));
-                        subheading("Cursor".into());
-                        paragraph("Hover and focused states identify individual interactive controls rather than the surrounding container.".into());
-                        gap(Dp(24.0));
-                        subheading("Initial focus".into());
-                        paragraph("Focus starts on the first interactive element. Tab continues through the actions in their visible order.".into());
-                        gap(Dp(24.0));
-                        figure(Variant::Floating, ToolbarColorStyle::Standard, false);
-                    }) },
-                    SpecSection { title: "Keyboard navigation", content: RenderSlot::new(|| {
-                        spec_table(vec!["Keys".into(), "Actions".into()], vec![
-                            vec!["Tab or arrows".into(), "Navigate between interactive elements".into()],
-                            vec!["Space or Enter".into(), "Activate the focused element".into()],
-                        ]);
-                        gap(Dp(32.0));
-                        subheading("Labeling elements".into());
-                        paragraph("The container exposes the toolbar role on supported accessibility platforms. Each action has its own descriptive label and toggle state where appropriate.".into());
-                        gap(Dp(24.0));
-                        collapsing_example();
-                    }) },
-                ],
+            SpecSection {
+                title: "Tokens & specs",
+                content: RenderSlot::new(tokens),
             },
-        ]);
+            SpecSection {
+                title: "Anatomy",
+                content: RenderSlot::new(spec_anatomy),
+            },
+            SpecSection {
+                title: "Color",
+                content: RenderSlot::new(spec_color),
+            },
+            SpecSection {
+                title: "Measurements",
+                content: RenderSlot::new(measurements),
+            },
+            SpecSection {
+                title: "Bottom app bar (baseline)",
+                content: RenderSlot::new(baseline_specs),
+            },
+        ],
+    )
+    .pages(vec![
+        ArticlePage {
+            title: "Overview",
+            intro: Some(RenderSlot::new(overview)),
+            sections: vec![
+                SpecSection {
+                    title: "Availability & resources",
+                    content: RenderSlot::new(availability),
+                },
+                SpecSection {
+                    title: "M3 Expressive update",
+                    content: RenderSlot::new(expressive_update),
+                },
+                SpecSection {
+                    title: "Differences from M2",
+                    content: RenderSlot::new(differences),
+                },
+            ],
+        },
+        ArticlePage {
+            title: "Guidelines",
+            intro: Some(RenderSlot::new(|| {
+                gallery(GalleryKind::UseCases);
+                gap(Dp(16.0));
+                caption("Toolbars can be used for a wide variety of use cases");
+            })),
+            sections: vec![
+                SpecSection {
+                    title: "Usage",
+                    content: RenderSlot::new(usage),
+                },
+                SpecSection {
+                    title: "Anatomy",
+                    content: RenderSlot::new(guide_anatomy),
+                },
+                SpecSection {
+                    title: "Position & orientation",
+                    content: RenderSlot::new(position),
+                },
+                SpecSection {
+                    title: "Adaptive design",
+                    content: RenderSlot::new(adaptive),
+                },
+                SpecSection {
+                    title: "Behavior",
+                    content: RenderSlot::new(behavior),
+                },
+            ],
+        },
+        ArticlePage {
+            title: "Accessibility",
+            intro: None,
+            sections: vec![
+                SpecSection {
+                    title: "Use cases",
+                    content: RenderSlot::new(use_cases),
+                },
+                SpecSection {
+                    title: "Interaction & style",
+                    content: RenderSlot::new(interaction_style),
+                },
+                SpecSection {
+                    title: "Keyboard navigation",
+                    content: RenderSlot::new(keyboard),
+                },
+            ],
+        },
+    ]);
 }
 
 #[tessera]
@@ -235,6 +209,24 @@ fn toolbar_control(
             } else {
                 scheme.on_secondary_container
             });
+    } else if index == 3 {
+        icon_button()
+            .modifier(
+                geometry
+                    .map(|geometry| watch(geometry, ["select", "brush", "record", "image"][index]))
+                    .unwrap_or_default()
+                    .semantics(SemanticsArgs {
+                        test_tag: Some(format!("spec-toolbar-action-{index}")),
+                        merge_descendants: true,
+                        ..Default::default()
+                    }),
+            )
+            .icon(vector)
+            .accessibility_label(label)
+            .on_click(move || {
+                notice.set(format!("{label} activated"));
+            })
+            .filled();
     } else {
         icon_button()
             .modifier(
@@ -256,7 +248,7 @@ fn toolbar_control(
             .content_color(if vibrant {
                 scheme.on_primary_container
             } else {
-                scheme.primary
+                scheme.on_surface_variant
             });
     }
 }
@@ -569,12 +561,10 @@ fn figure(variant: Variant, color: ToolbarColorStyle, measurements: bool) {
                         });
                     toolbar_annotations(geometry, measurements, variant);
                 });
-            gap(Dp(16.0));
-            paragraph(if measurements {
-                "Toolbar size, padding and spacing measurements".into()
-            } else {
-                "1  Container\n2  Placed components".into()
-            });
+            if !measurements {
+                gap(Dp(16.0));
+                legend(vec!["Container".into(), "Placed components".into()]);
+            }
             if !notice.get().is_empty() {
                 text().content(notice.get()).style(type_style(14.0, 20.0));
             }
@@ -701,61 +691,1948 @@ fn toolbar_annotations(geometry: State<Geometry>, measurements: bool, variant: V
 }
 
 #[tessera]
-fn variants() {
-    subheading("Docked toolbar".into());
-    gap(Dp(24.0));
-    figure(Variant::Docked, ToolbarColorStyle::Standard, false);
-    gap(Dp(32.0));
-    subheading("Floating toolbar".into());
-    gap(Dp(24.0));
-    figure(Variant::Floating, ToolbarColorStyle::Standard, false);
+fn prose(#[prop(into)] value: String) {
+    text().content(value).style(type_style(16.0, 24.0));
 }
 
 #[tessera]
-fn configurations() {
-    for (variant, color, label) in [
-        (Variant::Floating, ToolbarColorStyle::Standard, "Standard"),
-        (Variant::Floating, ToolbarColorStyle::Vibrant, "Vibrant"),
-        (
-            Variant::Vertical,
-            ToolbarColorStyle::Standard,
-            "Vertical floating toolbar",
-        ),
-        (
-            Variant::WithFab,
-            ToolbarColorStyle::Vibrant,
-            "Floating toolbar with FAB",
-        ),
-    ] {
-        subheading(label.into());
-        gap(Dp(24.0));
-        figure(variant, color, false);
-        gap(Dp(32.0));
+fn caption(#[prop(into)] value: String) {
+    let scheme = use_context::<MaterialTheme>().unwrap().get().color_scheme;
+    text()
+        .content(value)
+        .color(scheme.on_surface_variant)
+        .style(type_style(14.0, 20.0));
+}
+
+#[tessera]
+fn bullets(items: Vec<String>) {
+    column()
+        .modifier(Modifier::new().fill_max_width())
+        .children(move || {
+            for item in items.clone() {
+                let (indent, item) = match item.strip_prefix("- ") {
+                    Some(nested) => (Dp(24.0), nested.to_string()),
+                    None => (Dp::ZERO, item),
+                };
+                text()
+                    .content(format!("•  {item}"))
+                    .modifier(Modifier::new().padding(Padding::new(
+                        indent,
+                        Dp::ZERO,
+                        Dp::ZERO,
+                        Dp::ZERO,
+                    )))
+                    .style(type_style(16.0, 24.0));
+                gap(Dp(8.0));
+            }
+        });
+}
+
+#[tessera]
+fn number_badge(number: usize) {
+    boxed()
+        .alignment(Alignment::Center)
+        .modifier(
+            Modifier::new()
+                .size(Dp(24.0), Dp(24.0))
+                .background_with_shape(INK, Shape::Ellipse),
+        )
+        .children(move || {
+            text()
+                .content(number.to_string())
+                .style(type_style(12.0, 16.0))
+                .color(Color::WHITE);
+        });
+}
+
+#[tessera]
+fn legend(items: Vec<String>) {
+    column()
+        .modifier(Modifier::new().fill_max_width())
+        .children(move || {
+            for (index, label) in items.clone().into_iter().enumerate() {
+                row()
+                    .cross_axis_alignment(CrossAxisAlignment::Center)
+                    .modifier(
+                        Modifier::new()
+                            .fill_max_width()
+                            .padding_symmetric(Dp::ZERO, Dp(4.0)),
+                    )
+                    .children(move || {
+                        number_badge(index + 1);
+                        spacer().modifier(Modifier::new().width(Dp(12.0)));
+                        text()
+                            .content(label.clone())
+                            .modifier(Modifier::new().weight(1.0))
+                            .style(type_style(14.0, 20.0));
+                    });
+            }
+        });
+}
+
+#[tessera]
+fn guidance(#[prop(into)] mark: String, #[prop(into)] note: String, color: Color) {
+    let scheme = use_context::<MaterialTheme>().unwrap().get().color_scheme;
+    row()
+        .cross_axis_alignment(CrossAxisAlignment::Center)
+        .modifier(Modifier::new().fill_max_width())
+        .children(move || {
+            let mark = mark.clone();
+            boxed()
+                .alignment(Alignment::Center)
+                .modifier(
+                    Modifier::new()
+                        .padding(Padding::symmetric(Dp(12.0), Dp(4.0)))
+                        .background_with_shape(color, Shape::rounded_rectangle(Dp(8.0))),
+                )
+                .children(move || {
+                    text()
+                        .content(mark.clone())
+                        .style(type_style(14.0, 20.0))
+                        .color(Color::WHITE);
+                });
+            spacer().modifier(Modifier::new().width(Dp(12.0)));
+            text()
+                .content(note.clone())
+                .modifier(Modifier::new().weight(1.0))
+                .color(scheme.on_surface_variant)
+                .style(type_style(14.0, 20.0));
+        });
+}
+
+#[tessera]
+fn do_note(#[prop(into)] note: String) {
+    guidance("Do", note, DO_COLOR);
+}
+
+#[tessera]
+fn dont_note(#[prop(into)] note: String) {
+    guidance("Don't", note, DONT_COLOR);
+}
+
+#[tessera]
+fn caution_note(#[prop(into)] note: String) {
+    guidance("Caution", note, CAUTION_COLOR);
+}
+
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+enum Emphasis {
+    #[default]
+    Standard,
+    Filled,
+    Toggle,
+}
+
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+enum Sample {
+    #[default]
+    Mail,
+    Format,
+    FormatTonal,
+    Navigate,
+    Edit,
+    Vertical,
+    History,
+    ColorRoles,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq)]
+struct SampleAction {
+    label: &'static str,
+    emphasis: Emphasis,
+}
+
+const fn action(label: &'static str, emphasis: Emphasis) -> SampleAction {
+    SampleAction { label, emphasis }
+}
+
+fn sample_actions(sample: Sample) -> Vec<SampleAction> {
+    use Emphasis::{Filled, Standard, Toggle};
+    match sample {
+        Sample::Mail => vec![
+            action("Archive", Standard),
+            action("Delete", Standard),
+            action("Mark unread", Standard),
+            action("Snooze", Standard),
+            action("Star", Standard),
+        ],
+        Sample::Format => vec![
+            action("Bold", Toggle),
+            action("Italic", Standard),
+            action("Underline", Standard),
+            action("Text color", Standard),
+            action("Highlight", Standard),
+            action("More options", Standard),
+        ],
+        Sample::FormatTonal => vec![
+            action("Bold", Toggle),
+            action("Italic", Toggle),
+            action("Underline", Standard),
+            action("Text color", Standard),
+            action("More options", Standard),
+        ],
+        Sample::Navigate => vec![
+            action("Back", Standard),
+            action("Forward", Standard),
+            action("Add", Filled),
+            action("Picture in picture", Standard),
+            action("More options", Standard),
+        ],
+        Sample::Edit => vec![
+            action("Camera off", Standard),
+            action("Microphone", Standard),
+            action("Raise hand", Toggle),
+            action("More options", Standard),
+        ],
+        Sample::Vertical => vec![
+            action("Undo", Standard),
+            action("Redo", Standard),
+            action("Add", Standard),
+            action("Text color", Standard),
+            action("More options", Standard),
+        ],
+        Sample::History => vec![action("Undo", Standard), action("Redo", Standard)],
+        Sample::ColorRoles => vec![
+            action("Add", Filled),
+            action("Bold", Toggle),
+            action("Italic", Standard),
+            action("Underline", Standard),
+        ],
     }
+}
+
+fn action_icon(label: &str) -> tessera_components::material_icons::Asset {
+    match label {
+        "Archive" => filled::ARCHIVE_SVG,
+        "Delete" => filled::DELETE_SVG,
+        "Mark unread" => filled::MARK_EMAIL_UNREAD_SVG,
+        "Snooze" => filled::SNOOZE_SVG,
+        "Star" => filled::STAR_SVG,
+        "Bold" => filled::FORMAT_BOLD_SVG,
+        "Italic" => filled::FORMAT_ITALIC_SVG,
+        "Underline" => filled::FORMAT_UNDERLINED_SVG,
+        "Text color" => filled::FORMAT_COLOR_TEXT_SVG,
+        "Highlight" => filled::FORMAT_COLOR_FILL_SVG,
+        "Back" => filled::ARROW_BACK_SVG,
+        "Forward" => filled::ARROW_FORWARD_SVG,
+        "Add" => filled::ADD_SVG,
+        "Picture in picture" => filled::PICTURE_IN_PICTURE_SVG,
+        "Camera off" => filled::VIDEOCAM_OFF_SVG,
+        "Microphone" => filled::MIC_SVG,
+        "Raise hand" => filled::BACK_HAND_SVG,
+        "Mail" => filled::MAIL_SVG,
+        "Chat" => filled::PEOPLE_SVG,
+        "Settings" => filled::SETTINGS_SVG,
+        "Reply" => filled::REPLY_SVG,
+        "Undo" => filled::UNDO_SVG,
+        "Redo" => filled::REDO_SVG,
+        _ => filled::MORE_VERT_SVG,
+    }
+}
+
+/// Keeps the leading actions and a trailing overflow action within `limit`.
+fn visible_actions(actions: Vec<SampleAction>, limit: usize) -> Vec<SampleAction> {
+    let limit = limit.max(1);
+    if actions.len() <= limit {
+        return actions;
+    }
+    match actions.last().copied() {
+        Some(last) if last.label == "More options" => {
+            let mut kept = actions[..limit - 1].to_vec();
+            kept.push(last);
+            kept
+        }
+        _ => actions[..limit].to_vec(),
+    }
+}
+
+/// Number of 48dp actions with 4dp gaps that fit inside `width` after
+/// `padding`.
+fn actions_that_fit(width: Dp, padding: f64) -> usize {
+    (((width.0 - padding + 4.0) / 52.0).floor().max(2.0)) as usize
+}
+
+fn sample_label(sample: Sample) -> &'static str {
+    match sample {
+        Sample::Mail => "Mail actions",
+        Sample::Format | Sample::FormatTonal => "Formatting actions",
+        Sample::Navigate => "Browsing actions",
+        Sample::Edit => "Call actions",
+        Sample::Vertical => "Canvas actions",
+        Sample::History => "History actions",
+        Sample::ColorRoles => "Color role actions",
+    }
+}
+
+/// Identifies the gallery item that renders a sample so its controls can be
+/// located.
+#[derive(Clone)]
+struct GalleryTag(usize);
+
+fn tagged(tag: Option<String>) -> Modifier {
+    match tag {
+        Some(tag) => Modifier::new().semantics(SemanticsArgs {
+            test_tag: Some(tag),
+            merge_descendants: true,
+            ..Default::default()
+        }),
+        None => Modifier::new(),
+    }
+}
+
+#[tessera]
+fn sample_action(
+    #[prop(into)] label: String,
+    emphasis: Emphasis,
+    vibrant: bool,
+    selected: State<bool>,
+    notice: State<String>,
+    tag: Option<String>,
+) {
+    let scheme = use_context::<MaterialTheme>().unwrap().get().color_scheme;
+    let vector = action_icon(&label);
+    let message = format!("{label} activated");
+    let modifier = tagged(tag);
+    match emphasis {
+        Emphasis::Toggle => {
+            icon_button()
+                .modifier(modifier)
+                .icon(vector)
+                .accessibility_label(label.clone())
+                .on_click(move || {
+                    selected.set(!selected.get());
+                    notice.set(message.clone());
+                })
+                .filled_tonal()
+                .selected(selected.get())
+                .color(if vibrant {
+                    scheme.surface_container
+                } else {
+                    scheme.secondary_container
+                })
+                .content_color(if vibrant {
+                    scheme.on_surface
+                } else {
+                    scheme.on_secondary_container
+                });
+        }
+        Emphasis::Filled => {
+            icon_button()
+                .modifier(modifier)
+                .icon(vector)
+                .accessibility_label(label.clone())
+                .on_click(move || notice.set(message.clone()))
+                .filled();
+        }
+        Emphasis::Standard => {
+            icon_button()
+                .modifier(modifier)
+                .icon(vector)
+                .accessibility_label(label.clone())
+                .on_click(move || notice.set(message.clone()))
+                .standard()
+                .content_color(if vibrant {
+                    scheme.on_primary_container
+                } else {
+                    scheme.on_surface_variant
+                });
+        }
+    }
+}
+
+#[tessera]
+fn sample_toolbar(
+    sample: Sample,
+    docked: Option<bool>,
+    vibrant: Option<bool>,
+    vertical: Option<bool>,
+    rounded: Option<bool>,
+    dividers: Option<bool>,
+    elevation: Option<Dp>,
+    limit: Option<usize>,
+    notice: Option<State<String>>,
+) {
+    let local = remember(String::new);
+    let notice = notice.unwrap_or(local);
+    let selected = remember(|| true);
+    let docked = docked.unwrap_or(false);
+    let vibrant = vibrant.unwrap_or(false);
+    let vertical = vertical.unwrap_or(false);
+    let dividers = dividers.unwrap_or(false);
+    let actions = visible_actions(sample_actions(sample), limit.unwrap_or(usize::MAX));
+    let gallery_tag = use_context::<GalleryTag>().map(|tag| tag.get().0);
+    let color = if vibrant {
+        ToolbarColorStyle::Vibrant
+    } else {
+        ToolbarColorStyle::Standard
+    };
+    let content = RenderSlot::new(move || {
+        let count = actions.len();
+        for (index, action) in actions.clone().into_iter().enumerate() {
+            if dividers && index > 0 && index % 3 == 0 {
+                vertical_divider().modifier(Modifier::new().height(Dp(32.0)));
+            }
+            let tag = gallery_tag.and_then(|item| match index {
+                0 => Some(format!("toolbar-gallery-{item}-first")),
+                last if last + 1 == count => Some(format!("toolbar-gallery-{item}-last")),
+                _ => None,
+            });
+            sample_action(action.label, action.emphasis, vibrant, selected, notice)
+                .tag_optional(tag);
+        }
+    });
+    if docked {
+        let modifier = if rounded.unwrap_or(false) {
+            Modifier::new().clip_shape(Shape::rounded_rectangle(Dp(16.0)))
+        } else {
+            Modifier::new()
+        };
+        docked_toolbar()
+            .modifier(modifier)
+            .color_style(color)
+            .accessibility_label(sample_label(sample))
+            .content_shared(content);
+    } else {
+        floating_toolbar()
+            .color_style(color)
+            .orientation(if vertical {
+                ToolbarOrientation::Vertical
+            } else {
+                ToolbarOrientation::Horizontal
+            })
+            .elevation(elevation.unwrap_or(Dp(6.0)))
+            .accessibility_label(sample_label(sample))
+            .content_shared(content);
+    }
+}
+
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+enum FabKind {
+    #[default]
+    Reply,
+    Add,
+    EndCall,
+}
+
+#[tessera]
+fn fab_pair(
+    sample: Sample,
+    fab: FabKind,
+    vibrant: Option<bool>,
+    limit: Option<usize>,
+    notice: Option<State<String>>,
+) {
+    let scheme = use_context::<MaterialTheme>().unwrap().get().color_scheme;
+    let vibrant = vibrant.unwrap_or(false);
+    let local = remember(String::new);
+    let notice = notice.unwrap_or(local);
+    let fab_tag = use_context::<GalleryTag>()
+        .map(|tag| tag.get().0)
+        .map(|item| format!("toolbar-gallery-{item}-fab"));
+    let (label, container, content) = match fab {
+        FabKind::EndCall => (
+            "End call",
+            scheme.error_container,
+            scheme.on_error_container,
+        ),
+        FabKind::Reply if vibrant => (
+            "Reply",
+            scheme.tertiary_container,
+            scheme.on_tertiary_container,
+        ),
+        FabKind::Add if vibrant => (
+            "Create",
+            scheme.tertiary_container,
+            scheme.on_tertiary_container,
+        ),
+        FabKind::Reply => (
+            "Reply",
+            scheme.secondary_container,
+            scheme.on_secondary_container,
+        ),
+        FabKind::Add => (
+            "Create",
+            scheme.secondary_container,
+            scheme.on_secondary_container,
+        ),
+    };
+    row()
+        .cross_axis_alignment(CrossAxisAlignment::Center)
+        .children(move || {
+            sample_toolbar(sample)
+                .vibrant(vibrant)
+                .limit_optional(limit)
+                .notice(notice);
+            spacer().modifier(Modifier::new().width(Dp(8.0)));
+            floating_action_button()
+                .modifier(tagged(fab_tag.clone()))
+                .size(FloatingActionButtonSize::Standard)
+                .container_color(container)
+                .content_color(content)
+                .accessibility_label(label)
+                .elevation(FloatingActionButtonElevation::new(
+                    Dp(1.0),
+                    Dp(1.0),
+                    Dp(3.0),
+                    Dp(1.0),
+                ))
+                .on_click(move || notice.set(format!("{label} activated")))
+                .content(move || {
+                    icon()
+                        .vector(match fab {
+                            FabKind::Reply => filled::REPLY_SVG,
+                            FabKind::Add => filled::ADD_SVG,
+                            FabKind::EndCall => filled::CALL_END_SVG,
+                        })
+                        .size(Dp(24.0));
+                });
+        });
+}
+
+/// Records the measured width of a stage so its content can adapt.
+fn watch_width(modifier: Modifier, width: State<Dp>) -> Modifier {
+    modifier.on_layout_coordinates(move |coordinates: LayoutCoordinates| {
+        let next = Dp::from_pixels_f32(coordinates.local_size.width.to_f32());
+        if width.get() != next {
+            width.set(next);
+        }
+    })
+}
+
+fn compact(width: Dp) -> bool {
+    width < Dp(400.0)
+}
+
+#[tessera]
+fn stage(width: State<Dp>, content: RenderSlot) {
+    let scheme = use_context::<MaterialTheme>().unwrap().get().color_scheme;
+    let padding = if compact(width.get()) { 16.0 } else { 40.0 };
+    boxed()
+        .alignment(Alignment::Center)
+        .modifier(
+            watch_width(Modifier::new(), width)
+                .fill_max_width()
+                .background_with_shape(
+                    scheme.surface_container_low,
+                    Shape::rounded_rectangle(Dp(24.0)),
+                )
+                .semantics(SemanticsArgs {
+                    test_tag: Some("toolbar-stage".into()),
+                    merge_descendants: true,
+                    ..Default::default()
+                })
+                .padding_symmetric(Dp(padding), Dp(32.0)),
+        )
+        .children(move || {
+            column()
+                .modifier(Modifier::new().fill_max_width())
+                .cross_axis_alignment(CrossAxisAlignment::Center)
+                .children_shared(content);
+        });
+}
+
+#[tessera]
+fn gallery_item(
+    index: usize,
+    legend: Option<usize>,
+    fill: Option<bool>,
+    content: Option<RenderSlot>,
+) {
+    let fill = fill.unwrap_or(false);
+    let modifier = Modifier::new().semantics(SemanticsArgs {
+        test_tag: Some(format!("toolbar-gallery-{index}")),
+        ..Default::default()
+    });
+    column()
+        .modifier(if fill {
+            modifier.fill_max_width()
+        } else {
+            modifier
+        })
+        .cross_axis_alignment(CrossAxisAlignment::Center)
+        .children(move || {
+            if let Some(content) = content {
+                provide_context(move || GalleryTag(index), move || content.render());
+            }
+            if let Some(number) = legend {
+                gap(Dp(12.0));
+                number_badge(number);
+            }
+        });
+}
+
+#[tessera]
+fn floating_group(content: RenderSlot) {
+    flow_row()
+        .modifier(Modifier::new().fill_max_width())
+        .main_axis_alignment(MainAxisAlignment::Center)
+        .cross_axis_alignment(CrossAxisAlignment::Center)
+        .item_spacing(Dp(24.0))
+        .line_spacing(Dp(24.0))
+        .children_shared(content);
+}
+
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+enum GalleryKind {
+    #[default]
+    Overview,
+    Variants,
+    Configurations,
+    Expressive,
+    UseCases,
+    DockedVsFloating,
+    ColorEmphasis,
+    Corners,
+    Elevation,
+    Slots,
+    Emphasis,
+    EmphasisDont,
+    Presentation,
+    RoundedDocked,
+}
+
+#[tessera]
+fn gallery(kind: GalleryKind) {
+    let width = remember(|| Dp::ZERO);
+    let notice = remember(String::new);
+    let inner = Dp(width.get().0 - if compact(width.get()) { 32.0 } else { 80.0 });
+    let limit = actions_that_fit(inner, 16.0);
+    let docked_limit = actions_that_fit(inner, 32.0);
+    let fab_limit = actions_that_fit(Dp(inner.0 - 64.0), 16.0);
+    stage(
+        width,
+        RenderSlot::new(move || match kind {
+            GalleryKind::Overview => {
+                floating_group(RenderSlot::new(move || {
+                    gallery_item(0).content(move || {
+                        sample_toolbar(Sample::Vertical)
+                            .vertical(true)
+                            .notice(notice);
+                    });
+                    gallery_item(1).content(move || {
+                        fab_pair(Sample::Edit, FabKind::EndCall)
+                            .limit(fab_limit)
+                            .notice(notice);
+                    });
+                    gallery_item(2).content(move || {
+                        sample_toolbar(Sample::FormatTonal)
+                            .vibrant(true)
+                            .limit(limit)
+                            .notice(notice);
+                    });
+                    gallery_item(3).content(move || {
+                        sample_toolbar(Sample::Navigate).limit(limit).notice(notice);
+                    });
+                }));
+                gap(Dp(24.0));
+                gallery_item(4).fill(true).content(move || {
+                    sample_toolbar(Sample::Navigate)
+                        .docked(true)
+                        .vibrant(true)
+                        .limit(docked_limit)
+                        .notice(notice);
+                });
+                gap(Dp(16.0));
+                gallery_item(5).fill(true).content(move || {
+                    text_nav_toolbar(false).notice(notice);
+                });
+                gap(Dp(16.0));
+                gallery_item(6).fill(true).content(move || {
+                    sample_toolbar(Sample::Mail)
+                        .docked(true)
+                        .vibrant(true)
+                        .limit(docked_limit)
+                        .notice(notice);
+                });
+            }
+            GalleryKind::Variants => {
+                gallery_item(0).fill(true).legend(1).content(move || {
+                    sample_toolbar(Sample::Mail)
+                        .docked(true)
+                        .limit(docked_limit)
+                        .notice(notice);
+                });
+                gap(Dp(32.0));
+                gallery_item(1).legend(2).content(move || {
+                    sample_toolbar(Sample::Format).limit(limit).notice(notice);
+                });
+            }
+            GalleryKind::Configurations => {
+                gallery_item(0).content(move || {
+                    sample_toolbar(Sample::Format).limit(limit).notice(notice);
+                });
+                gap(Dp(16.0));
+                gallery_item(1).content(move || {
+                    sample_toolbar(Sample::Format)
+                        .vibrant(true)
+                        .limit(limit)
+                        .notice(notice);
+                });
+                gap(Dp(16.0));
+                gallery_item(2).fill(true).content(move || {
+                    sample_toolbar(Sample::Mail)
+                        .docked(true)
+                        .limit(docked_limit)
+                        .notice(notice);
+                });
+                gap(Dp(16.0));
+                gallery_item(3).fill(true).legend(1).content(move || {
+                    sample_toolbar(Sample::Mail)
+                        .docked(true)
+                        .vibrant(true)
+                        .limit(docked_limit)
+                        .notice(notice);
+                });
+                gap(Dp(32.0));
+                floating_group(RenderSlot::new(move || {
+                    gallery_item(4).legend(2).content(move || {
+                        sample_toolbar(Sample::Format)
+                            .vertical(true)
+                            .limit(5)
+                            .notice(notice);
+                    });
+                    gallery_item(5).legend(3).content(move || {
+                        fab_pair(Sample::Mail, FabKind::Reply)
+                            .vibrant(true)
+                            .limit(fab_limit)
+                            .notice(notice);
+                    });
+                }));
+            }
+            GalleryKind::Expressive => {
+                gallery_item(0).legend(1).content(move || {
+                    fab_pair(Sample::Mail, FabKind::Reply)
+                        .vibrant(true)
+                        .limit(fab_limit)
+                        .notice(notice);
+                });
+                gap(Dp(32.0));
+                gallery_item(1).fill(true).legend(2).content(move || {
+                    sample_toolbar(Sample::Navigate)
+                        .docked(true)
+                        .limit(docked_limit)
+                        .notice(notice);
+                });
+            }
+            GalleryKind::UseCases => {
+                floating_group(RenderSlot::new(move || {
+                    gallery_item(0).content(move || {
+                        sample_toolbar(Sample::Mail)
+                            .vibrant(true)
+                            .limit(limit)
+                            .notice(notice);
+                    });
+                    gallery_item(1).content(move || {
+                        sample_toolbar(Sample::Format).limit(limit).notice(notice);
+                    });
+                    gallery_item(2).content(move || {
+                        fab_pair(Sample::Edit, FabKind::EndCall)
+                            .limit(fab_limit)
+                            .notice(notice);
+                    });
+                    gallery_item(3).content(move || {
+                        sample_toolbar(Sample::Navigate)
+                            .vibrant(true)
+                            .limit(limit)
+                            .notice(notice);
+                    });
+                }));
+                gap(Dp(24.0));
+                gallery_item(4).fill(true).content(move || {
+                    text_nav_toolbar(false).notice(notice);
+                });
+            }
+            GalleryKind::DockedVsFloating => {
+                gallery_item(0).fill(true).content(move || {
+                    sample_toolbar(Sample::Mail)
+                        .docked(true)
+                        .limit(docked_limit)
+                        .notice(notice);
+                });
+                gap(Dp(12.0));
+                caption("Docked toolbar shows global controls");
+                gap(Dp(32.0));
+                gallery_item(1).content(move || {
+                    sample_toolbar(Sample::Format).limit(limit).notice(notice);
+                });
+                gap(Dp(12.0));
+                caption("Floating toolbar shows controls relevant to the current page");
+            }
+            GalleryKind::ColorEmphasis => {
+                gallery_item(0).content(move || {
+                    sample_toolbar(Sample::Format).limit(limit).notice(notice);
+                });
+                gap(Dp(12.0));
+                caption(
+                    "Use the standard color scheme to draw focus to content outside the toolbar",
+                );
+                gap(Dp(32.0));
+                gallery_item(1).content(move || {
+                    sample_toolbar(Sample::Format)
+                        .vibrant(true)
+                        .limit(limit)
+                        .notice(notice);
+                });
+                gap(Dp(12.0));
+                caption("Use the vibrant color scheme to emphasize controls or actions");
+            }
+            GalleryKind::Corners => {
+                gallery_item(0).fill(true).content(move || {
+                    sample_toolbar(Sample::Mail)
+                        .docked(true)
+                        .limit(docked_limit)
+                        .notice(notice);
+                });
+                gap(Dp(12.0));
+                do_note("Use straight corners for docked toolbars");
+                gap(Dp(32.0));
+                gallery_item(1).fill(true).content(move || {
+                    sample_toolbar(Sample::Mail)
+                        .docked(true)
+                        .rounded(true)
+                        .limit(docked_limit)
+                        .notice(notice);
+                });
+                gap(Dp(12.0));
+                dont_note("Avoid modifying the container shape");
+            }
+            GalleryKind::Elevation => {
+                gallery_item(0).content(move || {
+                    sample_toolbar(Sample::Format)
+                        .vibrant(true)
+                        .elevation(Dp::ZERO)
+                        .limit(limit)
+                        .notice(notice);
+                });
+            }
+            GalleryKind::Slots => {
+                floating_group(RenderSlot::new(move || {
+                    gallery_item(0).content(move || {
+                        sample_toolbar(Sample::FormatTonal)
+                            .limit(limit)
+                            .notice(notice);
+                    });
+                    gallery_item(1).content(move || {
+                        sample_toolbar(Sample::Navigate)
+                            .vibrant(true)
+                            .limit(limit)
+                            .notice(notice);
+                    });
+                    gallery_item(2).content(move || {
+                        sample_toolbar(Sample::Edit).limit(limit).notice(notice);
+                    });
+                }));
+                gap(Dp(24.0));
+                gallery_item(3).fill(true).content(move || {
+                    text_nav_toolbar(false).notice(notice);
+                });
+                gap(Dp(16.0));
+                gallery_item(4).fill(true).content(move || {
+                    search_toolbar(notice);
+                });
+            }
+            GalleryKind::Emphasis => {
+                floating_group(RenderSlot::new(move || {
+                    gallery_item(0).content(move || {
+                        sample_toolbar(Sample::Navigate).limit(limit).notice(notice);
+                    });
+                    gallery_item(1).content(move || {
+                        fab_pair(Sample::Mail, FabKind::Reply)
+                            .vibrant(true)
+                            .limit(fab_limit)
+                            .notice(notice);
+                    });
+                }));
+            }
+            GalleryKind::EmphasisDont => {
+                gallery_item(0).content(move || {
+                    fab_pair(Sample::Navigate, FabKind::Add)
+                        .vibrant(true)
+                        .limit(fab_limit)
+                        .notice(notice);
+                });
+            }
+            GalleryKind::Presentation => {
+                floating_group(RenderSlot::new(move || {
+                    gallery_item(0).content(move || {
+                        sample_toolbar(Sample::History).notice(notice);
+                    });
+                    gallery_item(1).content(move || {
+                        sample_toolbar(Sample::Format)
+                            .vibrant(true)
+                            .limit(limit.saturating_sub(2).max(2))
+                            .notice(notice);
+                    });
+                }));
+            }
+            GalleryKind::RoundedDocked => {
+                gallery_item(0).fill(true).content(move || {
+                    sample_toolbar(Sample::Format)
+                        .docked(true)
+                        .rounded(true)
+                        .dividers(true)
+                        .limit(docked_limit.saturating_sub(1).max(2))
+                        .notice(notice);
+                });
+            }
+        }),
+    );
+    if !notice.get().is_empty() {
+        gap(Dp(12.0));
+        caption(notice.get());
+    }
+}
+
+#[tessera]
+fn text_nav_toolbar(rtl: bool, notice: Option<State<String>>) {
+    let local = remember(String::new);
+    let notice = notice.unwrap_or(local);
+    let gallery_tag = use_context::<GalleryTag>().map(|tag| tag.get().0);
+    docked_toolbar()
+        .accessibility_label(if rtl {
+            "Mirrored page navigation"
+        } else {
+            "Page navigation"
+        })
+        .content(move || {
+            row()
+                .modifier(Modifier::new().fill_max_width())
+                .cross_axis_alignment(CrossAxisAlignment::Center)
+                .children(move || {
+                    nav_button(rtl, notice).tag_optional(
+                        gallery_tag.map(|item| format!("toolbar-gallery-{item}-first")),
+                    );
+                    spacer().modifier(Modifier::new().weight(1.0));
+                    nav_button(!rtl, notice).tag_optional(
+                        gallery_tag.map(|item| format!("toolbar-gallery-{item}-last")),
+                    );
+                });
+        });
+}
+
+#[tessera]
+fn nav_button(next: bool, notice: State<String>, tag: Option<String>) {
+    let label = if next { "Next" } else { "Back" };
+    if next {
+        button()
+            .modifier(tagged(tag))
+            .filled()
+            .accessibility_label(label)
+            .on_click(move || notice.set(format!("{label} activated")))
+            .child(move || {
+                text().content(label);
+            });
+    } else {
+        button()
+            .modifier(tagged(tag))
+            .text()
+            .accessibility_label(label)
+            .on_click(move || notice.set(format!("{label} activated")))
+            .child(move || {
+                text().content(label);
+            });
+    }
+}
+
+#[tessera]
+fn color_roles(vibrant: bool) {
+    let width = remember(|| Dp::ZERO);
+    stage(
+        width,
+        RenderSlot::new(move || {
+            sample_toolbar(Sample::ColorRoles).vibrant(vibrant);
+        }),
+    );
+    gap(Dp(16.0));
+    legend(if vibrant {
+        vec![
+            "Primary container".into(),
+            "Filled button (Primary, On primary)".into(),
+            "Toggle tonal button (Surface container, On surface)".into(),
+            "Standard button (On primary container)".into(),
+        ]
+    } else {
+        vec![
+            "Surface container".into(),
+            "Filled button (Primary, On primary)".into(),
+            "Toggle tonal button (Secondary container, On secondary container)".into(),
+            "Standard button (On surface variant)".into(),
+        ]
+    });
+}
+
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+enum Placement {
+    #[default]
+    Docked,
+    Horizontal,
+    Vertical,
+}
+
+fn placement_tag(geometry: State<Geometry>, name: &'static str, tag: &str) -> Modifier {
+    watch(geometry, name).semantics(SemanticsArgs {
+        test_tag: Some(tag.into()),
+        ..Default::default()
+    })
+}
+
+#[tessera]
+fn placement_figure(placement: Placement) {
+    let geometry = remember(Geometry::new);
+    let width = remember(|| Dp::ZERO);
+    let scheme = use_context::<MaterialTheme>().unwrap().get().color_scheme;
+    let window_width = Dp(width.get().0 - 48.0);
+    let horizontal_limit = actions_that_fit(Dp(window_width.0 - 32.0), 16.0).min(4);
+    let docked_limit = actions_that_fit(window_width, 32.0);
+    let vertical_limit = if compact(width.get()) { 3 } else { 5 };
+    boxed()
+        .alignment(Alignment::TopStart)
+        .modifier(
+            watch_width(watch(geometry, "figure"), width)
+                .fill_max_width()
+                .height(Dp(360.0))
+                .background_with_shape(
+                    scheme.surface_container_low,
+                    Shape::rounded_rectangle(Dp(24.0)),
+                )
+                .semantics(SemanticsArgs {
+                    role: Some(Role::Group),
+                    label: Some(
+                        match placement {
+                            Placement::Docked => "Docked toolbar at the bottom of the window",
+                            Placement::Horizontal => "Horizontal floating toolbar margins",
+                            Placement::Vertical => "Vertical floating toolbar margins",
+                        }
+                        .into(),
+                    ),
+                    test_tag: Some("placement-figure".into()),
+                    ..Default::default()
+                }),
+        )
+        .children(move || {
+            boxed()
+                .modifier(Modifier::new().fill_max_size().padding_all(Dp(24.0)))
+                .children(move || {
+                    boxed()
+                        .modifier(
+                            placement_tag(geometry, "window", "placement-window")
+                                .fill_max_size()
+                                .clip_shape(Shape::rounded_rectangle(Dp(16.0)))
+                                .background_with_shape(
+                                    scheme.surface,
+                                    Shape::rounded_rectangle(Dp(16.0)),
+                                ),
+                        )
+                        .children(move || match placement {
+                            Placement::Docked => {
+                                boxed()
+                                    .modifier(
+                                        placement_tag(geometry, "toolbar", "placement-toolbar")
+                                            .align(Alignment::BottomCenter)
+                                            .fill_max_width(),
+                                    )
+                                    .children(move || {
+                                        sample_toolbar(Sample::Mail)
+                                            .docked(true)
+                                            .limit(docked_limit);
+                                    });
+                            }
+                            Placement::Horizontal => {
+                                boxed()
+                                    .modifier(
+                                        Modifier::new().align(Alignment::BottomCenter).padding(
+                                            Padding::new(Dp::ZERO, Dp::ZERO, Dp::ZERO, Dp(16.0)),
+                                        ),
+                                    )
+                                    .children(move || {
+                                        boxed()
+                                            .modifier(placement_tag(
+                                                geometry,
+                                                "toolbar",
+                                                "placement-toolbar",
+                                            ))
+                                            .children(move || {
+                                                sample_toolbar(Sample::Format)
+                                                    .limit(horizontal_limit);
+                                            });
+                                    });
+                            }
+                            Placement::Vertical => {
+                                column()
+                                    .modifier(
+                                        Modifier::new()
+                                            .align(Alignment::CenterStart)
+                                            .padding(Padding::new(
+                                                Dp(16.0),
+                                                Dp::ZERO,
+                                                Dp::ZERO,
+                                                Dp::ZERO,
+                                            ))
+                                            .semantics(SemanticsArgs {
+                                                role: Some(Role::Group),
+                                                label: Some("Navigation rail".into()),
+                                                ..Default::default()
+                                            }),
+                                    )
+                                    .cross_axis_alignment(CrossAxisAlignment::Center)
+                                    .children(move || {
+                                        for vector in
+                                            [filled::INBOX_SVG, filled::STAR_SVG, filled::SEND_SVG]
+                                        {
+                                            icon().vector(vector).size(Dp(24.0));
+                                            gap(Dp(24.0));
+                                        }
+                                    });
+                                boxed()
+                                    .modifier(Modifier::new().align(Alignment::CenterEnd).padding(
+                                        Padding::new(Dp::ZERO, Dp::ZERO, Dp(24.0), Dp::ZERO),
+                                    ))
+                                    .children(move || {
+                                        boxed()
+                                            .modifier(placement_tag(
+                                                geometry,
+                                                "toolbar",
+                                                "placement-toolbar",
+                                            ))
+                                            .children(move || {
+                                                sample_toolbar(Sample::Vertical)
+                                                    .vertical(true)
+                                                    .limit(vertical_limit);
+                                            });
+                                    });
+                            }
+                        });
+                });
+            placement_annotations(geometry, placement);
+        });
+}
+
+#[tessera]
+fn placement_annotations(geometry: State<Geometry>, placement: Placement) {
+    let values = geometry.get();
+    let (Some(root), Some(window), Some(toolbar)) = (
+        values.get("figure"),
+        relative(&values, "window"),
+        relative(&values, "toolbar"),
+    ) else {
+        return;
+    };
+    let mut svg = String::new();
+    match placement {
+        Placement::Docked => return,
+        Placement::Horizontal => {
+            let bottom = toolbar.y + toolbar.h;
+            let margin = window.y + window.h - bottom;
+            let x = toolbar.x + toolbar.w + 12.0;
+            dotted(&mut svg, x, bottom, margin, true, "#b14e70");
+            annotations::dimension(format!("{margin:.0}"), Dp(x + 6.0), Dp(bottom - 4.0));
+        }
+        Placement::Vertical => {
+            let right = toolbar.x + toolbar.w;
+            let margin = window.x + window.w - right;
+            let y = toolbar.y - 12.0;
+            dotted(&mut svg, right, y, margin, false, "#b14e70");
+            annotations::dimension(format!("{margin:.0}"), Dp(right - 4.0), Dp(y - 28.0));
+        }
+    }
+    annotations::lines(
+        Dp::from_pixels_f32(root.width.to_f32()),
+        Dp::from_pixels_f32(root.height.to_f32()),
+        svg,
+    );
+}
+
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+enum DockedLayout {
+    #[default]
+    Edges,
+    Centered,
+}
+
+#[tessera]
+fn layout_action(index: usize, #[prop(into)] label: String, filled: bool, notice: State<String>) {
+    let vector = action_icon(&label);
+    let modifier = Modifier::new().semantics(SemanticsArgs {
+        test_tag: Some(format!("layout-action-{index}")),
+        ..Default::default()
+    });
+    let message = format!("{label} activated");
+    if filled {
+        icon_button()
+            .modifier(modifier)
+            .icon(vector)
+            .accessibility_label(label.clone())
+            .on_click(move || notice.set(message.clone()))
+            .filled();
+    } else {
+        icon_button()
+            .modifier(modifier)
+            .icon(vector)
+            .accessibility_label(label.clone())
+            .on_click(move || notice.set(message.clone()))
+            .standard();
+    }
+}
+
+#[tessera]
+fn docked_layout_figure(layout: DockedLayout) {
+    let width = remember(|| Dp::ZERO);
+    let notice = remember(String::new);
+    let labels: Vec<&'static str> = if compact(width.get()) {
+        vec!["Back", "Add", "More options"]
+    } else {
+        vec![
+            "Back",
+            "Forward",
+            "Add",
+            "Picture in picture",
+            "More options",
+        ]
+    };
+    stage(
+        width,
+        RenderSlot::new(move || {
+            let labels = labels.clone();
+            boxed()
+                .modifier(Modifier::new().fill_max_width().semantics(SemanticsArgs {
+                    test_tag: Some("docked-layout".into()),
+                    ..Default::default()
+                }))
+                .children(move || {
+                    let labels = labels.clone();
+                    docked_toolbar()
+                        .accessibility_label(match layout {
+                            DockedLayout::Edges => "Edge-aligned docked toolbar",
+                            DockedLayout::Centered => "Center-aligned docked toolbar",
+                        })
+                        .content(move || {
+                            let labels = labels.clone();
+                            match layout {
+                                DockedLayout::Centered => {
+                                    row()
+                                        .cross_axis_alignment(CrossAxisAlignment::Center)
+                                        .children(move || {
+                                            for (index, label) in
+                                                labels.clone().into_iter().enumerate()
+                                            {
+                                                if index > 0 {
+                                                    spacer()
+                                                        .modifier(Modifier::new().width(Dp(8.0)));
+                                                }
+                                                layout_action(index, label, label == "Add", notice);
+                                            }
+                                        });
+                                }
+                                DockedLayout::Edges => {
+                                    row()
+                                        .modifier(Modifier::new().fill_max_width())
+                                        .cross_axis_alignment(CrossAxisAlignment::Center)
+                                        .children(move || {
+                                            for (index, label) in
+                                                labels.clone().into_iter().enumerate()
+                                            {
+                                                let center = label == "Add";
+                                                if center {
+                                                    spacer().modifier(Modifier::new().weight(1.0));
+                                                }
+                                                layout_action(index, label, center, notice);
+                                                if center {
+                                                    spacer().modifier(Modifier::new().weight(1.0));
+                                                }
+                                            }
+                                        });
+                                }
+                            }
+                        });
+                });
+        }),
+    );
+    if !notice.get().is_empty() {
+        gap(Dp(12.0));
+        caption(notice.get());
+    }
+}
+
+#[tessera]
+fn overflow_example() {
+    let open = remember(|| false);
+    let notice = remember(String::new);
+    let width = remember(|| Dp::ZERO);
+    let scheme = use_context::<MaterialTheme>().unwrap().get().color_scheme;
+    stage(
+        width,
+        RenderSlot::new(move || {
+            floating_toolbar()
+                .accessibility_label("Mailbox destinations")
+                .content(move || {
+                    for label in ["Inbox", "Starred"] {
+                        button()
+                            .text()
+                            .accessibility_label(label)
+                            .on_click(move || {
+                                notice.set(format!("{label} selected"));
+                                open.set(false);
+                            })
+                            .child(move || {
+                                text().content(label);
+                            });
+                    }
+                    icon_button()
+                        .icon(filled::MORE_VERT_SVG)
+                        .accessibility_label("More destinations")
+                        .on_click(move || open.set(!open.get()))
+                        .standard()
+                        .selected(open.get());
+                });
+            if open.get() {
+                gap(Dp(8.0));
+                surface()
+                    .style(SurfaceStyle::Filled {
+                        color: scheme.surface_container,
+                    })
+                    .shape(Shape::rounded_rectangle(Dp(16.0)))
+                    .elevation(Dp(3.0))
+                    .accessibility_role(Role::Menu)
+                    .accessibility_label("More destinations")
+                    .child(move || {
+                        column()
+                            .modifier(Modifier::new().padding_symmetric(Dp::ZERO, Dp(8.0)))
+                            .children(move || {
+                                for label in ["Sent", "Drafts", "Spam"] {
+                                    button()
+                                        .text()
+                                        .accessibility_label(label)
+                                        .on_click(move || {
+                                            notice.set(format!("{label} selected"));
+                                            open.set(false);
+                                        })
+                                        .child(move || {
+                                            text().content(label);
+                                        });
+                                }
+                            });
+                    });
+            }
+        }),
+    );
+    gap(Dp(12.0));
+    caption(if notice.get().is_empty() {
+        "Toolbar actions can open a menu".to_string()
+    } else {
+        notice.get()
+    });
+}
+
+#[tessera]
+fn overflow_collapse_example() {
+    let compact_window = remember(|| true);
+    let width = remember(|| Dp::ZERO);
+    column()
+        .modifier(Modifier::new().fill_max_width())
+        .children(move || {
+            button()
+                .outlined()
+                .accessibility_label("Toggle window size")
+                .on_click(move || compact_window.set(!compact_window.get()))
+                .child(move || {
+                    text().content(if compact_window.get() {
+                        "Show larger window"
+                    } else {
+                        "Show compact window"
+                    });
+                });
+            gap(Dp(16.0));
+            stage(
+                width,
+                RenderSlot::new(move || {
+                    let fit = actions_that_fit(Dp(width.get().0 - 80.0), 16.0);
+                    sample_toolbar(Sample::Format)
+                        .vibrant(true)
+                        .limit(if compact_window.get() { 3 } else { fit });
+                }),
+            );
+        });
+}
+
+#[tessera]
+fn rtl_example() {
+    let width = remember(|| Dp::ZERO);
+    let notice = remember(String::new);
+    stage(
+        width,
+        RenderSlot::new(move || {
+            text_nav_toolbar(false).notice(notice);
+            gap(Dp(12.0));
+            caption(
+                "In LTR languages, the Next button is intentionally placed on the trailing (right) edge",
+            );
+            gap(Dp(24.0));
+            text_nav_toolbar(true).notice(notice);
+            gap(Dp(12.0));
+            caption(
+                "In RTL languages, reverse the order so Next remains on the trailing edge, now on the left",
+            );
+        }),
+    );
+}
+
+#[tessera]
+fn bottom_bar(icons: usize, fab: bool, notice: State<String>) {
+    let scheme = use_context::<MaterialTheme>().unwrap().get().color_scheme;
+    surface()
+        .style(SurfaceStyle::Filled {
+            color: scheme.surface_container,
+        })
+        .modifier(
+            Modifier::new()
+                .fill_max_width()
+                .height(Dp(80.0))
+                .semantics(SemanticsArgs {
+                    role: Some(Role::Toolbar),
+                    label: Some(if fab {
+                        "Bottom app bar with FAB".into()
+                    } else {
+                        "Bottom app bar".into()
+                    }),
+                    ..Default::default()
+                }),
+        )
+        .child(move || {
+            row()
+                .modifier(Modifier::new().fill_max_size().padding(Padding::new(
+                    Dp(4.0),
+                    Dp::ZERO,
+                    Dp(16.0),
+                    Dp::ZERO,
+                )))
+                .cross_axis_alignment(CrossAxisAlignment::Center)
+                .children(move || {
+                    for label in ["Archive", "Delete", "Mark unread", "Snooze"]
+                        .into_iter()
+                        .take(icons)
+                    {
+                        icon_button()
+                            .icon(action_icon(label))
+                            .accessibility_label(label)
+                            .on_click(move || notice.set(format!("{label} activated")))
+                            .standard();
+                    }
+                    if fab {
+                        spacer().modifier(Modifier::new().weight(1.0));
+                        floating_action_button()
+                            .accessibility_label("Compose")
+                            .on_click(move || notice.set("Compose activated".into()))
+                            .content(|| {
+                                icon().vector(filled::ADD_SVG);
+                            });
+                    }
+                });
+        });
+}
+
+#[tessera]
+fn baseline_layouts() {
+    let width = remember(|| Dp::ZERO);
+    let notice = remember(String::new);
+    stage(
+        width,
+        RenderSlot::new(move || {
+            let icons = if compact(width.get()) { 2 } else { 4 };
+            gallery_item(0).fill(true).legend(1).content(move || {
+                bottom_bar(icons, true, notice);
+            });
+            gap(Dp(24.0));
+            gallery_item(1).fill(true).legend(2).content(move || {
+                bottom_bar(4, false, notice);
+            });
+        }),
+    );
+    gap(Dp(16.0));
+    legend(vec![
+        "Icon buttons and FAB".into(),
+        "Icon buttons and no FAB".into(),
+    ]);
+    if !notice.get().is_empty() {
+        gap(Dp(12.0));
+        caption(notice.get());
+    }
+}
+
+#[tessera]
+fn overview() {
+    bullets(vec![
+        "Two expressive variants: docked toolbar and floating toolbar".into(),
+        "Use the vibrant color style for greater emphasis".into(),
+        "Can display a wide variety of control types, like buttons, icon buttons, and text fields"
+            .into(),
+        "Can be paired with FABs to emphasize certain actions".into(),
+        "Don't show at the same time as a navigation bar".into(),
+    ]);
+    gap(Dp(32.0));
+    gallery(GalleryKind::Overview);
+    gap(Dp(16.0));
+    caption("Configurations of floating toolbars");
+}
+
+#[tessera]
+fn availability() {
+    let rows = [
+        ("Design", "Design Kit (Figma)", "Available"),
+        (
+            "Implementation",
+            "Jetpack Compose - Bottom app bar",
+            "Available",
+        ),
+        (
+            "",
+            "Jetpack Compose: Expressive - Docked toolbar",
+            "Available",
+        ),
+        (
+            "",
+            "Jetpack Compose: Expressive - Floating toolbar",
+            "Available",
+        ),
+        (
+            "",
+            "Android Views (MDC-Android) - Bottom app bar",
+            "Available",
+        ),
+        (
+            "",
+            "Android Views (MDC-Android): Expressive - Docked toolbar",
+            "Available",
+        ),
+        (
+            "",
+            "Android Views (MDC-Android): Expressive - Floating toolbar",
+            "Available",
+        ),
+        ("", "Flutter - Bottom app bar", "Available"),
+        ("", "Web", "Unavailable"),
+    ];
+    let mut cells = Vec::new();
+    for (index, (kind, resource, status)) in rows.into_iter().enumerate() {
+        let row = index + 1;
+        if !kind.is_empty() {
+            cells.push(TextTableCell {
+                text: kind.into(),
+                row,
+                column: 0,
+                row_span: if index == 0 { 1 } else { rows.len() - 1 },
+                ..Default::default()
+            });
+        }
+        cells.push(TextTableCell {
+            text: resource.into(),
+            row,
+            column: 1,
+            ..Default::default()
+        });
+        cells.push(TextTableCell {
+            text: status.into(),
+            row,
+            column: 2,
+            ..Default::default()
+        });
+    }
+    spec_table_cells(
+        vec!["Type".into(), "Resource".into(), "Status".into()],
+        cells,
+    );
+    gap(Dp(24.0));
+    prose(
+        "The live examples on this page use Tessera's docked_toolbar and floating_toolbar components with standard and vibrant colors, horizontal and vertical layouts, and paired FABs.",
+    );
+}
+
+#[tessera]
+fn expressive_update() {
+    prose(
+        "The bottom app bar is no longer recommended and should be replaced with the docked toolbar, which functions similarly, but is shorter and has more flexibility. The floating toolbar was created for more versatility, greater amounts of actions, and more variety in where it's placed.",
+    );
+    gap(Dp(24.0));
+    prose("Variants and naming:");
+    gap(Dp(8.0));
+    bullets(vec![
+        "Added docked toolbar to replace bottom app bar".into(),
+        "- Size: Shorter height".into(),
+        "- Color: Standard or vibrant".into(),
+        "- Flexibility: More layout and element options".into(),
+        "Added floating toolbar with the following configurations:".into(),
+        "- Layout: Horizontal or vertical".into(),
+        "- Color: Standard or vibrant".into(),
+        "- Flexibility: Can hold many elements and components. Can be paired with FAB.".into(),
+        "Bottom app bar is still available, but not recommended".into(),
+    ]);
+    gap(Dp(24.0));
+    gallery(GalleryKind::Expressive);
+    gap(Dp(16.0));
+    legend(vec![
+        "Floating, vibrant color scheme and paired with FAB".into(),
+        "Docked with embedded primary action instead of FAB".into(),
+    ]);
+}
+
+#[tessera]
+fn differences() {
+    bullets(vec![
+        "Color: New color mappings and compatibility with dynamic color".into(),
+        "Elevation: No shadow".into(),
+        "Layout: Container height is taller and the FAB is now contained within the app bar container".into(),
+    ]);
+    gap(Dp(24.0));
+    m2_comparison();
+}
+
+#[tessera]
+fn spec_variants() {
+    gallery(GalleryKind::Variants);
+    gap(Dp(16.0));
+    legend(vec!["Docked toolbar".into(), "Floating toolbar".into()]);
+    gap(Dp(32.0));
+    subheading("Baseline variant".into());
+    gap(Dp(16.0));
+    prose(
+        "The baseline bottom app bar is no longer recommended. It should be replaced with the docked toolbar, which is very similar and more flexible.",
+    );
+    gap(Dp(24.0));
+    baseline_figure();
+    gap(Dp(16.0));
+    caption("Bottom app bar (not recommended)");
+    gap(Dp(32.0));
+    spec_table(
+        vec!["Variant".into(), "M3".into(), "M3 Expressive".into()],
+        vec![
+            vec!["Docked toolbar".into(), "--".into(), "Available".into()],
+            vec!["Floating toolbar".into(), "--".into(), "Available".into()],
+            vec![
+                "Bottom app bar".into(),
+                "Available".into(),
+                "Not recommended. Use docked toolbar.".into(),
+            ],
+        ],
+    );
+    gap(Dp(24.0));
+    prose(
+        "Note: Implementation differs per platform. In Tessera, docked_toolbar and floating_toolbar are separate components; the baseline bottom app bar is composed from a surface, icon buttons and a FAB.",
+    );
+}
+
+fn table_cell(text: &str, row: usize, column: usize, row_span: usize) -> TextTableCell {
+    TextTableCell {
+        text: text.into(),
+        row,
+        column,
+        row_span,
+        ..Default::default()
+    }
+}
+
+#[tessera]
+fn spec_configurations() {
+    gallery(GalleryKind::Configurations);
+    gap(Dp(16.0));
+    legend(vec![
+        "Standard and vibrant toolbars".into(),
+        "Vertical floating toolbar".into(),
+        "Floating toolbar with FAB".into(),
+    ]);
+    gap(Dp(32.0));
+    spec_table_cells(
+        vec![
+            "Category".into(),
+            "Configuration".into(),
+            "M3".into(),
+            "M3 Expressive".into(),
+        ],
+        vec![
+            table_cell("Color", 1, 0, 2),
+            table_cell("Standard (default)", 1, 1, 1),
+            table_cell("Available as bottom app bar", 1, 2, 1),
+            table_cell("Available", 1, 3, 1),
+            table_cell("Vibrant", 2, 1, 1),
+            table_cell("--", 2, 2, 1),
+            table_cell("Available", 2, 3, 1),
+            table_cell("Floating toolbar layout", 3, 0, 2),
+            table_cell("Horizontal (default)", 3, 1, 1),
+            table_cell("--", 3, 2, 1),
+            table_cell("Available", 3, 3, 1),
+            table_cell("Vertical", 4, 1, 1),
+            table_cell("--", 4, 2, 1),
+            table_cell("Available", 4, 3, 1),
+            table_cell("Other elements", 5, 0, 1),
+            table_cell("With FAB", 5, 1, 1),
+            table_cell("Available as bottom app bar", 5, 2, 1),
+            table_cell("Available*", 5, 3, 1),
+        ],
+    );
+    gap(Dp(24.0));
+    prose(
+        "Note: *Implementation differs per platform. In Tessera, the FAB is placed next to the floating toolbar as a separate component, 8dp from its container.",
+    );
+}
+
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+enum TokenSet {
+    #[default]
+    Standard,
+    Vibrant,
+    Docked,
+    Floating,
+    FloatingFab,
+}
+
+fn token_rows(set: TokenSet) -> Vec<Vec<String>> {
+    let rows: &[(&str, &str)] = match set {
+        TokenSet::Standard => &[
+            ("Toolbar standard container color", "Surface container"),
+            (
+                "Toolbar standard button container color",
+                "Surface container",
+            ),
+            (
+                "Toolbar standard selected button container color",
+                "Secondary container",
+            ),
+            ("Toolbar standard icon color", "On surface variant"),
+            (
+                "Toolbar standard selected icon color",
+                "On secondary container",
+            ),
+            ("Toolbar standard label color", "On surface variant"),
+            (
+                "Toolbar standard selected label color",
+                "On secondary container",
+            ),
+            ("Toolbar standard container shape", "Full"),
+            ("Toolbar standard disabled icon color", "On surface"),
+            ("Toolbar standard disabled icon opacity", "0.38"),
+        ],
+        TokenSet::Vibrant => &[
+            ("Toolbar vibrant container color", "Primary container"),
+            (
+                "Toolbar vibrant button container color",
+                "Primary container",
+            ),
+            (
+                "Toolbar vibrant selected button container color",
+                "Surface container",
+            ),
+            ("Toolbar vibrant icon color", "On primary container"),
+            ("Toolbar vibrant selected icon color", "On surface"),
+            ("Toolbar vibrant label color", "On primary container"),
+            ("Toolbar vibrant selected label color", "On surface"),
+            ("Toolbar vibrant container shape", "Full"),
+        ],
+        TokenSet::Docked => &[
+            ("Docked toolbar container color", "Surface container"),
+            ("Docked toolbar container height", "64dp"),
+            ("Docked toolbar leading padding", "16dp"),
+            ("Docked toolbar trailing padding", "16dp"),
+            ("Docked toolbar max space between actions", "32dp"),
+            ("Docked toolbar min space between actions", "4dp"),
+            ("Docked toolbar container shape", "None (rectangle)"),
+        ],
+        TokenSet::Floating => &[
+            ("Floating toolbar standard color", "Surface container"),
+            ("Floating toolbar vibrant color", "Primary container"),
+            ("Floating toolbar container height - horizontal", "64dp"),
+            ("Floating toolbar container width - vertical", "64dp"),
+            ("Floating toolbar leading space", "8dp"),
+            ("Floating toolbar trailing space", "8dp"),
+            (
+                "Floating toolbar margin from screen edge - horizontal",
+                "16dp",
+            ),
+            (
+                "Floating toolbar margin from screen edge - vertical",
+                "24dp",
+            ),
+            ("Floating toolbar space between actions", "4dp"),
+            ("Floating toolbar container shape", "Full"),
+            ("Floating toolbar container elevation", "Level 3 (6dp)"),
+        ],
+        TokenSet::FloatingFab => &[
+            ("Toolbar floating FAB space between toolbar and FAB", "8dp"),
+            (
+                "Toolbar floating FAB standard container color",
+                "Secondary container",
+            ),
+            (
+                "Toolbar floating FAB standard icon color",
+                "On secondary container",
+            ),
+            (
+                "Toolbar floating FAB vibrant container color",
+                "Tertiary container",
+            ),
+            (
+                "Toolbar floating FAB vibrant icon color",
+                "On tertiary container",
+            ),
+            (
+                "Toolbar floating FAB container size (expanded)",
+                "56dp × 56dp",
+            ),
+            ("Toolbar floating FAB icon size (expanded)", "24dp"),
+            (
+                "Toolbar floating FAB medium container size (collapsed)",
+                "80dp × 80dp",
+            ),
+            ("Toolbar floating FAB medium icon size (collapsed)", "28dp"),
+        ],
+    };
+    rows.iter()
+        .map(|(token, value)| vec![(*token).to_string(), (*value).to_string()])
+        .collect()
+}
+
+fn token_set_label(set: TokenSet) -> &'static str {
+    match set {
+        TokenSet::Standard => "Toolbar - Color - Standard",
+        TokenSet::Vibrant => "Toolbar - Color - Vibrant",
+        TokenSet::Docked => "Toolbar - Docked",
+        TokenSet::Floating => "Toolbar - Floating",
+        TokenSet::FloatingFab => "Toolbar - Floating - FAB",
+    }
+}
+
+#[tessera]
+fn token_chip(set: TokenSet, selected: State<TokenSet>) {
+    let label = token_set_label(set);
+    if selected.get() == set {
+        button()
+            .tonal()
+            .selected(true)
+            .accessibility_label(label)
+            .on_click(move || selected.set(set))
+            .child(move || {
+                text().content(label);
+            });
+    } else {
+        button()
+            .outlined()
+            .selected(false)
+            .accessibility_label(label)
+            .on_click(move || selected.set(set))
+            .child(move || {
+                text().content(label);
+            });
+    }
+}
+
+#[tessera]
+fn tokens() {
+    let selected = remember(TokenSet::default);
+    prose(
+        "Browse the component elements, attributes, tokens, and their values. Color tokens resolve through the active Material theme; the baseline bottom app bar specs follow at the end of this tab.",
+    );
+    gap(Dp(24.0));
+    flow_row()
+        .modifier(Modifier::new().fill_max_width())
+        .item_spacing(Dp(8.0))
+        .line_spacing(Dp(8.0))
+        .children(move || {
+            for set in [
+                TokenSet::Standard,
+                TokenSet::Vibrant,
+                TokenSet::Docked,
+                TokenSet::Floating,
+                TokenSet::FloatingFab,
+            ] {
+                token_chip(set, selected);
+            }
+        });
+    gap(Dp(24.0));
+    spec_table(
+        vec!["Token".into(), "Value".into()],
+        token_rows(selected.get()),
+    );
+}
+
+#[tessera]
+fn spec_anatomy() {
+    figure(Variant::Floating, ToolbarColorStyle::Standard, false);
+    gap(Dp(32.0));
+    subheading("Flexibility & slots".into());
+    gap(Dp(16.0));
+    prose(
+        "When configuring a toolbar, think of it as a container with several slots. Each slot can be a different element. The most common elements are icon buttons, buttons, and text fields.",
+    );
+    gap(Dp(24.0));
+    slots();
+    gap(Dp(16.0));
+    caption("A toolbar is essentially a container with configurable slots");
+    gap(Dp(24.0));
+    search_example();
+}
+
+#[tessera]
+fn spec_color() {
+    prose(
+        "Color values are implemented through design tokens. For design, this means working with color values that correspond with tokens. For implementation, a color value will be a token that references a value.",
+    );
+    gap(Dp(32.0));
+    subheading("Standard".into());
+    gap(Dp(16.0));
+    prose("Standard color schemes and icon button types:");
+    gap(Dp(16.0));
+    color_roles(false);
+    gap(Dp(32.0));
+    subheading("Vibrant".into());
+    gap(Dp(16.0));
+    prose("Vibrant color scheme and icon button types:");
+    gap(Dp(16.0));
+    color_roles(true);
 }
 
 #[tessera]
 fn measurements() {
-    paragraph("Horizontal toolbars have a default height of 64dp; vertical floating toolbars have a width of 64dp. Floating containers use 8dp inner padding; horizontal outside margins are at least 16dp, and vertical outside margins are at least 24dp. Docked actions retain 16dp leading and trailing padding.".into());
+    prose(
+        "By default all toolbars are 64dp high, center-aligned, have equal padding between items, and have a minimum outside padding of 16dp.",
+    );
     gap(Dp(32.0));
-    for variant in [
-        Variant::Docked,
-        Variant::Floating,
-        Variant::WithFab,
-        Variant::Vertical,
-    ] {
-        figure(variant, ToolbarColorStyle::Standard, true);
-        gap(Dp(32.0));
-    }
+    subheading("Docked toolbar".into());
+    gap(Dp(24.0));
+    figure(Variant::Docked, ToolbarColorStyle::Standard, true);
+    gap(Dp(16.0));
+    caption("Default margins and padding");
+    gap(Dp(32.0));
+    prose("Alignment and padding can be configured to create unique layouts:");
+    gap(Dp(24.0));
+    docked_layout_figure(DockedLayout::Edges);
+    gap(Dp(16.0));
+    caption("Left and right alignment");
+    gap(Dp(24.0));
+    docked_layout_figure(DockedLayout::Centered);
+    gap(Dp(16.0));
+    caption("Center-aligned, 8dp padding between items");
+    gap(Dp(32.0));
+    subheading("Floating toolbar".into());
+    gap(Dp(24.0));
+    figure(Variant::Floating, ToolbarColorStyle::Standard, true);
+    gap(Dp(16.0));
+    caption("Default padding of floating toolbar");
+    gap(Dp(24.0));
+    figure(Variant::WithFab, ToolbarColorStyle::Standard, true);
+    gap(Dp(16.0));
+    caption("Floating toolbar size and padding measurements");
+    gap(Dp(24.0));
+    placement_figure(Placement::Horizontal);
+    gap(Dp(16.0));
+    placement_figure(Placement::Vertical);
+    gap(Dp(16.0));
+    caption("Floating toolbar margins");
+    gap(Dp(32.0));
     spec_table(
         vec!["Attribute".into(), "Value".into()],
         vec![
             vec!["Container height / vertical width".into(), "64dp".into()],
             vec!["Floating internal padding".into(), "8dp".into()],
-            vec![
-                "Docked leading/trailing padding".into(),
-                "At least 16dp".into(),
-            ],
+            vec!["Floating space between actions".into(), "4dp".into()],
+            vec!["Docked leading/trailing padding".into(), "16dp".into()],
+            vec!["Docked space between actions".into(), "4dp - 32dp".into()],
             vec!["Horizontal outside margins".into(), "At least 16dp".into()],
             vec!["Vertical outside margins".into(), "At least 24dp".into()],
             vec!["FAB spacing".into(), "8dp".into()],
@@ -765,24 +2642,447 @@ fn measurements() {
 }
 
 #[tessera]
-fn tokens() {
+fn baseline_specs() {
+    prose(
+        "The baseline bottom app bar is no longer recommended. Use the docked toolbar for new page actions.",
+    );
+    gap(Dp(24.0));
+    baseline_figure();
+    gap(Dp(16.0));
+    caption("Container");
+    gap(Dp(32.0));
+    subheading("Tokens & specs".into());
+    gap(Dp(16.0));
+    prose("Bottom app bar tokens are in one token set.");
+    gap(Dp(16.0));
     spec_table(
         vec!["Token".into(), "Value".into()],
         vec![
-            vec!["Standard container".into(), "Surface container".into()],
-            vec!["Vibrant container".into(), "Primary container".into()],
-            vec!["Floating shape".into(), "Fully rounded".into()],
-            vec!["Docked shape".into(), "Rectangle".into()],
-            vec!["Container height / vertical width".into(), "64dp".into()],
-            vec!["Floating action gap".into(), "4dp".into()],
-            vec!["Floating container elevation".into(), "6dp".into()],
             vec![
-                "FAB alongside expanded toolbar".into(),
-                "56dp; elevation 1dp".into(),
+                "Bottom app bar container color".into(),
+                "Surface container".into(),
             ],
-            vec!["Collapsed medium FAB".into(), "80dp; elevation 3dp".into()],
+            vec!["Bottom app bar container height".into(), "80dp".into()],
+            vec![
+                "Bottom app bar container shape".into(),
+                "None (rectangle)".into(),
+            ],
+            vec!["Bottom app bar icon button target".into(), "48dp".into()],
+            vec![
+                "Bottom app bar icon color".into(),
+                "On surface variant".into(),
+            ],
+            vec!["Bottom app bar FAB size".into(), "56dp".into()],
         ],
     );
+    gap(Dp(32.0));
+    subheading("Color".into());
+    gap(Dp(16.0));
+    prose(
+        "Color values are implemented through design tokens. Bottom app bar color role used for light and dark themes: Surface container.",
+    );
+    gap(Dp(32.0));
+    subheading("Measurements".into());
+    gap(Dp(16.0));
+    prose(
+        "The baseline bottom app bar uses an 80dp container with 48dp action targets, a 4dp leading inset, and a 56dp FAB 12dp from the top and 16dp from the trailing edge. The container figure above shows these padding and size measurements.",
+    );
+    gap(Dp(32.0));
+    subheading("Common layouts".into());
+    gap(Dp(24.0));
+    baseline_layouts();
+}
+
+#[tessera]
+fn usage() {
+    prose(
+        "Use a toolbar to provide actions related to the current page. Toolbars can contain many actions and can scale to show more actions in larger windows.",
+    );
+    gap(Dp(24.0));
+    gallery(GalleryKind::Elevation);
+    gap(Dp(16.0));
+    caption("A toolbar provides actions related to the current page");
+    gap(Dp(32.0));
+    prose("There are two variants of toolbars:");
+    gap(Dp(8.0));
+    bullets(vec![
+        "Docked toolbar: Spans the full width of the window. It's best used for global actions that remain the same across multiple pages.".into(),
+        "Floating toolbar: Floats above the body content. It's best used for contextual actions relevant to the body content or the specific page.".into(),
+    ]);
+    gap(Dp(8.0));
+    prose("The baseline bottom app bar is no longer recommended, but is still supported.");
+    gap(Dp(24.0));
+    gallery(GalleryKind::DockedVsFloating);
+    gap(Dp(32.0));
+    prose("When actions don't fit in a toolbar, add a menu.");
+    gap(Dp(24.0));
+    overflow_example();
+    gap(Dp(32.0));
+    prose("There are two color configurations:");
+    gap(Dp(8.0));
+    bullets(vec![
+        "Standard: A low-emphasis color scheme best used for focusing attention on the body content.".into(),
+        "Vibrant: A high-emphasis color scheme that draws attention to the controls. It can also indicate a temporary change in the page behavior, such as entering edit mode.".into(),
+    ]);
+    gap(Dp(8.0));
+    prose(
+        "Consider using alternative color roles to create greater or lesser emphasis depending on the needs of the app.",
+    );
+    gap(Dp(24.0));
+    gallery(GalleryKind::ColorEmphasis);
+    gap(Dp(32.0));
+    subheading("Toolbars & navigation bars".into());
+    gap(Dp(16.0));
+    prose(
+        "The toolbar and navigation bar are both placed at the bottom of the window, so should not be shown at the same time. Show the navigation bar on primary pages, and toolbars on subsequent pages with actions.",
+    );
+    gap(Dp(24.0));
+    navigation_diagram(NavDiagram::Pages);
+    gap(Dp(32.0));
+    prose(
+        "Floating toolbars can be used as tabs between related subsequent pages in the product hierarchy. This helps group similar pages together, and shows that the selection affects the body content underneath.",
+    );
+    gap(Dp(24.0));
+    navigation_diagram(NavDiagram::LocalNavigation);
+    gap(Dp(16.0));
+    do_note(
+        "Keep navigation distinct, and use a toolbar to display local navigation on a specific page",
+    );
+    gap(Dp(12.0));
+    prose(
+        "Consider the existing app hierarchy when using a toolbar for local navigation. Avoid redundant or confusing navigation combinations in the same view.",
+    );
+    gap(Dp(12.0));
+    dont_note(
+        "Don't show a navigation bar and a toolbar with navigation controls at the same time",
+    );
+}
+
+#[tessera]
+fn guide_anatomy() {
+    figure(Variant::Floating, ToolbarColorStyle::Standard, false);
+    gap(Dp(32.0));
+    subheading("Container".into());
+    gap(Dp(16.0));
+    prose(
+        "The docked toolbar's container spans the full width of the window. Avoid applying rounded corners to the container. This can imply the container expands or changes upon interaction.",
+    );
+    gap(Dp(24.0));
+    gallery(GalleryKind::Corners);
+    gap(Dp(32.0));
+    prose(
+        "As long as there's a minimum of 16dp padding on the leading and trailing edge, arrange controls inside however you see fit. The 32dp padding between items is just the default. All elements need a minimum 48x48dp target area to be accessible.",
+    );
+    gap(Dp(16.0));
+    prose("Be cautious of including too many controls as it can be overwhelming.");
+    gap(Dp(12.0));
+    dont_note("Don't overwhelm people with too many controls");
+    gap(Dp(32.0));
+    prose(
+        "The floating toolbar's container should be fully visible on screen. If more actions are needed, use an overflow menu.",
+    );
+    gap(Dp(12.0));
+    do_note("Choose the most essential actions to show on screen by default");
+    gap(Dp(12.0));
+    dont_note("Floating toolbars shouldn't exceed the edge of the window or pane");
+    gap(Dp(32.0));
+    subheading("Elevation".into());
+    gap(Dp(16.0));
+    prose(
+        "Floating toolbars have elevation by default. If the content beneath the toolbar is visually distinct, elevation can be removed.",
+    );
+    gap(Dp(24.0));
+    gallery(GalleryKind::Elevation);
+    gap(Dp(16.0));
+    caption(
+        "The elevation on floating toolbars can be removed if on a visually distinct background",
+    );
+    gap(Dp(32.0));
+    subheading("Flexibility & slots".into());
+    gap(Dp(16.0));
+    prose(
+        "When configuring a toolbar, think of it as a container with several slots. These slots can be populated by buttons, icon buttons, images, text fields, or any kind of custom component. Icon buttons provide an even hierarchy of controls. Mixing in a filled icon button can help add emphasis to a single action.",
+    );
+    gap(Dp(24.0));
+    gallery(GalleryKind::Slots);
+    gap(Dp(16.0));
+    caption("Toolbars are made of slots that can contain many kinds of actions");
+    gap(Dp(32.0));
+    prose(
+        "Visually emphasizing a single action more than others is an effective way to create hierarchy and guide people to controls they use most often. Avoid emphasizing more than one action at a time. Some common ways to add emphasis to toolbar actions include:",
+    );
+    gap(Dp(8.0));
+    bullets(vec![
+        "Use different icon button color styles, such as filled, tonal, and standard".into(),
+        "Customize the color roles of a single action, such as a primary or secondary palette"
+            .into(),
+        "Use wide and narrow icon buttons".into(),
+        "Pair the toolbar with a FAB".into(),
+    ]);
+    gap(Dp(24.0));
+    gallery(GalleryKind::Emphasis);
+    gap(Dp(16.0));
+    caption("Two different ways to create a high emphasis action in toolbars");
+    gap(Dp(32.0));
+    gallery(GalleryKind::EmphasisDont);
+    gap(Dp(12.0));
+    dont_note(
+        "Don't emphasize multiple buttons with bold, primary colors, such as a button and FAB together. Emphasize one action at a time.",
+    );
+    gap(Dp(12.0));
+    dont_note(
+        "Avoid mixing too many different controls in the same toolbar. A consistent control design keeps things clear.",
+    );
+    gap(Dp(12.0));
+    prose(
+        "Avoid using square icon buttons in floating toolbars. Their square shape conflicts with the fully-rounded shape of the floating toolbar container. Square buttons can be used in the docked toolbar.",
+    );
+    gap(Dp(12.0));
+    dont_note("Don't use square filled icon buttons in floating toolbars");
+    gap(Dp(32.0));
+    subheading("Floating toolbar with FAB".into());
+    gap(Dp(16.0));
+    prose(
+        "A FAB can be placed next to a floating toolbar to present one high-priority action alongside a unified set of toolbar actions. Use a FAB for the highest-priority action in the view, or to complement the controls.",
+    );
+    gap(Dp(24.0));
+    figure(Variant::WithFab, ToolbarColorStyle::Vibrant, false);
+    gap(Dp(16.0));
+    caption("Floating toolbars can be paired with FABs");
+}
+
+#[tessera]
+fn position() {
+    prose(
+        "Only place docked toolbars at the bottom of the window. If using other bottom-aligned elements, such as a navigation bar, don't use a docked toolbar.",
+    );
+    gap(Dp(24.0));
+    placement_figure(Placement::Docked);
+    gap(Dp(16.0));
+    caption("Docked toolbars are always at the bottom of the window");
+    gap(Dp(32.0));
+    prose(
+        "Floating toolbars can be horizontal or vertical. Horizontal toolbars should have a minimum 16dp margin from the edge of the window.",
+    );
+    gap(Dp(24.0));
+    placement_figure(Placement::Horizontal);
+    gap(Dp(16.0));
+    caption("Horizontal floating toolbars should be at least 16dp from the edge of the window");
+    gap(Dp(32.0));
+    prose(
+        "In larger breakpoints, floating toolbars can be vertical and placed on either side of the screen. Vertical toolbars should have a minimum 24dp margin.",
+    );
+    gap(Dp(24.0));
+    figure(Variant::Vertical, ToolbarColorStyle::Standard, true);
+    gap(Dp(16.0));
+    caption("Maintain at least a 24dp margin for vertical toolbars");
+    gap(Dp(32.0));
+    prose(
+        "To keep vertical toolbars compact, don't use wide icon buttons. Use narrow or default icon buttons instead.",
+    );
+    gap(Dp(12.0));
+    dont_note(
+        "Using wide buttons with vertical toolbars can unnecessarily widen toolbar containers and hide other UI elements",
+    );
+    gap(Dp(32.0));
+    prose(
+        "Vertical toolbars should be positioned opposite the navigation rail to balance out the screen and keep actions easy to access. When showing a navigation rail and vertical floating toolbar at once, use the centered configuration of the navigation rail.",
+    );
+    gap(Dp(24.0));
+    placement_figure(Placement::Vertical);
+    gap(Dp(16.0));
+    caption(
+        "When a nav rail is visible, the floating toolbar should be vertical on the opposite edge of the window",
+    );
+}
+
+#[tessera]
+fn adaptive() {
+    prose(
+        "Adaptive design allows an interface to respond or change based on context, such as the user, device, and usage.",
+    );
+    gap(Dp(32.0));
+    subheading("Resizing".into());
+    gap(Dp(16.0));
+    prose(
+        "Docked: The docked toolbar should always span 100% of the screen width. In compact breakpoints, elements in the toolbar should be evenly spaced. In medium breakpoints and larger, adjust the padding between controls to create a comfortable layout by centering all elements, or by centering a key action and aligning other elements to the edges.",
+    );
+    gap(Dp(24.0));
+    figure(Variant::Docked, ToolbarColorStyle::Standard, false);
+    gap(Dp(16.0));
+    caption("Docked toolbar items should be evenly spaced in compact windows");
+    gap(Dp(24.0));
+    docked_layout_figure(DockedLayout::Centered);
+    gap(Dp(16.0));
+    caption("In medium breakpoints and larger, create a spacious layout by centering all elements");
+    gap(Dp(24.0));
+    docked_layout_figure(DockedLayout::Edges);
+    gap(Dp(16.0));
+    caption(
+        "Align controls to the edge of the screen to make them easier to reach on tablets, and to better highlight a primary action in the middle",
+    );
+    gap(Dp(32.0));
+    prose(
+        "On web and large screens, the docked toolbar can be rounded. Dividers can be used to organize large amounts of items. Only shrink the height and use extra small buttons if vertical space is limited.",
+    );
+    gap(Dp(24.0));
+    gallery(GalleryKind::RoundedDocked);
+    gap(Dp(16.0));
+    caption(
+        "On web and other large screens, docked toolbars can be rounded and placed in different parts of the page",
+    );
+    gap(Dp(32.0));
+    prose(
+        "Floating: The container should only be as big as needed to hold the items inside before reaching the 16dp margin. If there's not enough space for all items, put them in an overflow menu in the trailing slot. As the breakpoint expands, more actions can be revealed. The floating toolbar width can also be capped to keep it smaller and hide more elements.",
+    );
+    gap(Dp(12.0));
+    dont_note("Don't add extra space to a toolbar beyond its necessary items");
+    gap(Dp(24.0));
+    overflow_collapse_example();
+    gap(Dp(16.0));
+    caption(
+        "At larger screen sizes, the container can display more controls before hitting the 16dp margin",
+    );
+    gap(Dp(32.0));
+    prose(
+        "Vertical toolbars aren't recommended for compact windows. They take up a significant area of the screen and may feel visually overwhelming, especially on screens with complex layouts. Only use them when the screen is simple or when the toolbar has a few controls.",
+    );
+    gap(Dp(12.0));
+    caution_note("Vertical toolbars can cover important content in compact windows");
+    gap(Dp(32.0));
+    subheading("Presentation".into());
+    gap(Dp(16.0));
+    prose(
+        "In larger breakpoints, floating toolbars can be aligned to opposite edges of the screen so they're easy to reach and group similar actions. For example, consider placing the undo and redo actions in one toolbar, and editing controls in another. Stylistic differences can help emphasize each toolbar's purpose and clarify hierarchy.",
+    );
+    gap(Dp(24.0));
+    gallery(GalleryKind::Presentation);
+    gap(Dp(16.0));
+    caption(
+        "Multiple toolbars with different stylistic treatments can create hierarchy and distinguish different kinds of actions",
+    );
+    gap(Dp(24.0));
+    prose(
+        "Don't use multiple toolbars in compact windows. There typically isn't enough room on screen. Instead, use one toolbar for all actions.",
+    );
+    gap(Dp(12.0));
+    dont_note("Avoid using multiple toolbars in smaller windows");
+    gap(Dp(24.0));
+    prose(
+        "Actions at the trailing edge of the toolbar can collapse into an overflow menu at smaller breakpoints, and become visible again at larger sizes. Use the window size control above to compare both states.",
+    );
+    gap(Dp(32.0));
+    subheading("Right-to-left languages".into());
+    gap(Dp(16.0));
+    prose(
+        "In right-to-left (RTL) languages, mirror individual items that need it, like icons and text direction. If the order of actions is important, flip the order of the actions as well.",
+    );
+    gap(Dp(24.0));
+    rtl_example();
+}
+
+#[tessera]
+fn behavior() {
+    subheading("Scrolling".into());
+    gap(Dp(16.0));
+    prose(
+        "Docked toolbars can either remain on the screen during scroll, or animate offscreen. Floating toolbars can remain on the screen, animate offscreen, or collapse into a single, high-emphasis action on scroll.",
+    );
+    gap(Dp(16.0));
+    prose(
+        "Use the controls below to move the toolbar offscreen or collapse it to its key action. Only one transition is available at a time.",
+    );
+    gap(Dp(24.0));
+    collapsing_example();
+    gap(Dp(16.0));
+    dont_note("Toolbars shouldn't both collapse and transition off page");
+}
+
+#[tessera]
+fn use_cases() {
+    prose("People should be able to do the following with assistive technology:");
+    gap(Dp(8.0));
+    bullets(vec![
+        "Navigate and activate any actions in the toolbar".into(),
+        "Select a destination from a menu".into(),
+        "Activate a back button".into(),
+        "Maintain access to toolbar controls when the content is scrolled or collapsed".into(),
+    ]);
+}
+
+#[tessera]
+fn interaction_style() {
+    prose(
+        "The toolbar has no interactions by default. All interactions are with the elements placed inside.",
+    );
+    gap(Dp(32.0));
+    subheading("Touch".into());
+    gap(Dp(16.0));
+    prose(
+        "When tapping on an icon button in the toolbar, a touch ripple appears, indicating interaction feedback.",
+    );
+    gap(Dp(32.0));
+    subheading("Cursor".into());
+    gap(Dp(16.0));
+    prose(
+        "When hovered, the hover state provides a visual cue to the user that the element is interactive. When clicked (in both active and inactive states), a ripple appears, showing the user feedback.",
+    );
+    gap(Dp(32.0));
+    subheading("Initial focus".into());
+    gap(Dp(16.0));
+    prose(
+        "Focus lands on the first interactive element. Use Tab to navigate through all other actions, and Space or Enter to activate them. Try it on the toolbar below.",
+    );
+    gap(Dp(24.0));
+    focus_example();
+}
+
+#[tessera]
+fn focus_example() {
+    let width = remember(|| Dp::ZERO);
+    let notice = remember(String::new);
+    stage(
+        width,
+        RenderSlot::new(move || {
+            sample_toolbar(Sample::Format).limit(4).notice(notice);
+        }),
+    );
+    gap(Dp(12.0));
+    caption(if notice.get().is_empty() {
+        "Use Tab to navigate through interactive elements; use Space or Enter to activate actions"
+            .to_string()
+    } else {
+        notice.get()
+    });
+}
+
+#[tessera]
+fn keyboard() {
+    spec_table(
+        vec!["Keys".into(), "Actions".into()],
+        vec![
+            vec![
+                "Tab or Arrows".into(),
+                "Navigate between interactive elements".into(),
+            ],
+            vec![
+                "Space or Enter".into(),
+                "Activate the focused element".into(),
+            ],
+        ],
+    );
+    gap(Dp(32.0));
+    subheading("Labeling elements".into());
+    gap(Dp(16.0));
+    prose(
+        "On web, the toolbar container should have the toolbar role. On mobile, it can be a generic container. All actions inside the toolbar should follow their respective accessibility guidelines.",
+    );
+    gap(Dp(16.0));
+    prose(
+        "Tessera exposes the toolbar role on the container, labels it, and labels each action. Toggle actions also publish their toggled state.",
+    );
+    gap(Dp(24.0));
+    collapsing_example();
 }
 
 #[tessera]
@@ -815,31 +3115,459 @@ fn slots() {
 }
 
 #[tessera]
+fn search_toolbar(notice: State<String>) {
+    let query = remember(String::new);
+    let selected = remember(|| false);
+    let tag = use_context::<GalleryTag>().map(|tag| tag.get().0);
+    docked_toolbar()
+        .accessibility_label("Search actions")
+        .content(move || {
+            row()
+                .modifier(Modifier::new().fill_max_width())
+                .cross_axis_alignment(CrossAxisAlignment::Center)
+                .children(move || {
+                    sample_action("Back", Emphasis::Standard, false, selected, notice)
+                        .tag_optional(tag.map(|item| format!("toolbar-gallery-{item}-first")));
+                    spacer().modifier(Modifier::new().width(Dp(4.0)));
+                    boxed()
+                        .modifier(Modifier::new().weight(1.0))
+                        .children(move || {
+                            text_field()
+                                .placeholder("Search mail")
+                                .accessibility_label("Search mail")
+                                .shape(Shape::CAPSULE)
+                                .min_width(Dp::ZERO)
+                                .min_height(Dp(40.0))
+                                .initial_text(query.get())
+                                .on_change(move |next: String| {
+                                    query.set(next.clone());
+                                    next
+                                })
+                                .on_submit(move || {
+                                    notice.set(format!("Searched for \"{}\"", query.get()))
+                                })
+                                .modifier(Modifier::new().fill_max_width());
+                        });
+                    spacer().modifier(Modifier::new().width(Dp(4.0)));
+                    sample_action("Microphone", Emphasis::Standard, false, selected, notice)
+                        .tag_optional(tag.map(|item| format!("toolbar-gallery-{item}-last")));
+                });
+        });
+}
+
+#[tessera]
+fn search_example() {
+    let width = remember(|| Dp::ZERO);
+    let notice = remember(String::new);
+    stage(
+        width,
+        RenderSlot::new(move || {
+            search_toolbar(notice);
+        }),
+    );
+    gap(Dp(12.0));
+    caption(if notice.get().is_empty() {
+        "A text field placed in a toolbar slot between icon buttons".to_string()
+    } else {
+        notice.get()
+    });
+}
+
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+enum MockBar {
+    #[default]
+    None,
+    Actions,
+    Tabs,
+}
+
+#[tessera]
+fn mock_toolbar(kind: MockBar) {
+    let scheme = use_context::<MaterialTheme>().unwrap().get().color_scheme;
+    if kind == MockBar::None {
+        return;
+    }
+    row()
+        .cross_axis_alignment(CrossAxisAlignment::Center)
+        .modifier(
+            Modifier::new()
+                .padding_symmetric(Dp(8.0), Dp(6.0))
+                .background_with_shape(scheme.primary_container, Shape::CAPSULE),
+        )
+        .children(move || {
+            if kind == MockBar::Tabs {
+                for (index, label) in ["All", "Unread", "Starred"].into_iter().enumerate() {
+                    let selected = index == 0;
+                    let pill = Modifier::new().padding_symmetric(Dp(10.0), Dp(4.0));
+                    let pill = if selected {
+                        pill.background_with_shape(scheme.surface_container, Shape::CAPSULE)
+                    } else {
+                        pill
+                    };
+                    boxed()
+                        .alignment(Alignment::Center)
+                        .modifier(pill)
+                        .children(move || {
+                            text().content(label).style(type_style(12.0, 16.0)).color(
+                                if selected {
+                                    scheme.on_surface
+                                } else {
+                                    scheme.on_primary_container
+                                },
+                            );
+                        });
+                }
+            } else {
+                for (index, label) in ["Archive", "Delete", "Reply", "More options"]
+                    .into_iter()
+                    .enumerate()
+                {
+                    if index > 0 {
+                        spacer().modifier(Modifier::new().width(Dp(12.0)));
+                    }
+                    icon()
+                        .vector(action_icon(label))
+                        .size(Dp(20.0))
+                        .tint(scheme.on_primary_container);
+                }
+            }
+        });
+}
+
+#[tessera]
+fn mock_nav_bar() {
+    let scheme = use_context::<MaterialTheme>().unwrap().get().color_scheme;
+    row()
+        .modifier(
+            Modifier::new()
+                .fill_max_width()
+                .height(Dp(56.0))
+                .background_with_shape(scheme.surface_container, Shape::RECTANGLE),
+        )
+        .cross_axis_alignment(CrossAxisAlignment::Center)
+        .children(move || {
+            for (index, label) in ["Mail", "Chat", "Settings"].into_iter().enumerate() {
+                let selected = index == 0;
+                column()
+                    .modifier(Modifier::new().weight(1.0))
+                    .cross_axis_alignment(CrossAxisAlignment::Center)
+                    .children(move || {
+                        let indicator = Modifier::new().size(Dp(48.0), Dp(24.0));
+                        let indicator = if selected {
+                            indicator
+                                .background_with_shape(scheme.secondary_container, Shape::CAPSULE)
+                        } else {
+                            indicator
+                        };
+                        boxed()
+                            .alignment(Alignment::Center)
+                            .modifier(indicator)
+                            .children(move || {
+                                icon().vector(action_icon(label)).size(Dp(18.0)).tint(
+                                    if selected {
+                                        scheme.on_secondary_container
+                                    } else {
+                                        scheme.on_surface_variant
+                                    },
+                                );
+                            });
+                        text()
+                            .content(label)
+                            .style(type_style(11.0, 14.0))
+                            .color(scheme.on_surface_variant);
+                    });
+            }
+        });
+}
+
+#[tessera]
+fn phone_mock(#[prop(into)] title: String, toolbar: MockBar, nav_bar: bool) {
+    let scheme = use_context::<MaterialTheme>().unwrap().get().color_scheme;
+    let description = format!(
+        "{title} screen{}{}",
+        match toolbar {
+            MockBar::None => "",
+            MockBar::Actions => " with a floating toolbar of actions",
+            MockBar::Tabs => " with a floating toolbar of local navigation",
+        },
+        if nav_bar {
+            " above a navigation bar"
+        } else {
+            ""
+        }
+    );
+    boxed()
+        .alignment(Alignment::Center)
+        .modifier(
+            Modifier::new()
+                .size(Dp(208.0), Dp(308.0))
+                .background_with_shape(scheme.outline_variant, Shape::rounded_rectangle(Dp(28.0)))
+                .semantics(SemanticsArgs {
+                    role: Some(Role::Image),
+                    label: Some(description),
+                    merge_descendants: true,
+                    ..Default::default()
+                }),
+        )
+        .children(move || {
+            let title = title.clone();
+            column()
+                .modifier(
+                    Modifier::new()
+                        .size(Dp(200.0), Dp(300.0))
+                        .background_with_shape(scheme.surface, Shape::rounded_rectangle(Dp(24.0)))
+                        .clip_shape(Shape::rounded_rectangle(Dp(24.0))),
+                )
+                .cross_axis_alignment(CrossAxisAlignment::Center)
+                .children(move || {
+                    text()
+                        .content(title.clone())
+                        .style(type_style(16.0, 24.0))
+                        .modifier(Modifier::new().fill_max_width().padding(Padding::new(
+                            Dp(16.0),
+                            Dp(16.0),
+                            Dp(16.0),
+                            Dp(8.0),
+                        )));
+                    for width in [168.0, 140.0, 168.0, 120.0] {
+                        boxed().modifier(
+                            Modifier::new()
+                                .size(Dp(width), Dp(12.0))
+                                .background_with_shape(
+                                    scheme.surface_container_high,
+                                    Shape::rounded_rectangle(Dp(6.0)),
+                                ),
+                        );
+                        gap(Dp(10.0));
+                    }
+                    spacer().modifier(Modifier::new().weight(1.0));
+                    mock_toolbar(toolbar);
+                    if toolbar != MockBar::None {
+                        gap(Dp(12.0));
+                    }
+                    if nav_bar {
+                        mock_nav_bar();
+                    } else {
+                        gap(Dp(4.0));
+                    }
+                });
+        });
+}
+
+#[tessera]
+fn mock_screen(
+    #[prop(into)] title: String,
+    toolbar: MockBar,
+    nav_bar: bool,
+    #[prop(into)] note: String,
+) {
+    column()
+        .modifier(Modifier::new().width(Dp(208.0)))
+        .cross_axis_alignment(CrossAxisAlignment::Center)
+        .children(move || {
+            phone_mock(title.clone(), toolbar, nav_bar);
+            gap(Dp(12.0));
+            caption(note.clone());
+        });
+}
+
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+enum NavDiagram {
+    #[default]
+    Pages,
+    LocalNavigation,
+}
+
+#[tessera]
+fn navigation_diagram(kind: NavDiagram) {
+    let width = remember(|| Dp::ZERO);
+    stage(
+        width,
+        RenderSlot::new(move || {
+            floating_group(RenderSlot::new(move || match kind {
+                NavDiagram::Pages => {
+                    mock_screen(
+                        "Inbox",
+                        MockBar::None,
+                        true,
+                        "Navigation bar on a primary page",
+                    );
+                    mock_screen(
+                        "Message",
+                        MockBar::Actions,
+                        false,
+                        "Toolbar on a secondary page with contextual actions",
+                    );
+                }
+                NavDiagram::LocalNavigation => {
+                    mock_screen(
+                        "Inbox",
+                        MockBar::Tabs,
+                        false,
+                        "Do: Use a toolbar to display local navigation on a specific page",
+                    );
+                    mock_screen(
+                        "Inbox",
+                        MockBar::Tabs,
+                        true,
+                        "Don't: Show a navigation bar and a toolbar with navigation controls at the same time",
+                    );
+                }
+            }));
+        }),
+    );
+}
+
+#[tessera]
+fn m2_bar(icons: usize) {
+    let scheme = use_context::<MaterialTheme>().unwrap().get().color_scheme;
+    boxed()
+        .alignment(Alignment::TopStart)
+        .modifier(
+            Modifier::new()
+                .fill_max_width()
+                .height(Dp(84.0))
+                .semantics(SemanticsArgs {
+                    role: Some(Role::Image),
+                    label: Some(
+                        "M2 bottom app bar in the primary color with 8dp elevation and a FAB overlapping its top edge"
+                            .into(),
+                    ),
+                    merge_descendants: true,
+                    ..Default::default()
+                }),
+        )
+        .children(move || {
+            surface()
+                .style(SurfaceStyle::Filled {
+                    color: scheme.primary,
+                })
+                .elevation(Dp(8.0))
+                .modifier(
+                    Modifier::new()
+                        .align(Alignment::BottomStart)
+                        .fill_max_width()
+                        .height(Dp(56.0)),
+                )
+                .child(move || {
+                    row()
+                        .modifier(
+                            Modifier::new()
+                                .fill_max_size()
+                                .padding_symmetric(Dp(16.0), Dp::ZERO),
+                        )
+                        .cross_axis_alignment(CrossAxisAlignment::Center)
+                        .children(move || {
+                            for (index, label) in ["Archive", "Delete", "Mark unread", "Snooze"]
+                                .into_iter()
+                                .take(icons)
+                                .enumerate()
+                            {
+                                if index > 0 {
+                                    spacer().modifier(Modifier::new().width(Dp(24.0)));
+                                }
+                                icon()
+                                    .vector(action_icon(label))
+                                    .size(Dp(24.0))
+                                    .tint(scheme.on_primary);
+                            }
+                        });
+                });
+            boxed()
+                .alignment(Alignment::Center)
+                .modifier(
+                    Modifier::new()
+                        .align(Alignment::TopEnd)
+                        .padding(Padding::new(Dp::ZERO, Dp::ZERO, Dp(16.0), Dp::ZERO))
+                        .size(Dp(56.0), Dp(56.0))
+                        .background_with_shape(scheme.secondary_container, Shape::Ellipse),
+                )
+                .children(move || {
+                    icon()
+                        .vector(filled::ADD_SVG)
+                        .size(Dp(24.0))
+                        .tint(scheme.on_secondary_container);
+                });
+        });
+}
+
+#[tessera]
+fn m2_comparison() {
+    let width = remember(|| Dp::ZERO);
+    let notice = remember(String::new);
+    stage(
+        width,
+        RenderSlot::new(move || {
+            let icons = if compact(width.get()) { 2 } else { 4 };
+            gallery_item(0).fill(true).legend(1).content(move || {
+                m2_bar(icons);
+            });
+            gap(Dp(24.0));
+            gallery_item(1).fill(true).legend(2).content(move || {
+                bottom_bar(icons, true, notice);
+            });
+        }),
+    );
+    gap(Dp(16.0));
+    legend(vec![
+        "M2: Bottom app bar had higher elevation of 8dp and didn't contain the FAB".into(),
+        "M3: Bottom app bar has new colors, a taller container, no elevation or shadow, and contains the FAB".into(),
+    ]);
+    if !notice.get().is_empty() {
+        gap(Dp(12.0));
+        caption(notice.get());
+    }
+}
+
+#[tessera]
 fn collapsing_example() {
     let expanded = remember(|| true);
+    let visible = remember(|| true);
     let notice = remember(String::new);
     column()
         .modifier(Modifier::new().fill_max_width())
         .children(move || {
-            button()
-                .text()
-                .accessibility_label("Toggle toolbar expansion")
-                .on_click(move || expanded.set(!expanded.get()))
-                .child(move || {
-                    text().content(if expanded.get() {
-                        "Collapse actions"
-                    } else {
-                        "Expand actions"
-                    });
+            flow_row()
+                .item_spacing(Dp(8.0))
+                .line_spacing(Dp(8.0))
+                .children(move || {
+                    button()
+                        .text()
+                        .enabled(visible.get())
+                        .accessibility_label("Toggle toolbar expansion")
+                        .on_click(move || expanded.set(!expanded.get()))
+                        .child(move || {
+                            text().content(if expanded.get() {
+                                "Collapse actions"
+                            } else {
+                                "Expand actions"
+                            });
+                        });
+                    button()
+                        .text()
+                        .enabled(expanded.get())
+                        .accessibility_label("Toggle toolbar visibility")
+                        .on_click(move || visible.set(!visible.get()))
+                        .child(move || {
+                            text().content(if visible.get() {
+                                "Move offscreen"
+                            } else {
+                                "Show toolbar"
+                            });
+                        });
                 });
             gap(Dp(24.0));
             panel(RenderSlot::new(move || {
-                toolbar_content(
-                    Variant::Floating,
-                    ToolbarColorStyle::Vibrant,
-                    expanded.get(),
-                    notice,
-                );
+                if visible.get() {
+                    toolbar_content(
+                        Variant::Floating,
+                        ToolbarColorStyle::Vibrant,
+                        expanded.get(),
+                        notice,
+                    );
+                } else {
+                    spacer().modifier(Modifier::new().height(Dp(64.0)));
+                }
             }));
             gap(Dp(16.0));
             text()
@@ -1098,5 +3826,200 @@ mod tests {
                 }
             }
         }
+    }
+
+    thread_local! {
+        static GALLERY: Cell<GalleryKind> = const { Cell::new(GalleryKind::Overview) };
+        static PLACEMENT: Cell<Placement> = const { Cell::new(Placement::Docked) };
+        static DOCKED_LAYOUT: Cell<DockedLayout> = const { Cell::new(DockedLayout::Edges) };
+    }
+
+    fn settled(content: fn(), width: u32, height: u32) -> tessera_ui::testing::LayoutSnapshot {
+        let mut session = tessera_ui::testing::start_layout_test_session(
+            layout_test(content).viewport_px(width, height),
+        );
+        for frame in 0..3 {
+            tessera_ui::testing::pump_layout_test_session(&mut session, frame * 16_000_000);
+        }
+        tessera_ui::testing::pump_layout_test_session(&mut session, 48_000_000)
+    }
+
+    #[tessera]
+    fn gallery_fixture() {
+        let kind = GALLERY.get();
+        material_theme().child(move || {
+            column()
+                .modifier(Modifier::new().fill_max_width())
+                .children(move || {
+                    gallery(kind);
+                });
+        });
+    }
+
+    #[test]
+    fn toolbar_galleries_keep_every_configuration_and_target_inside_compact_and_medium_stages() {
+        for (kind, items, fabs) in [
+            (GalleryKind::Overview, 7, &[1usize][..]),
+            (GalleryKind::Variants, 2, &[][..]),
+            (GalleryKind::Configurations, 6, &[5][..]),
+            (GalleryKind::Expressive, 2, &[0][..]),
+            (GalleryKind::UseCases, 5, &[2][..]),
+            (GalleryKind::Slots, 5, &[][..]),
+            (GalleryKind::Emphasis, 2, &[1][..]),
+            (GalleryKind::EmphasisDont, 1, &[0][..]),
+            (GalleryKind::Presentation, 2, &[][..]),
+            (GalleryKind::RoundedDocked, 1, &[][..]),
+        ] {
+            GALLERY.set(kind);
+            for width in [320, 600] {
+                let snapshot = settled(gallery_fixture, width, 1600);
+                let stage = snapshot.node("toolbar-stage").bounds();
+                for item in 0..items {
+                    let mut tags = vec![
+                        format!("toolbar-gallery-{item}-first"),
+                        format!("toolbar-gallery-{item}-last"),
+                    ];
+                    if fabs.contains(&item) {
+                        tags.push(format!("toolbar-gallery-{item}-fab"));
+                    }
+                    for tag in tags {
+                        let bounds = snapshot.node(&tag).bounds();
+                        assert!(
+                            bounds.width >= Dp(40.0).to_px() && bounds.height >= Dp(40.0).to_px(),
+                            "{kind:?} at {width}px: {tag} lost its target {bounds:?}"
+                        );
+                        assert!(
+                            bounds.x >= stage.x
+                                && bounds.x + bounds.width <= stage.x + stage.width
+                                && bounds.y >= stage.y
+                                && bounds.y + bounds.height <= stage.y + stage.height,
+                            "{kind:?} at {width}px: {tag} {bounds:?} outside {stage:?}"
+                        );
+                    }
+                }
+            }
+        }
+    }
+
+    #[tessera]
+    fn placement_fixture() {
+        let placement = PLACEMENT.get();
+        material_theme().child(move || {
+            column()
+                .modifier(Modifier::new().fill_max_width())
+                .children(move || {
+                    placement_figure(placement);
+                });
+        });
+    }
+
+    #[test]
+    fn placement_figures_keep_docked_flush_and_floating_margins_from_the_window() {
+        for width in [320, 720] {
+            for placement in [
+                Placement::Docked,
+                Placement::Horizontal,
+                Placement::Vertical,
+            ] {
+                PLACEMENT.set(placement);
+                let snapshot = settled(placement_fixture, width, 600);
+                let window = snapshot.node("placement-window").bounds();
+                let toolbar = snapshot.node("placement-toolbar").bounds();
+                assert!(
+                    toolbar.x >= window.x
+                        && toolbar.y >= window.y
+                        && toolbar.x + toolbar.width <= window.x + window.width
+                        && toolbar.y + toolbar.height <= window.y + window.height,
+                    "{placement:?} at {width}px: {toolbar:?} outside {window:?}"
+                );
+                match placement {
+                    Placement::Docked => {
+                        assert_eq!((toolbar.x, toolbar.width), (window.x, window.width));
+                        assert_eq!(toolbar.y + toolbar.height, window.y + window.height);
+                        assert_eq!(toolbar.height, Dp(64.0).to_px());
+                    }
+                    Placement::Horizontal => {
+                        assert_eq!(
+                            window.y + window.height - toolbar.y - toolbar.height,
+                            Dp(16.0).to_px()
+                        );
+                    }
+                    Placement::Vertical => {
+                        assert_eq!(
+                            window.x + window.width - toolbar.x - toolbar.width,
+                            Dp(24.0).to_px()
+                        );
+                        assert_eq!(toolbar.width, Dp(64.0).to_px());
+                    }
+                }
+            }
+        }
+    }
+
+    #[tessera]
+    fn docked_layout_fixture() {
+        let layout = DOCKED_LAYOUT.get();
+        material_theme().child(move || {
+            column()
+                .modifier(Modifier::new().fill_max_width())
+                .children(move || {
+                    docked_layout_figure(layout);
+                });
+        });
+    }
+
+    #[test]
+    fn docked_alignment_figures_center_with_8dp_gaps_or_pin_actions_to_16dp_edges() {
+        for width in [320, 720] {
+            let count = if width < 400 { 3 } else { 5 };
+            DOCKED_LAYOUT.set(DockedLayout::Centered);
+            let snapshot = settled(docked_layout_fixture, width, 400);
+            let container = snapshot.node("docked-layout").bounds();
+            let first = snapshot.node("layout-action-0").bounds();
+            let last = snapshot
+                .node(&format!("layout-action-{}", count - 1))
+                .bounds();
+            let second = snapshot.node("layout-action-1").bounds();
+            assert_eq!(second.x - (first.x + first.width), Dp(8.0).to_px());
+            let leading = first.x - container.x;
+            let trailing = container.x + container.width - (last.x + last.width);
+            assert!(
+                (leading.0 - trailing.0).abs() <= 1,
+                "{leading:?} vs {trailing:?}"
+            );
+            assert!(leading >= Dp(16.0).to_px());
+
+            DOCKED_LAYOUT.set(DockedLayout::Edges);
+            let snapshot = settled(docked_layout_fixture, width, 400);
+            let container = snapshot.node("docked-layout").bounds();
+            let first = snapshot.node("layout-action-0").bounds();
+            let last = snapshot
+                .node(&format!("layout-action-{}", count - 1))
+                .bounds();
+            assert_eq!(first.x - container.x, Dp(16.0).to_px());
+            assert_eq!(
+                container.x + container.width - (last.x + last.width),
+                Dp(16.0).to_px()
+            );
+        }
+    }
+
+    #[test]
+    fn collapsed_sample_actions_keep_leading_actions_and_trailing_overflow() {
+        let labels = |sample, limit| {
+            visible_actions(sample_actions(sample), limit)
+                .into_iter()
+                .map(|action| action.label)
+                .collect::<Vec<_>>()
+        };
+        assert_eq!(
+            labels(Sample::Format, 3),
+            ["Bold", "Italic", "More options"]
+        );
+        assert_eq!(
+            labels(Sample::Mail, 3),
+            ["Archive", "Delete", "Mark unread"]
+        );
+        assert_eq!(labels(Sample::History, 6), ["Undo", "Redo"]);
     }
 }

@@ -43,42 +43,667 @@ mod accessibility_figures;
 #[path = "menus_selection.rs"]
 mod selection_figures;
 
+#[path = "menus_guides.rs"]
+mod guides;
+
 #[tessera]
 pub(super) fn menus_spec() {
-    article("Menus", "Menus display a list of choices on a temporary surface", vec![
-        SpecSection { title: "Variants", content: RenderSlot::new(variants) },
-        SpecSection { title: "Configurations", content: RenderSlot::new(configurations) },
-        SpecSection { title: "Tokens & specs", content: RenderSlot::new(tokens) },
-        SpecSection { title: "Anatomy", content: RenderSlot::new(|| {menu_figure(true, false, MenuColorStyle::Standard);}) },
-        SpecSection { title: "Color", content: RenderSlot::new(colors) },
-        SpecSection { title: "States", content: RenderSlot::new(states) },
-        SpecSection { title: "Measurements", content: RenderSlot::new(|| {menu_figure(false, true, MenuColorStyle::Standard);}) },
-        SpecSection { title: "Menu (baseline)", content: RenderSlot::new(baseline) },
-    ]).pages(vec![
-        ArticlePage { title: "Overview", intro: Some(RenderSlot::new(|| { prose("Menus display a list of choices on a temporary surface. Use a menu to show a temporary set of actions; use a toolbar when actions must stay on screen. Menus can open from icon buttons, split buttons, text fields or a secondary click."); gap(Dp(32.0)); launch(); })), sections: vec![
-            SpecSection { title: "M3 Expressive update", content: RenderSlot::new(|| { prose("Vertical menus add rounded groups, refined submenu motion, standard and vibrant colors and additional selection states. Gaps can join groups for a more flexible layout. Vertical menus are recommended for new designs, and the baseline menu remains available."); gap(Dp(24.0)); variants(); }) },
-            SpecSection { title: "Differences from M2", content: RenderSlot::new(|| { prose("Color: new color mappings and compatibility with dynamic color keep menu surfaces distinct from the content behind them. Variants: the dropdown menu and the exposed dropdown menu are both referred to as a menu, because they differ only in the element that opens them."); }) },
-        ] },
-        ArticlePage { title: "Guidelines", intro: None, sections: vec![
-            SpecSection { title: "Usage", content: RenderSlot::new(|| { prose("Use menus for temporary sets of actions. Keep vibrant menus for higher emphasis. Open them from a button, icon, field or contextual secondary click."); gap(Dp(24.0)); launch(); gap(Dp(32.0)); subheading("Menu groups".into()); prose("Bundle related actions with a divider or a small gap. Use no more than one or two gaps. Use dividers instead of gaps in scrolling menus."); gap(Dp(24.0)); configurations(); }) },
-            SpecSection { title: "Anatomy", content: RenderSlot::new(|| { menu_figure(true, false, MenuColorStyle::Standard); }) },
-            SpecSection { title: "Flexibility & slots", content: RenderSlot::new(|| { prose("Use simple slot content such as images, progress indicators or color swatches. Keep a single action per menu item. Preserve menu item padding and a target of at least 48 × 48dp. Nested buttons or switches introduce competing actions and break the menu interaction model."); }) },
-            SpecSection { title: "Placement", content: RenderSlot::new(|| { prose("Position the menu next to its trigger, below it or over it. Reposition near a window edge so the surface stays visible. Submenus open beside the parent item without covering it."); gap(Dp(24.0)); launch(); }) },
-            SpecSection { title: "Adaptive design", content: RenderSlot::new(|| { subheading("Compact breakpoints".into()); prose("Consider a bottom sheet on compact screens when actions need more room or longer labels."); gap(Dp(24.0)); subheading("Other breakpoints".into()); prose("Keep menus near their content on medium and expanded screens. Submenus can organize more complex sets of choices when horizontal space is available."); }) },
-            SpecSection { title: "Behavior", content: RenderSlot::new(|| { subheading("Appearing".into()); prose("The menu expands from its trigger and adapts its direction to available space. A selected option shows a ripple; the trigger remains visually pressed while the menu is open."); gap(Dp(24.0)); launch(); gap(Dp(24.0)); subheading("Selecting".into()); prose("Single selection replaces the previous choice. Multiple selection keeps the menu open until dismissal. Use shape, color and a checkmark to reinforce selection."); gap(Dp(24.0)); selection_figures::selection_figure(); gap(Dp(24.0)); subheading("Scrolling".into()); prose("Use a persistent scrollbar when every item cannot fit at once. Avoid gaps in a scrolling menu."); }) },
-            SpecSection { title: "Focus", content: RenderSlot::new(|| { prose("As focus moves between submenus, the active menu becomes more rounded and the inactive menu becomes less rounded. Hover or focus Share to open its submenu and inspect the shape change."); gap(Dp(24.0)); launch(); }) },
-            SpecSection { title: "Density", content: RenderSlot::new(|| {prose("On web, density settings reduce vertical spacing. Keep interaction targets large enough for the intended input method.");}) },
-        ] },
-        ArticlePage { title: "Accessibility", intro: None, sections: vec![
-            SpecSection { title: "Use cases", content: RenderSlot::new(|| { prose("People must be able to reach, open and dismiss menus, navigate their items and select an action using assistive technology."); gap(Dp(24.0)); launch(); }) },
-            SpecSection { title: "Interaction & style", content: RenderSlot::new(|| { prose("Selection changes both shape and color. Add a checkmark so selection is recognizable without color alone."); gap(Dp(24.0)); accessibility_figures::state_selection(); }) },
-            SpecSection { title: "Flexibility & slots", content: RenderSlot::new(|| { prose("Preserve each menu item's padding and a target of at least 48 × 48dp. Slot content must follow menu interaction patterns and perform one action. Avoid nested buttons, switches or other independent actions."); }) },
-            SpecSection { title: "Focus", content: RenderSlot::new(|| { prose("Opening a menu places focus on its first item. Focus after dismissal depends on the surrounding task; this example returns focus to its trigger. Dividers and gaps are not focus targets."); }) },
-            SpecSection { title: "Keyboard navigation", content: RenderSlot::new(keyboard) },
-            SpecSection { title: "Interactability", content: RenderSlot::new(|| {prose("Disabled choices remain visible and can receive focus, but cannot activate. Dividers and gaps cannot receive focus.");}) },
-            SpecSection { title: "Labeling elements", content: RenderSlot::new(|| { prose("Use each visible menu item label as its accessible name. Icons accompanying text are decorative. A submenu trigger must communicate that it opens another menu."); gap(Dp(24.0)); accessibility_figures::labeling(); }) },
-        ] },
+    article(
+        "Menus",
+        "Menus display a list of choices on a temporary surface",
+        vec![
+            SpecSection {
+                title: "Variants",
+                content: RenderSlot::new(variants),
+            },
+            SpecSection {
+                title: "Configurations",
+                content: RenderSlot::new(configurations),
+            },
+            SpecSection {
+                title: "Tokens & specs",
+                content: RenderSlot::new(tokens),
+            },
+            SpecSection {
+                title: "Anatomy",
+                content: RenderSlot::new(|| {
+                    subheading("Vertical menus".into());
+                    gap(Dp(24.0));
+                    menu_figure(true, false, MenuColorStyle::Standard);
+                }),
+            },
+            SpecSection {
+                title: "Color",
+                content: RenderSlot::new(colors),
+            },
+            SpecSection {
+                title: "States",
+                content: RenderSlot::new(states),
+            },
+            SpecSection {
+                title: "Measurements",
+                content: RenderSlot::new(|| {
+                    menu_figure(false, true, MenuColorStyle::Standard);
+                }),
+            },
+            SpecSection {
+                title: "Menu (baseline)",
+                content: RenderSlot::new(guides::baseline_section),
+            },
+        ],
+    )
+    .pages(vec![
+        ArticlePage {
+            title: "Overview",
+            intro: Some(RenderSlot::new(overview_intro)),
+            sections: vec![
+                SpecSection {
+                    title: "Availability & resources",
+                    content: RenderSlot::new(guides::resources),
+                },
+                SpecSection {
+                    title: "M3 Expressive update",
+                    content: RenderSlot::new(expressive),
+                },
+                SpecSection {
+                    title: "Differences from M2",
+                    content: RenderSlot::new(differences),
+                },
+            ],
+        },
+        ArticlePage {
+            title: "Guidelines",
+            intro: None,
+            sections: vec![
+                SpecSection {
+                    title: "Usage",
+                    content: RenderSlot::new(usage),
+                },
+                SpecSection {
+                    title: "Anatomy",
+                    content: RenderSlot::new(guideline_anatomy),
+                },
+                SpecSection {
+                    title: "Flexibility & slots",
+                    content: RenderSlot::new(|| {
+                        slots(true);
+                    }),
+                },
+                SpecSection {
+                    title: "Placement",
+                    content: RenderSlot::new(placement),
+                },
+                SpecSection {
+                    title: "Adaptive design",
+                    content: RenderSlot::new(adaptive),
+                },
+                SpecSection {
+                    title: "Behavior",
+                    content: RenderSlot::new(behavior),
+                },
+                SpecSection {
+                    title: "Focus",
+                    content: RenderSlot::new(guideline_focus),
+                },
+                SpecSection {
+                    title: "Density",
+                    content: RenderSlot::new(density),
+                },
+            ],
+        },
+        ArticlePage {
+            title: "Accessibility",
+            intro: None,
+            sections: vec![
+                SpecSection {
+                    title: "Use cases",
+                    content: RenderSlot::new(use_cases),
+                },
+                SpecSection {
+                    title: "Interaction & style",
+                    content: RenderSlot::new(interaction),
+                },
+                SpecSection {
+                    title: "Flexibility & slots",
+                    content: RenderSlot::new(|| {
+                        slots(false);
+                    }),
+                },
+                SpecSection {
+                    title: "Focus",
+                    content: RenderSlot::new(accessible_focus),
+                },
+                SpecSection {
+                    title: "Keyboard navigation",
+                    content: RenderSlot::new(keyboard),
+                },
+                SpecSection {
+                    title: "Interactability",
+                    content: RenderSlot::new(interactability),
+                },
+                SpecSection {
+                    title: "Labeling elements",
+                    content: RenderSlot::new(labeling),
+                },
+            ],
+        },
     ]);
+}
+
+fn strings(items: &[&str]) -> Vec<String> {
+    items.iter().map(|item| (*item).to_owned()).collect()
+}
+
+#[tessera]
+fn overview_intro() {
+    prose(
+        "Use a menu to show a temporary set of actions. To show actions on screen at all times, use a toolbar instead.",
+    );
+    gap(Dp(16.0));
+    guides::bullets(strings(&[
+        "Menus can open from many components, including icon buttons, split buttons, and text fields",
+        "Context menus provide actions for a specific element, like an image or highlighted text, and usually open with a secondary click",
+    ]));
+    gap(Dp(24.0));
+    panel(RenderSlot::new(|| {
+        flow_row()
+            .main_axis_alignment(MainAxisAlignment::Center)
+            .item_spacing(Dp(64.0))
+            .line_spacing(Dp(32.0))
+            .children(|| {
+                configuration(true, MenuColorStyle::Vibrant);
+                guides::submenu_pair(
+                    "Line spacing",
+                    strings(&["Single", "1.15", "Double", "Custom 1.2"]),
+                    3,
+                );
+            });
+    }));
+    gap(Dp(12.0));
+    guides::caption(
+        "Vertical menus can include vibrant colors, gaps, dividers, and submenus to organize a list of choices",
+    );
+    gap(Dp(32.0));
+    launch();
+    gap(Dp(8.0));
+    guides::caption("Open the live menu, then hover or focus Share to reveal its submenu");
+}
+
+#[tessera]
+fn expressive() {
+    guides::caption("November 2025");
+    gap(Dp(8.0));
+    prose(
+        "Vertical menus were introduced with new shapes, color styles, selection states, and refined submenu motion. Gaps can be used for a more flexible layout on Android.",
+    );
+    gap(Dp(16.0));
+    prose("Variants:");
+    gap(Dp(8.0));
+    guides::bullets(strings(&[
+        "Added vertical menus, recommended for new designs",
+        "Baseline menu is still available",
+    ]));
+    prose("Color styles:");
+    gap(Dp(8.0));
+    guides::bullets(strings(&["Standard", "Vibrant"]));
+    gap(Dp(16.0));
+    panel(RenderSlot::new(|| {
+        menu_sample(true, MenuColorStyle::Vibrant);
+    }));
+    gap(Dp(12.0));
+    guides::caption("Vibrant colors help selected menu items stand out");
+}
+
+#[tessera]
+fn differences() {
+    guides::bullets(strings(&[
+        "Color: New color mappings and compatibility with dynamic color",
+        "Variants: Dropdown menu and exposed dropdown menu are now both referred to as menu, since they differ only in the element which opens the menu surface",
+    ]));
+    gap(Dp(24.0));
+    guides::m2_comparison();
+}
+
+#[tessera]
+fn usage() {
+    prose(
+        "Use a menu to show a temporary set of actions. To show actions on screen at all times, use a toolbar instead.",
+    );
+    gap(Dp(8.0));
+    prose("A menu takes up less space than a set of radio buttons or chips.");
+    gap(Dp(24.0));
+    subheading("Color options".into()).level(4);
+    gap(Dp(8.0));
+    prose("Menus have two color mappings:");
+    gap(Dp(8.0));
+    guides::bullets(strings(&[
+        "Standard: Surface-based, lower visual emphasis",
+        "Vibrant: Tertiary-based, higher visual emphasis",
+    ]));
+    prose("Vibrant menus are more prominent, and should be used sparingly.");
+    gap(Dp(24.0));
+    guides::line_spacing_figure();
+    gap(Dp(12.0));
+    guides::caption("On web, menus can open submenus");
+    gap(Dp(32.0));
+    subheading("Opening menus".into());
+    gap(Dp(8.0));
+    prose("Menus temporarily appear in front of all other permanent UI elements.");
+    gap(Dp(8.0));
+    prose("A menu should open when a person:");
+    gap(Dp(8.0));
+    guides::bullets(strings(&[
+        "Selects an element, such as an icon, button, or text field",
+        "Performs a specific action to trigger the menu, like right-click or press-and-hold",
+    ]));
+    prose("Use menus in situations that need extra actions, like:");
+    gap(Dp(8.0));
+    guides::bullets(strings(&[
+        "Overflow menus",
+        "Text field dropdown menus",
+        "Select menus",
+        "Context menus",
+    ]));
+    gap(Dp(16.0));
+    guides::opening_figure();
+    gap(Dp(12.0));
+    guides::caption("Menus appear in front of all other UI elements");
+    gap(Dp(32.0));
+    subheading("Menu groups".into());
+    gap(Dp(8.0));
+    prose(
+        "Vertical menu items can be grouped by adding a divider or small gap. Use groups to bundle similar actions together.",
+    );
+    gap(Dp(24.0));
+    configurations_figure();
+    gap(Dp(16.0));
+    prose("Menu items can be grouped to be more scannable:");
+    gap(Dp(8.0));
+    guides::legend(strings(&[
+        "Standard vertical menu",
+        "Grouped vertical menu",
+    ]));
+    gap(Dp(32.0));
+    subheading("Context menus".into());
+    gap(Dp(8.0));
+    prose(
+        "Context menus provide a list of additional actions a person can take on an item. A secondary click, like a right-click on a mouse or a two-finger tap on a trackpad, opens a context menu.",
+    );
+    gap(Dp(24.0));
+    guides::context_figure();
+    gap(Dp(12.0));
+    guides::caption(
+        "A context menu appears when right clicking with a mouse or trackpad. It can reveal key actions related to the associated content.",
+    );
+}
+
+#[tessera]
+fn guideline_anatomy() {
+    menu_figure(true, false, MenuColorStyle::Standard);
+    gap(Dp(32.0));
+    subheading("Menu items".into());
+    gap(Dp(8.0));
+    prose(
+        "Menu items can include label text, leading icons, trailing icons, and keyboard commands.",
+    );
+    gap(Dp(8.0));
+    prose(
+        "When a menu item can only be used under specific conditions, it should appear disabled rather than be removed.",
+    );
+    gap(Dp(24.0));
+    guides::disabled_figure();
+    gap(Dp(12.0));
+    guides::caption("The Redo action is disabled when that action isn't available");
+    gap(Dp(32.0));
+    subheading("Gaps & dividers (optional)".into());
+    gap(Dp(8.0));
+    prose("Gaps and dividers can be used to separate and group menu items.");
+    gap(Dp(24.0));
+    subheading("Gaps".into()).level(4);
+    gap(Dp(8.0));
+    prose(
+        "Use a gap to visually divide menu items into distinct groups. Gaps are more expressive than dividers and make the relationship between items clear.",
+    );
+    gap(Dp(8.0));
+    guides::bullets(strings(&[
+        "Avoid changing the size of the gap",
+        "Limit the number of gaps in a menu to one or two",
+        "Don't use gaps in scrollable menus",
+    ]));
+    gap(Dp(16.0));
+    panel(RenderSlot::new(|| {
+        menu_sample(true, MenuColorStyle::Standard);
+    }));
+    gap(Dp(12.0));
+    guides::caption("Gaps separate menu items using expressive shapes");
+    gap(Dp(8.0));
+    guides::caption("Note: Gaps are not currently available in the Material web library");
+    gap(Dp(24.0));
+    subheading("Dividers".into()).level(4);
+    gap(Dp(8.0));
+    prose("Dividers create a more subtle separation between items. Use a divider for:");
+    gap(Dp(8.0));
+    guides::bullets(strings(&[
+        "Scrollable menus",
+        "Text fields with a dropdown menu, where a grouped treatment isn't appropriate",
+    ]));
+    prose("On web, use a divider to separate menu items.");
+    gap(Dp(16.0));
+    panel(RenderSlot::new(|| {
+        menu_sample(false, MenuColorStyle::Standard);
+    }));
+    gap(Dp(12.0));
+    guides::caption("Dividers separate menu items in baseline menus and on web");
+}
+
+#[tessera]
+fn slots(guidelines: bool) {
+    if guidelines {
+        prose("Menus have custom slots that support more flexible item layouts.");
+        gap(Dp(8.0));
+        prose(
+            "When creating a complicated menu, think of the menu item as a container with a swappable slot.",
+        );
+        gap(Dp(8.0));
+        prose("Slots work best with simple content such as:");
+        gap(Dp(8.0));
+        guides::bullets(strings(&[
+            "Images",
+            "Progress indicators",
+            "Color swatches",
+        ]));
+        gap(Dp(16.0));
+        guides::slots_figure();
+        gap(Dp(12.0));
+        guides::caption("Slots can appear anywhere in a menu");
+        gap(Dp(8.0));
+        guides::caption(
+            "Note: This page draws the slot structure statically. The native menu item exposes fixed icon, label, supporting text and trailing text slots, not arbitrary slot content.",
+        );
+        gap(Dp(24.0));
+        subheading("Slot accessibility".into()).level(4);
+        gap(Dp(8.0));
+    }
+    prose("Use caution when adding slots to menus:");
+    gap(Dp(8.0));
+    guides::bullets(strings(&[
+        "Make sure the menu remains accessible",
+        "Elements must follow the rules and interaction patterns of the menu component",
+        "Keep the same menu item padding",
+        "Targets should be 48x48dp or larger",
+    ]));
+    prose(
+        "Don't add buttons, switches, or other direct actions into the menu item. Nested elements should only perform one action. Adding multiple actions can break keyboard navigation and screen reader functionality.",
+    );
+    gap(Dp(12.0));
+    guides::caption(
+        "Caution: Reserve the use of slots for use cases that maintain the menu's accessibility and functionality",
+    );
+}
+
+#[tessera]
+fn placement() {
+    prose(
+        "A menu is positioned relative to the window edge. It typically appears below, next to, or in front of the element that generates it.",
+    );
+    gap(Dp(8.0));
+    prose(
+        "If a menu is in a position to be cut off, it should automatically reposition to appear to the left, right, or above the element that generates it.",
+    );
+    gap(Dp(24.0));
+    guides::placement_figure();
+    gap(Dp(12.0));
+    guides::caption("Menus can appear around or in front of the element that opened them");
+    gap(Dp(24.0));
+    launch();
+    gap(Dp(8.0));
+    guides::caption("Open the live menu to see it positioned next to its trigger");
+    gap(Dp(32.0));
+    subheading("Submenus".into());
+    gap(Dp(8.0));
+    prose("Submenus should open next to the parent menu item without overlapping it.");
+    gap(Dp(8.0));
+    prose(
+        "Submenus are best used on large screens where there's space. See adaptive guidance for alternatives on mobile.",
+    );
+    gap(Dp(24.0));
+    guides::line_spacing_figure();
+    gap(Dp(12.0));
+    guides::caption("Position submenus to the side of the parent item");
+    gap(Dp(8.0));
+    guides::caption("Note: Submenus are not currently available on Jetpack Compose");
+}
+
+#[tessera]
+fn adaptive() {
+    subheading("Compact breakpoints".into());
+    gap(Dp(8.0));
+    prose(
+        "Consider adapting menus into bottom sheets on small screens. They have more space to display additional items and longer labels.",
+    );
+    gap(Dp(24.0));
+    guides::adaptive_figure(true);
+    gap(Dp(12.0));
+    guides::caption("A bottom sheet can replace a menu on smaller screens");
+    gap(Dp(32.0));
+    subheading("Other breakpoints".into());
+    gap(Dp(8.0));
+    prose(
+        "On medium and expanded windows, menus are most effective as they appear in context with the content. On larger screens, menus can also display more items, and can use submenus to organize complex sets of options.",
+    );
+    gap(Dp(24.0));
+    guides::adaptive_figure(false);
+    gap(Dp(12.0));
+    guides::caption("On large screens, a menu is often more appropriate than a bottom sheet");
+}
+
+#[tessera]
+fn behavior() {
+    subheading("Appearing".into());
+    gap(Dp(8.0));
+    prose(
+        "A menu can appear when a person interacts with an element on the page, like a button, text field, filter chip, or highlighted text.",
+    );
+    gap(Dp(8.0));
+    prose(
+        "A menu's position on screen affects where and how it appears. If opened at the top of the screen, it expands downwards to avoid being cropped.",
+    );
+    gap(Dp(24.0));
+    launch();
+    gap(Dp(8.0));
+    guides::caption(
+        "Menus at different positions on a screen open in different directions, adapting to the available space",
+    );
+    gap(Dp(32.0));
+    subheading("Motion".into());
+    gap(Dp(8.0));
+    prose(
+        "Menus use an enter and exit transition. This animation creates a relationship between the menu and the element that generates it.",
+    );
+    gap(Dp(8.0));
+    prose(
+        "When a menu expands, the trigger element becomes pressed. When an item is selected, a ripple appears on touch.",
+    );
+    gap(Dp(8.0));
+    prose("In dense products, such as on desktop, menus can open instantly to reduce motion.");
+    gap(Dp(32.0));
+    subheading("Filtering".into());
+    gap(Dp(8.0));
+    prose(
+        "A menu can include a text field to filter options. This pattern is also known as autocomplete.",
+    );
+    gap(Dp(8.0));
+    prose(
+        "As someone types, the list of menu options filters to show relevant results. This helps people quickly find the right option from a long list.",
+    );
+    gap(Dp(32.0));
+    subheading("Scrolling".into());
+    gap(Dp(8.0));
+    prose(
+        "Menus can scroll when all menu items can't display at once. In this state, menus show a persistent scrollbar.",
+    );
+    gap(Dp(8.0));
+    prose("Don't use gaps if a menu scrolls; this is currently unsupported.");
+    gap(Dp(32.0));
+    subheading("Selecting".into());
+    gap(Dp(8.0));
+    prose(
+        "When a menu is opened, the corresponding button or icon button should remain the same visually, with the addition of a pressed state. This should happen even when opening from a keyboard shortcut.",
+    );
+    gap(Dp(8.0));
+    prose("The overflow icon remains the same, even after the menu is opened.");
+    gap(Dp(24.0));
+    subheading("Single- and multi-select menus".into()).level(4);
+    gap(Dp(8.0));
+    prose("Menus can allow either single-select or multi-select actions:");
+    gap(Dp(8.0));
+    guides::bullets(strings(&[
+        "Single-select menus can have one item selected at a time. When a new item is selected, the previously selected item is automatically unselected.",
+        "Multi-select menus can have many selected items. They stay open until the person dismisses the menu.",
+    ]));
+    gap(Dp(16.0));
+    selection_figures::selection_figure();
+    gap(Dp(12.0));
+    guides::caption("Menus can be single- or multi-select");
+}
+
+#[tessera]
+fn guideline_focus() {
+    prose(
+        "When a menu has multiple submenus, focus follows the current hovered or focused submenu.",
+    );
+    gap(Dp(24.0));
+    subheading("Shape morphing".into()).level(4);
+    gap(Dp(8.0));
+    prose(
+        "As a person moves from one submenu to the next, the corners of the focused submenu become more rounded, while the unfocused submenu becomes less rounded. This adds a dynamic quality to menu interactions.",
+    );
+    gap(Dp(24.0));
+    launch();
+    gap(Dp(8.0));
+    guides::caption(
+        "Open the menu, then hover or focus Share to watch the corner shape follow the focused submenu",
+    );
+}
+
+#[tessera]
+fn density() {
+    prose(
+        "On web only, density levels control the spacing between elements. Increasing density decreases the top and bottom padding.",
+    );
+    gap(Dp(24.0));
+    guides::density_figure();
+    gap(Dp(12.0));
+    guides::caption("Density of menus from 0 to -3");
+}
+
+#[tessera]
+fn use_cases() {
+    prose("People should be able to do the following using assistive technology:");
+    gap(Dp(8.0));
+    guides::bullets(strings(&[
+        "Navigate to, open, and close a menu",
+        "Navigate between and select menu items",
+    ]));
+    gap(Dp(16.0));
+    launch();
+}
+
+#[tessera]
+fn interaction() {
+    prose("Menu items need certain cues to clearly show when they're selected:");
+    gap(Dp(8.0));
+    guides::bullets(strings(&[
+        "By default, menu items change shape and color when selected",
+        "The default color contrast is 3:1 between selected and unselected menu items",
+        "It's recommended to include another visual cue, like a checkmark",
+    ]));
+    gap(Dp(16.0));
+    accessibility_figures::state_selection();
+    gap(Dp(12.0));
+    guides::caption(
+        "Use multiple visual cues like color, shape, and icons to show that an item is selected",
+    );
+}
+
+#[tessera]
+fn accessible_focus() {
+    subheading("Initial focus".into()).level(4);
+    gap(Dp(8.0));
+    prose(
+        "When a menu opens, focus should be placed on the first menu item. This allows people using a keyboard or other assistive technologies to begin navigating the menu immediately.",
+    );
+    gap(Dp(24.0));
+    subheading("Exiting a menu".into()).level(4);
+    gap(Dp(8.0));
+    prose("People expect to exit a menu by:");
+    gap(Dp(8.0));
+    guides::bullets(strings(&[
+        "Selecting an option",
+        "Tapping Escape or outside of the menu",
+        "Using the system back button",
+    ]));
+    prose(
+        "Where focus is placed after closing the menu depends on the app. This example returns focus to its trigger.",
+    );
+    gap(Dp(24.0));
+    prose("Keyboard navigation on Android and web:");
+    gap(Dp(8.0));
+    guides::bullets(strings(&[
+        "Tab to select a menu item",
+        "Space or Enter to open a menu",
+        "Space or Enter to select a menu item",
+        "Escape to close a menu",
+    ]));
+    gap(Dp(16.0));
+    launch();
+}
+
+#[tessera]
+fn interactability() {
+    prose("Disabled menu items can receive focus but aren't selectable.");
+    gap(Dp(8.0));
+    prose("Dividers and gaps can't receive focus.");
+    gap(Dp(24.0));
+    guides::focus_examples();
+}
+
+#[tessera]
+fn labeling() {
+    prose("Accessibility labels are used with assistive technology devices like screen readers.");
+    gap(Dp(8.0));
+    prose("The accessibility label should be the same as the menu item text.");
+    gap(Dp(8.0));
+    prose("The role is dependent on platform.");
+    gap(Dp(24.0));
+    accessibility_figures::labeling();
+    gap(Dp(12.0));
+    guides::caption("The menu item's accessibility label aligns with the UI text");
+    gap(Dp(24.0));
+    spec_table(
+        strings(&[
+            "Element",
+            "A11y label",
+            "Role (Web)",
+            "Role (Android Views)",
+            "Role (Jetpack Compose)",
+        ]),
+        vec![strings(&[
+            "Menu item text",
+            "Preview",
+            "Menu item",
+            "Generic actionable element",
+            "Generic actionable element",
+        ])],
+    );
+    gap(Dp(24.0));
+    prose(
+        "For menu items with text and an icon, the icon's accessibility label should be marked as decorative to avoid redundant verbalizations.",
+    );
+    gap(Dp(8.0));
+    guides::caption(
+        "For menu items with text and an icon, the icon's accessibility label is decorative",
+    );
 }
 
 #[tessera]
@@ -92,8 +717,9 @@ fn prose(#[prop(into)] value: String) {
 #[tessera]
 fn variants() {
     subheading("Vertical menus".into());
+    gap(Dp(16.0));
     prose(
-        "Vertical menus support rounded corners, standard and vibrant colors, selection and grouped actions.",
+        "Use vertical menus for a more expressive look and feel, including rounded corners, standard and vibrant color styles, more selection states, and submenu motion.",
     );
     gap(Dp(24.0));
     panel(RenderSlot::new(|| {
@@ -102,41 +728,67 @@ fn variants() {
             .item_spacing(Dp(64.0))
             .line_spacing(Dp(32.0))
             .children(|| {
-                menu_tile(
-                    true,
-                    MenuColorStyle::Standard,
-                    "1  Vertical menu with gap".into(),
-                );
-                menu_tile(
-                    false,
-                    MenuColorStyle::Standard,
-                    "2  Vertical menu with divider".into(),
-                );
+                menu_tile(true, MenuColorStyle::Standard, 1);
+                menu_tile(false, MenuColorStyle::Standard, 2);
             });
     }));
-    gap(Dp(24.0));
+    gap(Dp(16.0));
+    guides::legend(strings(&[
+        "Vertical menu with gap",
+        "Vertical menu with divider",
+    ]));
+    gap(Dp(32.0));
     subheading("Baseline variant".into());
-    prose("The baseline menu remains available. Vertical menus are recommended for new designs.");
+    gap(Dp(16.0));
+    prose(
+        "In M3 Expressive, baseline menu is still available to use, but doesn't have the latest shapes, color styles, selection states, and motion.",
+    );
+    gap(Dp(24.0));
+    guides::baseline_variant();
 }
 
 #[tessera]
 fn configurations() {
     subheading("Vertical menus layout".into());
     gap(Dp(24.0));
+    configurations_figure();
+    gap(Dp(16.0));
+    guides::legend(strings(&["Standard", "Grouped"]));
+    gap(Dp(24.0));
+    spec_table(
+        strings(&["Category", "Configuration", "M3", "M3 Expressive"]),
+        vec![
+            strings(&["Color", "Standard", "Available", "Available"]),
+            strings(&["Color", "Vibrant", "--", "Available"]),
+            strings(&["Layout", "Standard", "Available", "Available"]),
+            strings(&["Layout", "Grouped", "--", "Available"]),
+        ],
+    );
+}
+
+#[tessera]
+fn configurations_figure() {
     panel(RenderSlot::new(|| {
         flow_row()
             .main_axis_alignment(MainAxisAlignment::Center)
             .item_spacing(Dp(64.0))
             .line_spacing(Dp(32.0))
             .children(|| {
-                configuration(false);
-                configuration(true);
+                for (index, grouped) in [false, true].into_iter().enumerate() {
+                    column()
+                        .cross_axis_alignment(CrossAxisAlignment::Center)
+                        .children(move || {
+                            configuration(grouped, MenuColorStyle::Standard);
+                            gap(Dp(24.0));
+                            guides::badge(index + 1);
+                        });
+                }
             });
     }));
 }
 
 #[tessera]
-fn configuration(grouped: bool) {
+fn configuration(grouped: bool, style: MenuColorStyle) {
     let selected = remember(|| 2_usize);
     let scheme = use_context::<MaterialTheme>().unwrap().get().color_scheme;
     column()
@@ -213,6 +865,7 @@ fn configuration(grouped: bool) {
             if grouped {
                 menu_group()
                     .position(MenuPosition::First)
+                    .color_style(style)
                     .children(move || {
                         menu_item()
                             .label("Item 1")
@@ -234,19 +887,22 @@ fn configuration(grouped: bool) {
                             .selection_mode(MenuItemSelectionMode::Radio)
                             .on_click(move || selected.set(2));
                     });
-                menu_group().position(MenuPosition::Last).children(move || {
-                    menu_item()
-                        .label("Item 4")
-                        .leading_icon(filled::PERSON_SVG)
-                        .trailing_icon(filled::ARROW_RIGHT_SVG)
-                        .on_click(move || selected.set(3));
-                    menu_item()
-                        .label("Item 5")
-                        .leading_icon(filled::SETTINGS_SVG)
-                        .on_click(move || selected.set(4));
-                });
+                menu_group()
+                    .position(MenuPosition::Last)
+                    .color_style(style)
+                    .children(move || {
+                        menu_item()
+                            .label("Item 4")
+                            .leading_icon(filled::PERSON_SVG)
+                            .trailing_icon(filled::ARROW_RIGHT_SVG)
+                            .on_click(move || selected.set(3));
+                        menu_item()
+                            .label("Item 5")
+                            .leading_icon(filled::SETTINGS_SVG)
+                            .on_click(move || selected.set(4));
+                    });
             } else {
-                menu_group().children(move || {
+                menu_group().color_style(style).children(move || {
                     menu_item()
                         .label("Refresh")
                         .trailing_icon(filled::REFRESH_SVG)
@@ -265,18 +921,18 @@ fn configuration(grouped: bool) {
                         .on_click(move || selected.set(3));
                 });
             }
-            gap(Dp(24.0));
-            prose(if grouped { "2  Grouped" } else { "1  Standard" });
         });
 }
 
 #[tessera]
-fn menu_tile(grouped: bool, style: MenuColorStyle, caption: String) {
-    column().children(move || {
-        menu_sample(grouped, style);
-        gap(Dp(24.0));
-        prose(caption.clone());
-    });
+fn menu_tile(grouped: bool, style: MenuColorStyle, number: usize) {
+    column()
+        .cross_axis_alignment(CrossAxisAlignment::Center)
+        .children(move || {
+            menu_sample(grouped, style);
+            gap(Dp(24.0));
+            guides::badge(number);
+        });
 }
 
 #[tessera]
@@ -518,13 +1174,23 @@ fn menu_figure(anatomy: bool, measurements: bool, style: MenuColorStyle) {
         });
     if anatomy {
         gap(Dp(16.0));
-        prose(
-            "1  Menu item    2  Leading icon    3  Menu item text    4  Trailing icon\n5  Badge    6  Trailing text    7  Container    8  Supporting text\n9  Label text    10  Gap    11  Divider",
-        );
+        guides::legend(strings(&[
+            "Menu item",
+            "Leading icon (optional)",
+            "Menu item text",
+            "Trailing icon (optional)",
+            "Badge (optional)",
+            "Trailing text (optional)",
+            "Container",
+            "Supporting text (optional)",
+            "Label text (optional)",
+            "Gap (optional)",
+            "Divider (optional)",
+        ]));
     }
     if measurements {
-        gap(Dp(24.0));
-        tokens();
+        gap(Dp(12.0));
+        guides::caption("Vertical menu padding and size measurements");
     }
 }
 
@@ -597,6 +1263,9 @@ fn menu_annotations(geometry: State<Geometry>, anatomy: bool, measurements: bool
             ("16", c.x + c.w + 48.0, c.y),
             ("48", c.x + c.w + 48.0, second.y + 16.0),
             ("20", c.x - 52.0, third.y + 16.0),
+            ("12", c.x - 52.0, second.y + 16.0),
+            ("20", c.x + c.w + 48.0, third.y + 16.0),
+            ("8", c.x + c.w + 48.0, label.y - 16.0),
             ("2", c.x - 36.0, label.y - 8.0),
             ("32", c.x - 48.0, label.y + 10.0),
             ("12", c.x - 2.0, c.y + c.h + 24.0),
@@ -619,23 +1288,39 @@ fn menu_annotations(geometry: State<Geometry>, anatomy: bool, measurements: bool
 
 #[tessera]
 fn colors() {
+    prose(
+        "Color values are implemented through design tokens. For designers, this means working with color values that correspond with tokens. In implementation, a color value will be a token that references a value.",
+    );
+    gap(Dp(16.0));
+    prose("Menus have two color mappings:");
+    gap(Dp(8.0));
+    guides::bullets(strings(&[
+        "Standard: Surface-based",
+        "Vibrant: Tertiary-based",
+    ]));
+    prose(
+        "These mappings provide options for lower or higher visual emphasis. Vibrant menus are more prominent so should be used sparingly.",
+    );
+    gap(Dp(24.0));
     panel(RenderSlot::new(|| {
         flow_row()
             .main_axis_alignment(MainAxisAlignment::Center)
             .item_spacing(Dp(40.0))
             .line_spacing(Dp(32.0))
             .children(|| {
-                menu_tile(true, MenuColorStyle::Standard, "1  Standard".into());
-                menu_tile(true, MenuColorStyle::Vibrant, "2  Vibrant".into());
+                menu_tile(true, MenuColorStyle::Standard, 1);
+                menu_tile(true, MenuColorStyle::Vibrant, 2);
             });
     }));
-    gap(Dp(24.0));
+    gap(Dp(16.0));
+    guides::legend(strings(&["Standard color scheme", "Vibrant color scheme"]));
+    gap(Dp(32.0));
     for style in [MenuColorStyle::Standard, MenuColorStyle::Vibrant] {
         subheading(
             if style == MenuColorStyle::Standard {
-                "Standard color roles"
+                "Standard colors"
             } else {
-                "Vibrant color roles"
+                "Vibrant colors"
             }
             .into(),
         );
@@ -655,42 +1340,17 @@ fn colors() {
                         });
                 }
             });
-        gap(Dp(24.0));
-        spec_table(
-            vec!["Element".into(), "Color role".into()],
+        gap(Dp(16.0));
+        guides::caption("Vertical menus color roles used for light and dark themes:");
+        gap(Dp(8.0));
+        guides::legend(
             menu_color_roles(style)
                 .iter()
-                .enumerate()
-                .map(|(index, role)| vec![(index + 1).to_string(), (*role).into()])
+                .map(|role| (*role).to_owned())
                 .collect(),
         );
         gap(Dp(32.0));
     }
-    spec_table(
-        vec!["Element".into(), "Standard".into(), "Vibrant".into()],
-        vec![
-            vec![
-                "Container".into(),
-                "Surface container low".into(),
-                "Tertiary container".into(),
-            ],
-            vec![
-                "Content".into(),
-                "On surface".into(),
-                "On tertiary container".into(),
-            ],
-            vec![
-                "Selected container".into(),
-                "Tertiary container".into(),
-                "Tertiary".into(),
-            ],
-            vec![
-                "Selected content".into(),
-                "On tertiary container".into(),
-                "On tertiary".into(),
-            ],
-        ],
-    );
 }
 
 const COLOR_ROWS: [&str; 5] = [
@@ -1010,88 +1670,35 @@ fn menu_color_marker(number: usize, role: String, x: Dp, y: Dp) {
 
 #[tessera]
 fn states() {
-    let selected = remember(|| true);
-    panel(RenderSlot::new(move || {
-        column()
-            .modifier(Modifier::new().width(Dp(240.0)))
-            .children(move || {
-                menu_group().children(move || {
-                    menu_item()
-                        .label("Selected item")
-                        .selected(selected.get())
-                        .selection_mode(MenuItemSelectionMode::Radio)
-                        .leading_icon(filled::CHECK_SVG)
-                        .close_on_click(false)
-                        .on_click(move || selected.set(!selected.get()));
-                    menu_item().label("Enabled item").on_click(|| {});
-                    menu_item().label("Disabled item").enabled(false);
-                });
-            });
-    }));
-    gap(Dp(16.0));
     prose(
-        "Enabled, disabled, hovered, focused, pressed and active submenu states. Hover, focus or press the live items to inspect their state layers.",
+        "States are visual representations used to communicate the status of a component or an interactive element.",
     );
+    gap(Dp(8.0));
+    prose(
+        "Shape morphing in vertical menus creates an expressive active state. As focus moves between submenus, the corner shape changes to highlight the active menu.",
+    );
+    gap(Dp(24.0));
+    guides::states_figure(false, false);
 }
 
 #[tessera]
 fn tokens() {
+    prose("Browse the component elements, attributes, tokens, and their values.");
+    gap(Dp(16.0));
     spec_table(
-        vec!["Attribute".into(), "Value".into()],
+        strings(&["Token", "Value"]),
         vec![
-            vec!["Menu item height".into(), "48dp touch target".into()],
-            vec!["Leading / trailing icon".into(), "20dp".into()],
-            vec!["Leading item padding".into(), "12dp".into()],
-            vec!["Space between icon and label".into(), "8dp".into()],
-            vec!["Group gap".into(), "2dp".into()],
-            vec!["Group vertical padding".into(), "2dp".into()],
-            vec!["Label row height".into(), "32dp".into()],
-            vec!["Outer corner radius".into(), "16dp".into()],
-            vec!["Corners adjoining gap".into(), "8dp".into()],
-            vec!["Selected item radius".into(), "12dp".into()],
-        ],
-    );
-}
-
-#[tessera]
-fn baseline() {
-    prose(
-        "Baseline menus retain square-shaped 4dp corners. Expressive vertical menus are recommended for new designs.",
-    );
-    gap(Dp(24.0));
-    panel(RenderSlot::new(|| {
-        menu_group()
-            .shape(Shape::rounded_rectangle(Dp(4.0)))
-            .modifier(Modifier::new().width(Dp(240.0)))
-            .children(|| {
-                menu_item()
-                    .height(Dp(48.0))
-                    .label("Cut")
-                    .leading_icon(filled::CONTENT_CUT_SVG)
-                    .on_click(|| {});
-                menu_item()
-                    .height(Dp(48.0))
-                    .label("Copy")
-                    .leading_icon(filled::CONTENT_COPY_SVG)
-                    .on_click(|| {});
-                horizontal_divider();
-                menu_item()
-                    .height(Dp(48.0))
-                    .label("Paste")
-                    .leading_icon(filled::CONTENT_PASTE_SVG)
-                    .on_click(|| {});
-            });
-    }));
-    gap(Dp(24.0));
-    spec_table(
-        vec!["Attribute".into(), "Value".into()],
-        vec![
-            vec!["Width".into(), "112–280dp".into()],
-            vec!["Corner radius".into(), "4dp".into()],
-            vec!["Item height".into(), "48dp".into()],
-            vec!["Horizontal padding".into(), "12dp".into()],
-            vec!["Icon size".into(), "24dp".into()],
-            vec!["Divider padding".into(), "8dp top and bottom".into()],
+            strings(&["Menu gap", "2dp"]),
+            strings(&["Menu group padding", "2dp"]),
+            strings(&["Menu container elevation", "Level 2, 3dp"]),
+            strings(&["Menu item height", "44dp"]),
+            strings(&["Menu item top space", "8dp"]),
+            strings(&["Menu item bottom space", "8dp"]),
+            strings(&["Menu item leading space", "16dp"]),
+            strings(&["Menu item trailing space", "16dp"]),
+            strings(&["Menu item between space", "12dp"]),
+            strings(&["Menu item leading icon size", "20dp"]),
+            strings(&["Menu item trailing icon size", "20dp"]),
         ],
     );
 }
@@ -1099,20 +1706,23 @@ fn baseline() {
 #[tessera]
 fn keyboard() {
     spec_table(
-        vec!["Keys".into(), "Action".into()],
+        strings(&["Keys", "Actions"]),
         vec![
-            vec!["Tab".into(), "Focus a menu".into()],
-            vec![
-                "Space or Enter".into(),
-                "Open a menu or select an item".into(),
-            ],
-            vec![
-                "Up / Down".into(),
-                "Open a closed menu or move between items in an open menu".into(),
-            ],
-            vec!["Left / Right".into(), "Close / open a submenu".into()],
-            vec!["Letters".into(), "Focus the next matching item".into()],
-            vec!["Escape".into(), "Close the menu".into()],
+            strings(&["Tab", "Focus lands on menu"]),
+            strings(&[
+                "Space or Enter",
+                "For closed menus: Opens menu or submenu. For open menus: Selects a menu item",
+            ]),
+            strings(&[
+                "Up and Down arrows",
+                "For closed menus: Opens menu. For open menus: Moves focus to the next item",
+            ]),
+            strings(&["Left and Right arrows", "Opens or closes a submenu"]),
+            strings(&[
+                "Letters",
+                "Focus moves to the next menu item starting with letter",
+            ]),
+            strings(&["Escape", "Closes menu"]),
         ],
     );
 }

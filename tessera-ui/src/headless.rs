@@ -141,7 +141,8 @@ pub struct HeadlessConfig {
     pub scale_factor: f64,
     /// MSAA sample count for render pipelines.
     pub sample_count: u32,
-    /// Offscreen target format; RGBA8 is required for readback and PNG output.
+    /// Output texture format; RGBA8 is required for sRGB-encoded readback and
+    /// PNG output.
     pub format: wgpu::TextureFormat,
     /// Virtual time advanced per rendered frame.
     pub frame_time: Duration,

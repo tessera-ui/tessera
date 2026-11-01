@@ -13,10 +13,11 @@ use tessera_components::{
     shape_def::Shape,
     spacer::spacer,
     surface::surface,
+    switch::switch,
     text::text,
     theme::{MaterialTheme, material_theme},
 };
-use tessera_ui::{Color, Dp, Modifier, RenderSlot, tessera, use_context};
+use tessera_ui::{Color, Dp, Modifier, RenderSlot, remember, tessera, use_context};
 
 use super::{
     ACCENT, INK,
@@ -324,9 +325,32 @@ fn variants() {
 
 #[tessera]
 fn configurations() {
+    let contained = remember(|| false);
+    let paused = remember(|| false);
     prose(
         "Configure containment, a determinate progress value, and a paused state. Pausing is useful for reduced-motion settings and keeps the shape visible without animating.",
     );
+    gap(Dp(24.0));
+    spinner("Configured loading")
+        .contained(contained.get())
+        .paused(paused.get());
+    gap(Dp(16.0));
+    flow_row().item_spacing(Dp(16.0)).children(move || {
+        text()
+            .content("Contained loading")
+            .style(type_style(14.0, 20.0));
+        switch()
+            .checked(contained.get())
+            .accessibility_label("Contained loading")
+            .on_toggle(move |value| contained.set(value));
+        text()
+            .content("Pause animation")
+            .style(type_style(14.0, 20.0));
+        switch()
+            .checked(paused.get())
+            .accessibility_label("Pause loading animation")
+            .on_toggle(move |value| paused.set(value));
+    });
     gap(Dp(24.0));
     panel(RenderSlot::new(|| {
         column()

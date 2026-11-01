@@ -999,9 +999,9 @@ fn tooltip_panel(
             column()
                 .modifier(Modifier::new().padding(if rich {
                     Padding::new(
-                        Dp(16.0),
+                        Dp::ZERO,
                         Dp(12.0),
-                        Dp(16.0),
+                        Dp::ZERO,
                         if action_row { Dp(8.0) } else { Dp(16.0) },
                     )
                 } else {
@@ -1010,17 +1010,28 @@ fn tooltip_panel(
                 .children(move || {
                     let (theme, message, headline, action_label, rich, actions, has_actions) =
                         render_data.get();
-                    if rich && let Some(headline) = &headline {
-                        text()
-                            .content(headline.clone())
-                            .style(theme.typography.title_small);
-                        crate::spacer::spacer().modifier(Modifier::new().height(Dp(4.0)));
-                    }
-                    text().content(message.clone()).style(if rich {
-                        theme.typography.body_medium
+                    if rich {
+                        column()
+                            .modifier(
+                                Modifier::new().padding(Padding::symmetric(Dp(16.0), Dp::ZERO)),
+                            )
+                            .children(move || {
+                                if let Some(headline) = &headline {
+                                    text()
+                                        .content(headline.clone())
+                                        .style(theme.typography.title_small);
+                                    crate::spacer::spacer()
+                                        .modifier(Modifier::new().height(Dp(4.0)));
+                                }
+                                text()
+                                    .content(message.clone())
+                                    .style(theme.typography.body_medium);
+                            });
                     } else {
-                        theme.typography.body_small
-                    });
+                        text()
+                            .content(message.clone())
+                            .style(theme.typography.body_small);
+                    }
                     if rich && has_actions {
                         crate::spacer::spacer().modifier(Modifier::new().height(Dp(12.0)));
                         actions.render();
@@ -1233,6 +1244,7 @@ mod tests {
         changed: bool,
         focus_stress: bool,
         custom_actions: bool,
+        without_headline: bool,
         popup_width: Option<Dp>,
     }
 
@@ -1274,7 +1286,7 @@ mod tests {
                 .popup_modifier(popup_modifier)
                 .controller(controller)
                 .variant(if config.rich { TooltipVariant::Rich } else { TooltipVariant::Plain })
-                .headline("More information")
+                .headline(if config.without_headline { "" } else { "More information" })
                 .action_label(if config.rich { "Got it" } else { "" })
                 .on_action(move || actions.set(actions.get() + 1));
             let tooltip = if config.custom_actions {
@@ -1473,13 +1485,17 @@ mod tests {
     #[test]
     #[ignore = "requires a native GPU adapter"]
     fn gpu_hover_restores_pixels_preserves_focus_and_updates_content_and_variant() {
-        check_tooltip_interactions(false);
+        for without_headline in [false, true] {
+            check_tooltip_interactions(false, without_headline);
+        }
     }
 
     #[test]
     #[ignore = "requires a native GPU adapter"]
     fn gpu_custom_actions_restore_focus_and_pixels_after_parent_rebuild() {
-        check_tooltip_interactions(true);
+        for without_headline in [false, true] {
+            check_tooltip_interactions(true, without_headline);
+        }
     }
 
     #[test]
@@ -1527,12 +1543,80 @@ mod tests {
         );
     }
 
-    fn check_tooltip_interactions(custom_actions: bool) {
+    fn assert_rich_action_insets(
+        renderer: &HeadlessRenderer,
+        custom_actions: bool,
+        without_headline: bool,
+    ) {
+        let tree = renderer.accessibility_snapshot().expect("tree");
+        let bounds = |role: Role, label: &str| {
+            tree.nodes
+                .iter()
+                .find(|(_, node)| node.role() == role && node.label() == Some(label))
+                .unwrap_or_else(|| panic!("missing {label} ({role:?})"))
+                .1
+                .bounds()
+                .expect("semantic bounds")
+        };
+        let popup = tree
+            .nodes
+            .iter()
+            .find(|(_, node)| node.role() == Role::Dialog)
+            .expect("rich tooltip")
+            .1
+            .bounds()
+            .expect("popup bounds");
+        let body = bounds(Role::Label, "Helpful description");
+        assert_eq!(body.x0 - popup.x0, 16.0);
+        if without_headline {
+            assert!(
+                !tree.nodes.iter().any(|(_, node)| node.role() == Role::Label
+                    && node.label() == Some("More information"))
+            );
+            assert_eq!(body.y0 - popup.y0, 12.0);
+        } else {
+            let headline = bounds(Role::Label, "More information");
+            assert_eq!(headline.x0 - popup.x0, 16.0);
+            assert_eq!(headline.y0 - popup.y0, 12.0);
+            assert_eq!(body.y0 - headline.y1, 4.0);
+        }
+        let first_label = if custom_actions { "Not now" } else { "Got it" };
+        let first = bounds(Role::Button, first_label);
+        let first_text = bounds(Role::Label, first_label);
+        assert_eq!(first_text.x0 - popup.x0, 16.0);
+        assert_eq!(first.y0 - body.y1, 12.0);
+        assert_eq!(popup.y1 - first.y1, 8.0);
+        let labels: &[&str] = if custom_actions {
+            &["Not now", "Got it"]
+        } else {
+            &["Got it"]
+        };
+        for label in labels {
+            let button = bounds(Role::Button, label);
+            let text = bounds(Role::Label, label);
+            assert!(button.width() >= 48.0 && button.height() >= 48.0);
+            assert!(
+                text.x0 >= button.x0
+                    && text.x1 <= button.x1
+                    && text.y0 >= button.y0
+                    && text.y1 <= button.y1
+            );
+            assert_eq!(text.x0 - button.x0, 16.0);
+        }
+        if custom_actions {
+            let second = bounds(Role::Button, "Got it");
+            assert_eq!(second.x0, first.x1);
+            assert_eq!(second.y0, first.y0);
+            assert_eq!(second.y1, first.y1);
+        }
+    }
+
+    fn check_tooltip_interactions(custom_actions: bool, without_headline: bool) {
         let mut renderer = renderer();
-        SETTINGS
-            .get()
-            .expect("settings")
-            .with_mut(|settings| settings.custom_actions = custom_actions);
+        SETTINGS.get().expect("settings").with_mut(|settings| {
+            settings.custom_actions = custom_actions;
+            settings.without_headline = without_headline;
+        });
         renderer.render_frames(2);
         let before = renderer.read_pixels().expect("pixels");
         let focus = renderer.accessibility_snapshot().expect("tree").focus;
@@ -1619,6 +1703,7 @@ mod tests {
             12.0,
             "rich tooltip separates supporting text from actual actions by 12dp"
         );
+        assert_rich_action_insets(&renderer, custom_actions, without_headline);
         let controller = CONTROLLER.get().expect("controller");
         let trigger = controller.with(|controller| controller.focus);
         trigger.request_focus();

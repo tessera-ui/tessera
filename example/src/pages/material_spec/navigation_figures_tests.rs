@@ -294,14 +294,7 @@ fn color_figures_publish_official_role_markers_and_independent_live_destination_
                     .1
                     .bounds()
                     .unwrap();
-                assert_eq!(
-                    bounds.height(),
-                    if rail && prefix.contains("expanded") {
-                        56.0
-                    } else {
-                        64.0
-                    }
-                );
+                assert_eq!(bounds.height(), if rail { 56.0 } else { 64.0 });
                 if rail {
                     assert_eq!(
                         bounds.width(),

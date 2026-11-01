@@ -16,6 +16,9 @@ path = "src/lib.rs"
 name = "example"
 path = "src/main.rs"
 
+[features]
+md3-diagnostics = []
+
 [dependencies]
 tessera-shard = { path = "../tessera-shard" }
 tessera-ui = { path = "../tessera-ui", features = ["headless"] }

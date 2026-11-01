@@ -4,35 +4,45 @@
 //!
 //! Compare standard and modal side sheets and review dismissal behavior.
 
+mod figures;
+
 use tessera_components::{
     alignment::{Alignment, CrossAxisAlignment},
     boxed::boxed,
     button::{ButtonSize, button},
     checkbox::checkbox,
     column::column,
-    divider::horizontal_divider,
+    icon::icon,
     icon_button::icon_button,
     material_icons::filled,
     modifier::{ModifierExt as _, Padding, SemanticsArgs},
     row::row,
     shape_def::Shape,
-    side_sheet::{SideSheetPosition, modal_side_sheet_provider, standard_side_sheet_provider},
+    side_sheet::{
+        SideSheetController, SideSheetPosition, modal_side_sheet_provider,
+        standard_side_sheet_provider,
+    },
     spacer::spacer,
     text::text,
     theme::MaterialTheme,
 };
-use tessera_ui::{Color, Dp, Modifier, RenderSlot, State, remember, tessera, use_context};
-
-use super::{
-    INK,
-    annotations::{self, SpaceGeometry, watch_in_space},
-    article::{ArticlePage, SpecSection, article},
-    gap, spec_table, subheading, type_style,
+use tessera_shard::RouterController;
+use tessera_ui::{
+    Color, Dp, FocusProperties, FocusRequester, FocusState, Modifier, RenderSlot, State,
+    accesskit::Role, modifier::FocusModifierExt as _, provide_context, remember, tessera,
+    use_context,
 };
 
-const DO_COLOR: Color = Color::from_rgb(0.121, 0.478, 0.196);
-const DONT_COLOR: Color = Color::from_rgb(0.741, 0.161, 0.161);
-const SCRIM_COLOR: Color = Color::from_rgb(0.4512, 0.4392, 0.4706);
+use self::figures::{guidance_card, legend, split};
+use super::{
+    INK,
+    article::{ArticlePage, SpecSection, article},
+    gap, spec_table, srgb, subheading, type_style,
+};
+
+#[cfg(all(test, not(target_family = "wasm")))]
+#[path = "side_sheets_tests.rs"]
+mod tests;
 
 struct FilterLabels;
 
@@ -44,25 +54,109 @@ impl FilterLabels {
     }
 }
 
+/// Live modal side sheet state owned by the app root while the article is
+/// mounted or remounted.
+#[derive(Clone, Copy)]
+struct LiveSideSheetSession {
+    open: State<bool>,
+    filters: State<[bool; 5]>,
+    notice: State<String>,
+    directory: State<SideSheetController>,
+    router: State<RouterController>,
+    material: State<Option<usize>>,
+}
+
+impl LiveSideSheetSession {
+    fn route_active(self) -> bool {
+        let selected = self.material.get();
+        self.router.with(|router| {
+            router
+                .current_is::<crate::pages::material_components::MaterialComponentsPageDestination>(
+                )
+        }) && selected.is_some()
+            && selected == super::catalog::component_index(34)
+    }
+
+    fn can_open(self) -> bool {
+        self.route_active()
+            && self
+                .directory
+                .with(|directory| !directory.is_open() && !directory.is_animating())
+    }
+}
+
+#[cfg(all(test, not(target_family = "wasm")))]
+thread_local! {
+    static TEST_SESSION: std::cell::Cell<Option<LiveSideSheetSession>> = const {
+        std::cell::Cell::new(None)
+    };
+}
+
 #[tessera]
-pub(super) fn side_sheets_spec() {
-    let modal_open = remember(|| false);
-    let standard_open = remember(|| false);
-    let filters = remember(FilterLabels::defaults);
-    let notice = remember(|| String::from("No action selected"));
-    let main = RenderSlot::new(move || {
-        sheet_article(modal_open, standard_open, notice);
+pub(crate) fn live_side_sheet_host(
+    directory: State<SideSheetController>,
+    router: State<RouterController>,
+    material: State<Option<usize>>,
+    main_content: RenderSlot,
+) {
+    let session = LiveSideSheetSession {
+        open: remember(|| false),
+        filters: remember(FilterLabels::defaults),
+        notice: remember(|| String::from("No action selected")),
+        directory,
+        router,
+        material,
+    };
+    #[cfg(all(test, not(target_family = "wasm")))]
+    TEST_SESSION.set(Some(session));
+    if !session.route_active() && session.open.get() {
+        session.open.set(false);
+    }
+    let modal = RenderSlot::new(move || {
+        live_modal(session.open, session.filters, session.notice, main_content);
     });
-    let body = RenderSlot::new(move || {
-        sheet_content(modal_open, filters, notice);
-    });
+    provide_context(move || session, move || modal.render());
+}
+
+#[tessera]
+fn live_modal(
+    open: State<bool>,
+    filters: State<[bool; 5]>,
+    notice: State<String>,
+    main_content: RenderSlot,
+) {
     modal_side_sheet_provider()
         .position(SideSheetPosition::End)
+        .content_padding(Dp::ZERO)
         .accessibility_label("Filters")
-        .is_open(modal_open.get())
-        .on_close_request(move || modal_open.set(false))
-        .main_content_shared(main)
-        .side_sheet_content_shared(body);
+        .is_open(open.get())
+        .on_close_request(move || open.set(false))
+        .main_content_shared(main_content)
+        .side_sheet_content(move || {
+            sheet_content(open, filters, notice);
+        });
+}
+
+#[tessera]
+pub(super) fn side_sheets_spec() {
+    let root = use_context::<LiveSideSheetSession>().map(|context| context.get());
+    let local_open = remember(|| false);
+    let local_filters = remember(FilterLabels::defaults);
+    let local_notice = remember(|| String::from("No action selected"));
+    let standard_open = remember(|| false);
+    let (open, filters, notice) = if let Some(session) = root {
+        (session.open, session.filters, session.notice)
+    } else {
+        (local_open, local_filters, local_notice)
+    };
+    let content = RenderSlot::new(move || {
+        sheet_article(open, standard_open, notice);
+    });
+    if root.is_some() {
+        content.render();
+    } else {
+        live_modal(open, filters, notice, content);
+    }
 }
 
 #[tessera]
@@ -77,23 +171,18 @@ fn sheet_article(modal_open: State<bool>, standard_open: State<bool>, notice: St
             },
             SpecSection {
                 title: "Standard side sheet",
-                content: RenderSlot::new(standard_specs),
+                content: RenderSlot::new(|| {
+                    variant_specs(false);
+                }),
             },
             SpecSection {
                 title: "Modal side sheet",
-                content: RenderSlot::new(modal_specs),
+                content: RenderSlot::new(|| {
+                    variant_specs(true);
+                }),
             },
         ],
     )
-    .intro(|| {
-        prose("Standard and modal side sheets share the container, headline, close affordance and 16dp corner radius. A modal side sheet adds a scrim, an optional back icon button and optional action buttons at the bottom edge.");
-        gap(Dp(32.0));
-        anatomy_pair();
-        gap(Dp(16.0));
-        caption("1  Standard side sheet     2  Modal side sheet");
-        gap(Dp(32.0));
-        legend(false);
-    })
     .pages(vec![
         ArticlePage {
             title: "Overview",
@@ -114,17 +203,15 @@ fn sheet_article(modal_open: State<bool>, standard_open: State<bool>, notice: St
         ArticlePage {
             title: "Guidelines",
             intro: Some(RenderSlot::new(|| {
-                prose("Two variants of side sheets.");
-                gap(Dp(32.0));
-                anatomy_pair();
-                gap(Dp(16.0));
-                caption("1  Standard side sheet     2  Modal side sheet");
+                figures::hero();
+                gap(Dp(24.0));
+                variants_legend();
             })),
             sections: vec![
                 SpecSection {
                     title: "Usage",
                     content: RenderSlot::new(move || {
-                        usage(modal_open, standard_open);
+                        usage(modal_open);
                     }),
                 },
                 SpecSection {
@@ -133,8 +220,8 @@ fn sheet_article(modal_open: State<bool>, standard_open: State<bool>, notice: St
                 },
                 SpecSection {
                     title: "Adaptive design",
-                    content: RenderSlot::new(|| {
-                        adaptive_design();
+                    content: RenderSlot::new(move || {
+                        adaptive_design(standard_open);
                     }),
                 },
                 SpecSection {
@@ -209,52 +296,27 @@ fn bullets(items: Vec<String>) {
 }
 
 #[tessera]
-fn guidance_line(#[prop(into)] mark: String, #[prop(into)] note: String, color: Color) {
-    let scheme = use_context::<MaterialTheme>().unwrap().get().color_scheme;
-    row()
-        .cross_axis_alignment(CrossAxisAlignment::Center)
-        .modifier(Modifier::new().fill_max_width())
-        .children(move || {
-            let mark = mark.clone();
-            boxed()
-                .alignment(Alignment::Center)
-                .modifier(
-                    Modifier::new()
-                        .padding_symmetric(Dp(12.0), Dp(4.0))
-                        .background_with_shape(color, Shape::rounded_rectangle(Dp(8.0))),
-                )
-                .children(move || {
-                    text()
-                        .content(mark.clone())
-                        .style(type_style(14.0, 20.0))
-                        .color(Color::WHITE);
-                });
-            spacer().modifier(Modifier::new().width(Dp(12.0)));
-            text()
-                .content(note.clone())
-                .color(scheme.on_surface_variant)
-                .style(type_style(14.0, 20.0));
-        });
-}
-
-#[tessera]
-fn do_dont(#[prop(into)] good: String, #[prop(into)] bad: String) {
-    column().children(move || {
-        guidance_line("Do", good.clone(), DO_COLOR);
-        gap(Dp(12.0));
-        guidance_line("Don't", bad.clone(), DONT_COLOR);
-    });
+fn variants_legend() {
+    legend(vec![
+        (1, "Standard side sheet".into()),
+        (2, "Modal side sheet".into()),
+    ]);
 }
 
 #[tessera]
 fn launch(open: State<bool>) {
+    let session = use_context::<LiveSideSheetSession>().map(|context| context.get());
     column()
         .modifier(Modifier::new().fill_max_width())
         .children(move || {
             button()
                 .outlined()
                 .accessibility_label("Open modal side sheet")
-                .on_click(move || open.set(true))
+                .on_click(move || {
+                    if session.is_none_or(LiveSideSheetSession::can_open) {
+                        open.set(true);
+                    }
+                })
                 .child(|| {
                     text().content("Open modal side sheet");
                 });
@@ -267,20 +329,18 @@ fn launch(open: State<bool>) {
 
 #[tessera]
 fn overview_intro(open: State<bool>) {
-    prose(
-        "Use side sheets to provide optional content and actions without interrupting the main content.",
-    );
-    gap(Dp(16.0));
     bullets(vec![
+        "Use side sheets to provide optional content and actions without interrupting the main content"
+            .into(),
         "Two variants: standard and modal".into(),
         "People can navigate to another region within the sheet".into(),
         "Side sheets can contain a back icon for navigation".into(),
     ]);
     gap(Dp(24.0));
-    anatomy_pair();
-    gap(Dp(16.0));
-    caption("1  Standard side sheet     2  Modal side sheet");
-    gap(Dp(32.0));
+    figures::hero();
+    gap(Dp(24.0));
+    variants_legend();
+    gap(Dp(24.0));
     launch(open);
 }
 
@@ -316,498 +376,656 @@ fn availability() {
 
 #[tessera]
 fn differences() {
-    bullets(vec![
-        "Right-to-left (RTL) language support with left side sheet".into(),
-        "Color: new color mappings and compatibility with dynamic color".into(),
-        "Shape: modal side sheets have a 16dp corner radius".into(),
-    ]);
-    gap(Dp(24.0));
-    caption("Side sheets have new color mappings to support dynamic color");
+    split()
+        .start_weight(0.5)
+        .start(|| {
+            bullets(vec![
+                "Right-to-left (RTL) language support with left side sheet".into(),
+                "Color: new color mappings and compatibility with dynamic color".into(),
+                "Shape: modal side sheets have a 16dp corner radius".into(),
+            ]);
+        })
+        .end(|| {
+            figures::differences_figure();
+            gap(Dp(16.0));
+            caption("Side sheets have new color mappings to support dynamic color");
+        });
+}
+
+struct Token {
+    group: &'static str,
+    section: &'static str,
+    name: &'static str,
+    value: &'static str,
+}
+
+const TOKEN_GROUPS: [&str; 4] = ["Enabled", "Hovered", "Focused", "Pressed (ripple)"];
+
+const TOKENS: [Token; 31] = [
+    Token {
+        group: "Enabled",
+        section: "Container",
+        name: "Sheet side docked container color",
+        value: "#FEF7FF",
+    },
+    Token {
+        group: "Enabled",
+        section: "Container",
+        name: "Sheet side docked modal container color",
+        value: "#F7F2FA",
+    },
+    Token {
+        group: "Enabled",
+        section: "Container",
+        name: "Sheet side docked standard container color",
+        value: "#FEF7FF",
+    },
+    Token {
+        group: "Enabled",
+        section: "Container",
+        name: "Sheet side docked container surface tint layer color",
+        value: "#6750A4",
+    },
+    Token {
+        group: "Enabled",
+        section: "Container",
+        name: "Sheet side docked modal container elevation",
+        value: "Level 1",
+    },
+    Token {
+        group: "Enabled",
+        section: "Container",
+        name: "Sheet side docked standard container elevation",
+        value: "Level 0",
+    },
+    Token {
+        group: "Enabled",
+        section: "Container",
+        name: "Sheet side docked container height",
+        value: "100%",
+    },
+    Token {
+        group: "Enabled",
+        section: "Container",
+        name: "Sheet side docked container shape",
+        value: "Square corners",
+    },
+    Token {
+        group: "Enabled",
+        section: "Container",
+        name: "Sheet side detached container shape",
+        value: "Rounded corners",
+    },
+    Token {
+        group: "Enabled",
+        section: "Container",
+        name: "Sheet side docked container width",
+        value: "256dp",
+    },
+    Token {
+        group: "Enabled",
+        section: "Container",
+        name: "Sheet side docked modal container shape",
+        value: "Rounded corners",
+    },
+    Token {
+        group: "Enabled",
+        section: "Headline",
+        name: "Sheet side docked headline color",
+        value: "#49454F",
+    },
+    Token {
+        group: "Enabled",
+        section: "Headline",
+        name: "Sheet side docked headline font",
+        value: "Roboto",
+    },
+    Token {
+        group: "Enabled",
+        section: "Headline",
+        name: "Sheet side docked headline line height",
+        value: "28pt",
+    },
+    Token {
+        group: "Enabled",
+        section: "Headline",
+        name: "Sheet side docked headline size",
+        value: "22pt",
+    },
+    Token {
+        group: "Enabled",
+        section: "Headline",
+        name: "Sheet side docked headline tracking",
+        value: "0pt",
+    },
+    Token {
+        group: "Enabled",
+        section: "Headline",
+        name: "Sheet side docked headline weight",
+        value: "400",
+    },
+    Token {
+        group: "Enabled",
+        section: "Headline",
+        name: "Sheet side docked headline type style",
+        value: "Title large",
+    },
+    Token {
+        group: "Enabled",
+        section: "Divider",
+        name: "Sheet side docked divider color",
+        value: "#79747E",
+    },
+    Token {
+        group: "Hovered",
+        section: "Label text",
+        name: "Sheet side docked action hover label text color",
+        value: "#6750A4",
+    },
+    Token {
+        group: "Hovered",
+        section: "State layer",
+        name: "Sheet side docked action hover state layer color",
+        value: "#6750A4",
+    },
+    Token {
+        group: "Hovered",
+        section: "State layer",
+        name: "Sheet side docked action hover state layer opacity",
+        value: "0.08",
+    },
+    Token {
+        group: "Focused",
+        section: "Focus indicator",
+        name: "Sheet side docked focus indicator color",
+        value: "#625B71",
+    },
+    Token {
+        group: "Focused",
+        section: "Focus indicator",
+        name: "Sheet side docked focus indicator thickness",
+        value: "3dp",
+    },
+    Token {
+        group: "Focused",
+        section: "Focus indicator",
+        name: "Sheet side docked focus indicator offset",
+        value: "2dp",
+    },
+    Token {
+        group: "Focused",
+        section: "Label text",
+        name: "Sheet side docked action focus label text color",
+        value: "#6750A4",
+    },
+    Token {
+        group: "Focused",
+        section: "State layer",
+        name: "Sheet side docked action focus state layer color",
+        value: "#6750A4",
+    },
+    Token {
+        group: "Focused",
+        section: "State layer",
+        name: "Sheet side docked action focus state layer opacity",
+        value: "0.1",
+    },
+    Token {
+        group: "Pressed (ripple)",
+        section: "Label text",
+        name: "Sheet side docked action pressed label text color",
+        value: "#6750A4",
+    },
+    Token {
+        group: "Pressed (ripple)",
+        section: "State layer",
+        name: "Sheet side docked action pressed state layer color",
+        value: "#6750A4",
+    },
+    Token {
+        group: "Pressed (ripple)",
+        section: "State layer",
+        name: "Sheet side docked action pressed state layer opacity",
+        value: "0.1",
+    },
+];
+
+fn parse_hex(value: &str) -> Option<Color> {
+    let value = value.strip_prefix('#')?;
+    let channel = |index: usize| u8::from_str_radix(value.get(index..index + 2)?, 16).ok();
+    Some(srgb(channel(0)?, channel(2)?, channel(4)?))
 }
 
 #[tessera]
 fn tokens() {
-    spec_table(
-        vec!["Element".into(), "Token".into()],
-        vec![
-            vec!["Standard container".into(), "Surface".into()],
-            vec!["Modal container".into(), "Surface container low".into()],
-            vec!["Divider".into(), "Outline variant, 1dp".into()],
-            vec!["Headline".into(), "On surface variant".into()],
-            vec!["Icon buttons".into(), "On surface variant".into()],
-            vec!["Modal scrim".into(), "Scrim, 32%".into()],
-            vec!["Corner radius".into(), "16dp".into()],
-            vec!["Maximum width".into(), "400dp".into()],
-        ],
-    );
-}
-
-#[tessera]
-fn standard_specs() {
-    column()
-        .modifier(Modifier::new().fill_max_width())
-        .children(|| {
-            anatomy_diagram(false);
-            gap(Dp(24.0));
-            legend(false);
-            gap(Dp(56.0));
-            subheading("Standard side sheet color".into());
-            gap(Dp(24.0));
-            spec_table(
-                vec!["Element".into(), "Color role".into()],
-                vec![
-                    vec!["1  Divider (optional)".into(), "Outline variant".into()],
-                    vec!["2  Headline".into(), "On surface variant".into()],
-                    vec!["3  Container".into(), "Surface".into()],
-                    vec!["4  Close icon button".into(), "On surface variant".into()],
-                ],
-            );
-            gap(Dp(56.0));
-            subheading("Standard side sheet measurements".into());
-            gap(Dp(24.0));
-            proportions(false);
-            gap(Dp(24.0));
-            caption("Side sheet padding and size measurements");
-            gap(Dp(32.0));
-            measurements();
-        });
-}
-
-#[tessera]
-fn modal_specs() {
-    column()
-        .modifier(Modifier::new().fill_max_width())
-        .children(|| {
-            anatomy_diagram(true);
-            gap(Dp(24.0));
-            legend(true);
-            gap(Dp(56.0));
-            subheading("Modal side sheet color".into());
-            gap(Dp(24.0));
-            spec_table(
-                vec!["Element".into(), "Color role".into()],
-                vec![
-                    vec![
-                        "1  Back icon button (optional)".into(),
-                        "On surface variant".into(),
-                    ],
-                    vec!["2  Headline".into(), "On surface variant".into()],
-                    vec!["3  Container".into(), "Surface container low".into()],
-                    vec!["4  Close icon button".into(), "On surface variant".into()],
-                    vec!["5  Divider (optional)".into(), "Outline variant".into()],
-                    vec!["6  Scrim".into(), "Scrim, 32%".into()],
-                ],
-            );
-            gap(Dp(56.0));
-            subheading("Modal side sheet measurements".into());
-            gap(Dp(24.0));
-            proportions(true);
-            gap(Dp(24.0));
-            caption("Side sheet padding and size measurements");
-            gap(Dp(32.0));
-            measurements();
-            gap(Dp(24.0));
-            spec_table(
-                vec!["Attribute".into(), "Value".into()],
-                vec![
-                    vec!["Modal corner radius".into(), "16dp".into()],
-                    vec!["Modal elevation".into(), "1dp".into()],
-                    vec!["Scrim coverage".into(), "Remaining window width".into()],
-                ],
-            );
-        });
-}
-
-#[tessera]
-fn measurements() {
-    spec_table(
-        vec!["Attribute".into(), "Value".into()],
-        vec![
-            vec!["Start/end padding".into(), "24dp".into()],
-            vec!["Padding between top elements".into(), "12dp".into()],
-            vec!["Bottom actions height".into(), "72dp".into()],
-            vec!["Bottom actions top padding".into(), "16dp".into()],
-            vec!["Bottom actions bottom padding".into(), "24dp".into()],
-            vec![
-                "Bottom actions alignment (horizontal)".into(),
-                "Left".into(),
-            ],
-            vec!["Max-width".into(), "400dp".into()],
-            vec!["Margins (when detached)".into(), "16dp".into()],
-        ],
-    );
-}
-
-/// Side sheet widths across window size classes.
-///
-/// The official specification sizes the sheet against the window size class,
-/// while this implementation exposes a single maximum width. Both values are
-/// listed so the difference stays visible in the article.
-#[tessera]
-fn width_table() {
-    spec_table(
-        vec![
-            "Window size class".into(),
-            "Official width".into(),
-            "Native width".into(),
-        ],
-        vec![
-            vec!["Compact".into(), "256dp".into(), "Up to 400dp".into()],
-            vec!["Medium".into(), "320dp".into(), "Up to 400dp".into()],
-            vec!["Expanded".into(), "400dp".into(), "Up to 400dp".into()],
-        ],
-    );
-}
-
-#[tessera]
-fn legend(modal: bool) {
-    column().children(move || {
-        for (number, label) in if modal {
-            vec![
-                (1, "Back icon button (optional)"),
-                (2, "Headline"),
-                (3, "Container"),
-                (4, "Close icon button"),
-                (5, "Divider (optional)"),
-                (6, "Action buttons (optional)"),
-                (7, "Scrim"),
-            ]
-        } else {
-            vec![
-                (1, "Divider (optional)"),
-                (2, "Headline"),
-                (3, "Container"),
-                (4, "Close icon button"),
-            ]
-        } {
-            prose(format!("{number}  {label}"));
-            gap(Dp(12.0));
-        }
-    });
-}
-
-#[tessera]
-fn anatomy_pair() {
-    row()
-        .modifier(Modifier::new().fill_max_width())
-        .children(|| {
-            boxed().modifier(Modifier::new().weight(1.0)).children(|| {
-                anatomy_diagram(false);
-            });
-            spacer().modifier(Modifier::new().width(Dp(24.0)));
-            boxed().modifier(Modifier::new().weight(1.0)).children(|| {
-                anatomy_diagram(true);
-            });
-        });
-}
-
-#[tessera]
-fn anatomy_diagram(modal: bool) {
+    let expanded = remember(|| [true, false, false, false]);
     let scheme = use_context::<MaterialTheme>().unwrap().get().color_scheme;
-    row()
+    prose("Browse the component elements, attributes, tokens, and their values.");
+    gap(Dp(24.0));
+    column()
         .modifier(
             Modifier::new()
                 .fill_max_width()
-                .height(Dp(300.0))
-                .background(scheme.surface_container)
-                .clip_shape(Shape::rounded_rectangle(Dp(20.0))),
+                .border_with_shape(
+                    Dp(1.0),
+                    scheme.outline_variant,
+                    Shape::rounded_rectangle(Dp(16.0)),
+                )
+                .clip_shape(Shape::rounded_rectangle(Dp(16.0))),
         )
         .children(move || {
-            if modal {
-                boxed()
-                    .modifier(
-                        Modifier::new()
-                            .weight(1.0)
-                            .fill_max_height()
-                            .background(SCRIM_COLOR),
-                    )
-                    .children(|| {});
-            } else {
-                spacer().modifier(Modifier::new().weight(1.0));
-            }
-            boxed()
-                .modifier(Modifier::new().width(Dp(300.0)).fill_max_height())
-                .children(move || {
-                    sheet_figure(
-                        modal,
-                        scheme.surface,
-                        scheme.surface_container_low,
-                        scheme.outline_variant,
-                        scheme.on_surface_variant,
-                    );
-                });
-        });
-}
-
-#[tessera]
-fn sheet_figure(
-    modal: bool,
-    standard_container: Color,
-    modal_container: Color,
-    outline_variant: Color,
-    on_surface_variant: Color,
-    geometry: Option<State<SpaceGeometry>>,
-) {
-    boxed()
-        .modifier(
-            Modifier::new()
-                .fill_max_width()
-                .fill_max_height()
-                .padding_all(Dp(8.0)),
-        )
-        .children(move || {
-            boxed()
+            row()
+                .cross_axis_alignment(CrossAxisAlignment::Center)
                 .modifier(
-                    measurement_part(geometry, "container")
+                    Modifier::new()
                         .fill_max_width()
-                        .fill_max_height()
-                        .background_with_shape(
-                            if modal {
-                                modal_container
-                            } else {
-                                standard_container
-                            },
-                            Shape::rounded_rectangle(Dp(16.0)),
-                        ),
+                        .background(scheme.surface_container_low)
+                        .padding_symmetric(Dp(12.0), Dp(8.0)),
                 )
                 .children(move || {
-                    column()
-                        .modifier(Modifier::new().fill_max_width())
+                    boxed()
+                        .modifier(
+                            Modifier::new()
+                                .background_with_shape(
+                                    scheme.secondary_container,
+                                    Shape::rounded_rectangle(Dp(8.0)),
+                                )
+                                .padding_symmetric(Dp(16.0), Dp(8.0)),
+                        )
                         .children(move || {
-                            row()
-                                .cross_axis_alignment(CrossAxisAlignment::Center)
-                                .modifier(
-                                    measurement_part(geometry, "header")
-                                        .fill_max_width()
-                                        .padding_symmetric(Dp(24.0), Dp(12.0)),
-                                )
-                                .children(move || {
-                                    if modal {
-                                        icon_button()
-                                            .standard()
-                                            .icon(filled::ARROW_BACK_SVG)
-                                            .accessibility_label("Side sheet figure back")
-                                            .modifier(measurement_part(geometry, "back"))
-                                            .on_click(|| {});
-                                        spacer().modifier(Modifier::new().width(Dp(12.0)));
-                                    }
-                                    text()
-                                        .content("Headline")
-                                        .style(type_style(18.0, 24.0))
-                                        .color(on_surface_variant)
-                                        .modifier(
-                                            measurement_part(geometry, "headline").weight(1.0),
-                                        );
-                                    icon_button()
-                                        .standard()
-                                        .icon(filled::CLOSE_SVG)
-                                        .accessibility_label("Side sheet figure close")
-                                        .modifier(measurement_part(geometry, "close"))
-                                        .on_click(|| {});
-                                });
-                            boxed()
-                                .modifier(
-                                    Modifier::new()
-                                        .fill_max_width()
-                                        .height(Dp(1.0))
-                                        .background(outline_variant),
-                                )
-                                .children(|| {});
-                            gap(Dp(16.0));
-                            for label in ["Labels", "Events", "Personal", "Projects"] {
-                                text()
-                                    .content(label)
-                                    .style(type_style(14.0, 20.0))
-                                    .color(on_surface_variant)
-                                    .modifier(Modifier::new().padding_symmetric(Dp(24.0), Dp(6.0)));
-                            }
-                            spacer().modifier(Modifier::new().weight(1.0));
-                            if modal {
-                                boxed()
-                                    .modifier(
-                                        Modifier::new()
-                                            .fill_max_width()
-                                            .height(Dp(1.0))
-                                            .background(outline_variant),
-                                    )
-                                    .children(|| {});
-                                row()
-                                    .cross_axis_alignment(CrossAxisAlignment::Center)
-                                    .modifier(
-                                        measurement_part(geometry, "actions")
-                                            .fill_max_width()
-                                            .height(Dp(72.0))
-                                            .padding_symmetric(Dp(24.0), Dp::ZERO),
-                                    )
-                                    .children(|| {
-                                        button()
-                                            .text()
-                                            .size(ButtonSize::ExtraSmall)
-                                            .accessibility_label("Save filters")
-                                            .on_click(|| {})
-                                            .child(|| {
-                                                text().content("Save");
-                                            });
-                                        spacer().modifier(Modifier::new().width(Dp(8.0)));
-                                        button()
-                                            .text()
-                                            .size(ButtonSize::ExtraSmall)
-                                            .accessibility_label("Cancel filters")
-                                            .on_click(|| {})
-                                            .child(|| {
-                                                text().content("Cancel");
-                                            });
-                                    });
-                            }
+                            text()
+                                .content("Sheets - Side")
+                                .style(type_style(14.0, 20.0))
+                                .color(scheme.on_secondary_container);
+                        });
+                    spacer().modifier(Modifier::new().weight(1.0));
+                    let all_open = expanded.with(|state| state.iter().all(|open| *open));
+                    button()
+                        .text()
+                        .accessibility_label(if all_open {
+                            "Collapse all token groups"
+                        } else {
+                            "Expand all token groups"
+                        })
+                        .on_click(move || {
+                            expanded.with_mut(|state| {
+                                let next = !state.iter().all(|open| *open);
+                                state.fill(next);
+                            });
+                        })
+                        .child(move || {
+                            text().content(if all_open {
+                                "Collapse all"
+                            } else {
+                                "Expand all"
+                            });
                         });
                 });
+            row()
+                .cross_axis_alignment(CrossAxisAlignment::Center)
+                .modifier(
+                    Modifier::new()
+                        .fill_max_width()
+                        .background(scheme.surface_container_low)
+                        .padding_symmetric(Dp(24.0), Dp(12.0)),
+                )
+                .children(move || {
+                    text()
+                        .content("Token")
+                        .style(type_style(14.0, 20.0))
+                        .color(INK)
+                        .modifier(Modifier::new().weight(1.0));
+                    text()
+                        .content("Default, Light")
+                        .style(type_style(14.0, 20.0))
+                        .color(scheme.on_surface_variant);
+                });
+            for (index, group) in TOKEN_GROUPS.into_iter().enumerate() {
+                let open = expanded.with(|state| state[index]);
+                button()
+                    .text()
+                    .accessibility_label(format!("{group} tokens"))
+                    .modifier(Modifier::new().fill_max_width())
+                    .on_click(move || expanded.with_mut(|state| state[index] = !state[index]))
+                    .child(move || {
+                        row()
+                            .cross_axis_alignment(CrossAxisAlignment::Center)
+                            .modifier(Modifier::new().fill_max_width())
+                            .children(move || {
+                                icon()
+                                    .vector(filled::FOLDER_SVG)
+                                    .size(Dp(20.0))
+                                    .tint(scheme.on_surface_variant);
+                                spacer().modifier(Modifier::new().width(Dp(12.0)));
+                                text()
+                                    .content(group)
+                                    .style(type_style(16.0, 24.0))
+                                    .color(INK)
+                                    .modifier(Modifier::new().weight(1.0));
+                                icon()
+                                    .vector(if open {
+                                        filled::ARROW_DROP_UP_SVG
+                                    } else {
+                                        filled::ARROW_DROP_DOWN_SVG
+                                    })
+                                    .size(Dp(24.0))
+                                    .tint(scheme.on_surface_variant);
+                            });
+                    });
+                if open {
+                    token_group(group);
+                }
+            }
         });
 }
 
-fn measurement_part(geometry: Option<State<SpaceGeometry>>, name: &'static str) -> Modifier {
-    if let Some(geometry) = geometry {
-        watch_in_space(geometry, name).semantics(SemanticsArgs {
-            test_tag: Some(format!("side-measurement-{name}")),
-            merge_descendants: true,
-            ..Default::default()
-        })
-    } else {
-        Modifier::new()
-    }
-}
-
 #[tessera]
-fn proportions(modal: bool) {
+fn token_group(#[prop(into)] group: String) {
     let scheme = use_context::<MaterialTheme>().unwrap().get().color_scheme;
-    let geometry = remember(SpaceGeometry::new);
-    column().modifier(Modifier::new().fill_max_width()).children(move || {
-        boxed()
-            .modifier(measurement_part(Some(geometry), "figure").fill_max_width().height(Dp(480.0)))
+    let mut section = "";
+    for token in TOKENS.iter().filter(|token| token.group == group) {
+        if token.section != section {
+            section = token.section;
+            text()
+                .content(format!("{group} / {section}"))
+                .style(type_style(14.0, 20.0))
+                .color(scheme.on_surface_variant)
+                .modifier(
+                    Modifier::new()
+                        .fill_max_width()
+                        .background(scheme.surface_container)
+                        .padding_symmetric(Dp(32.0), Dp(10.0)),
+                );
+        }
+        let (name, value) = (token.name, token.value);
+        row()
+            .cross_axis_alignment(CrossAxisAlignment::Center)
+            .modifier(
+                Modifier::new()
+                    .fill_max_width()
+                    .padding_symmetric(Dp(24.0), Dp(12.0)),
+            )
             .children(move || {
-                row()
-                    .modifier(Modifier::new().fill_max_size().padding(Padding::new(Dp::ZERO, Dp(32.0), Dp::ZERO, Dp(48.0))).background(scheme.surface_container))
+                text()
+                    .content(name)
+                    .style(type_style(14.0, 20.0))
+                    .color(INK)
+                    .modifier(Modifier::new().weight(1.0));
+                spacer().modifier(Modifier::new().width(Dp(16.0)));
+                let swatch = parse_hex(value);
+                boxed()
+                    .alignment(Alignment::Center)
+                    .modifier(
+                        Modifier::new()
+                            .size_in(Some(Dp(160.0)), None, Some(Dp(40.0)), None)
+                            .background_with_shape(
+                                swatch.unwrap_or(scheme.surface_container_low),
+                                Shape::rounded_rectangle(Dp(8.0)),
+                            )
+                            .border_with_shape(
+                                Dp(1.0),
+                                scheme.outline_variant,
+                                Shape::rounded_rectangle(Dp(8.0)),
+                            )
+                            .padding_symmetric(Dp(12.0), Dp(8.0)),
+                    )
                     .children(move || {
-                        if modal {
-                            boxed().modifier(Modifier::new().weight(1.0).fill_max_height().background(SCRIM_COLOR));
-                        } else {
-                            spacer().modifier(Modifier::new().weight(1.0));
-                        }
-                        boxed()
-                            .modifier(Modifier::new().width(Dp(416.0)).fill_max_height())
-                            .children(move || {
-                                sheet_figure(modal, scheme.surface, scheme.surface_container_low, scheme.outline_variant, scheme.on_surface_variant)
-                                    .geometry(geometry);
-                            });
+                        text().content(value).style(type_style(14.0, 20.0)).color(
+                            if swatch.is_some_and(|color| {
+                                0.2126 * color.r + 0.7152 * color.g + 0.0722 * color.b < 0.25
+                            }) {
+                                Color::WHITE
+                            } else {
+                                INK
+                            },
+                        );
                     });
-                boxed().modifier(Modifier::new().fill_max_size()).children(move || {
-                    measurement_rulers(modal, geometry);
-                });
             });
-        gap(Dp(16.0));
-        caption("24dp start/end padding, measured from the container to the first and last header elements");
-        gap(Dp(8.0));
-        caption("12dp header top inset; the width ruler follows the rendered container (400dp maximum)");
-    });
-}
-
-fn dimension_line(svg: &mut String, from: (f64, f64), to: (f64, f64)) {
-    let ((x1, y1), (x2, y2)) = (from, to);
-    svg.push_str(&format!(
-        "<path d='M{x1},{y1} L{x2},{y2}' stroke='#6750a4' stroke-width='1' fill='none'/>",
-    ));
-    for (x, y) in [from, to] {
-        let (dx, dy) = if y1 == y2 { (0.0, 3.0) } else { (3.0, 0.0) };
-        svg.push_str(&format!(
-            "<path d='M{},{} L{},{}' stroke='#6750a4' stroke-width='1'/>",
-            x - dx,
-            y - dy,
-            x + dx,
-            y + dy
-        ));
     }
 }
 
 #[tessera]
-fn measurement_rulers(modal: bool, geometry: State<SpaceGeometry>) {
-    let values = geometry.with(annotations::space_geometry);
-    let (Some(figure), Some(container), Some(first), Some(close)) = (
-        values.get("figure"),
-        values.get("container"),
-        values.get(if modal { "back" } else { "headline" }),
-        values.get("close"),
-    ) else {
-        return;
-    };
-    let start = (first.x - container.x).max(0.0);
-    let end = (container.x + container.w - close.x - close.w).max(0.0);
-    let top = (close.y - container.y).max(0.0);
-    let y = container.y - 6.0;
-    let bottom = container.y + container.h + 16.0;
-    let mut svg = String::new();
-    dimension_line(&mut svg, (container.x, y), (first.x, y));
-    dimension_line(
-        &mut svg,
-        (close.x + close.w, y),
-        (container.x + container.w, y),
+fn variant_specs(modal: bool) {
+    let name = if modal { "Modal" } else { "Standard" };
+    column()
+        .modifier(Modifier::new().fill_max_width())
+        .children(move || {
+            figures::anatomy(modal, if modal { "specs-modal" } else { "specs-standard" });
+            gap(Dp(24.0));
+            legend(figures::anatomy_legend(modal));
+            gap(Dp(56.0));
+            subheading(format!("{name} side sheet color"));
+            gap(Dp(16.0));
+            prose(
+                "Color values are implemented through design tokens. For design, this means working with color values that correspond with tokens. For implementation, a color value will be a token that references a value.",
+            );
+            gap(Dp(24.0));
+            figures::color_roles(modal);
+            gap(Dp(8.0));
+            caption("Side sheet color roles used for light and dark themes:");
+            gap(Dp(16.0));
+            legend(figures::color_legend(modal));
+            gap(Dp(56.0));
+            subheading(format!("{name} side sheet measurements"));
+            gap(Dp(24.0));
+            figures::measurement_figure(modal);
+            gap(Dp(16.0));
+            caption(if modal {
+                "Modal side sheet padding and size measurements"
+            } else {
+                "Side sheet padding and size measurements"
+            });
+            gap(Dp(32.0));
+            measurements(modal);
+        });
+}
+
+#[tessera]
+fn measurements(modal: bool) {
+    let mut rows: Vec<Vec<String>> = vec![vec!["Start/end padding".into(), "24dp".into()]];
+    if modal {
+        rows.push(vec!["Start padding with icon".into(), "16dp".into()]);
+    }
+    rows.extend([
+        vec!["Padding between top elements".into(), "12dp".into()],
+        vec!["Bottom actions height".into(), "72dp".into()],
+        vec!["Bottom actions top padding".into(), "16dp".into()],
+        vec!["Bottom actions bottom padding".into(), "24dp".into()],
+        vec![
+            "Bottom actions alignment (horizontal)".into(),
+            "Left".into(),
+        ],
+        vec!["Max-width".into(), "400dp".into()],
+        vec!["Margins (when detached)".into(), "16dp".into()],
+    ]);
+    spec_table(vec!["Attribute".into(), "Value".into()], rows);
+}
+
+#[tessera]
+fn usage(modal_open: State<bool>) {
+    split()
+        .start(|| {
+            prose(
+                "Standard side sheets are supplementary surfaces used mostly in medium to expanded breakpoints, like tablet and desktop. They provide a consistent and predictable surface for contextual actions and information.",
+            );
+            gap(Dp(16.0));
+            prose(
+                "Standard side sheets display content that complements the screen's primary content. They remain visible while people interact with primary content.",
+            );
+            gap(Dp(16.0));
+            prose("Common uses include:");
+            gap(Dp(8.0));
+            bullets(vec![
+                "Displaying a list of actions that affect the screen's primary content, such as filters"
+                    .into(),
+                "Displaying supplemental content and features".into(),
+            ]);
+        })
+        .end(|| {
+            figures::usage_figure(false);
+            gap(Dp(12.0));
+            caption("Information about a photo in a standard side sheet");
+        });
+    gap(Dp(40.0));
+    split()
+        .start(move || {
+            prose(
+                "Modal side sheets are preferred in compact breakpoints, like mobile, due to limited screen size.",
+            );
+            gap(Dp(16.0));
+            prose(
+                "They can display the same kinds of content as standard side sheets, but must be dismissed in order to interact with the underlying content.",
+            );
+            gap(Dp(24.0));
+            launch(modal_open);
+        })
+        .end(|| {
+            figures::usage_figure(true);
+            gap(Dp(12.0));
+            caption("Modal side sheet with filter controls");
+        });
+    gap(Dp(40.0));
+    prose("Side sheets have a fixed width and typically span the height of the screen.");
+    gap(Dp(12.0));
+    prose("Their dimensions depend on how the app's layout is subdivided into UI regions.");
+    gap(Dp(24.0));
+    split()
+        .start(|| {
+            guidance_card(
+                true,
+                "Place side sheets along the edge of the screen, usually on the right side to avoid interference with any navigational components on the left edge. They can be slightly inset by 16dp.",
+            )
+            .figure(|| {
+                figures::inset_figure(16.0);
+            });
+        })
+        .end(|| {
+            guidance_card(
+                false,
+                "Don't inset a side sheet from the screen edges far beyond the recommended margin. This makes the sheet's position and scroll behavior unclear, while obscuring primary content.",
+            )
+            .figure(|| {
+                figures::inset_figure(56.0);
+            });
+        });
+}
+
+#[tessera]
+fn element_section(
+    #[prop(into)] title: String,
+    #[prop(into)] body: String,
+    bullets_after: Option<Vec<String>>,
+    #[prop(into)] element: String,
+    #[prop(into)] figure_caption: String,
+) {
+    gap(Dp(48.0));
+    split()
+        .start(move || {
+            subheading(title.clone());
+            gap(Dp(12.0));
+            prose(body.clone());
+            if let Some(items) = bullets_after.clone() {
+                gap(Dp(12.0));
+                bullets(items);
+            }
+        })
+        .end(move || {
+            figures::element_figure(element.clone());
+            gap(Dp(12.0));
+            caption(figure_caption.clone());
+        });
+}
+
+#[tessera]
+fn anatomy_guidance() {
+    figures::anatomy(false, "guidelines-standard");
+    gap(Dp(24.0));
+    legend(figures::anatomy_legend(false));
+    gap(Dp(40.0));
+    figures::anatomy(true, "guidelines-modal");
+    gap(Dp(24.0));
+    legend(figures::anatomy_legend(true));
+    element_section(
+        "Container",
+        "Side sheet containers hold all side sheet elements. Their size is determined by the space those elements occupy. The container is the only required element of a side sheet.",
+        "container",
+        "Container",
     );
-    dimension_line(
-        &mut svg,
-        (container.x + container.w - 12.0, container.y),
-        (container.x + container.w - 12.0, close.y),
+    element_section(
+        "Back icon button (optional)",
+        "Icon buttons can provide ways to exit a side sheet or move to a different experience. Because the primary content behind or beside a side sheet is always visible, it's important to provide affordances for leaving a side sheet and returning to the primary content.",
+        "back",
+        "Back icon button",
     );
-    dimension_line(
-        &mut svg,
-        (container.x, bottom),
-        (container.x + container.w, bottom),
+    element_section(
+        "Close icon button (optional)",
+        "A close affordance provides a consistent method for dismissing a side sheet. A close icon button is highly recommended, increases accessibility, and makes focused side sheets easier to close.",
+        "close",
+        "Close icon button",
     );
-    annotations::lines(Dp(figure.w), Dp(figure.h), svg);
-    annotations::dimension(format!("{start:.0}"), Dp(container.x), Dp(y - 22.0));
-    annotations::dimension(
-        format!("{end:.0}"),
-        Dp(container.x + container.w - 22.0),
-        Dp(y - 22.0),
+    element_section(
+        "Action buttons (optional)",
+        "Buttons represent actions available from a side sheet. Examples: Save, Edit, Download. Use elevation, fill, and tone to call attention to specific actions.",
+        "actions",
+        "Action buttons",
     );
-    annotations::dimension(
-        format!("{top:.0}"),
-        Dp(container.x + container.w - 22.0),
-        Dp(container.y + 2.0),
+    element_section(
+        "Divider (optional)",
+        "Dividers can separate different kinds of content and create distinct regions in a side sheet. Use a divider to separate:",
+        "divider",
+        "Divider",
+    )
+    .bullets_after(vec![
+        "Action buttons from content".into(),
+        "User-generated content from system-generated content".into(),
+    ]);
+    gap(Dp(48.0));
+    subheading("Content (optional)".into());
+    gap(Dp(12.0));
+    prose(
+        "Side sheets can display a wide variety of content and layouts, ranging from a list of actions to supplemental content in a tabular layout.",
     );
-    annotations::dimension(
-        format!("{:.0}dp", container.w),
-        Dp(container.x + container.w * 0.5 - 24.0),
-        Dp(bottom + 2.0),
+    gap(Dp(24.0));
+    figures::content_figure();
+    gap(Dp(12.0));
+    caption("Form controls shown in a side sheet for app settings");
+    gap(Dp(40.0));
+    figures::transition_figure();
+    gap(Dp(12.0));
+    caption(
+        "Modal side sheets on smaller screens can transition to standard side sheets at larger screen sizes",
     );
 }
 
 #[tessera]
-fn usage(modal_open: State<bool>, standard_open: State<bool>) {
+fn adaptive_design(standard_open: State<bool>) {
     prose(
-        "Standard side sheets are supplementary surfaces used mostly in medium to expanded breakpoints, like tablet and desktop. They provide a consistent and predictable surface for contextual actions and information.",
+        "Side sheets have a default width, but can be resized depending on the needs of the layout.",
     );
     gap(Dp(16.0));
     prose(
-        "Standard side sheets display content that complements the screen's primary content. They remain visible while people interact with primary content.",
+        "When a standard side sheet opens, the body area shrinks to accommodate the sheet's width while maintaining a margin on the body's trailing edge.",
     );
-    gap(Dp(16.0));
-    prose(
-        "Modal side sheets are preferred in compact breakpoints, like mobile, due to limited screen size. They can display the same kinds of content as standard side sheets, but must be dismissed in order to interact with the underlying content.",
-    );
-    gap(Dp(16.0));
-    subheading("Common uses include".into());
-    gap(Dp(12.0));
-    bullets(vec![
-        "Displaying a list of actions that affect the screen's primary content, such as filters"
-            .into(),
-        "Displaying supplemental content and features".into(),
-    ]);
-    gap(Dp(32.0));
-    launch(modal_open);
-    gap(Dp(32.0));
-    subheading("Standard side sheet example".into());
-    gap(Dp(16.0));
+    gap(Dp(24.0));
     standard_demo(standard_open);
-    gap(Dp(16.0));
-    caption("The standard side sheet shrinks the body area instead of covering it with a scrim.");
+    gap(Dp(12.0));
+    caption(
+        "Entrance of standard side sheets will cause the body area to adjust and accommodate the new content",
+    );
+    gap(Dp(48.0));
+    split()
+        .start(|| {
+            subheading("RTL language support".into());
+            gap(Dp(12.0));
+            prose(
+                "In right-to-left (RTL) languages, side sheets should appear on the left edge of the window with all elements reversed.",
+            );
+        })
+        .end(|| {
+            figures::rtl_figure();
+            gap(Dp(12.0));
+            caption("Side sheet elements are reversed in RTL languages");
+        });
 }
 
 #[tessera]
@@ -860,133 +1078,175 @@ fn standard_body(open: State<bool>) {
 }
 
 #[tessera]
-fn standard_content(open: State<bool>) {
+fn sheet_header(
+    #[prop(into)] title: String,
+    #[prop(into)] close_label: String,
+    on_close: State<bool>,
+    announce_open: Option<bool>,
+) {
     let scheme = use_context::<MaterialTheme>().unwrap().get().color_scheme;
-    column()
-        .modifier(
-            Modifier::new()
-                .fill_max_size()
-                .background(scheme.surface)
-                .padding_symmetric(Dp(24.0), Dp(12.0)),
-        )
+    let announce_open = announce_open.unwrap_or(false);
+    let headline = remember(FocusRequester::new).get();
+    let announced = remember(|| false);
+    let headline_focused = remember(|| false);
+    if announce_open {
+        // The headline receives focus once per opening so assistive technology
+        // announces the sheet, while Tab traversal still starts at Close.
+        if on_close.get() && !announced.get() {
+            announced.set(true);
+            headline.request_focus();
+        } else if !on_close.get() && announced.get() {
+            announced.set(false);
+        }
+    }
+    row()
+        .cross_axis_alignment(CrossAxisAlignment::Center)
+        .modifier(Modifier::new().fill_max_width().padding(Padding::new(
+            Dp(24.0),
+            Dp(12.0),
+            Dp(12.0),
+            Dp(12.0),
+        )))
         .children(move || {
-            row()
-                .cross_axis_alignment(CrossAxisAlignment::Center)
-                .modifier(Modifier::new().fill_max_width())
+            let heading = Modifier::new().semantics(SemanticsArgs {
+                role: Some(Role::Heading),
+                heading_level: Some(2),
+                ..Default::default()
+            });
+            let heading = if announce_open {
+                heading
+                    .focus_requester(headline)
+                    .focusable()
+                    .focus_properties(FocusProperties::new().skip_traversal(true))
+                    .on_focus_changed(move |focus: FocusState| {
+                        if headline_focused.is_alive()
+                            && headline_focused.get() != focus.is_focused()
+                        {
+                            headline_focused.set(focus.is_focused());
+                        }
+                    })
+            } else {
+                heading
+            };
+            let title = title.clone();
+            boxed()
+                .modifier(Modifier::new().weight(1.0))
                 .children(move || {
+                    let ring = if headline_focused.get() {
+                        scheme.secondary
+                    } else {
+                        Color::TRANSPARENT
+                    };
                     text()
-                        .content("Info")
-                        .style(type_style(18.0, 24.0))
+                        .content(title.clone())
+                        .style(type_style(22.0, 28.0))
                         .color(scheme.on_surface_variant)
-                        .modifier(Modifier::new().weight(1.0));
-                    icon_button()
-                        .standard()
-                        .icon(filled::CLOSE_SVG)
-                        .accessibility_label("Close standard side sheet")
-                        .on_click(move || open.set(false));
+                        .modifier(heading.clone().border_with_shape(
+                            Dp(3.0),
+                            ring,
+                            Shape::rounded_rectangle(Dp(4.0)),
+                        ));
                 });
-            gap(Dp(12.0));
-            horizontal_divider();
-            gap(Dp(16.0));
-            text()
-                .content("Festival concert")
-                .style(type_style(16.0, 24.0))
-                .color(INK);
-            gap(Dp(8.0));
-            caption("Albums");
-            gap(Dp(8.0));
-            text()
-                .content("Home space")
-                .style(type_style(14.0, 20.0))
-                .color(INK);
-            text()
-                .content("64 items")
-                .style(type_style(12.0, 16.0))
-                .color(scheme.on_surface_variant);
+            icon_button()
+                .standard()
+                .icon(filled::CLOSE_SVG)
+                .accessibility_label(close_label.clone())
+                .on_click(move || on_close.set(false));
         });
 }
 
 #[tessera]
-fn anatomy_guidance() {
-    prose(
-        "Side sheets have a fixed width and typically span the height of the screen. Their dimensions depend on how the app's layout is subdivided into UI regions.",
-    );
-    gap(Dp(24.0));
-    anatomy_diagram(false);
-    gap(Dp(16.0));
-    legend(false);
-    gap(Dp(32.0));
-    subheading("Container".into());
-    gap(Dp(12.0));
-    prose(
-        "Side sheet containers hold all side sheet elements. Their size is determined by the space those elements occupy. The container is the only required element of a side sheet.",
-    );
-    gap(Dp(24.0));
-    subheading("Back icon button (optional)".into());
-    gap(Dp(12.0));
-    prose(
-        "Icon buttons can provide ways to navigate to another region within the sheet. A back icon button navigates to the previous region or closes the sheet when a close affordance is not present.",
-    );
-    gap(Dp(24.0));
-    subheading("Divider (optional)".into());
-    gap(Dp(12.0));
-    prose(
-        "Dividers can separate different kinds of content and create distinct regions in a side sheet. Use a divider to separate action buttons from content, and user-generated content from system-generated content.",
-    );
-    gap(Dp(32.0));
-    do_dont(
-        "Place side sheets along the edge of the screen, usually on the right side to avoid interference with any navigational components on the left edge. They can be slightly inset by 16dp.",
-        "Don't inset a side sheet from the screen edges far beyond the recommended margin. This makes the sheet's position and scroll behavior unclear, while obscuring primary content.",
-    );
-}
-
-#[tessera]
-fn adaptive_design() {
-    prose(
-        "Side sheets have a default width, but can be resized depending on the needs of the layout.",
-    );
-    gap(Dp(16.0));
-    prose(
-        "When a standard side sheet opens, the body area shrinks to accommodate the sheet's width while maintaining a margin on the body's trailing edge.",
-    );
-    gap(Dp(24.0));
-    width_table();
-    gap(Dp(16.0));
-    caption(
-        "The official specification sizes the sheet from the window size class; this implementation keeps one 400dp maximum width.",
-    );
-    gap(Dp(32.0));
-    subheading("RTL language support".into());
-    gap(Dp(12.0));
-    prose(
-        "In right-to-left (RTL) languages, side sheets should appear on the left edge of the window with all elements reversed.",
-    );
+fn standard_content(open: State<bool>) {
+    let scheme = use_context::<MaterialTheme>().unwrap().get().color_scheme;
+    column()
+        .modifier(Modifier::new().fill_max_size().background(scheme.surface))
+        .children(move || {
+            sheet_header("Info", "Close standard side sheet", open);
+            column()
+                .modifier(
+                    Modifier::new()
+                        .fill_max_width()
+                        .padding_symmetric(Dp(24.0), Dp::ZERO),
+                )
+                .children(move || {
+                    text()
+                        .content("Festival concert")
+                        .style(type_style(16.0, 24.0))
+                        .color(INK);
+                    gap(Dp(8.0));
+                    caption("Albums");
+                    gap(Dp(8.0));
+                    text()
+                        .content("Home space")
+                        .style(type_style(14.0, 20.0))
+                        .color(INK);
+                    text()
+                        .content("64 items")
+                        .style(type_style(12.0, 16.0))
+                        .color(scheme.on_surface_variant);
+                });
+        });
 }
 
 #[tessera]
 fn behavior(modal_open: State<bool>, notice: State<String>) {
+    prose("Side sheets can vertically scroll independent of the rest of the UI.");
+    gap(Dp(12.0));
     prose(
-        "Side sheets can vertically scroll independent of the rest of the UI. This allows their scroll position and content to persist while the page is scrolled, and vice versa. Side sheets cannot scroll horizontally.",
+        "This allows their scroll position and content to persist while the page is scrolled, and vice versa.",
     );
-    gap(Dp(16.0));
-    prose(
-        "A modal side sheet is dismissed by the close icon button, the scrim, or the Escape key. It blocks the main content until it is dismissed, and focus returns to the control that opened it.",
-    );
+    gap(Dp(12.0));
+    prose("Side sheets cannot scroll horizontally.");
     gap(Dp(24.0));
+    split()
+        .start(|| {
+            guidance_card(
+                true,
+                "Side sheets can vertically scroll internally when their content exceeds the screen height",
+            )
+            .figure(|| {
+                figures::scroll_figure(true);
+            });
+        })
+        .end(|| {
+            guidance_card(
+                false,
+                "Don't allow horizontal scrolling or lay out the side sheet in a way that suggests horizontal scrolling. A side sheet's narrow width leaves limited space to fully view items.",
+            )
+            .figure(|| {
+                figures::scroll_figure(false);
+            });
+        });
+    gap(Dp(32.0));
     launch(modal_open);
     gap(Dp(16.0));
     caption(notice.get());
+    gap(Dp(48.0));
+    subheading("Predictive back".into());
+    gap(Dp(12.0));
+    prose(
+        "On Android, a gesture called predictive back allows a person to swipe left or right on the side sheet.",
+    );
+    gap(Dp(12.0));
+    prose("When predictive back is used:");
+    gap(Dp(8.0));
+    bullets(vec![
+        "The side sheet detaches from the top and bottom edges of the screen to signal it will close"
+            .into(),
+        "The previous screen is revealed in a preview".into(),
+        "The side sheet and its content always scales in the direction of the gesture".into(),
+    ]);
+    gap(Dp(24.0));
+    figures::predictive_back_figure();
+    gap(Dp(12.0));
+    caption(
+        "Preview of the result of the gestures: release to commit, fling to commit, and cancel",
+    );
 }
 
 #[tessera]
 fn use_cases(modal_open: State<bool>) {
     prose("People should be able to dismiss the side sheet using assistive technology.");
-    gap(Dp(16.0));
-    bullets(vec![
-        "Open the sheet from a control with a descriptive label".into(),
-        "Move through the sheet's actions in tab order, including the close affordance".into(),
-        "Dismiss the sheet without a drag or pointer gesture".into(),
-    ]);
     gap(Dp(24.0));
     launch(modal_open);
 }
@@ -997,14 +1257,23 @@ fn interaction_style() {
         "Material requires that a close affordance, such as a close icon button, is always present within a side sheet.",
     );
     gap(Dp(24.0));
-    do_dont(
-        "A close icon button makes the side sheet easy to dismiss",
-        "Without a close icon button, people can't predict the opening and closing flow of side sheets, or know if the sheet is transient or permanent",
-    );
-    gap(Dp(24.0));
-    prose(
-        "Provide a visible close action with a minimum 48 × 48dp target, keep text legible at 200% text size, and preserve contrast for the headline, icons and actions.",
-    );
+    split()
+        .start(|| {
+            guidance_card(true, "A close icon button makes the side sheet easy to dismiss").figure(
+                || {
+                    figures::close_figure(true);
+                },
+            );
+        })
+        .end(|| {
+            guidance_card(
+                false,
+                "Without a close icon button, people can't predict the opening and closing flow of side sheets, or know if the sheet is transient or permanent",
+            )
+            .figure(|| {
+                figures::close_figure(false);
+            });
+        });
 }
 
 #[tessera]
@@ -1014,8 +1283,19 @@ fn initial_focus(modal_open: State<bool>) {
     );
     gap(Dp(16.0));
     prose(
-        "The Material focus-order example includes the headline, close icon button and action buttons. In this interactive example, keyboard focus moves through Close, the label checkboxes, Save and Cancel. Focus enters the modal sheet when it opens and stays inside it until the sheet closes.",
+        "In the live example, opening the sheet moves focus to its Filters headline so the sheet is announced. Tab then reaches Close, the label checkboxes, Save and Cancel in reading order; the headline is not a separate Tab stop.",
     );
+    gap(Dp(24.0));
+    figures::focus_figure();
+    gap(Dp(12.0));
+    caption("Visible focus shown on the available actions within a side sheet:");
+    gap(Dp(16.0));
+    legend(vec![
+        (1, "Headline".into()),
+        (2, "Close".into()),
+        (3, "Save".into()),
+        (4, "Cancel".into()),
+    ]);
     gap(Dp(24.0));
     launch(modal_open);
 }
@@ -1027,26 +1307,23 @@ fn keyboard_navigation() {
         vec![
             vec![
                 "Tab".into(),
-                "Focus lands on the next (non-disabled) control in the sheet".into(),
-            ],
-            vec![
-                "Shift + Tab".into(),
-                "Focus lands on the previous (non-disabled) control in the sheet".into(),
+                "Focus lands on (non-disabled) icon button".into(),
             ],
             vec![
                 "Space or Enter".into(),
-                "Activates the (non-disabled) focused control".into(),
+                "Activates the (non-disabled) icon button".into(),
             ],
-            vec!["Escape".into(), "Dismisses the modal side sheet".into()],
         ],
     );
 }
 
 #[tessera]
 fn labeling() {
-    prose(
-        "The accessibility role for a side sheet is Dialog. Give the sheet a name that describes its content or task, name icon controls by the action they perform, and distinguish closing the sheet from navigating within it.",
-    );
+    prose("The accessibility role for a side sheet is Dialog.");
+    gap(Dp(24.0));
+    figures::role_figure();
+    gap(Dp(12.0));
+    caption("The role for side sheets is Dialog");
 }
 
 #[tessera]
@@ -1056,47 +1333,26 @@ fn sheet_content(modal_open: State<bool>, filters: State<[bool; 5]>, notice: Sta
         .modifier(
             Modifier::new()
                 .fill_max_size()
-                .background(scheme.surface_container_low),
+                .background(scheme.surface_container_low)
+                .semantics(SemanticsArgs {
+                    test_tag: Some("side-sheet-live-content".into()),
+                    merge_descendants: true,
+                    ..Default::default()
+                }),
         )
         .children(move || {
-            row()
-                .cross_axis_alignment(CrossAxisAlignment::Center)
-                .modifier(
-                    Modifier::new()
-                        .fill_max_width()
-                        .padding_symmetric(Dp(24.0), Dp(12.0)),
-                )
-                .children(move || {
-                    text()
-                        .content("Filters")
-                        .style(type_style(18.0, 24.0))
-                        .color(scheme.on_surface_variant)
-                        .modifier(Modifier::new().weight(1.0));
-                    icon_button()
-                        .standard()
-                        .icon(filled::CLOSE_SVG)
-                        .accessibility_label("Close side sheet")
-                        .on_click(move || modal_open.set(false));
-                });
-            boxed()
-                .modifier(
-                    Modifier::new()
-                        .fill_max_width()
-                        .height(Dp(1.0))
-                        .background(scheme.outline_variant),
-                )
-                .children(|| {});
+            sheet_header("Filters", "Close side sheet", modal_open).announce_open(true);
             column()
                 .modifier(
                     Modifier::new()
                         .fill_max_width()
                         .weight(1.0)
-                        .padding_symmetric(Dp(24.0), Dp(16.0)),
+                        .padding_symmetric(Dp(24.0), Dp::ZERO),
                 )
                 .children(move || {
                     text()
                         .content("Labels")
-                        .style(type_style(12.0, 16.0))
+                        .style(type_style(14.0, 20.0))
                         .color(scheme.on_surface_variant);
                     gap(Dp(8.0));
                     for (index, label) in FilterLabels::ITEMS.into_iter().enumerate() {
@@ -1111,29 +1367,28 @@ fn sheet_content(modal_open: State<bool>, filters: State<[bool; 5]>, notice: Sta
                                     })
                                     .accessibility_label(label);
                                 spacer().modifier(Modifier::new().width(Dp(16.0)));
-                                text().content(label).style(type_style(14.0, 20.0));
+                                text().content(label).style(type_style(16.0, 24.0));
                             });
                     }
                 });
-            boxed()
-                .modifier(
-                    Modifier::new()
-                        .fill_max_width()
-                        .height(Dp(1.0))
-                        .background(scheme.outline_variant),
-                )
-                .children(|| {});
+            boxed().modifier(
+                Modifier::new()
+                    .fill_max_width()
+                    .height(Dp(1.0))
+                    .background(scheme.outline_variant),
+            );
             row()
                 .cross_axis_alignment(CrossAxisAlignment::Center)
                 .modifier(
                     Modifier::new()
                         .fill_max_width()
                         .height(Dp(72.0))
-                        .padding_symmetric(Dp(24.0), Dp::ZERO),
+                        .padding(Padding::new(Dp(24.0), Dp(16.0), Dp(24.0), Dp(24.0))),
                 )
                 .children(move || {
                     button()
-                        .text()
+                        .filled()
+                        .size(ButtonSize::ExtraSmall)
                         .accessibility_label("Save filters")
                         .on_click(move || {
                             notice.set(String::from("Filters applied"));
@@ -1144,7 +1399,7 @@ fn sheet_content(modal_open: State<bool>, filters: State<[bool; 5]>, notice: Sta
                         });
                     spacer().modifier(Modifier::new().width(Dp(8.0)));
                     button()
-                        .text()
+                        .outlined()
                         .size(ButtonSize::ExtraSmall)
                         .accessibility_label("Cancel filters")
                         .on_click(move || modal_open.set(false))
@@ -1153,164 +1408,4 @@ fn sheet_content(modal_open: State<bool>, filters: State<[bool; 5]>, notice: Sta
                         });
                 });
         });
-}
-
-#[cfg(all(test, not(target_family = "wasm")))]
-mod measurement_tests {
-    use std::cell::Cell;
-
-    use tessera_components::theme::material_theme;
-    use tessera_ui::{
-        HeadlessConfig, HeadlessRenderer,
-        accesskit::Role,
-        testing::{layout_test, pump_layout_test_session, start_layout_test_session},
-    };
-
-    use super::*;
-
-    thread_local! {
-        static MODAL: Cell<bool> = const { Cell::new(false) };
-    }
-
-    #[tessera]
-    fn fixture() {
-        material_theme().child(|| {
-            column()
-                .modifier(Modifier::new().fill_max_size())
-                .children(|| {
-                    proportions(MODAL.get());
-                });
-        });
-    }
-
-    #[test]
-    fn measurement_figures_build_complete_sheets_and_measure_real_header_insets_at_narrow_widths() {
-        for modal in [false, true] {
-            MODAL.set(modal);
-            for width in [720, 320] {
-                let mut session =
-                    start_layout_test_session(layout_test(fixture).viewport_px(width, 800));
-                pump_layout_test_session(&mut session, 0);
-                pump_layout_test_session(&mut session, 16_666_667);
-                let snapshot = pump_layout_test_session(&mut session, 33_333_334);
-                snapshot
-                    .node("side-measurement-figure")
-                    .size(width as i32, 480);
-                let expected_width = if width == 720 { 400 } else { 304 };
-                snapshot
-                    .node("side-measurement-container")
-                    .size(expected_width, 384);
-                let container = snapshot.node("side-measurement-container").bounds();
-                let close = snapshot.node("side-measurement-close").bounds();
-                let first = snapshot
-                    .node(if modal {
-                        "side-measurement-back"
-                    } else {
-                        "side-measurement-headline"
-                    })
-                    .bounds();
-                assert_eq!(first.x.0 - container.x.0, 24);
-                assert_eq!(
-                    container.x.0 + container.width.0 - close.x.0 - close.width.0,
-                    24
-                );
-                assert_eq!(close.y.0 - container.y.0, 12);
-                assert!(first.width.0 > 0 && first.height.0 > 0);
-                assert!(close.y.0 + close.height.0 <= container.y.0 + container.height.0);
-                if modal {
-                    let actions = snapshot.node("side-measurement-actions").bounds();
-                    assert_eq!(actions.height.0, 72);
-                    assert!(actions.y.0 >= close.y.0 + close.height.0);
-                    assert!(actions.y.0 + actions.height.0 <= container.y.0 + container.height.0);
-                }
-            }
-        }
-    }
-
-    struct Pipelines;
-
-    impl tessera_ui::RenderModule for Pipelines {
-        fn register_pipelines(&self, context: &mut tessera_ui::PipelineContext<'_>) {
-            tessera_components::pipelines::register_pipelines(context);
-        }
-    }
-
-    #[test]
-    #[ignore = "Requires a native GPU adapter for complete side-sheet measurement accessibility snapshots"]
-    fn measurement_figures_publish_real_headlines_content_and_controls_in_both_variants() {
-        for modal in [false, true] {
-            MODAL.set(modal);
-            for width in [720, 320] {
-                let mut renderer = HeadlessRenderer::new(
-                    Box::new(fixture),
-                    vec![Box::new(Pipelines)],
-                    HeadlessConfig {
-                        width,
-                        height: 800,
-                        sample_count: 1,
-                        ..Default::default()
-                    },
-                )
-                .unwrap();
-                renderer.render_frames(8);
-                let snapshot = renderer.accessibility_snapshot().unwrap();
-                for label in ["Headline", "Labels", "Events", "Personal", "Projects"] {
-                    assert!(
-                        snapshot
-                            .nodes
-                            .iter()
-                            .any(|(_, node)| node.label() == Some(label) && !node.is_hidden()),
-                        "missing measured sheet content: {label}"
-                    );
-                }
-                let labels: &[&str] = if modal {
-                    &[
-                        "Side sheet figure back",
-                        "Side sheet figure close",
-                        "Save filters",
-                        "Cancel filters",
-                    ]
-                } else {
-                    &["Side sheet figure close"]
-                };
-                for label in labels {
-                    let node = snapshot
-                        .nodes
-                        .iter()
-                        .find(|(_, node)| {
-                            node.role() == Role::Button
-                                && node.label() == Some(*label)
-                                && !node.is_hidden()
-                        })
-                        .unwrap_or_else(|| panic!("missing measured sheet button: {label}"));
-                    let bounds = node.1.bounds().unwrap();
-                    assert!(bounds.x0 >= 0.0 && bounds.x1 <= f64::from(width));
-                    assert!(bounds.y0 >= 0.0 && bounds.y1 <= 480.0);
-                }
-                assert!(
-                    snapshot
-                        .nodes
-                        .iter()
-                        .any(|(_, node)| node.label() == Some("Dimension 24"))
-                );
-                assert!(
-                    snapshot
-                        .nodes
-                        .iter()
-                        .any(|(_, node)| node.label() == Some("Dimension 12"))
-                );
-                let width_label = if width == 720 {
-                    "Dimension 400dp"
-                } else {
-                    "Dimension 304dp"
-                };
-                assert!(
-                    snapshot
-                        .nodes
-                        .iter()
-                        .any(|(_, node)| node.label() == Some(width_label))
-                );
-            }
-        }
-    }
 }

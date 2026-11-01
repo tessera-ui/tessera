@@ -143,3 +143,61 @@ fn snackbar_status_and_named_actions_preserve_existing_focus_msaa4() {
         || check(4),
     );
 }
+
+mod escape {
+    use std::cell::{Cell, RefCell};
+
+    use tessera_ui::{
+        Callback, State,
+        winit::{
+            event::ElementState,
+            keyboard::{KeyCode, PhysicalKey},
+        },
+    };
+
+    use super::super::dismiss_key;
+    use super::*;
+
+    thread_local! {
+        static DISMISSALS: Cell<Option<State<usize>>> = const { Cell::new(None) };
+        static DISMISS: RefCell<Option<Callback>> = const { RefCell::new(None) };
+    }
+
+    #[tessera]
+    fn escape_fixture() {
+        let dismissals = remember(|| 0usize);
+        DISMISSALS.set(Some(dismissals));
+        let dismiss = Callback::new(move || dismissals.with_mut(|count| *count += 1));
+        DISMISS.with_borrow_mut(|value| *value = Some(dismiss));
+    }
+
+    #[test]
+    fn escape_adapter_dismisses_only_on_pressed_escape() {
+        use tessera_ui::testing::{
+            layout_test, pump_layout_test_session, start_layout_test_session,
+        };
+
+        let mut session =
+            start_layout_test_session(layout_test(escape_fixture).viewport_px(200, 100));
+        pump_layout_test_session(&mut session, 0);
+        let dismissals = DISMISSALS.get().unwrap();
+        let dismiss = DISMISS.with_borrow(|value| value.unwrap());
+        assert!(!dismiss_key(
+            PhysicalKey::Code(KeyCode::Enter),
+            ElementState::Pressed,
+            dismiss
+        ));
+        assert!(!dismiss_key(
+            PhysicalKey::Code(KeyCode::Escape),
+            ElementState::Released,
+            dismiss
+        ));
+        assert_eq!(dismissals.get(), 0);
+        assert!(dismiss_key(
+            PhysicalKey::Code(KeyCode::Escape),
+            ElementState::Pressed,
+            dismiss
+        ));
+        assert_eq!(dismissals.get(), 1);
+    }
+}
