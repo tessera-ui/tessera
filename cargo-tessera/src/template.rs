@@ -232,7 +232,12 @@ mod tests {
                 assert!(!project.join(".agents").exists());
                 let guidance = fs::read_to_string(project.join("AGENTS.md"))
                     .expect("generated project guidance");
-                assert!(guidance.contains("cargo tessera skill install"));
+                assert!(
+                    guidance
+                        .lines()
+                        .any(|line| line.trim() == "cargo tessera skill")
+                );
+                assert!(!guidance.contains("skill install"));
                 assert!(guidance.contains("tessera-good-taste"));
             }
         }

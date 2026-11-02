@@ -31,9 +31,33 @@ pub fn execute(project: Option<&Path>, force: bool, global: bool, local: bool) -
         global,
         local,
         io::stdin().is_terminal() && io::stdout().is_terminal(),
-        scope::prompt,
+        || scope::prompt(&choices(project, dirs::home_dir)),
     )?;
     install_selected(scope, project, force, dirs::home_dir)
+}
+
+const DESTINATION: &str = ".agents/skills/tessera-good-taste";
+
+fn destination_preview(root: &Path) -> String {
+    let root = std::path::absolute(root).unwrap_or_else(|_| root.to_path_buf());
+    root.join(DESTINATION).display().to_string()
+}
+
+fn choices(project: Option<&Path>, home: impl FnOnce() -> Option<PathBuf>) -> scope::Choices {
+    let local = destination_preview(project.unwrap_or_else(|| Path::new(".")));
+    let (global, global_unavailable) = if project.is_some() {
+        (format!("~/{DESTINATION}"), Some("unavailable with --path"))
+    } else {
+        match home() {
+            Some(home) => (destination_preview(&home), None),
+            None => (format!("~/{DESTINATION}"), Some("home directory not found")),
+        }
+    };
+    scope::Choices {
+        local,
+        global,
+        global_unavailable,
+    }
 }
 
 fn installation_root(
@@ -74,7 +98,7 @@ fn install(project: &Path, force: bool) -> Result<()> {
             project.display()
         );
     }
-    let destination = project.join(".agents/skills/tessera-good-taste");
+    let destination = project.join(DESTINATION);
     let mut writes = Vec::new();
     for (relative, contents) in skill_files(&SKILL) {
         let path = destination.join(relative);

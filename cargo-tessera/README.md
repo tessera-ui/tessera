@@ -25,13 +25,14 @@ optional `tessera-good-taste` skill. Project creation does not install the skill
 Run this command in a project when you want Tessera application guidance:
 
 ```bash
-cargo tessera skill install
+cargo tessera skill
 ```
 
-By default, a Ratatui selector asks whether to install locally or globally, with
-**Local** selected initially. Use Up/Down or Tab to select and Enter to confirm.
-Esc, q, or Ctrl-C cancels without installing. The terminal is restored on exit,
-including cancellation and errors.
+The command shows a compact selector below your shell output, with **Local**
+selected initially and the destination of each scope previewed. Use Up/Down or
+Tab to select and Enter to confirm. Esc, q, or Ctrl-C cancels without
+installing. The selector rows are removed when it exits and the terminal is
+restored, including after cancellation and errors.
 
 - Local: `<project>/.agents/skills/tessera-good-taste/` (current directory by default).
 - Global: `~/.agents/skills/tessera-good-taste/`, using your operating-system home directory.
@@ -39,16 +40,16 @@ including cancellation and errors.
 For scripts or non-interactive terminals, explicitly select one scope:
 
 ```bash
-cargo tessera skill install --local
-cargo tessera skill install --local --path my-app
-cargo tessera skill install --global
+cargo tessera skill --local
+cargo tessera skill --local --path my-app
+cargo tessera skill --global
 ```
 
 `--local` and `--global` are mutually exclusive and bypass the selector entirely;
 they do not require a TTY. Without either flag, both stdin and stdout must be
 terminals; otherwise the command fails with a scope-selection hint. `--path` is
-local-only: it conflicts with `--global`, and selecting Global interactively
-while supplying `--path` also fails before any installation writes.
+local-only: it conflicts with `--global`, and the selector shows Global as
+unavailable when `--path` is supplied.
 
 Both scopes leave `AGENTS.md`, other skills, and unrelated files unchanged.
 Matching files are left untouched; use `--force` to replace locally modified

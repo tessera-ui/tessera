@@ -38,11 +38,9 @@ struct TesseraArgs {
 
 #[derive(Subcommand)]
 enum TesseraCommands {
-    /// Install bundled Tessera agent guidance
-    Skill {
-        #[command(subcommand)]
-        command: SkillCommands,
-    },
+    /// Install the bundled tessera-good-taste agent skill (asks for a scope
+    /// unless one is given)
+    Skill(SkillArgs),
     /// Create a new Tessera project
     New {
         /// Name of the project (optional, will prompt if not provided)
@@ -177,23 +175,20 @@ enum TesseraCommands {
     },
 }
 
-#[derive(Subcommand)]
-enum SkillCommands {
-    /// Install tessera-good-taste locally or globally (interactive by default)
-    Install {
-        /// Project directory for local installation (default: current directory)
-        #[arg(long, conflicts_with = "global")]
-        path: Option<PathBuf>,
-        /// Install into the user's ~/.agents/skills directory without prompting
-        #[arg(long, conflicts_with = "local")]
-        global: bool,
-        /// Install into the project's .agents/skills directory without prompting
-        #[arg(long, conflicts_with = "global")]
-        local: bool,
-        /// Replace locally modified files belonging to the bundled skill
-        #[arg(long)]
-        force: bool,
-    },
+#[derive(Args)]
+struct SkillArgs {
+    /// Project directory for local installation (default: current directory)
+    #[arg(long, conflicts_with = "global")]
+    path: Option<PathBuf>,
+    /// Install into the user's ~/.agents/skills directory without prompting
+    #[arg(long, conflicts_with = "local")]
+    global: bool,
+    /// Install into the project's .agents/skills directory without prompting
+    #[arg(long)]
+    local: bool,
+    /// Replace locally modified files belonging to the bundled skill
+    #[arg(long)]
+    force: bool,
 }
 
 #[derive(Subcommand)]
@@ -436,16 +431,14 @@ fn run() -> Result<()> {
 
     match command {
         Commands::Tessera(args) => match args.command {
-            TesseraCommands::Skill { command } => match command {
-                SkillCommands::Install {
-                    path,
-                    global,
-                    local,
-                    force,
-                } => {
-                    commands::skill::execute(path.as_deref(), force, global, local)?;
-                }
-            },
+            TesseraCommands::Skill(SkillArgs {
+                path,
+                global,
+                local,
+                force,
+            }) => {
+                commands::skill::execute(path.as_deref(), force, global, local)?;
+            }
             TesseraCommands::New { name, template } => {
                 let name = match name {
                     Some(n) => n,
@@ -682,45 +675,45 @@ fn print_error(err: &anyhow::Error) {
 mod skill_cli_tests {
     use super::*;
 
+    fn skill_args(extra: &[&str]) -> Result<SkillArgs, clap::Error> {
+        let mut args = vec!["cargo", "tessera", "skill"];
+        args.extend(extra);
+        let cli = Cli::try_parse_from(args)?;
+        let Commands::Tessera(args) = cli.command;
+        let TesseraCommands::Skill(skill) = args.command else {
+            panic!("expected the skill command");
+        };
+        Ok(skill)
+    }
+
     #[test]
-    fn skill_scope_flags_parse_without_a_default_path_conflict() {
-        for flag in ["--local", "--global"] {
-            let cli = Cli::try_parse_from(["cargo", "tessera", "skill", "install", flag]).unwrap();
-            let Commands::Tessera(args) = cli.command;
-            let TesseraCommands::Skill {
-                command:
-                    SkillCommands::Install {
-                        path,
-                        global,
-                        local,
-                        ..
-                    },
-            } = args.command
-            else {
-                panic!("expected skill install");
+    fn skill_accepts_installation_options_directly() {
+        let interactive = skill_args(&[]).unwrap();
+        assert!(!interactive.global && !interactive.local && interactive.path.is_none());
+
+        let local = skill_args(&["--local", "--path", "app", "--force"]).unwrap();
+        assert!(local.local && local.force && !local.global);
+        assert_eq!(local.path, Some(PathBuf::from("app")));
+
+        let global = skill_args(&["--global"]).unwrap();
+        assert!(global.global && !global.local && global.path.is_none());
+    }
+
+    #[test]
+    fn removed_install_subcommand_is_rejected() {
+        for extra in [&["install"][..], &["install", "--local"]] {
+            let error = match skill_args(extra) {
+                Ok(_) => panic!("`skill install` must no longer parse"),
+                Err(error) => error,
             };
-            assert!(path.is_none());
-            assert_eq!(global, flag == "--global");
-            assert_eq!(local, flag == "--local");
+            assert_eq!(error.kind(), clap::error::ErrorKind::UnknownArgument);
         }
-        assert!(
-            Cli::try_parse_from([
-                "cargo", "tessera", "skill", "install", "--local", "--path", "app"
-            ])
-            .is_ok()
-        );
-        assert!(Cli::try_parse_from(["cargo", "tessera", "skill", "install"]).is_ok());
     }
 
     #[test]
     fn skill_scope_flags_conflict_and_global_rejects_an_explicit_path() {
-        for flags in [
-            vec!["--global", "--local"],
-            vec!["--global", "--path", "app"],
-        ] {
-            let mut args = vec!["cargo", "tessera", "skill", "install"];
-            args.extend(flags);
-            let error = match Cli::try_parse_from(args) {
+        for flags in [&["--global", "--local"][..], &["--global", "--path", "app"]] {
+            let error = match skill_args(flags) {
                 Ok(_) => panic!("conflicting options must fail"),
                 Err(error) => error,
             };
