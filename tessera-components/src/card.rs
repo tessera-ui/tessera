@@ -356,7 +356,7 @@ struct CardResolvedArgs {
 /// #         });
 /// }
 ///
-/// component();
+/// # tessera_ui::testing::layout_test(component).run();
 /// ```
 #[tessera]
 pub fn card(
@@ -522,17 +522,17 @@ pub fn card(
 
 impl CardBuilder {
     /// Applies the filled card preset.
-    pub fn filled(self) -> Self {
+    pub fn filled(&self) -> Self {
         self.variant(CardVariant::Filled)
     }
 
     /// Applies the elevated card preset.
-    pub fn elevated(self) -> Self {
+    pub fn elevated(&self) -> Self {
         self.variant(CardVariant::Elevated)
     }
 
     /// Applies the outlined card preset.
-    pub fn outlined(self) -> Self {
+    pub fn outlined(&self) -> Self {
         self.variant(CardVariant::Outlined)
     }
 }

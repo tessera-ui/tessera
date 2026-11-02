@@ -37,74 +37,90 @@ fn placeholder_raster_data() -> Arc<ImageData> {
 
 impl IconBuilder {
     /// Sets icon content using a shared painter value.
-    pub fn painter(mut self, painter: impl Into<Painter>) -> Self {
-        self.props.content = Some(painter.into());
-        self
+    pub fn painter(&self, painter: impl Into<Painter>) -> Self {
+        let value = Some(painter.into());
+        self.props
+            .configure("content", move |props| props.content = value);
+        Self { props: self.props }
     }
 
     /// Decodes icon content from any supported source.
-    pub fn try_painter<T>(mut self, source: T) -> Result<Self, PainterLoadError>
+    pub fn try_painter<T>(&self, source: T) -> Result<Self, PainterLoadError>
     where
         T: TryIntoPainter,
     {
-        self.props.content = Some(source.try_into_painter()?);
-        Ok(self)
+        let value = Some(source.try_into_painter()?);
+        self.props
+            .configure("content", move |props| props.content = value);
+        Ok(Self { props: self.props })
     }
 
     /// Sets vector icon content using already-decoded vector geometry.
-    pub fn vector(mut self, data: impl Into<ImageVectorData>) -> Self {
-        self.props.content = Some(Painter::Vector(data.into()));
-        self
+    pub fn vector(&self, data: impl Into<ImageVectorData>) -> Self {
+        let value = Some(Painter::Vector(data.into()));
+        self.props
+            .configure("content", move |props| props.content = value);
+        Self { props: self.props }
     }
 
     /// Sets raster icon content using already-decoded image pixels.
-    pub fn raster(mut self, data: impl Into<ImageData>) -> Self {
-        self.props.content = Some(Painter::Raster(data.into()));
-        self
+    pub fn raster(&self, data: impl Into<ImageData>) -> Self {
+        let value = Some(Painter::Raster(data.into()));
+        self.props
+            .configure("content", move |props| props.content = value);
+        Self { props: self.props }
     }
 
     /// Decodes vector icon content from bytes/path/asset input.
-    pub fn try_vector<T>(mut self, source: T) -> Result<Self, ImageVectorLoadError>
+    pub fn try_vector<T>(&self, source: T) -> Result<Self, ImageVectorLoadError>
     where
         T: TryIntoImageVectorData,
     {
-        self.props.content = Some(Painter::Vector(source.try_into_image_vector_data()?));
-        Ok(self)
+        let value = Some(Painter::Vector(source.try_into_image_vector_data()?));
+        self.props
+            .configure("content", move |props| props.content = value);
+        Ok(Self { props: self.props })
     }
 
     /// Decodes raster icon content from bytes/path/asset input.
-    pub fn try_raster<T>(mut self, source: T) -> Result<Self, ImageLoadError>
+    pub fn try_raster<T>(&self, source: T) -> Result<Self, ImageLoadError>
     where
         T: TryIntoImageData,
     {
-        self.props.content = Some(Painter::Raster(source.try_into_image_data()?));
-        Ok(self)
+        let value = Some(Painter::Raster(source.try_into_image_data()?));
+        self.props
+            .configure("content", move |props| props.content = value);
+        Ok(Self { props: self.props })
     }
 
     /// Decodes vector icon content from an asset handle.
-    pub fn try_vector_asset<T>(mut self, asset: T) -> Result<Self, ImageVectorLoadError>
+    pub fn try_vector_asset<T>(&self, asset: T) -> Result<Self, ImageVectorLoadError>
     where
         T: AssetExt,
     {
         let bytes = asset
             .read()
             .map_err(|source| ImageVectorLoadError::AssetRead { source })?;
-        self.props.content = Some(Painter::Vector(
+        let value = Some(Painter::Vector(
             bytes.as_ref().try_into_image_vector_data()?,
         ));
-        Ok(self)
+        self.props
+            .configure("content", move |props| props.content = value);
+        Ok(Self { props: self.props })
     }
 
     /// Decodes raster icon content from an asset handle.
-    pub fn try_raster_asset<T>(mut self, asset: T) -> Result<Self, ImageLoadError>
+    pub fn try_raster_asset<T>(&self, asset: T) -> Result<Self, ImageLoadError>
     where
         T: AssetExt,
     {
         let bytes = asset
             .read()
             .map_err(|source| ImageLoadError::AssetRead { source })?;
-        self.props.content = Some(Painter::Raster(bytes.as_ref().try_into_image_data()?));
-        Ok(self)
+        let value = Some(Painter::Raster(bytes.as_ref().try_into_image_data()?));
+        self.props
+            .configure("content", move |props| props.content = value);
+        Ok(Self { props: self.props })
     }
 }
 

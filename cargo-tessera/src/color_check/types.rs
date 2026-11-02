@@ -57,10 +57,9 @@ pub(crate) struct ColorAnalyzer<'db> {
     pub(crate) selected_package: Option<String>,
     pub(crate) tessera_function_names: HashSet<String>,
     pub(crate) tessera_function_paths: HashSet<String>,
-    pub(crate) render_slot_setter_indexes_by_component_name:
-        HashMap<String, HashMap<String, HashSet<usize>>>,
     pub(crate) render_slot_setter_indexes_by_type_path:
         HashMap<String, HashMap<String, HashSet<usize>>>,
+    pub(crate) render_slot_constructor_indexes_by_function_path: HashMap<String, HashSet<usize>>,
     pub(crate) inactive_code_ranges: HashMap<FileId, Vec<Vec<TextRange>>>,
     pub(crate) diagnostics: Vec<Diagnostic>,
 }

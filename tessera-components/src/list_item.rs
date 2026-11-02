@@ -359,7 +359,7 @@ impl ListItemDefaults {
 ///         });
 /// }
 ///
-/// demo();
+/// # tessera_ui::testing::layout_test(demo).run();
 /// assert_eq!(ListItemDefaults::min_height(false, true), Dp(72.0));
 /// ```
 #[tessera]

@@ -72,7 +72,7 @@ fn fixture() {
                 colors.disabled_selected_container_color = Color::WHITE;
                 colors.leading_icon_color = Color::GREEN;
                 colors.selected_leading_icon_color = Color::GREEN;
-                let mut chip = chip()
+                let chip = chip()
                     .variant(if settings.assist {
                         ChipVariant::Assist
                     } else {
@@ -102,9 +102,8 @@ fn fixture() {
                     )
                     .on_click(|| {});
                 if settings.trailing {
-                    chip = chip.trailing_icon(filled::CLOSE_SVG);
+                    chip.trailing_icon(filled::CLOSE_SVG);
                 }
-                drop(chip);
             });
     });
 }

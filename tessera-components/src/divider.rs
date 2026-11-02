@@ -150,7 +150,11 @@ impl tessera_ui::DrawModifierNode for DividerLayout {
 /// use tessera_components::divider::horizontal_divider;
 /// use tessera_ui::{Color, Dp};
 ///
+/// # #[tessera_ui::tessera]
+/// # fn example() {
 /// horizontal_divider().thickness(Dp::ZERO).color(Color::BLACK);
+/// # }
+/// # tessera_ui::testing::layout_test(example).run();
 /// ```
 #[tessera]
 pub fn horizontal_divider(modifier: Option<Modifier>, thickness: Option<Dp>, color: Option<Color>) {
@@ -197,7 +201,11 @@ pub fn horizontal_divider(modifier: Option<Modifier>, thickness: Option<Dp>, col
 /// use tessera_components::divider::vertical_divider;
 /// use tessera_ui::{Color, Dp};
 ///
+/// # #[tessera_ui::tessera]
+/// # fn example() {
 /// vertical_divider().thickness(Dp(2.0)).color(Color::BLACK);
+/// # }
+/// # tessera_ui::testing::layout_test(example).run();
 /// ```
 #[tessera]
 pub fn vertical_divider(modifier: Option<Modifier>, thickness: Option<Dp>, color: Option<Color>) {

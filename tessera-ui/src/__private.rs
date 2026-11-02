@@ -13,6 +13,9 @@ use crate::{
 };
 
 pub use crate::{
+    component_call::{
+        ComponentCall, current_component_runner, register_component_call, with_pending_scope,
+    },
     layout::layout,
     prop::{Prop, make_component_runner},
     runtime::{

@@ -339,38 +339,38 @@ impl SplitButtonDefaults {
 
 #[allow(missing_docs)]
 impl SplitLeadingButtonBuilder {
-    pub fn filled(self) -> Self {
+    pub fn filled(&self) -> Self {
         self.variant(SplitButtonVariant::Filled)
     }
 
-    pub fn tonal(self) -> Self {
+    pub fn tonal(&self) -> Self {
         self.variant(SplitButtonVariant::Tonal)
     }
 
-    pub fn elevated(self) -> Self {
+    pub fn elevated(&self) -> Self {
         self.variant(SplitButtonVariant::Elevated)
     }
 
-    pub fn outlined(self) -> Self {
+    pub fn outlined(&self) -> Self {
         self.variant(SplitButtonVariant::Outlined)
     }
 }
 
 #[allow(missing_docs)]
 impl SplitTrailingButtonBuilder {
-    pub fn filled(self) -> Self {
+    pub fn filled(&self) -> Self {
         self.variant(SplitButtonVariant::Filled)
     }
 
-    pub fn tonal(self) -> Self {
+    pub fn tonal(&self) -> Self {
         self.variant(SplitButtonVariant::Tonal)
     }
 
-    pub fn elevated(self) -> Self {
+    pub fn elevated(&self) -> Self {
         self.variant(SplitButtonVariant::Elevated)
     }
 
-    pub fn outlined(self) -> Self {
+    pub fn outlined(&self) -> Self {
         self.variant(SplitButtonVariant::Outlined)
     }
 }
@@ -430,7 +430,7 @@ impl SplitTrailingButtonBuilder {
 ///             });
 ///     });
 /// }
-/// component();
+/// # tessera_ui::testing::layout_test(component).run();
 /// ```
 #[tessera]
 pub fn split_button_layout(
@@ -494,7 +494,7 @@ pub fn split_button_layout(
 ///     });
 ///     assert_eq!(activations.get(), 0);
 /// }
-/// component();
+/// # tessera_ui::testing::layout_test(component).run();
 /// ```
 #[tessera]
 pub fn split_leading_button(
@@ -583,7 +583,7 @@ pub fn split_leading_button(
 ///             });
 ///     });
 /// }
-/// component();
+/// # tessera_ui::testing::layout_test(component).run();
 /// ```
 #[tessera]
 pub fn split_trailing_button(

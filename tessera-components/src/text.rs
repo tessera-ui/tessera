@@ -67,7 +67,7 @@ pub use crate::pipelines::text::pipeline::{read_font_system, write_font_system};
 ///         });
 /// }
 ///
-/// demo();
+/// # tessera_ui::testing::layout_test(demo).run();
 /// ```
 #[tessera]
 pub fn text(

@@ -129,7 +129,7 @@ fn inline_feedback_fixture() {
     });
 }
 
-fn renderer(root: fn()) -> HeadlessRenderer {
+fn renderer<Output: 'static>(root: fn() -> Output) -> HeadlessRenderer {
     let mut renderer = HeadlessRenderer::new(
         Box::new(root),
         vec![Box::new(Pipelines)],

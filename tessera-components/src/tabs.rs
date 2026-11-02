@@ -423,43 +423,63 @@ struct TabActivation {
 
 impl TabBuilder {
     /// Set a custom title slot for the tab and clear built-in label state.
-    pub fn title<F>(mut self, title: F) -> Self
+    pub fn title<F, Output>(&self, title: F) -> Self
     where
-        F: Fn() + Send + Sync + 'static,
+        F: Fn() -> Output + Send + Sync + 'static,
     {
-        self.props.title_slot = Some(RenderSlot::new(title));
-        self.props.label_text = None;
-        self.props.label_icon = None;
-        self
+        self.props.configure_deferred("title_slot", move |props| {
+            props.title_slot = Some(RenderSlot::new(title))
+        });
+        let value = None;
+        self.props
+            .configure("label_text", move |props| props.label_text = value);
+        let value = None;
+        self.props
+            .configure("label_icon", move |props| props.label_icon = value);
+        Self { props: self.props }
     }
 
     /// Set a shared custom title slot for the tab and clear built-in label
     /// state.
-    pub fn title_shared(mut self, title: impl Into<RenderSlot>) -> Self {
-        self.props.title_slot = Some(title.into());
-        self.props.label_text = None;
-        self.props.label_icon = None;
-        self
+    pub fn title_shared(&self, title: impl Into<RenderSlot> + Send + Sync + 'static) -> Self {
+        self.props.configure_deferred("title_slot", move |props| {
+            props.title_slot = Some(title.into())
+        });
+        let value = None;
+        self.props
+            .configure("label_text", move |props| props.label_text = value);
+        let value = None;
+        self.props
+            .configure("label_icon", move |props| props.label_icon = value);
+        Self { props: self.props }
     }
 
     /// Set the built-in Material text label for the tab and clear any custom
     /// title slot.
-    pub fn label(mut self, label: impl Into<String>) -> Self {
-        self.props.title_slot = None;
-        self.props.label_text = Some(label.into());
-        self
+    pub fn label(&self, label: impl Into<String>) -> Self {
+        let value = None;
+        self.props
+            .configure("title_slot", move |props| props.title_slot = value);
+        let value = Some(label.into());
+        self.props
+            .configure("label_text", move |props| props.label_text = value);
+        Self { props: self.props }
     }
 
     /// Set the built-in Material icon for the tab and clear any custom title
     /// slot.
-    pub fn icon(mut self, icon: impl Into<Painter>) -> Self {
-        self.props.title_slot = None;
-        self.props.label_icon = Some(icon.into());
-        self
+    pub fn icon(&self, icon: impl Into<Painter>) -> Self {
+        let value = None;
+        self.props
+            .configure("title_slot", move |props| props.title_slot = value);
+        let value = Some(icon.into());
+        self.props
+            .configure("label_icon", move |props| props.label_icon = value);
+        Self { props: self.props }
     }
 
     /// Set the built-in Material label and icon for the tab.
-    pub fn label_with_icon(self, label: impl Into<String>, icon: impl Into<Painter>) -> Self {
+    pub fn label_with_icon(&self, label: impl Into<String>, icon: impl Into<Painter>) -> Self {
         self.label(label).icon(icon)
     }
 }

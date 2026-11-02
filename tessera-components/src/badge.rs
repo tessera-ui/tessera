@@ -345,7 +345,7 @@ pub fn badged_box(
 /// badge().content_color(Color::WHITE);
 /// #     });
 /// # }
-/// # component();
+/// # tessera_ui::testing::layout_test(component).run();
 /// ```
 #[tessera]
 pub fn badge(
@@ -401,7 +401,7 @@ pub fn badge(
 ///     .content(|| {});
 /// #     });
 /// # }
-/// # component();
+/// # tessera_ui::testing::layout_test(component).run();
 /// ```
 #[tessera]
 pub fn badge_with_content(

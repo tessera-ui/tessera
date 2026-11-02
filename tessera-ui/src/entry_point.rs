@@ -29,9 +29,11 @@ pub struct EntryPoint {
 
 impl EntryPoint {
     /// Creates a new entry point builder from the root UI function.
-    pub fn new(entry: impl Fn() + 'static) -> Self {
+    pub fn new<Output>(entry: impl Fn() -> Output + 'static) -> Self {
         Self {
-            entry: Box::new(entry),
+            entry: Box::new(move || {
+                entry();
+            }),
             registry: EntryRegistry::new(),
             config: TesseraConfig::default(),
         }

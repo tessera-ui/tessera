@@ -12,7 +12,8 @@ use std::{
 
 use tessera_ui::{
     AxisConstraint, CallbackWith, Color, ComputedData, Constraint, Dp, FocusDirection,
-    LayoutResult, MeasurementError, Modifier, ParentConstraint, Px, PxPosition, State, key,
+    LayoutResult, MeasurementError, Modifier, ParentConstraint, Px, PxPosition, RenderSlotWith,
+    State, key,
     layout::{LayoutChild, MeasureScope, PlacementResult, PlacementScope, layout},
     modifier::FocusModifierExt as _,
     remember, tessera,
@@ -425,22 +426,24 @@ impl tessera_ui::LayoutModifierNode for LazyGridLayout {
 ///     lazy_grid::{GridCells, lazy_vertical_grid},
 ///     text::text,
 /// };
-/// use tessera_ui::{LayoutResult, remember, tessera};
+/// use tessera_ui::tessera;
 ///
+/// # use std::sync::{Arc, atomic::{AtomicUsize, Ordering}};
 /// #[tessera]
-/// fn demo() {
-///     let rendered = remember(|| 0usize);
+/// fn demo(rendered: Arc<AtomicUsize>) {
 ///     lazy_vertical_grid()
 ///         .columns(GridCells::fixed(2))
 ///         .overscan(0)
 ///         .items(4, move |i| {
-///             rendered.with_mut(|count| *count += 1);
+///             rendered.fetch_or(1 << i, Ordering::Relaxed);
 ///             text().content(format!("Tile {i}"));
 ///         });
-///     assert_eq!(rendered.get(), 4);
 /// }
 ///
-/// demo();
+/// let rendered = Arc::new(AtomicUsize::new(0));
+/// let observed = Arc::clone(&rendered);
+/// tessera_ui::testing::layout_test(move || demo(Arc::clone(&observed))).run();
+/// assert_eq!(rendered.load(Ordering::Relaxed), 15);
 /// ```
 #[tessera]
 pub fn lazy_vertical_grid(
@@ -604,22 +607,24 @@ fn lazy_vertical_grid_slots(args: LazyGridSlotsArgs) {
 ///     lazy_grid::{GridCells, lazy_horizontal_grid},
 ///     text::text,
 /// };
-/// use tessera_ui::{remember, tessera};
+/// use tessera_ui::tessera;
 ///
+/// # use std::sync::{Arc, atomic::{AtomicUsize, Ordering}};
 /// #[tessera]
-/// fn demo() {
-///     let rendered = remember(|| 0usize);
+/// fn demo(rendered: Arc<AtomicUsize>) {
 ///     lazy_horizontal_grid()
 ///         .rows(GridCells::fixed(2))
 ///         .overscan(0)
 ///         .items(3, move |i| {
-///             rendered.with_mut(|count| *count += 1);
+///             rendered.fetch_or(1 << i, Ordering::Relaxed);
 ///             text().content(format!("Tile {i}"));
 ///         });
-///     assert_eq!(rendered.get(), 3);
 /// }
 ///
-/// demo();
+/// let rendered = Arc::new(AtomicUsize::new(0));
+/// let observed = Arc::clone(&rendered);
+/// tessera_ui::testing::layout_test(move || demo(Arc::clone(&observed))).run();
+/// assert_eq!(rendered.load(Ordering::Relaxed), 7);
 /// ```
 #[tessera]
 pub fn lazy_horizontal_grid(
@@ -720,37 +725,44 @@ fn lazy_horizontal_grid_slots(args: LazyGridSlotsArgs) {
 macro_rules! impl_lazy_grid_builder {
     ($builder:ident) => {
         impl $builder {
-            /// Append a single lazy grid item.
-            pub fn item<F>(mut self, builder: F) -> Self
+            /// Append a single lazy item.
+            pub fn item<F, Output>(&self, builder: F) -> Self
             where
-                F: Fn() + Send + Sync + 'static,
+                F: Fn() -> Output + Send + Sync + 'static,
             {
-                self.push_slot(lazy_grid_item_slot(builder));
-                self
+                self.push_slot(move || Some(lazy_grid_item_slot(builder)));
+                Self { props: self.props }
             }
 
-            /// Append a single lazy grid item with a stable key.
-            pub fn item_with_key<K, F>(mut self, key: K, builder: F) -> Self
+            /// Append a single lazy item with a stable key.
+            pub fn item_with_key<K, F, Output>(&self, key: K, builder: F) -> Self
             where
                 K: Hash,
-                F: Fn() + Send + Sync + 'static,
+                F: Fn() -> Output + Send + Sync + 'static,
             {
-                self.push_slot(lazy_grid_item_with_key_slot(key, builder));
-                self
+                let key = hash_key(key);
+                self.push_slot(move || {
+                    Some(LazySlot::items(
+                        1,
+                        move |_| builder(),
+                        Some(CallbackWith::new(move |_| key)),
+                    ))
+                });
+                Self { props: self.props }
             }
 
-            /// Append a batch of indexed lazy grid items.
-            pub fn items<F>(mut self, count: usize, builder: F) -> Self
+            /// Append a batch of indexed lazy items.
+            pub fn items<F, Output>(&self, count: usize, builder: F) -> Self
             where
-                F: Fn(usize) + Send + Sync + 'static,
+                F: Fn(usize) -> Output + Send + Sync + 'static,
             {
-                self.push_slot(LazySlot::items(count, builder, None));
-                self
+                self.push_slot(move || Some(LazySlot::items(count, builder, None)));
+                Self { props: self.props }
             }
 
-            /// Append a batch of indexed lazy grid items with stable keys.
-            pub fn items_with_key<K, KF, F>(
-                mut self,
+            /// Append indexed lazy items with stable keys.
+            pub fn items_with_key<K, KF, F, Output>(
+                &self,
                 count: usize,
                 key_provider: KF,
                 builder: F,
@@ -758,29 +770,31 @@ macro_rules! impl_lazy_grid_builder {
             where
                 K: Hash,
                 KF: Fn(usize) -> K + Send + Sync + 'static,
-                F: Fn(usize) + Send + Sync + 'static,
+                F: Fn(usize) -> Output + Send + Sync + 'static,
             {
-                let key_provider = CallbackWith::new(move |idx| hash_key(key_provider(idx)));
-                self.push_slot(LazySlot::items(count, builder, Some(key_provider)));
-                self
+                self.push_slot(move || {
+                    let key_provider =
+                        CallbackWith::new(move |index| hash_key(key_provider(index)));
+                    Some(LazySlot::items(count, builder, Some(key_provider)))
+                });
+                Self { props: self.props }
             }
 
-            /// Append lazy grid items from an iterator, exposing index and element.
-            pub fn items_from_iter<I, T, F>(mut self, iter: I, builder: F) -> Self
+            /// Append lazy items from an iterator, exposing index and element.
+            pub fn items_from_iter<I, T, F, Output>(&self, iter: I, builder: F) -> Self
             where
                 I: IntoIterator<Item = T>,
                 T: Send + Sync + 'static,
-                F: Fn(usize, &T) + Send + Sync + 'static,
+                F: Fn(usize, &T) -> Output + Send + Sync + 'static,
             {
-                if let Some(slot) = lazy_grid_items_from_iter_slot(iter, builder) {
-                    self.push_slot(slot);
-                }
-                self
+                let iter: Vec<T> = iter.into_iter().collect();
+                self.push_slot(move || lazy_grid_items_from_iter_slot(iter, builder));
+                Self { props: self.props }
             }
 
-            /// Append lazy grid items from an iterator with stable keys.
-            pub fn items_from_iter_with_key<I, T, K, KF, F>(
-                mut self,
+            /// Append lazy items from an iterator with stable keys.
+            pub fn items_from_iter_with_key<I, T, K, KF, F, Output>(
+                &self,
                 iter: I,
                 key_provider: KF,
                 builder: F,
@@ -790,31 +804,37 @@ macro_rules! impl_lazy_grid_builder {
                 T: Send + Sync + 'static,
                 K: Hash,
                 KF: Fn(usize, &T) -> K + Send + Sync + 'static,
-                F: Fn(usize, &T) + Send + Sync + 'static,
+                F: Fn(usize, &T) -> Output + Send + Sync + 'static,
             {
-                if let Some(slot) =
+                let iter: Vec<T> = iter.into_iter().collect();
+                self.push_slot(move || {
                     lazy_grid_items_from_iter_with_key_slot(iter, key_provider, builder)
-                {
-                    self.push_slot(slot);
-                }
-                self
+                });
+                Self { props: self.props }
             }
 
-            /// Append lazy grid items from an iterator when only the element is used.
-            pub fn items_from_iter_values<I, T, F>(self, iter: I, builder: F) -> Self
+            /// Append lazy items from an iterator when only the element is used.
+            pub fn items_from_iter_values<I, T, F, Output>(&self, iter: I, builder: F) -> Self
             where
                 I: IntoIterator<Item = T>,
                 T: Send + Sync + 'static,
-                F: Fn(&T) + Send + Sync + 'static,
+                F: Fn(&T) -> Output + Send + Sync + 'static,
             {
                 self.items_from_iter(iter, move |_, item| builder(item))
             }
 
-            fn push_slot(&mut self, slot: LazySlot) {
-                self.props
-                    .content
-                    .get_or_insert_with(LazyGridContent::default)
-                    .push(slot);
+            fn push_slot(
+                &self,
+                make_slot: impl FnOnce() -> Option<LazySlot> + Send + Sync + 'static,
+            ) {
+                self.props.append("content", move |props| {
+                    if let Some(slot) = make_slot() {
+                        props
+                            .content
+                            .get_or_insert_with(LazyGridContent::default)
+                            .push(slot);
+                    }
+                });
             }
         }
     };
@@ -823,9 +843,9 @@ macro_rules! impl_lazy_grid_builder {
 impl_lazy_grid_builder!(LazyVerticalGridBuilder);
 impl_lazy_grid_builder!(LazyHorizontalGridBuilder);
 
-fn lazy_grid_item_slot<F>(builder: F) -> LazySlot
+fn lazy_grid_item_slot<F, Output>(builder: F) -> LazySlot
 where
-    F: Fn() + Send + Sync + 'static,
+    F: Fn() -> Output + Send + Sync + 'static,
 {
     LazySlot::items(
         1,
@@ -836,26 +856,11 @@ where
     )
 }
 
-fn lazy_grid_item_with_key_slot<K, F>(key: K, builder: F) -> LazySlot
-where
-    K: Hash,
-    F: Fn() + Send + Sync + 'static,
-{
-    let key_hash = hash_key(key);
-    LazySlot::items(
-        1,
-        move |_| {
-            builder();
-        },
-        Some(CallbackWith::new(move |_| key_hash)),
-    )
-}
-
-fn lazy_grid_items_from_iter_slot<I, T, F>(iter: I, builder: F) -> Option<LazySlot>
+fn lazy_grid_items_from_iter_slot<I, T, F, Output>(iter: I, builder: F) -> Option<LazySlot>
 where
     I: IntoIterator<Item = T>,
     T: Send + Sync + 'static,
-    F: Fn(usize, &T) + Send + Sync + 'static,
+    F: Fn(usize, &T) -> Output + Send + Sync + 'static,
 {
     let items: Arc<Vec<T>> = Arc::new(iter.into_iter().collect());
     if items.is_empty() {
@@ -878,7 +883,7 @@ where
     ))
 }
 
-fn lazy_grid_items_from_iter_with_key_slot<I, T, K, KF, F>(
+fn lazy_grid_items_from_iter_with_key_slot<I, T, K, KF, F, Output>(
     iter: I,
     key_provider: KF,
     builder: F,
@@ -888,7 +893,7 @@ where
     T: Send + Sync + 'static,
     K: Hash,
     KF: Fn(usize, &T) -> K + Send + Sync + 'static,
-    F: Fn(usize, &T) + Send + Sync + 'static,
+    F: Fn(usize, &T) -> Output + Send + Sync + 'static,
 {
     let items: Arc<Vec<T>> = Arc::new(iter.into_iter().collect());
     if items.is_empty() {
@@ -1084,13 +1089,11 @@ fn lazy_grid_view(
 }
 
 #[tessera]
-fn lazy_grid_item_host(
-    builder_handle: Option<CallbackWith<usize, ()>>,
-    local_index: Option<usize>,
-) {
-    let builder_handle = builder_handle.unwrap_or_else(CallbackWith::default_value);
+fn lazy_grid_item_host(builder_handle: Option<RenderSlotWith<usize>>, local_index: Option<usize>) {
     let local_index = local_index.unwrap_or(0);
-    builder_handle.call(local_index);
+    if let Some(builder_handle) = builder_handle {
+        builder_handle.render(local_index);
+    }
 }
 
 fn resolve_viewport_span(current: Px, estimated: Px, spacing: Px) -> Px {
@@ -1385,13 +1388,17 @@ enum LazySlot {
 }
 
 impl LazySlot {
-    fn items<F>(count: usize, builder: F, key_provider: Option<CallbackWith<usize, u64>>) -> Self
+    fn items<F, Output>(
+        count: usize,
+        builder: F,
+        key_provider: Option<CallbackWith<usize, u64>>,
+    ) -> Self
     where
-        F: Fn(usize) + Send + Sync + 'static,
+        F: Fn(usize) -> Output + Send + Sync + 'static,
     {
         Self::Items(LazyItemsSlot {
             count,
-            builder: CallbackWith::new(builder),
+            builder: RenderSlotWith::new(builder),
             key_provider,
         })
     }
@@ -1406,7 +1413,7 @@ impl LazySlot {
 #[derive(Clone, PartialEq)]
 struct LazyItemsSlot {
     count: usize,
-    builder: CallbackWith<usize, ()>,
+    builder: RenderSlotWith<usize>,
     key_provider: Option<CallbackWith<usize, u64>>,
 }
 
@@ -1465,7 +1472,7 @@ struct VisibleGridItem {
     local_index: usize,
     line_index: usize,
     slot_index: usize,
-    builder: CallbackWith<usize, ()>,
+    builder: RenderSlotWith<usize>,
     key_hash: u64,
 }
 

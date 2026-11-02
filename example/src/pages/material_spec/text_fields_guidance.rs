@@ -105,22 +105,20 @@ fn field(
     } else {
         TextFieldBuilder::filled()
     };
-    let mut base = base
-        .label(label.clone())
+    base.label(label.clone())
         .accessibility_label(label.clone())
         .min_width(Dp::ZERO)
         .is_error(error.unwrap_or(false))
         .modifier(Modifier::new().fill_max_width());
     if let Some(value) = value {
-        base = base.initial_text(value);
+        base.initial_text(value);
     }
     if focused.unwrap_or(false) {
-        base = base.presentation_state(InteractionVisualState::Focus);
+        base.presentation_state(InteractionVisualState::Focus);
     }
     if let Some(color) = outline {
-        base = base.border_color(color);
+        base.border_color(color);
     }
-    drop(base);
 }
 
 #[tessera]
@@ -340,13 +338,12 @@ fn input_mode(mode: u8) {
                     } else {
                         TextFieldLineLimit::MultiLine
                     });
-                let base = if mode == 2 {
+                if mode == 2 {
                     base.min_height(Dp(120.0))
                         .modifier(Modifier::new().width(Dp(320.0)).height(Dp(120.0)))
                 } else {
                     base.modifier(Modifier::new().width(Dp(320.0)))
                 };
-                drop(base);
             }));
             gap(Dp(12.0));
             text()

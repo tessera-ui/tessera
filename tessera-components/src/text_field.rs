@@ -1239,7 +1239,7 @@ fn text_field_menu_content(
 /// text_field().input_transform_shared(transform);
 /// # });
 /// # }
-/// # component();
+/// # tessera_ui::testing::layout_test(component).run();
 /// ```
 #[tessera]
 pub fn text_field(
@@ -1751,7 +1751,7 @@ mod native_field_regressions {
                     crate::column::column()
                         .modifier(Modifier::new().width(Dp(180.0)))
                         .children(move || {
-                            let mut field = if matches!(case, Case::Outlined) {
+                            let field = if matches!(case, Case::Outlined) {
                                 TextFieldBuilder::outlined()
                             } else {
                                 TextFieldBuilder::filled()
@@ -1762,7 +1762,7 @@ mod native_field_regressions {
                             if matches!(case, Case::ExplicitHeight) {
                                 field_modifier = field_modifier.height(Dp(96.0));
                             }
-                            field = field
+                            field
                                 .controller(controller)
                                 .modifier(field_modifier)
                                 .min_width(Dp::ZERO)
@@ -1805,7 +1805,7 @@ mod native_field_regressions {
                                     value
                                 });
                             if matches!(case, Case::Affixes) {
-                                field = field
+                                field
                                     .prefix(|| {
                                         text().content("$").accessibility_label("Dollar prefix");
                                     })
@@ -1814,11 +1814,10 @@ mod native_field_regressions {
                                     });
                             }
                             if matches!(case, Case::Secure) {
-                                field = field
+                                field
                                     .obfuscation_char('•')
                                     .context_menu(TextFieldContextMenu::secure_default());
                             }
-                            drop(field);
                             text().content(format!("Changes: {}", changes.get()));
                         });
                 });
@@ -1873,7 +1872,7 @@ mod native_field_regressions {
                                     if label {
                                         EDITOR.set(Some(controller));
                                     }
-                                    let mut field = TextFieldBuilder::outlined()
+                                    let field = TextFieldBuilder::outlined()
                                         .shape(MaterialShapes::default().extra_small)
                                         .min_width(Dp::ZERO)
                                         .controller(controller)
@@ -1889,9 +1888,8 @@ mod native_field_regressions {
                                                 }),
                                         );
                                     if label {
-                                        field = field.label("Label");
+                                        field.label("Label");
                                     }
-                                    drop(field);
                                 }
                             });
                     });
@@ -2239,7 +2237,7 @@ mod native_field_regressions {
             boxed()
                 .modifier(Modifier::new().fill_max_size())
                 .children(move || {
-                    let mut field = TextFieldBuilder::outlined()
+                    let field = TextFieldBuilder::outlined()
                         .controller(editor)
                         .modifier(
                             Modifier::new()
@@ -2253,16 +2251,15 @@ mod native_field_regressions {
                         .line_height(Dp(24.0))
                         .accessibility_label("Viewport editor");
                     if label {
-                        field = field.label("Value");
+                        field.label("Value");
                     }
                     if leading {
-                        field = field.leading_icon(|| {
+                        field.leading_icon(|| {
                             crate::icon::icon()
                                 .vector(crate::material_icons::filled::SEARCH_SVG)
                                 .size(Dp(24.0));
                         });
                     }
-                    drop(field);
                 });
         });
     }

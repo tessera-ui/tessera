@@ -760,7 +760,7 @@ fn bottom_sheet_content_wrapper(
 ///     .bottom_sheet_content(|| { /* bottom sheet content */ });
 /// #     });
 /// # }
-/// # component();
+/// # tessera_ui::testing::layout_test(component).run();
 /// ```
 #[tessera]
 pub fn bottom_sheet_provider(

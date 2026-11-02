@@ -219,12 +219,12 @@ fn sample(
                     ..Default::default()
                 }))
                 .children(move || {
-                    let mut field = if outlined {
+                    let field = if outlined {
                         TextFieldBuilder::outlined()
                     } else {
                         TextFieldBuilder::filled()
                     };
-                    field = field
+                    field
                         .modifier(if let Some(geometry) = anatomy_geometry {
                             watch_in_space(
                                 geometry,
@@ -263,10 +263,10 @@ fn sample(
                         })
                         .on_submit(move || submitted.set(submitted.get() + 1));
                     if anatomy_geometry.is_some() && populated.unwrap_or(true) {
-                        field = field.presentation_state(InteractionVisualState::Focus);
+                        field.presentation_state(InteractionVisualState::Focus);
                     }
                     if icons.get() {
-                        field = field.leading_icon_shared(RenderSlot::new(move || {
+                        field.leading_icon_shared(RenderSlot::new(move || {
                             boxed()
                                 .modifier(Modifier::new().semantics(SemanticsArgs {
                                     role: Some(Role::Group),
@@ -279,7 +279,7 @@ fn sample(
                                 });
                         }));
                         if value.with(|value| !value.is_empty()) {
-                            field = field.trailing_icon_shared(RenderSlot::new(move || {
+                            field.trailing_icon_shared(RenderSlot::new(move || {
                                 icon_button()
                                     .standard()
                                     .color_style(IconButtonColorStyle::Inherited)
@@ -295,7 +295,7 @@ fn sample(
                         }
                     }
                     if affixes.get() {
-                        field = field
+                        field
                             .prefix_shared(RenderSlot::new(|| {
                                 text().content("$");
                             }))
@@ -304,11 +304,10 @@ fn sample(
                             }));
                     }
                     if secure.get() {
-                        field = field
+                        field
                             .obfuscation_char('•')
                             .context_menu(TextFieldContextMenu::secure_default());
                     }
-                    drop(field);
                 });
             gap(Dp(4.0));
             row()
@@ -671,7 +670,7 @@ fn field_figure(outlined: bool, error: bool, multiline: bool, measurements: bool
                             } else {
                                 TextFieldBuilder::filled()
                             };
-                            let mut field = field
+                            field
                                 .modifier(watch_in_space(geometry, "field").fill_max_width())
                                 .min_width(Dp::ZERO)
                                 .min_height(Dp(if multiline { 96.0 } else { 56.0 }))
@@ -697,7 +696,7 @@ fn field_figure(outlined: bool, error: bool, multiline: bool, measurements: bool
                                     icon().painter(filled::SEARCH_SVG).size(Dp(24.0));
                                 }));
                             if error || populated {
-                                field = field.trailing_icon_shared(RenderSlot::new(move || {
+                                field.trailing_icon_shared(RenderSlot::new(move || {
                                     if error {
                                         boxed()
                                             .modifier(Modifier::new().semantics(SemanticsArgs {
@@ -723,7 +722,6 @@ fn field_figure(outlined: bool, error: bool, multiline: bool, measurements: bool
                                     }
                                 }));
                             }
-                            drop(field);
                             gap(Dp(4.0));
                             text()
                                 .content(if error {
@@ -984,7 +982,7 @@ fn overview_variant(outlined: bool, scale: f64, numbered: bool) {
             } else {
                 TextFieldBuilder::filled()
             };
-            let mut field = field
+            field
                 .label("Text field")
                 .initial_text(title)
                 .accessibility_label(format!("Overview {title} text field"))
@@ -1000,11 +998,10 @@ fn overview_variant(outlined: bool, scale: f64, numbered: bool) {
                         .height(Dp(56.0 * scale)),
                 );
             if outlined {
-                field = field
+                field
                     .border_width(Dp(scale))
                     .focus_border_width(Dp(2.0 * scale));
             }
-            drop(field);
             gap(Dp(4.0 * scale));
             text()
                 .content("Supporting text")
@@ -1111,7 +1108,7 @@ fn form_field(label: String, outlined: bool, mode: u8) {
             } else {
                 TextFieldBuilder::filled()
             };
-            let mut field = field
+            field
                 .modifier(Modifier::new().fill_max_width())
                 .min_width(Dp::ZERO)
                 .controller(controller)
@@ -1137,19 +1134,19 @@ fn form_field(label: String, outlined: bool, mode: u8) {
                     value
                 });
             if mode != 1 {
-                field = field.label(if mode == 2 {
+                field.label(if mode == 2 {
                     format!("{label}*")
                 } else {
                     label
                 });
             }
             if mode == 3 {
-                field = field
+                field
                     .min_height(Dp(112.0))
                     .line_limit(TextFieldLineLimit::MultiLine);
             }
             if mode == 4 {
-                field = field.prefix_shared(RenderSlot::new(|| {
+                field.prefix_shared(RenderSlot::new(|| {
                     text()
                         .content("$")
                         .modifier(Modifier::new().semantics(SemanticsArgs {
@@ -1160,7 +1157,7 @@ fn form_field(label: String, outlined: bool, mode: u8) {
                 }));
             }
             if mode == 5 {
-                field = field.suffix_shared(RenderSlot::new(|| {
+                field.suffix_shared(RenderSlot::new(|| {
                     text()
                         .content("@gmail.com")
                         .modifier(Modifier::new().semantics(SemanticsArgs {
@@ -1171,7 +1168,7 @@ fn form_field(label: String, outlined: bool, mode: u8) {
                 }));
             }
             if mode == 7 {
-                field = field.trailing_icon_shared(RenderSlot::new(|| {
+                field.trailing_icon_shared(RenderSlot::new(|| {
                     boxed()
                         .modifier(Modifier::new().semantics(SemanticsArgs {
                             role: Some(Role::Image),
@@ -1185,11 +1182,11 @@ fn form_field(label: String, outlined: bool, mode: u8) {
             }
             if mode == 9 {
                 if !show.get() {
-                    field = field
+                    field
                         .obfuscation_char('•')
                         .context_menu(TextFieldContextMenu::secure_default());
                 }
-                field = field.trailing_icon_shared(RenderSlot::new(move || {
+                field.trailing_icon_shared(RenderSlot::new(move || {
                     icon_button()
                         .standard()
                         .icon(if show.get() {
@@ -1205,7 +1202,6 @@ fn form_field(label: String, outlined: bool, mode: u8) {
                         .on_click(move || show.set(!show.get()));
                 }));
             }
-            drop(field);
             gap(Dp(4.0));
             row()
                 .modifier(
@@ -1526,7 +1522,7 @@ fn field_error_icon_example(password: bool, scale: f64) {
                 .width(Dp(364.0 * scale)),
         )
         .children(move || {
-            let mut field = TextFieldBuilder::outlined()
+            let field = TextFieldBuilder::outlined()
                 .controller(controller)
                 .is_error(true)
                 .presentation_state_optional(if password {
@@ -1563,14 +1559,13 @@ fn field_error_icon_example(password: bool, scale: f64) {
                         });
                 }));
             if password {
-                field = field
+                field
                     .obfuscation_char('•')
                     .text_color(scheme.error)
                     .context_menu(TextFieldContextMenu::secure_default());
             } else {
-                field = field.label("Username");
+                field.label("Username");
             }
-            drop(field);
             gap(Dp(4.0 * scale));
             text()
                 .content(support)
@@ -1712,7 +1707,7 @@ fn field_icon_input(
     menu: State<MenuController>,
 ) {
     let scheme = use_context::<MaterialTheme>().unwrap().get().color_scheme;
-    let mut field = TextFieldBuilder::filled()
+    let field = TextFieldBuilder::filled()
         .controller(controller)
         .min_width(Dp::ZERO)
         .min_height(Dp(56.0 * scale))
@@ -1744,20 +1739,20 @@ fn field_icon_input(
             next
         });
     if kind == 1 {
-        field = field.leading_icon_shared(RenderSlot::new(move || {
+        field.leading_icon_shared(RenderSlot::new(move || {
             icon()
                 .painter(filled::CALENDAR_TODAY_SVG)
                 .size(Dp(24.0 * scale));
         }));
     } else if kind == 2 {
-        field = field.trailing_icon_shared(RenderSlot::new(move || {
+        field.trailing_icon_shared(RenderSlot::new(move || {
             icon()
                 .painter(filled::ERROR_SVG)
                 .size(Dp(24.0 * scale))
                 .tint(scheme.error);
         }));
     } else if kind == 3 && value.with(|value| !value.is_empty()) {
-        field = field.trailing_icon_shared(RenderSlot::new(move || {
+        field.trailing_icon_shared(RenderSlot::new(move || {
             icon_button()
                 .standard()
                 .color_style(IconButtonColorStyle::Inherited)
@@ -1770,11 +1765,11 @@ fn field_icon_input(
                 });
         }));
     } else if kind == 4 {
-        field = field.trailing_icon_shared(RenderSlot::new(move || {
+        field.trailing_icon_shared(RenderSlot::new(move || {
             icon().painter(filled::MIC_SVG).size(Dp(24.0 * scale));
         }));
     } else if kind == 5 {
-        field = field.trailing_icon_shared(RenderSlot::new(move || {
+        field.trailing_icon_shared(RenderSlot::new(move || {
             icon_button()
                 .standard()
                 .color_style(IconButtonColorStyle::Inherited)
@@ -1783,11 +1778,10 @@ fn field_icon_input(
                 .on_click(move || menu.with_mut(MenuController::toggle));
         }));
     } else if kind == 6 {
-        field = field.trailing_icon_shared(RenderSlot::new(move || {
+        field.trailing_icon_shared(RenderSlot::new(move || {
             field_payment_image(scale);
         }));
     }
-    drop(field);
 }
 
 #[tessera]
@@ -1922,7 +1916,7 @@ fn field_anatomy_item(populated: bool, outlined: bool, geometry: State<SpaceGeom
             } else {
                 TextFieldBuilder::filled()
             };
-            let mut field = field
+            field
                 .modifier(
                     watch_in_space(geometry, if populated { "populated" } else { "empty" })
                         .fill_max_width(),
@@ -1940,7 +1934,7 @@ fn field_anatomy_item(populated: bool, outlined: bool, geometry: State<SpaceGeom
                     icon().painter(filled::SEARCH_SVG).size(Dp(24.0));
                 }));
             if value.with(|value| !value.is_empty()) {
-                field = field.trailing_icon_shared(RenderSlot::new(move || {
+                field.trailing_icon_shared(RenderSlot::new(move || {
                     icon_button()
                         .standard()
                         .icon(filled::CANCEL_SVG)
@@ -1952,7 +1946,6 @@ fn field_anatomy_item(populated: bool, outlined: bool, geometry: State<SpaceGeom
                         });
                 }));
             }
-            drop(field);
             gap(Dp(4.0));
             text()
                 .content("Supporting text")
@@ -2568,12 +2561,12 @@ fn field_state_item(
     column()
         .modifier(Modifier::new().width(Dp(180.0 * scale)))
         .children(move || {
-            let mut field = if outlined {
+            let field = if outlined {
                 TextFieldBuilder::outlined()
             } else {
                 TextFieldBuilder::filled()
             };
-            field = field
+            field
                 .controller(controller)
                 .label(if !enabled && populated {
                     "Label"
@@ -2601,7 +2594,7 @@ fn field_state_item(
                 || populated
                 || (state_example && presentation == InteractionVisualState::Focus)
             {
-                field = field.trailing_icon_shared(RenderSlot::new(move || {
+                field.trailing_icon_shared(RenderSlot::new(move || {
                     if error {
                         icon()
                             .painter(filled::ERROR_SVG)
@@ -2621,7 +2614,6 @@ fn field_state_item(
                     }
                 }));
             }
-            drop(field);
             gap(Dp(4.0 * scale));
             text()
                 .content("Supporting text")
@@ -2735,12 +2727,12 @@ fn field_configuration_item(outlined: bool, row: usize, populated: bool, scale: 
     column()
         .modifier(Modifier::new().width(Dp(180.0 * scale)))
         .children(move || {
-            let mut field = if outlined {
+            let field = if outlined {
                 TextFieldBuilder::outlined()
             } else {
                 TextFieldBuilder::filled()
             };
-            field = field
+            field
                 .controller(controller)
                 .label("Label")
                 .accessibility_label(name.get())
@@ -2773,12 +2765,12 @@ fn field_configuration_item(outlined: bool, row: usize, populated: bool, scale: 
                     next
                 });
             if row == 2 || row == 3 {
-                field = field.leading_icon_shared(RenderSlot::new(move || {
+                field.leading_icon_shared(RenderSlot::new(move || {
                     icon().painter(filled::SEARCH_SVG).size(Dp(24.0 * scale));
                 }));
             }
             if (row == 1 || row == 3) && value.with(|value| !value.is_empty()) {
-                field = field.trailing_icon_shared(RenderSlot::new(move || {
+                field.trailing_icon_shared(RenderSlot::new(move || {
                     icon_button()
                         .standard()
                         .color_style(IconButtonColorStyle::Inherited)
@@ -2792,16 +2784,15 @@ fn field_configuration_item(outlined: bool, row: usize, populated: bool, scale: 
                 }));
             }
             if row == 4 {
-                field = field.prefix_shared(RenderSlot::new(|| {
+                field.prefix_shared(RenderSlot::new(|| {
                     text().content("$");
                 }));
             }
             if row == 5 {
-                field = field.suffix_shared(RenderSlot::new(|| {
+                field.suffix_shared(RenderSlot::new(|| {
                     text().content("lbs");
                 }));
             }
-            drop(field);
             if row == 0 {
                 gap(Dp(4.0 * scale));
                 text()
@@ -2915,7 +2906,7 @@ fn field_measurement_item(
                     } else {
                         TextFieldBuilder::filled()
                     };
-                    let mut field = field
+                    field
                         .modifier(
                             watch_in_space(
                                 geometry,
@@ -2965,7 +2956,7 @@ fn field_measurement_item(
                             next
                         });
                     if variant == 1 {
-                        field = field.leading_icon_shared(RenderSlot::new(move || {
+                        field.leading_icon_shared(RenderSlot::new(move || {
                             boxed()
                                 .modifier(
                                     watch_in_space(
@@ -2990,7 +2981,7 @@ fn field_measurement_item(
                                 });
                         }));
                         if value.with(|value| !value.is_empty()) {
-                            field = field.trailing_icon_shared(RenderSlot::new(move || {
+                            field.trailing_icon_shared(RenderSlot::new(move || {
                                 icon_button()
                                     .standard()
                                     .icon(filled::CANCEL_SVG)
@@ -3009,7 +3000,6 @@ fn field_measurement_item(
                             }));
                         }
                     }
-                    drop(field);
                 });
             if variant == 2 {
                 gap(Dp(4.0));

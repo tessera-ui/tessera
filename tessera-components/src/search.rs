@@ -246,7 +246,7 @@ enum SearchBarLayoutKind {
 ///         search_bar().is_active(true).content(|| {});
 ///     });
 /// # }
-/// # component();
+/// # tessera_ui::testing::layout_test(component).run();
 /// ```
 #[tessera]
 pub fn search_bar(
@@ -397,7 +397,7 @@ fn resolve_search_bar(
 ///         docked_search_bar().is_active(true).content(|| {});
 ///     });
 /// # }
-/// # component();
+/// # tessera_ui::testing::layout_test(component).run();
 /// ```
 #[tessera]
 pub fn docked_search_bar(

@@ -153,7 +153,7 @@ impl tessera_ui::LayoutModifierNode for RowLayout {
 ///     text().content("Last");
 /// });
 /// # }
-/// # component();
+/// # tessera_ui::testing::layout_test(component).run();
 /// ```
 #[tessera]
 pub fn row(

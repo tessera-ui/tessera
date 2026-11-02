@@ -450,42 +450,60 @@ impl<T, R> CallbackWithCell<T, R> {
 }
 
 struct RenderSlotCell {
-    current: RwLock<Arc<dyn Fn() + Send + Sync>>,
+    current: RwLock<(Arc<dyn Fn() + Send + Sync>, Option<TypeId>)>,
 }
 
 impl RenderSlotCell {
-    fn new(current: Arc<dyn Fn() + Send + Sync>) -> Self {
+    fn new(current: Arc<dyn Fn() + Send + Sync>, static_type: Option<TypeId>) -> Self {
         Self {
-            current: RwLock::new(current),
+            current: RwLock::new((current, static_type)),
         }
     }
 
-    fn update(&self, next: Arc<dyn Fn() + Send + Sync>) {
-        *self.current.write() = next;
+    fn update(&self, next: Arc<dyn Fn() + Send + Sync>, static_type: Option<TypeId>) -> bool {
+        let previous = {
+            let mut current = self.current.write();
+            // A new allocation alone must not invalidate unchanged capture-free content.
+            if static_type.is_some() && current.1 == static_type {
+                return false;
+            }
+            std::mem::replace(&mut *current, (next, static_type))
+        };
+        drop(previous);
+        true
     }
 
     fn shared(&self) -> Arc<dyn Fn() + Send + Sync> {
-        Arc::clone(&self.current.read())
+        Arc::clone(&self.current.read().0)
     }
 }
 
 struct RenderSlotWithCell<T> {
-    current: RwLock<Arc<dyn Fn(T) + Send + Sync>>,
+    current: RwLock<(Arc<dyn Fn(T) + Send + Sync>, Option<TypeId>)>,
 }
 
 impl<T> RenderSlotWithCell<T> {
-    fn new(current: Arc<dyn Fn(T) + Send + Sync>) -> Self {
+    fn new(current: Arc<dyn Fn(T) + Send + Sync>, static_type: Option<TypeId>) -> Self {
         Self {
-            current: RwLock::new(current),
+            current: RwLock::new((current, static_type)),
         }
     }
 
-    fn update(&self, next: Arc<dyn Fn(T) + Send + Sync>) {
-        *self.current.write() = next;
+    fn update(&self, next: Arc<dyn Fn(T) + Send + Sync>, static_type: Option<TypeId>) -> bool {
+        let previous = {
+            let mut current = self.current.write();
+            // Closure type still distinguishes different capture-free bodies at one slot.
+            if static_type.is_some() && current.1 == static_type {
+                return false;
+            }
+            std::mem::replace(&mut *current, (next, static_type))
+        };
+        drop(previous);
+        true
     }
 
     fn shared(&self) -> Arc<dyn Fn(T) + Send + Sync> {
-        Arc::clone(&self.current.read())
+        Arc::clone(&self.current.read().0)
     }
 }
 
@@ -2569,24 +2587,10 @@ pub(crate) fn current_measured_node_instance_key() -> Option<u64> {
     with_execution_context(|context| context.measured_node_instance_key_stack.last().copied())
 }
 
-/// Push the given node id as the current executing component for this thread.
-pub fn push_current_node(
-    node_id: NodeId,
-    component_type_id: u64,
-    fn_name: &str,
-) -> NodeContextGuard {
-    #[cfg(not(feature = "profiling"))]
-    let _ = fn_name;
-    #[allow(unused_variables)]
-    let parent_node_id = with_execution_context_mut(|context| {
-        let parent = context.node_context_stack.last().copied();
-        context.node_context_stack.push(node_id);
-        parent
-    });
-
-    // Get the parent's call index and increment it
-    // This distinguishes multiple calls to the same component (e.g., foo(1);
-    // foo(2);)
+pub(crate) fn reserve_component_identity(component_type_id: u64) -> u64 {
+    if let Some(identity) = take_next_node_instance_logic_id_override() {
+        return identity;
+    }
     let parent_call_index = next_child_instance_call_index();
     let parent_instance_logic_id = with_execution_context(|context| {
         context.instance_logic_id_stack.last().copied().unwrap_or(0)
@@ -2611,22 +2615,37 @@ pub fn push_current_node(
         parent_call_index
     };
 
-    let instance_logic_id =
-        if let Some(instance_logic_id_override) = take_next_node_instance_logic_id_override() {
-            instance_logic_id_override
-        } else if parent_call_index == 0
-            && parent_instance_logic_id == 0
-            && current_instance_key_override().is_none()
-            && !has_group_path
-        {
-            component_type_id
-        } else {
-            hash_components(&[
-                &component_type_id,
-                &parent_instance_logic_id,
-                &instance_salt,
-            ])
-        };
+    if parent_call_index == 0
+        && parent_instance_logic_id == 0
+        && current_instance_key_override().is_none()
+        && !has_group_path
+    {
+        component_type_id
+    } else {
+        hash_components(&[
+            &component_type_id,
+            &parent_instance_logic_id,
+            &instance_salt,
+        ])
+    }
+}
+
+/// Push the given node id as the current executing component for this thread.
+pub fn push_current_node(
+    node_id: NodeId,
+    component_type_id: u64,
+    fn_name: &str,
+) -> NodeContextGuard {
+    #[cfg(not(feature = "profiling"))]
+    let _ = fn_name;
+    #[allow(unused_variables)]
+    let parent_node_id = with_execution_context_mut(|context| {
+        let parent = context.node_context_stack.last().copied();
+        context.node_context_stack.push(node_id);
+        parent
+    });
+
+    let instance_logic_id = reserve_component_identity(component_type_id);
 
     with_execution_context_mut(|context| {
         context.instance_logic_id_stack.push(instance_logic_id);
@@ -2795,7 +2814,7 @@ pub(crate) fn pop_group_id(expected_group_id: u64) {
 }
 
 /// Get a clone of the current control-flow path.
-fn current_group_path() -> Vec<u64> {
+pub(crate) fn current_group_path() -> Vec<u64> {
     with_execution_context(|context| context.group_path_stack.clone())
 }
 
@@ -3020,7 +3039,7 @@ where
     })
 }
 
-fn current_instance_key_override() -> Option<u64> {
+pub(crate) fn current_instance_key_override() -> Option<u64> {
     with_execution_context(|context| context.instance_key_stack.last().copied())
 }
 
@@ -3368,14 +3387,17 @@ pub(crate) fn remember_render_slot_handle<F>(render: F) -> FunctorHandle
 where
     F: Fn() + Send + Sync + 'static,
 {
+    let static_type = (std::mem::size_of::<F>() == 0).then(TypeId::of::<F>);
     let render = Arc::new(render) as Arc<dyn Fn() + Send + Sync>;
     let creator_instance_key = current_replay_boundary_instance_key_from_scope()
         .unwrap_or_else(|| panic!("RenderSlot handles must be created during a component build"));
     let (cell, handle) = remember_functor_cell_with_key((), {
         let render = Arc::clone(&render);
-        move || RenderSlotCell::new(render)
+        move || RenderSlotCell::new(render, static_type)
     });
-    cell.update(render);
+    if !cell.update(render, static_type) {
+        return handle;
+    }
     for instance_key in render_slot_read_subscribers(handle) {
         if instance_key != creator_instance_key && !is_instance_key_build_dirty(instance_key) {
             record_replay_boundary_invalidation_for_instance_key(instance_key);
@@ -3394,6 +3416,7 @@ where
     T: 'static,
     F: Fn(T) + Send + Sync + 'static,
 {
+    let static_type = (std::mem::size_of::<F>() == 0).then(TypeId::of::<F>);
     let render = Arc::new(render) as Arc<dyn Fn(T) + Send + Sync>;
     let creator_instance_key =
         current_replay_boundary_instance_key_from_scope().unwrap_or_else(|| {
@@ -3401,9 +3424,11 @@ where
         });
     let (cell, handle) = remember_functor_cell_with_key((), {
         let render = Arc::clone(&render);
-        move || RenderSlotWithCell::new(render)
+        move || RenderSlotWithCell::new(render, static_type)
     });
-    cell.update(render);
+    if !cell.update(render, static_type) {
+        return handle;
+    }
     for instance_key in render_slot_read_subscribers(handle) {
         if instance_key != creator_instance_key && !is_instance_key_build_dirty(instance_key) {
             record_replay_boundary_invalidation_for_instance_key(instance_key);
@@ -3451,6 +3476,7 @@ pub fn begin_recompose_slot_epoch() {
 
 /// Reset all slot buffers (used on suspension).
 pub fn reset_slots() {
+    crate::component_call::reset_pending_calls();
     crate::context::reset_context_slots();
     let removed = with_slot_table_mut(SlotTable::reset);
     drop(removed);
@@ -3872,7 +3898,7 @@ mod tests {
         let _phase_guard = push_phase(RuntimePhase::Build);
         let _node_guard = push_current_node(node_id, component_type_id, "test_component");
         let _instance_guard = push_current_component_instance_key(current_instance_key());
-        f()
+        crate::component_call::with_pending_scope(f)
     }
 
     #[test]

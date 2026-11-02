@@ -48,7 +48,7 @@ fn fixture() {
     SETTINGS.set(Some(settings));
     material_theme().child(move || {
         column().children(move || {
-            let mut group = button_groups()
+            let group = button_groups()
                 .size(ButtonGroupsSize::Small)
                 .style(if settings.get().connected {
                     ButtonGroupsStyle::Connected
@@ -69,19 +69,18 @@ fn fixture() {
                 )
                 .enabled(settings.get().enabled);
             for index in 0..settings.get().items {
-                group = group.child(
+                group.child(
                     move || {
                         layout().modifier(Modifier::new().size(Dp(68.0), Dp(20.0)).semantics(
                             SemanticsArgs {
                                 label: Some(format!("Item {index}")),
                                 ..Default::default()
                             },
-                        ));
+                        ))
                     },
                     |_| CLICKS.set(CLICKS.get() + 1),
                 );
             }
-            drop(group);
         });
     });
 }

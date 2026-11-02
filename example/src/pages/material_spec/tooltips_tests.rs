@@ -68,11 +68,11 @@ fn figure_fixture() {
     });
 }
 
-fn reference_renderer(root: fn()) -> HeadlessRenderer {
+fn reference_renderer<Output: 'static>(root: fn() -> Output) -> HeadlessRenderer {
     reference_renderer_at(root, 1024)
 }
 
-fn reference_renderer_at(root: fn(), width: u32) -> HeadlessRenderer {
+fn reference_renderer_at<Output: 'static>(root: fn() -> Output, width: u32) -> HeadlessRenderer {
     let mut renderer = HeadlessRenderer::new(
         Box::new(root),
         vec![Box::new(ComponentPipelines)],

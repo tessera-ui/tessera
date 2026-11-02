@@ -302,20 +302,19 @@ fn fixture() {
                 .on_close_request(move || settings.with_mut(|s| s.open = false))
                 .main_content(main_content)
                 .dialog_content(move || {
-                    let mut dialog = full_screen_dialog(tessera_ui::Callback::new(move || {
+                    let dialog = full_screen_dialog(tessera_ui::Callback::new(move || {
                         settings.with_mut(|s| s.open = false)
                     }))
                     .title("New event")
                     .content(modal_content);
                     if settings.get().actions {
-                        dialog = dialog.on_confirm(move || {
+                        dialog.on_confirm(move || {
                             settings.with_mut(|s| {
                                 s.confirmed += 1;
                                 s.open = false;
                             })
                         });
                     }
-                    drop(dialog);
                 });
         }
         Kind::BottomSheet => {

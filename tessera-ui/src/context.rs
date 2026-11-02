@@ -163,7 +163,7 @@ thread_local! {
     static CONTEXT_GLOBALS: ContextGlobals = ContextGlobals::new();
 }
 
-fn current_context_map() -> ContextMap {
+pub(crate) fn current_context_map() -> ContextMap {
     with_execution_context(|context| {
         context
             .context_stack

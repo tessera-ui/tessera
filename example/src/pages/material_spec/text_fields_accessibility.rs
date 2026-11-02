@@ -280,7 +280,7 @@ fn password_diagram(scale: f64) {
     rectangle(378.0, 0.0, 8.0, 300.0, scheme.outline_variant, scale);
     editable_field(26.5, 41.5, 327.0, "Label".into(), "Input".into(), scale);
     dropdown_field(scale);
-    let mut field = TextFieldBuilder::outlined()
+    let field = TextFieldBuilder::outlined()
         .label("Password")
         .accessibility_label("Password")
         .controller(controller)
@@ -316,11 +316,10 @@ fn password_diagram(scale: f64) {
                 });
         }));
     if !show.get() {
-        field = field
+        field
             .obfuscation_char('•')
             .context_menu(TextFieldContextMenu::secure_default());
     }
-    drop(field);
     rectangle(350.0, 150.0, 63.0, 5.0, srgb(132, 69, 143), scale);
     highlight(310.0, 130.0, 40.0, 40.0, 6.0, scale);
     callout(
@@ -626,7 +625,7 @@ fn labeled_field(kind: usize, x: f64, y: f64, width: f64, scale: f64) {
         3 => "Label",
         _ => "Username*",
     };
-    let mut field = TextFieldBuilder::outlined()
+    let field = TextFieldBuilder::outlined()
         .controller(controller)
         .accessibility_label(name)
         .accessibility_description(description)
@@ -648,10 +647,10 @@ fn labeled_field(kind: usize, x: f64, y: f64, width: f64, scale: f64) {
             next
         });
     if kind >= 2 {
-        field = field.label(name);
+        field.label(name);
     }
     if kind == 1 {
-        field = field
+        field
             .placeholder("Email")
             .suffix_shared(RenderSlot::new(move || {
                 text()
@@ -661,7 +660,7 @@ fn labeled_field(kind: usize, x: f64, y: f64, width: f64, scale: f64) {
             }));
     }
     if kind == 0 {
-        field = field.prefix_shared(RenderSlot::new(move || {
+        field.prefix_shared(RenderSlot::new(move || {
             text()
                 .content("€")
                 .style(type_style(16.0 * scale, 24.0 * scale))
@@ -669,9 +668,8 @@ fn labeled_field(kind: usize, x: f64, y: f64, width: f64, scale: f64) {
         }));
     }
     if kind == 2 || kind == 3 {
-        field = field.presentation_state(InteractionVisualState::Focus);
+        field.presentation_state(InteractionVisualState::Focus);
     }
-    drop(field);
     if kind == 3 {
         text()
             .content(format!("{}/20", count.get()))

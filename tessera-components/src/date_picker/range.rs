@@ -287,7 +287,7 @@ fn date_key(date: CalendarDate) -> (i32, u8, u8) {
 /// assert!(!state.is_complete());
 /// assert!(state.select_date(day));
 /// assert!(state.is_complete());
-/// demo();
+/// # tessera_ui::testing::layout_test(demo).run();
 /// ```
 #[tessera]
 pub fn date_range_picker(

@@ -413,7 +413,7 @@ fn label_layer(
 ///     });
 ///     assert_eq!(value.get(), 0.5);
 /// }
-/// content();
+/// # tessera_ui::testing::layout_test(content).run();
 /// ```
 #[tessera]
 pub fn slider_value_indicator_provider(modifier: Option<Modifier>, child: Option<RenderSlot>) {

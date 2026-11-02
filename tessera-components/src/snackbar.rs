@@ -468,7 +468,7 @@ impl SnackbarDefaults {
 ///         });
 /// }
 ///
-/// demo();
+/// # tessera_ui::testing::layout_test(demo).run();
 /// ```
 #[tessera]
 pub fn snackbar(
@@ -646,7 +646,7 @@ fn dismiss_key(
 ///         });
 /// }
 ///
-/// demo();
+/// # tessera_ui::testing::layout_test(demo).run();
 /// ```
 #[tessera]
 pub fn snackbar_host(

@@ -317,7 +317,7 @@ impl Default for TesseraConfig {
 /// ## Type Parameters
 ///
 /// - `F`: The entry point function type that defines your UI. Must implement
-///   `Fn()`.
+///   `Fn() -> Output`; its return value is discarded after declaration.
 ///
 /// ## Lifecycle
 ///
@@ -354,6 +354,7 @@ impl Default for TesseraConfig {
 /// }
 ///
 /// // Define your UI entry point
+/// #[tessera_ui::tessera]
 /// fn my_app() {
 ///     // Your UI components go here
 /// }
@@ -398,7 +399,7 @@ impl Default for TesseraConfig {
 ///
 /// The renderer includes built-in performance monitoring that logs frame
 /// statistics when performance drops below 30 FPS.
-pub struct Renderer<F: Fn()> {
+pub struct Renderer<F> {
     /// The WGPU application context, initialized after window creation
     app: Option<RenderCore>,
     /// The entry point function that defines the root of your UI component tree
@@ -464,7 +465,10 @@ pub struct Renderer<F: Fn()> {
     android_ime_opened: bool,
 }
 
-impl<F: Fn()> Renderer<F> {
+impl<F, Output> Renderer<F>
+where
+    F: Fn() -> Output,
+{
     #[cfg(target_family = "wasm")]
     fn resolve_web_canvas(config: &TesseraConfig) -> Option<HtmlCanvasElement> {
         let canvas_id = config.web.canvas_id.as_deref()?;
@@ -506,6 +510,7 @@ impl<F: Fn()> Renderer<F> {
     ///     fn register_pipelines(&self, _context: &mut PipelineContext<'_>) {}
     /// }
     ///
+    /// #[tessera_ui::tessera]
     /// fn my_ui() {
     ///     // Your UI components go here
     /// }
@@ -694,6 +699,7 @@ impl<F: Fn()> Renderer<F> {
     /// use tessera_ui::Renderer;
     /// use winit::platform::android::activity::AndroidApp;
     ///
+    /// #[tessera_ui::tessera]
     /// fn my_ui() {}
     ///
     /// #[derive(Debug)]
@@ -741,6 +747,7 @@ impl<F: Fn()> Renderer<F> {
     /// use tessera_ui::{Renderer, renderer::TesseraConfig};
     /// use winit::platform::android::activity::AndroidApp;
     ///
+    /// #[tessera_ui::tessera]
     /// fn my_ui() {}
     ///
     /// #[derive(Debug)]
@@ -821,7 +828,7 @@ struct RenderFrameArgs<'a> {
     pub event_loop: &'a ActiveEventLoop,
 }
 
-struct RenderFrameContext<'a, F: Fn()> {
+struct RenderFrameContext<'a, F> {
     entry_point: &'a F,
     args: &'a mut RenderFrameArgs<'a>,
     accessibility_enabled: bool,
@@ -893,7 +900,10 @@ impl RendererImeBridgeState {
     }
 }
 
-impl<F: Fn()> Renderer<F> {
+impl<F, Output> Renderer<F>
+where
+    F: Fn() -> Output,
+{
     const RESIZE_EDGE_THRESHOLD: f64 = 8.0;
 
     const fn supports_native_window_frame_controls() -> bool {
@@ -1585,7 +1595,10 @@ Fps: {:.2}
     }
 }
 
-impl<F: Fn()> Renderer<F> {
+impl<F, Output> Renderer<F>
+where
+    F: Fn() -> Output,
+{
     fn desktop_platform_context(&self) -> Option<DesktopPlatformContext> {
         let app = self.app.as_ref()?;
         let redraw_pending = self.redraw_request_pending.clone();
@@ -2151,7 +2164,10 @@ fn resolve_startup_window_size(
 }
 
 /// Handle application lifecycle and window events.
-impl<F: Fn()> ApplicationHandler<RendererUserEvent> for Renderer<F> {
+impl<F, Output> ApplicationHandler<RendererUserEvent> for Renderer<F>
+where
+    F: Fn() -> Output,
+{
     /// Called when the application is resumed or started.
     ///
     /// This method is responsible for:

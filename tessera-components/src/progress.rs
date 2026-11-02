@@ -533,7 +533,7 @@ fn stop_indicator_bounds(width: Px, height: Px) -> (PxPosition, Px) {
 /// linear_progress_indicator().progress(0.75);
 /// # });
 /// # }
-/// # component();
+/// # tessera_ui::testing::layout_test(component).run();
 /// ```
 #[tessera]
 pub fn linear_progress_indicator(
@@ -729,7 +729,7 @@ pub(crate) fn circular_indeterminate_progress(cycle_ms: f32) -> f32 {
 /// circular_progress_indicator().progress(0.6);
 /// # });
 /// # }
-/// # component();
+/// # tessera_ui::testing::layout_test(component).run();
 /// ```
 #[tessera]
 pub fn circular_progress_indicator(
@@ -833,7 +833,7 @@ pub fn circular_progress_indicator(
 /// progress().value(0.75);
 /// # });
 /// # }
-/// # component();
+/// # tessera_ui::testing::layout_test(component).run();
 /// ```
 #[tessera]
 pub fn progress(
@@ -890,8 +890,6 @@ mod tests {
                     .track_color(Color::new(0.0, 0.0, 1.0, 1.0));
                 if determinate.get() {
                     indicator.progress(0.6);
-                } else {
-                    drop(indicator);
                 }
             } else {
                 let indicator = circular_progress_indicator()
@@ -899,8 +897,6 @@ mod tests {
                     .track_color(Color::new(0.0, 0.0, 1.0, 1.0));
                 if determinate.get() {
                     indicator.progress(0.6);
-                } else {
-                    drop(indicator);
                 }
             }
         });

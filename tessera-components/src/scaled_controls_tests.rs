@@ -125,7 +125,7 @@ fn time_fixture() {
     });
 }
 
-fn renderer(entry: fn(), samples: u32) -> HeadlessRenderer {
+fn renderer<Output: 'static>(entry: fn() -> Output, samples: u32) -> HeadlessRenderer {
     COORDINATES.with_borrow_mut(BTreeMap::clear);
     let mut renderer = HeadlessRenderer::new(
         Box::new(entry),

@@ -14,6 +14,9 @@ parking_lot = "0.12.5"
 tessera-macros = { path = "../tessera-macros" }
 tessera-ui = { path = "../tessera-ui" }
 
+[dev-dependencies]
+tessera-ui = { path = "../tessera-ui", features = ["testing"] }
+
 [target.'cfg(not(target_family = "wasm"))'.dependencies]
 tokio = { version = "1.51.1", features = ["full"] }
 

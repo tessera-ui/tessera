@@ -154,7 +154,7 @@ fn interpolate_color(off: Color, on: Color, progress: f32) -> Color {
 ///     assert!(controller.with(|c| c.is_checked()));
 /// }
 ///
-/// demo();
+/// # tessera_ui::testing::layout_test(demo).run();
 /// ```
 #[tessera]
 pub fn glass_switch(

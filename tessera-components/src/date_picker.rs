@@ -532,7 +532,7 @@ struct DatePickerConfig {
 /// assert!(state.selected_date().is_none());
 /// #     });
 /// # }
-/// # component();
+/// # tessera_ui::testing::layout_test(component).run();
 /// ```
 #[tessera]
 pub fn date_picker(
@@ -723,7 +723,7 @@ fn date_picker_content(args: DatePickerConfig) {
 ///     .picker_today(CalendarDate::new(2026, 7, 16).unwrap());
 /// #     });
 /// # }
-/// # component();
+/// # tessera_ui::testing::layout_test(component).run();
 /// ```
 #[tessera]
 pub fn date_picker_dialog(

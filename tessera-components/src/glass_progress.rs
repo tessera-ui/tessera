@@ -120,7 +120,7 @@ impl tessera_ui::LayoutModifierNode for GlassProgressFillLayout {
 /// // Render a progress bar at 75% completion.
 /// glass_progress().value(0.75);
 /// # }
-/// # component();
+/// # tessera_ui::testing::layout_test(component).run();
 /// ```
 #[tessera]
 pub fn glass_progress(

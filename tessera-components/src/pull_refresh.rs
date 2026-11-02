@@ -388,7 +388,7 @@ pub fn pull_refresh_indicator(
 ///         });
 /// }
 ///
-/// demo();
+/// # tessera_ui::testing::layout_test(demo).run();
 /// ```
 #[tessera]
 pub fn pull_refresh(

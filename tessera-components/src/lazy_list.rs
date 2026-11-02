@@ -500,36 +500,43 @@ macro_rules! impl_lazy_list_builder {
     ($builder:ident) => {
         impl $builder {
             /// Append a single lazy item.
-            pub fn item<F>(mut self, builder: F) -> Self
+            pub fn item<F, Output>(&self, builder: F) -> Self
             where
-                F: Fn() + Send + Sync + 'static,
+                F: Fn() -> Output + Send + Sync + 'static,
             {
-                self.push_slot(lazy_item_slot(builder));
-                self
+                self.push_slot(move || Some(lazy_item_slot(builder)));
+                Self { props: self.props }
             }
 
             /// Append a single lazy item with a stable key.
-            pub fn item_with_key<K, F>(mut self, key: K, builder: F) -> Self
+            pub fn item_with_key<K, F, Output>(&self, key: K, builder: F) -> Self
             where
                 K: Hash,
-                F: Fn() + Send + Sync + 'static,
+                F: Fn() -> Output + Send + Sync + 'static,
             {
-                self.push_slot(lazy_item_with_key_slot(key, builder));
-                self
+                let key = hash_key(key);
+                self.push_slot(move || {
+                    Some(LazySlot::items(
+                        1,
+                        move |_| builder(),
+                        Some(CallbackWith::new(move |_| key)),
+                    ))
+                });
+                Self { props: self.props }
             }
 
             /// Append a batch of indexed lazy items.
-            pub fn items<F>(mut self, count: usize, builder: F) -> Self
+            pub fn items<F, Output>(&self, count: usize, builder: F) -> Self
             where
-                F: Fn(usize) + Send + Sync + 'static,
+                F: Fn(usize) -> Output + Send + Sync + 'static,
             {
-                self.push_slot(LazySlot::items(count, builder, None));
-                self
+                self.push_slot(move || Some(LazySlot::items(count, builder, None)));
+                Self { props: self.props }
             }
 
-            /// Append a batch of indexed lazy items with stable keys.
-            pub fn items_with_key<K, KF, F>(
-                mut self,
+            /// Append indexed lazy items with stable keys.
+            pub fn items_with_key<K, KF, F, Output>(
+                &self,
                 count: usize,
                 key_provider: KF,
                 builder: F,
@@ -537,86 +544,31 @@ macro_rules! impl_lazy_list_builder {
             where
                 K: Hash,
                 KF: Fn(usize) -> K + Send + Sync + 'static,
-                F: Fn(usize) + Send + Sync + 'static,
+                F: Fn(usize) -> Output + Send + Sync + 'static,
             {
-                let key_provider = CallbackWith::new(move |idx| hash_key(key_provider(idx)));
-                self.push_slot(LazySlot::items(count, builder, Some(key_provider)));
-                self
-            }
-
-            /// Append indexed items with stable keys and a shared render slot.
-            pub fn items_with_key_shared<K, KF>(
-                mut self,
-                count: usize,
-                key_provider: KF,
-                builder: impl Into<RenderSlotWith<usize>>,
-            ) -> Self
-            where
-                K: Hash,
-                KF: Fn(usize) -> K + Send + Sync + 'static,
-            {
-                self.push_slot(LazySlot::Items(LazyItemsSlot {
-                    count,
-                    builder: builder.into(),
-                    key_provider: Some(CallbackWith::new(move |index| {
-                        hash_key(key_provider(index))
-                    })),
-                }));
-                self
-            }
-
-            /// Append a sticky header item.
-            pub fn sticky_header<F>(mut self, builder: F) -> Self
-            where
-                F: Fn() + Send + Sync + 'static,
-            {
-                self.push_slot(LazySlot::sticky(builder, None));
-                self
-            }
-
-            /// Append a sticky header item with a stable key.
-            pub fn sticky_header_with_key<K, F>(mut self, key: K, builder: F) -> Self
-            where
-                K: Hash,
-                F: Fn() + Send + Sync + 'static,
-            {
-                self.push_slot(LazySlot::sticky(builder, Some(hash_key(key))));
-                self
-            }
-
-            /// Append a sticky header with a stable key and a shared indexed render
-            /// slot.
-            pub fn sticky_header_with_key_shared<K>(
-                mut self,
-                key: K,
-                builder: impl Into<RenderSlotWith<usize>>,
-            ) -> Self
-            where
-                K: Hash,
-            {
-                self.push_slot(LazySlot::Sticky(LazyStickySlot {
-                    builder: builder.into(),
-                    key_hash: Some(hash_key(key)),
-                }));
-                self
+                self.push_slot(move || {
+                    let key_provider =
+                        CallbackWith::new(move |index| hash_key(key_provider(index)));
+                    Some(LazySlot::items(count, builder, Some(key_provider)))
+                });
+                Self { props: self.props }
             }
 
             /// Append lazy items from an iterator, exposing index and element.
-            pub fn items_from_iter<I, T, F>(mut self, iter: I, builder: F) -> Self
+            pub fn items_from_iter<I, T, F, Output>(&self, iter: I, builder: F) -> Self
             where
                 I: IntoIterator<Item = T>,
                 T: Send + Sync + 'static,
-                F: Fn(usize, &T) + Send + Sync + 'static,
+                F: Fn(usize, &T) -> Output + Send + Sync + 'static,
             {
-                if let Some(slot) = lazy_items_from_iter_slot(iter, builder) {
-                    self.push_slot(slot);
-                }
-                self
+                let iter: Vec<T> = iter.into_iter().collect();
+                self.push_slot(move || lazy_items_from_iter_slot(iter, builder));
+                Self { props: self.props }
             }
 
-            /// Append lazy items from an iterator with a stable key provider.
-            pub fn items_from_iter_with_key<I, T, K, KF, F>(
-                mut self,
+            /// Append lazy items from an iterator with stable keys.
+            pub fn items_from_iter_with_key<I, T, K, KF, F, Output>(
+                &self,
                 iter: I,
                 key_provider: KF,
                 builder: F,
@@ -626,30 +578,98 @@ macro_rules! impl_lazy_list_builder {
                 T: Send + Sync + 'static,
                 K: Hash,
                 KF: Fn(usize, &T) -> K + Send + Sync + 'static,
-                F: Fn(usize, &T) + Send + Sync + 'static,
+                F: Fn(usize, &T) -> Output + Send + Sync + 'static,
             {
-                if let Some(slot) = lazy_items_from_iter_with_key_slot(iter, key_provider, builder)
-                {
-                    self.push_slot(slot);
-                }
-                self
+                let iter: Vec<T> = iter.into_iter().collect();
+                self.push_slot(move || {
+                    lazy_items_from_iter_with_key_slot(iter, key_provider, builder)
+                });
+                Self { props: self.props }
             }
 
             /// Append lazy items from an iterator when only the element is used.
-            pub fn items_from_iter_values<I, T, F>(self, iter: I, builder: F) -> Self
+            pub fn items_from_iter_values<I, T, F, Output>(&self, iter: I, builder: F) -> Self
             where
                 I: IntoIterator<Item = T>,
                 T: Send + Sync + 'static,
-                F: Fn(&T) + Send + Sync + 'static,
+                F: Fn(&T) -> Output + Send + Sync + 'static,
             {
                 self.items_from_iter(iter, move |_, item| builder(item))
             }
 
-            fn push_slot(&mut self, slot: LazySlot) {
-                self.props
-                    .content
-                    .get_or_insert_with(LazyListContent::default)
-                    .push(slot);
+            /// Append indexed items with stable keys and a shared render slot.
+            pub fn items_with_key_shared<K, KF>(
+                &self,
+                count: usize,
+                key_provider: KF,
+                builder: impl Into<RenderSlotWith<usize>> + Send + Sync + 'static,
+            ) -> Self
+            where
+                K: Hash,
+                KF: Fn(usize) -> K + Send + Sync + 'static,
+            {
+                self.push_slot(move || {
+                    let builder = builder.into();
+                    Some(LazySlot::Items(LazyItemsSlot {
+                        count,
+                        builder,
+                        key_provider: Some(CallbackWith::new(move |index| {
+                            hash_key(key_provider(index))
+                        })),
+                    }))
+                });
+                Self { props: self.props }
+            }
+
+            /// Append a sticky header item.
+            pub fn sticky_header<F, Output>(&self, builder: F) -> Self
+            where
+                F: Fn() -> Output + Send + Sync + 'static,
+            {
+                self.push_slot(move || Some(LazySlot::sticky(builder, None)));
+                Self { props: self.props }
+            }
+
+            /// Append a sticky header item with a stable key.
+            pub fn sticky_header_with_key<K, F, Output>(&self, key: K, builder: F) -> Self
+            where
+                K: Hash,
+                F: Fn() -> Output + Send + Sync + 'static,
+            {
+                let key = hash_key(key);
+                self.push_slot(move || Some(LazySlot::sticky(builder, Some(key))));
+                Self { props: self.props }
+            }
+
+            /// Append a sticky header with a stable key and a shared render slot.
+            pub fn sticky_header_with_key_shared<K>(
+                &self,
+                key: K,
+                builder: impl Into<RenderSlotWith<usize>> + Send + Sync + 'static,
+            ) -> Self
+            where
+                K: Hash,
+            {
+                let key_hash = Some(hash_key(key));
+                self.push_slot(move || {
+                    let builder = builder.into();
+                    Some(LazySlot::Sticky(LazyStickySlot { builder, key_hash }))
+                });
+                Self { props: self.props }
+            }
+
+            fn push_slot(
+                &self,
+                make_slot: impl FnOnce() -> Option<LazySlot> + Send + Sync + 'static,
+            ) {
+                self.props.append("content", move |props| {
+                    if let Some(slot) = make_slot() {
+                        props
+                            .content
+                            .get_or_insert_with(LazyListContent::default)
+                            .push(slot);
+                    }
+                });
             }
         }
     };
@@ -658,9 +678,9 @@ macro_rules! impl_lazy_list_builder {
 impl_lazy_list_builder!(LazyColumnBuilder);
 impl_lazy_list_builder!(LazyRowBuilder);
 
-fn lazy_item_slot<F>(builder: F) -> LazySlot
+fn lazy_item_slot<F, Output>(builder: F) -> LazySlot
 where
-    F: Fn() + Send + Sync + 'static,
+    F: Fn() -> Output + Send + Sync + 'static,
 {
     LazySlot::items(
         1,
@@ -671,26 +691,11 @@ where
     )
 }
 
-fn lazy_item_with_key_slot<K, F>(key: K, builder: F) -> LazySlot
-where
-    K: Hash,
-    F: Fn() + Send + Sync + 'static,
-{
-    let key_hash = hash_key(key);
-    LazySlot::items(
-        1,
-        move |_| {
-            builder();
-        },
-        Some(CallbackWith::new(move |_| key_hash)),
-    )
-}
-
-fn lazy_items_from_iter_slot<I, T, F>(iter: I, builder: F) -> Option<LazySlot>
+fn lazy_items_from_iter_slot<I, T, F, Output>(iter: I, builder: F) -> Option<LazySlot>
 where
     I: IntoIterator<Item = T>,
     T: Send + Sync + 'static,
-    F: Fn(usize, &T) + Send + Sync + 'static,
+    F: Fn(usize, &T) -> Output + Send + Sync + 'static,
 {
     let items: Arc<Vec<T>> = Arc::new(iter.into_iter().collect());
     if items.is_empty() {
@@ -713,7 +718,7 @@ where
     ))
 }
 
-fn lazy_items_from_iter_with_key_slot<I, T, K, KF, F>(
+fn lazy_items_from_iter_with_key_slot<I, T, K, KF, F, Output>(
     iter: I,
     key_provider: KF,
     builder: F,
@@ -723,7 +728,7 @@ where
     T: Send + Sync + 'static,
     K: Hash,
     KF: Fn(usize, &T) -> K + Send + Sync + 'static,
-    F: Fn(usize, &T) + Send + Sync + 'static,
+    F: Fn(usize, &T) -> Output + Send + Sync + 'static,
 {
     let items: Arc<Vec<T>> = Arc::new(iter.into_iter().collect());
     if items.is_empty() {
@@ -1755,9 +1760,13 @@ enum LazySlot {
 }
 
 impl LazySlot {
-    fn items<F>(count: usize, builder: F, key_provider: Option<CallbackWith<usize, u64>>) -> Self
+    fn items<F, Output>(
+        count: usize,
+        builder: F,
+        key_provider: Option<CallbackWith<usize, u64>>,
+    ) -> Self
     where
-        F: Fn(usize) + Send + Sync + 'static,
+        F: Fn(usize) -> Output + Send + Sync + 'static,
     {
         Self::Items(LazyItemsSlot {
             count,
@@ -1766,9 +1775,9 @@ impl LazySlot {
         })
     }
 
-    fn sticky<F>(builder: F, key_hash: Option<u64>) -> Self
+    fn sticky<F, Output>(builder: F, key_hash: Option<u64>) -> Self
     where
-        F: Fn() + Send + Sync + 'static,
+        F: Fn() -> Output + Send + Sync + 'static,
     {
         Self::Sticky(LazyStickySlot {
             builder: RenderSlotWith::new(move |_| {
@@ -2985,6 +2994,8 @@ mod tests {
         material_theme()
             .theme(MaterialTheme::default)
             .child(move || {
+                let item_width =
+                    controller.with(|c| 20 - c.scroll_controller().child_position().y as i32);
                 lazy_column()
                     .modifier(Modifier::new().constrain(
                         Some(AxisConstraint::exact(Px::new(60))),
@@ -2993,11 +3004,11 @@ mod tests {
                     .controller(controller)
                     .cross_axis_alignment(CrossAxisAlignment::Start)
                     .estimated_item_size(Px::new(20).into())
-                    .items(10, |index| {
+                    .items(10, move |index| {
                         LAZY_LIST_VISIBLE_ITEM_BUILD_COUNT.fetch_add(1, Ordering::Relaxed);
                         fixed_test_box()
                             .tag(format!("stable_visible_item_{index}"))
-                            .width(20)
+                            .width(item_width)
                             .height(20);
                     });
             });
@@ -3087,15 +3098,21 @@ mod tests {
             .viewport_px(80, 60),
         );
 
-        let _ = tessera_ui::testing::pump_layout_test_session(&mut session, 0);
+        tessera_ui::testing::pump_layout_test_session(&mut session, 0)
+            .node("stable_visible_item_0")
+            .width(20);
         let first_builds = LAZY_LIST_VISIBLE_ITEM_BUILD_COUNT.load(Ordering::Relaxed);
         assert!(first_builds > 0);
 
-        let _ = tessera_ui::testing::pump_layout_test_session(&mut session, 16_666_667);
+        tessera_ui::testing::pump_layout_test_session(&mut session, 16_666_667)
+            .node("stable_visible_item_0")
+            .width(22);
         let second_builds = LAZY_LIST_VISIBLE_ITEM_BUILD_COUNT.load(Ordering::Relaxed);
         assert!(second_builds > first_builds);
 
-        let _ = tessera_ui::testing::pump_layout_test_session(&mut session, 33_333_334);
+        tessera_ui::testing::pump_layout_test_session(&mut session, 33_333_334)
+            .node("stable_visible_item_0")
+            .width(24);
         let third_builds = LAZY_LIST_VISIBLE_ITEM_BUILD_COUNT.load(Ordering::Relaxed);
         assert!(third_builds > second_builds);
     }

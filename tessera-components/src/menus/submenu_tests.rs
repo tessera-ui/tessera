@@ -308,15 +308,18 @@ fn disclosure_fixture() {
             .is_open(true)
             .modifier(Modifier::new().width(Dp(240.0)))
             .menu_content(move || {
-                let mut item = menu_item().label("Share").submenu_content(|| {
+                let item = menu_item().label("Share").submenu_content(|| {
                     menu_item().label("Copy link").on_click(|| {});
                 });
                 match trailing.get() {
-                    1 => item = item.trailing_text("Hint"),
-                    2 => item = item.trailing_icon(crate::material_icons::filled::STAR_SVG),
+                    1 => {
+                        item.trailing_text("Hint");
+                    }
+                    2 => {
+                        item.trailing_icon(crate::material_icons::filled::STAR_SVG);
+                    }
                     _ => {}
                 }
-                drop(item);
             });
     });
 }

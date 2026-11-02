@@ -96,7 +96,7 @@ impl LinkedTextRun {
 ///     navigate.call();
 ///     assert!(opened.get());
 /// }
-/// explanation();
+/// # tessera_ui::testing::layout_test(explanation).run();
 /// ```
 #[tessera]
 pub fn linked_text(

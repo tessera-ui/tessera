@@ -1331,7 +1331,7 @@ fn range_slider_colors(args: &RangeSliderConfig, scheme: &MaterialColorScheme) -
 ///     });
 /// # });
 /// # }
-/// # component();
+/// # tessera_ui::testing::layout_test(component).run();
 /// ```
 #[tessera]
 pub fn slider(
@@ -1819,7 +1819,7 @@ fn measure_centered_slider(
 /// assert_eq!(current_value.get(), 0.25);
 /// # });
 /// # }
-/// # component();
+/// # tessera_ui::testing::layout_test(component).run();
 /// ```
 #[tessera]
 pub fn centered_slider(
@@ -2290,7 +2290,7 @@ fn measure_range_slider(
 /// assert_eq!(range_value.get(), (0.2, 0.8));
 /// # });
 /// # }
-/// # component();
+/// # tessera_ui::testing::layout_test(component).run();
 /// ```
 #[tessera]
 pub fn range_slider(

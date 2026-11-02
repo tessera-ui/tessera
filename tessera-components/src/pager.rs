@@ -900,7 +900,7 @@ fn apply_pager_input_modifiers(
 ///         });
 /// }
 ///
-/// demo();
+/// # tessera_ui::testing::layout_test(demo).run();
 /// ```
 #[tessera]
 pub fn horizontal_pager(
@@ -1016,7 +1016,7 @@ pub fn horizontal_pager(
 ///         });
 /// }
 ///
-/// demo();
+/// # tessera_ui::testing::layout_test(demo).run();
 /// ```
 #[tessera]
 pub fn vertical_pager(

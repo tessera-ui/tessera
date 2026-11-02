@@ -330,7 +330,7 @@ fn process_pointer_gestures(
 ///     assert_eq!(slider_value.get(), 0.5);
 /// }
 ///
-/// demo();
+/// # tessera_ui::testing::layout_test(demo).run();
 /// ```
 #[tessera]
 pub fn glass_slider(

@@ -431,47 +431,55 @@ struct ChipResolvedArgs {
 
 impl ChipBuilder {
     /// Applies the assist chip preset and updates the visible label.
-    pub fn assist(self, label: impl Into<String>) -> Self {
+    pub fn assist(&self, label: impl Into<String>) -> Self {
         self.variant(ChipVariant::Assist).label(label.into())
     }
 
     /// Applies the suggestion chip preset and updates the visible label.
-    pub fn suggestion(self, label: impl Into<String>) -> Self {
+    pub fn suggestion(&self, label: impl Into<String>) -> Self {
         self.variant(ChipVariant::Suggestion).label(label.into())
     }
 
     /// Applies the filter chip preset and updates the visible label.
-    pub fn filter(self, label: impl Into<String>) -> Self {
+    pub fn filter(&self, label: impl Into<String>) -> Self {
         self.variant(ChipVariant::Filter).label(label.into())
     }
 
     /// Applies the input chip preset and updates the visible label.
-    pub fn input(self, label: impl Into<String>) -> Self {
+    pub fn input(&self, label: impl Into<String>) -> Self {
         self.variant(ChipVariant::Input).label(label.into())
     }
 
     /// Sets the leading icon content using any supported icon source.
-    pub fn leading_icon(mut self, icon: impl Into<Painter>) -> Self {
-        self.props.leading_icon = Some(icon.into());
-        self
+    pub fn leading_icon(&self, icon: impl Into<Painter>) -> Self {
+        let value = Some(icon.into());
+        self.props
+            .configure("leading_icon", move |props| props.leading_icon = value);
+        Self { props: self.props }
     }
 
     /// Clears the leading icon content.
-    pub fn clear_leading_icon(mut self) -> Self {
-        self.props.leading_icon = None;
-        self
+    pub fn clear_leading_icon(&self) -> Self {
+        let value = None;
+        self.props
+            .configure("leading_icon", move |props| props.leading_icon = value);
+        Self { props: self.props }
     }
 
     /// Sets the trailing icon content using any supported icon source.
-    pub fn trailing_icon(mut self, icon: impl Into<Painter>) -> Self {
-        self.props.trailing_icon = Some(icon.into());
-        self
+    pub fn trailing_icon(&self, icon: impl Into<Painter>) -> Self {
+        let value = Some(icon.into());
+        self.props
+            .configure("trailing_icon", move |props| props.trailing_icon = value);
+        Self { props: self.props }
     }
 
     /// Clears the trailing icon content.
-    pub fn clear_trailing_icon(mut self) -> Self {
-        self.props.trailing_icon = None;
-        self
+    pub fn clear_trailing_icon(&self) -> Self {
+        let value = None;
+        self.props
+            .configure("trailing_icon", move |props| props.trailing_icon = value);
+        Self { props: self.props }
     }
 }
 
@@ -535,7 +543,7 @@ impl ChipBuilder {
 ///     .on_click_shared(toggle);
 /// #     });
 /// # }
-/// # component();
+/// # tessera_ui::testing::layout_test(component).run();
 /// ```
 #[tessera]
 pub fn chip(

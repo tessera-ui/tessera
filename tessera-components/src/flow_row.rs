@@ -39,21 +39,23 @@ use crate::{
 ///
 /// ```
 /// use tessera_components::{flow_row::flow_row, text::text};
-/// use tessera_ui::{LayoutResult, remember, tessera};
+/// use tessera_ui::tessera;
 ///
+/// # use std::sync::{Arc, atomic::{AtomicUsize, Ordering}};
 /// #[tessera]
-/// fn demo() {
-///     let rendered = remember(|| 0usize);
+/// fn demo(rendered: Arc<AtomicUsize>) {
 ///     flow_row().children(move || {
-///         rendered.with_mut(|count| *count += 1);
+///         rendered.fetch_or(1, Ordering::Relaxed);
 ///         text().content("First");
-///         rendered.with_mut(|count| *count += 1);
+///         rendered.fetch_or(2, Ordering::Relaxed);
 ///         text().content("Second");
 ///     });
-///     assert_eq!(rendered.get(), 2);
 /// }
 ///
-/// demo();
+/// let rendered = Arc::new(AtomicUsize::new(0));
+/// let observed = Arc::clone(&rendered);
+/// tessera_ui::testing::layout_test(move || demo(Arc::clone(&observed))).run();
+/// assert_eq!(rendered.load(Ordering::Relaxed), 3);
 /// ```
 #[tessera]
 pub fn flow_row(

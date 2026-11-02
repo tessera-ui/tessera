@@ -108,74 +108,90 @@ impl TryIntoImageData for &Path {
 
 impl ImageBuilder {
     /// Replaces the image content with a shared painter value.
-    pub fn painter(mut self, painter: impl Into<Painter>) -> Self {
-        self.props.painter = Some(painter.into());
-        self
+    pub fn painter(&self, painter: impl Into<Painter>) -> Self {
+        let value = Some(painter.into());
+        self.props
+            .configure("painter", move |props| props.painter = value);
+        Self { props: self.props }
     }
 
     /// Decodes image content from any supported source.
-    pub fn try_painter<T>(mut self, source: T) -> Result<Self, PainterLoadError>
+    pub fn try_painter<T>(&self, source: T) -> Result<Self, PainterLoadError>
     where
         T: TryIntoPainter,
     {
-        self.props.painter = Some(source.try_into_painter()?);
-        Ok(self)
+        let value = Some(source.try_into_painter()?);
+        self.props
+            .configure("painter", move |props| props.painter = value);
+        Ok(Self { props: self.props })
     }
 
     /// Replaces the image data with already-decoded raster pixels.
-    pub fn raster(mut self, data: impl Into<ImageData>) -> Self {
-        self.props.painter = Some(Painter::Raster(data.into()));
-        self
+    pub fn raster(&self, data: impl Into<ImageData>) -> Self {
+        let value = Some(Painter::Raster(data.into()));
+        self.props
+            .configure("painter", move |props| props.painter = value);
+        Self { props: self.props }
     }
 
     /// Replaces the image content with already-decoded vector geometry.
-    pub fn vector(mut self, data: impl Into<ImageVectorData>) -> Self {
-        self.props.painter = Some(Painter::Vector(data.into()));
-        self
+    pub fn vector(&self, data: impl Into<ImageVectorData>) -> Self {
+        let value = Some(Painter::Vector(data.into()));
+        self.props
+            .configure("painter", move |props| props.painter = value);
+        Self { props: self.props }
     }
 
     /// Decodes raster image data from bytes/path/asset input and stores it.
-    pub fn try_raster<T>(mut self, source: T) -> Result<Self, ImageLoadError>
+    pub fn try_raster<T>(&self, source: T) -> Result<Self, ImageLoadError>
     where
         T: TryIntoImageData,
     {
-        self.props.painter = Some(Painter::Raster(source.try_into_image_data()?));
-        Ok(self)
+        let value = Some(Painter::Raster(source.try_into_image_data()?));
+        self.props
+            .configure("painter", move |props| props.painter = value);
+        Ok(Self { props: self.props })
     }
 
     /// Decodes vector image data from bytes/path input and stores it.
-    pub fn try_vector<T>(mut self, source: T) -> Result<Self, ImageVectorLoadError>
+    pub fn try_vector<T>(&self, source: T) -> Result<Self, ImageVectorLoadError>
     where
         T: TryIntoImageVectorData,
     {
-        self.props.painter = Some(Painter::Vector(source.try_into_image_vector_data()?));
-        Ok(self)
+        let value = Some(Painter::Vector(source.try_into_image_vector_data()?));
+        self.props
+            .configure("painter", move |props| props.painter = value);
+        Ok(Self { props: self.props })
     }
 
     /// Decodes raster image data from an asset handle and stores it.
-    pub fn try_raster_asset<T>(mut self, asset: T) -> Result<Self, ImageLoadError>
+    pub fn try_raster_asset<T>(&self, asset: T) -> Result<Self, ImageLoadError>
     where
         T: AssetExt,
     {
         let bytes = asset
             .read()
             .map_err(|source| ImageLoadError::AssetRead { source })?;
-        self.props.painter = Some(Painter::Raster(decode_image_from_bytes(bytes.as_ref())?));
-        Ok(self)
+        let value = Some(Painter::Raster(decode_image_from_bytes(bytes.as_ref())?));
+        self.props
+            .configure("painter", move |props| props.painter = value);
+        Ok(Self { props: self.props })
     }
 
     /// Decodes vector image data from an asset handle and stores it.
-    pub fn try_vector_asset<T>(mut self, asset: T) -> Result<Self, ImageVectorLoadError>
+    pub fn try_vector_asset<T>(&self, asset: T) -> Result<Self, ImageVectorLoadError>
     where
         T: AssetExt,
     {
         let bytes = asset
             .read()
             .map_err(|source| ImageVectorLoadError::AssetRead { source })?;
-        self.props.painter = Some(Painter::Vector(
+        let value = Some(Painter::Vector(
             bytes.as_ref().try_into_image_vector_data()?,
         ));
-        Ok(self)
+        self.props
+            .configure("painter", move |props| props.painter = value);
+        Ok(Self { props: self.props })
     }
 }
 

@@ -273,12 +273,14 @@ impl RenderSlot {
     ///
     /// This must be called during a component build.
     #[track_caller]
-    pub fn new<F>(render: F) -> Self
+    pub fn new<F, Output>(render: F) -> Self
     where
-        F: Fn() + Send + Sync + 'static,
+        F: Fn() -> Output + Send + Sync + 'static,
     {
         Self {
-            repr: RenderSlotRepr::Handle(remember_render_slot_handle(render)),
+            repr: RenderSlotRepr::Handle(remember_render_slot_handle(move || {
+                render();
+            })),
         }
     }
 
@@ -294,7 +296,7 @@ impl RenderSlot {
         match self.repr {
             RenderSlotRepr::Empty => {}
             RenderSlotRepr::Handle(handle) => {
-                render_slot_boundary(handle);
+                render_slot_boundary(handle).props.execute_now();
             }
         }
     }
@@ -306,9 +308,9 @@ fn render_slot_boundary(handle: FunctorHandle) {
     invoke_render_slot_handle(handle);
 }
 
-impl<F> From<F> for RenderSlot
+impl<F, Output> From<F> for RenderSlot
 where
-    F: Fn() + Send + Sync + 'static,
+    F: Fn() -> Output + Send + Sync + 'static,
 {
     fn from(render: F) -> Self {
         Self::new(render)
@@ -353,13 +355,15 @@ impl<T> RenderSlotWith<T> {
     ///
     /// This must be called during a component build.
     #[track_caller]
-    pub fn new<F>(render: F) -> Self
+    pub fn new<F, Output>(render: F) -> Self
     where
         T: 'static,
-        F: Fn(T) + Send + Sync + 'static,
+        F: Fn(T) -> Output + Send + Sync + 'static,
     {
         Self {
-            handle: remember_render_slot_with_handle(render),
+            handle: remember_render_slot_with_handle(move |value| {
+                render(value);
+            }),
             marker: PhantomData,
         }
     }
@@ -369,7 +373,9 @@ impl<T> RenderSlotWith<T> {
     where
         T: Clone + PartialEq + Send + Sync + 'static,
     {
-        render_slot_with_boundary(self.handle, value);
+        render_slot_with_boundary(self.handle, value)
+            .props
+            .execute_now();
     }
 }
 
@@ -382,10 +388,10 @@ where
     invoke_render_slot_with_handle(handle, value)
 }
 
-impl<T, F> From<F> for RenderSlotWith<T>
+impl<T, F, Output> From<F> for RenderSlotWith<T>
 where
     T: 'static,
-    F: Fn(T) + Send + Sync + 'static,
+    F: Fn(T) -> Output + Send + Sync + 'static,
 {
     fn from(render: F) -> Self {
         Self::new(render)
@@ -435,6 +441,8 @@ impl Prop for () {
 pub trait ErasedProp: Send + Sync {
     /// Access the concrete prop value as `Any`.
     fn as_any(&self) -> &dyn Any;
+    /// Access the concrete prop value for configuration.
+    fn as_any_mut(&mut self) -> &mut dyn Any;
     /// Clone this erased prop object.
     fn clone_box(&self) -> Box<dyn ErasedProp>;
     /// Compare with another erased prop object.
@@ -446,6 +454,10 @@ where
     T: Prop,
 {
     fn as_any(&self) -> &dyn Any {
+        self
+    }
+
+    fn as_any_mut(&mut self) -> &mut dyn Any {
         self
     }
 

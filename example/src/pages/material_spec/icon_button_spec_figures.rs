@@ -341,14 +341,11 @@ fn control(
                         selected.set(!selected.get());
                     }
                 });
-            let button = if is_selected {
+            if is_selected {
                 button
                     .color(scheme.inverse_surface)
-                    .content_color(scheme.inverse_on_surface)
-            } else {
-                button
-            };
-            drop(button);
+                    .content_color(scheme.inverse_on_surface);
+            }
         });
 }
 

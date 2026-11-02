@@ -397,15 +397,14 @@ fn card(
             let screen_label = screen_label.clone();
             let rail = rail.clone();
             let body = RenderSlot::new(move || {
-                let mut screen = figures::screen(screen_label.clone(), width, Dp(340.0))
+                let screen = figures::screen(screen_label.clone(), width, Dp(340.0))
                     .trailing(trailing)
                     .content_kind(content_kind)
                     .bar(bar)
                     .hidden_menu(hidden);
                 if !hidden && bar == 0 {
-                    screen = screen.rail_shared(rail.clone());
+                    screen.rail_shared(rail.clone());
                 }
-                drop(screen);
             });
             if dark {
                 // Only this illustration uses the dark scheme; the article
@@ -969,7 +968,7 @@ fn rail_color_half_content(dark: bool) {
                         if expanded {
                             spacer().modifier(Modifier::new().width(Dp(48.0)));
                         }
-                        let mut rail = figures::specimen(
+                        let rail = figures::specimen(
                             format!(
                                 "{mode} {} reference rail",
                                 if expanded { "expanded" } else { "collapsed" }
@@ -986,9 +985,8 @@ fn rail_color_half_content(dark: bool) {
                         .filled(true)
                         .callouts(color_callouts(expanded));
                         if let Some(container) = container {
-                            rail = rail.container(container);
+                            rail.container(container);
                         }
-                        drop(rail);
                     }
                 });
         }),
@@ -1064,9 +1062,9 @@ fn state_grid(expanded: bool) {
                                         ),
                                     )
                                     .children(move || {
-                                        let mut rail = figures::mock_rail().expanded(expanded);
+                                        let rail = figures::mock_rail().expanded(expanded);
                                         if expanded {
-                                            rail = rail.width(Dp(184.0));
+                                            rail.width(Dp(184.0));
                                         }
                                         rail.set(0)
                                             .count(3)
@@ -3110,9 +3108,24 @@ mod tests {
         };
 
         for (component, menu) in [
-            (gallery_fixture as fn(), None),
-            (fixture as fn(), Some("Expand navigation rail")),
-            (scrolling_fixture as fn(), Some("Expand fixed rail")),
+            (
+                (|| {
+                    gallery_fixture();
+                }) as fn(),
+                None,
+            ),
+            (
+                (|| {
+                    fixture();
+                }) as fn(),
+                Some("Expand navigation rail"),
+            ),
+            (
+                (|| {
+                    scrolling_fixture();
+                }) as fn(),
+                Some("Expand fixed rail"),
+            ),
         ] {
             let mut renderer = HeadlessRenderer::new(
                 Box::new(component),

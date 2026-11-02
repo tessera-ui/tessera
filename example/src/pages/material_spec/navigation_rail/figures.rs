@@ -358,7 +358,7 @@ fn specimen_item(
     boxed()
         .modifier(watch(geometry, ITEM_KEYS[index.min(5)]))
         .children(move || {
-            let mut item = navigation_rail_item()
+            let item = navigation_rail_item()
                 .label(name.clone())
                 .selected(selected.get() == index)
                 .on_click(move || selected.set(index))
@@ -370,8 +370,7 @@ fn specimen_item(
                         });
                 });
             if badge_series && index == badge_start + 2 {
-                item = item
-                    .accessibility_description("999 or more new items")
+                item.accessibility_description("999 or more new items")
                     .badge_shared(RenderSlot::new(move || {
                         boxed()
                             .modifier(watch(geometry, "max-badge"))
@@ -382,18 +381,16 @@ fn specimen_item(
                             });
                     }));
             } else if badge_series && index == badge_start {
-                item =
-                    item.accessibility_description("New activity")
-                        .badge_shared(RenderSlot::new(move || {
-                            boxed()
-                                .modifier(watch(geometry, "small-badge"))
-                                .children(|| {
-                                    badge();
-                                });
-                        }));
+                item.accessibility_description("New activity")
+                    .badge_shared(RenderSlot::new(move || {
+                        boxed()
+                            .modifier(watch(geometry, "small-badge"))
+                            .children(|| {
+                                badge();
+                            });
+                    }));
             } else if badge_series && index == badge_start + 1 {
-                item = item
-                    .accessibility_description("3 new items")
+                item.accessibility_description("3 new items")
                     .badge_shared(RenderSlot::new(move || {
                         boxed()
                             .modifier(watch(geometry, "large-badge"))
@@ -404,35 +401,32 @@ fn specimen_item(
                             });
                     }));
             } else if badges && index == badge_start {
-                item = item
-                    .accessibility_description(if max_badge {
-                        "999 or more new items"
-                    } else {
-                        "3 new items"
-                    })
+                item.accessibility_description(if max_badge {
+                    "999 or more new items"
+                } else {
+                    "3 new items"
+                })
+                .badge_shared(RenderSlot::new(move || {
+                    boxed()
+                        .modifier(watch(geometry, "large-badge"))
+                        .children(move || {
+                            badge_with_content().content(move || {
+                                text()
+                                    .content(if max_badge { "999+" } else { "3" })
+                                    .modifier(watch(geometry, "badge-label"));
+                            });
+                        });
+                }));
+            } else if badges && index == badge_start + 1 {
+                item.accessibility_description("New activity")
                     .badge_shared(RenderSlot::new(move || {
                         boxed()
-                            .modifier(watch(geometry, "large-badge"))
-                            .children(move || {
-                                badge_with_content().content(move || {
-                                    text()
-                                        .content(if max_badge { "999+" } else { "3" })
-                                        .modifier(watch(geometry, "badge-label"));
-                                });
+                            .modifier(watch(geometry, "small-badge"))
+                            .children(|| {
+                                badge();
                             });
                     }));
-            } else if badges && index == badge_start + 1 {
-                item =
-                    item.accessibility_description("New activity")
-                        .badge_shared(RenderSlot::new(move || {
-                            boxed()
-                                .modifier(watch(geometry, "small-badge"))
-                                .children(|| {
-                                    badge();
-                                });
-                        }));
             }
-            drop(item);
         });
 }
 

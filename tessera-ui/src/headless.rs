@@ -185,8 +185,8 @@ pub struct HeadlessRenderer {
 impl HeadlessRenderer {
     /// Creates a headless renderer for the given entry point and render
     /// modules.
-    pub fn new(
-        entry: Box<dyn Fn()>,
+    pub fn new<Output: 'static>(
+        entry: Box<dyn Fn() -> Output>,
         modules: Vec<Box<dyn RenderModule>>,
         config: HeadlessConfig,
     ) -> Result<Self, HeadlessError> {
@@ -219,7 +219,9 @@ impl HeadlessRenderer {
 
         Ok(Self {
             core,
-            entry,
+            entry: Box::new(move || {
+                entry();
+            }),
             cursor: CursorState::default(),
             keyboard: KeyboardState::default(),
             ime: ImeState::default(),

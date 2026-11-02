@@ -28,21 +28,13 @@ pub(crate) fn load_workspace(options: &CheckOptions<'_>) -> Result<LoadedWorkspa
     if let Some(package) = options.package {
         cargo_config.extra_args.push("--package".to_string());
         cargo_config.extra_args.push(package.to_string());
-        // The default command also checks every workspace member, whose host
-        // dependencies may be absent from the selected target's metadata.
-        if options.target.is_some() {
-            cargo_config.run_build_script_command = Some(build_script_command(options, package));
-        }
+        cargo_config.run_build_script_command = Some(build_script_command(options, package));
     }
 
     let load_config = LoadCargoConfig {
-        // Collecting build-script output runs a full `cargo check` over the
-        // workspace before any file is analysed. That build has no deadline,
-        // dominates the wall clock of a source-level color check, and blocks
-        // the check entirely when it cannot finish, so it is not performed
-        // here. Compilation is verified by the build command that follows the
-        // color check instead.
-        load_out_dirs_from_check: false,
+        // Generated configuration handles require macro expansion to resolve
+        // saved values and parameters across ordinary configuration helpers.
+        load_out_dirs_from_check: true,
         with_proc_macro_server: ProcMacroServerChoice::Sysroot,
         prefill_caches: false,
         num_worker_threads: 1,

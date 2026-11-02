@@ -110,7 +110,7 @@ fn dialog_accessibility_fixture() {
     let settings = remember(|| (0_u8, false));
     CONTENT.set(Some(settings));
     material_theme().child(move || {
-        let mut provider = dialog_provider()
+        let provider = dialog_provider()
             .is_open(true)
             .role(DialogRole::AlertDialog)
             .dialog_content(move || match settings.get().0 {
@@ -144,11 +144,10 @@ fn dialog_accessibility_fixture() {
                 }
             });
         if settings.get().1 {
-            provider = provider
+            provider
                 .accessibility_label("Explicit title")
                 .accessibility_description("Explicit description");
         }
-        drop(provider);
     });
 }
 

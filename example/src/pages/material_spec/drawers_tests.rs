@@ -173,7 +173,11 @@ fn page_figure_fixture() {
     });
 }
 
-fn gpu_renderer(root: fn(), width: u32, height: u32) -> tessera_ui::HeadlessRenderer {
+fn gpu_renderer<Output: 'static>(
+    root: fn() -> Output,
+    width: u32,
+    height: u32,
+) -> tessera_ui::HeadlessRenderer {
     let mut renderer = tessera_ui::HeadlessRenderer::new(
         Box::new(root),
         vec![Box::new(DrawerPipelines)],

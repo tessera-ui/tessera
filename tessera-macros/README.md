@@ -38,47 +38,36 @@ use tessera_macros::tessera;
 use tessera_ui::Callback;
 
 #[tessera]
-fn button_component(label: String, on_click: Callback) {
+fn button_component(label: Option<String>, on_click: Option<Callback>) {
     let _ = (label, on_click);
     // Component implementation
 }
 ```
 
-Public components are called through the generated builder syntax:
+Call a component to register a use, then configure its returned handle:
 
 ```rust
 button_component()
     .label("Confirm")
-    .on_click(Callback::new(|| {}));
+    .on_click(|| {});
 ```
 
 ## How It Works
 
-The `#[tessera]` macro performs the following transformations:
+The macro generates an entry, owned props, a typed configuration handle, and a
+replay runner. The entry reserves declaration identity and registers a Pending
+use. Setters configure that record. The runtime finalizes props and executes the
+runner in the captured context, then expands newly declared descendants before
+finishing the component scope.
 
-1. **Component Registration**: Adds the function to the component tree with its name
-2. **Runtime Access**: Injects the internal runtime plumbing needed for build and replay
-3. **Context Injection**: Establishes internal component context used by Tessera during build and replay
-4. **Tree Management**: Handles pushing and popping nodes from the component tree
-5. **Error Safety**: Wraps the original function body to prevent early returns from breaking the component tree
+Generated `*Builder` handles can be saved and passed to helpers. Dropping a
+handle has no effect on the declaration. Setters reject committed and stale
+handles. Zero-parameter and parameterized components share this model.
 
-### Before Macro Application
-
-```rust
-#[tessera]
-fn my_component() {
-    // Component logic
-}
-```
-
-### After Macro Application (Conceptual)
-
-```rust
-fn my_component() {
-    // Establish build context, register a node, and attach replay metadata.
-    // Execute the original body inside the managed component scope.
-}
-```
+RenderSlot setters materialize their closures in a stable property scope tied
+to the declaration, independently of configuration groups and setter order.
+Slots remain deferred content that their parent controls. See
+[component calls](../docs/COMPONENT_CALLS.md) for execution and lifetime details.
 
 ## Examples
 
@@ -97,8 +86,8 @@ fn counter_component() {
     let count = remember(|| 0i32);
 
     button()
-        .on_click(Callback::new(move || count.with_mut(|c| *c += 1)))
-        .child(|| {
+        .on_click(move || count.with_mut(|c| *c += 1))
+        .child(move || {
             let label = format!("Count: {}", count.get());
             text().content(label);
         });

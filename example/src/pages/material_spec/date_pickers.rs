@@ -1028,9 +1028,15 @@ fn date_overview_variant(index: usize, scale: f64) {
                         .required_size(Dp(360.0), Dp(620.0)),
                 )
                 .children(move || match index {
-                    0 => overview_docked_picker(),
-                    1 => overview_modal_picker(),
-                    _ => overview_modal_input(),
+                    0 => {
+                        overview_docked_picker();
+                    }
+                    1 => {
+                        overview_modal_picker();
+                    }
+                    _ => {
+                        overview_modal_input();
+                    }
                 });
         });
 }

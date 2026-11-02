@@ -38,10 +38,18 @@ fn fixture() {
             .children(|| {
                 spacer().modifier(Modifier::new().height(Dp(32.0)));
                 match SCENE.get() {
-                    0 => app_bar_figure(),
-                    1 => toolbar_figure(),
-                    2 => labeling_figure(),
-                    _ => density_figure(),
+                    0 => {
+                        app_bar_figure();
+                    }
+                    1 => {
+                        toolbar_figure();
+                    }
+                    2 => {
+                        labeling_figure();
+                    }
+                    _ => {
+                        density_figure();
+                    }
                 }
                 spacer().modifier(Modifier::new().height(Dp(800.0)));
             });

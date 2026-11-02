@@ -425,7 +425,7 @@ fn push_build_root_node() -> BuildRootNodeGuard {
 }
 
 #[instrument(level = "debug", skip(entry_point))]
-pub(crate) fn build_component_tree<F: Fn()>(entry_point: &F) -> BuildTreeResult {
+pub(crate) fn build_component_tree<F: Fn() -> Output, Output>(entry_point: &F) -> BuildTreeResult {
     let run_root_recompose = || {
         let recomposed_state_instance_logic_ids = live_slot_instance_logic_ids();
         let recomposed_context_instance_logic_ids = live_context_slot_instance_logic_ids();
@@ -444,7 +444,9 @@ pub(crate) fn build_component_tree<F: Fn()>(entry_point: &F) -> BuildTreeResult 
         begin_recompose_context_slot_epoch();
         let _phase_guard = crate::runtime::push_phase(crate::runtime::RuntimePhase::Build);
         let _root_guard = push_build_root_node();
-        entry_point();
+        crate::component_call::with_pending_scope(|| {
+            entry_point();
+        });
         finalize_frame_component_replay_tracking();
         finalize_frame_component_context_tracking();
         finalize_frame_layout_dirty_tracking();
@@ -638,7 +640,12 @@ pub(crate) fn build_component_tree<F: Fn()>(entry_point: &F) -> BuildTreeResult 
                             &replay_group_path,
                             replay_instance_key_override,
                             || {
-                                replay.runner.run(replay.props.as_ref());
+                                crate::component_call::with_component_runner(
+                                    &replay.runner,
+                                    || {
+                                        replay.runner.run(replay.props.as_ref());
+                                    },
+                                );
                             },
                         );
                     });

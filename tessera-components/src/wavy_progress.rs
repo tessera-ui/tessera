@@ -142,7 +142,7 @@ fn circular_indeterminate(elapsed: u64) -> (f32, f32) {
 ///             .paused(true);
 ///     });
 /// }
-/// content();
+/// # tessera_ui::testing::layout_test(content).run();
 /// ```
 #[tessera]
 pub fn circular_wavy_progress_indicator(
@@ -466,7 +466,7 @@ impl tessera_ui::LayoutModifierNode for LinearWaveLayout {
 ///         linear_wavy_progress_indicator().progress(0.5).paused(true);
 ///     });
 /// }
-/// content();
+/// # tessera_ui::testing::layout_test(content).run();
 /// ```
 #[tessera]
 pub fn linear_wavy_progress_indicator(

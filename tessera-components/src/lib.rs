@@ -8,6 +8,7 @@
 //! ```no_run
 //! use tessera_components::theme::{MaterialTheme, material_theme};
 //!
+//! #[tessera_ui::tessera]
 //! fn app() {
 //!     material_theme()
 //!         .theme(|| MaterialTheme::default())
@@ -51,7 +52,7 @@
 //! text_input();
 //! #     });
 //! # }
-//! # component();
+//! # tessera_ui::testing::layout_test(component).run();
 //! ```
 #![deny(
     missing_docs,

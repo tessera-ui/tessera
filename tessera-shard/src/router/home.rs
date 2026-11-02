@@ -82,7 +82,7 @@ where
 /// # fn demo() {
 /// shard_home().root(DemoDestination);
 /// # }
-/// # demo();
+/// # tessera_ui::testing::layout_test(demo).run();
 /// ```
 #[tessera(tessera_ui)]
 pub fn shard_home(
@@ -125,11 +125,13 @@ pub fn shard_home(
 }
 
 impl ShardHomeBuilder {
-    pub fn root<T>(mut self, root: T) -> Self
+    pub fn root<T>(&self, root: T) -> Self
     where
         T: RouterDestination + 'static,
     {
-        self.props.root = Some(Arc::new(root));
-        self
+        let value: Option<Arc<dyn RouterDestination>> = Some(Arc::new(root));
+        self.props
+            .configure("root", move |props| props.root = value);
+        Self { props: self.props }
     }
 }

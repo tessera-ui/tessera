@@ -128,8 +128,8 @@ fn white_scrim_fixture() {
     });
 }
 
-fn render(
-    root: fn(),
+fn render<Output: 'static>(
+    root: fn() -> Output,
     width: u32,
     height: u32,
     format: TextureFormat,

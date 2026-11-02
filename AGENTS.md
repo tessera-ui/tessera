@@ -39,13 +39,17 @@ programming contract; the guidelines below also govern framework implementation.
   - Compose child components to build the complete component tree
   - Use `Modifier` chains for node-local behavior such as layout modifiers, input, semantics, drawing, and focus
   - Use the internal layout primitive only inside framework/internal crates when a component must provide a custom layout policy
-  - All child component closures must be executed to build the complete component tree
+  - Expand selected child content through `RenderSlot` / `RenderSlotWith` during build. A parent decides whether, when, and where its slots expand.
 
 ### Component API Pattern
 
 - Truly zero-config components may use `#[tessera] pub fn component()` with no parameters.
 - Configurable components must use a single public entrypoint declared with named owned parameters: `#[tessera] pub fn component(foo: Foo, bar: Bar, ...)`.
-- Public component calls must use the generated builder syntax: `component().foo(value).bar(value);`.
+- A component entry immediately registers one use and returns its typed configuration handle. Registration fixes declaration ownership, order, and stable identity. Configure the same Pending use with chaining, saved handles, or ordinary configuration helpers, including across groups.
+- The runtime finalizes props when execution starts and completes dynamically registered descendants before layout. Saving, moving, dropping, or forgetting a handle has no execution or cancellation effect. Modifying a committed or stale handle panics.
+- Generated `*Builder` types are configuration handles; they do not execute component bodies from `Drop`. Scope restoration and resource cleanup guards may still use `Drop`.
+- Keep child content in `RenderSlot` / `RenderSlotWith`. Controlled slot expansion can commit earlier Pending calls in the current fragment, so handle validity is per call rather than per frame. See [component calls](docs/COMPONENT_CALLS.md).
+- Public component calls use named configuration: `component().foo(value).bar(value);`.
 - Do not introduce public wrapper variants (`*_with_controller`, `*_impl`, or extra public forwarding layers).
 - Component parameters must use owned types that satisfy the macro requirements (`Clone`, `Default`, `Send`, `Sync`, and `'static` through the generated props model).
 - `#[tessera]` parameter-level `#[default(...)]` is not supported. Do not introduce it in new or migrated code.
@@ -78,12 +82,13 @@ programming contract; the guidelines below also govern framework implementation.
 - `cargo-tessera` should run color checking before invoking the real `cargo build`, `cargo check`, `cargo run`, `cargo tessera dev`, or platform-specific build command. It should use the resolved Cargo package graph for the selected package, target, features, and profile, not just workspace crates.
 - Tessera color is an execution-context color, not a general UI-code marker. The only colored contexts are:
   - free functions annotated with `#[tessera]`, or a project-approved alias that lowers to a Tessera component free function such as `#[shard]`;
-  - closures carried directly by `RenderSlot`, `RenderSlotWith`, or generated builder setters for parameters declared as `RenderSlot` / `Option<RenderSlot>` / `RenderSlotWith<...>` (including `impl Into<RenderSlot>` / `impl Into<RenderSlotWith<...>>`).
+  - closures carried directly by `RenderSlot`, `RenderSlotWith`, or generated setters and required constructor arguments for parameters declared as RenderSlot types (including `impl Into<RenderSlot>` / `impl Into<RenderSlotWith<...>>`);
+  - content closures in the approved built-in render setters listed in [component calls](docs/COMPONENT_CALLS.md#built-in-render-setters). Their key providers and action callbacks remain uncolored.
 - All other executable contexts are uncolored by default: ordinary free functions, impl methods, trait methods/default methods, local functions, callbacks, event handlers, async tasks, iterator closures, `Option`/`Result` combinator closures, and arbitrary higher-order function closures.
 - Color does not propagate through helpers. A helper called by a Tessera-colored component remains uncolored unless the helper itself is a Tessera-colored free function. A helper that calls a Tessera component or Tessera-only API is invalid; it is not implicitly promoted to Tessera.
 - The core rule is one-way: Tessera-colored contexts may call uncolored functions, but uncolored contexts must not call Tessera-colored free functions or Tessera-only APIs.
 - Tessera-only APIs such as `remember`, `remember_with_key`, `retain`, `retain_with_key`, `provide_context`, `use_context`, `receive_frame_nanos`, `key`, `RenderSlot::new`, `RenderSlotWith::new`, and internal current-instance/group/slot APIs require a Tessera-colored context. They do not color the ordinary function that calls them; calling them from an uncolored function or closure is invalid.
-- Closures do not inherit Tessera color merely because they are written inside a Tessera-colored function. Only a closure passed directly to a recognized Tessera carrier, such as `RenderSlot::new` or a generated render-slot setter, is checked as a Tessera closure.
+- Closures do not inherit Tessera color merely because they are written inside a Tessera-colored function. Only a closure passed directly to a recognized Tessera carrier, such as `RenderSlot::new`, a generated render-slot parameter, or an approved built-in render setter, is checked as a Tessera closure.
 - `RenderSlot` and `RenderSlotWith` are Tessera functors: their carried closures are delayed Tessera fragments and may only be executed by the Tessera runtime at controlled build/replay boundaries.
 - Do not introduce custom closure carriers that can execute Tessera code unless the carrier is explicitly added to the color-checker specification. Unknown higher-order functions must be treated as uncolored boundaries.
 - A color-check diagnostic is a false positive only when the reported expression is actually inside a Tessera-colored free-function body or a recognized Tessera carrier closure. Reports for helper functions, ordinary closures, callbacks, iterator combinators, `unwrap_or_else`, `then`, or event handlers are not false positives merely because those constructs appear syntactically inside a component.

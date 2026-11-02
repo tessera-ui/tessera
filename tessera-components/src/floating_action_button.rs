@@ -282,7 +282,7 @@ struct FloatingActionButtonResolvedArgs {
 /// #         });
 /// }
 ///
-/// component();
+/// # tessera_ui::testing::layout_test(component).run();
 /// ```
 #[tessera]
 pub fn floating_action_button(
@@ -421,23 +421,23 @@ pub fn floating_action_button(
 impl FloatingActionButtonBuilder {
     /// Creates a configuration with the required click handler.
     pub fn new(on_click: impl Fn() + Send + Sync + 'static) -> Self {
-        Self::default().on_click(on_click)
+        floating_action_button().on_click(on_click)
     }
 
     /// Applies the small floating action button preset.
-    pub fn small(self, on_click: impl Fn() + Send + Sync + 'static) -> Self {
+    pub fn small(&self, on_click: impl Fn() + Send + Sync + 'static) -> Self {
         self.on_click(on_click)
             .size(FloatingActionButtonSize::Small)
     }
 
     /// Applies the large floating action button preset.
-    pub fn large(self, on_click: impl Fn() + Send + Sync + 'static) -> Self {
+    pub fn large(&self, on_click: impl Fn() + Send + Sync + 'static) -> Self {
         self.on_click(on_click)
             .size(FloatingActionButtonSize::Large)
     }
 
     /// Applies the medium floating action button preset.
-    pub fn medium(self, on_click: impl Fn() + Send + Sync + 'static) -> Self {
+    pub fn medium(&self, on_click: impl Fn() + Send + Sync + 'static) -> Self {
         self.on_click(on_click)
             .size(FloatingActionButtonSize::Medium)
     }

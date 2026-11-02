@@ -102,7 +102,7 @@ fn fixture() {
                         } else {
                             size
                         };
-                        let mut group = button_groups()
+                        let group = button_groups()
                             .state(controller)
                             .style(if settings.get().connected {
                                 ButtonGroupsStyle::Connected
@@ -137,7 +137,7 @@ fn fixture() {
                                 },
                             ));
                         for item in 0..settings.get().items {
-                            group = group.child(
+                            group.child(
                                 move || {
                                     row()
                                         .cross_axis_alignment(CrossAxisAlignment::Center)
@@ -168,7 +168,6 @@ fn fixture() {
                                 },
                             );
                         }
-                        drop(group);
                         spacer().modifier(Modifier::new().height(Dp(12.0)));
                     }
                 });

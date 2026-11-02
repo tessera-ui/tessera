@@ -716,7 +716,7 @@ fn icon_state_item(
     let selected = remember(|| initial);
     let actions = remember(|| 0_u32);
     let label = remember(|| label);
-    let mut control = icon_button()
+    let control = icon_button()
         .variant(style)
         .size(IconButtonSize::Small)
         .width(IconButtonWidth::Uniform)
@@ -744,13 +744,12 @@ fn icon_state_item(
             }
         });
     if state == 4 {
-        control = control.presentation_ripple(RipplePresentation {
+        control.presentation_ripple(RipplePresentation {
             origin: [0.73125, 0.97125],
             radius: 0.67375,
             opacity: 0.12,
         });
     }
-    drop(control);
 }
 
 #[tessera]

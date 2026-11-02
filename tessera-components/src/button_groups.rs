@@ -80,37 +80,45 @@ pub enum ButtonGroupsSize {
 
 impl ButtonGroupsBuilder {
     /// Add a child item and click callback.
-    pub fn child<F, C>(mut self, child: F, on_click: C) -> Self
+    pub fn child<F, C, Output>(&self, child: F, on_click: C) -> Self
     where
-        F: Fn() + Send + Sync + 'static,
+        F: Fn() -> Output + Send + Sync + 'static,
         C: Fn(bool) + Send + Sync + 'static,
     {
-        self.props
-            .child_closures
-            .get_or_insert_with(Vec::new)
-            .push(RenderSlot::new(child));
-        self.props
-            .on_click_closures
-            .get_or_insert_with(Vec::new)
-            .push(CallbackWith::new(on_click));
-        self
+        self.props.append("child_closures", move |props| {
+            props
+                .child_closures
+                .get_or_insert_with(Vec::new)
+                .push(RenderSlot::new(child))
+        });
+        self.props.append("on_click_closures", move |props| {
+            props
+                .on_click_closures
+                .get_or_insert_with(Vec::new)
+                .push(CallbackWith::new(on_click))
+        });
+        Self { props: self.props }
     }
 
     /// Add a child item and click callback using shared callbacks.
     pub fn child_shared(
-        mut self,
-        child: impl Into<RenderSlot>,
-        on_click: impl Into<CallbackWith<bool>>,
+        &self,
+        child: impl Into<RenderSlot> + Send + Sync + 'static,
+        on_click: impl Into<CallbackWith<bool>> + Send + Sync + 'static,
     ) -> Self {
-        self.props
-            .child_closures
-            .get_or_insert_with(Vec::new)
-            .push(child.into());
-        self.props
-            .on_click_closures
-            .get_or_insert_with(Vec::new)
-            .push(on_click.into());
-        self
+        self.props.append("child_closures", move |props| {
+            props
+                .child_closures
+                .get_or_insert_with(Vec::new)
+                .push(child.into())
+        });
+        self.props.append("on_click_closures", move |props| {
+            props
+                .on_click_closures
+                .get_or_insert_with(Vec::new)
+                .push(on_click.into())
+        });
+        Self { props: self.props }
     }
 }
 

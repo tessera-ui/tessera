@@ -384,7 +384,7 @@ fn group(
         }
         state
     });
-    let mut builder = button_groups()
+    let builder = button_groups()
         .modifier(Modifier::new().semantics(SemanticsArgs {
             label: label.or_else(|| Some("Button group".into())),
             ..Default::default()
@@ -399,7 +399,7 @@ fn group(
         .presentation_states(presentation.unwrap_or_default())
         .state(state);
     for item in items {
-        builder = builder.child_shared(
+        builder.child_shared(
             RenderSlot::new(move || {
                 let item = item.clone();
                 row()
@@ -423,7 +423,6 @@ fn group(
             CallbackWith::new(|_| {}),
         );
     }
-    drop(builder);
 }
 
 #[tessera]

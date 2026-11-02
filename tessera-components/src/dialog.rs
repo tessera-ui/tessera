@@ -375,7 +375,7 @@ impl tessera_ui::DrawModifierNode for DialogContentLayout {
 ///     });
 /// #     });
 /// # }
-/// # component();
+/// # tessera_ui::testing::layout_test(component).run();
 /// ```
 #[tessera]
 pub fn dialog_provider(
@@ -565,7 +565,7 @@ fn dialog_provider_render(
 ///         assert!(!open.get());
 ///     });
 /// }
-/// example();
+/// # tessera_ui::testing::layout_test(example).run();
 /// ```
 #[tessera]
 pub fn full_screen_dialog(
@@ -596,7 +596,7 @@ pub fn full_screen_dialog(
             column()
                 .modifier(Modifier::new().fill_max_size())
                 .children(move || {
-                    let mut bar = top_app_bar()
+                    let bar = top_app_bar()
                         .title(title.clone())
                         .container_color(scheme.surface_container_high)
                         .navigation_icon(move || {
@@ -609,7 +609,7 @@ pub fn full_screen_dialog(
                         });
                     if let Some(on_confirm) = on_confirm {
                         let confirm_label = confirm_label.clone();
-                        bar = bar.action(move || {
+                        bar.action(move || {
                             let confirm_label = confirm_label.clone();
                             button()
                                 .text()
@@ -622,7 +622,6 @@ pub fn full_screen_dialog(
                                 });
                         });
                     }
-                    drop(bar);
                     column()
                         .modifier(
                             Modifier::new()
@@ -676,7 +675,7 @@ pub fn full_screen_dialog(
 ///     });
 /// #     });
 /// # }
-/// # component();
+/// # tessera_ui::testing::layout_test(component).run();
 /// ```
 #[tessera]
 pub fn basic_dialog(

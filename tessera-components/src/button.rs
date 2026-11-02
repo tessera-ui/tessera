@@ -96,7 +96,8 @@ impl ButtonSize {
     /// Returns the spacing between icons and the label.
     pub const fn icon_spacing(self) -> Dp {
         Dp(match self {
-            Self::ExtraSmall | Self::Small | Self::Medium => 8.0,
+            Self::ExtraSmall => 4.0,
+            Self::Small | Self::Medium => 8.0,
             Self::Large => 12.0,
             Self::ExtraLarge => 16.0,
         })
@@ -392,7 +393,7 @@ struct ButtonResolvedArgs {
 /// assert!(selected.get());
 /// #     });
 /// # }
-/// # component();
+/// # tessera_ui::testing::layout_test(component).run();
 /// ```
 /// Renders a Material button.
 #[tessera]
@@ -873,26 +874,26 @@ impl tessera_ui::LayoutModifierNode for ButtonContentLayout {
 
 impl ButtonBuilder {
     /// Uses fully rounded ends in the unselected resting state.
-    pub fn round(self) -> Self {
+    pub fn round(&self) -> Self {
         self.shape_style(ButtonShape::Round)
     }
 
     /// Uses the size-specific square corners in the unselected resting state.
-    pub fn square(self) -> Self {
+    pub fn square(&self) -> Self {
         self.shape_style(ButtonShape::Square)
     }
 
     /// Applies the standard "Filled" button preset (High emphasis).
     ///
     /// Uses the theme Primary container with OnPrimary content.
-    pub fn filled(self) -> Self {
+    pub fn filled(&self) -> Self {
         self.variant(ButtonVariant::Filled)
     }
 
     /// Applies the "Elevated" button preset (Medium emphasis).
     ///
     /// Uses the theme SurfaceContainerLow container with a shadow.
-    pub fn elevated(self) -> Self {
+    pub fn elevated(&self) -> Self {
         self.variant(ButtonVariant::Elevated)
     }
 
@@ -900,21 +901,21 @@ impl ButtonBuilder {
     ///
     /// Uses the theme SecondaryContainer container with OnSecondaryContainer
     /// content.
-    pub fn tonal(self) -> Self {
+    pub fn tonal(&self) -> Self {
         self.variant(ButtonVariant::Tonal)
     }
 
     /// Applies the "Outlined" button preset (Medium emphasis).
     ///
     /// Uses a transparent container with an Outline border.
-    pub fn outlined(self) -> Self {
+    pub fn outlined(&self) -> Self {
         self.variant(ButtonVariant::Outlined)
     }
 
     /// Applies the "Text" button preset (Low emphasis).
     ///
     /// Uses a transparent container and no border.
-    pub fn text(self) -> Self {
+    pub fn text(&self) -> Self {
         self.variant(ButtonVariant::Text)
     }
 }
@@ -1186,6 +1187,17 @@ mod tests {
                 .find(|bounds| bounds.y0 >= rect.y0 && bounds.y1 <= rect.y1)
                 .expect("button label");
             assert!(label.x0 >= rect.x0 && label.x1 <= rect.x1);
+            let leading = tree
+                .nodes
+                .iter()
+                .find(|(_, node)| node.label() == Some(format!("Icon {index}").as_str()))
+                .and_then(|(_, node)| node.bounds())
+                .expect("leading icon");
+            assert_eq!(
+                label.x0 - leading.x1,
+                [4.0, 8.0, 8.0, 12.0, 16.0][index],
+                "icon-label gap of size {index}"
+            );
             assert_eq!(label.height(), [20.0, 20.0, 24.0, 32.0, 80.0][index]);
             assert_eq!(style.font_size, Dp([14.0, 14.0, 16.0, 24.0, 32.0][index]));
             assert_eq!(

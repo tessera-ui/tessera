@@ -55,6 +55,12 @@ fn app() {
 }
 ```
 
+Calling a component registers one UI use and returns a typed configuration
+handle. Chain setters or save the handle and configure it before execution;
+declaration order follows entry calls. The runtime expands component bodies
+during build, before layout and drawing. Pass deferred child content through
+`RenderSlot` closures. See [component calls](docs/COMPONENT_CALLS.md).
+
 Then we write its UI logic:
 
 ```rust

@@ -41,12 +41,14 @@ pub(crate) fn last_layout_frame_diagnostics() -> Option<LayoutFrameDiagnostics> 
 }
 
 /// Create a headless layout test harness for the provided component content.
-pub fn layout_test<F>(content: F) -> LayoutTestHarness<F>
+pub fn layout_test<F, Output>(content: F) -> LayoutTestHarness<impl Fn()>
 where
-    F: Fn(),
+    F: Fn() -> Output,
 {
     LayoutTestHarness {
-        content,
+        content: move || {
+            content();
+        },
         viewport: (800, 600),
     }
 }
@@ -2095,5 +2097,317 @@ mod tests {
             diagnostics.measure_node_calls, 1,
             "a stable frame must resolve from the root layout cache without re-measuring"
         );
+    }
+    #[tessera(crate)]
+    fn registered_handles_layout() {
+        crate::layout::layout()
+            .policy(VerticalStackPolicy)
+            .child(|| {
+                let first = tagged_box().tag("declared-first".to_owned());
+                let second = tagged_box().tag("declared-second".to_owned());
+                if true {
+                    second.width(20).height(12);
+                    first.width(10).height(8);
+                }
+                drop(second);
+                let forgotten = tagged_box().tag("forgotten".to_owned()).width(5).height(6);
+                std::mem::forget(forgotten);
+            });
+    }
+
+    #[test]
+    fn saved_component_handles_keep_layout_order_through_cross_group_configuration_and_disposal() {
+        let snapshot = layout_test(registered_handles_layout)
+            .viewport_px(100, 100)
+            .run();
+        snapshot.node("declared-first").size(10, 8).position(0, 0);
+        snapshot.node("declared-second").size(20, 12).position(0, 8);
+        snapshot.node("forgotten").size(5, 6).position(0, 20);
+    }
+
+    #[tessera(crate)]
+    fn closed_slot_host(slot: Option<RenderSlot>) {
+        let _ = slot;
+    }
+
+    #[test]
+    fn a_parent_that_does_not_expand_its_slot_registers_no_child_content() {
+        #[tessera(crate)]
+        fn fixture() {
+            closed_slot_host().slot(|| panic!("unexpanded slot was invoked"));
+            tagged_box().tag("visible".to_owned()).width(10).height(10);
+        }
+        layout_test(fixture).run().node("visible").size(10, 10);
+    }
+
+    #[tessera(crate)]
+    fn interleaved_slot_fixture() {
+        crate::layout::layout()
+            .policy(VerticalStackPolicy)
+            .child(|| {
+                tagged_box()
+                    .tag("before-slot".to_owned())
+                    .width(10)
+                    .height(8);
+                RenderSlot::new(|| {
+                    tagged_box()
+                        .tag("inside-slot".to_owned())
+                        .width(20)
+                        .height(12);
+                })
+                .render();
+                tagged_box().tag("after-slot".to_owned()).width(5).height(6);
+            });
+    }
+
+    #[test]
+    fn controlled_slot_expansion_preserves_preceding_and_following_declaration_order() {
+        let snapshot = layout_test(interleaved_slot_fixture).run();
+        snapshot.node("before-slot").size(10, 8).position(0, 0);
+        snapshot.node("inside-slot").size(20, 12).position(0, 8);
+        snapshot.node("after-slot").size(5, 6).position(0, 20);
+    }
+
+    thread_local! {
+        static LAST_CALL: std::cell::RefCell<Option<TaggedBoxBuilder>> = const { std::cell::RefCell::new(None) };
+        static CALL_REBUILD: Cell<Option<State<u32>>> = const { Cell::new(None) };
+        static REJECTED_CALLS: Cell<usize> = const { Cell::new(0) };
+    }
+
+    fn expect_committed_call(handle: &TaggedBoxBuilder) {
+        let error = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            handle.width(99);
+        }))
+        .expect_err("committed call must reject configuration");
+        assert!(
+            error
+                .downcast_ref::<String>()
+                .unwrap()
+                .contains("is no longer Pending")
+        );
+        REJECTED_CALLS.set(REJECTED_CALLS.get() + 1);
+    }
+
+    #[tessera(crate)]
+    fn committed_call_fixture() {
+        let revision = remember(|| 0);
+        CALL_REBUILD.set(Some(revision));
+        let width = 10 + revision.get() as i32;
+        let handle = tagged_box()
+            .tag("committed-call".to_owned())
+            .width(width)
+            .height(8);
+        LAST_CALL.with(|previous| {
+            if let Some(previous) = previous.borrow_mut().take() {
+                expect_committed_call(&previous);
+            }
+        });
+        RenderSlot::new(|| {}).render();
+        expect_committed_call(&handle);
+        LAST_CALL.with(|previous| *previous.borrow_mut() = Some(handle));
+    }
+
+    #[test]
+    fn committed_handles_fail_within_a_frame_and_cannot_mutate_the_next_builds_use() {
+        LAST_CALL.with(|previous| *previous.borrow_mut() = None);
+        REJECTED_CALLS.set(0);
+        let mut session = start_layout_test_session(layout_test(committed_call_fixture));
+        pump_layout_test_session(&mut session, 0)
+            .node("committed-call")
+            .size(10, 8);
+        assert_eq!(REJECTED_CALLS.get(), 1);
+        CALL_REBUILD.get().unwrap().set(1);
+        pump_layout_test_session(&mut session, 16_666_667)
+            .node("committed-call")
+            .size(11, 8);
+        assert_eq!(REJECTED_CALLS.get(), 3);
+        LAST_CALL.with(|previous| *previous.borrow_mut() = None);
+    }
+
+    #[derive(Clone, Copy)]
+    struct CallContext(i32);
+
+    thread_local! {
+        static CONFIGURATION_REVERSED: Cell<Option<State<bool>>> = const { Cell::new(None) };
+        static CONFIGURED_OWNERS: std::cell::RefCell<Vec<(String, State<u32>, RenderSlot)>> = const { std::cell::RefCell::new(Vec::new()) };
+    }
+
+    #[tessera(crate)]
+    fn contextual_call(tag: String, child: Option<RenderSlot>) {
+        assert_eq!(crate::use_context::<CallContext>().unwrap().get().0, 17);
+        let local = remember(|| 0);
+        let child = child.unwrap();
+        CONFIGURED_OWNERS.with(|owners| {
+            let mut owners = owners.borrow_mut();
+            if let Some(previous) = owners.iter_mut().find(|entry| entry.0 == tag) {
+                assert!(
+                    previous.1 == local,
+                    "configuration groups changed state identity"
+                );
+                assert!(
+                    previous.2 == child,
+                    "configuration groups changed slot identity"
+                );
+            } else {
+                owners.push((tag, local, child));
+            }
+        });
+        child.render();
+    }
+
+    fn configure_contextual_call(handle: &ContextualCallBuilder, tag: &'static str, delta: i32) {
+        handle.child(move || {
+            let context = crate::use_context::<CallContext>().unwrap().get();
+            tagged_box()
+                .tag(tag.to_owned())
+                .width(context.0 + delta)
+                .height(8);
+        });
+    }
+
+    #[tessera(crate)]
+    fn contextual_calls_fixture() {
+        let reversed = remember(|| false);
+        CONFIGURATION_REVERSED.set(Some(reversed));
+        let reverse = reversed.get();
+        crate::layout::layout()
+            .policy(VerticalStackPolicy)
+            .child(move || {
+                let first = crate::provide_context(
+                    || CallContext(17),
+                    || contextual_call("first".to_owned()),
+                );
+                let second = crate::provide_context(
+                    || CallContext(17),
+                    || contextual_call("second".to_owned()),
+                );
+                crate::provide_context(
+                    || CallContext(91),
+                    || {
+                        if reverse {
+                            configure_contextual_call(&second, "context-second", 5);
+                            configure_contextual_call(&first, "context-first", 3);
+                        } else {
+                            configure_contextual_call(&first, "context-first", 0);
+                            configure_contextual_call(&second, "context-second", 1);
+                        }
+                    },
+                );
+            });
+    }
+
+    #[test]
+    fn delayed_property_slots_restore_declaration_context_and_keep_identity_across_replay() {
+        CONFIGURED_OWNERS.with(|owners| owners.borrow_mut().clear());
+        let mut session = start_layout_test_session(layout_test(contextual_calls_fixture));
+        let snapshot = pump_layout_test_session(&mut session, 0);
+        snapshot.node("context-first").size(17, 8).position(0, 0);
+        snapshot.node("context-second").size(18, 8).position(0, 8);
+        CONFIGURATION_REVERSED.get().unwrap().set(true);
+        let snapshot = pump_layout_test_session(&mut session, 16_666_667);
+        snapshot.node("context-first").size(20, 8).position(0, 0);
+        snapshot.node("context-second").size(22, 8).position(0, 8);
+        CONFIGURED_OWNERS.with(|owners| assert_eq!(owners.borrow().len(), 2));
+    }
+
+    thread_local! {
+        static ROOT_PROP_TICK: Cell<Option<State<i32>>> = const { Cell::new(None) };
+    }
+
+    #[tessera(crate)]
+    fn root_props_call(action: crate::Callback, child: RenderSlot) {
+        let tick = remember(|| 0);
+        ROOT_PROP_TICK.set(Some(tick));
+        let _ = tick.get();
+        action.call();
+        child.render();
+    }
+
+    #[test]
+    fn entry_owned_prop_functors_survive_independent_replays_of_the_root_component() {
+        let calls = Arc::new(AtomicUsize::new(0));
+        let observed = Arc::clone(&calls);
+        let mut session = start_layout_test_session(layout_test(move || {
+            let calls = Arc::clone(&observed);
+            root_props_call(
+                move || {
+                    calls.fetch_add(1, Ordering::SeqCst);
+                },
+                || {
+                    tagged_box()
+                        .tag("root-prop-child".to_owned())
+                        .width(12)
+                        .height(8);
+                },
+            );
+        }));
+        for frame in 0..3 {
+            if frame > 0 {
+                ROOT_PROP_TICK.get().unwrap().set(frame);
+            }
+            pump_layout_test_session(&mut session, frame as u64 * 16_666_667)
+                .node("root-prop-child")
+                .size(12, 8);
+        }
+        assert_eq!(calls.load(Ordering::SeqCst), 3);
+    }
+
+    thread_local! {
+        static STATIC_SLOT_CHOICE: Cell<Option<State<bool>>> = const { Cell::new(None) };
+    }
+
+    #[tessera(crate)]
+    fn static_slot_choice_fixture() {
+        let choice = remember(|| false);
+        STATIC_SLOT_CHOICE.set(Some(choice));
+        let host = crate::layout::layout();
+        if choice.get() {
+            host.child(|| {
+                tagged_box()
+                    .tag("static-slot-b".to_owned())
+                    .width(20)
+                    .height(8);
+            });
+        } else {
+            host.child(|| {
+                tagged_box()
+                    .tag("static-slot-a".to_owned())
+                    .width(10)
+                    .height(8);
+            });
+        }
+    }
+
+    #[test]
+    fn changing_a_capture_free_slot_body_invalidates_readers_even_when_its_handle_is_stable() {
+        let mut session = start_layout_test_session(layout_test(static_slot_choice_fixture));
+        pump_layout_test_session(&mut session, 0)
+            .node("static-slot-a")
+            .size(10, 8);
+        STATIC_SLOT_CHOICE.get().unwrap().set(true);
+        pump_layout_test_session(&mut session, 16_666_667)
+            .node("static-slot-b")
+            .size(20, 8);
+    }
+
+    #[tessera(crate)]
+    fn required_unit_slot_probe(child: crate::RenderSlotWith<()>) {
+        child.render(());
+    }
+
+    #[tessera(crate)]
+    fn unit_slot_leaf() {
+        tagged_box()
+            .tag("required-unit-child".to_owned())
+            .width(9)
+            .height(4);
+    }
+
+    #[test]
+    fn required_unit_render_slot_accepts_a_component_entry_as_its_build_function() {
+        layout_test(|| required_unit_slot_probe(unit_slot_leaf))
+            .run()
+            .node("required-unit-child")
+            .size(9, 4);
     }
 }

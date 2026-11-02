@@ -33,25 +33,25 @@ struct GlassButtonResolvedArgs {
 
 impl GlassButtonBuilder {
     /// Applies the primary glass button preset.
-    pub fn primary(self) -> Self {
+    pub fn primary(&self) -> Self {
         self.tint_color(Color::new(0.2, 0.5, 0.8, 0.2))
             .border(GlassBorder::new(Dp(1.0).into()))
     }
 
     /// Applies the secondary glass button preset.
-    pub fn secondary(self) -> Self {
+    pub fn secondary(&self) -> Self {
         self.tint_color(Color::new(0.6, 0.6, 0.6, 0.2))
             .border(GlassBorder::new(Dp(1.0).into()))
     }
 
     /// Applies the success glass button preset.
-    pub fn success(self) -> Self {
+    pub fn success(&self) -> Self {
         self.tint_color(Color::new(0.1, 0.7, 0.3, 0.2))
             .border(GlassBorder::new(Dp(1.0).into()))
     }
 
     /// Applies the danger glass button preset.
-    pub fn danger(self) -> Self {
+    pub fn danger(&self) -> Self {
         self.tint_color(Color::new(0.8, 0.2, 0.2, 0.2))
             .border(GlassBorder::new(Dp(1.0).into()))
     }
@@ -100,7 +100,7 @@ impl GlassButtonBuilder {
 ///         });
 /// }
 ///
-/// component();
+/// # tessera_ui::testing::layout_test(component).run();
 /// ```
 #[tessera]
 pub fn glass_button(

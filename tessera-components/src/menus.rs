@@ -560,7 +560,7 @@ impl PointerInputModifierNode for MenuKeyboardBoundary {
 ///     });
 /// # });
 /// # }
-/// # component();
+/// # tessera_ui::testing::layout_test(component).run();
 /// ```
 #[tessera]
 pub fn menu_provider(
@@ -1131,7 +1131,7 @@ impl Default for MenuItemConfig {
 ///     });
 /// # });
 /// # }
-/// # component();
+/// # tessera_ui::testing::layout_test(component).run();
 /// ```
 #[tessera]
 pub fn menu_item(

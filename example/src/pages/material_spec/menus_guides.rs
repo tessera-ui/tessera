@@ -210,7 +210,7 @@ fn state_item(
         );
         return;
     }
-    let mut item = menu_item()
+    let item = menu_item()
         .label(label)
         .container_color(container)
         .label_color(content)
@@ -220,15 +220,13 @@ fn state_item(
         .height(Dp(44.0))
         .on_click(|| {});
     if check {
-        item = item
-            .leading_icon(filled::CHECK_SVG)
+        item.leading_icon(filled::CHECK_SVG)
             .selection_mode(MenuItemSelectionMode::Radio)
             .selected(true);
     }
     if arrow {
-        item = item.trailing_icon(filled::ARROW_RIGHT_SVG);
+        item.trailing_icon(filled::ARROW_RIGHT_SVG);
     }
-    drop(item);
 }
 
 /// Static rendering of one interaction state with real menu items.
@@ -1299,19 +1297,17 @@ pub(super) fn submenu_pair(#[prop(into)] parent: String, options: Vec<String>, s
                 .modifier(Modifier::new().width(Dp(176.0)))
                 .children(move || {
                     for (index, label) in options.clone().into_iter().enumerate() {
-                        let mut item = menu_item()
+                        let item = menu_item()
                             .label(label)
                             .close_on_click(false)
                             .on_click(|| {});
                         if index == selected {
-                            item = item
-                                .leading_icon(filled::CHECK_SVG)
+                            item.leading_icon(filled::CHECK_SVG)
                                 .selection_mode(MenuItemSelectionMode::Radio)
                                 .selected(true)
                                 .container_color(vibrant)
                                 .label_color(on_vibrant);
                         }
-                        drop(item);
                     }
                 });
         });
@@ -1587,14 +1583,13 @@ pub(super) fn m2_comparison() {
                                 }
                                 group.children_shared(RenderSlot::new(move || {
                                     for label in ["Share", "Get link", "Edit name"] {
-                                        let mut item = menu_item()
+                                        let item = menu_item()
                                             .label(label)
                                             .close_on_click(false)
                                             .on_click(|| {});
                                         if !m3 {
-                                            item = item.shape(Shape::RECTANGLE).height(Dp(48.0));
+                                            item.shape(Shape::RECTANGLE).height(Dp(48.0));
                                         }
-                                        drop(item);
                                     }
                                 }));
                             });

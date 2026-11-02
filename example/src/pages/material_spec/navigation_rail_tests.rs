@@ -67,7 +67,7 @@ fn color_reference_fixture() {
     });
 }
 
-fn renderer(root: fn(), width: u32, height: u32) -> HeadlessRenderer {
+fn renderer<Output: 'static>(root: fn() -> Output, width: u32, height: u32) -> HeadlessRenderer {
     let mut renderer = HeadlessRenderer::new(
         Box::new(root),
         vec![Box::new(Pipelines)],

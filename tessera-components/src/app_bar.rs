@@ -138,7 +138,7 @@ impl AppBarDefaults {
 /// });
 /// #     });
 /// # }
-/// # component();
+/// # tessera_ui::testing::layout_test(component).run();
 /// ```
 #[tessera]
 pub fn app_bar(
@@ -188,34 +188,40 @@ pub fn app_bar(
 
 impl TopAppBarBuilder {
     /// Append a trailing action item.
-    pub fn action<F>(mut self, action: F) -> Self
+    pub fn action<F, Output>(&self, action: F) -> Self
     where
-        F: Fn() + Send + Sync + 'static,
+        F: Fn() -> Output + Send + Sync + 'static,
     {
-        self.props
-            .actions
-            .get_or_insert_with(Vec::new)
-            .push(RenderSlot::new(action));
-        self
+        self.props.append("actions", move |props| {
+            props
+                .actions
+                .get_or_insert_with(Vec::new)
+                .push(RenderSlot::new(action))
+        });
+        Self { props: self.props }
     }
 
     /// Append a trailing action item using a shared callback.
-    pub fn action_shared(mut self, action: impl Into<RenderSlot>) -> Self {
-        self.props
-            .actions
-            .get_or_insert_with(Vec::new)
-            .push(action.into());
-        self
+    pub fn action_shared(&self, action: impl Into<RenderSlot> + Send + Sync + 'static) -> Self {
+        self.props.append("actions", move |props| {
+            props
+                .actions
+                .get_or_insert_with(Vec::new)
+                .push(action.into())
+        });
+        Self { props: self.props }
     }
 
     /// Replace the trailing actions with shared callbacks.
-    pub fn actions_shared(mut self, actions: Vec<RenderSlot>) -> Self {
-        self.props.actions = Some(actions);
-        self
+    pub fn actions_shared(&self, actions: Vec<RenderSlot>) -> Self {
+        let value = Some(actions);
+        self.props
+            .configure("actions", move |props| props.actions = value);
+        Self { props: self.props }
     }
 
     /// Appends a desktop minimize window control button.
-    pub fn window_control_minimize(self) -> Self {
+    pub fn window_control_minimize(&self) -> Self {
         self.action(|| {
             icon_button()
                 .standard()
@@ -225,7 +231,7 @@ impl TopAppBarBuilder {
     }
 
     /// Appends a desktop maximize or restore window control button.
-    pub fn window_control_toggle_maximize(self) -> Self {
+    pub fn window_control_toggle_maximize(&self) -> Self {
         self.action(|| {
             icon_button()
                 .standard()
@@ -235,7 +241,7 @@ impl TopAppBarBuilder {
     }
 
     /// Appends a desktop close window control button.
-    pub fn window_control_close(self) -> Self {
+    pub fn window_control_close(&self) -> Self {
         self.action(|| {
             icon_button()
                 .standard()
@@ -314,7 +320,7 @@ impl TopAppBarBuilder {
 /// assert_eq!(unread.get(), 0);
 /// #     });
 /// # }
-/// # component();
+/// # tessera_ui::testing::layout_test(component).run();
 /// ```
 #[tessera]
 pub fn top_app_bar(

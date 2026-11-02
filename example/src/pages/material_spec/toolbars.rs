@@ -3834,7 +3834,11 @@ mod tests {
         static DOCKED_LAYOUT: Cell<DockedLayout> = const { Cell::new(DockedLayout::Edges) };
     }
 
-    fn settled(content: fn(), width: u32, height: u32) -> tessera_ui::testing::LayoutSnapshot {
+    fn settled<Output: 'static>(
+        content: fn() -> Output,
+        width: u32,
+        height: u32,
+    ) -> tessera_ui::testing::LayoutSnapshot {
         let mut session = tessera_ui::testing::start_layout_test_session(
             layout_test(content).viewport_px(width, height),
         );

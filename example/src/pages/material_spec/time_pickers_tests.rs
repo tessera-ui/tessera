@@ -54,11 +54,11 @@ fn configuration_fixture() {
     });
 }
 
-fn renderer(root: fn()) -> HeadlessRenderer {
+fn renderer<Output: 'static>(root: fn() -> Output) -> HeadlessRenderer {
     renderer_at_width(root, 1100)
 }
 
-fn renderer_at_width(root: fn(), width: u32) -> HeadlessRenderer {
+fn renderer_at_width<Output: 'static>(root: fn() -> Output, width: u32) -> HeadlessRenderer {
     let mut renderer = HeadlessRenderer::new(
         Box::new(root),
         vec![Box::new(Pipelines)],

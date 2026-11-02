@@ -76,9 +76,13 @@ fn adjacent_labels_activate_their_native_control_and_preserve_canonical_scaled_g
     for is_switch in [false, true] {
         let mut renderer = HeadlessRenderer::new(
             if is_switch {
-                Box::new(switch_fixture)
+                Box::new(|| {
+                    switch_fixture();
+                })
             } else {
-                Box::new(checkbox_fixture)
+                Box::new(|| {
+                    checkbox_fixture();
+                })
             },
             vec![Box::new(Pipelines)],
             HeadlessConfig {

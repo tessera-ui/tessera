@@ -81,9 +81,13 @@ fn switch_figures_preserve_native_parts_numbered_markers_and_independent_scaled_
         let width = if configuration { 676 } else { 1024 };
         let mut renderer = HeadlessRenderer::new(
             if configuration {
-                Box::new(configuration_fixture)
+                Box::new(|| {
+                    configuration_fixture();
+                })
             } else {
-                Box::new(anatomy_fixture)
+                Box::new(|| {
+                    anatomy_fixture();
+                })
             },
             vec![Box::new(Pipelines)],
             HeadlessConfig {

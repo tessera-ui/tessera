@@ -972,7 +972,7 @@ fn navigation_rail_content(
 ///             });
 ///     });
 /// }
-/// navigation();
+/// # tessera_ui::testing::layout_test(navigation).run();
 /// ```
 #[tessera]
 pub fn modal_navigation_rail(

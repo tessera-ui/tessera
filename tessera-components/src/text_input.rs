@@ -335,17 +335,20 @@ impl Default for TextInputProps {
 /// text_input().padding(Dp(8.0)).initial_text("Hello World");
 /// # });
 /// # }
-/// # component();
+/// # tessera_ui::testing::layout_test(component).run();
 /// ```
 impl TextInputBuilder {
     /// Set a display-only transform with explicit offset mapping.
-    pub fn display_transform_mapped<F>(mut self, transform: F) -> Self
+    pub fn display_transform_mapped<F>(&self, transform: F) -> Self
     where
         F: Fn(&str) -> DisplayTransformText + Send + Sync + 'static,
     {
-        self.props.display_transform =
-            Some(CallbackWith::new(move |value: String| transform(&value)));
-        self
+        self.props
+            .configure_deferred("display_transform", move |props| {
+                props.display_transform =
+                    Some(CallbackWith::new(move |value: String| transform(&value)))
+            });
+        Self { props: self.props }
     }
 }
 
@@ -410,7 +413,7 @@ impl TextInputBuilder {
 /// text_input().padding(Dp(8.0)).initial_text("Hello World");
 /// # });
 /// # }
-/// # component();
+/// # tessera_ui::testing::layout_test(component).run();
 /// ```
 #[tessera]
 pub fn text_input(
@@ -1556,7 +1559,7 @@ impl TextInputBuilder {
     /// let args = TextInputBuilder::simple();
     /// # });
     /// # }
-    /// # component();
+    /// # tessera_ui::testing::layout_test(component).run();
     /// ```
     pub fn simple() -> Self {
         text_input()
@@ -1589,7 +1592,7 @@ impl TextInputBuilder {
     /// let args = TextInputBuilder::outlined();
     /// # });
     /// # }
-    /// # component();
+    /// # tessera_ui::testing::layout_test(component).run();
     /// ```
     pub fn outlined() -> Self {
         Self::simple()
@@ -1614,7 +1617,7 @@ impl TextInputBuilder {
     /// let args = TextInputBuilder::minimal();
     /// # });
     /// # }
-    /// # component();
+    /// # tessera_ui::testing::layout_test(component).run();
     /// ```
     pub fn minimal() -> Self {
         text_input()

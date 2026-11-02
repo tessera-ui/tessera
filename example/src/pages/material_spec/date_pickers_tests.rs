@@ -832,7 +832,7 @@ fn date_reference_guidelines_and_color_pairs_mount_native_views() {
     }
 }
 
-fn reference_renderer(root: fn()) -> HeadlessRenderer {
+fn reference_renderer<Output: 'static>(root: fn() -> Output) -> HeadlessRenderer {
     HeadlessRenderer::new(
         Box::new(root),
         vec![Box::new(Pipelines)],

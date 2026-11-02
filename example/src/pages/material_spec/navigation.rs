@@ -437,7 +437,7 @@ fn color_specimen(rail: bool, initially_expanded: bool, dark: bool, backdrop: Co
                                     })
                                     .content(move || {
                                         for index in 0..4 {
-                                            let mut item = navigation_rail_item()
+                                            let item = navigation_rail_item()
                                                 .label("Label")
                                                 .selected(selected.get() == index)
                                                 .accessibility_description(format!(
@@ -453,15 +453,13 @@ fn color_specimen(rail: bool, initially_expanded: bool, dark: bool, backdrop: Co
                                                         });
                                                 });
                                             if index >= 2 {
-                                                item =
-                                                    item.badge_shared(RenderSlot::new(move || {
-                                                        navigation_badge(
-                                                            if index == 2 { 1 } else { 2 },
-                                                            geometry,
-                                                        );
-                                                    }));
+                                                item.badge_shared(RenderSlot::new(move || {
+                                                    navigation_badge(
+                                                        if index == 2 { 1 } else { 2 },
+                                                        geometry,
+                                                    );
+                                                }));
                                             }
-                                            drop(item);
                                         }
                                     });
                             } else {
@@ -1206,7 +1204,7 @@ fn native_figure(rail: bool, expanded: bool, annotation: usize, badges: bool) {
                                             })
                                             .content(move || {
                                                 for index in 0..3 {
-                                                    let mut item = navigation_rail_item()
+                                                    let item = navigation_rail_item()
                                                         .label("Label")
                                                         .selected(selected.get() == index)
                                                         .on_click(move || selected.set(index))
@@ -1223,23 +1221,17 @@ fn native_figure(rail: bool, expanded: bool, annotation: usize, badges: bool) {
                                                                 });
                                                         });
                                                     if badges && index > 0 {
-                                                        item = item
-                                                            .accessibility_description(
-                                                                if index == 1 {
-                                                                    "3 unread messages"
-                                                                } else {
-                                                                    "New items"
-                                                                },
-                                                            )
-                                                            .badge_shared(RenderSlot::new(
-                                                                move || {
-                                                                    navigation_badge(
-                                                                        index, geometry,
-                                                                    );
-                                                                },
-                                                            ));
+                                                        item.accessibility_description(
+                                                            if index == 1 {
+                                                                "3 unread messages"
+                                                            } else {
+                                                                "New items"
+                                                            },
+                                                        )
+                                                        .badge_shared(RenderSlot::new(move || {
+                                                            navigation_badge(index, geometry);
+                                                        }));
                                                     }
-                                                    drop(item);
                                                 }
                                             });
                                     } else {

@@ -139,7 +139,7 @@ impl From<Color> for SurfaceStyle {
 ///         assert_eq!(live.get(), InteractionState::new());
 ///     });
 /// }
-/// sample();
+/// # tessera_ui::testing::layout_test(sample).run();
 /// ```
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub struct RipplePresentation {
@@ -1147,7 +1147,7 @@ fn surface_content(
 ///     });
 /// # });
 /// # }
-/// # component();
+/// # tessera_ui::testing::layout_test(component).run();
 /// ```
 /// Renders a styled surface container.
 #[tessera]

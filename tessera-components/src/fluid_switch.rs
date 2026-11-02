@@ -328,7 +328,7 @@ fn update_state_for_frame(state: State<FluidSwitchState>, frame_nanos: u64) -> b
 ///         });
 ///     });
 /// # }
-/// # component();
+/// # tessera_ui::testing::layout_test(component).run();
 /// ```
 #[tessera]
 pub fn fluid_switch(

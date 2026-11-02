@@ -151,32 +151,32 @@ impl IconButtonSize {
 
 impl IconButtonBuilder {
     /// Uses fully rounded corners in the unselected resting state.
-    pub fn round(self) -> Self {
+    pub fn round(&self) -> Self {
         self.shape_style(IconButtonShape::Round)
     }
 
     /// Uses size-specific corners in the unselected resting state.
-    pub fn square(self) -> Self {
+    pub fn square(&self) -> Self {
         self.shape_style(IconButtonShape::Square)
     }
 
     /// Applies the standard icon button preset.
-    pub fn standard(self) -> Self {
+    pub fn standard(&self) -> Self {
         self.variant(IconButtonVariant::Standard)
     }
 
     /// Applies the filled icon button preset.
-    pub fn filled(self) -> Self {
+    pub fn filled(&self) -> Self {
         self.variant(IconButtonVariant::Filled)
     }
 
     /// Applies the filled tonal icon button preset.
-    pub fn filled_tonal(self) -> Self {
+    pub fn filled_tonal(&self) -> Self {
         self.variant(IconButtonVariant::FilledTonal)
     }
 
     /// Applies the outlined icon button preset.
-    pub fn outlined(self) -> Self {
+    pub fn outlined(&self) -> Self {
         self.variant(IconButtonVariant::Outlined)
     }
 }
@@ -383,7 +383,7 @@ fn resolve_colors(
 ///             .on_click(move || selected.set(!selected.get()));
 ///     });
 /// }
-/// component();
+/// # tessera_ui::testing::layout_test(component).run();
 /// ```
 #[tessera]
 pub fn icon_button(

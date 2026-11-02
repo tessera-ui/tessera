@@ -825,7 +825,7 @@ fn handle_state_h(
 ///             .visible(Px(200));
 ///     });
 /// }
-/// tracked_content();
+/// # tessera_ui::testing::layout_test(tracked_content).run();
 /// ```
 #[tessera]
 pub fn scrollbar_v(
@@ -1035,7 +1035,7 @@ pub fn scrollbar_v(
 ///             .visible(Px(200));
 ///     });
 /// }
-/// tracked_content();
+/// # tessera_ui::testing::layout_test(tracked_content).run();
 /// ```
 #[tessera]
 pub fn scrollbar_h(

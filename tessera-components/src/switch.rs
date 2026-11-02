@@ -412,7 +412,7 @@ impl Default for SwitchController {
 ///         switch().controller(controller).on_toggle(|_| {});
 ///     });
 /// # }
-/// # component();
+/// # tessera_ui::testing::layout_test(component).run();
 /// ```
 #[tessera]
 pub fn switch(

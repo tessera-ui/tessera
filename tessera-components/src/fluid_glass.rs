@@ -163,7 +163,7 @@ fn apply_fluid_glass_block_input_modifier(base: Modifier, block_input: bool) -> 
 ///     text().content("Content on glass");
 /// });
 /// # }
-/// # component();
+/// # tessera_ui::testing::layout_test(component).run();
 /// ```
 #[tessera]
 pub fn fluid_glass(

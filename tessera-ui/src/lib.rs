@@ -27,6 +27,47 @@
 //!
 //! Functions marked with the `#[tessera]` macro are tessera components.
 //!
+//! Calling a component registers one UI use and returns a typed configuration
+//! handle. Setters configure that same use until runtime execution begins.
+//! Handles may be saved or passed to configuration helpers; their disposal has
+//! no effect on execution. Configuring a committed or stale handle panics.
+//!
+//! Runtime build scopes execute registered uses in declaration order, expanding
+//! their descendants before layout and drawing. Child content stays deferred in
+//! [`RenderSlot`] or [`RenderSlotWith`] until the parent expands it.
+//!
+//! Stored content owns its captures. Move local values into its closure:
+//!
+//! ```compile_fail
+//! use tessera_ui::{RenderSlot, tessera};
+//!
+//! #[tessera]
+//! fn host(child: Option<RenderSlot>) {}
+//!
+//! #[tessera]
+//! fn app() {
+//!     let label = String::from("Title");
+//!     host().child(|| label.len());
+//! }
+//! ```
+//!
+//! A configuration handle cannot be used in place of deferred child content:
+//!
+//! ```compile_fail
+//! use tessera_ui::{RenderSlot, tessera};
+//!
+//! #[tessera]
+//! fn host(child: Option<RenderSlot>) {}
+//!
+//! #[tessera]
+//! fn leaf() {}
+//!
+//! #[tessera]
+//! fn app() {
+//!     host().child(leaf());
+//! }
+//! ```
+//!
 //! Component functions may contain other component functions, enabling nesting
 //! and composition.
 //!
@@ -295,6 +336,7 @@ mod build_tree;
 pub mod clip;
 pub mod clipboard;
 pub mod color;
+mod component_call;
 mod component_tree;
 pub mod context;
 mod cursor;

@@ -95,7 +95,7 @@ impl CalendarRangePosition {
 ///         assert_eq!(selected.get(), date);
 ///     });
 /// }
-/// schedule();
+/// # tessera_ui::testing::layout_test(schedule).run();
 /// ```
 #[tessera]
 pub fn date_picker_day(
@@ -255,7 +255,7 @@ pub fn date_picker_day(
 ///         assert_eq!(selected.get(), 2025);
 ///     });
 /// }
-/// years();
+/// # tessera_ui::testing::layout_test(years).run();
 /// ```
 #[tessera]
 pub fn date_picker_year(

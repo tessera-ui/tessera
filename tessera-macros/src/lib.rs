@@ -418,8 +418,9 @@ fn replay_register_tokens(
 ) -> proc_macro2::TokenStream {
     quote! {
         let __tessera_component_reused = {
-            let __tessera_runner =
-                #crate_path::__private::make_component_runner::<#prop_type>(#runner_name);
+            let __tessera_runner = #crate_path::__private::current_component_runner().unwrap_or_else(|| {
+                #crate_path::__private::make_component_runner::<#prop_type>(#runner_name)
+            });
             #crate_path::__private::set_current_component_replay(__tessera_runner, #props_expr)
         };
     }
@@ -455,205 +456,6 @@ fn stored_field_ty(field_ty: &Type) -> Type {
     parse_quote!(::core::option::Option<#value_ty>)
 }
 
-fn generate_default_setter_method_for_path(
-    field: &PropFieldSpec,
-    field_path: &proc_macro2::TokenStream,
-) -> syn::Result<Option<proc_macro2::TokenStream>> {
-    if field.attrs.skip_setter {
-        return Ok(None);
-    }
-
-    let ident = &field.ident;
-    let method_doc = format!("Set `{ident}`.");
-    let field_ty = &field.ty;
-    if let Some(inner_ty) = option_inner_type(field_ty) {
-        let method = if field.attrs.into {
-            quote! {
-                #[doc = #method_doc]
-                pub fn #ident(mut self, #ident: impl Into<#inner_ty>) -> Self {
-                    self.#field_path = Some(#ident.into());
-                    self
-                }
-            }
-        } else {
-            quote! {
-                #[doc = #method_doc]
-                pub fn #ident(mut self, #ident: #inner_ty) -> Self {
-                    self.#field_path = Some(#ident);
-                    self
-                }
-            }
-        };
-        return Ok(Some(method));
-    }
-
-    let method = if field.attrs.into {
-        quote! {
-            #[doc = #method_doc]
-            pub fn #ident(mut self, #ident: impl Into<#field_ty>) -> Self {
-                self.#field_path = Some(#ident.into());
-                self
-            }
-        }
-    } else {
-        quote! {
-            #[doc = #method_doc]
-            pub fn #ident(mut self, #ident: #field_ty) -> Self {
-                self.#field_path = Some(#ident);
-                self
-            }
-        }
-    };
-    Ok(Some(method))
-}
-
-fn generate_optional_setter_method_for_path(
-    field: &PropFieldSpec,
-    field_path: &proc_macro2::TokenStream,
-) -> Option<proc_macro2::TokenStream> {
-    if field.attrs.skip_setter {
-        return None;
-    }
-
-    let inner_ty = option_inner_type(&field.ty)?;
-    let ident = &field.ident;
-    let optional_ident = format_ident!("{}_optional", ident);
-    let method_doc = format!("Set `{ident}` from an optional value.");
-
-    Some(quote! {
-        #[doc = #method_doc]
-        pub fn #optional_ident(mut self, #ident: ::core::option::Option<#inner_ty>) -> Self {
-            self.#field_path = #ident;
-            self
-        }
-    })
-}
-
-fn generate_helper_setter_methods(
-    field: &PropFieldSpec,
-    helper: PropHelperKind,
-    crate_path: &Path,
-    field_path: &proc_macro2::TokenStream,
-) -> proc_macro2::TokenStream {
-    let ident = &field.ident;
-    let shared_ident = format_ident!("{}_shared", ident);
-    let helper_doc = format!("Set `{ident}` from a closure.");
-    let shared_doc = format!("Set `{ident}` from a shared handle.");
-
-    match helper {
-        PropHelperKind::Callback => {
-            let closure_assign = quote! { Some(#crate_path::Callback::new(#ident)) };
-            let shared_assign = quote! { Some(#ident.into()) };
-
-            quote! {
-                #[doc = #helper_doc]
-                pub fn #ident<F>(mut self, #ident: F) -> Self
-                where
-                    F: Fn() + Send + Sync + 'static,
-                {
-                    self.#field_path = #closure_assign;
-                    self
-                }
-
-                #[doc = #shared_doc]
-                pub fn #shared_ident(mut self, #ident: impl Into<#crate_path::Callback>) -> Self {
-                    self.#field_path = #shared_assign;
-                    self
-                }
-            }
-        }
-        PropHelperKind::CallbackWith { arg, ret } => {
-            let closure_assign = if is_unit_type(&arg) {
-                quote! { Some(#crate_path::CallbackWith::new(move |()| #ident())) }
-            } else {
-                quote! { Some(#crate_path::CallbackWith::new(#ident)) }
-            };
-            let shared_assign = quote! { Some(#ident.into()) };
-
-            let callback_bound = if is_unit_type(&arg) {
-                quote! { F: Fn() -> #ret + Send + Sync + 'static }
-            } else {
-                quote! { F: Fn(#arg) -> #ret + Send + Sync + 'static }
-            };
-
-            quote! {
-                #[doc = #helper_doc]
-                pub fn #ident<F>(mut self, #ident: F) -> Self
-                where
-                    #callback_bound,
-                {
-                    self.#field_path = #closure_assign;
-                    self
-                }
-
-                #[doc = #shared_doc]
-                pub fn #shared_ident(
-                    mut self,
-                    #ident: impl Into<#crate_path::CallbackWith<#arg, #ret>>,
-                ) -> Self {
-                    self.#field_path = #shared_assign;
-                    self
-                }
-            }
-        }
-        PropHelperKind::RenderSlot => {
-            let closure_assign = quote! { Some(#crate_path::RenderSlot::new(#ident)) };
-            let shared_assign = quote! { Some(#ident.into()) };
-
-            quote! {
-                #[doc = #helper_doc]
-                pub fn #ident<F>(mut self, #ident: F) -> Self
-                where
-                    F: Fn() + Send + Sync + 'static,
-                {
-                    self.#field_path = #closure_assign;
-                    self
-                }
-
-                #[doc = #shared_doc]
-                pub fn #shared_ident(mut self, #ident: impl Into<#crate_path::RenderSlot>) -> Self {
-                    self.#field_path = #shared_assign;
-                    self
-                }
-            }
-        }
-        PropHelperKind::RenderSlotWith { arg } => {
-            let closure_assign = if is_unit_type(&arg) {
-                quote! { Some(#crate_path::RenderSlotWith::new(move |()| #ident())) }
-            } else {
-                quote! { Some(#crate_path::RenderSlotWith::new(#ident)) }
-            };
-            let shared_assign = quote! { Some(#ident.into()) };
-
-            let callback_bound = if is_unit_type(&arg) {
-                quote! { F: Fn() + Send + Sync + 'static }
-            } else {
-                quote! { F: Fn(#arg) + Send + Sync + 'static }
-            };
-
-            quote! {
-                #[doc = #helper_doc]
-                pub fn #ident<F>(mut self, #ident: F) -> Self
-                where
-                    #callback_bound,
-                {
-                    self.#field_path = #closure_assign;
-                    self
-                }
-
-                #[doc = #shared_doc]
-                pub fn #shared_ident(
-                    mut self,
-                    #ident: impl Into<#crate_path::RenderSlotWith<#arg>>,
-                ) -> Self {
-                    self.#field_path = #shared_assign;
-                    self
-                }
-            }
-        }
-    }
-}
-
 fn generate_constructor_param_and_assignment(
     field: &PropFieldSpec,
     crate_path: &Path,
@@ -669,18 +471,21 @@ fn generate_constructor_param_and_assignment(
                     #ident: impl Fn() -> #ret + Send + Sync + 'static
                 };
                 let assignment = quote! {
-                    __tessera_builder.props.#ident =
-                        Some(#crate_path::CallbackWith::new(move |()| #ident()));
+                    __tessera_call.configure_deferred(stringify!(#ident), move |__tessera_pending_props| {
+                        __tessera_pending_props.#ident = Some(#crate_path::CallbackWith::new(move |()| #ident()));
+                    });
                 };
                 return Ok((param, assignment));
             }
             PropHelperKind::RenderSlotWith { arg } if is_unit_type(arg) => {
+                let output = format_ident!("__Tessera{}Output", pascal_case_ident(ident, ""));
                 let param = quote! {
-                    #ident: impl Fn() + Send + Sync + 'static
+                    #ident: impl Fn() -> #output + Send + Sync + 'static
                 };
                 let assignment = quote! {
-                    __tessera_builder.props.#ident =
-                        Some(#crate_path::RenderSlotWith::new(move |()| #ident()));
+                    __tessera_call.configure_deferred(stringify!(#ident), move |__tessera_pending_props| {
+                        __tessera_pending_props.#ident = Some(#crate_path::RenderSlotWith::new(move |()| #ident()));
+                    });
                 };
                 return Ok((param, assignment));
             }
@@ -691,25 +496,34 @@ fn generate_constructor_param_and_assignment(
         }
     }
 
-    let constructor_param = if field.attrs.into || helper_uses_into {
+    let constructor_param = if helper_uses_into {
+        quote!(#ident: impl Into<#field_ty> + Send + Sync + 'static)
+    } else if field.attrs.into {
         quote!(#ident: impl Into<#field_ty>)
     } else {
         quote!(#ident: #field_ty)
     };
-    let constructor_assignment = if field.attrs.into || helper_uses_into {
+    let constructor_assignment = if helper_uses_into {
         quote! {
-            __tessera_builder.props.#ident = Some(#ident.into());
+            __tessera_call.configure_deferred(stringify!(#ident), move |__tessera_pending_props| {
+                __tessera_pending_props.#ident = Some(#ident.into());
+            });
         }
     } else {
+        let value = if field.attrs.into {
+            quote!(#ident.into())
+        } else {
+            quote!(#ident)
+        };
         quote! {
-            __tessera_builder.props.#ident = Some(#ident);
+            let #ident = #value;
+            __tessera_call.configure(stringify!(#ident), move |__tessera_pending_props| __tessera_pending_props.#ident = Some(#ident));
         }
     };
 
     Ok((constructor_param, constructor_assignment))
 }
 
-/// Automatically converts a struct into component props and
 fn pascal_case_ident(base: &Ident, suffix: &str) -> Ident {
     let mut output = String::new();
     for segment in base
@@ -757,29 +571,6 @@ fn validate_component_generics(generics: &Generics) -> syn::Result<()> {
         }
     }
     Ok(())
-}
-
-fn component_turbofish_tokens(generics: &Generics) -> proc_macro2::TokenStream {
-    let generic_args: Vec<_> = generics
-        .params
-        .iter()
-        .map(|param| match param {
-            GenericParam::Type(param) => {
-                let ident = &param.ident;
-                quote!(#ident)
-            }
-            GenericParam::Const(param) => {
-                let ident = &param.ident;
-                quote!(#ident)
-            }
-            GenericParam::Lifetime(_) => unreachable!("lifetime generics are rejected earlier"),
-        })
-        .collect();
-    if generic_args.is_empty() {
-        quote!()
-    } else {
-        quote!(::<#(#generic_args),*>)
-    }
 }
 
 fn generic_marker_tokens(
@@ -912,28 +703,96 @@ fn generate_prop_like_impls(
 
 fn generate_builder_methods(
     fields: &[PropFieldSpec],
-    crate_path: &Path,
+    crate_path: &syn::Path,
 ) -> syn::Result<Vec<proc_macro2::TokenStream>> {
     let mut methods = Vec::new();
     for field in fields {
-        if is_required_component_field(field) {
+        if field.attrs.skip_setter || is_required_component_field(field) {
             continue;
         }
         let ident = &field.ident;
-        let field_path = quote!(props.#ident);
-        if let Some(helper) = field.helper.clone() {
-            methods.push(generate_helper_setter_methods(
-                field,
-                helper,
-                crate_path,
-                &field_path,
-            ));
-        } else if let Some(method) = generate_default_setter_method_for_path(field, &field_path)? {
-            methods.push(method);
+        let ty = stored_value_ty(&field.ty);
+        let method_doc = format!("Configure `{ident}` before this component executes.");
+        if let Some(helper) = &field.helper {
+            let shared = format_ident!("{}_shared", ident);
+            let (generics, bound, value) = match helper {
+                PropHelperKind::Callback => (
+                    quote!(<F>),
+                    quote!(F: Fn() + Send + Sync + 'static),
+                    quote!(#crate_path::Callback::new(value)),
+                ),
+                PropHelperKind::CallbackWith { arg, ret } if is_unit_type(arg) => (
+                    quote!(<F>),
+                    quote!(F: Fn() -> #ret + Send + Sync + 'static),
+                    quote!(#crate_path::CallbackWith::new(move |()| value())),
+                ),
+                PropHelperKind::CallbackWith { arg, ret } => (
+                    quote!(<F>),
+                    quote!(F: Fn(#arg) -> #ret + Send + Sync + 'static),
+                    quote!(#crate_path::CallbackWith::new(value)),
+                ),
+                PropHelperKind::RenderSlot => (
+                    quote!(<F, Output>),
+                    quote!(F: Fn() -> Output + Send + Sync + 'static),
+                    quote!(#crate_path::RenderSlot::new(value)),
+                ),
+                PropHelperKind::RenderSlotWith { arg } if is_unit_type(arg) => (
+                    quote!(<F, Output>),
+                    quote!(F: Fn() -> Output + Send + Sync + 'static),
+                    quote!(#crate_path::RenderSlotWith::new(move |()| value())),
+                ),
+                PropHelperKind::RenderSlotWith { arg } => (
+                    quote!(<F, Output>),
+                    quote!(F: Fn(#arg) -> Output + Send + Sync + 'static),
+                    quote!(#crate_path::RenderSlotWith::new(value)),
+                ),
+            };
+            methods.push(quote! {
+                #[doc = #method_doc]
+                #[track_caller]
+                pub fn #ident #generics (&self, value: F) -> Self where #bound {
+                    self.props.configure_deferred(stringify!(#ident), move |props| {
+                        props.#ident = Some(#value);
+                    });
+                    Self { props: self.props }
+                }
+                #[doc = #method_doc]
+                #[track_caller]
+                pub fn #shared(&self, value: impl Into<#ty> + Send + Sync + 'static) -> Self {
+                    self.props.configure_deferred(stringify!(#ident), move |props| props.#ident = Some(value.into()));
+                    Self { props: self.props }
+                }
+            });
+        } else {
+            let parameter = if field.attrs.into {
+                quote!(impl Into<#ty>)
+            } else {
+                quote!(#ty)
+            };
+            let value = if field.attrs.into {
+                quote!(value.into())
+            } else {
+                quote!(value)
+            };
+            methods.push(quote! {
+                #[doc = #method_doc]
+                #[track_caller]
+                pub fn #ident(&self, value: #parameter) -> Self {
+                    let value = #value;
+                    self.props.configure(stringify!(#ident), move |props| props.#ident = Some(value));
+                    Self { props: self.props }
+                }
+            });
         }
-        if let Some(method) = generate_optional_setter_method_for_path(field, &field_path) {
-            methods.push(method);
-        }
+        let optional = format_ident!("{}_optional", ident);
+        methods.push(quote! {
+            #[doc = #method_doc]
+            #[track_caller]
+            pub fn #optional(&self, value: Option<#ty>) -> Self {
+                self.props.configure(stringify!(#ident), move |props| props.#ident = value);
+                Self { props: self.props }
+            }
+        });
     }
     Ok(methods)
 }
@@ -1160,270 +1019,185 @@ pub fn tessera(attr: TokenStream, item: TokenStream) -> TokenStream {
     item_generics.where_clause = None;
     let where_clause = &generics.where_clause;
     let (impl_generics, ty_generics, _) = generics.split_for_impl();
-    let component_turbofish = component_turbofish_tokens(generics);
 
     // Prepare token fragments using helpers to keep function small and readable
     let register_tokens = register_node_tokens(&crate_path, fn_name);
-    let expanded = match &prop_signature {
-        ComponentPropSignature::Unit => {
-            let props_ident = hidden_props_ident(fn_name);
-            let fn_sig = &input_fn.sig;
-            let unit_runner_ident = format_ident!("__tessera_{}_unit_runner", fn_name);
-            let (const_marker_defs, marker_field_def) = generic_marker_tokens(fn_name, generics);
-            let has_generic_marker = marker_field_def.is_some();
-            let prop_type: syn::Type = syn::parse_quote!(#props_ident #ty_generics);
-            let component_type_id_tokens = component_type_id_tokens(fn_name, &prop_type);
-            let props_clone_default_impls =
-                generate_props_clone_default_impls(&props_ident, generics, &[], has_generic_marker);
-            let prop_impl_tokens =
-                generate_prop_like_impls(&props_ident, generics, &[], &crate_path);
-            let prop_assert_tokens = prop_assert_tokens(&crate_path, &prop_type);
-            let replay_tokens = replay_register_tokens(
-                &crate_path,
-                &unit_runner_ident,
-                &prop_type,
-                quote!(&__tessera_unit_props),
-            );
-            let marker_field_def = marker_field_def
-                .map(|field| quote!(#field,))
-                .unwrap_or_default();
-
-            quote! {
-                #(#const_marker_defs)*
-
-                struct #props_ident #item_generics #where_clause {
-                    #marker_field_def
-                }
-
-                #props_clone_default_impls
-                #prop_impl_tokens
-
-                fn #unit_runner_ident #item_generics(_props: &#props_ident #ty_generics) #where_clause {
-                    #fn_name #component_turbofish ();
-                }
-
-                #(#fn_attrs)*
-                #fn_vis #fn_sig {
-                    let __tessera_component_type_id: u64 = #component_type_id_tokens;
-                    let __tessera_phase_guard = {
-                        use #crate_path::__private::{RuntimePhase, push_phase};
-                        push_phase(RuntimePhase::Build)
-                    };
-                    let __tessera_fn_name: &str = stringify!(#fn_name);
-                    let __tessera_node_id = #register_tokens;
-
-                    let _node_ctx_guard = {
-                        use #crate_path::__private::push_current_node;
-                        push_current_node(
-                            __tessera_node_id,
-                            __tessera_component_type_id,
-                            __tessera_fn_name,
-                        )
-                    };
-
-                    let __tessera_instance_key: u64 = #crate_path::__private::current_instance_key();
-                    let __tessera_instance_logic_id: u64 =
-                        #crate_path::__private::current_instance_logic_id();
-                    let _instance_ctx_guard = {
-                        use #crate_path::__private::push_current_component_instance_key;
-                        push_current_component_instance_key(__tessera_instance_key)
-                    };
-                    let _component_scope_guard = {
-                        struct ComponentScopeGuard;
-                        impl Drop for ComponentScopeGuard {
-                            fn drop(&mut self) {
-                                #crate_path::__private::finish_component_node();
-                            }
-                        }
-                        ComponentScopeGuard
-                    };
-                    #crate_path::__private::set_current_node_identity(
-                        __tessera_instance_key,
-                        __tessera_instance_logic_id,
-                    );
-                    #prop_assert_tokens
-                    #crate_path::__private::record_current_context_snapshot_for(__tessera_instance_key);
-                    let __tessera_unit_props: #prop_type = ::core::default::Default::default();
-                    #replay_tokens
-                    if __tessera_component_reused {
-                        return;
-                    }
-                    #fn_block
-                }
+    let fields = match &prop_signature {
+        ComponentPropSignature::Unit => &[][..],
+        ComponentPropSignature::Params(fields) => fields.as_slice(),
+    };
+    let expanded = {
+        let props_ident = hidden_props_ident(fn_name);
+        let builder_ident = builder_ident(fn_name);
+        let impl_ident = hidden_component_impl_ident(fn_name);
+        let (const_marker_defs, marker_field_def) = generic_marker_tokens(fn_name, generics);
+        let has_generic_marker = marker_field_def.is_some();
+        let prop_type: syn::Type = syn::parse_quote!(#props_ident #ty_generics);
+        let component_type_id_tokens = component_type_id_tokens(fn_name, &prop_type);
+        let field_idents: Vec<_> = fields.iter().map(|field| field.ident.clone()).collect();
+        let required_fields: Vec<_> = fields
+            .iter()
+            .filter(|field| is_required_component_field(field))
+            .collect();
+        let mut entry_generics = item_generics.clone();
+        for field in &required_fields {
+            if matches!(&field.helper, Some(PropHelperKind::RenderSlotWith { arg }) if is_unit_type(arg))
+            {
+                let output =
+                    format_ident!("__Tessera{}Output", pascal_case_ident(&field.ident, ""));
+                entry_generics.params.push(syn::parse_quote!(#output));
             }
         }
-        ComponentPropSignature::Params(fields) => {
-            let props_ident = hidden_props_ident(fn_name);
-            let builder_ident = builder_ident(fn_name);
-            let impl_ident = hidden_component_impl_ident(fn_name);
-            let (const_marker_defs, marker_field_def) = generic_marker_tokens(fn_name, generics);
-            let has_generic_marker = marker_field_def.is_some();
-            let prop_type: syn::Type = syn::parse_quote!(#props_ident #ty_generics);
-            let component_type_id_tokens = component_type_id_tokens(fn_name, &prop_type);
-            let field_idents: Vec<_> = fields.iter().map(|field| field.ident.clone()).collect();
-            let required_fields: Vec<_> = fields
-                .iter()
-                .filter(|field| is_required_component_field(field))
-                .collect();
-            let constructor_params_and_assignments: Vec<_> = match required_fields
-                .iter()
-                .map(|field| generate_constructor_param_and_assignment(field, &crate_path))
-                .collect::<syn::Result<Vec<_>>>()
-            {
-                Ok(entries) => entries,
-                Err(err) => return err.to_compile_error().into(),
-            };
-            let constructor_params: Vec<_> = constructor_params_and_assignments
-                .iter()
-                .map(|(param, _)| param.clone())
-                .collect();
-            let constructor_assignments: Vec<_> = constructor_params_and_assignments
-                .iter()
-                .map(|(_, assignment)| assignment.clone())
-                .collect();
-            let field_defs: Vec<_> = fields
-                .iter()
-                .map(|field| {
-                    let ident = &field.ident;
-                    let ty = stored_field_ty(&field.ty);
-                    quote!(#ident: #ty)
-                })
-                .collect();
-            let field_resolutions: Vec<_> = fields
-                .iter()
-                .map(|field| {
-                    let ident = &field.ident;
-                    let ty = &field.ty;
-                    if option_inner_type(ty).is_some() {
-                        return quote! {
-                            let #ident: #ty = __tessera_props.#ident.clone();
-                        };
-                    }
+        let constructor_params_and_assignments: Vec<_> = match required_fields
+            .iter()
+            .map(|field| generate_constructor_param_and_assignment(field, &crate_path))
+            .collect::<syn::Result<Vec<_>>>()
+        {
+            Ok(entries) => entries,
+            Err(err) => return err.to_compile_error().into(),
+        };
+        let constructor_params: Vec<_> = constructor_params_and_assignments
+            .iter()
+            .map(|(param, _)| param.clone())
+            .collect();
+        let constructor_assignments: Vec<_> = constructor_params_and_assignments
+            .iter()
+            .map(|(_, assignment)| assignment.clone())
+            .collect();
+        let field_defs: Vec<_> = fields
+            .iter()
+            .map(|field| {
+                let ident = &field.ident;
+                let ty = stored_field_ty(&field.ty);
+                quote!(#ident: #ty)
+            })
+            .collect();
+        let field_resolutions: Vec<_> = fields
+            .iter()
+            .map(|field| {
+                let ident = &field.ident;
+                let ty = &field.ty;
+                if option_inner_type(ty).is_some() {
+                    return quote! {
+                        let #ident: #ty = __tessera_props.#ident.clone();
+                    };
+                }
 
-                    let missing_prop_message = format!(
-                        "missing required prop `{}` for component `{}`",
-                        ident, fn_name
+                let missing_prop_message = format!(
+                    "missing required prop `{}` for component `{}`",
+                    ident, fn_name
+                );
+                quote! {
+                    let #ident: #ty = __tessera_props.#ident.clone().unwrap_or_else(|| {
+                        panic!(#missing_prop_message)
+                    });
+                }
+            })
+            .collect();
+        let prop_impl_tokens =
+            generate_prop_like_impls(&props_ident, generics, fields, &crate_path);
+        let builder_methods = match generate_builder_methods(fields, &crate_path) {
+            Ok(methods) => methods,
+            Err(err) => return err.to_compile_error().into(),
+        };
+        let prop_assert_tokens = prop_assert_tokens(&crate_path, &prop_type);
+        let replay_tokens = replay_register_tokens(
+            &crate_path,
+            &impl_ident,
+            &prop_type,
+            quote!(__tessera_props),
+        );
+        let marker_field_def = marker_field_def
+            .map(|field| quote!(#field,))
+            .unwrap_or_default();
+        let props_clone_default_impls = generate_props_clone_default_impls(
+            &props_ident,
+            generics,
+            &field_idents,
+            has_generic_marker,
+        );
+
+        quote! {
+            #(#const_marker_defs)*
+
+            struct #props_ident #item_generics #where_clause {
+                #(#field_defs,)*
+                #marker_field_def
+            }
+
+            #props_clone_default_impls
+            #prop_impl_tokens
+
+            #[doc = concat!("Configuration handle returned by [`", stringify!(#fn_name), "`].")]
+            #fn_vis struct #builder_ident #item_generics #where_clause {
+                props: #crate_path::__private::ComponentCall<#props_ident #ty_generics>,
+            }
+
+            impl #impl_generics #builder_ident #ty_generics #where_clause {
+                #(#builder_methods)*
+            }
+
+            #(#fn_attrs)*
+            #fn_vis fn #fn_name #entry_generics(
+                #(#constructor_params),*
+            ) -> #builder_ident #ty_generics #where_clause {
+                let __tessera_call = #crate_path::__private::register_component_call(
+                        stringify!(#fn_name), #component_type_id_tokens,
+                        <#props_ident #ty_generics>::default(),
+                        #crate_path::__private::make_component_runner::<#prop_type>(#impl_ident),
                     );
-                    quote! {
-                        let #ident: #ty = __tessera_props.#ident.clone().unwrap_or_else(|| {
-                            panic!(#missing_prop_message)
-                        });
-                    }
-                })
-                .collect();
-            let prop_impl_tokens =
-                generate_prop_like_impls(&props_ident, generics, fields, &crate_path);
-            let builder_methods = match generate_builder_methods(fields, &crate_path) {
-                Ok(methods) => methods,
-                Err(err) => return err.to_compile_error().into(),
-            };
-            let prop_assert_tokens = prop_assert_tokens(&crate_path, &prop_type);
-            let replay_tokens = replay_register_tokens(
-                &crate_path,
-                &impl_ident,
-                &prop_type,
-                quote!(__tessera_props),
-            );
-            let marker_field_def = marker_field_def
-                .map(|field| quote!(#field,))
-                .unwrap_or_default();
-            let props_clone_default_impls = generate_props_clone_default_impls(
-                &props_ident,
-                generics,
-                &field_idents,
-                has_generic_marker,
-            );
+                #(#constructor_assignments)*
+                #builder_ident { props: __tessera_call }
+            }
 
-            quote! {
-                #(#const_marker_defs)*
+            fn #impl_ident #item_generics(__tessera_props: &#props_ident #ty_generics) #where_clause {
+                let __tessera_component_type_id: u64 = #component_type_id_tokens;
+                let __tessera_phase_guard = {
+                    use #crate_path::__private::{RuntimePhase, push_phase};
+                    push_phase(RuntimePhase::Build)
+                };
+                let __tessera_fn_name: &str = stringify!(#fn_name);
+                let __tessera_node_id = #register_tokens;
 
-                struct #props_ident #item_generics #where_clause {
-                    #(#field_defs,)*
-                    #marker_field_def
-                }
+                let _node_ctx_guard = {
+                    use #crate_path::__private::push_current_node;
+                    push_current_node(
+                        __tessera_node_id,
+                        __tessera_component_type_id,
+                        __tessera_fn_name,
+                    )
+                };
 
-                #props_clone_default_impls
-                #prop_impl_tokens
-
-                #[doc = concat!("Builder returned by [`", stringify!(#fn_name), "`].")]
-                #fn_vis struct #builder_ident #item_generics #where_clause {
-                    props: #props_ident #ty_generics,
-                }
-
-                impl #impl_generics ::core::default::Default for #builder_ident #ty_generics #where_clause {
-                    fn default() -> Self {
-                        Self {
-                            props: ::core::default::Default::default(),
+                let __tessera_instance_key: u64 = #crate_path::__private::current_instance_key();
+                let __tessera_instance_logic_id: u64 =
+                    #crate_path::__private::current_instance_logic_id();
+                let _instance_ctx_guard = {
+                    use #crate_path::__private::push_current_component_instance_key;
+                    push_current_component_instance_key(__tessera_instance_key)
+                };
+                let _component_scope_guard = {
+                    struct ComponentScopeGuard;
+                    impl Drop for ComponentScopeGuard {
+                        fn drop(&mut self) {
+                            #crate_path::__private::finish_component_node();
                         }
                     }
+                    ComponentScopeGuard
+                };
+                #crate_path::__private::set_current_node_identity(
+                    __tessera_instance_key,
+                    __tessera_instance_logic_id,
+                );
+                #prop_assert_tokens
+                #crate_path::__private::record_current_context_snapshot_for(__tessera_instance_key);
+                #replay_tokens
+                if __tessera_component_reused {
+                    return;
                 }
-
-                impl #impl_generics #builder_ident #ty_generics #where_clause {
-                    #(#builder_methods)*
-                }
-
-                impl #impl_generics Drop for #builder_ident #ty_generics #where_clause {
-                    fn drop(&mut self) {
-                        #impl_ident(&self.props);
-                    }
-                }
-
-                #(#fn_attrs)*
-                #fn_vis fn #fn_name #item_generics(
-                    #(#constructor_params),*
-                ) -> #builder_ident #ty_generics #where_clause {
-                    let mut __tessera_builder = #builder_ident::default();
-                    #(#constructor_assignments)*
-                    __tessera_builder
-                }
-
-                fn #impl_ident #item_generics(__tessera_props: &#props_ident #ty_generics) #where_clause {
-                    let __tessera_component_type_id: u64 = #component_type_id_tokens;
-                    let __tessera_phase_guard = {
-                        use #crate_path::__private::{RuntimePhase, push_phase};
-                        push_phase(RuntimePhase::Build)
-                    };
-                    let __tessera_fn_name: &str = stringify!(#fn_name);
-                    let __tessera_node_id = #register_tokens;
-
-                    let _node_ctx_guard = {
-                        use #crate_path::__private::push_current_node;
-                        push_current_node(
-                            __tessera_node_id,
-                            __tessera_component_type_id,
-                            __tessera_fn_name,
-                        )
-                    };
-
-                    let __tessera_instance_key: u64 = #crate_path::__private::current_instance_key();
-                    let __tessera_instance_logic_id: u64 =
-                        #crate_path::__private::current_instance_logic_id();
-                    let _instance_ctx_guard = {
-                        use #crate_path::__private::push_current_component_instance_key;
-                        push_current_component_instance_key(__tessera_instance_key)
-                    };
-                    let _component_scope_guard = {
-                        struct ComponentScopeGuard;
-                        impl Drop for ComponentScopeGuard {
-                            fn drop(&mut self) {
-                                #crate_path::__private::finish_component_node();
-                            }
-                        }
-                        ComponentScopeGuard
-                    };
-                    #crate_path::__private::set_current_node_identity(
-                        __tessera_instance_key,
-                        __tessera_instance_logic_id,
-                    );
-                    #prop_assert_tokens
-                    #crate_path::__private::record_current_context_snapshot_for(__tessera_instance_key);
-                    #replay_tokens
-                    if __tessera_component_reused {
-                        return;
-                    }
+                #crate_path::__private::with_pending_scope(|| {
                     #(#field_resolutions)*
-                    #fn_block
-                }
+                    #fn_block;
+                });
             }
         }
     };
@@ -1681,12 +1455,12 @@ pub fn shard(attr: TokenStream, input: TokenStream) -> TokenStream {
                 if option_inner_type(&param.ty).is_some() {
                     quote! {
                         if let Some(value) = self.#ident.clone() {
-                            __tessera_builder = __tessera_builder.#ident(value);
+                            __tessera_builder.#ident(value);
                         }
                     }
                 } else {
                     quote! {
-                        __tessera_builder = __tessera_builder.#ident(self.#ident.clone());
+                        __tessera_builder.#ident(self.#ident.clone());
                     }
                 }
             })
@@ -1701,9 +1475,8 @@ pub fn shard(attr: TokenStream, input: TokenStream) -> TokenStream {
 
                 impl #shard_crate_path::router::RouterDestination for #struct_name {
                     fn exec_component(&self) {
-                        let mut __tessera_builder = #func_name();
+                        let __tessera_builder = #func_name();
                         #(#destination_builder_setters)*
-                        drop(__tessera_builder);
                     }
 
                     fn exec_component_handle(&self) -> std::sync::Arc<dyn Fn() + Send + Sync> {
@@ -1741,9 +1514,8 @@ pub fn shard(attr: TokenStream, input: TokenStream) -> TokenStream {
 
                 impl #shard_crate_path::router::RouterDestination for #struct_name {
                     fn exec_component(&self) {
-                        let mut __tessera_builder = #func_name();
+                        let __tessera_builder = #func_name();
                         #(#destination_builder_setters)*
-                        drop(__tessera_builder);
                     }
 
                     fn exec_component_handle(&self) -> std::sync::Arc<dyn Fn() + Send + Sync> {

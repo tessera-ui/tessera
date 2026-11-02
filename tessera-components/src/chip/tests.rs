@@ -57,7 +57,7 @@ fn fixture() {
                     (ChipVariant::Filter, "Filter sample"),
                     (ChipVariant::Input, "Input sample"),
                 ] {
-                    let mut builder = chip()
+                    let builder = chip()
                         .variant(variant)
                         .label(label)
                         .accessibility_label(format!("Control {label}"))
@@ -74,12 +74,11 @@ fn fixture() {
                             })
                         });
                     if settings.get().leading {
-                        builder = builder.leading_icon(filled::HOME_SVG);
+                        builder.leading_icon(filled::HOME_SVG);
                     }
                     if settings.get().trailing {
-                        builder = builder.trailing_icon(filled::CLOSE_SVG);
+                        builder.trailing_icon(filled::CLOSE_SVG);
                     }
-                    drop(builder);
                 }
             });
         });

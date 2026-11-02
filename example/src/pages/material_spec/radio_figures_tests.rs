@@ -35,7 +35,7 @@ fn overview_fixture() {
     });
 }
 
-fn renderer(fixture: fn()) -> HeadlessRenderer {
+fn renderer<Output: 'static>(fixture: fn() -> Output) -> HeadlessRenderer {
     let mut renderer = HeadlessRenderer::new(
         Box::new(fixture),
         vec![Box::new(Pipelines)],

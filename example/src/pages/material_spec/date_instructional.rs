@@ -66,10 +66,18 @@ impl FieldGeometry {
 #[tessera]
 pub(super) fn illustration(kind: Illustration) {
     match kind {
-        Illustration::EntryMethods => entry_methods(),
-        Illustration::Formatting => formatting(),
-        Illustration::Clear => optional_clear(),
-        Illustration::Labels => field_labels(),
+        Illustration::EntryMethods => {
+            entry_methods();
+        }
+        Illustration::Formatting => {
+            formatting();
+        }
+        Illustration::Clear => {
+            optional_clear();
+        }
+        Illustration::Labels => {
+            field_labels();
+        }
     }
 }
 

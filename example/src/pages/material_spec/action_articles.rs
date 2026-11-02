@@ -512,7 +512,7 @@ pub(super) fn action_article(
             });
         }
     }
-    let mut article = article(title, description, sections).pages(vec![
+    let article = article(title, description, sections).pages(vec![
         ArticlePage {
             title: "Overview",
             intro: Some(RenderSlot::new(move || {
@@ -547,11 +547,10 @@ pub(super) fn action_article(
         },
     ]);
     if kind == Kind::Segmented {
-        article = article.intro_shared(RenderSlot::new(move || {
+        article.intro_shared(RenderSlot::new(move || {
             recommendation(kind);
         }));
     }
-    drop(article);
 }
 
 #[tessera]

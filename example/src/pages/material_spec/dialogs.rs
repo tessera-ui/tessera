@@ -2577,7 +2577,7 @@ fn dialog_scene_input(
         )
         .children(move || {
             let content = RenderSlot::new(move || {
-                let mut field = TextFieldBuilder::outlined()
+                let field = TextFieldBuilder::outlined()
                     .controller(controller)
                     .label(label.get())
                     .accessibility_label(name.get())
@@ -2588,7 +2588,7 @@ fn dialog_scene_input(
                     .line_height(Dp(24.0 * scale))
                     .modifier(Modifier::new().size(Dp(width * scale), Dp(56.0 * scale)));
                 if dropdown {
-                    field = field.trailing_icon_shared(RenderSlot::new(move || {
+                    field.trailing_icon_shared(RenderSlot::new(move || {
                         button()
                             .text()
                             .accessibility_label(format!("Choose {}", name.get()))
@@ -2602,7 +2602,6 @@ fn dialog_scene_input(
                             });
                     }));
                 }
-                drop(field);
             });
             if dropdown {
                 menu_provider()

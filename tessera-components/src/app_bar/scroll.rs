@@ -318,7 +318,7 @@ pub(super) struct AppBarScrollContext(pub State<AppBarScrollState>);
 /// # fn app() {
 /// #     tessera_components::theme::material_theme().child(|| screen());
 /// # }
-/// # app();
+/// # tessera_ui::testing::layout_test(app).run();
 /// ```
 #[tessera]
 pub fn app_bar_scroll_provider(

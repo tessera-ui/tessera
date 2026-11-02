@@ -753,7 +753,7 @@ fn configuration_slider(
     boxed()
         .modifier(Modifier::new().offset(x, y).width(width).height(height))
         .children(move || {
-            let mut control = slider()
+            let control = slider()
                 .modifier(Modifier::new().fill_max_size())
                 .size(size)
                 .orientation(if vertical {
@@ -773,9 +773,8 @@ fn configuration_slider(
                 })
                 .accessibility_label(label.clone());
             if inset {
-                control = control.inset_icon(filled::VOLUME_UP_SVG);
+                control.inset_icon(filled::VOLUME_UP_SVG);
             }
-            drop(control);
         });
 }
 
@@ -1636,7 +1635,7 @@ fn size_specimen(
                     Dp(center_y.0 - component_height * 0.5),
                 ))
                 .children(move || {
-                    let mut specimen = slider()
+                    let specimen = slider()
                         .modifier(watch_precise(geometry, name).fill_max_width())
                         .size(SIZES[index])
                         .value(value.get())
@@ -1647,9 +1646,8 @@ fn size_specimen(
                             ["XS", "S", "M", "L", "XL"][index]
                         ));
                     if index >= 2 {
-                        specimen = specimen.inset_icon(filled::VOLUME_UP_SVG);
+                        specimen.inset_icon(filled::VOLUME_UP_SVG);
                     }
-                    drop(specimen);
                 });
             size_annotations(geometry, index, value.get(), controller);
         });

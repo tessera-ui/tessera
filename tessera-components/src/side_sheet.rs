@@ -421,7 +421,7 @@ fn place_side_sheet_if_present(
 ///             .side_sheet_content(|| { /* side sheet content */ });
 ///     });
 /// # }
-/// # component();
+/// # tessera_ui::testing::layout_test(component).run();
 /// ```
 #[tessera]
 pub fn modal_side_sheet_provider(
@@ -488,7 +488,7 @@ pub fn modal_side_sheet_provider(
 ///             .side_sheet_content(|| { /* side sheet content */ });
 ///     });
 /// # }
-/// # component();
+/// # tessera_ui::testing::layout_test(component).run();
 /// ```
 #[tessera]
 pub fn standard_side_sheet_provider(

@@ -968,6 +968,25 @@ impl ComponentTree {
         })
     }
 
+    pub(crate) fn replace_build_parent(&mut self, parent: Option<NodeId>) -> Option<Vec<NodeId>> {
+        if self.node_queue.last().copied() == parent {
+            None
+        } else {
+            Some(std::mem::replace(
+                &mut self.node_queue,
+                parent.into_iter().collect(),
+            ))
+        }
+    }
+
+    pub(crate) fn restore_build_queue(&mut self, queue: Vec<NodeId>) {
+        self.node_queue = queue;
+    }
+
+    pub(crate) fn current_build_node_id(&self) -> Option<NodeId> {
+        self.node_queue.last().copied()
+    }
+
     /// Get current node
     pub(crate) fn current_node(&self) -> Option<&ComponentNode> {
         self.node_queue

@@ -273,7 +273,7 @@ impl SegmentedButtonDefaults {
 ///         });
 /// }
 ///
-/// demo();
+/// # tessera_ui::testing::layout_test(demo).run();
 /// ```
 #[tessera]
 pub fn segmented_button(
@@ -504,7 +504,7 @@ pub fn segmented_button(
 ///         });
 /// }
 ///
-/// demo();
+/// # tessera_ui::testing::layout_test(demo).run();
 /// ```
 #[tessera]
 pub fn single_choice_segmented_button_row(
@@ -603,7 +603,7 @@ pub fn single_choice_segmented_button_row(
 ///         });
 /// }
 ///
-/// demo();
+/// # tessera_ui::testing::layout_test(demo).run();
 /// ```
 #[tessera]
 pub fn multi_choice_segmented_button_row(

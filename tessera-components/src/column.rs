@@ -50,7 +50,7 @@ use crate::{
 ///     text().content("Last item");
 /// });
 /// # }
-/// # component();
+/// # tessera_ui::testing::layout_test(component).run();
 /// ```
 #[tessera]
 pub fn column(
