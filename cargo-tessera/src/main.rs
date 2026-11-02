@@ -38,6 +38,11 @@ struct TesseraArgs {
 
 #[derive(Subcommand)]
 enum TesseraCommands {
+    /// Install bundled Tessera agent guidance
+    Skill {
+        #[command(subcommand)]
+        command: SkillCommands,
+    },
     /// Create a new Tessera project
     New {
         /// Name of the project (optional, will prompt if not provided)
@@ -169,6 +174,19 @@ enum TesseraCommands {
     Plugin {
         #[command(subcommand)]
         command: PluginCommands,
+    },
+}
+
+#[derive(Subcommand)]
+enum SkillCommands {
+    /// Install tessera-good-taste into the project's .agents/skills directory
+    Install {
+        /// Project directory to install into
+        #[arg(long, default_value = ".")]
+        path: PathBuf,
+        /// Replace locally modified files belonging to the bundled skill
+        #[arg(long)]
+        force: bool,
     },
 }
 
@@ -412,6 +430,11 @@ fn run() -> Result<()> {
 
     match command {
         Commands::Tessera(args) => match args.command {
+            TesseraCommands::Skill { command } => match command {
+                SkillCommands::Install { path, force } => {
+                    commands::skill::install(&path, force)?;
+                }
+            },
             TesseraCommands::New { name, template } => {
                 let name = match name {
                     Some(n) => n,

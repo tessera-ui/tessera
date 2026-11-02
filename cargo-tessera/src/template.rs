@@ -4,6 +4,13 @@ use anyhow::{Context, Result, anyhow};
 use handlebars::Handlebars;
 use include_dir::{Dir, DirEntry};
 
+pub fn write_project_guidance(out_root: &Path) -> Result<()> {
+    write_if_changed(
+        &out_root.join("AGENTS.md"),
+        include_bytes!("../skills/AGENTS.md.hbs"),
+    )
+}
+
 fn write_if_changed(path: &Path, new_bytes: &[u8]) -> Result<()> {
     match fs::read(path) {
         Ok(existing) if existing == new_bytes => return Ok(()),
@@ -178,6 +185,59 @@ fn mark_gradlew_executable_with_git(out_path: &Path) {
 
 #[cfg(test)]
 mod tests {
+    use std::{
+        fs,
+        path::PathBuf,
+        sync::atomic::{AtomicU64, Ordering},
+    };
+
+    use crate::commands::{new, plugin};
+
+    struct ProjectDirectory(PathBuf);
+
+    impl ProjectDirectory {
+        fn new() -> Self {
+            static NEXT_ID: AtomicU64 = AtomicU64::new(0);
+            let id = NEXT_ID.fetch_add(1, Ordering::Relaxed);
+            let root =
+                std::env::temp_dir().join(format!("tessera-scaffold-{}-{id}", std::process::id()));
+            fs::create_dir(&root).expect("create isolated scaffold directory");
+            Self(root)
+        }
+    }
+
+    impl Drop for ProjectDirectory {
+        fn drop(&mut self) {
+            let _ = fs::remove_dir_all(&self.0);
+        }
+    }
+
+    #[test]
+    fn app_and_plugin_scaffolds_offer_skill_installation_without_installing_it() {
+        let root = ProjectDirectory::new();
+        for (kind, generate) in [
+            ("app", new::execute as fn(&str, &str) -> anyhow::Result<()>),
+            ("plugin", plugin::execute),
+        ] {
+            for template in if kind == "app" {
+                ["basic", "blank"]
+            } else {
+                ["basic", "android"]
+            } {
+                let project = root.0.join(format!("{kind}-{template}"));
+                generate(project.to_str().expect("UTF-8 project path"), template)
+                    .expect("generate scaffold");
+
+                assert!(project.join("Cargo.toml").is_file());
+                assert!(!project.join(".agents").exists());
+                let guidance = fs::read_to_string(project.join("AGENTS.md"))
+                    .expect("generated project guidance");
+                assert!(guidance.contains("cargo tessera skill install"));
+                assert!(guidance.contains("tessera-good-taste"));
+            }
+        }
+    }
+
     #[test]
     fn plugin_templates_match_the_app_ui_requirement() {
         let app: toml::Value = toml::from_str(include_str!("../templates/basic/Cargo.toml.hbs"))

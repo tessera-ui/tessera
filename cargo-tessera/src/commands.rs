@@ -6,6 +6,7 @@ pub mod headless;
 pub mod new;
 pub mod plugin;
 pub mod profiling;
+pub mod skill;
 pub mod web;
 
 use std::{fs, path::PathBuf};

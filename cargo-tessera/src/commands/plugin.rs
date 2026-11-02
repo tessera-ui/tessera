@@ -6,7 +6,10 @@ use include_dir::{Dir, include_dir};
 use inquire::{Select as ChoicePrompt, Text, error::CustomUserError, validator::Validation};
 use serde_json::json;
 
-use crate::{output, template::write_template_dir_at};
+use crate::{
+    output,
+    template::{write_project_guidance, write_template_dir_at},
+};
 
 static TEMPLATES: Dir = include_dir!("$CARGO_MANIFEST_DIR/templates/plugin");
 
@@ -135,5 +138,6 @@ fn generate_from_template(project_dir: &Path, template: &str) -> Result<()> {
         template_dir.path(),
         &handlebars,
         &data,
-    )
+    )?;
+    write_project_guidance(project_dir)
 }

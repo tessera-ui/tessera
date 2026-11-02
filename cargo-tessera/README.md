@@ -17,6 +17,34 @@ cargo tessera new my-app
 cd my-app
 ```
 
+App and plugin scaffolds include an `AGENTS.md` explaining how to install the
+optional `tessera-good-taste` skill. Project creation does not install the skill.
+
+### Install the agent skill
+
+Run this command in a project when you want Tessera application guidance:
+
+```bash
+cargo tessera skill install
+```
+
+It installs the bundled skill and its API reference into
+`.agents/skills/tessera-good-taste/`, leaving `AGENTS.md` and other skills unchanged.
+Use `--path my-app` to select another project. Matching files are left untouched;
+use `--force` to replace locally modified bundled skill files.
+Invoke the installed skill as `$tessera-good-taste` in an agent that supports
+project skills, or read `.agents/skills/tessera-good-taste/SKILL.md` directly.
+
+For agent-specific or global installation through the Skills CLI, select the
+skill from this repository:
+
+```bash
+npx skills add tessera-ui/tessera --skill tessera-good-taste
+```
+
+The repository's `skills.sh.json` exposes `cargo-tessera/skills/` as a skill
+container. `SKILL.md` routes tasks to focused references, which are read as needed.
+
 ### Start development server
 
 ```bash
