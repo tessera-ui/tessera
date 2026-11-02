@@ -8,6 +8,7 @@
 pub(crate) enum Spec {
     Spatial,
     FastSpatial,
+    ButtonGroupPress,
     Effects,
     FastEffects,
     Removal,
@@ -79,15 +80,19 @@ impl Scalar {
         let omega = match self.spec {
             Spec::Spatial => 380.0_f64.sqrt(),
             Spec::FastSpatial => 800.0_f64.sqrt(),
+            Spec::ButtonGroupPress => 1400.0_f64.sqrt(),
             Spec::Effects => 40.0,
             Spec::FastEffects => 3800.0_f64.sqrt(),
             Spec::Removal => unreachable!(),
         };
-        let seconds = if matches!(self.spec, Spec::Spatial | Spec::FastSpatial) {
-            let damping: f64 = if self.spec == Spec::FastSpatial {
-                0.6
-            } else {
-                0.8
+        let seconds = if matches!(
+            self.spec,
+            Spec::Spatial | Spec::FastSpatial | Spec::ButtonGroupPress
+        ) {
+            let damping: f64 = match self.spec {
+                Spec::FastSpatial => 0.6,
+                Spec::ButtonGroupPress => 0.9,
+                _ => 0.8,
             };
             let decay = omega * damping;
             let frequency = omega * (1.0 - damping * damping).sqrt();
@@ -148,6 +153,7 @@ impl Scalar {
         let (stiffness, damping): (f64, f64) = match self.spec {
             Spec::Spatial => (380.0, 0.8),
             Spec::FastSpatial => (800.0, 0.6),
+            Spec::ButtonGroupPress => (1400.0, 0.9),
             Spec::Effects => (1600.0, 1.0),
             Spec::FastEffects => (3800.0, 1.0),
             Spec::Removal => unreachable!(),

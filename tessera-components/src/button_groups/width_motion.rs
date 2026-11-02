@@ -44,7 +44,7 @@ impl PressWidthMotion {
         }
         self.enabled = true;
         if pressed && !self.pressed {
-            self.scalar.retarget(1.0, Spec::FastSpatial, frame);
+            self.scalar.retarget(1.0, Spec::ButtonGroupPress, frame);
             self.completing = true;
         }
         self.pressed = pressed;
@@ -54,7 +54,7 @@ impl PressWidthMotion {
     pub fn pulse(&mut self, frame: u64) {
         self.advance(frame);
         if self.enabled && !self.pressed {
-            self.scalar.retarget(1.0, Spec::FastSpatial, frame);
+            self.scalar.retarget(1.0, Spec::ButtonGroupPress, frame);
             self.completing = true;
         }
     }
@@ -67,7 +67,7 @@ impl PressWidthMotion {
     fn finish_press(&mut self, frame: u64) {
         if !self.pressed && self.completing && self.scalar.value >= 0.75 {
             self.completing = false;
-            self.scalar.retarget(0.0, Spec::FastSpatial, frame);
+            self.scalar.retarget(0.0, Spec::ButtonGroupPress, frame);
         }
     }
 
@@ -82,6 +82,7 @@ impl PressWidthMotion {
 pub(super) struct WidthObserver {
     pub interaction: State<InteractionState>,
     pub motion: State<PressWidthMotion>,
+    pub presented_pressed: bool,
 }
 
 impl PointerInputModifierNode for WidthObserver {
@@ -91,7 +92,7 @@ impl PointerInputModifierNode for WidthObserver {
         }
         let mut next = self.motion.get();
         next.update(
-            self.interaction.with(InteractionState::is_pressed),
+            self.presented_pressed || self.interaction.with(InteractionState::is_pressed),
             next.enabled,
             current_frame_nanos(),
         );

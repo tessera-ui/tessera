@@ -18,7 +18,7 @@ use tessera_ui::{
 use crate::{
     button_groups::{ButtonGroupsSize, ButtonGroupsStyle, button_groups},
     column::column,
-    modifier::{ModifierExt as _, SemanticsArgs},
+    modifier::{InteractionVisualState, ModifierExt as _, SemanticsArgs},
     theme::material_theme,
 };
 
@@ -28,6 +28,7 @@ struct Settings {
     connected: bool,
     enabled: bool,
     items: usize,
+    presented: Option<usize>,
 }
 
 thread_local! {
@@ -42,6 +43,7 @@ fn fixture() {
         connected: false,
         enabled: true,
         items: 3,
+        presented: None,
     });
     SETTINGS.set(Some(settings));
     material_theme().child(move || {
@@ -54,6 +56,17 @@ fn fixture() {
                     ButtonGroupsStyle::Standard
                 })
                 .expanded_ratio(settings.get().ratio)
+                .presentation_states(
+                    (0..settings.get().items)
+                        .map(|index| {
+                            if settings.get().presented == Some(index) {
+                                InteractionVisualState::Pressed
+                            } else {
+                                InteractionVisualState::Rest
+                            }
+                        })
+                        .collect::<Vec<_>>(),
+                )
                 .enabled(settings.get().enabled);
             for index in 0..settings.get().items {
                 group = group.child(
@@ -359,6 +372,28 @@ fn check_press_widths(samples: u32) {
             "width, shape, and ripple pixels must fully recover after two toggles"
         );
         assert_eq!(CLICKS.get(), 10);
+        let toggled = nodes(&renderer, 1).1.toggled();
+        settings.with_mut(|value| value.presented = Some(1));
+        renderer.render_frames(60);
+        check_widths(
+            &renderer,
+            if scale == 1.0 {
+                [92.0, 116.0, 92.0]
+            } else {
+                [139.0, 172.0, 139.0]
+            },
+            scale,
+            gap,
+        );
+        assert_eq!(nodes(&renderer, 1).1.toggled(), toggled);
+        assert_eq!(
+            CLICKS.get(),
+            10,
+            "pressed presentation must not activate a button"
+        );
+        settings.with_mut(|value| value.presented = None);
+        renderer.render_frames(60);
+        check_widths(&renderer, base, scale, gap);
     }
 }
 

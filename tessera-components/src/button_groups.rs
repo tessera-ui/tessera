@@ -19,9 +19,9 @@ use tessera_ui::{
 
 use crate::{
     animation::shape_motion::ShapeMotion,
-    button::{ButtonShape, ButtonSize, button},
+    button::{ButtonShape, ButtonSize, ButtonVariant, button},
     icon::IconSize,
-    modifier::{InteractionState, ModifierExt, Padding},
+    modifier::{InteractionState, InteractionVisualState, ModifierExt, Padding},
     shape_def::{RoundedCorner, Shape},
 };
 
@@ -166,7 +166,13 @@ impl ButtonGroupsLayout {
         let outer_corner = if shape == ButtonShape::Round {
             RoundedCorner::Capsule
         } else {
-            RoundedCorner::manual(inner_radius, 2.0)
+            // The square connected outer corner is 4dp for extra small groups,
+            // while their inner corner token stays at 8dp.
+            let radius = match size {
+                ButtonGroupsSize::ExtraSmall => Dp(4.0),
+                _ => inner_radius,
+            };
+            RoundedCorner::manual(radius, 2.0)
         };
         let inactive_button_shape = match style {
             ButtonGroupsStyle::Standard if shape == ButtonShape::Square => {
@@ -294,6 +300,11 @@ impl ButtonGroupsState {
 ///
 /// - `size` — size of the button group.
 /// - `style` — visual style of the button group.
+/// - `variant` — color style of the buttons: filled (default), tonal, outlined,
+///   or elevated. Text buttons have no container treatment and use filled.
+/// - `presentation_states` — optional static visual interaction per item, in
+///   visual order, without changing input or focus. Pressed items also show the
+///   pressed shape.
 /// - `shape_style` — round or square resting shapes; defaults to round.
 /// - `expanded_ratio` — pressed width expansion in standard groups, clamped to
 ///   0–1; defaults to 0.15. Neighbors limit expansion to their content padding.
@@ -339,6 +350,8 @@ impl ButtonGroupsState {
 pub fn button_groups(
     size: Option<ButtonGroupsSize>,
     style: Option<ButtonGroupsStyle>,
+    variant: Option<ButtonVariant>,
+    presentation_states: Option<Vec<InteractionVisualState>>,
     shape_style: Option<ButtonShape>,
     expanded_ratio: Option<f32>,
     selection_mode: Option<ButtonGroupsSelectionMode>,
@@ -352,6 +365,11 @@ pub fn button_groups(
 ) {
     let size = size.unwrap_or_default();
     let style = style.unwrap_or_default();
+    let variant = match variant.unwrap_or_default() {
+        ButtonVariant::Text => ButtonVariant::Filled,
+        variant => variant,
+    };
+    let presentation_states = presentation_states.unwrap_or_default();
     let shape_style = shape_style.unwrap_or_default();
     let expanded_ratio = expanded_ratio
         .filter(|value| value.is_finite())
@@ -434,12 +452,15 @@ pub fn button_groups(
                     let on_click_closure = on_click_closures[index];
                     let item_layout = metrics.clone();
                     let enabled = enabled && !disabled_indices.contains(&index);
+                    let presentation = presentation_states.get(index).copied();
 
                     let interaction = remember(InteractionState::new);
                     let width_motion = remember(PressWidthMotion::default);
                     let item = RenderSlot::new(move || {
                         let actived = state.with(|state| state.is_selected(index));
-                        let pressed = enabled && interaction.with(InteractionState::is_pressed);
+                        let pressed = enabled
+                            && (presentation == Some(InteractionVisualState::Pressed)
+                                || interaction.with(InteractionState::is_pressed));
                         let resting_shape = if actived {
                             item_layout.active_button_shape
                         } else if child_len == 1 && style == ButtonGroupsStyle::Connected {
@@ -523,7 +544,8 @@ pub fn button_groups(
                             });
                         }
                         button()
-                            .filled()
+                            .variant(variant)
+                            .presentation_state_optional(presentation)
                             .size(size.into())
                             .content_padding(Padding::default())
                             .selected(actived)
@@ -594,6 +616,7 @@ pub fn button_groups(
                     group_item()
                         .interaction_state(interaction)
                         .width_motion(width_motion)
+                        .presented_pressed(presentation == Some(InteractionVisualState::Pressed))
                         .enabled(enabled && expanded_ratio > 0.0 && child_len > 1)
                         .compression_limit(ButtonSize::from(size).content_padding().right)
                         .connected(style == ButtonGroupsStyle::Connected)
@@ -607,6 +630,7 @@ pub fn button_groups(
 fn group_item(
     interaction_state: Option<State<InteractionState>>,
     width_motion: Option<State<PressWidthMotion>>,
+    presented_pressed: Option<bool>,
     enabled: Option<bool>,
     compression_limit: Option<Dp>,
     connected: Option<bool>,
@@ -615,11 +639,12 @@ fn group_item(
     #[cfg(test)]
     GROUP_ITEM_BUILDS.set(GROUP_ITEM_BUILDS.get() + 1);
     let interaction = interaction_state.expect("group item interaction");
+    let presented_pressed = presented_pressed.unwrap_or(false);
     let motion = width_motion.expect("group item width motion");
     let child = child.expect("group item content");
     let mut next = motion.get();
     next.update(
-        interaction.with(InteractionState::is_pressed),
+        presented_pressed || interaction.with(InteractionState::is_pressed),
         enabled.unwrap_or(true) && !connected.unwrap_or(false),
         current_frame_nanos(),
     );
@@ -650,6 +675,7 @@ fn group_item(
                 .push_pointer_input(WidthObserver {
                     interaction,
                     motion,
+                    presented_pressed,
                 }),
         )
         .policy(GroupItemLayout)

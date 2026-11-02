@@ -183,7 +183,7 @@ fn rect(renderer: &HeadlessRenderer, key: &str) -> [i64; 4] {
             || node["accessibility"]["label"].as_str() == Some(key)
         {
             return ["x", "y", "width", "height"]
-                .map(|field| node["bounds"][field].as_i64().unwrap());
+                .map(|field| node["bounds"][field].as_f64().unwrap() as i64);
         }
         if let Some(children) = node["children"].as_array() {
             pending.extend(children);
@@ -592,6 +592,18 @@ fn check_group_metrics(samples: u32) {
                 pixel(&renderer, x, y)[1] < HALF_COVERAGE,
                 "square outer corner {index}"
             );
+            if index == 0 {
+                // Inside a 4dp corner but outside an 8dp corner.
+                let tight = (1.8 * scale) as i64;
+                assert!(
+                    pixel(
+                        &renderer,
+                        bounds.x0 as i64 + tight,
+                        y - (2.0 * scale) as i64 + tight
+                    )[1] < HALF_COVERAGE,
+                    "extra small square outer corner must be 4dp"
+                );
+            }
             click(&mut renderer, &label);
             let selected = button(&renderer, &label);
             assert_eq!(selected.0, before.0);

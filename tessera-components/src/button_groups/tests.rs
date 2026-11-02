@@ -98,3 +98,17 @@ fn disabled_motion_snaps_and_reactivation_keeps_interrupted_values() {
     motion.pulse(100_000_000);
     assert!(motion.is_animating());
 }
+
+#[test]
+fn press_width_uses_the_button_group_pressed_spring() {
+    let mut motion = PressWidthMotion::default();
+    motion.update(true, true, 0);
+    let mut peak = 0.0_f64;
+    for millis in 1..=400 {
+        motion.advance(millis * 1_000_000);
+        peak = peak.max(motion.value());
+    }
+    // A 0.9 damping ratio overshoots by about 0.15%; the 0.6 fast-spatial
+    // spring this replaces overshoots by about 9.5%.
+    assert!(peak <= 1.005, "pressed width overshoot {peak}");
+}
