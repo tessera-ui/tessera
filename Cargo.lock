@@ -778,6 +778,7 @@ dependencies = [
  "comfy-table",
  "console",
  "csv",
+ "dirs",
  "globset",
  "handlebars",
  "include_dir",

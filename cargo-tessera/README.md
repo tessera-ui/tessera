@@ -28,15 +28,36 @@ Run this command in a project when you want Tessera application guidance:
 cargo tessera skill install
 ```
 
-It installs the bundled skill and its API reference into
-`.agents/skills/tessera-good-taste/`, leaving `AGENTS.md` and other skills unchanged.
-Use `--path my-app` to select another project. Matching files are left untouched;
-use `--force` to replace locally modified bundled skill files.
-Invoke the installed skill as `$tessera-good-taste` in an agent that supports
-project skills, or read `.agents/skills/tessera-good-taste/SKILL.md` directly.
+By default, a Ratatui selector asks whether to install locally or globally, with
+**Local** selected initially. Use Up/Down or Tab to select and Enter to confirm.
+Esc, q, or Ctrl-C cancels without installing. The terminal is restored on exit,
+including cancellation and errors.
 
-For agent-specific or global installation through the Skills CLI, select the
-skill from this repository:
+- Local: `<project>/.agents/skills/tessera-good-taste/` (current directory by default).
+- Global: `~/.agents/skills/tessera-good-taste/`, using your operating-system home directory.
+
+For scripts or non-interactive terminals, explicitly select one scope:
+
+```bash
+cargo tessera skill install --local
+cargo tessera skill install --local --path my-app
+cargo tessera skill install --global
+```
+
+`--local` and `--global` are mutually exclusive and bypass the selector entirely;
+they do not require a TTY. Without either flag, both stdin and stdout must be
+terminals; otherwise the command fails with a scope-selection hint. `--path` is
+local-only: it conflicts with `--global`, and selecting Global interactively
+while supplying `--path` also fails before any installation writes.
+
+Both scopes leave `AGENTS.md`, other skills, and unrelated files unchanged.
+Matching files are left untouched; use `--force` to replace locally modified
+bundled skill files. Invoke the installed skill as `$tessera-good-taste` in an
+agent that supports its installation location, or read its `SKILL.md` directly.
+Project creation still only generates guidance; it does not install the skill.
+
+For agent-specific installation through the Skills CLI, select the skill from
+this repository:
 
 ```bash
 npx skills add tessera-ui/tessera --skill tessera-good-taste

@@ -25,6 +25,7 @@ clap = { version = "4.5", features = ["derive", "cargo"] }
 comfy-table = "7.1"
 console = "0.16.2"
 csv = "1.3"
+dirs = "6"
 globset = "0.4"
 handlebars = "6"
 include_dir = "0.7"
