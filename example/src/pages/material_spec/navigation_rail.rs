@@ -3110,28 +3110,26 @@ mod tests {
             accesskit::{Action, ActionRequest, TreeId},
         };
 
-        for (component, menu) in [
-            (
-                (|| {
-                    gallery_fixture();
-                }) as fn(),
-                None,
-            ),
-            (
-                (|| {
-                    fixture();
-                }) as fn(),
-                Some("Expand navigation rail"),
-            ),
-            (
-                (|| {
-                    scrolling_fixture(tessera_ui::testing::TestProbe::default());
-                }) as fn(),
-                Some("Expand fixed rail"),
-            ),
-        ] {
+        for (variant, menu) in [
+            None,
+            Some("Expand navigation rail"),
+            Some("Expand fixed rail"),
+        ]
+        .into_iter()
+        .enumerate()
+        {
             let mut renderer = HeadlessRenderer::new(
-                Box::new(component),
+                Box::new(move || match variant {
+                    0 => {
+                        gallery_fixture();
+                    }
+                    1 => {
+                        fixture();
+                    }
+                    _ => {
+                        scrolling_fixture(tessera_ui::testing::TestProbe::default());
+                    }
+                }),
                 vec![Box::new(crate::TestPipelines)],
                 HeadlessConfig {
                     width: 600,

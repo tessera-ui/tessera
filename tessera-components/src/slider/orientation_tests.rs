@@ -120,7 +120,8 @@ fn fixture(observed: tessera_ui::testing::TestProbe<FixtureHandles>) {
                         settings.with(|settings| settings.background.unwrap_or(Color::WHITE)),
                     ))
                     .children(move || {
-                        observed.with_mut(|handles| handles.theme = use_context::<MaterialTheme>());
+                        let theme = use_context::<MaterialTheme>();
+                        observed.with_mut(|handles| handles.theme = theme);
                         let settings = settings.get();
                         let modifier = if let Some((x, y)) = settings.origin {
                             Modifier::new().push_placement(FractionalOrigin(
