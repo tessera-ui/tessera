@@ -22,6 +22,7 @@ cargo_mobile2 = { package = "tessera-mobile", path = "../tessera-mobile", defaul
 ] }
 cargo_metadata = "0.23"
 clap = { version = "4.5", features = ["derive", "cargo"] }
+codespan-reporting = "0.13.1"
 comfy-table = "7.1"
 console = "0.16.2"
 csv = "1.3"

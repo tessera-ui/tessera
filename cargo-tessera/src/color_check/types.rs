@@ -6,12 +6,16 @@ use ra_ap_ide::{AnalysisHost, FileId, RootDatabase};
 use ra_ap_span::TextRange;
 use ra_ap_vfs::Vfs;
 
+use super::error_codes::ErrorCode;
+
 pub(crate) struct Diagnostic {
+    pub(crate) code: ErrorCode,
     pub(crate) file_id: FileId,
     pub(crate) range: TextRange,
     pub(crate) message: String,
     pub(crate) label: String,
-    pub(crate) help: Vec<String>,
+    pub(crate) help: &'static str,
+    pub(crate) boundary: Option<(TextRange, String)>,
 }
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -48,6 +52,7 @@ pub(crate) struct LoadedWorkspace {
 }
 
 pub(crate) struct ColorAnalyzer<'db> {
+    pub(crate) display_root: std::path::PathBuf,
     pub(crate) db: &'db RootDatabase,
     pub(crate) sema: Semantics<'db, RootDatabase>,
     pub(crate) tessera_crates: HashSet<Crate>,

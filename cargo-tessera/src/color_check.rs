@@ -1,9 +1,10 @@
-use std::panic;
+use std::{collections::HashSet, panic};
 
 use anyhow::{Context, Result, anyhow, bail};
 
 use crate::output;
 
+pub use error_codes::ErrorCode;
 pub use types::MessageFormat;
 
 pub struct CheckOptions<'a> {
@@ -114,7 +115,11 @@ pub fn run(options: CheckOptions<'_>) -> Result<()> {
         })
     }));
 
-    let analyzer = finish_analysis(analyzer_result)?;
+    let mut analyzer = finish_analysis(analyzer_result)?;
+    let mut seen = HashSet::new();
+    analyzer
+        .diagnostics
+        .retain(|diagnostic| seen.insert((diagnostic.file_id, diagnostic.range, diagnostic.code)));
 
     if analyzer.diagnostics.is_empty() {
         if !options.message_format.is_json() {
@@ -122,13 +127,27 @@ pub fn run(options: CheckOptions<'_>) -> Result<()> {
         }
         return Ok(());
     }
+    let reporter = diagnostics::Reporter::new(&analyzer, &analyzer.diagnostics);
     for diagnostic in &analyzer.diagnostics {
-        analyzer.emit_diagnostic(diagnostic, options.message_format);
+        reporter.emit(diagnostic, options.message_format)?;
     }
-
+    if !options.message_format.is_json() {
+        let first = analyzer
+            .diagnostics
+            .iter()
+            .map(|diagnostic| diagnostic.code)
+            .min()
+            .expect("nonempty diagnostics");
+        eprintln!("For more information, run `cargo tessera check --explain {first}`.");
+    }
     bail!(
-        "Tessera color check failed with {} diagnostic(s)",
-        analyzer.diagnostics.len()
+        "could not check Tessera calls due to {} previous error{}",
+        analyzer.diagnostics.len(),
+        if analyzer.diagnostics.len() == 1 {
+            ""
+        } else {
+            "s"
+        }
     )
 }
 
@@ -159,6 +178,8 @@ mod tests {
 }
 
 mod analyzer;
+mod diagnostics;
+mod error_codes;
 mod types;
 mod utils;
 mod watchdog;

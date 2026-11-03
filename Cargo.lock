@@ -775,6 +775,7 @@ dependencies = [
  "anyhow",
  "cargo_metadata",
  "clap 4.6.7",
+ "codespan-reporting",
  "comfy-table",
  "console",
  "csv",

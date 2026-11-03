@@ -101,6 +101,9 @@ enum TesseraCommands {
     },
     /// Check the project for compilation errors and Tessera color violations
     Check {
+        /// Explain a Tessera diagnostic code without checking a project
+        #[arg(long, value_name = "CODE")]
+        explain: Option<color_check::ErrorCode>,
         /// Specify package to check
         #[arg(short, long)]
         package: Option<String>,
@@ -510,6 +513,7 @@ fn run() -> Result<()> {
                 )?;
             }
             TesseraCommands::Check {
+                explain,
                 package,
                 target,
                 release,
@@ -528,6 +532,10 @@ fn run() -> Result<()> {
                 verbose,
                 quiet,
             } => {
+                if let Some(code) = explain {
+                    print!("{}", code.explanation());
+                    return Ok(());
+                }
                 commands::check::execute(
                     package.as_deref(),
                     target.as_deref(),

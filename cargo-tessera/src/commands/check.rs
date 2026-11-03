@@ -25,7 +25,7 @@ pub fn execute(
     quiet: bool,
 ) -> Result<()> {
     let color_message_format = color_check::MessageFormat::from_cargo_arg(message_format);
-    if let Err(err) = color_check::run(color_check::CheckOptions {
+    color_check::run(color_check::CheckOptions {
         package,
         target,
         target_selection: color_check::TargetSelection {
@@ -42,12 +42,7 @@ pub fn execute(
             no_default_features,
         ),
         message_format: color_message_format,
-    }) {
-        if color_message_format.is_json() {
-            std::process::exit(1);
-        }
-        return Err(err);
-    }
+    })?;
 
     let mut details = Vec::new();
     if release {
