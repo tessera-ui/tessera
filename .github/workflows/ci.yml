@@ -16,7 +16,7 @@ jobs:
     name: Desktop (${{ matrix.os }})
     strategy:
       matrix:
-        os: [ubuntu-latest, macos-26-intel]
+        os: [ubuntu-latest, macos-latest]
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
