@@ -114,8 +114,7 @@ impl<'a> CargoCommand<'a> {
             args.push("--release".into());
         }
 
-        duct::cmd("cargo", args)
-            .vars(env.explicit_env())
+        env.configure_command(duct::cmd("cargo", args))
             .vars(explicit_cargo_env())
             .dup_stdio()
     }

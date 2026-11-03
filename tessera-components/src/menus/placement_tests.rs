@@ -1,5 +1,3 @@
-use std::cell::Cell;
-
 use tessera_ui::{
     Color, Dp, HeadlessConfig, HeadlessRenderer, Modifier, State,
     accesskit::{Rect, Role},
@@ -33,17 +31,18 @@ impl Default for Settings {
     }
 }
 
-thread_local! {
-    static SETTINGS: Cell<Option<State<Settings>>> = const { Cell::new(None) };
-    static CONTROLLER: Cell<Option<State<MenuController>>> = const { Cell::new(None) };
+#[derive(Clone, Copy, Default)]
+struct FixtureHandles {
+    settings: Option<State<Settings>>,
+    controller: Option<State<MenuController>>,
 }
 
 #[tessera]
-fn fixture() {
+fn fixture(observed: tessera_ui::testing::TestProbe<FixtureHandles>) {
     let settings = remember(Settings::default);
     let controller = remember(MenuController::new);
-    SETTINGS.set(Some(settings));
-    CONTROLLER.set(Some(controller));
+    observed.with_mut(|handles| handles.settings = Some(settings));
+    observed.with_mut(|handles| handles.controller = Some(controller));
     material_theme().child(move || {
         boxed()
             .modifier(Modifier::new().fill_max_size().padding(Padding::new(
@@ -68,9 +67,12 @@ fn fixture() {
                             .modifier(Modifier::new().fill_max_size())
                             .child(|| {});
                     })
-                    .menu_content(|| {
-                        menu_item().label("First action").on_click(|| {});
-                        menu_item().label("Second action").on_click(|| {});
+                    .menu_content(|menu| {
+                        menu_item().menu(menu).label("First action").on_click(|| {});
+                        menu_item()
+                            .menu(menu)
+                            .label("Second action")
+                            .on_click(|| {});
                     });
             });
     });
@@ -90,8 +92,12 @@ fn panel(renderer: &HeadlessRenderer) -> Rect {
 }
 
 fn check_placement(samples: u32) {
+    let observed = tessera_ui::testing::TestProbe::default();
     let mut renderer = HeadlessRenderer::new(
-        Box::new(|| fixture()),
+        Box::new({
+            let observed = observed.clone();
+            move || fixture(observed.clone())
+        }),
         vec![Box::new(crate::TesseraComponents)],
         HeadlessConfig {
             width: 900,
@@ -103,8 +109,8 @@ fn check_placement(samples: u32) {
     )
     .expect("renderer");
     renderer.render_frames(3);
-    let settings = SETTINGS.get().expect("settings");
-    let controller = CONTROLLER.get().expect("controller");
+    let settings = observed.get().settings.expect("settings");
+    let controller = observed.get().controller.expect("controller");
     controller.with_mut(|menu| {
         menu.open_at(MenuAnchor::from_dp(
             (Dp(200.0), Dp(200.0)),

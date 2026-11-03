@@ -2,7 +2,7 @@ use std::process::Command;
 
 use anyhow::Result;
 
-use crate::{color_check, output};
+use crate::{call_guard, output};
 
 #[allow(clippy::too_many_arguments)]
 pub fn execute(
@@ -24,11 +24,11 @@ pub fn execute(
     verbose: bool,
     quiet: bool,
 ) -> Result<()> {
-    let color_message_format = color_check::MessageFormat::from_cargo_arg(message_format);
-    color_check::run(color_check::CheckOptions {
+    let call_message_format = call_guard::MessageFormat::from_cargo_arg(message_format);
+    call_guard::run(call_guard::CheckOptions {
         package,
         target,
-        target_selection: color_check::TargetSelection {
+        target_selection: call_guard::TargetSelection {
             lib,
             bins,
             examples,
@@ -36,12 +36,16 @@ pub fn execute(
             benches,
             all_targets,
         },
-        features: color_check::FeatureSelection::from_cargo_args(
+        features: call_guard::FeatureSelection::from_cargo_args(
             features,
             all_features,
             no_default_features,
         ),
-        message_format: color_message_format,
+        message_format: call_message_format,
+        quiet,
+        release,
+        workspace,
+        jobs,
     })?;
 
     let mut details = Vec::new();
@@ -59,7 +63,7 @@ pub fn execute(
     } else {
         format!("project ({})", details.join(", "))
     };
-    if !color_message_format.is_json() {
+    if !quiet && !call_message_format.is_json() {
         output::status("Checking", message);
     }
 

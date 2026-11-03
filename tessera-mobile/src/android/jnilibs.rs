@@ -84,7 +84,8 @@ impl JniLibs {
 
     pub fn remove_broken_links(config: &Config) -> Result<(), RemoveBrokenLinksError> {
         for abi_dir in Target::all()
-            .values()
+            .iter()
+            .map(|(_, target)| target)
             .map(|target| path(config, *target))
             .filter(|path| path.is_dir())
         {

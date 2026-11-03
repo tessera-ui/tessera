@@ -4,8 +4,6 @@
 //!
 //! Publish transient status without taking focus from the user's current task.
 
-use std::cell::Cell;
-
 use tessera_ui::{
     Dp, HeadlessConfig, HeadlessRenderer, Modifier, State,
     accesskit::{Action, ActionRequest, Live, Node, NodeId, Role, TreeId},
@@ -27,10 +25,13 @@ struct Settings {
     dismissals: usize,
 }
 
-thread_local! { static SETTINGS: Cell<Option<State<Settings>>> = const { Cell::new(None) }; }
+#[derive(Clone, Copy, Default)]
+struct FixtureHandles {
+    settings: Option<State<Settings>>,
+}
 
 #[tessera]
-fn fixture() {
+fn fixture(observed: tessera_ui::testing::TestProbe<FixtureHandles>) {
     let settings = remember(|| Settings {
         visible: false,
         stacked: false,
@@ -38,7 +39,7 @@ fn fixture() {
         actions: 0,
         dismissals: 0,
     });
-    SETTINGS.set(Some(settings));
+    observed.with_mut(|handles| handles.settings = Some(settings));
     material_theme().child(move || {
         column().children(move || {
             button()
@@ -63,13 +64,13 @@ fn fixture() {
 }
 
 fn node(renderer: &HeadlessRenderer, label: &str, role: Role) -> (NodeId, Node) {
-    renderer
-        .accessibility_snapshot()
-        .unwrap()
-        .nodes
-        .into_iter()
-        .find(|(_, node)| node.label() == Some(label) && node.role() == role)
-        .unwrap_or_else(|| panic!("Missing {role:?}: {label}"))
+    let snapshot = renderer
+        .inspect_accessibility()
+        .expect("accessibility tree");
+    let (id, node) = snapshot
+        .find(label, role)
+        .unwrap_or_else(|| panic!("missing {role:?}: {label}"));
+    (id, node.clone())
 }
 
 fn action(renderer: &mut HeadlessRenderer, target: NodeId, action: Action) {
@@ -84,8 +85,12 @@ fn action(renderer: &mut HeadlessRenderer, target: NodeId, action: Action) {
 
 fn check(samples: u32) {
     for scale in [1.0, 1.5] {
+        let observed = tessera_ui::testing::TestProbe::default();
         let mut renderer = HeadlessRenderer::new(
-            Box::new(fixture),
+            Box::new({
+                let observed = observed.clone();
+                move || fixture(observed.clone())
+            }),
             vec![Box::new(crate::TesseraComponents)],
             HeadlessConfig {
                 width: 800,
@@ -100,7 +105,7 @@ fn check(samples: u32) {
         let task = node(&renderer, "Current task", Role::Button).0;
         action(&mut renderer, task, Action::Focus);
         assert_eq!(renderer.accessibility_snapshot().unwrap().focus, task);
-        let settings = SETTINGS.get().unwrap();
+        let settings = observed.get().settings.unwrap();
         settings.with_mut(|s| s.visible = true);
         renderer.render_frames(3);
         for stacked in [false, true] {
@@ -145,10 +150,9 @@ fn snackbar_status_and_named_actions_preserve_existing_focus_msaa4() {
 }
 
 mod escape {
-    use std::cell::{Cell, RefCell};
-
     use tessera_ui::{
         Callback, State,
+        testing::TestProbe,
         winit::{
             event::ElementState,
             keyboard::{KeyCode, PhysicalKey},
@@ -158,17 +162,20 @@ mod escape {
     use super::super::dismiss_key;
     use super::*;
 
-    thread_local! {
-        static DISMISSALS: Cell<Option<State<usize>>> = const { Cell::new(None) };
-        static DISMISS: RefCell<Option<Callback>> = const { RefCell::new(None) };
+    #[derive(Clone, Copy, Default)]
+    struct EscapeHandles {
+        dismissals: Option<State<usize>>,
+        dismiss: Option<Callback>,
     }
 
     #[tessera]
-    fn escape_fixture() {
+    fn escape_fixture(observed: TestProbe<EscapeHandles>) {
         let dismissals = remember(|| 0usize);
-        DISMISSALS.set(Some(dismissals));
         let dismiss = Callback::new(move || dismissals.with_mut(|count| *count += 1));
-        DISMISS.with_borrow_mut(|value| *value = Some(dismiss));
+        observed.set(EscapeHandles {
+            dismissals: Some(dismissals),
+            dismiss: Some(dismiss),
+        });
     }
 
     #[test]
@@ -176,12 +183,17 @@ mod escape {
         use tessera_ui::testing::{
             layout_test, pump_layout_test_session, start_layout_test_session,
         };
-
-        let mut session =
-            start_layout_test_session(layout_test(escape_fixture).viewport_px(200, 100));
+        let observed = TestProbe::default();
+        let mut session = start_layout_test_session(
+            layout_test({
+                let observed = observed.clone();
+                move || escape_fixture(observed.clone())
+            })
+            .viewport_px(200, 100),
+        );
         pump_layout_test_session(&mut session, 0);
-        let dismissals = DISMISSALS.get().unwrap();
-        let dismiss = DISMISS.with_borrow(|value| value.unwrap());
+        let dismissals = observed.get().dismissals.unwrap();
+        let dismiss = observed.get().dismiss.unwrap();
         assert!(!dismiss_key(
             PhysicalKey::Code(KeyCode::Enter),
             ElementState::Pressed,

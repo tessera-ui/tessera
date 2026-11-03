@@ -98,11 +98,11 @@ pub(super) struct CalendarFocus {
 }
 
 impl CalendarFocus {
-    pub(super) fn new(anchor: CalendarDate) -> Self {
+    pub(super) fn new(anchor: CalendarDate, requester: Option<FocusRequester>) -> Self {
         Self {
             anchor,
             pending: None,
-            requester: FocusRequester::new(),
+            requester: requester.unwrap_or_else(FocusRequester::new),
         }
     }
 }
@@ -114,24 +114,12 @@ pub(super) struct CalendarKeyboard {
     pub(super) first_day: Weekday,
 }
 
-#[cfg(test)]
-thread_local! {
-    static TEST_KEYBOARD: std::cell::Cell<Option<CalendarKeyboard>> = const { std::cell::Cell::new(None) };
-}
-
-#[cfg(test)]
-pub(super) fn test_keyboard() -> CalendarKeyboard {
-    TEST_KEYBOARD.get().expect("rendered calendar keyboard")
-}
-
 impl CalendarKeyboard {
     pub(super) fn focus_requester(self) -> FocusRequester {
         self.focus.with(|focus| focus.requester)
     }
 
     pub(super) fn sync(self, today: CalendarDate) {
-        #[cfg(test)]
-        TEST_KEYBOARD.set(Some(self));
         let (anchor, pending, requester) = self
             .focus
             .with(|focus| (focus.anchor, focus.pending, focus.requester));

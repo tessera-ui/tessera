@@ -4,9 +4,10 @@
 //!
 //! Preserve translucent vector color across atlas sampling and layer opacity.
 
-use std::cell::Cell;
-
-use tessera_ui::{Color, Dp, HeadlessConfig, HeadlessRenderer, Modifier, State, remember, tessera};
+use tessera_ui::{
+    Color, Dp, HeadlessConfig, HeadlessRenderer, Modifier, State, remember, tessera,
+    testing::TestProbe,
+};
 
 use crate::{
     alignment::Alignment,
@@ -16,17 +17,20 @@ use crate::{
     modifier::ModifierExt as _,
 };
 
-thread_local! {
-    static INVERTED: Cell<Option<State<bool>>> = const { Cell::new(None) };
-    static COUNT: Cell<Option<State<usize>>> = const { Cell::new(None) };
+#[derive(Clone, Copy, Default, PartialEq)]
+struct FixtureHandles {
+    inverted: Option<State<bool>>,
+    count: Option<State<usize>>,
 }
 
 #[tessera]
-fn fixture() {
+fn fixture(probe: TestProbe<FixtureHandles>) {
     let inverted = remember(|| false);
-    INVERTED.set(Some(inverted));
     let count = remember(|| 65_usize);
-    COUNT.set(Some(count));
+    probe.set(FixtureHandles {
+        inverted: Some(inverted),
+        count: Some(count),
+    });
     let translucent = remember(|| {
         b"<svg xmlns='http://www.w3.org/2000/svg' width='32' height='32'><rect width='32' height='32' fill='#ff0000' fill-opacity='.5'/></svg>".as_slice()
         .try_into_image_vector_data().expect("Inline translucent vector")
@@ -88,8 +92,12 @@ fn translucent_atlas_color_is_not_premultiplied_twice() {
         "pipelines::image_vector::alpha_tests::translucent_atlas_color_is_not_premultiplied_twice",
         || {
             for samples in [1, 4] {
+                let probe = TestProbe::default();
+                let observed = probe.clone();
                 let mut renderer = HeadlessRenderer::new(
-                    Box::new(fixture),
+                    Box::new(move || {
+                        fixture(probe.clone());
+                    }),
                     vec![Box::new(crate::TesseraComponents)],
                     HeadlessConfig {
                         width: 176,
@@ -102,7 +110,11 @@ fn translucent_atlas_color_is_not_premultiplied_twice() {
                 renderer.render_frames(4);
                 let initial = renderer.read_pixels().unwrap();
                 assert!(
-                    super::pipeline::SAMPLE_UPLOADS.get() <= 2,
+                    renderer
+                        .frame_graphics_work()
+                        .group("vector_samples")
+                        .buffer_uploads
+                        <= 2,
                     "68 vector samples must use at most two uniform uploads"
                 );
                 for (x, expected) in [
@@ -127,10 +139,16 @@ fn translucent_atlas_color_is_not_premultiplied_twice() {
                     "Atlas cache-hit output must preserve alpha"
                 );
                 for inverted in [false, true, false] {
-                    INVERTED.get().unwrap().set(inverted);
+                    observed.get().inverted.unwrap().set(inverted);
                     renderer.render_frames(1);
                     let pixels = renderer.read_pixels().unwrap();
-                    assert!(super::pipeline::SAMPLE_UPLOADS.get() <= 2);
+                    assert!(
+                        renderer
+                            .frame_graphics_work()
+                            .group("vector_samples")
+                            .buffer_uploads
+                            <= 2
+                    );
                     for index in 0..65 {
                         let x = 12 + (index % 13) * 12;
                         let y = 60 + (index / 13) * 12;
@@ -149,12 +167,18 @@ fn translucent_atlas_color_is_not_premultiplied_twice() {
                         );
                     }
                 }
-                COUNT.get().unwrap().set(1);
+                observed.get().count.unwrap().set(1);
                 renderer.render_frames(1);
-                assert!(super::pipeline::SAMPLE_UPLOADS.get() <= 1);
+                assert!(
+                    renderer
+                        .frame_graphics_work()
+                        .group("vector_samples")
+                        .buffer_uploads
+                        <= 1
+                );
                 let shrunk = renderer.read_pixels().unwrap();
                 assert_eq!(&shrunk[(108 * 176 + 156) * 4..][..4], &[255, 255, 255, 255]);
-                COUNT.get().unwrap().set(65);
+                observed.get().count.unwrap().set(65);
                 renderer.render_frames(1);
                 assert_eq!(renderer.read_pixels().unwrap(), initial);
             }

@@ -23,7 +23,7 @@ use wasm_bindgen::{JsValue, prelude::wasm_bindgen};
 #[tessera_ui::entry]
 pub fn run() -> EntryPoint {
     #[cfg(all(target_family = "wasm", feature = "md3-diagnostics"))]
-    let entry = EntryPoint::new(md3_diagnostics::diagnostic_app);
+    let entry = md3_diagnostics::entry();
     #[cfg(not(all(target_family = "wasm", feature = "md3-diagnostics")))]
     let entry = EntryPoint::new(app);
     entry
@@ -42,10 +42,32 @@ pub fn run() -> EntryPoint {
         .package(CustomShaderPackage)
 }
 
-#[cfg(target_family = "wasm")]
+#[cfg(all(target_family = "wasm", not(feature = "md3-diagnostics")))]
 #[wasm_bindgen(start)]
 pub fn start() -> Result<(), JsValue> {
     run()
         .run_web()
         .map_err(|err| JsValue::from_str(&err.to_string()))
+}
+
+#[cfg(all(target_family = "wasm", feature = "md3-diagnostics"))]
+#[wasm_bindgen]
+/// Starts the diagnostic application and returns observations bound to its lifetime.
+pub fn md3_start_diagnostics() -> Result<md3_diagnostics::Md3Diagnostics, JsValue> {
+    let entry = run();
+    let observations = md3_diagnostics::Md3Diagnostics::bind(&entry);
+    entry
+        .run_web()
+        .map_err(|error| JsValue::from_str(&error.to_string()))?;
+    Ok(observations)
+}
+
+#[cfg(test)]
+struct TestPipelines;
+
+#[cfg(test)]
+impl tessera_ui::RenderModule for TestPipelines {
+    fn register_pipelines(&self, context: &mut tessera_ui::PipelineContext<'_>) {
+        tessera_components::pipelines::register_pipelines(context);
+    }
 }

@@ -852,6 +852,11 @@ where
     }
 
     fn measure_dyn(&self, scope: &mut MeasureScope<'_>) -> Result<LayoutResult, MeasurementError> {
+        crate::work::record_policy::<T>(if scope.is_intrinsic() {
+            crate::WorkPhase::IntrinsicMeasure
+        } else {
+            crate::WorkPhase::Measure
+        });
         LayoutModifierNode::measure(self, scope)
     }
 
@@ -860,6 +865,7 @@ where
         scope: &PlacementScope<'_>,
         inner: &PlacementResult,
     ) -> Option<PlacementResult> {
+        crate::work::record_policy::<T>(crate::WorkPhase::Place);
         LayoutModifierNode::place_children(self, scope, inner)
     }
 

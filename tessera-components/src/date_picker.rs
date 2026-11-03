@@ -7,7 +7,7 @@ use std::ops::RangeInclusive;
 
 use tessera_ui::{
     AxisConstraint, CallbackWith, Color, ComputedData, Constraint, Dp, LayoutResult,
-    MeasurementError, Modifier, Px, PxPosition, RenderSlot, State,
+    MeasurementError, Modifier, Px, PxPosition, RenderSlot, State, key,
     layout::{MeasureScope, layout},
     modifier::FocusModifierExt as _,
     provide_context, remember, tessera,
@@ -30,7 +30,7 @@ use crate::{
     spacer::spacer,
     surface::surface,
     text::text,
-    text_field::TextFieldBuilder,
+    text_field::text_field,
     text_input::TextInputController,
     theme::{ContentColor, MaterialTheme},
 };
@@ -480,6 +480,7 @@ struct DatePickerConfig {
     headline: Option<String>,
     state: Option<State<DatePickerState>>,
     view: Option<State<DatePickerView>>,
+    focus_requester: Option<tessera_ui::FocusRequester>,
 }
 
 /// # date_picker
@@ -513,6 +514,7 @@ struct DatePickerConfig {
 /// - `state` — optional external state for selection, month navigation, and
 ///   mode.
 /// - `view` — optional shared calendar or year selection view.
+/// - `focus_requester` — requests focus on the calendar's current keyboard date.
 ///
 /// ## Examples
 ///
@@ -551,6 +553,7 @@ pub fn date_picker(
     #[prop(into)] headline: Option<String>,
     state: Option<State<DatePickerState>>,
     view: Option<State<DatePickerView>>,
+    focus_requester: Option<tessera_ui::FocusRequester>,
 ) {
     let today = today.unwrap_or_else(CalendarDate::today);
     let modifier = modifier.unwrap_or_default();
@@ -588,6 +591,7 @@ pub fn date_picker(
         headline,
         state: Some(state),
         view,
+        focus_requester,
     });
 }
 
@@ -669,7 +673,8 @@ fn date_picker_content(args: DatePickerConfig) {
                         args.show_weekday_labels,
                         args.today,
                     )
-                    .view_optional(args.view);
+                    .view_optional(args.view)
+                    .focus_requester_optional(args.focus_requester);
                 }
                 DatePickerDisplayMode::Input => {
                     date_input_view(state);
@@ -689,6 +694,7 @@ fn date_picker_content(args: DatePickerConfig) {
 ///
 /// ## Parameters
 ///
+/// - `dialog` — registration scope received from the provider content slot.
 /// - `state` — state handle used by the embedded date picker.
 /// - `title` — optional override for the dialog title.
 /// - `confirm_button` — optional confirm button content.
@@ -727,6 +733,7 @@ fn date_picker_content(args: DatePickerConfig) {
 /// ```
 #[tessera]
 pub fn date_picker_dialog(
+    dialog: Option<crate::dialog::DialogScope>,
     state: Option<State<DatePickerState>>,
     #[prop(into)] title: Option<String>,
     confirm_button: Option<RenderSlot>,
@@ -739,6 +746,7 @@ pub fn date_picker_dialog(
     #[prop(into)] picker_title: Option<String>,
     #[prop(into)] picker_headline: Option<String>,
     picker_view: Option<State<DatePickerView>>,
+    picker_focus_requester: Option<tessera_ui::FocusRequester>,
 ) {
     let today = picker_today.unwrap_or_else(CalendarDate::today);
     let state = if let Some(state) = state {
@@ -759,6 +767,9 @@ pub fn date_picker_dialog(
         })
     };
     let title = picker_title.or(title);
+    crate::dialog::register_dialog_accessibility()
+        .dialog_optional(dialog)
+        .label(title.clone().unwrap_or_else(|| "Select date".to_owned()));
     let theme = use_context::<MaterialTheme>().unwrap().get();
     column()
         .modifier(Modifier::new().width(DATE_PICKER_MAX_WIDTH))
@@ -773,6 +784,7 @@ pub fn date_picker_dialog(
                 headline: picker_headline.clone(),
                 state: Some(state),
                 view: picker_view,
+                focus_requester: picker_focus_requester,
             });
             if confirm_button.is_some() || dismiss_button.is_some() {
                 provide_context(
@@ -813,6 +825,7 @@ fn calendar_view(
     show_weekday_labels: bool,
     today: CalendarDate,
     view: Option<State<DatePickerView>>,
+    focus_requester: Option<tessera_ui::FocusRequester>,
 ) {
     let snapshot = state.with(DatePickerState::snapshot);
     let view = if let Some(view) = view {
@@ -930,17 +943,23 @@ fn calendar_view(
                             }
                         });
                 }
-                date_grid(state, first_day_of_week, today);
+                date_grid(state, first_day_of_week, today)
+                    .focus_requester_optional(focus_requester);
             }
         });
 }
 
 #[tessera]
-fn date_grid(state: State<DatePickerState>, first_day_of_week: Weekday, today: CalendarDate) {
+fn date_grid(
+    state: State<DatePickerState>,
+    first_day_of_week: Weekday,
+    today: CalendarDate,
+    focus_requester: Option<tessera_ui::FocusRequester>,
+) {
     let snapshot = state.with(DatePickerState::snapshot);
     let owner = CalendarOwner::Single(state);
     let initial = owner.initial_date(today);
-    let focus = remember(move || CalendarFocus::new(initial));
+    let focus = remember(move || CalendarFocus::new(initial, focus_requester));
     let keyboard = CalendarKeyboard {
         focus,
         owner,
@@ -1119,19 +1138,21 @@ fn date_year_grid(state: State<DatePickerState>, view: State<DatePickerView>, to
                                     .as_ref()
                                     .is_none_or(|predicate| predicate.call(year));
                                 let today = today.year() == year;
-                                date_picker_year(year)
-                                    .selected(selected)
-                                    .is_today(today)
-                                    .enabled(enabled)
-                                    .on_select(move |year: i32| {
-                                        state.with_mut(|s| {
-                                            s.set_displayed_month(YearMonth::new_unchecked(
-                                                year,
-                                                s.displayed_month.month(),
-                                            ))
+                                key(year, move || {
+                                    date_picker_year(year)
+                                        .selected(selected)
+                                        .is_today(today)
+                                        .enabled(enabled)
+                                        .on_select(move |year: i32| {
+                                            state.with_mut(|s| {
+                                                s.set_displayed_month(YearMonth::new_unchecked(
+                                                    year,
+                                                    s.displayed_month.month(),
+                                                ))
+                                            });
+                                            view.set(DatePickerView::Calendar);
                                         });
-                                        view.set(DatePickerView::Calendar);
-                                    });
+                                });
                             }
                         });
                     spacer().modifier(Modifier::new().height(Dp((rows - end) as f64 * 52.0)));
@@ -1190,7 +1211,8 @@ fn date_input_view(state: State<DatePickerState>) {
     column()
         .modifier(Modifier::new().fill_max_width().padding_all(Dp(24.0)))
         .children(move || {
-            TextFieldBuilder::outlined()
+            text_field()
+                .outlined()
                 .modifier(Modifier::new().fill_max_width().height(Dp(56.0)))
                 .background_color(theme.color_scheme.surface_container_high)
                 .focus_background_color(theme.color_scheme.surface_container_high)
@@ -1477,7 +1499,6 @@ fn civil_from_days(days: i64) -> (i32, u8, u8) {
 
 #[cfg(test)]
 mod tests {
-    use std::cell::Cell;
 
     use tessera_ui::{
         CursorEventContent, GestureState, PointerChange, PressKeyEventType, PxPosition, State,
@@ -1495,16 +1516,18 @@ mod tests {
         date_picker_dialog, format_date_input, parse_date_input,
     };
 
-    thread_local! {
-        static STATE: Cell<Option<State<DatePickerState>>> = const { Cell::new(None) };
-        static VIEW: Cell<Option<State<DatePickerView>>> = const { Cell::new(None) };
-        static ACTION: Cell<u8> = const { Cell::new(0) };
-        static TODAY: Cell<Option<State<CalendarDate>>> = const { Cell::new(None) };
-        static RANGE_STATE: Cell<Option<State<super::DateRangePickerState>>> = const { Cell::new(None) };
+    #[derive(Clone, Default, PartialEq)]
+    struct Probe {
+        state: tessera_ui::testing::TestProbe<Option<State<DatePickerState>>>,
+        view: tessera_ui::testing::TestProbe<Option<State<DatePickerView>>>,
+        today: tessera_ui::testing::TestProbe<Option<State<CalendarDate>>>,
+        range: tessera_ui::testing::TestProbe<Option<State<super::DateRangePickerState>>>,
+        action: tessera_ui::testing::TestProbe<u8>,
+        focus: tessera_ui::testing::TestProbe<Option<tessera_ui::FocusRequester>>,
     }
 
     #[tessera]
-    fn today_fixture(range: bool, dialog: bool) {
+    fn today_fixture(range: bool, dialog: bool, probe: Probe) {
         let today = remember(|| CalendarDate::new(2026, 7, 16).unwrap());
         let state = remember(|| {
             DatePickerState::new(
@@ -1528,10 +1551,12 @@ mod tests {
             )
         });
         let view = remember(DatePickerView::default);
-        TODAY.set(Some(today));
-        RANGE_STATE.set(Some(range_state));
-        STATE.set(Some(state));
-        VIEW.set(Some(view));
+        let focus = remember(tessera_ui::FocusRequester::new).get();
+        probe.focus.set(Some(focus));
+        probe.today.set(Some(today));
+        probe.range.set(Some(range_state));
+        probe.state.set(Some(state));
+        probe.view.set(Some(view));
         material_theme()
             .theme(|| {
                 let mut theme = crate::theme::MaterialTheme::default();
@@ -1542,17 +1567,20 @@ mod tests {
                 if range {
                     super::date_range_picker()
                         .state(range_state)
+                        .focus_requester(focus)
                         .today(today.get())
                         .first_day_of_week(Weekday::Sunday);
                 } else if dialog {
                     date_picker_dialog()
                         .state(state)
+                        .picker_focus_requester(focus)
                         .picker_today(today.get())
                         .picker_view(view)
                         .picker_first_day_of_week(Weekday::Sunday);
                 } else {
                     date_picker()
                         .state(state)
+                        .focus_requester(focus)
                         .today(today.get())
                         .view(view)
                         .first_day_of_week(Weekday::Sunday);
@@ -1595,9 +1623,13 @@ mod tests {
     fn check_today_override(range: bool, dialog: bool) {
         use tessera_ui::{FocusManager, HeadlessConfig, HeadlessRenderer};
 
+        let observed = Probe::default();
+
+        let probe = observed.clone();
+
         let mut renderer = HeadlessRenderer::new(
             Box::new(move || {
-                today_fixture(range, dialog);
+                today_fixture(range, dialog, probe.clone());
             }),
             vec![Box::new(crate::TesseraComponents)],
             HeadlessConfig {
@@ -1611,9 +1643,7 @@ mod tests {
         renderer.render_frames(8);
         assert_today_outline(&renderer, "July 16, 2026", 20.0, true);
         assert_today_outline(&renderer, "July 17, 2026", 20.0, false);
-        super::navigation::test_keyboard()
-            .focus_requester()
-            .request_focus();
+        observed.focus.get().unwrap().request_focus();
         renderer.render_frames(4);
         let tree = renderer.accessibility_snapshot().unwrap();
         assert_eq!(
@@ -1624,7 +1654,8 @@ mod tests {
             Some("July 16, 2026")
         );
         FocusManager::current().clear_focus(true);
-        TODAY
+        observed
+            .today
             .get()
             .unwrap()
             .set(CalendarDate::new(2026, 7, 17).unwrap());
@@ -1632,30 +1663,31 @@ mod tests {
         assert_today_outline(&renderer, "July 16, 2026", 20.0, false);
         assert_today_outline(&renderer, "July 17, 2026", 20.0, true);
         if !range {
-            VIEW.get().unwrap().set(DatePickerView::Year);
-            TODAY
+            observed.view.get().unwrap().set(DatePickerView::Year);
+            observed
+                .today
                 .get()
                 .unwrap()
                 .set(CalendarDate::new(2027, 7, 17).unwrap());
             renderer.render_frames(4);
             assert_today_outline(&renderer, "2027", 18.0, true);
             assert_today_outline(&renderer, "2028", 18.0, false);
-            TODAY
+            observed
+                .today
                 .get()
                 .unwrap()
                 .set(CalendarDate::new(2028, 7, 17).unwrap());
             renderer.render_frames(4);
             assert_today_outline(&renderer, "2027", 18.0, false);
             assert_today_outline(&renderer, "2028", 18.0, true);
-            VIEW.get().unwrap().set(DatePickerView::Calendar);
-            STATE
+            observed.view.get().unwrap().set(DatePickerView::Calendar);
+            observed
+                .state
                 .get()
                 .unwrap()
                 .with_mut(|state| state.set_displayed_month(YearMonth::new(2028, 7).unwrap()));
             renderer.render_frames(4);
-            super::navigation::test_keyboard()
-                .focus_requester()
-                .request_focus();
+            observed.focus.get().unwrap().request_focus();
             renderer.render_frames(4);
             let tree = renderer.accessibility_snapshot().unwrap();
             assert_eq!(
@@ -1666,18 +1698,18 @@ mod tests {
                 Some("July 17, 2028")
             );
         } else {
-            TODAY
+            observed
+                .today
                 .get()
                 .unwrap()
                 .set(CalendarDate::new(2028, 7, 17).unwrap());
-            RANGE_STATE
+            observed
+                .range
                 .get()
                 .unwrap()
                 .with_mut(|state| state.set_displayed_month(YearMonth::new(2028, 7).unwrap()));
             renderer.render_frames(8);
-            super::navigation::test_keyboard()
-                .focus_requester()
-                .request_focus();
+            observed.focus.get().unwrap().request_focus();
             renderer.render_frames(4);
             let tree = renderer.accessibility_snapshot().unwrap();
             assert_eq!(
@@ -1714,7 +1746,7 @@ mod tests {
     }
 
     #[tessera]
-    fn external_year_fixture() {
+    fn external_year_fixture(probe: Probe) {
         let state = remember(|| {
             DatePickerState::new(
                 CalendarDate::new(2025, 8, 17),
@@ -1726,26 +1758,27 @@ mod tests {
             )
         });
         let view = remember(|| DatePickerView::Year);
-        STATE.set(Some(state));
-        VIEW.set(Some(view));
+        probe.state.set(Some(state));
+        probe.view.set(Some(view));
+        let on_action = tessera_ui::CallbackWith::new(move |value| probe.action.set(value));
         material_theme().child(move || {
             date_picker_dialog()
                 .state(state)
                 .picker_view(view)
-                .confirm_button(|| {
+                .confirm_button(move || {
                     button()
                         .text()
                         .accessibility_label("Confirm external view")
-                        .on_click(|| ACTION.set(1))
+                        .on_click(move || on_action.call(1))
                         .child(|| {
                             text().content("OK");
                         });
                 })
-                .dismiss_button(|| {
+                .dismiss_button(move || {
                     button()
                         .text()
                         .accessibility_label("Cancel external view")
-                        .on_click(|| ACTION.set(2))
+                        .on_click(move || on_action.call(2))
                         .child(|| {
                             text().content("Cancel");
                         });
@@ -1780,8 +1813,10 @@ mod tests {
             }));
             renderer.render_frames(4);
         }
+        let observed = Probe::default();
+        let probe = observed.clone();
         let mut renderer = HeadlessRenderer::new(
-            Box::new(external_year_fixture),
+            Box::new(move || external_year_fixture(probe.clone())),
             vec![Box::new(crate::TesseraComponents)],
             HeadlessConfig {
                 width: 400,
@@ -1792,8 +1827,8 @@ mod tests {
         )
         .unwrap();
         renderer.render_frames(4);
-        let state = STATE.get().unwrap();
-        let view = VIEW.get().unwrap();
+        let state = observed.state.get().unwrap();
+        let view = observed.view.get().unwrap();
         let selected = CalendarDate::new(2025, 8, 17);
         let initial_tree = renderer.accessibility_snapshot().unwrap();
         assert!(
@@ -1835,11 +1870,16 @@ mod tests {
         assert_eq!(viewport.width(), 336.0);
         assert_eq!(first.y0 - viewport.y0, 8.0);
         let confirm = bounds("Confirm external view");
-        assert_eq!(confirm.y0 - viewport.y1, 8.0);
+        assert_eq!(confirm.height(), 48.0);
+        assert_eq!((confirm.y0 + confirm.y1) / 2.0 - 20.0 - viewport.y1, 8.0);
         let target_node = initial_tree
             .nodes
             .iter()
-            .find(|(_, node)| node.label() == Some("2039"))
+            .find(|(_, node)| {
+                node.label() == Some("2039")
+                    && node.role() == tessera_ui::accesskit::Role::Button
+                    && node.supports_action(Action::Focus)
+            })
             .expect("virtualized overscan must retain the next focusable rows")
             .0;
         assert!(renderer.dispatch_accessibility_action(ActionRequest {
@@ -1879,9 +1919,9 @@ mod tests {
         );
         assert_eq!(state.with(DatePickerState::selected_date), selected);
         activate(&mut renderer, "Confirm external view");
-        assert_eq!(ACTION.get(), 1);
+        assert_eq!(observed.action.get(), 1);
         activate(&mut renderer, "Cancel external view");
-        assert_eq!(ACTION.get(), 2);
+        assert_eq!(observed.action.get(), 2);
         assert_eq!(state.with(DatePickerState::selected_date), selected);
     }
 
@@ -1904,7 +1944,7 @@ mod tests {
     }
 
     #[tessera]
-    fn calendar_fixture() {
+    fn calendar_fixture(probe: Probe, today: Option<CalendarDate>) {
         let state = remember(|| {
             DatePickerState::new(
                 None,
@@ -1915,11 +1955,15 @@ mod tests {
                 Default::default(),
             )
         });
-        STATE.set(Some(state));
+        probe.state.set(Some(state));
+        let focus = remember(tessera_ui::FocusRequester::new).get();
+        probe.focus.set(Some(focus));
         material_theme().child(move || {
             column().children(move || {
                 date_picker()
                     .state(state)
+                    .today(today.unwrap_or_else(|| CalendarDate::new(2026, 7, 1).unwrap()))
+                    .focus_requester(focus)
                     .first_day_of_week(Weekday::Sunday);
                 button()
                     .text()
@@ -1939,8 +1983,14 @@ mod tests {
             accesskit::Role,
         };
 
+        let observed = Probe::default();
+
+        let probe = observed.clone();
+
         let mut renderer = HeadlessRenderer::new(
-            Box::new(|| calendar_fixture()),
+            Box::new(move || {
+                calendar_fixture(probe.clone()).today(CalendarDate::new(2026, 7, 16).unwrap())
+            }),
             vec![Box::new(crate::TesseraComponents)],
             HeadlessConfig {
                 width: 600,
@@ -1965,7 +2015,7 @@ mod tests {
             31,
             "the published calendar must expose every July date"
         );
-        super::navigation::test_keyboard().request(CalendarDate::new(2026, 7, 16).unwrap());
+        observed.focus.get().unwrap().request_focus();
         renderer.render_frames(8);
         let accessibility = renderer.accessibility_snapshot().expect("tree");
         assert_eq!(
@@ -1987,7 +2037,7 @@ mod tests {
                 .and_then(|(_, node)| node.label()),
             Some("After single calendar")
         );
-        let state = STATE.get().expect("single state");
+        let state = observed.state.get().expect("single state");
         assert_eq!(state.with(DatePickerState::selected_date), None);
         for label in ["Choose year", "2027"] {
             let accessibility = renderer.accessibility_snapshot().expect("tree");
@@ -2091,10 +2141,14 @@ mod tests {
 
     #[test]
     fn calendar_uses_48dp_targets_and_selects_the_date_under_the_pointer() {
+        let runtime = tessera_ui::RuntimeSession::new();
+        let _scope = runtime.enter();
         tessera_ui::dp::set_scale_factor(1.0);
+        let observed = Probe::default();
+        let probe = observed.clone();
         let mut session = start_layout_test_session(
-            layout_test(|| {
-                calendar_fixture();
+            layout_test(move || {
+                calendar_fixture(probe.clone());
             })
             .viewport_px(400, 600),
         );
@@ -2106,6 +2160,19 @@ mod tests {
             bounds.x.to_f32() + 4.5 * 48.0,
             bounds.y.to_f32() + 2.5 * 48.0,
         ));
+        let day = session
+            .inspect_components()
+            .labeled("July 16, 2026")
+            .bounds()
+            .unwrap();
+        let point = cursor.unwrap();
+        assert!(
+            point.x >= day.x
+                && point.x < day.x + day.width
+                && point.y >= day.y
+                && point.y < day.y + day.height,
+            "grid-derived pointer {point:?} must land in July 16 target {day:?}"
+        );
         for (index, content) in [
             CursorEventContent::Pressed(PressKeyEventType::Left),
             CursorEventContent::Released(PressKeyEventType::Left),
@@ -2117,7 +2184,7 @@ mod tests {
                 &mut session,
                 (index as u64 + 1) * 16_666_667,
                 vec![PointerChange::new(
-                    tessera_ui::time::Instant::now(),
+                    tessera_ui::current_frame_time().unwrap(),
                     1,
                     content,
                     GestureState::TapCandidate,
@@ -2126,16 +2193,24 @@ mod tests {
             );
         }
         assert_eq!(
-            STATE.get().unwrap().with(DatePickerState::selected_date),
+            observed
+                .state
+                .get()
+                .unwrap()
+                .with(DatePickerState::selected_date),
             CalendarDate::new(2026, 7, 16)
         );
     }
     #[test]
     fn selecting_a_year_returns_to_the_calendar_without_selecting_a_date() {
+        let runtime = tessera_ui::RuntimeSession::new();
+        let _scope = runtime.enter();
         tessera_ui::dp::set_scale_factor(1.0);
+        let observed = Probe::default();
+        let probe = observed.clone();
         let mut session = start_layout_test_session(
-            layout_test(|| {
-                calendar_fixture();
+            layout_test(move || {
+                calendar_fixture(probe.clone());
             })
             .viewport_px(400, 600),
         );
@@ -2152,7 +2227,7 @@ mod tests {
                     &mut session,
                     ((step * 3 + index + 1) as u64) * 16_666_667,
                     vec![PointerChange::new(
-                        tessera_ui::time::Instant::now(),
+                        tessera_ui::current_frame_time().unwrap(),
                         1,
                         content,
                         GestureState::TapCandidate,
@@ -2165,7 +2240,7 @@ mod tests {
                 }
             }
         }
-        let state = STATE.get().unwrap();
+        let state = observed.state.get().unwrap();
         assert_eq!(
             state.with(DatePickerState::displayed_month),
             YearMonth::new(2023, 7).unwrap()
@@ -2174,10 +2249,14 @@ mod tests {
     }
     #[test]
     fn narrow_calendars_preserve_seven_columns() {
+        let runtime = tessera_ui::RuntimeSession::new();
+        let _scope = runtime.enter();
         tessera_ui::dp::set_scale_factor(1.0);
+        let observed = Probe::default();
+        let probe = observed.clone();
         let mut session = start_layout_test_session(
-            layout_test(|| {
-                calendar_fixture();
+            layout_test(move || {
+                calendar_fixture(probe.clone());
             })
             .viewport_px(320, 600),
         );
@@ -2188,6 +2267,19 @@ mod tests {
             bounds.x.to_f32() + bounds.width.to_f32() * 4.5 / 7.0,
             bounds.y.to_f32() + 2.5 * 48.0,
         ));
+        let day = session
+            .inspect_components()
+            .labeled("July 16, 2026")
+            .bounds()
+            .unwrap();
+        let point = cursor.unwrap();
+        assert!(
+            point.x >= day.x
+                && point.x < day.x + day.width
+                && point.y >= day.y
+                && point.y < day.y + day.height,
+            "grid-derived pointer {point:?} must land in July 16 target {day:?}"
+        );
         for (index, content) in [
             CursorEventContent::Pressed(PressKeyEventType::Left),
             CursorEventContent::Released(PressKeyEventType::Left),
@@ -2199,7 +2291,7 @@ mod tests {
                 &mut session,
                 (index as u64 + 1) * 16_666_667,
                 vec![PointerChange::new(
-                    tessera_ui::time::Instant::now(),
+                    tessera_ui::current_frame_time().unwrap(),
                     1,
                     content,
                     GestureState::TapCandidate,
@@ -2208,16 +2300,24 @@ mod tests {
             );
         }
         assert_eq!(
-            STATE.get().unwrap().with(DatePickerState::selected_date),
+            observed
+                .state
+                .get()
+                .unwrap()
+                .with(DatePickerState::selected_date),
             CalendarDate::new(2026, 7, 16)
         );
     }
     #[test]
     fn edit_button_switches_calendar_to_input_mode() {
+        let runtime = tessera_ui::RuntimeSession::new();
+        let _scope = runtime.enter();
         tessera_ui::dp::set_scale_factor(1.0);
+        let observed = Probe::default();
+        let probe = observed.clone();
         let mut session = start_layout_test_session(
-            layout_test(|| {
-                calendar_fixture();
+            layout_test(move || {
+                calendar_fixture(probe.clone());
             })
             .viewport_px(400, 600),
         );
@@ -2233,7 +2333,7 @@ mod tests {
                 &mut session,
                 (index as u64 + 1) * 16_666_667,
                 vec![PointerChange::new(
-                    tessera_ui::time::Instant::now(),
+                    tessera_ui::current_frame_time().unwrap(),
                     1,
                     content,
                     GestureState::TapCandidate,
@@ -2243,7 +2343,11 @@ mod tests {
         }
         pump_layout_test_session(&mut session, 50_000_001);
         assert_eq!(
-            STATE.get().unwrap().with(DatePickerState::display_mode),
+            observed
+                .state
+                .get()
+                .unwrap()
+                .with(DatePickerState::display_mode),
             super::DatePickerDisplayMode::Input
         );
     }

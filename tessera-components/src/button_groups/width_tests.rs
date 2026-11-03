@@ -5,14 +5,13 @@
 //! Keep press feedback local while preserving neighboring content and row
 //! width.
 
-use std::cell::Cell;
-
 use tessera_ui::{
     Dp, HeadlessConfig, HeadlessRenderer, MOUSE_POINTER_ID, Modifier, PressKeyEventType,
     PxPosition, State,
     accesskit::{Action, ActionRequest, Node, NodeId, Rect, Role, Toggled, TreeId},
     layout::layout,
     remember, tessera,
+    testing::TestProbe,
 };
 
 use crate::{
@@ -31,13 +30,8 @@ struct Settings {
     presented: Option<usize>,
 }
 
-thread_local! {
-    static SETTINGS: Cell<Option<State<Settings>>> = const { Cell::new(None) };
-    static CLICKS: Cell<usize> = const { Cell::new(0) };
-}
-
 #[tessera]
-fn fixture() {
+fn fixture(settings_observed: TestProbe<Option<State<Settings>>>, clicks: TestProbe<usize>) {
     let settings = remember(|| Settings {
         ratio: 0.15,
         connected: false,
@@ -45,8 +39,9 @@ fn fixture() {
         items: 3,
         presented: None,
     });
-    SETTINGS.set(Some(settings));
+    settings_observed.set(Some(settings));
     material_theme().child(move || {
+        let clicks = clicks.clone();
         column().children(move || {
             let group = button_groups()
                 .size(ButtonGroupsSize::Small)
@@ -69,6 +64,7 @@ fn fixture() {
                 )
                 .enabled(settings.get().enabled);
             for index in 0..settings.get().items {
+                let clicks = clicks.clone();
                 group.child(
                     move || {
                         layout().modifier(Modifier::new().size(Dp(68.0), Dp(20.0)).semantics(
@@ -78,7 +74,7 @@ fn fixture() {
                             },
                         ))
                     },
-                    |_| CLICKS.set(CLICKS.get() + 1),
+                    move |_| clicks.with_mut(|count| *count += 1),
                 );
             }
         });
@@ -145,9 +141,14 @@ fn check_widths(renderer: &HeadlessRenderer, widths: [f64; 3], scale: f64, gap: 
 
 fn check_press_widths(samples: u32) {
     for scale in [1.0, 1.5] {
-        CLICKS.set(0);
+        let clicks = TestProbe::new(0usize);
+        let settings_observed = TestProbe::default();
+        let fixture_clicks = clicks.clone();
+        let fixture_settings = settings_observed.clone();
         let mut renderer = HeadlessRenderer::new(
-            Box::new(fixture),
+            Box::new(move || {
+                fixture(fixture_settings.clone(), fixture_clicks.clone());
+            }),
             vec![Box::new(crate::TesseraComponents)],
             HeadlessConfig {
                 width: 800,
@@ -159,14 +160,23 @@ fn check_press_widths(samples: u32) {
         )
         .unwrap();
         renderer.render_frames(12);
-        let idle_builds = super::GROUP_ITEM_BUILDS.get();
-        renderer.render_frames(8);
+        for _ in 0..8 {
+            renderer.render_frames(1);
+            assert_eq!(
+                renderer
+                    .work()
+                    .count("group_item", tessera_ui::WorkPhase::Build),
+                0
+            );
+        }
         assert_eq!(
-            super::GROUP_ITEM_BUILDS.get(),
-            idle_builds,
+            renderer
+                .work()
+                .count("group_item", tessera_ui::WorkPhase::Build),
+            0,
             "an idle group must retain its items"
         );
-        let settings = SETTINGS.get().unwrap();
+        let settings = settings_observed.get().unwrap();
         let base = [100.0 * scale; 3];
         let gap = 12.0 * scale;
         check_widths(&renderer, base, scale, gap);
@@ -186,12 +196,21 @@ fn check_press_widths(samples: u32) {
             gap,
         );
         assert_eq!(nodes(&renderer, 1).1.toggled(), Some(Toggled::False));
-        assert_eq!(CLICKS.get(), 0);
-        let held_builds = super::GROUP_ITEM_BUILDS.get();
-        renderer.render_frames(8);
+        assert_eq!(clicks.get(), 0);
+        for _ in 0..8 {
+            renderer.render_frames(1);
+            assert_eq!(
+                renderer
+                    .work()
+                    .count("group_item", tessera_ui::WorkPhase::Build),
+                0
+            );
+        }
         assert_eq!(
-            super::GROUP_ITEM_BUILDS.get(),
-            held_builds,
+            renderer
+                .work()
+                .count("group_item", tessera_ui::WorkPhase::Build),
+            0,
             "a settled held press must stop rebuilding"
         );
         renderer.pointer_release(MOUSE_POINTER_ID, point, PressKeyEventType::Left);
@@ -199,12 +218,21 @@ fn check_press_widths(samples: u32) {
         check_widths(&renderer, base, scale, gap);
         assert_eq!(nodes(&renderer, 1).0, middle.0);
         assert_eq!(nodes(&renderer, 1).1.toggled(), Some(Toggled::True));
-        assert_eq!(CLICKS.get(), 1);
-        let settled_builds = super::GROUP_ITEM_BUILDS.get();
-        renderer.render_frames(8);
+        assert_eq!(clicks.get(), 1);
+        for _ in 0..8 {
+            renderer.render_frames(1);
+            assert_eq!(
+                renderer
+                    .work()
+                    .count("group_item", tessera_ui::WorkPhase::Build),
+                0
+            );
+        }
         assert_eq!(
-            super::GROUP_ITEM_BUILDS.get(),
-            settled_builds,
+            renderer
+                .work()
+                .count("group_item", tessera_ui::WorkPhase::Build),
+            0,
             "release must stop the animation driver"
         );
 
@@ -225,7 +253,7 @@ fn check_press_widths(samples: u32) {
         renderer.pointer_release(MOUSE_POINTER_ID, first, PressKeyEventType::Left);
         renderer.render_frames(60);
         check_widths(&renderer, base, scale, gap);
-        assert_eq!(CLICKS.get(), 2);
+        assert_eq!(clicks.get(), 2);
 
         renderer.pointer_press(MOUSE_POINTER_ID, first, PressKeyEventType::Left);
         renderer.pointer_release(MOUSE_POINTER_ID, first, PressKeyEventType::Left);
@@ -237,7 +265,7 @@ fn check_press_widths(samples: u32) {
         );
         renderer.render_frames(60);
         check_widths(&renderer, base, scale, gap);
-        assert_eq!(CLICKS.get(), 3);
+        assert_eq!(clicks.get(), 3);
         let target_node = nodes(&renderer, 0).0;
         assert!(renderer.dispatch_accessibility_action(ActionRequest {
             action: Action::Click,
@@ -252,7 +280,7 @@ fn check_press_widths(samples: u32) {
             "accessibility activation must animate"
         );
         renderer.render_frames(60);
-        assert_eq!(CLICKS.get(), 4);
+        assert_eq!(clicks.get(), 4);
         check_widths(&renderer, base, scale, gap);
 
         settings.with_mut(|value| value.ratio = 0.0);
@@ -282,7 +310,7 @@ fn check_press_widths(samples: u32) {
         renderer.pointer_release(MOUSE_POINTER_ID, first, PressKeyEventType::Left);
         renderer.render_frames(60);
         check_widths(&renderer, base, scale, 2.0 * scale);
-        assert_eq!(CLICKS.get(), 6);
+        assert_eq!(clicks.get(), 6);
 
         settings.with_mut(|value| {
             value.connected = false;
@@ -296,7 +324,7 @@ fn check_press_widths(samples: u32) {
         renderer.pointer_release(MOUSE_POINTER_ID, point, PressKeyEventType::Left);
         renderer.render_frames(60);
         check_widths(&renderer, base, scale, gap);
-        assert_eq!(CLICKS.get(), 6);
+        assert_eq!(clicks.get(), 6);
         settings.with_mut(|value| value.enabled = true);
         renderer.render_frames(10);
         renderer.pointer_press(MOUSE_POINTER_ID, point, PressKeyEventType::Left);
@@ -321,7 +349,7 @@ fn check_press_widths(samples: u32) {
         assert_eq!(nodes(&renderer, 0).1.bounds().unwrap().width(), base[0]);
         renderer.pointer_release(MOUSE_POINTER_ID, point, PressKeyEventType::Left);
         renderer.render_frames(60);
-        assert_eq!(CLICKS.get(), 7);
+        assert_eq!(clicks.get(), 7);
         settings.with_mut(|value| value.items = 3);
         renderer.render_frames(10);
         let point = center(nodes(&renderer, 1).1.bounds().unwrap());
@@ -335,7 +363,7 @@ fn check_press_widths(samples: u32) {
         renderer.render_frames(60);
         check_widths(&renderer, base, scale, gap);
         assert_eq!(
-            CLICKS.get(),
+            clicks.get(),
             7,
             "cancelled presses must not activate a button"
         );
@@ -356,7 +384,7 @@ fn check_press_widths(samples: u32) {
         renderer.render_frames(60);
         check_widths(&renderer, base, scale, gap);
         assert_eq!(
-            CLICKS.get(),
+            clicks.get(),
             8,
             "a later press must recover after cancellation"
         );
@@ -370,7 +398,7 @@ fn check_press_widths(samples: u32) {
             renderer.read_pixels().unwrap() == baseline,
             "width, shape, and ripple pixels must fully recover after two toggles"
         );
-        assert_eq!(CLICKS.get(), 10);
+        assert_eq!(clicks.get(), 10);
         let toggled = nodes(&renderer, 1).1.toggled();
         settings.with_mut(|value| value.presented = Some(1));
         renderer.render_frames(60);
@@ -386,7 +414,7 @@ fn check_press_widths(samples: u32) {
         );
         assert_eq!(nodes(&renderer, 1).1.toggled(), toggled);
         assert_eq!(
-            CLICKS.get(),
+            clicks.get(),
             10,
             "pressed presentation must not activate a button"
         );

@@ -35,7 +35,7 @@ pub enum PagerPageSize {
 }
 
 /// Configuration arguments shared by pager variants.
-#[derive(Clone)]
+#[derive(Clone, PartialEq)]
 struct PagerConfig {
     /// Modifier chain applied to the pager subtree.
     pub modifier: Modifier,
@@ -944,9 +944,10 @@ pub fn horizontal_pager(
         page_content,
         controller,
     });
-    let controller = pager_args
-        .controller
-        .unwrap_or_else(|| remember(|| PagerController::new(pager_args.initial_page)));
+    let controller = match pager_args.controller {
+        Some(value) => value,
+        None => remember(|| PagerController::new(pager_args.initial_page)),
+    };
     let drag_recognizer = remember(|| {
         DragRecognizer::new(DragSettings {
             axis: Some(DragAxis::Horizontal),
@@ -1060,9 +1061,10 @@ pub fn vertical_pager(
         page_content,
         controller,
     });
-    let controller = pager_args
-        .controller
-        .unwrap_or_else(|| remember(|| PagerController::new(pager_args.initial_page)));
+    let controller = match pager_args.controller {
+        Some(value) => value,
+        None => remember(|| PagerController::new(pager_args.initial_page)),
+    };
     let drag_recognizer = remember(|| {
         DragRecognizer::new(DragSettings {
             axis: Some(DragAxis::Vertical),
@@ -1095,6 +1097,7 @@ pub fn vertical_pager(
     );
 }
 
+#[tessera]
 fn pager_render(
     args: PagerConfig,
     controller: State<PagerController>,

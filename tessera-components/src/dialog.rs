@@ -7,12 +7,12 @@
 use tessera_ui::{
     AxisConstraint, Callback, Color, ComputedData, Constraint, Dp, FocusProperties, FocusScopeNode,
     FocusTraversalPolicy, LayoutResult, MeasurementError, Modifier, Px, PxPosition, RenderSlot,
-    State,
+    RenderSlotWith, State,
     accesskit::Role,
     current_frame_nanos,
     layout::{MeasureScope, layout},
     modifier::FocusModifierExt as _,
-    provide_context, receive_frame_nanos, remember, tessera, use_context, winit,
+    provide_context, receive_frame_nanos, remember, remember_with_key, tessera, use_context, winit,
 };
 
 use crate::{
@@ -61,13 +61,14 @@ struct DialogContentAccessibility {
     description: Option<String>,
 }
 
-#[derive(Clone, Copy)]
-struct DialogAccessibilityContext {
+/// The registration target supplied to a dialog provider's content.
+#[derive(Clone, Copy, PartialEq, Eq, Hash)]
+pub struct DialogScope {
     content: State<Option<State<DialogContentAccessibility>>>,
 }
 
 struct DialogAccessibilityRegistration {
-    context: DialogAccessibilityContext,
+    context: DialogScope,
     content: State<DialogContentAccessibility>,
 }
 
@@ -80,17 +81,23 @@ impl Drop for DialogAccessibilityRegistration {
 }
 
 #[tessera]
-fn register_dialog_accessibility(label: Option<String>, description: Option<String>) {
-    let Some(context) = use_context::<DialogAccessibilityContext>() else {
+pub(crate) fn register_dialog_accessibility(
+    dialog: Option<DialogScope>,
+    label: Option<String>,
+    description: Option<String>,
+) {
+    let Some(context) = dialog else {
         return;
     };
-    let context = context.get();
     let content = remember(DialogContentAccessibility::default);
     let next = DialogContentAccessibility { label, description };
     if content.get() != next {
         content.set(next);
     }
-    remember(move || DialogAccessibilityRegistration { context, content });
+    remember_with_key(context, move || DialogAccessibilityRegistration {
+        context,
+        content,
+    });
     if context.content.get() != Some(content) {
         context.content.set(Some(content));
     }
@@ -182,7 +189,7 @@ fn dialog_content_wrapper(
     padding: Option<Dp>,
     just_opened: Option<bool>,
     on_close_request: Option<Callback>,
-    content: Option<RenderSlot>,
+    content: Option<RenderSlotWith<DialogScope>>,
     focus_scope: Option<FocusScopeNode>,
     full_screen: Option<bool>,
 ) {
@@ -191,9 +198,8 @@ fn dialog_content_wrapper(
     let padding = padding.unwrap_or(Dp(24.0));
     let just_opened = just_opened.unwrap_or(false);
     let on_close_request = on_close_request.unwrap_or_default();
-    let content = content.expect("dialog_content_wrapper requires content");
     let focus_scope = focus_scope.expect("modal content requires its focus scope");
-    let context = DialogAccessibilityContext {
+    let context = DialogScope {
         content: remember(|| None),
     };
     let inferred = context
@@ -275,7 +281,9 @@ fn dialog_content_wrapper(
                                 layout()
                                     .modifier(Modifier::new().padding_all(padding))
                                     .child(move || {
-                                        provide_context(move || context, move || content.render());
+                                        if let Some(content) = content {
+                                            content.render(context);
+                                        }
                                     });
                             });
                     });
@@ -349,7 +357,7 @@ impl tessera_ui::DrawModifierNode for DialogContentLayout {
 /// - `is_open` — declarative open state.
 /// - `controller` — optional external controller.
 /// - `main_content` — optional main content rendered behind the dialog.
-/// - `dialog_content` — optional modal content rendered above the scrim.
+/// - `dialog_content` — modal content receiving its explicit dialog scope.
 ///
 /// ## Examples
 ///
@@ -368,8 +376,8 @@ impl tessera_ui::DrawModifierNode for DialogContentLayout {
 ///     .on_close_request(|| {})
 ///     .is_open(true)
 ///     .main_content(|| { /* main content */ })
-///     .dialog_content(|| {
-///         basic_dialog()
+///     .dialog_content(|dialog| {
+///         basic_dialog().dialog(dialog)
 ///             .supporting_text("This is the dialog body text.")
 ///             .headline("Dialog Title");
 ///     });
@@ -388,17 +396,18 @@ pub fn dialog_provider(
     is_open: Option<bool>,
     #[prop(skip_setter)] controller: Option<State<DialogController>>,
     main_content: Option<RenderSlot>,
-    dialog_content: Option<RenderSlot>,
+    dialog_content: Option<RenderSlotWith<DialogScope>>,
 ) {
     let on_close_request = on_close_request.unwrap_or_default();
     let full_screen = full_screen.unwrap_or(false);
     let padding = padding.unwrap_or(if full_screen { Dp::ZERO } else { Dp(24.0) });
     let is_open = is_open.unwrap_or(false);
     let main_content = main_content.unwrap_or_else(RenderSlot::empty);
-    let dialog_content = dialog_content.unwrap_or_else(RenderSlot::empty);
     let external_controller = controller;
-    let controller =
-        external_controller.unwrap_or_else(|| remember(|| DialogController::new(is_open)));
+    let controller = match external_controller {
+        Some(value) => value,
+        None => remember(|| DialogController::new(is_open)),
+    };
 
     // In controlled mode (external controller provided), do not override
     // controller state from `is_open`.
@@ -421,7 +430,7 @@ pub fn dialog_provider(
         .full_screen(full_screen)
         .controller(controller)
         .main_content_shared(main_content)
-        .dialog_content_shared(dialog_content);
+        .dialog_content_optional(dialog_content);
 }
 
 #[tessera]
@@ -434,13 +443,12 @@ fn dialog_provider_render(
     full_screen: Option<bool>,
     controller: Option<State<DialogController>>,
     main_content: Option<RenderSlot>,
-    dialog_content: Option<RenderSlot>,
+    dialog_content: Option<RenderSlotWith<DialogScope>>,
 ) {
     let on_close_request = on_close_request.unwrap_or_default();
     let padding = padding.unwrap_or(Dp(24.0));
     let controller = controller.expect("dialog_provider_render requires controller");
     let main_content = main_content.unwrap_or_else(RenderSlot::empty);
-    let dialog_content = dialog_content.unwrap_or_else(RenderSlot::empty);
     let dialog_open_state = remember(|| false);
 
     // If the dialog is open, render the modal overlay.
@@ -512,7 +520,7 @@ fn dialog_provider_render(
                 .full_screen(full_screen.unwrap_or(false))
                 .just_opened(just_opened)
                 .on_close_request_shared(on_close_request)
-                .content_shared(dialog_content);
+                .content_optional(dialog_content);
         }
     });
 }
@@ -556,8 +564,8 @@ fn dialog_provider_render(
 ///             .main_content(|| {
 ///                 text().content("Calendar");
 ///             })
-///             .dialog_content(move || {
-///                 full_screen_dialog(close).title("New event").content(|| {
+///             .dialog_content(move |dialog| {
+///                 full_screen_dialog(close).dialog(dialog).title("New event").content(|| {
 ///                     text().content("Event details");
 ///                 });
 ///             });
@@ -570,13 +578,16 @@ fn dialog_provider_render(
 #[tessera]
 pub fn full_screen_dialog(
     on_close: Callback,
+    dialog: Option<DialogScope>,
     modifier: Option<Modifier>,
     #[prop(into)] title: Option<String>,
     #[prop(into)] confirm_label: Option<String>,
     on_confirm: Option<Callback>,
     content: Option<RenderSlot>,
 ) {
-    register_dialog_accessibility().label_optional(title.clone());
+    register_dialog_accessibility()
+        .dialog_optional(dialog)
+        .label_optional(title.clone());
     let title = title.unwrap_or_default();
     let confirm_label = confirm_label.unwrap_or_else(|| "Save".to_owned());
     let content = content.unwrap_or_else(RenderSlot::empty);
@@ -645,6 +656,7 @@ pub fn full_screen_dialog(
 ///
 /// ## Parameters
 ///
+/// - `dialog` — registration scope received from the provider content slot.
 /// - `icon` — optional icon slot shown above the headline.
 /// - `headline` — optional headline text.
 /// - `supporting_text` — body text shown in the dialog.
@@ -679,6 +691,7 @@ pub fn full_screen_dialog(
 /// ```
 #[tessera]
 pub fn basic_dialog(
+    dialog: Option<DialogScope>,
     icon: Option<RenderSlot>,
     #[prop(into)] headline: Option<String>,
     #[prop(into)] supporting_text: Option<String>,
@@ -687,6 +700,7 @@ pub fn basic_dialog(
     dismiss_button: Option<RenderSlot>,
 ) {
     register_dialog_accessibility()
+        .dialog_optional(dialog)
         .label_optional(headline.clone())
         .description_optional(if content.is_none() {
             supporting_text.clone()

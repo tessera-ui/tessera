@@ -1,14 +1,11 @@
-use std::{cell::Cell, sync::atomic::Ordering};
-
 use tessera_ui::{
     Color, Dp, HeadlessConfig, HeadlessRenderer, Modifier, State, accesskit::Role, remember,
-    tessera, testing::layout_test,
+    tessera, testing::TestProbe, testing::layout_test,
 };
 
 use crate::{
     boxed::boxed,
     modifier::{ModifierExt as _, SemanticsArgs},
-    pipelines::linear_wave::pipeline::ALLOCATIONS,
     progress::ProgressStrokeCap,
     surface::{SurfaceStyle, surface},
     theme::material_theme,
@@ -57,14 +54,12 @@ impl Default for Settings {
     }
 }
 
-thread_local! {
-    static SETTINGS: Cell<Option<State<Settings>>> = const { Cell::new(None) };
-}
-
 #[tessera]
-fn fixture(circular: Option<bool>) {
+fn fixture(circular: Option<bool>, probe: Option<TestProbe<Option<State<Settings>>>>) {
     let settings = remember(Settings::default);
-    SETTINGS.set(Some(settings));
+    if let Some(probe) = probe {
+        probe.set(Some(settings));
+    }
     material_theme().child(move || {
         boxed()
             .modifier(Modifier::new().fill_max_size().background(Color::WHITE))
@@ -285,9 +280,11 @@ fn reference_wave_coverage(image: &[u8]) {
 }
 
 fn check_pixels_and_motion(samples: u32) {
+    let probe = TestProbe::<Option<State<Settings>>>::default();
+    let observed = probe.clone();
     let mut renderer = HeadlessRenderer::new(
-        Box::new(|| {
-            fixture();
+        Box::new(move || {
+            fixture().probe(probe.clone());
         }),
         vec![Box::new(crate::TesseraComponents)],
         HeadlessConfig {
@@ -300,7 +297,7 @@ fn check_pixels_and_motion(samples: u32) {
     )
     .expect("renderer");
     renderer.render_frames(3);
-    let settings = SETTINGS.get().expect("settings");
+    let settings = observed.get().expect("settings");
     let original = renderer.read_pixels().expect("wave pixels");
     let accessibility = renderer
         .accessibility_snapshot()
@@ -384,9 +381,18 @@ fn check_pixels_and_motion(samples: u32) {
         original != moved,
         "the component must request animation frames"
     );
-    let allocations = ALLOCATIONS.load(Ordering::Relaxed);
+    let allocations = renderer
+        .graphics_work()
+        .group("linear_wave_instances")
+        .buffer_allocations;
     renderer.render_frames(17);
-    assert_eq!(allocations, ALLOCATIONS.load(Ordering::Relaxed));
+    assert_eq!(
+        allocations,
+        renderer
+            .graphics_work()
+            .group("linear_wave_instances")
+            .buffer_allocations
+    );
     settings.with_mut(|settings| settings.paused = true);
     renderer.render_frames(2);
     let paused = renderer.read_pixels().expect("paused wave");
@@ -627,9 +633,11 @@ fn circular_timing_runs_all_four_rotation_steps_and_preserves_holds() {
 }
 
 fn check_circular_pixels_and_motion(samples: u32) {
+    let probe = TestProbe::<Option<State<Settings>>>::default();
+    let observed = probe.clone();
     let mut renderer = HeadlessRenderer::new(
-        Box::new(|| {
-            fixture().circular(true);
+        Box::new(move || {
+            fixture().circular(true).probe(probe.clone());
         }),
         vec![Box::new(crate::TesseraComponents)],
         HeadlessConfig {
@@ -642,7 +650,7 @@ fn check_circular_pixels_and_motion(samples: u32) {
     )
     .unwrap();
     renderer.render_frames(3);
-    let settings = SETTINGS.get().unwrap();
+    let settings = observed.get().unwrap();
     let original = renderer.read_pixels().unwrap();
     let region_contains = |image: &[u8], left: usize, top: usize, rgb: [u8; 3]| {
         (top..top + 10).any(|y| (left..left + 10).any(|x| pixel(image, x, y) == rgb))
@@ -751,11 +759,17 @@ fn check_circular_pixels_and_motion(samples: u32) {
     renderer.render_frames(23);
     let moving = renderer.read_pixels().unwrap();
     assert!(moving != original, "the component schedules wave motion");
-    let allocations = crate::pipelines::path_stroke::pipeline::ALLOCATIONS.load(Ordering::Relaxed);
+    let allocations = renderer
+        .graphics_work()
+        .group("path_stroke_instances")
+        .buffer_allocations;
     renderer.render_frames(19);
     assert_eq!(
         allocations,
-        crate::pipelines::path_stroke::pipeline::ALLOCATIONS.load(Ordering::Relaxed),
+        renderer
+            .graphics_work()
+            .group("path_stroke_instances")
+            .buffer_allocations,
         "buffers are reused at steady size"
     );
     settings.with_mut(|s| s.paused = true);

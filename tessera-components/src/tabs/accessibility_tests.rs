@@ -4,12 +4,13 @@
 //!
 //! Verify tab strips used to switch related views.
 
-use std::{cell::Cell, time::Duration};
+use std::time::Duration;
 
 use tessera_ui::{
     Color, Dp, FocusDirection, FocusManager, HeadlessConfig, HeadlessRenderer, Modifier, State,
     accesskit::{Action, ActionRequest, Node, NodeId, Role, TreeId},
-    remember, tessera, use_context,
+    remember, tessera,
+    testing::TestProbe,
 };
 
 use crate::{
@@ -21,7 +22,7 @@ use crate::{
     theme::{MaterialTheme, material_theme},
 };
 
-use super::{TabActivationMode, TabsCompositionContext, TabsController, TabsVariant, tab, tabs};
+use super::{TabActivationMode, TabsController, TabsVariant, tab, tabs};
 
 #[derive(Clone, Copy, PartialEq)]
 struct Config {
@@ -48,21 +49,22 @@ impl Default for Config {
     }
 }
 
-thread_local! {
-    static SELECTED: Cell<Option<State<usize>>> = const { Cell::new(None) };
-    static CONFIG: Cell<Option<State<Config>>> = const { Cell::new(None) };
-    static CALLS: Cell<Option<State<usize>>> = const { Cell::new(None) };
-    static CONTROLLER: Cell<Option<State<TabsController>>> = const { Cell::new(None) };
+#[derive(Clone, Copy, Default)]
+struct FixtureHandles {
+    selected: Option<State<usize>>,
+    config: Option<State<Config>>,
+    calls: Option<State<usize>>,
+    controller: Option<State<TabsController>>,
 }
 
 #[tessera]
-fn fixture() {
+fn fixture(observed: TestProbe<FixtureHandles>) {
     let selected = remember(|| 0usize);
     let config = remember(Config::default);
     let calls = remember(|| 0usize);
-    SELECTED.set(Some(selected));
-    CONFIG.set(Some(config));
-    CALLS.set(Some(calls));
+    observed.with_mut(|handles| handles.selected = Some(selected));
+    observed.with_mut(|handles| handles.config = Some(config));
+    observed.with_mut(|handles| handles.calls = Some(calls));
     material_theme()
         .theme(|| {
             let mut theme = MaterialTheme::default();
@@ -73,6 +75,7 @@ fn fixture() {
             theme
         })
         .child(move || {
+            let observed = observed.clone();
             column().children(move || {
                 button()
                     .accessibility_label("Before tabs")
@@ -80,6 +83,7 @@ fn fixture() {
                     .child(|| {
                         text().content("Before tabs");
                     });
+                let observed = observed.clone();
                 tabs()
                     .modifier(Modifier::new().width(Dp(301.0)).semantics(SemanticsArgs {
                         label: Some("Transport views".to_owned()),
@@ -89,19 +93,14 @@ fn fixture() {
                     .variant(config.get().variant)
                     .activation_mode(config.get().mode)
                     .scrollable(config.get().scrollable)
-                    .content(move || {
-                        CONTROLLER.set(Some(
-                            use_context::<TabsCompositionContext>()
-                                .unwrap()
-                                .get()
-                                .controller,
-                        ));
+                    .content(move |row| {
+                        observed.with_mut(|handles| handles.controller = Some(row.controller));
                         for (index, label) in ["Flights", "Hotels", "Trains", "Buses", "Ferries"]
                             .into_iter()
                             .take(config.get().count)
                             .enumerate()
                         {
-                            let mut item = tab()
+                            let item = tab(row)
                                 .label(label)
                                 .selected_optional(if config.get().controlled {
                                     Some(selected.get() == index)
@@ -111,7 +110,7 @@ fn fixture() {
                                 .enabled(index != 1 || config.get().middle_enabled)
                                 .on_click(move || calls.with_mut(|calls| *calls += 1));
                             if config.get().icons {
-                                item = item.icon(filled::ADD_SVG);
+                                item.icon(filled::ADD_SVG);
                             }
                         }
                     });
@@ -233,8 +232,12 @@ fn control(renderer: &HeadlessRenderer, label: &str, role: Role) -> (NodeId, Nod
 }
 
 fn check_tabs(samples: u32) {
+    let observed = TestProbe::default();
+    let fixture_observed = observed.clone();
     let mut renderer = HeadlessRenderer::new(
-        Box::new(fixture),
+        Box::new(move || {
+            fixture(fixture_observed.clone());
+        }),
         vec![Box::new(crate::TesseraComponents)],
         HeadlessConfig {
             width: 900,
@@ -259,9 +262,9 @@ fn check_tabs(samples: u32) {
         control(&renderer, "Hotels", Role::Tab).1.is_selected(),
         Some(false)
     );
-    let selected = SELECTED.get().expect("selection");
-    let config = CONFIG.get().expect("config");
-    let calls = CALLS.get().expect("activation count");
+    let selected = observed.get().selected.expect("selection");
+    let config = observed.get().config.expect("config");
+    let calls = observed.get().calls.expect("activation count");
     let group = control(&renderer, "Transport views", Role::TabList)
         .1
         .bounds()
@@ -358,7 +361,7 @@ fn check_tabs(samples: u32) {
         bounds.x0 >= 0.0 && bounds.x1 <= 451.0,
         "bounds={bounds:?}, focus={:?}, controller={:?}",
         focused(&renderer),
-        CONTROLLER.get().unwrap().with(|controller| (
+        observed.get().controller.unwrap().with(|controller| (
             controller.focused_requester,
             controller.tab_row_scroll_user_overridden,
             controller.tab_row_scroll_offset,
@@ -422,15 +425,15 @@ fn named_nontext_tabs_fixture() {
     material_theme().child(|| {
         tabs()
             .modifier(Modifier::new().width(Dp(360.0)))
-            .content(|| {
-                tab()
+            .content(|row| {
+                tab(row)
                     .icon(filled::FLIGHT_SVG)
                     .accessibility_label("Flights");
-                tab()
+                tab(row)
                     .label("")
                     .icon(filled::HOTEL_SVG)
                     .accessibility_label("Hotels");
-                tab().accessibility_label("Saved trips").title(|| {
+                tab(row).accessibility_label("Saved trips").title(|| {
                     crate::icon::icon().painter(filled::STAR_SVG).size(Dp(24.0));
                 });
             });

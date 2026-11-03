@@ -350,8 +350,6 @@ pub fn extended_floating_action_button(
 
 #[cfg(test)]
 mod tests {
-    use std::cell::Cell;
-
     use tessera_ui::{
         CursorEventContent, GestureState, PointerChange, PressKeyEventType, State,
         testing::{
@@ -372,9 +370,10 @@ mod tests {
         size: ExtendedFloatingActionButtonSize,
     }
 
-    thread_local! {
-        static EXPANDED: Cell<Option<State<bool>>> = const { Cell::new(None) };
-        static CONFIG: Cell<Option<State<FixtureConfig>>> = const { Cell::new(None) };
+    #[derive(Clone, Default)]
+    struct FixtureHandles {
+        expanded: Option<State<bool>>,
+        config: Option<State<FixtureConfig>>,
     }
 
     fn tag(name: &str) -> Modifier {
@@ -390,14 +389,19 @@ mod tests {
         expanded: bool,
         has_icon: bool,
         enabled: bool,
+        probe: Option<tessera_ui::testing::TestProbe<FixtureHandles>>,
     ) {
         let expanded = remember(|| expanded);
         let config = remember(|| FixtureConfig {
             label: "Compose".into(),
             size,
         });
-        EXPANDED.set(Some(expanded));
-        CONFIG.set(Some(config));
+        if let Some(probe) = &probe {
+            probe.with_mut(|handles| handles.expanded = Some(expanded));
+        }
+        if let Some(probe) = &probe {
+            probe.with_mut(|handles| handles.config = Some(config));
+        }
         material_theme().child(move || {
             column().children(move || {
                 boxed().modifier(tag("fab")).children(move || {
@@ -490,19 +494,26 @@ mod tests {
 
     #[test]
     fn changing_size_and_label_updates_retained_content() {
+        let probe = tessera_ui::testing::TestProbe::<FixtureHandles>::default();
+
         let mut session = start_layout_test_session(
             layout_test(|| {
-                fixture(ExtendedFloatingActionButtonSize::Small, true, true, true);
+                fixture(ExtendedFloatingActionButtonSize::Small, true, true, true)
+                    .probe(probe.clone());
             })
             .viewport_px(500, 400),
         );
         let before = pump_layout_test_session(&mut session, 0)
             .node("fab")
             .bounds();
-        CONFIG.get().expect("fixture state").with_mut(|config| {
-            config.size = ExtendedFloatingActionButtonSize::Medium;
-            config.label = "Create a document".into();
-        });
+        probe
+            .get()
+            .config
+            .expect("fixture state")
+            .with_mut(|config| {
+                config.size = ExtendedFloatingActionButtonSize::Medium;
+                config.label = "Create a document".into();
+            });
         let after = pump_layout_test_session(&mut session, 16_666_667)
             .node("fab")
             .bounds();
@@ -512,10 +523,13 @@ mod tests {
 
     #[test]
     fn click_collapse_animates_and_disabled_buttons_ignore_input() {
+        let probe = tessera_ui::testing::TestProbe::<FixtureHandles>::default();
+
         for enabled in [true, false] {
             let mut session = start_layout_test_session(
-                layout_test(move || {
-                    fixture(ExtendedFloatingActionButtonSize::Small, true, true, enabled);
+                layout_test(|| {
+                    fixture(ExtendedFloatingActionButtonSize::Small, true, true, enabled)
+                        .probe(probe.clone());
                 })
                 .viewport_px(500, 400),
             );
@@ -550,11 +564,11 @@ mod tests {
                 .node("fab")
                 .bounds();
             if enabled {
-                assert!(!EXPANDED.get().expect("fixture state").get());
+                assert!(!probe.get().expanded.expect("fixture state").get());
                 assert!(intermediate.width < initial.width);
                 assert!(intermediate.width > Px::new(56));
             } else {
-                assert!(EXPANDED.get().expect("fixture state").get());
+                assert!(probe.get().expanded.expect("fixture state").get());
                 assert_eq!(intermediate.width, initial.width);
             }
             let mut final_snapshot = pump_layout_test_session(&mut session, 100_000_000);
@@ -588,11 +602,15 @@ mod tests {
     #[test]
     #[ignore = "Requires a native GPU adapter"]
     fn rendered_labels_restore_after_a_full_collapse_and_expansion() {
+        let probe = tessera_ui::testing::TestProbe::<FixtureHandles>::default();
+        let observed = probe.clone();
+
         use tessera_ui::headless::{HeadlessConfig, HeadlessRenderer};
 
         let mut renderer = HeadlessRenderer::new(
-            Box::new(|| {
-                fixture(ExtendedFloatingActionButtonSize::Small, true, true, true);
+            Box::new(move || {
+                fixture(ExtendedFloatingActionButtonSize::Small, true, true, true)
+                    .probe(observed.clone());
             }),
             vec![Box::new(crate::TesseraComponents)],
             HeadlessConfig {
@@ -604,11 +622,11 @@ mod tests {
         .expect("headless GPU renderer");
         renderer.render_frames(3);
         let expanded = renderer.read_pixels().expect("expanded pixels");
-        EXPANDED.get().expect("fixture state").set(false);
+        probe.get().expanded.expect("fixture state").set(false);
         renderer.render_frames(120);
         let collapsed = renderer.read_pixels().expect("collapsed pixels");
         assert_ne!(expanded, collapsed);
-        EXPANDED.get().expect("fixture state").set(true);
+        probe.get().expanded.expect("fixture state").set(true);
         renderer.render_frames(120);
         let restored = renderer.read_pixels().expect("restored pixels");
         let different_pixels = expanded

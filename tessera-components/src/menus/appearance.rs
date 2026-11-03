@@ -5,7 +5,7 @@
 //! Organize contextual actions into distinct groups with optional selection.
 
 use tessera_ui::{
-    Color, Dp, FocusScopeNode, Modifier, RenderSlot, State,
+    Color, Dp, FocusScopeNode, Modifier, RenderSlot,
     accesskit::Role,
     current_frame_nanos,
     layout::layout,
@@ -22,10 +22,7 @@ use crate::{
     theme::{MaterialColorScheme, MaterialTheme},
 };
 
-use super::{
-    MenuController, MenuHost,
-    motion::{MenuShapeHover, MenuShapeMotion, advance},
-};
+use super::motion::{MenuShapeHover, MenuShapeMotion, advance};
 
 /// Color emphasis for vertical menus and their items.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -137,6 +134,7 @@ fn corners(top: f64, bottom: f64) -> Shape {
 ///
 /// ## Parameters
 ///
+/// - `menu` — action owner received from the enclosing menu content slot.
 /// - `position` — outside corners; middle and last groups include a 2dp gap
 ///   above. Default corners contract when an activated group loses hover and
 ///   keyboard focus.
@@ -165,9 +163,9 @@ fn corners(top: f64, bottom: f64) -> Shape {
 ///         menu_provider()
 ///             .controller(menu)
 ///             .grouped(true)
-///             .menu_content(move || {
-///                 menu_group().children(move || {
-///                     menu_item().label("Save").on_click(move || {
+///             .menu_content(move |scope| {
+///                 menu_group().menu(scope).children(move || {
+///                     menu_item().menu(scope).label("Save").on_click(move || {
 ///                         menu.with_mut(MenuController::close);
 ///                     });
 ///                 });
@@ -178,6 +176,7 @@ fn corners(top: f64, bottom: f64) -> Shape {
 /// ```
 #[tessera]
 pub fn menu_group(
+    menu: Option<super::MenuScope>,
     position: Option<MenuPosition>,
     color_style: Option<MenuColorStyle>,
     modifier: Option<Modifier>,
@@ -209,8 +208,8 @@ pub fn menu_group(
     if shape.is_none() {
         modifier = modifier.push_pointer_preview_input(MenuShapeHover {
             motion,
-            host: use_context::<MenuHost>().map(|host| host.get()),
-            controller: use_context::<State<MenuController>>().map(|controller| controller.get()),
+            host: menu.map(|menu| menu.host),
+            controller: menu.map(|menu| menu.controller),
         });
     }
     layout()

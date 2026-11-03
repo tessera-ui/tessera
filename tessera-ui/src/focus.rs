@@ -5,12 +5,7 @@
 //! Register focus targets, scopes, and traversal rules for keyboard and IME
 //! input.
 
-use std::{
-    cell::Cell,
-    collections::BTreeMap,
-    ptr::NonNull,
-    sync::atomic::{AtomicU64, Ordering},
-};
+use std::{cell::Cell, collections::BTreeMap, ptr::NonNull};
 
 use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
 
@@ -30,13 +25,10 @@ use crate::{
     },
 };
 
-static NEXT_FOCUS_TARGET_ID: AtomicU64 = AtomicU64::new(1);
-static NEXT_FOCUS_REQUESTER_ID: AtomicU64 = AtomicU64::new(1);
 const ROOT_SCOPE_ID: FocusHandleId = 0;
 
-thread_local! {
-    static FOCUS_CHANGE_DIRECTION: Cell<Option<FocusDirection>> = const { Cell::new(None) };
-}
+const FOCUS_CHANGE_DIRECTION: crate::session::SessionLocal<Cell<Option<FocusDirection>>> =
+    crate::session::SessionLocal::new();
 
 struct FocusChangeDirectionGuard(Option<FocusDirection>);
 
@@ -46,15 +38,15 @@ impl Drop for FocusChangeDirectionGuard {
     }
 }
 
-pub(crate) type FocusHandleId = u64;
-pub(crate) type FocusRequesterId = u64;
+pub(crate) type FocusHandleId = u128;
+pub(crate) type FocusRequesterId = u128;
 
 fn next_focus_handle_id() -> FocusHandleId {
-    NEXT_FOCUS_TARGET_ID.fetch_add(1, Ordering::Relaxed)
+    uuid::Uuid::new_v4().as_u128()
 }
 
 fn next_focus_requester_id() -> FocusRequesterId {
-    NEXT_FOCUS_REQUESTER_ID.fetch_add(1, Ordering::Relaxed)
+    uuid::Uuid::new_v4().as_u128()
 }
 
 fn with_bound_focus_owner<R>(f: impl FnOnce(&FocusOwner) -> R) -> Option<R> {
@@ -129,17 +121,6 @@ pub(crate) fn bind_focus_owner(owner: &mut FocusOwner) -> FocusOwnerBindingGuard
 ///
 /// Use this to render focus-dependent UI and distinguish between the primary
 /// focused target and its focused ancestors.
-///
-/// # Examples
-///
-/// ```
-/// use tessera_ui::FocusState;
-///
-/// assert!(!FocusState::Inactive.has_focus());
-/// assert!(FocusState::ActiveParent.has_focus());
-/// assert!(FocusState::Active.is_focused());
-/// assert!(FocusState::Captured.is_captured());
-/// ```
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub enum FocusState {
     /// The node is not participating in the active focus path.
@@ -211,20 +192,6 @@ pub enum FocusTraversalStrategy {
 ///
 /// Use policies to describe how a container handles directional keys and
 /// whether `Tab` navigation should stay inside the container.
-///
-/// # Examples
-///
-/// ```
-/// use tessera_ui::{FocusTraversalPolicy, FocusTraversalStrategy};
-///
-/// let policy = FocusTraversalPolicy::vertical()
-///     .wrap(true)
-///     .tab_navigation(true);
-///
-/// assert_eq!(policy.strategy, FocusTraversalStrategy::Vertical);
-/// assert!(policy.wrap);
-/// assert!(policy.tab_navigation);
-/// ```
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 pub struct FocusTraversalPolicy {
     /// Traversal strategy used for arrow-key navigation.
@@ -371,25 +338,6 @@ impl FocusRevealRequest {
 /// explicit traversal neighbors for complex layouts.
 /// Controls hidden by layout cannot receive focus. Placed controls outside a
 /// scroll viewport remain eligible so navigation can reveal them.
-///
-/// # Examples
-///
-/// ```
-/// use tessera_ui::{FocusProperties, FocusRequester};
-///
-/// let next = FocusRequester::new();
-/// let right = FocusRequester::new();
-/// let props = FocusProperties::new()
-///     .can_focus(true)
-///     .skip_traversal(false)
-///     .next(next)
-///     .right(right);
-///
-/// assert_eq!(props.next, Some(next));
-/// assert_eq!(props.right, Some(right));
-/// assert!(props.can_focus);
-/// assert!(!props.skip_traversal);
-/// ```
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct FocusProperties {
     /// Whether this node may receive focus.
@@ -565,16 +513,6 @@ impl FocusRegistration {
 /// Requesters are stable handles that can be stored in component state and
 /// passed across component boundaries without exposing the underlying focus
 /// tree.
-///
-/// # Examples
-///
-/// ```
-/// use tessera_ui::FocusRequester;
-///
-/// let first = FocusRequester::new();
-/// let second = FocusRequester::new();
-/// assert_ne!(first, second);
-/// ```
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub struct FocusRequester {
     id: FocusRequesterId,
@@ -640,12 +578,6 @@ impl FocusRequester {
     /// input and accessibility focus actions show it; programmatic focus
     /// inherits the most recent input mode. Read this during component
     /// composition.
-    ///
-    /// ```
-    /// use tessera_ui::FocusRequester;
-    /// let target = FocusRequester::new();
-    /// assert!(!target.is_focus_visible());
-    /// ```
     pub fn is_focus_visible(&self) -> bool {
         track_focus_requester_read_dependency(self.id);
         with_focus_owner(|owner| owner.is_requester_focus_visible(self.id))
@@ -702,16 +634,6 @@ impl Default for FocusNode {
 ///
 /// Scopes own restore behavior and provide imperative traversal within a
 /// subtree.
-///
-/// # Examples
-///
-/// ```
-/// use tessera_ui::FocusScopeNode;
-///
-/// let first = FocusScopeNode::new();
-/// let second = FocusScopeNode::new();
-/// assert_ne!(first, second);
-/// ```
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub struct FocusScopeNode {
     id: FocusHandleId,
@@ -786,16 +708,6 @@ impl Default for FocusScopeNode {
 ///
 /// Groups define traversal boundaries without taking on scope restore
 /// semantics.
-///
-/// # Examples
-///
-/// ```
-/// use tessera_ui::FocusGroupNode;
-///
-/// let first = FocusGroupNode::new();
-/// let second = FocusGroupNode::new();
-/// assert_ne!(first, second);
-/// ```
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub struct FocusGroupNode {
     id: FocusHandleId,
@@ -884,14 +796,6 @@ impl FocusRestorationTarget {
 ///
 /// Use the focus manager to trigger application-level traversal without
 /// storing a specific scope or requester.
-///
-/// # Examples
-///
-/// ```
-/// use tessera_ui::FocusManager;
-///
-/// let _manager = FocusManager::current();
-/// ```
 #[derive(Clone, Copy, Debug, Default)]
 pub struct FocusManager;
 

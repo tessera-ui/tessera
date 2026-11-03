@@ -4,8 +4,6 @@
 //!
 //! Present component articles with their attributed Material Design artwork.
 
-use std::sync::Once;
-
 use tessera_components::{
     alignment::{Alignment, CrossAxisAlignment},
     boxed::boxed,
@@ -33,17 +31,34 @@ pub(super) struct PageMedia {
 }
 
 pub(super) fn load_fonts() {
-    static LOADED: Once = Once::new();
-    LOADED.call_once(|| {
-        let mut fonts = write_font_system();
-        for asset in [
+    let mut fonts = write_font_system();
+    for (name, asset) in [
+        (
+            "ExampleSansDisplay-Regular",
             crate::res::material_spec::EXAMPLESANSDISPLAY_TTF,
+        ),
+        (
+            "ExampleSansText-Regular",
             crate::res::material_spec::EXAMPLESANSTEXT_TTF,
+        ),
+        (
+            "ExampleSansTabs-Medium",
             crate::res::material_spec::EXAMPLESANSTABS_TTF,
+        ),
+        (
+            "ExampleSansTabsHover-Medium",
             crate::res::material_spec::EXAMPLESANSTABSHOVER_TTF,
+        ),
+        (
+            "ExampleSansTabsSelected-Medium",
             crate::res::material_spec::EXAMPLESANSTABSSELECTED_TTF,
+        ),
+        (
+            "ExampleSansTabsPressed-Medium",
             crate::res::material_spec::EXAMPLESANSTABSPRESSED_TTF,
-        ] {
+        ),
+    ] {
+        if !fonts.db().faces().any(|face| face.post_script_name == name) {
             fonts.db_mut().load_font_data(
                 asset
                     .read()
@@ -52,7 +67,7 @@ pub(super) fn load_fonts() {
                     .to_vec(),
             );
         }
-    });
+    }
 }
 
 pub(super) fn page_media(title: &str) -> Option<PageMedia> {

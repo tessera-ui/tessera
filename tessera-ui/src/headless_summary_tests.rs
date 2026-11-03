@@ -13,10 +13,8 @@ use super::*;
 fn worker_summary_retains_real_timings_counters_and_explicit_snapshot() {
     const CHILD: &str = "TESSERA_TEST_HEADLESS_SUMMARY_OUTPUT";
     let Some(output) = std::env::var_os(CHILD) else {
-        let path = std::env::temp_dir().join(format!(
-            "tessera-headless-summary-{}.jsonl",
-            std::process::id()
-        ));
+        let directory = tempfile::tempdir().expect("Profiling fixture directory");
+        let path = directory.path().join("summary.jsonl");
         let result = Command::new(std::env::current_exe().expect("Test executable"))
             .args([
                 "--exact",
@@ -44,7 +42,6 @@ fn worker_summary_retains_real_timings_counters_and_explicit_snapshot() {
             .map(|line| serde_json::from_str(line).expect("Profiler JSON"))
             .filter(|record: &Value| record["type"] == "frame")
             .collect();
-        fs::remove_file(path).expect("Remove isolated trace");
         assert_eq!(records.len(), 4);
         for (index, record) in records.iter().enumerate() {
             assert_eq!(record["frame"], index as u64);
@@ -91,11 +88,14 @@ fn worker_summary_retains_real_timings_counters_and_explicit_snapshot() {
         }
         return;
     };
+    let runtime_session = crate::RuntimeSession::new();
+    let _scope = runtime_session.enter();
     crate::profiler::set_output_path(output);
-    LOCAL_PRESS.set(None);
+    let probe = crate::testing::TestProbe::new(None);
     let mut renderer = HeadlessRenderer::new(
-        Box::new(|| {
-            protocol_fixture();
+        Box::new({
+            let probe = probe.clone();
+            move || protocol_fixture(probe.clone())
         }),
         Vec::new(),
         HeadlessConfig {
@@ -143,6 +143,6 @@ fn worker_summary_retains_real_timings_counters_and_explicit_snapshot() {
         },
     )
     .expect("Full frames after summary");
-    assert_eq!(LOCAL_PRESS.get(), Some(PxPosition::from_f32_xy(48.0, 24.0)));
+    assert_eq!(probe.get(), Some(PxPosition::from_f32_xy(48.0, 24.0)));
     crate::profiler::flush_for_test();
 }

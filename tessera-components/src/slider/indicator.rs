@@ -4,19 +4,13 @@
 //!
 //! Help users select exact values while adjusting settings.
 
-use std::sync::Arc;
-
-use parking_lot::RwLock;
 use tessera_ui::{
     AxisConstraint, Color, ComputedData, Constraint, FrameNanosControl, LayoutResult,
-    MeasurementError, Modifier, Px, PxPosition, RenderSlot, State, current_frame_nanos, key,
-    layout::{MeasureScope, layout},
+    MeasurementError, Modifier, Px, PxPosition, RenderSlotWith, State, current_frame_nanos, key,
+    layout::{MeasureScope, PlacementResult, PlacementScope, layout},
     modifier::FocusModifierExt as _,
-    provide_context, receive_frame_nanos, remember, tessera, use_context,
+    receive_frame_nanos, remember, remember_with_key, tessera, use_context,
 };
-
-#[cfg(test)]
-use tessera_ui::PxRect;
 
 use crate::{
     alignment::Alignment,
@@ -66,8 +60,9 @@ struct Request {
     style: TextStyle,
 }
 
-#[derive(Clone, PartialEq)]
-struct Host {
+/// The overlay registration target supplied to slider content.
+#[derive(Clone, Copy, PartialEq, Eq, Hash)]
+pub struct SliderValueIndicatorHost {
     entries: State<Vec<State<Request>>>,
 }
 
@@ -173,7 +168,7 @@ impl tessera_ui::LayoutModifierNode for HostLayout {
 #[derive(Clone)]
 struct LabelLayout {
     anchor: State<tessera_ui::LayoutCoordinates>,
-    origin: Arc<RwLock<tessera_ui::LayoutCoordinates>>,
+    origin: State<tessera_ui::LayoutCoordinates>,
     orientation: SliderOrientation,
     scale: f32,
 }
@@ -181,7 +176,7 @@ struct LabelLayout {
 impl PartialEq for LabelLayout {
     fn eq(&self, other: &Self) -> bool {
         self.anchor == other.anchor
-            && Arc::ptr_eq(&self.origin, &other.origin)
+            && self.origin == other.origin
             && self.orientation == other.orientation
             && self.scale == other.scale
     }
@@ -237,6 +232,27 @@ fn position(
     )
 }
 
+impl LabelLayout {
+    fn popup_position(&self, popup: ComputedData, size: ComputedData) -> Option<PxPosition> {
+        if !self.anchor.is_alive() {
+            return None;
+        }
+        let rect = self.anchor.get();
+        let origin = self.origin.get();
+        let anchor = origin.local_to_window.inverse_rect(rect.window_bounds());
+        if anchor.width <= 0.0
+            || anchor.height <= 0.0
+            || anchor.x + anchor.width <= 0.0
+            || anchor.y + anchor.height <= 0.0
+            || anchor.x >= size.width.to_f32()
+            || anchor.y >= size.height.to_f32()
+        {
+            return None;
+        }
+        Some(position(anchor, popup, size, self.orientation, self.scale))
+    }
+}
+
 impl tessera_ui::LayoutModifierNode for LabelLayout {
     fn measure(&self, input: &mut MeasureScope<'_>) -> Result<LayoutResult, MeasurementError> {
         let parent = input.parent_constraint();
@@ -248,60 +264,43 @@ impl tessera_ui::LayoutModifierNode for LabelLayout {
         let Some(child) = input.children().first().copied() else {
             return Ok(result);
         };
-        if !self.anchor.is_alive() {
-            return Ok(result);
-        }
-        let rect = self.anchor.get();
-        let origin = *self.origin.read();
-        let anchor = origin.local_to_window.inverse_rect(rect.window_bounds());
-        if anchor.width <= 0.0
-            || anchor.height <= 0.0
-            || anchor.x + anchor.width <= 0.0
-            || anchor.y + anchor.height <= 0.0
-            || anchor.x >= size.width.to_f32()
-            || anchor.y >= size.height.to_f32()
-        {
-            return Ok(result);
-        }
         let margin = tessera_ui::Dp(16.0).to_px();
         let constraint = Constraint::new(
             AxisConstraint::at_most((size.width - margin).max(Px::ZERO)),
             AxisConstraint::at_most((size.height - margin).max(Px::ZERO)),
         );
         let popup = child.measure(input, &constraint)?;
-        result.place_child(
-            child,
-            position(anchor, popup.size(), size, self.orientation, self.scale),
-        );
+        if let Some(position) = input.placement(|| self.popup_position(popup.size(), size)) {
+            result.place_child(child, position);
+        }
         Ok(result)
+    }
+
+    fn place_children(
+        &self,
+        scope: &PlacementScope<'_>,
+        _inner: &PlacementResult,
+    ) -> Option<PlacementResult> {
+        let mut result = LayoutResult::new(scope.size());
+        if let Some(child) = scope.children().first().copied()
+            && let Some(position) = self.popup_position(child.size(), scope.size())
+        {
+            result.place_child(child, position);
+        }
+        Some(result.into_placement_result())
     }
 }
 
 #[tessera]
 fn label_layer(
     request: Option<State<Request>>,
-    origin: Option<Arc<RwLock<tessera_ui::LayoutCoordinates>>>,
+    origin: Option<State<tessera_ui::LayoutCoordinates>>,
 ) {
-    #[cfg(test)]
-    LABEL_BUILD_COUNT.set(LABEL_BUILD_COUNT.get() + 1);
     let request_state = request.expect("slider label request");
     let request = request_state.get();
     let origin = origin.expect("slider label origin");
     let now = current_frame_nanos();
     let reveal = remember(Reveal::new);
-    #[cfg(test)]
-    let popup_bounds = remember(|| PxRect::ZERO);
-    #[cfg(test)]
-    LABELS.with(|labels| {
-        let mut labels = labels.borrow_mut();
-        labels.retain(|(request, _, _)| request.is_alive());
-        if !labels
-            .iter()
-            .any(|(request, _, _)| *request == request_state)
-        {
-            labels.push((request_state, popup_bounds, reveal));
-        }
-    });
     if reveal.with(|reveal| reveal.target != request.visible) {
         reveal.with_mut(|reveal| reveal.retarget(request.visible, now));
     }
@@ -341,10 +340,10 @@ fn label_layer(
                     Some(AxisConstraint::new(dp(44.0).to_px(), None)),
                 );
                 #[cfg(test)]
-                let modifier = modifier.on_globally_positioned(move |rect| {
-                    if popup_bounds.get() != rect {
-                        popup_bounds.set(rect);
-                    }
+                let modifier = modifier.semantics(SemanticsArgs {
+                    test_tag: Some("slider-value-label".into()),
+                    label: Some(request.label.clone()),
+                    ..Default::default()
                 });
                 surface()
                     .modifier(modifier)
@@ -390,7 +389,7 @@ fn label_layer(
 ///
 /// - `modifier` — page placement and bounds; fills the available size by
 ///   default.
-/// - `child` — page content containing standard, centered, or range sliders.
+/// - `child` — page content receiving the explicit host for its slider labels.
 ///
 /// ## Examples
 ///
@@ -404,8 +403,8 @@ fn label_layer(
 /// fn content() {
 ///     let value = remember(|| 0.5_f32);
 ///     material_theme().child(move || {
-///         slider_value_indicator_provider().child(move || {
-///             slider()
+///         slider_value_indicator_provider().child(move |host| {
+///             slider().value_indicator_host(host)
 ///                 .value(value.get())
 ///                 .on_change(move |next| value.set(next))
 ///                 .value_indicator(SliderValueIndicatorVisibility::OnInteraction);
@@ -416,17 +415,12 @@ fn label_layer(
 /// # tessera_ui::testing::layout_test(content).run();
 /// ```
 #[tessera]
-pub fn slider_value_indicator_provider(modifier: Option<Modifier>, child: Option<RenderSlot>) {
-    let child = child.unwrap_or_else(RenderSlot::empty);
-    if use_context::<Host>().is_some() {
-        layout()
-            .modifier(modifier.unwrap_or_default())
-            .child_shared(child);
-        return;
-    }
+pub fn slider_value_indicator_provider(
+    modifier: Option<Modifier>,
+    child: Option<RenderSlotWith<SliderValueIndicatorHost>>,
+) {
     let entries = remember(Vec::<State<Request>>::new);
-    let origin = remember(|| Arc::new(RwLock::new(tessera_ui::LayoutCoordinates::default()))).get();
-    let bounds = Arc::clone(&origin);
+    let origin = remember(tessera_ui::LayoutCoordinates::default);
     let next = (
         modifier.unwrap_or_else(|| Modifier::new().fill_max_size()),
         child,
@@ -435,48 +429,47 @@ pub fn slider_value_indicator_provider(modifier: Option<Modifier>, child: Option
     if child_data.get() != next {
         child_data.set(next);
     }
-    provide_context(
-        || Host { entries },
-        move || {
-            layout()
-                .modifier(
-                    child_data
-                        .with(|(modifier, _)| modifier.clone())
-                        .on_layout_coordinates(move |coordinates| *bounds.write() = coordinates),
-                )
-                .policy(HostLayout)
-                .child(move || {
-                    layout().child(move || child_data.with(|(_, child)| *child).render());
-                    let mut requests: Vec<_> = entries
-                        .get()
-                        .into_iter()
-                        .filter(|request| request.is_alive())
-                        .collect();
-                    requests.sort_by_key(|request| request.with(|request| request.interacting));
-                    for request in requests {
-                        if request.is_alive() {
-                            let origin = Arc::clone(&origin);
-                            key(request, move || {
-                                label_layer().request(request).origin(Arc::clone(&origin));
-                            });
-                        }
-                    }
-                });
-        },
-    );
+    layout()
+        .modifier(
+            child_data
+                .with(|(modifier, _)| modifier.clone())
+                .on_layout_coordinates(move |coordinates| {
+                    origin.set_if_changed(coordinates);
+                }),
+        )
+        .policy(HostLayout)
+        .child(move || {
+            layout().child(move || {
+                if let Some(child) = child_data.with(|(_, child)| *child) {
+                    child.render(SliderValueIndicatorHost { entries });
+                }
+            });
+            let mut requests: Vec<_> = entries
+                .get()
+                .into_iter()
+                .filter(|request| request.is_alive())
+                .collect();
+            requests.sort_by_key(|request| request.with(|request| request.interacting));
+            for request in requests {
+                if request.is_alive() {
+                    key(request, move || {
+                        label_layer().request(request).origin(origin);
+                    });
+                }
+            }
+        });
 }
 
 #[tessera]
 pub(super) fn register_indicator(
+    host: Option<SliderValueIndicatorHost>,
     anchor: Option<State<tessera_ui::LayoutCoordinates>>,
     label: Option<String>,
     visible: Option<bool>,
     interacting: Option<bool>,
     orientation: Option<SliderOrientation>,
 ) {
-    let host = use_context::<Host>()
-        .expect("slider value indicators require slider_value_indicator_provider")
-        .get();
+    let host = host.expect("visible slider indicators require a provider host");
     let theme = use_context::<MaterialTheme>()
         .map(|theme| theme.get())
         .unwrap_or_default();
@@ -494,42 +487,13 @@ pub(super) fn register_indicator(
     if request.get() != next {
         request.set(next);
     }
-    let _registration = remember(|| Registration {
+    let _registration = remember_with_key(host, || Registration {
         entries: host.entries,
         request,
     });
     if !host.entries.with(|entries| entries.contains(&request)) {
         host.entries.with_mut(|entries| entries.push(request));
     }
-}
-
-#[cfg(test)]
-type LabelRecord = (State<Request>, State<PxRect>, State<Reveal>);
-
-#[cfg(test)]
-thread_local! {
-    static LABELS: std::cell::RefCell<Vec<LabelRecord>> = const { std::cell::RefCell::new(Vec::new()) };
-    static LABEL_BUILD_COUNT: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
-}
-
-#[cfg(test)]
-pub(super) fn observed_labels() -> Vec<(String, PxRect)> {
-    LABELS.with(|labels| {
-        labels
-            .borrow()
-            .iter()
-            .filter_map(|(request, bounds, reveal)| {
-                if !request.is_alive()
-                    || !bounds.is_alive()
-                    || !reveal.is_alive()
-                    || reveal.with(|reveal| reveal.value) == 0.0
-                {
-                    return None;
-                }
-                Some((request.with(|request| request.label.clone()), bounds.get()))
-            })
-            .collect()
-    })
 }
 
 #[cfg(test)]
@@ -555,9 +519,4 @@ mod tests {
         assert_eq!(reveal.value, 1.0);
         assert!(!reveal.running());
     }
-}
-
-#[cfg(test)]
-pub(super) fn label_build_count() -> usize {
-    LABEL_BUILD_COUNT.get()
 }

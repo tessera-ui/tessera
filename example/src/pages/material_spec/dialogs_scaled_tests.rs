@@ -5,7 +5,7 @@
 //! Keep native dialog actions and annotations aligned while scrolling and
 //! resizing.
 
-use std::{cell::Cell, time::Duration};
+use std::time::Duration;
 
 use tessera_components::{
     alignment::Alignment, boxed::boxed, column::column, modifier::ModifierExt as _,
@@ -23,13 +23,6 @@ use tessera_ui::{
 
 use super::{Geometry, annotations};
 
-thread_local! {
-    static SCENE: Cell<usize> = const { Cell::new(0) };
-    pub(super) static GEOMETRY: Cell<Option<State<Geometry>>> = const { Cell::new(None) };
-    pub(super) static NOTICE: Cell<Option<State<String>>> = const { Cell::new(None) };
-    static SCROLL: Cell<Option<State<ScrollableController>>> = const { Cell::new(None) };
-}
-
 #[derive(Clone, Copy, PartialEq)]
 struct FractionalOrigin;
 
@@ -40,9 +33,12 @@ impl PlacementModifierNode for FractionalOrigin {
 }
 
 #[tessera]
-fn fixture() {
+fn fixture(
+    scene: usize,
+    output: tessera_ui::testing::TestProbe<Option<State<ScrollableController>>>,
+) {
     let scroll = remember(ScrollableController::new);
-    SCROLL.set(Some(scroll));
+    output.set(Some(scroll));
     material_theme().child(move || {
         boxed()
             .alignment(Alignment::TopStart)
@@ -59,9 +55,9 @@ fn fixture() {
                             .height(Dp(500.0))
                             .vertical_scroll(scroll),
                     )
-                    .children(|| {
+                    .children(move || {
                         spacer().modifier(Modifier::new().height(Dp(200.0)));
-                        match SCENE.get() {
+                        match scene {
                             0 => {
                                 super::basic_figure(false);
                             }
@@ -72,7 +68,7 @@ fn fixture() {
                                 super::basic_color_figure();
                             }
                             3..=5 => {
-                                super::full_spec_figure(SCENE.get() - 3);
+                                super::full_spec_figure(scene - 3);
                             }
                             _ => {
                                 super::dialog_overview_pair();
@@ -84,22 +80,15 @@ fn fixture() {
     });
 }
 
-struct Pipelines;
-impl tessera_ui::RenderModule for Pipelines {
-    fn register_pipelines(&self, context: &mut tessera_ui::PipelineContext<'_>) {
-        tessera_components::pipelines::register_pipelines(context);
-    }
-}
-
 fn node(renderer: &HeadlessRenderer, label: &str, role: Role) -> Node {
-    renderer
-        .accessibility_snapshot()
-        .unwrap()
-        .nodes
-        .into_iter()
-        .find(|(_, node)| node.role() == role && node.label() == Some(label))
+    let snapshot = renderer
+        .inspect_accessibility()
+        .expect("accessibility tree");
+    snapshot
+        .find(label, role)
         .unwrap_or_else(|| panic!("missing {label} {role:?}"))
         .1
+        .clone()
 }
 
 fn assert_geometry(renderer: &HeadlessRenderer, scene: usize, scale: f32) {
@@ -114,7 +103,19 @@ fn assert_geometry(renderer: &HeadlessRenderer, scene: usize, scale: f32) {
         );
         return;
     }
-    let values = GEOMETRY.get().expect("Dialog annotation coordinates").get();
+    let snapshot = renderer.inspect_components();
+    let values: Geometry = ["figure", "container"]
+        .into_iter()
+        .map(|name| {
+            (
+                name,
+                snapshot
+                    .tagged(&format!("dialog-figure-{name}"))
+                    .layout_coordinates()
+                    .unwrap(),
+            )
+        })
+        .collect();
     let figure = values["figure"];
     assert_eq!(figure.local_to_window.scale(), scale);
     assert_eq!(
@@ -158,12 +159,11 @@ fn assert_geometry(renderer: &HeadlessRenderer, scene: usize, scale: f32) {
 fn exercise(scenes: &[usize]) {
     for samples in [1, 4] {
         for &scene in scenes {
-            SCENE.set(scene);
-            GEOMETRY.set(None);
-            NOTICE.set(None);
+            let output = tessera_ui::testing::TestProbe::default();
+            let probe = output.clone();
             let mut renderer = HeadlessRenderer::new(
-                Box::new(fixture),
-                vec![Box::new(Pipelines)],
+                Box::new(move || fixture(scene, probe.clone())),
+                vec![Box::new(crate::TestPipelines)],
                 HeadlessConfig {
                     width: 640,
                     height: 800,
@@ -190,7 +190,7 @@ fn exercise(scenes: &[usize]) {
             );
             renderer.render_frames(120);
             assert_eq!(
-                SCROLL
+                output
                     .get()
                     .unwrap()
                     .with(|scroll| scroll.child_position().y),
@@ -217,7 +217,15 @@ fn exercise(scenes: &[usize]) {
             renderer.pointer_press(MOUSE_POINTER_ID, position, PressKeyEventType::Left);
             renderer.pointer_release(MOUSE_POINTER_ID, position, PressKeyEventType::Left);
             renderer.render_frames(4);
-            assert_eq!(NOTICE.get().unwrap().get(), expected_notice);
+            assert!(
+                renderer
+                    .inspect_accessibility()
+                    .unwrap()
+                    .nodes()
+                    .iter()
+                    .any(|(_, node)| node.label() == Some(expected_notice)),
+                "the activated action publishes its notice"
+            );
         }
     }
 }

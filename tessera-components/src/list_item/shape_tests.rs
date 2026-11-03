@@ -4,13 +4,13 @@
 //!
 //! Keep grouped rows responsive and restore their resting appearance.
 
-use std::cell::Cell;
-
 use tessera_ui::{
     Color, Dp, FocusManager, HeadlessConfig, HeadlessRenderer, MOUSE_POINTER_ID, Modifier,
     PressKeyEventType, PxPosition, State,
     accesskit::{Action, ActionRequest, TreeId},
-    remember, tessera, use_context,
+    remember, tessera,
+    testing::TestProbe,
+    use_context,
 };
 
 use crate::{
@@ -34,13 +34,8 @@ struct Settings {
     position: ListItemPosition,
 }
 
-thread_local! {
-    static SETTINGS: Cell<Option<State<Settings>>> = const { Cell::new(None) };
-    static CLICKS: Cell<usize> = const { Cell::new(0) };
-}
-
 #[tessera]
-fn fixture() {
+fn fixture(probe: TestProbe<Option<State<Settings>>>, clicks: TestProbe<usize>) {
     let settings = remember(|| Settings {
         selected: false,
         enabled: true,
@@ -49,7 +44,7 @@ fn fixture() {
         custom: false,
         position: ListItemPosition::First,
     });
-    SETTINGS.set(Some(settings));
+    probe.set(Some(settings));
     material_theme()
         .theme(|| {
             let mut theme = MaterialTheme::default();
@@ -70,61 +65,70 @@ fn fixture() {
                         .background(Color::WHITE)
                         .padding_all(Dp(16.0)),
                 )
-                .children(move || {
-                    for (index, position) in [
-                        ListItemPosition::First,
-                        ListItemPosition::Middle,
-                        ListItemPosition::Last,
-                        ListItemPosition::Single,
-                        ListItemPosition::Standalone,
-                    ]
-                    .into_iter()
-                    .enumerate()
-                    {
-                        if index > 0 {
+                .children({
+                    let clicks = clicks.clone();
+                    move || {
+                        for (index, position) in [
+                            ListItemPosition::First,
+                            ListItemPosition::Middle,
+                            ListItemPosition::Last,
+                            ListItemPosition::Single,
+                            ListItemPosition::Standalone,
+                        ]
+                        .into_iter()
+                        .enumerate()
+                        {
+                            if index > 0 {
+                                spacer().modifier(
+                                    Modifier::new().height(super::ListItemDefaults::SEGMENTED_GAP),
+                                );
+                            }
+                            let value = settings.get();
+                            let shapes = if index == 0 && value.custom {
+                                let mut shapes = ListItemShapes::from_theme(&theme);
+                                shapes.pressed_shape = Shape::rounded_rectangle(Dp(2.0));
+                                Some(shapes)
+                            } else {
+                                None
+                            };
+                            let clicks = clicks.clone();
+                            list_item()
+                                .modifier(Modifier::new().width(Dp(96.0)).semantics(
+                                    SemanticsArgs {
+                                        test_tag: Some(format!("item-{index}")),
+                                        ..Default::default()
+                                    },
+                                ))
+                                .accessibility_label(format!("Item {index}"))
+                                .position(if index == 0 { value.position } else { position })
+                                .selected(index == 0 && value.selected)
+                                .enabled(value.enabled)
+                                .dragged(index == 0 && value.dragged)
+                                .shape_optional(
+                                    (index == 0 && value.fixed).then_some(Shape::RECTANGLE),
+                                )
+                                .shapes_optional(shapes)
+                                .on_click(move || clicks.with_mut(|count| *count += 1));
+                        }
+                        for radius in [4, 12, 16, 0] {
                             spacer().modifier(
                                 Modifier::new().height(super::ListItemDefaults::SEGMENTED_GAP),
                             );
+                            surface()
+                                .modifier(Modifier::new().size(Dp(96.0), Dp(56.0)))
+                                .style(SurfaceStyle::Filled { color: Color::RED })
+                                .shape(reference_shape(radius))
+                                .accessibility_label(format!("Reference {radius}"));
                         }
-                        let value = settings.get();
-                        let shapes = if index == 0 && value.custom {
-                            let mut shapes = ListItemShapes::from_theme(&theme);
-                            shapes.pressed_shape = Shape::rounded_rectangle(Dp(2.0));
-                            Some(shapes)
-                        } else {
-                            None
-                        };
-                        list_item()
-                            .modifier(Modifier::new().width(Dp(96.0)).semantics(SemanticsArgs {
-                                test_tag: Some(format!("item-{index}")),
-                                ..Default::default()
-                            }))
-                            .accessibility_label(format!("Item {index}"))
-                            .position(if index == 0 { value.position } else { position })
-                            .selected(index == 0 && value.selected)
-                            .enabled(value.enabled)
-                            .dragged(index == 0 && value.dragged)
-                            .shape_optional((index == 0 && value.fixed).then_some(Shape::RECTANGLE))
-                            .shapes_optional(shapes)
-                            .on_click(|| CLICKS.set(CLICKS.get() + 1));
-                    }
-                    for radius in [4, 12, 16, 0] {
                         spacer().modifier(
                             Modifier::new().height(super::ListItemDefaults::SEGMENTED_GAP),
                         );
                         surface()
                             .modifier(Modifier::new().size(Dp(96.0), Dp(56.0)))
                             .style(SurfaceStyle::Filled { color: Color::RED })
-                            .shape(reference_shape(radius))
-                            .accessibility_label(format!("Reference {radius}"));
+                            .shape(super::ListItemDefaults::shape())
+                            .accessibility_label("Default shape");
                     }
-                    spacer()
-                        .modifier(Modifier::new().height(super::ListItemDefaults::SEGMENTED_GAP));
-                    surface()
-                        .modifier(Modifier::new().size(Dp(96.0), Dp(56.0)))
-                        .style(SurfaceStyle::Filled { color: Color::RED })
-                        .shape(super::ListItemDefaults::shape())
-                        .accessibility_label("Default shape");
                 });
         });
 }
@@ -218,9 +222,14 @@ fn ink(patch: &[u8]) -> u64 {
 
 fn check(samples: u32) {
     for scale in [1.0, 1.5] {
-        CLICKS.set(0);
+        let clicks = TestProbe::<usize>::default();
+        let clicks_observed = clicks.clone();
+        let probe = TestProbe::default();
+        let observed = probe.clone();
         let mut renderer = HeadlessRenderer::new(
-            Box::new(fixture),
+            Box::new(move || {
+                fixture(probe.clone(), clicks.clone());
+            }),
             vec![Box::new(crate::TesseraComponents)],
             HeadlessConfig {
                 width: 320,
@@ -232,7 +241,13 @@ fn check(samples: u32) {
         )
         .unwrap();
         renderer.render_frames(8);
-        let settings = SETTINGS.get().unwrap();
+        assert!(
+            renderer
+                .work_totals()
+                .count("list_item", tessera_ui::WorkPhase::Build)
+                > 0
+        );
+        let settings = observed.get().unwrap();
         for index in 0..5 {
             let current = bounds(&renderer, index);
             assert_eq!(
@@ -261,9 +276,16 @@ fn check(samples: u32) {
         equal_patch(&patch(&renderer, 2, false, scale), &inner);
         equal_patch(&patch(&renderer, 2, true, scale), &upper);
         equal_patch(&patch(&renderer, 4, false, scale), &inner);
-        let idle = super::ITEM_BUILDS.get();
+        let idle = renderer
+            .work_totals()
+            .count("list_item", tessera_ui::WorkPhase::Build);
         renderer.render_frames(8);
-        assert_eq!(super::ITEM_BUILDS.get(), idle);
+        assert_eq!(
+            renderer
+                .work_totals()
+                .count("list_item", tessera_ui::WorkPhase::Build),
+            idle
+        );
         let [x, y, width, height] = bounds(&renderer, 0);
         let point = PxPosition::from_f32_xy((x + width / 2) as f32, (y + height / 2) as f32);
         renderer.pointer_move(MOUSE_POINTER_ID, point);
@@ -280,22 +302,36 @@ fn check(samples: u32) {
         assert_ne!(moving, hover);
         renderer.render_frames(60);
         equal_feedback_patch(&patch(&renderer, 0, true, scale), &upper);
-        let held = super::ITEM_BUILDS.get();
+        let held = renderer
+            .work_totals()
+            .count("list_item", tessera_ui::WorkPhase::Build);
         renderer.render_frames(8);
-        assert_eq!(super::ITEM_BUILDS.get(), held);
+        assert_eq!(
+            renderer
+                .work_totals()
+                .count("list_item", tessera_ui::WorkPhase::Build),
+            held
+        );
         FocusManager::current().clear_focus(true);
         renderer.pointer_release(MOUSE_POINTER_ID, point, PressKeyEventType::Left);
         renderer.render_frames(60);
-        assert_eq!(CLICKS.get(), 1);
+        assert_eq!(clicks_observed.get(), 1);
         equal_patch(&patch(&renderer, 0, true, scale), &hover);
         let outside = PxPosition::from_f32_xy(300.0, 780.0);
         renderer.pointer_move(MOUSE_POINTER_ID, outside);
         FocusManager::current().clear_focus(true);
         renderer.render_frames(60);
         equal_patch(&patch(&renderer, 0, true, scale), &inner);
-        let resting = super::ITEM_BUILDS.get();
+        let resting = renderer
+            .work_totals()
+            .count("list_item", tessera_ui::WorkPhase::Build);
         renderer.render_frames(8);
-        assert_eq!(super::ITEM_BUILDS.get(), resting);
+        assert_eq!(
+            renderer
+                .work_totals()
+                .count("list_item", tessera_ui::WorkPhase::Build),
+            resting
+        );
         for field in [0, 1] {
             settings.with_mut(|value| {
                 value.selected = field == 0;

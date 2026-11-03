@@ -34,11 +34,6 @@ mod width_tests;
 
 mod width_motion;
 
-#[cfg(test)]
-thread_local! {
-    static GROUP_ITEM_BUILDS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
-}
-
 /// According to the Material 3 spec, the [`button_groups`] component supports
 /// two styles: `Standard` and `Connected`.
 #[derive(Debug, Clone, PartialEq, Copy, Default)]
@@ -644,8 +639,6 @@ fn group_item(
     connected: Option<bool>,
     child: Option<RenderSlot>,
 ) {
-    #[cfg(test)]
-    GROUP_ITEM_BUILDS.set(GROUP_ITEM_BUILDS.get() + 1);
     let interaction = interaction_state.expect("group item interaction");
     let presented_pressed = presented_pressed.unwrap_or(false);
     let motion = width_motion.expect("group item width motion");

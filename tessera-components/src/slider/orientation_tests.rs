@@ -1,5 +1,3 @@
-use std::cell::Cell;
-
 use tessera_ui::{
     Color, Context, FocusManager, HeadlessConfig, HeadlessRenderer, MOUSE_POINTER_ID, Modifier,
     PlacementModifierNode, PressKeyEventType, PxPosition, State,
@@ -92,34 +90,37 @@ struct Settings {
     clip_slider: bool,
 }
 
-thread_local! {
-    static SETTINGS: Cell<Option<State<Settings>>> = const { Cell::new(None) };
-    static CONTROLLER: Cell<Option<State<super::SliderController>>> = const { Cell::new(None) };
-    static VALUE: Cell<Option<State<f32>>> = const { Cell::new(None) };
-    static RANGE: Cell<Option<State<(f32, f32)>>> = const { Cell::new(None) };
-    static THEME: Cell<Option<Context<MaterialTheme>>> = const { Cell::new(None) };
+#[derive(Clone, Copy, Default)]
+struct FixtureHandles {
+    settings: Option<State<Settings>>,
+    controller: Option<State<super::SliderController>>,
+    value: Option<State<f32>>,
+    range: Option<State<(f32, f32)>>,
+    theme: Option<Context<MaterialTheme>>,
 }
 
 #[tessera]
-fn fixture() {
+fn fixture(observed: tessera_ui::testing::TestProbe<FixtureHandles>) {
     let settings = remember(Settings::default);
     let controller = remember(super::SliderController::new);
-    CONTROLLER.set(Some(controller));
+    observed.with_mut(|handles| handles.controller = Some(controller));
     let value = remember(|| 0.25_f32);
     let range = remember(|| (0.25_f32, 0.75_f32));
-    SETTINGS.set(Some(settings));
-    VALUE.set(Some(value));
-    RANGE.set(Some(range));
+    observed.with_mut(|handles| handles.settings = Some(settings));
+    observed.with_mut(|handles| handles.value = Some(value));
+    observed.with_mut(|handles| handles.range = Some(range));
     material_theme()
         .theme(move || settings.with(|settings| settings.palette.theme()))
         .child(move || {
-            super::slider_value_indicator_provider().child(move || {
+            let observed = observed.clone();
+            super::slider_value_indicator_provider().child(move |host| {
+                let observed = observed.clone();
                 boxed()
                     .modifier(Modifier::new().fill_max_size().background(
                         settings.with(|settings| settings.background.unwrap_or(Color::WHITE)),
                     ))
                     .children(move || {
-                        THEME.set(use_context::<MaterialTheme>());
+                        observed.with_mut(|handles| handles.theme = use_context::<MaterialTheme>());
                         let settings = settings.get();
                         let modifier = if let Some((x, y)) = settings.origin {
                             Modifier::new().push_placement(FractionalOrigin(
@@ -148,6 +149,7 @@ fn fixture() {
                             match settings.kind {
                                 Kind::Single => {
                                     slider()
+                                        .value_indicator_host(host)
                                         .controller(controller)
                                         .presentation_state_optional(settings.presentation_state)
                                         .modifier(modifier)
@@ -187,6 +189,7 @@ fn fixture() {
                                 }
                                 Kind::Centered => {
                                     centered_slider()
+                                        .value_indicator_host(host)
                                         .controller(controller)
                                         .presentation_state_optional(settings.presentation_state)
                                         .modifier(modifier)
@@ -223,6 +226,7 @@ fn fixture() {
                                 }
                                 Kind::Range => {
                                     range_slider()
+                                        .value_indicator_host(host)
                                         .modifier(modifier)
                                         .value(range.get())
                                         .on_change(move |next| range.set(next))
@@ -367,8 +371,12 @@ fn drag(renderer: &mut HeadlessRenderer, from: PxPosition, to: PxPosition) {
 }
 
 fn check_orientation(samples: u32) {
+    let observed = tessera_ui::testing::TestProbe::default();
     let mut renderer = HeadlessRenderer::new(
-        Box::new(|| fixture()),
+        Box::new({
+            let observed = observed.clone();
+            move || fixture(observed.clone())
+        }),
         vec![Box::new(crate::TesseraComponents)],
         HeadlessConfig {
             width: 500,
@@ -380,7 +388,7 @@ fn check_orientation(samples: u32) {
     )
     .unwrap();
     renderer.render_frames(2);
-    let settings = SETTINGS.get().unwrap();
+    let settings = observed.get().settings.unwrap();
     for kind in [Kind::Single, Kind::Centered, Kind::Range] {
         for size in [
             SliderSize::ExtraSmall,
@@ -542,7 +550,7 @@ fn check_orientation(samples: u32) {
         ..Default::default()
     });
     for fraction in [0.0, 0.01] {
-        VALUE.get().unwrap().set(fraction);
+        observed.get().value.unwrap().set(fraction);
         renderer.render_frames(2);
         let pixels = renderer.read_pixels().unwrap();
         let mut ink = 0;
@@ -570,7 +578,7 @@ fn check_orientation(samples: u32) {
             );
         }
     }
-    VALUE.get().unwrap().set(0.25);
+    observed.get().value.unwrap().set(0.25);
 
     for kind in [Kind::Single, Kind::Centered, Kind::Range] {
         for reversed in [false, true] {
@@ -581,8 +589,8 @@ fn check_orientation(samples: u32) {
                 steps: 3,
                 ..Default::default()
             });
-            VALUE.get().unwrap().set(0.25);
-            RANGE.get().unwrap().set((0.25, 0.75));
+            observed.get().value.unwrap().set(0.25);
+            observed.get().range.unwrap().set((0.25, 0.75));
             renderer.render_frames(2);
             let rect: Rect = control(
                 &renderer,
@@ -607,42 +615,42 @@ fn check_orientation(samples: u32) {
             };
             click(&mut renderer, x, minimum);
             if matches!(kind, Kind::Range) {
-                assert_eq!(RANGE.get().unwrap().get(), (0.0, 0.75));
+                assert_eq!(observed.get().range.unwrap().get(), (0.0, 0.75));
             } else {
-                assert_eq!(VALUE.get().unwrap().get(), 0.0);
+                assert_eq!(observed.get().value.unwrap().get(), 0.0);
             }
             click(&mut renderer, x, maximum);
             if matches!(kind, Kind::Range) {
-                assert_eq!(RANGE.get().unwrap().get(), (0.0, 1.0));
+                assert_eq!(observed.get().range.unwrap().get(), (0.0, 1.0));
             } else {
-                assert_eq!(VALUE.get().unwrap().get(), 1.0);
+                assert_eq!(observed.get().value.unwrap().get(), 1.0);
             }
             let press = PxPosition::from_f32_xy(x as f32, maximum as f32);
             let middle = PxPosition::from_f32_xy(x as f32, ((rect.y0 + rect.y1) / 2.0) as f32);
             drag(&mut renderer, press, middle);
             if matches!(kind, Kind::Range) {
-                assert_eq!(RANGE.get().unwrap().get(), (0.0, 0.5));
+                assert_eq!(observed.get().range.unwrap().get(), (0.0, 0.5));
                 let press = PxPosition::from_f32_xy(x as f32, minimum as f32);
                 let end = PxPosition::from_f32_xy(x as f32, maximum as f32);
                 drag(&mut renderer, press, end);
                 assert_eq!(
-                    RANGE.get().unwrap().get(),
+                    observed.get().range.unwrap().get(),
                     (0.5, 0.5),
                     "dragging cannot cross the peer handle"
                 );
-                RANGE.get().unwrap().set((0.0, 1.0));
+                observed.get().range.unwrap().set((0.0, 1.0));
                 renderer.render_frames(2);
             } else {
-                assert_eq!(VALUE.get().unwrap().get(), 0.5);
+                assert_eq!(observed.get().value.unwrap().get(), 0.5);
                 click(&mut renderer, x, maximum);
             }
             settings.with_mut(|settings| settings.disabled = true);
             renderer.render_frames(2);
             click(&mut renderer, x, (rect.y0 + rect.y1) / 2.0);
             if matches!(kind, Kind::Range) {
-                assert_eq!(RANGE.get().unwrap().get(), (0.0, 1.0));
+                assert_eq!(observed.get().range.unwrap().get(), (0.0, 1.0));
             } else {
-                assert_eq!(VALUE.get().unwrap().get(), 1.0);
+                assert_eq!(observed.get().value.unwrap().get(), 1.0);
             }
             let before = renderer.read_pixels().unwrap();
             for (length, pixels) in [(0.0, 0.0), (1.0, 1.0), (280.0, 420.0)] {
@@ -670,11 +678,15 @@ fn check_orientation(samples: u32) {
             );
         }
     }
-    check_controlled_steps(&mut renderer, settings);
-    check_color_states_and_markers(&mut renderer, settings);
+    check_controlled_steps(&mut renderer, settings, &observed);
+    check_color_states_and_markers(&mut renderer, settings, &observed);
 }
 
-fn check_color_states_and_markers(renderer: &mut HeadlessRenderer, settings: State<Settings>) {
+fn check_color_states_and_markers(
+    renderer: &mut HeadlessRenderer,
+    settings: State<Settings>,
+    observed: &tessera_ui::testing::TestProbe<FixtureHandles>,
+) {
     let pixel = |pixels: &[u8], x: usize, y: usize| -> [u8; 4] {
         pixels[(y * 500 + x) * 4..(y * 500 + x + 1) * 4]
             .try_into()
@@ -686,8 +698,8 @@ fn check_color_states_and_markers(renderer: &mut HeadlessRenderer, settings: Sta
                 for orientation in [SliderOrientation::Horizontal, SliderOrientation::Vertical] {
                     for reversed in [false, true] {
                         for disabled in [false, true] {
-                            VALUE.get().unwrap().set(0.75);
-                            RANGE.get().unwrap().set((0.25, 0.75));
+                            observed.get().value.unwrap().set(0.75);
+                            observed.get().range.unwrap().set((0.25, 0.75));
                             settings.set(Settings {
                                 kind,
                                 orientation,
@@ -826,8 +838,8 @@ fn check_color_states_and_markers(renderer: &mut HeadlessRenderer, settings: Sta
                             }
                             FocusManager::current().clear_focus(true);
                             settings.with_mut(|settings| settings.stops = Some(true));
-                            VALUE.get().unwrap().set(1.0);
-                            RANGE.get().unwrap().set((0.0, 1.0));
+                            observed.get().value.unwrap().set(1.0);
+                            observed.get().range.unwrap().set((0.0, 1.0));
                             renderer.render_frames(2);
                             let endpoints = renderer.read_pixels().unwrap();
                             let (x, y) = point(402, 39);
@@ -854,10 +866,10 @@ fn check_color_states_and_markers(renderer: &mut HeadlessRenderer, settings: Sta
         size: SliderSize::Medium,
         ..Default::default()
     });
-    VALUE.get().unwrap().set(0.75);
+    observed.get().value.unwrap().set(0.75);
     FocusManager::current().clear_focus(true);
     renderer.render_frames(2);
-    THEME.get().unwrap().set(Palette::Contrast.theme());
+    observed.get().theme.unwrap().set(Palette::Contrast.theme());
     renderer.render_frames(2);
     assert_eq!(
         pixel(&renderer.read_pixels().unwrap(), 160, 87),
@@ -883,9 +895,13 @@ fn check_color_states_and_markers(renderer: &mut HeadlessRenderer, settings: Sta
     );
 }
 
-fn check_controlled_steps(renderer: &mut HeadlessRenderer, settings: State<Settings>) {
-    let value = VALUE.get().unwrap();
-    let range = RANGE.get().unwrap();
+fn check_controlled_steps(
+    renderer: &mut HeadlessRenderer,
+    settings: State<Settings>,
+    observed: &tessera_ui::testing::TestProbe<FixtureHandles>,
+) {
+    let value = observed.get().value.unwrap();
+    let range = observed.get().range.unwrap();
     for kind in [Kind::Single, Kind::Centered, Kind::Range] {
         for orientation in [SliderOrientation::Horizontal, SliderOrientation::Vertical] {
             for reversed in [false, true] {
@@ -982,10 +998,15 @@ fn vertical_slider_pixels_pointer_semantics_and_length_recovery_msaa4() {
 }
 
 fn check_value_indicators(samples: u32) {
-    use super::{SliderValueIndicatorVisibility as Visibility, indicator::observed_labels};
+    use super::SliderValueIndicatorVisibility as Visibility;
+
+    let observed = tessera_ui::testing::TestProbe::default();
 
     let mut renderer = HeadlessRenderer::new(
-        Box::new(|| fixture()),
+        Box::new({
+            let observed = observed.clone();
+            move || fixture(observed.clone())
+        }),
         vec![Box::new(crate::TesseraComponents)],
         HeadlessConfig {
             width: 500,
@@ -998,11 +1019,11 @@ fn check_value_indicators(samples: u32) {
     )
     .unwrap();
     renderer.render_frames(3);
-    let settings = SETTINGS.get().unwrap();
-    let value = VALUE.get().unwrap();
-    let range = RANGE.get().unwrap();
+    let settings = observed.get().settings.unwrap();
+    let value = observed.get().value.unwrap();
+    let range = observed.get().range.unwrap();
     assert!(
-        observed_labels().is_empty(),
+        observed_labels(&renderer).is_empty(),
         "value indicators are optional and hidden by default"
     );
     settings.with_mut(|s| {
@@ -1024,29 +1045,32 @@ fn check_value_indicators(samples: u32) {
         s.references = true;
     });
     renderer.render_frames(12);
-    assert!(observed_labels().is_empty());
+    assert!(observed_labels(&renderer).is_empty());
     let original = renderer.read_pixels().unwrap();
     renderer.pointer_move(MOUSE_POINTER_ID, PxPosition::from_f32_xy(230.0, 153.0));
     renderer.render_frames(25);
     assert!(
-        observed_labels().is_empty(),
+        observed_labels(&renderer).is_empty(),
         "hover alone does not show a value label"
     );
     click(&mut renderer, 230.0, 153.0);
     renderer.render_frames(25);
-    let labels = observed_labels();
+    let labels = observed_labels(&renderer);
     assert_eq!(
         labels.len(),
         1,
         "pressing the real slider focuses its handle and reveals the label"
     );
-    let builds = super::indicator::label_build_count();
-    renderer.render_frames(6);
-    assert_eq!(
-        super::indicator::label_build_count(),
-        builds,
-        "settled value labels do not keep rebuilding at rest"
-    );
+    for _ in 0..6 {
+        renderer.render_frames(1);
+        assert_eq!(
+            renderer
+                .work()
+                .count("label_layer", tessera_ui::WorkPhase::Build),
+            0,
+            "settled value labels do not keep rebuilding at rest"
+        );
+    }
     let bounds = labels[0].1;
     assert!(
         (72..=74).contains(&bounds.width.0),
@@ -1071,7 +1095,7 @@ fn check_value_indicators(samples: u32) {
     settings.with_mut(|s| s.value_label = Some("Warm"));
     renderer.render_frames(3);
     assert_eq!(
-        observed_labels()[0].0,
+        observed_labels(&renderer)[0].0,
         "Warm",
         "retained labels read current props"
     );
@@ -1086,7 +1110,7 @@ fn check_value_indicators(samples: u32) {
             .try_into()
             .unwrap()
     };
-    let rect = observed_labels()[0].1;
+    let rect = observed_labels(&renderer)[0].1;
     let has_foreground = |pixels: &[u8], rect: tessera_ui::PxRect, expected: [u8; 3]| {
         (rect.y.0 as usize..(rect.y + rect.height).0 as usize).any(|y| {
             (rect.x.0 as usize..(rect.x + rect.width).0 as usize).any(|x| {
@@ -1113,7 +1137,7 @@ fn check_value_indicators(samples: u32) {
     settings.with_mut(|s| s.palette = Palette::Dark);
     renderer.render_frames(4);
     let dark = renderer.read_pixels().unwrap();
-    let rect = observed_labels()[0].1;
+    let rect = observed_labels(&renderer)[0].1;
     assert_eq!(
         pixel(
             &dark,
@@ -1134,13 +1158,13 @@ fn check_value_indicators(samples: u32) {
     value.set(0.8);
     renderer.render_frames(3);
     assert!(
-        observed_labels()[0].1.x > bounds.x,
+        observed_labels(&renderer)[0].1.x > bounds.x,
         "the label follows programmatic value changes"
     );
     FocusManager::current().clear_focus(true);
     renderer.render_frames(12);
     assert!(
-        observed_labels().is_empty(),
+        observed_labels(&renderer).is_empty(),
         "blur settles the hide animation"
     );
     settings.with_mut(|s| {
@@ -1149,12 +1173,12 @@ fn check_value_indicators(samples: u32) {
     });
     value.set(0.25);
     renderer.render_frames(25);
-    assert_eq!(observed_labels()[0].0, "25");
+    assert_eq!(observed_labels(&renderer)[0].0, "25");
     assert_eq!(control(&renderer, "Value").value(), Some("25%"));
     value.set(0.245);
     renderer.render_frames(3);
     assert_eq!(
-        observed_labels()[0].0,
+        observed_labels(&renderer)[0].0,
         "25",
         "percentage labels round halfway upward"
     );
@@ -1182,7 +1206,7 @@ fn check_value_indicators(samples: u32) {
     });
     value.set(0.0);
     renderer.render_frames(3);
-    let edge = observed_labels()[0].1;
+    let edge = observed_labels(&renderer)[0].1;
     assert!(edge.x.0 >= 12);
     assert!(
         edge.y.0 >= 72,
@@ -1196,7 +1220,7 @@ fn check_value_indicators(samples: u32) {
         s.reversed = true;
     });
     renderer.render_frames(3);
-    let vertical = observed_labels()[0].1;
+    let vertical = observed_labels(&renderer)[0].1;
     assert_eq!(
         (vertical.x + vertical.width).0,
         114,
@@ -1215,9 +1239,9 @@ fn check_value_indicators(samples: u32) {
         });
         value.set(0.25);
         renderer.render_frames(25);
-        assert_eq!(observed_labels().len(), 1);
+        assert_eq!(observed_labels(&renderer).len(), 1);
         assert_eq!(
-            (observed_labels()[0].1.y + observed_labels()[0].1.height).0,
+            (observed_labels(&renderer)[0].1.y + observed_labels(&renderer)[0].1.height).0,
             114
         );
     }
@@ -1228,7 +1252,7 @@ fn check_value_indicators(samples: u32) {
     });
     range.set((0.2, 0.8));
     renderer.render_frames(25);
-    let labels = observed_labels();
+    let labels = observed_labels(&renderer);
     assert_eq!(labels.len(), 2);
     assert!(labels.iter().any(|(label, _)| label == "Low"));
     assert!(labels.iter().any(|(label, _)| label == "High"));
@@ -1237,7 +1261,7 @@ fn check_value_indicators(samples: u32) {
     settings.with_mut(|s| s.disabled = true);
     renderer.render_frames(12);
     assert!(
-        observed_labels().is_empty(),
+        observed_labels(&renderer).is_empty(),
         "disabled handles hide both labels"
     );
     settings.with_mut(|s| {
@@ -1246,7 +1270,7 @@ fn check_value_indicators(samples: u32) {
     });
     renderer.render_frames(3);
     assert!(
-        observed_labels().is_empty(),
+        observed_labels(&renderer).is_empty(),
         "removing the owner unregisters its labels"
     );
     settings.with_mut(|s| {
@@ -1256,14 +1280,14 @@ fn check_value_indicators(samples: u32) {
     });
     renderer.render_frames(25);
     assert_eq!(
-        observed_labels()[0].0,
+        observed_labels(&renderer)[0].0,
         "Back",
         "a newly mounted slider registers without stale resources"
     );
     settings.with_mut(|s| s.indicator = Visibility::Hidden);
     renderer.render_frames(3);
     assert!(
-        observed_labels().is_empty(),
+        observed_labels(&renderer).is_empty(),
         "switching the feature off releases the overlay request"
     );
     settings.set(Settings {
@@ -1307,8 +1331,12 @@ fn presentation_uses_native_handle_geometry_without_starting_interaction() {
     crate::test_utils::run_isolated_test(
         "slider::orientation_tests::presentation_uses_native_handle_geometry_without_starting_interaction",
         || {
+            let observed = tessera_ui::testing::TestProbe::default();
             let mut renderer = HeadlessRenderer::new(
-                Box::new(fixture),
+                Box::new({
+                    let observed = observed.clone();
+                    move || fixture(observed.clone())
+                }),
                 vec![Box::new(crate::TesseraComponents)],
                 HeadlessConfig {
                     width: 500,
@@ -1319,8 +1347,8 @@ fn presentation_uses_native_handle_geometry_without_starting_interaction() {
             )
             .unwrap();
             renderer.render_frames(3);
-            let settings = SETTINGS.get().unwrap();
-            let controller = CONTROLLER.get().unwrap();
+            let settings = observed.get().settings.unwrap();
+            let controller = observed.get().controller.unwrap();
             for kind in [Kind::Single, Kind::Centered] {
                 for orientation in [SliderOrientation::Horizontal, SliderOrientation::Vertical] {
                     settings.set(Settings {
@@ -1331,7 +1359,7 @@ fn presentation_uses_native_handle_geometry_without_starting_interaction() {
                         ..Default::default()
                     });
                     renderer.render_frames(3);
-                    let before = VALUE.get().unwrap().get();
+                    let before = observed.get().value.unwrap().get();
                     assert!(!controller.with(|controller| controller.is_dragging()));
                     assert!(!controller.with(|controller| controller.is_focused()));
                     let semantics = renderer.accessibility_snapshot().unwrap();
@@ -1424,7 +1452,7 @@ fn presentation_uses_native_handle_geometry_without_starting_interaction() {
                     settings.with_mut(|settings| settings.presentation_state = None);
                     renderer.render_frames(3);
                     assert_eq!(thumb_span(&renderer.read_pixels().unwrap()), 4);
-                    assert_eq!(VALUE.get().unwrap().get(), before);
+                    assert_eq!(observed.get().value.unwrap().get(), before);
                     settings.with_mut(|settings| {
                         settings.disabled = true;
                         settings.presentation_state = Some(InteractionVisualState::Pressed);
@@ -1438,4 +1466,19 @@ fn presentation_uses_native_handle_geometry_without_starting_interaction() {
             }
         },
     );
+}
+
+fn observed_labels(renderer: &HeadlessRenderer) -> Vec<(String, tessera_ui::PxRect)> {
+    renderer
+        .inspect_components()
+        .nodes()
+        .iter()
+        .filter_map(|node| {
+            let semantics = node.semantics()?;
+            if semantics.key.as_deref() != Some("slider-value-label") {
+                return None;
+            }
+            Some((semantics.label.clone()?, node.bounds()?.rounded()))
+        })
+        .collect()
 }

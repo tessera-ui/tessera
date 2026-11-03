@@ -4,10 +4,7 @@
 //!
 //! Verify fractional panel seams, semantic color roles and real icon callbacks.
 
-use std::{
-    cell::{Cell, RefCell},
-    time::Duration,
-};
+use std::time::Duration;
 
 use tessera_components::{column::column, scrollable::ScrollableController};
 use tessera_ui::{
@@ -15,21 +12,42 @@ use tessera_ui::{
     PointerChange, PressKeyEventType, ScrollDeltaUnit, ScrollEventContent, ScrollEventSource,
     accesskit::{Node, Role},
     current_frame_time, scaled_box,
+    testing::TestProbe,
 };
 
 use super::*;
 
-thread_local! {
-    static CONFIG:Cell<(bool,bool)>=const{Cell::new((false,true))};
-    pub(super) static GEOMETRY:RefCell<[Option<State<PreciseGeometry>>;2]>=const{RefCell::new([None,None])};
-    pub(super) static NOTICE:Cell<Option<State<String>>>=const{Cell::new(None)};
-    static SCROLL:Cell<Option<State<ScrollableController>>>=const{Cell::new(None)};
-    static CALIBRATION: Cell<(f32, bool)> = const { Cell::new((0.625, false)) };
+#[derive(Clone, Copy, Default, PartialEq)]
+struct FixtureHandles {
+    scroll: Option<State<ScrollableController>>,
+    notice: Option<State<String>>,
+}
+
+fn geometry(renderer: &HeadlessRenderer, dark: bool) -> PreciseGeometry {
+    let snapshot = renderer.inspect_components();
+    [
+        "figure",
+        "container",
+        "divider",
+        "back",
+        "headline",
+        "close",
+        "scrim",
+        "handle",
+    ]
+    .into_iter()
+    .filter_map(|name| {
+        let tag = format!("sheet-color-{}-{name}", if dark { "dark" } else { "light" });
+        snapshot
+            .find_tag(&tag)
+            .and_then(|node| node.layout_coordinates())
+            .map(|value| (name, value))
+    })
+    .collect()
 }
 
 #[tessera]
-fn close_calibration_fixture() {
-    let (scale, modal) = CALIBRATION.get();
+fn close_calibration_fixture(scale: f32, modal: bool) {
     boxed()
         .alignment(Alignment::TopStart)
         .modifier(at(10.25, 80.5))
@@ -81,10 +99,11 @@ struct CloseReference {
 }
 
 fn calibrate_close(samples: u32, modal: bool, width: u32, scale: f32) -> CloseReference {
-    CALIBRATION.set((scale, modal));
     let mut renderer = HeadlessRenderer::new(
-        Box::new(close_calibration_fixture),
-        vec![Box::new(Pipelines)],
+        Box::new(move || {
+            close_calibration_fixture(scale, modal);
+        }),
+        vec![Box::new(crate::TestPipelines)],
         HeadlessConfig {
             width,
             height: 1000,
@@ -150,9 +169,13 @@ fn calibrate_close(samples: u32, modal: bool, width: u32, scale: f32) -> CloseRe
 }
 
 #[tessera]
-fn fixture() {
+fn fixture(side: bool, modal: bool, probe: TestProbe<FixtureHandles>) {
     let scroll = remember(ScrollableController::new);
-    SCROLL.set(Some(scroll));
+    let notice = remember(String::new);
+    probe.set(FixtureHandles {
+        scroll: Some(scroll),
+        notice: Some(notice),
+    });
     material_theme().child(move || {
         column()
             .modifier(
@@ -161,31 +184,23 @@ fn fixture() {
                     .height(Dp(600.0))
                     .vertical_scroll(scroll),
             )
-            .children(|| {
+            .children(move || {
                 spacer().modifier(Modifier::new().height(Dp(160.0)));
-                let (side, modal) = CONFIG.get();
-                sheet_colors(side, modal);
+                sheet_colors(side, modal).notice(notice);
                 spacer().modifier(Modifier::new().height(Dp(700.0)));
             });
     });
 }
 
-struct Pipelines;
-impl tessera_ui::RenderModule for Pipelines {
-    fn register_pipelines(&self, context: &mut tessera_ui::PipelineContext<'_>) {
-        tessera_components::pipelines::register_pipelines(context);
-    }
-}
-
 fn node(renderer: &HeadlessRenderer, label: &str, role: Role) -> Node {
-    renderer
-        .accessibility_snapshot()
-        .unwrap()
-        .nodes
-        .into_iter()
-        .find(|(_, node)| node.role() == role && node.label() == Some(label))
-        .unwrap_or_else(|| panic!("Missing {label} {role:?}"))
+    let snapshot = renderer
+        .inspect_accessibility()
+        .expect("accessibility tree");
+    snapshot
+        .find(label, role)
+        .unwrap_or_else(|| panic!("missing {label} {role:?}"))
         .1
+        .clone()
 }
 
 fn color_bytes(color: Color) -> [u8; 4] {
@@ -223,8 +238,8 @@ fn assert_pixels(
         )
         .unwrap();
     }
-    let light = GEOMETRY.with_borrow(|values| values[0].unwrap()).get()["figure"];
-    let dark = GEOMETRY.with_borrow(|values| values[1].unwrap()).get()["figure"];
+    let light = geometry(renderer, false)["figure"];
+    let dark = geometry(renderer, true)["figure"];
     let x = light
         .local_to_window
         .map_point(PxPosition::from_f32_xy(28.0, 0.0))
@@ -245,9 +260,7 @@ fn assert_pixels(
     }
     for dark in [false, true] {
         let scheme = MaterialTheme::from_seed(ACCENT, dark).color_scheme;
-        let geometry = GEOMETRY
-            .with_borrow(|values| values[dark as usize].unwrap())
-            .get();
+        let geometry = geometry(renderer, dark);
         let root = geometry["figure"];
         if side {
             let bounds = node(
@@ -329,9 +342,7 @@ fn assert_pixels(
 
 fn assert_geometry(renderer: &HeadlessRenderer, side: bool, scale: f32) {
     for dark in [false, true] {
-        let values = GEOMETRY
-            .with_borrow(|values| values[dark as usize].unwrap())
-            .get();
+        let values = geometry(renderer, dark);
         let root = values["figure"];
         assert_eq!(root.local_to_window.scale(), scale);
         let half = if side { 440.5 } else { 502.5 };
@@ -372,9 +383,8 @@ fn assert_geometry(renderer: &HeadlessRenderer, side: bool, scale: f32) {
 fn sheet_color_pairs_keep_fractional_seams_roles_and_callbacks_when_scrolled_and_resized() {
     for samples in [1, 4] {
         for (side, modal) in [(false, true), (true, false), (true, true)] {
-            CONFIG.set((side, modal));
-            GEOMETRY.with_borrow_mut(|values| *values = [None, None]);
-            NOTICE.set(None);
+            let probe = TestProbe::<FixtureHandles>::default();
+            let observed = probe.clone();
             let close_references = side.then(|| {
                 [
                     calibrate_close(samples, modal, 640, 0.625),
@@ -382,8 +392,10 @@ fn sheet_color_pairs_keep_fractional_seams_roles_and_callbacks_when_scrolled_and
                 ]
             });
             let mut renderer = HeadlessRenderer::new(
-                Box::new(fixture),
-                vec![Box::new(Pipelines)],
+                Box::new(move || {
+                    fixture(side, modal, probe.clone());
+                }),
+                vec![Box::new(crate::TestPipelines)],
                 HeadlessConfig {
                     width: 640,
                     height: 1000,
@@ -410,8 +422,9 @@ fn sheet_color_pairs_keep_fractional_seams_roles_and_callbacks_when_scrolled_and
             );
             renderer.render_frames(120);
             assert_eq!(
-                SCROLL
+                observed
                     .get()
+                    .scroll
                     .unwrap()
                     .with(|scroll| scroll.child_position().y),
                 -100.0
@@ -434,7 +447,7 @@ fn sheet_color_pairs_keep_fractional_seams_roles_and_callbacks_when_scrolled_and
             );
             if side {
                 for dark in [false, true] {
-                    NOTICE.get().unwrap().set(String::new());
+                    observed.get().notice.unwrap().set(String::new());
                     let bounds = node(
                         &renderer,
                         &format!("{} sheet color close", if dark { "Dark" } else { "Light" }),
@@ -451,7 +464,10 @@ fn sheet_color_pairs_keep_fractional_seams_roles_and_callbacks_when_scrolled_and
                     renderer.pointer_press(MOUSE_POINTER_ID, point, PressKeyEventType::Left);
                     renderer.pointer_release(MOUSE_POINTER_ID, point, PressKeyEventType::Left);
                     renderer.render_frames(4);
-                    assert_eq!(NOTICE.get().unwrap().get(), "Sheet close action selected");
+                    assert_eq!(
+                        observed.get().notice.unwrap().get(),
+                        "Sheet close action selected"
+                    );
                 }
             }
         }

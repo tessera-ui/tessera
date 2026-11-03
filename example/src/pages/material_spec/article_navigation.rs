@@ -201,7 +201,7 @@ impl KeyboardInputModifierNode for ArticleTabKeyboard {
 
 #[cfg(all(test, not(target_family = "wasm")))]
 mod tests {
-    use std::{cell::Cell, env, process::Command, time::Duration};
+    use std::{env, process::Command, time::Duration};
 
     use tessera_components::{
         alignment::Alignment, boxed::boxed, column::column, row::row,
@@ -216,30 +216,19 @@ mod tests {
 
     use super::*;
 
-    struct Pipelines;
-
-    impl tessera_ui::RenderModule for Pipelines {
-        fn register_pipelines(&self, context: &mut tessera_ui::PipelineContext<'_>) {
-            tessera_components::pipelines::register_pipelines(context);
-        }
-    }
-
-    thread_local! {
-        static AVAILABLE: Cell<[bool; 4]> = const { Cell::new([true; 4]) };
-        static NAVIGATION: Cell<Option<State<ArticleNavigationState>>> = const { Cell::new(None) };
-        static SELECTED: Cell<Option<State<&'static str>>> = const { Cell::new(None) };
-        static ARTICLE_SCROLL: Cell<Option<State<ScrollableController>>> = const { Cell::new(None) };
-    }
+    type Observed = (
+        State<ArticleNavigationState>,
+        State<&'static str>,
+        Option<State<ScrollableController>>,
+    );
 
     #[tessera]
-    fn scrolling_tab_fixture() {
+    fn scrolling_tab_fixture(output: tessera_ui::testing::TestProbe<Option<Observed>>) {
         let selected = remember(|| "Overview");
         let navigation = remember(ArticleNavigationState::default);
         let vertical = remember(ScrollableController::new);
         let horizontal = remember(ScrollableController::new);
-        SELECTED.set(Some(selected));
-        NAVIGATION.set(Some(navigation));
-        ARTICLE_SCROLL.set(Some(vertical));
+        output.set(Some((navigation, selected, Some(vertical))));
         sync_article_navigation(navigation, [true; 4], selected.get());
         column()
             .modifier(Modifier::new().fill_max_size().vertical_scroll(vertical))
@@ -307,9 +296,11 @@ mod tests {
             return;
         }
         for settle_focus in [true, false] {
+            let output = tessera_ui::testing::TestProbe::default();
+            let probe = output.clone();
             let mut renderer = HeadlessRenderer::new(
-                Box::new(scrolling_tab_fixture),
-                vec![Box::new(Pipelines)],
+                Box::new(move || scrolling_tab_fixture(probe.clone())),
+                vec![Box::new(crate::TestPipelines)],
                 HeadlessConfig {
                     width: 400,
                     height: 300,
@@ -349,9 +340,9 @@ mod tests {
                 );
             }
             renderer.step_frame();
-            let scroll = ARTICLE_SCROLL.get().unwrap();
+            let scroll = output.get().unwrap().2.unwrap();
             assert_eq!(focused(&renderer), "Specs");
-            assert_eq!(SELECTED.get().unwrap().get(), "Specs");
+            assert_eq!(output.get().unwrap().1.get(), "Specs");
             assert_eq!(
                 scroll.with(|scroll| scroll.child_position().y),
                 -240.0,
@@ -363,7 +354,7 @@ mod tests {
 
             assert!(
                 ArticleTabKeyboard {
-                    navigation: NAVIGATION.get().unwrap(),
+                    navigation: output.get().unwrap().0,
                     index: 1,
                 }
                 .handle_key(
@@ -392,9 +383,10 @@ mod tests {
             }
             renderer.step_frame();
             let manual_position = scroll.with(|scroll| scroll.child_position().y);
-            NAVIGATION
+            output
                 .get()
                 .unwrap()
+                .0
                 .with(|navigation| navigation.requesters[0])
                 .request_focus();
             renderer.render_frames(4);
@@ -419,12 +411,10 @@ mod tests {
     }
 
     #[tessera]
-    fn fixture() {
-        let available = AVAILABLE.get();
+    fn fixture(available: [bool; 4], output: tessera_ui::testing::TestProbe<Option<Observed>>) {
         let selected = remember(|| if available[1] { "Specs" } else { "Overview" });
         let navigation = remember(ArticleNavigationState::default);
-        NAVIGATION.set(Some(navigation));
-        SELECTED.set(Some(selected));
+        output.set(Some((navigation, selected, None)));
         sync_article_navigation(navigation, available, selected.get());
         boxed()
             .alignment(Alignment::TopStart)
@@ -519,10 +509,15 @@ mod tests {
         renderer.render_frames(4);
     }
 
-    fn key(renderer: &mut HeadlessRenderer, from: usize, key: NamedKey) {
+    fn key(
+        renderer: &mut HeadlessRenderer,
+        navigation: State<ArticleNavigationState>,
+        from: usize,
+        key: NamedKey,
+    ) {
         assert!(
             ArticleTabKeyboard {
-                navigation: NAVIGATION.get().unwrap(),
+                navigation,
                 index: from
             }
             .handle_key(
@@ -539,10 +534,11 @@ mod tests {
     fn production_tab_key_handler_moves_native_focus_without_activation_and_roving_traversal_exits()
     {
         for available in [[true; 4], [true, false, false, true]] {
-            AVAILABLE.set(available);
+            let output = tessera_ui::testing::TestProbe::default();
+            let probe = output.clone();
             let mut renderer = HeadlessRenderer::new(
-                Box::new(fixture),
-                vec![Box::new(Pipelines)],
+                Box::new(move || fixture(available, probe.clone())),
+                vec![Box::new(crate::TestPipelines)],
                 HeadlessConfig {
                     width: 640,
                     height: 240,
@@ -579,33 +575,48 @@ mod tests {
                 ARTICLE_TAB_TITLES[initial],
                 "pointer activation must focus the tab before keyboard navigation"
             );
-            assert_eq!(SELECTED.get().unwrap().get(), ARTICLE_TAB_TITLES[initial]);
+            assert_eq!(output.get().unwrap().1.get(), ARTICLE_TAB_TITLES[initial]);
             action(&mut renderer, "Accessibility", Action::Focus);
             assert_eq!(focused(&renderer), "Accessibility");
             assert_eq!(
-                SELECTED.get().unwrap().get(),
+                output.get().unwrap().1.get(),
                 ARTICLE_TAB_TITLES[initial],
                 "accessibility focus alone must not activate a tab"
             );
             action(&mut renderer, ARTICLE_TAB_TITLES[initial], Action::Focus);
-            key(&mut renderer, initial, NamedKey::ArrowRight);
+            key(
+                &mut renderer,
+                output.get().unwrap().0,
+                initial,
+                NamedKey::ArrowRight,
+            );
             assert_eq!(focused(&renderer), ARTICLE_TAB_TITLES[next]);
             assert_eq!(
-                SELECTED.get().unwrap().get(),
+                output.get().unwrap().1.get(),
                 ARTICLE_TAB_TITLES[initial],
                 "manual navigation must not activate a focused tab"
             );
-            key(&mut renderer, next, NamedKey::End);
+            key(&mut renderer, output.get().unwrap().0, next, NamedKey::End);
             assert_eq!(focused(&renderer), "Accessibility");
-            key(&mut renderer, 3, NamedKey::ArrowRight);
+            key(
+                &mut renderer,
+                output.get().unwrap().0,
+                3,
+                NamedKey::ArrowRight,
+            );
             assert_eq!(focused(&renderer), "Overview");
-            key(&mut renderer, 0, NamedKey::ArrowLeft);
+            key(
+                &mut renderer,
+                output.get().unwrap().0,
+                0,
+                NamedKey::ArrowLeft,
+            );
             assert_eq!(focused(&renderer), "Accessibility");
-            key(&mut renderer, 3, NamedKey::Home);
+            key(&mut renderer, output.get().unwrap().0, 3, NamedKey::Home);
             assert_eq!(focused(&renderer), "Overview");
-            key(&mut renderer, 0, NamedKey::End);
+            key(&mut renderer, output.get().unwrap().0, 0, NamedKey::End);
             action(&mut renderer, "Accessibility", Action::Click);
-            assert_eq!(SELECTED.get().unwrap().get(), "Accessibility");
+            assert_eq!(output.get().unwrap().1.get(), "Accessibility");
             let tree = renderer.accessibility_snapshot().unwrap();
             let tabs: Vec<_> = tree
                 .nodes
@@ -622,7 +633,7 @@ mod tests {
                     Some(tab.label() == Some("Accessibility"))
                 );
             }
-            SELECTED.get().unwrap().set("Overview");
+            output.get().unwrap().1.set("Overview");
             renderer.render_frames(4);
             assert_eq!(
                 focused(&renderer),
@@ -644,7 +655,7 @@ mod tests {
                 "re-entry uses the latest selected section"
             );
             let handler = ArticleTabKeyboard {
-                navigation: NAVIGATION.get().unwrap(),
+                navigation: output.get().unwrap().0,
                 index: 0,
             };
             for ignored in [NamedKey::ArrowUp, NamedKey::ArrowDown, NamedKey::Tab] {

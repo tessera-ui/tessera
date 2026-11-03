@@ -24,7 +24,7 @@ use tessera_ui::{
 
 use super::{
     super::{ACCENT, type_style},
-    annotations::{self, PreciseGeometry, Rect, dotted, watch_precise},
+    annotations::{self, PreciseGeometry, Rect, dotted},
     sheet_canvas,
 };
 
@@ -43,9 +43,24 @@ pub(super) fn at(x: f64, y: f64) -> Modifier {
     Modifier::new().push_placement(ExactOffset { x: Dp(x), y: Dp(y) })
 }
 
+fn watch_color(geometry: State<PreciseGeometry>, dark: bool, name: &'static str) -> Modifier {
+    annotations::watch_precise(geometry, name).semantics(SemanticsArgs {
+        test_tag: Some(format!(
+            "sheet-color-{}-{name}",
+            if dark { "dark" } else { "light" }
+        )),
+        merge_descendants: true,
+        ..Default::default()
+    })
+}
+
 #[tessera]
-pub(super) fn sheet_colors(side: bool, modal: bool) {
-    let notice = remember(String::new);
+pub(super) fn sheet_colors(side: bool, modal: bool, notice: Option<State<String>>) {
+    let notice = if let Some(notice) = notice {
+        notice
+    } else {
+        remember(String::new)
+    };
     let half_height: f64 = if side { 440.5 } else { 502.5 };
     sheet_canvas(
         1024.0,
@@ -75,14 +90,10 @@ fn color_half(side: bool, modal: bool, dark: bool, notice: State<String>) {
     let scheme = use_context::<MaterialTheme>().unwrap().get().color_scheme;
     let height: f64 = if side { 440.5 } else { 502.5 };
     let geometry = remember(PreciseGeometry::new);
-    #[cfg(all(test, not(target_family = "wasm")))]
-    tests::GEOMETRY.with_borrow_mut(|values| values[dark as usize] = Some(geometry));
-    #[cfg(all(test, not(target_family = "wasm")))]
-    tests::NOTICE.set(Some(notice));
     boxed()
         .modifier(
             at(0.0, if dark { height } else { 0.0 })
-                .then(watch_precise(geometry, "figure"))
+                .then(watch_color(geometry, dark, "figure"))
                 .size(Dp(1024.0), Dp(height.ceil()))
                 .clip_to_bounds()
                 .background(scheme.surface),
@@ -122,7 +133,7 @@ fn color_half(side: bool, modal: bool, dark: bool, notice: State<String>) {
                 boxed()
                     .modifier(
                         at(612.0, 114.0)
-                            .then(watch_precise(geometry, "container"))
+                            .then(watch_color(geometry, dark, "container"))
                             .size(Dp(320.0), Dp(684.0))
                             .background_with_shape(
                                 if modal {
@@ -140,7 +151,7 @@ fn color_half(side: bool, modal: bool, dark: bool, notice: State<String>) {
                     .children(move || {
                         if !modal {
                             spacer().modifier(
-                                watch_precise(geometry, "divider")
+                                watch_color(geometry, dark, "divider")
                                     .width(Dp(1.0))
                                     .fill_max_height()
                                     .background(scheme.outline_variant),
@@ -155,7 +166,7 @@ fn color_half(side: bool, modal: bool, dark: bool, notice: State<String>) {
                                     "{} sheet color back",
                                     if dark { "Dark" } else { "Light" }
                                 ))
-                                .modifier(at(4.0, 12.0).then(watch_precise(geometry, "back")))
+                                .modifier(at(4.0, 12.0).then(watch_color(geometry, dark, "back")))
                                 .on_click(move || notice.set("Back action selected".into()));
                         }
                         text()
@@ -164,7 +175,7 @@ fn color_half(side: bool, modal: bool, dark: bool, notice: State<String>) {
                             .color(scheme.on_surface_variant)
                             .modifier(
                                 at(if modal { 52.0 } else { 24.0 }, 22.0)
-                                    .then(watch_precise(geometry, "headline")),
+                                    .then(watch_color(geometry, dark, "headline")),
                             );
                         icon_button()
                             .standard()
@@ -174,7 +185,7 @@ fn color_half(side: bool, modal: bool, dark: bool, notice: State<String>) {
                                 "{} sheet color close",
                                 if dark { "Dark" } else { "Light" }
                             ))
-                            .modifier(at(260.0, 12.0).then(watch_precise(geometry, "close")))
+                            .modifier(at(260.0, 12.0).then(watch_color(geometry, dark, "close")))
                             .on_click(move || notice.set("Sheet close action selected".into()));
                     });
             } else {
@@ -199,7 +210,7 @@ fn color_half(side: bool, modal: bool, dark: bool, notice: State<String>) {
                         );
                         spacer().modifier(
                             at(8.0, 8.0)
-                                .then(watch_precise(geometry, "scrim"))
+                                .then(watch_color(geometry, dark, "scrim"))
                                 .required_size(Dp(412.0), Dp(893.0))
                                 .background_with_shape(
                                     scheme.scrim.with_alpha(0.32),
@@ -210,7 +221,7 @@ fn color_half(side: bool, modal: bool, dark: bool, notice: State<String>) {
                 boxed()
                     .modifier(
                         at(306.0, 131.0)
-                            .then(watch_precise(geometry, "container"))
+                            .then(watch_color(geometry, dark, "container"))
                             .size(Dp(412.0), Dp(290.0))
                             .background_with_shape(
                                 scheme.surface_container_low,
@@ -225,7 +236,7 @@ fn color_half(side: bool, modal: bool, dark: bool, notice: State<String>) {
                     .children(move || {
                         spacer().modifier(
                             at(190.0, 22.0)
-                                .then(watch_precise(geometry, "handle"))
+                                .then(watch_color(geometry, dark, "handle"))
                                 .size(Dp(32.0), Dp(4.0))
                                 .background_with_shape(scheme.on_surface_variant, Shape::CAPSULE),
                         );

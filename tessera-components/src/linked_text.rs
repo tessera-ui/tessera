@@ -111,10 +111,10 @@ pub fn linked_text(
         .map(|theme| theme.get())
         .unwrap_or_default();
     let style = style
-        .or_else(|| use_context::<TextStyle>().map(|style| style.get()))
+        .or(use_context::<TextStyle>().map(|style| style.get()))
         .unwrap_or(theme.typography.body_large);
     let color = color
-        .or_else(|| use_context::<ContentColor>().map(|color| color.get().current))
+        .or(use_context::<ContentColor>().map(|color| color.get().current))
         .unwrap_or(theme.color_scheme.on_surface);
     let link_color = link_color.unwrap_or(theme.color_scheme.primary);
     let focus_color = focus_color.unwrap_or(theme.color_scheme.secondary);
@@ -177,6 +177,7 @@ struct ShapeKey {
     scale: f32,
 }
 
+#[derive(Clone)]
 struct CachedParagraph {
     key: ShapeKey,
     paragraph: Arc<Paragraph>,
@@ -303,7 +304,8 @@ struct ParagraphLayout {
 
 impl PartialEq for ParagraphLayout {
     fn eq(&self, other: &Self) -> bool {
-        self.runs == other.runs
+        Arc::ptr_eq(&self.cache, &other.cache)
+            && self.runs == other.runs
             && self.style == other.style
             && self.color == other.color
             && self.link_color == other.link_color
@@ -330,7 +332,9 @@ impl ParagraphLayout {
 
 impl tessera_ui::LayoutModifierNode for ParagraphLayout {
     fn measure_eq(&self, other: &Self) -> bool {
-        self.runs == other.runs && self.style == other.style
+        Arc::ptr_eq(&self.cache, &other.cache)
+            && self.runs == other.runs
+            && self.style == other.style
     }
     fn placement_eq(&self, other: &Self) -> bool {
         self.measure_eq(other)
@@ -431,7 +435,7 @@ fn linked_run(
             })
             .push_pointer_input(LinkPointer {
                 index,
-                cache,
+                cache: Arc::clone(&cache),
                 tap,
                 hovered,
                 focus,

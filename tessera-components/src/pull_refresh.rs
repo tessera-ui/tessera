@@ -5,8 +5,7 @@
 //! Trigger data reloads when users pull down at the top of a scrollable view.
 use tessera_ui::{
     Callback, CallbackWith, Color, Dp, FocusModifierExt, Modifier, Px, RenderSlot, State,
-    current_frame_nanos, layout::layout, provide_context, receive_frame_nanos, remember, tessera,
-    use_context,
+    current_frame_nanos, layout::layout, receive_frame_nanos, remember, tessera, use_context,
 };
 
 use crate::{
@@ -268,7 +267,10 @@ pub fn pull_refresh_indicator(
     let content_color = content_color.unwrap_or_else(|| {
         content_color_for(background_color, &scheme).unwrap_or(scheme.on_surface)
     });
-    let controller = controller.unwrap_or_else(|| remember(PullRefreshController::new));
+    let controller = match controller {
+        Some(value) => value,
+        None => remember(PullRefreshController::new),
+    };
     let refreshing = controller.with(|s| s.refreshing());
     let progress = controller.with(|s| s.progress()).clamp(0.0, 1.0);
     let indicator_alpha = if refreshing {
@@ -418,7 +420,10 @@ pub fn pull_refresh(
     let indicator_content_color = indicator_content_color.unwrap_or_else(|| {
         content_color_for(indicator_background_color, &scheme).unwrap_or(scheme.on_surface)
     });
-    let controller = controller.unwrap_or_else(|| remember(PullRefreshController::new));
+    let controller = match controller {
+        Some(value) => value,
+        None => remember(PullRefreshController::new),
+    };
     let child = child.unwrap_or_else(RenderSlot::empty);
     let modifier = modifier
         .unwrap_or_else(|| Modifier::new().fill_max_size())
@@ -455,7 +460,7 @@ pub fn pull_refresh(
         });
     }
 
-    let parent_nested_scroll = use_context::<NestedScrollConnection>().map(|context| context.get());
+    let parent_nested_scroll = NestedScrollConnection::nearest();
     let on_refresh = on_refresh.unwrap_or_default();
     let coordinate_scale = remember(|| 1.0_f32);
     let nested_scroll_connection = NestedScrollConnection::new()
@@ -521,16 +526,14 @@ pub fn pull_refresh(
             let child = child;
             let nested_scroll_connection = nested_scroll_connection.clone();
             boxed()
-                .modifier(Modifier::new().fill_max_size())
+                .modifier(
+                    Modifier::new()
+                        .fill_max_size()
+                        .nested_scroll(nested_scroll_connection.clone()),
+                )
                 .alignment(Alignment::TopCenter)
                 .children(move || {
-                    let nested_scroll_connection = nested_scroll_connection.clone();
-                    provide_context(
-                        || nested_scroll_connection.clone(),
-                        move || {
-                            child.render();
-                        },
-                    );
+                    child.render();
                     layout()
                         .modifier(Modifier::new().align(Alignment::TopCenter))
                         .child(move || {

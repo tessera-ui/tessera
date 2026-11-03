@@ -4,8 +4,6 @@
 //!
 //! Explore keyboard navigation and labels for dialog controls.
 
-use std::sync::OnceLock;
-
 use tessera_components::{
     alignment::Alignment,
     boxed::boxed,
@@ -13,10 +11,7 @@ use tessera_components::{
     icon::icon,
     image::{ImageData, TryIntoImageData as _, image},
     material_icons::filled,
-    modifier::{
-        InteractionVisualState, MinimumInteractiveComponentEnforcement, ModifierExt as _, Padding,
-        SemanticsArgs,
-    },
+    modifier::{InteractionVisualState, ModifierExt as _, Padding, SemanticsArgs},
     row::row,
     shape_def::Shape,
     spacer::spacer,
@@ -25,7 +20,7 @@ use tessera_components::{
 };
 use tessera_ui::{
     Callback, Dp, FocusRequester, Modifier, RenderSlotWith, accesskit::Role,
-    modifier::FocusModifierExt as _, provide_context, remember, tessera, use_context,
+    modifier::FocusModifierExt as _, remember, tessera, use_context,
 };
 
 use super::{
@@ -111,12 +106,9 @@ fn figure(base_width: f64, height: f64, content: RenderSlotWith<f64>) {
                 }),
         )
         .children(move || {
-            provide_context(
-                || MinimumInteractiveComponentEnforcement { enabled: false },
-                move || {
-                    content.render(scale);
-                },
-            );
+            {
+                content.render(scale);
+            };
         });
 }
 
@@ -479,20 +471,15 @@ fn use_sparingly() {
 }
 
 pub(super) fn photo_data() -> ImageData {
-    static PHOTO: OnceLock<ImageData> = OnceLock::new();
-    PHOTO
-        .get_or_init(|| {
-            include_bytes!("../../../assets/material_spec/dialog-accessibility-photos.png")
-                .as_slice()
-                .try_into_image_data()
-                .expect("dialog photo examples")
-        })
-        .clone()
+    include_bytes!("../../../assets/material_spec/dialog-accessibility-photos.png")
+        .as_slice()
+        .try_into_image_data()
+        .expect("dialog photo examples")
 }
 
 #[tessera]
 fn photo_region(x: f64, y: f64, width: f64, height: f64, radius: f64, scale: f64) {
-    let photo = photo_data();
+    let photo = remember(photo_data).get();
     boxed()
         .modifier(
             Modifier::new()

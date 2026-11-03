@@ -32,7 +32,7 @@ pub(super) struct BatchResources {
 }
 
 struct BatchBuffer {
-    buffer: wgpu::Buffer,
+    buffer: tessera_ui::TrackedBuffer,
     bind_group: wgpu::BindGroup,
     capacity: usize,
     bytes: Vec<u8>,
@@ -48,7 +48,7 @@ impl BatchResources {
 
     fn append(
         &mut self,
-        device: &wgpu::Device,
+        device: &tessera_ui::GraphicsDevice,
         layout: &wgpu::BindGroupLayout,
         bytes: &[u8],
         instance_count: usize,
@@ -67,8 +67,6 @@ impl BatchResources {
             .get(index)
             .is_none_or(|buffer| buffer.capacity < bytes.len())
         {
-            #[cfg(test)]
-            super::BATCH_ALLOCATIONS.with(|count| count.set(count.get() + 1));
             let maximum_instances =
                 device.limits().max_storage_buffer_binding_size as usize / stride;
             let capacity_instances = instance_count
@@ -81,12 +79,15 @@ impl BatchResources {
                 "Shape instance batch exceeds the storage binding limit"
             );
             let capacity = capacity_instances * stride;
-            let buffer = device.create_buffer(&wgpu::BufferDescriptor {
-                label: Some("Shape Batch Storage"),
-                size: capacity as u64,
-                usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
-                mapped_at_creation: false,
-            });
+            let buffer = device.create_buffer(
+                "shape_batches",
+                &wgpu::BufferDescriptor {
+                    label: Some("Shape Batch Storage"),
+                    size: capacity as u64,
+                    usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
+                    mapped_at_creation: false,
+                },
+            );
             let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
                 layout,
                 entries: &[wgpu::BindGroupEntry {
@@ -116,9 +117,7 @@ impl BatchResources {
         (&buffer.bind_group, start..end)
     }
 
-    pub(super) fn finish_frame(&self, queue: &wgpu::Queue) -> (usize, usize) {
-        let mut uploads = 0;
-        let mut bytes = 0;
+    pub(super) fn finish_frame(&self, queue: &tessera_ui::GraphicsDevice) {
         // Uploads must precede submission while retaining each recorded draw's
         // range.
         for buffer in self
@@ -128,12 +127,7 @@ impl BatchResources {
             .filter(|buffer| !buffer.bytes.is_empty())
         {
             queue.write_buffer(&buffer.buffer, 0, &buffer.bytes);
-            #[cfg(test)]
-            super::BATCH_UPLOADS.with(|count| count.set(count.get() + 1));
-            uploads += 1;
-            bytes += buffer.bytes.len();
         }
-        (uploads, bytes)
     }
 }
 
@@ -161,7 +155,7 @@ fn build_instances(
 impl ShapePipeline {
     pub(super) fn draw_uncached_batch(
         &mut self,
-        gpu: &wgpu::Device,
+        gpu: &tessera_ui::GraphicsDevice,
         target_size: PxSize,
         render_pass: &mut wgpu::RenderPass<'_>,
         commands: &[(&ShapeCommand, tessera_ui::DrawGeometry)],
@@ -199,7 +193,7 @@ impl ShapePipeline {
 
     pub(super) fn draw_cached_run(
         &mut self,
-        gpu: &wgpu::Device,
+        gpu: &tessera_ui::GraphicsDevice,
         target_size: PxSize,
         render_pass: &mut wgpu::RenderPass<'_>,
         texture_bind_group: &wgpu::BindGroup,
@@ -248,7 +242,7 @@ impl ShapePipeline {
 
     pub(super) fn flush_cached_run(
         &mut self,
-        gpu: &wgpu::Device,
+        gpu: &tessera_ui::GraphicsDevice,
         target_size: PxSize,
         render_pass: &mut wgpu::RenderPass<'_>,
         pending: &mut CachedInstanceBatch,

@@ -13,14 +13,6 @@ use tessera_ui::{
     tessera,
 };
 
-struct Pipelines;
-
-impl tessera_ui::RenderModule for Pipelines {
-    fn register_pipelines(&self, context: &mut tessera_ui::PipelineContext<'_>) {
-        tessera_components::pipelines::register_pipelines(context);
-    }
-}
-
 #[tessera]
 fn fixture() {
     material_theme().child(super::figure);
@@ -112,7 +104,7 @@ fn assert_wide_grid(nodes: &BTreeMap<NodeId, Node>) {
 fn radius_table_preserves_native_grid_and_reveals_columns_with_horizontal_input_after_resize() {
     let mut renderer = HeadlessRenderer::new(
         Box::new(fixture),
-        vec![Box::new(Pipelines)],
+        vec![Box::new(crate::TestPipelines)],
         HeadlessConfig {
             width: 1024,
             height: 400,

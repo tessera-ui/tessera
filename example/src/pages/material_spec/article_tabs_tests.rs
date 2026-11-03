@@ -4,10 +4,7 @@
 //!
 //! Verify section navigation states without changing target geometry.
 
-use std::{
-    cell::{Cell, RefCell},
-    time::Duration,
-};
+use std::time::Duration;
 
 use tessera_components::theme::material_theme;
 use tessera_ui::{
@@ -17,18 +14,20 @@ use tessera_ui::{
 
 use super::*;
 
-thread_local! {
-    static CONTENT_BOUNDS: RefCell<[Option<tessera_ui::PxRect>; 4]> = const { RefCell::new([None; 4]) };
-    static SELECTED: Cell<Option<State<&'static str>>> = const { Cell::new(None) };
-    static PINNED: Cell<Option<State<bool>>> = const { Cell::new(None) };
-}
+type Observed = (State<&'static str>, State<bool>);
 
-pub(super) fn record_content(index: usize, bounds: tessera_ui::PxRect) {
-    CONTENT_BOUNDS.with(|value| value.borrow_mut()[index] = Some(bounds));
+fn content_bounds(renderer: &HeadlessRenderer) -> [Option<tessera_ui::PxRect>; 4] {
+    let snapshot = renderer.inspect_components();
+    std::array::from_fn(|index| {
+        snapshot
+            .find_tag(&format!("article-tab-content-{index}"))
+            .and_then(|node| node.bounds())
+            .map(|bounds| bounds.rounded())
+    })
 }
 
 fn ink(renderer: &HeadlessRenderer, index: usize, label: bool) -> Vec<(usize, usize)> {
-    let bounds = CONTENT_BOUNDS.with(|value| value.borrow()[index].unwrap());
+    let bounds = content_bounds(renderer)[index].unwrap();
     let rgba = renderer.read_pixels().unwrap();
     let left = bounds.x.to_f32() as usize + if label { 32 } else { 0 };
     let right = if label {
@@ -52,21 +51,12 @@ fn ink(renderer: &HeadlessRenderer, index: usize, label: bool) -> Vec<(usize, us
     ink
 }
 
-struct Pipelines;
-
-impl tessera_ui::RenderModule for Pipelines {
-    fn register_pipelines(&self, context: &mut tessera_ui::PipelineContext<'_>) {
-        tessera_components::pipelines::register_pipelines(context);
-    }
-}
-
 #[tessera]
-fn fixture() {
+fn fixture(output: tessera_ui::testing::TestProbe<Option<Observed>>) {
     let selected = remember(|| "Specs");
     let scroll = remember(ScrollableController::new);
     let pinned = remember(|| false);
-    SELECTED.set(Some(selected));
-    PINNED.set(Some(pinned));
+    output.set(Some((selected, pinned)));
     material_theme().child(move || {
         boxed()
             .alignment(Alignment::TopStart)
@@ -140,9 +130,11 @@ fn assert_pixel(renderer: &HeadlessRenderer, title: &str, y: f64, expected: [u8;
 #[ignore = "requires a native GPU adapter for article tab pixels and actual input"]
 fn article_tab_hover_hold_selection_and_focus_preserve_targets_and_idle_work() {
     for samples in [1, 4] {
+        let output = tessera_ui::testing::TestProbe::default();
+        let probe = output.clone();
         let mut renderer = HeadlessRenderer::new(
-            Box::new(fixture),
-            vec![Box::new(Pipelines)],
+            Box::new(move || fixture(probe.clone())),
+            vec![Box::new(crate::TestPipelines)],
             HeadlessConfig {
                 width: 1000,
                 height: 160,
@@ -175,7 +167,7 @@ fn article_tab_hover_hold_selection_and_focus_preserve_targets_and_idle_work() {
         renderer.render_frames(4);
         assert_pixel(&renderer, "Overview", 8.0, [227, 220, 227]);
         assert_eq!(
-            SELECTED.get().unwrap().get(),
+            output.get().unwrap().0.get(),
             "Specs",
             "press must not activate"
         );
@@ -186,7 +178,7 @@ fn article_tab_hover_hold_selection_and_focus_preserve_targets_and_idle_work() {
         );
         renderer.pointer_release(MOUSE_POINTER_ID, overview, PressKeyEventType::Left);
         renderer.render_frames(14);
-        assert_eq!(SELECTED.get().unwrap().get(), "Overview");
+        assert_eq!(output.get().unwrap().0.get(), "Overview");
         assert_pixel(&renderer, "Overview", 8.0, [205, 203, 228]);
         let selected_icon = ink(&renderer, 0, false);
         assert!(
@@ -223,7 +215,7 @@ fn article_tab_hover_hold_selection_and_focus_preserve_targets_and_idle_work() {
             guidelines.0
         );
         assert_eq!(
-            SELECTED.get().unwrap().get(),
+            output.get().unwrap().0.get(),
             "Overview",
             "focus alone must not activate"
         );
@@ -240,13 +232,16 @@ fn article_tab_hover_hold_selection_and_focus_preserve_targets_and_idle_work() {
             "focus strokes must not move content"
         );
         renderer.render_frames(4);
-        let diagnostics = renderer.diagnostics();
         assert_eq!(
-            diagnostics.cache_store_count, 0,
-            "resting tabs must not measure"
+            renderer
+                .work()
+                .phase(tessera_ui::WorkPhase::Measure)
+                .count(),
+            0
         );
         assert_eq!(
-            diagnostics.paint_nodes_recorded, 0,
+            renderer.work().phase(tessera_ui::WorkPhase::Paint).count(),
+            0,
             "resting tabs must not repaint"
         );
     }
@@ -256,9 +251,11 @@ fn article_tab_hover_hold_selection_and_focus_preserve_targets_and_idle_work() {
 #[ignore = "requires a native GPU adapter for timed selection motion and frame work"]
 fn article_selection_pill_animates_with_clock_without_measuring_or_moving_targets() {
     for samples in [1, 4] {
+        let output = tessera_ui::testing::TestProbe::default();
+        let probe = output.clone();
         let mut renderer = HeadlessRenderer::new(
-            Box::new(fixture),
-            vec![Box::new(Pipelines)],
+            Box::new(move || fixture(probe.clone())),
+            vec![Box::new(crate::TestPipelines)],
             HeadlessConfig {
                 width: 1000,
                 height: 160,
@@ -269,12 +266,15 @@ fn article_selection_pill_animates_with_clock_without_measuring_or_moving_target
         )
         .unwrap();
         renderer.render_frames(8);
-        let idle = renderer.diagnostics();
-        assert_eq!(idle.measure_node_calls, 1);
-        assert_eq!(idle.cache_hits_direct, 1);
-        assert_eq!(idle.cache_store_count, 0);
-        assert_eq!(idle.dirty_nodes_param, 0);
-        assert_eq!(idle.geometry_nodes_updated, 0);
+        assert_eq!(
+            renderer
+                .work()
+                .phase(tessera_ui::WorkPhase::Measure)
+                .count(),
+            0
+        );
+        assert_eq!(renderer.diagnostics().dirty_nodes_param, 0);
+        assert_eq!(renderer.diagnostics().geometry_nodes_updated, 0);
         let initial = geometry(&renderer);
         let bounds = tab(&renderer, "Overview").1.bounds().unwrap();
         let point = center(bounds);
@@ -282,7 +282,7 @@ fn article_selection_pill_animates_with_clock_without_measuring_or_moving_target
         renderer.pointer_release(MOUSE_POINTER_ID, point, PressKeyEventType::Left);
         renderer.pointer_move(MOUSE_POINTER_ID, PxPosition::from_f32_xy(990.0, 150.0));
         renderer.render_frames(1);
-        assert_eq!(SELECTED.get().unwrap().get(), "Overview");
+        assert_eq!(output.get().unwrap().0.get(), "Overview");
         assert_pixel(&renderer, "Overview", 8.0, [248, 241, 246]);
         let edge = |renderer: &HeadlessRenderer| {
             let rgba = renderer.read_pixels().unwrap();
@@ -296,21 +296,19 @@ fn article_selection_pill_animates_with_clock_without_measuring_or_moving_target
             renderer.render_frames(1);
             let diagnostics = renderer.diagnostics();
             assert_eq!(
-                diagnostics.measure_node_calls, 1,
-                "animation frame{frame} must only query the cached root"
+                renderer
+                    .work()
+                    .phase(tessera_ui::WorkPhase::Measure)
+                    .count(),
+                0,
+                "animation frame{frame} must not measure"
             );
-            assert_eq!(
-                diagnostics.cache_hits_direct, 1,
-                "animation frame{frame} must retain the direct root hit"
-            );
+
             assert_eq!(
                 diagnostics.dirty_nodes_param, 0,
                 "animation frame{frame} must not invalidate layout inputs"
             );
-            assert_eq!(
-                diagnostics.cache_store_count, 0,
-                "animation frame{frame} must preserve layout snapshots"
-            );
+
             assert_eq!(
                 diagnostics.geometry_nodes_updated, 0,
                 "animation frame{frame} must not place nodes"
@@ -337,12 +335,17 @@ fn article_selection_pill_animates_with_clock_without_measuring_or_moving_target
         );
         renderer.render_frames(3);
         assert_eq!(
-            renderer.diagnostics().paint_nodes_recorded,
+            renderer.work().phase(tessera_ui::WorkPhase::Paint).count(),
             0,
-            "completed motion must unregister its driver"
+            "completed motion must not repaint"
         );
-        assert_eq!(renderer.diagnostics().measure_node_calls, 1);
-        assert_eq!(renderer.diagnostics().cache_hits_direct, 1);
+        assert_eq!(
+            renderer
+                .work()
+                .phase(tessera_ui::WorkPhase::Measure)
+                .count(),
+            0
+        );
         assert_eq!(renderer.diagnostics().geometry_nodes_updated, 0);
     }
 }
@@ -375,9 +378,11 @@ fn narrow_article_tabs_keep_natural_labels_and_clip_scrolled_capsule() {
         );
         return;
     }
+    let output = tessera_ui::testing::TestProbe::default();
+    let probe = output.clone();
     let mut renderer = HeadlessRenderer::new(
-        Box::new(fixture),
-        vec![Box::new(Pipelines)],
+        Box::new(move || fixture(probe.clone())),
+        vec![Box::new(crate::TestPipelines)],
         HeadlessConfig {
             width: 1000,
             height: 160,
@@ -392,10 +397,9 @@ fn narrow_article_tabs_keep_natural_labels_and_clip_scrolled_capsule() {
         tessera_ui::dp::set_scale_factor(scale);
         renderer.resize((1000.0 * scale) as u32, (160.0 * scale) as u32);
         renderer.render_frames(12);
-        let natural =
-            CONTENT_BOUNDS.with(|bounds| bounds.borrow().map(|bounds| bounds.unwrap().width));
+        let natural = content_bounds(&renderer).map(|bounds| bounds.unwrap().width);
         for pinned in [false, true] {
-            PINNED.get().unwrap().set(pinned);
+            output.get().unwrap().1.set(pinned);
             for width in [753.0, 500.0, 485.0, 375.0, 320.0, 1000.0] {
                 renderer.resize((width * scale) as u32, (160.0 * scale) as u32);
                 renderer.render_frames(12);
@@ -416,7 +420,7 @@ fn narrow_article_tabs_keep_natural_labels_and_clip_scrolled_capsule() {
                     visible.width() >= f64::from(minimum - 1),
                     "active tab {visible_label} is clipped after resize at {width}, scale {scale}: {visible:?}, minimum {minimum}"
                 );
-                let contents = CONTENT_BOUNDS.with(|bounds| *bounds.borrow());
+                let contents = content_bounds(&renderer);
                 for (index, content) in contents.into_iter().enumerate() {
                     let content = content.unwrap();
                     assert!(
@@ -440,7 +444,7 @@ fn narrow_article_tabs_keep_natural_labels_and_clip_scrolled_capsule() {
                 }));
                 renderer.render_frames(24);
                 assert_eq!(renderer.accessibility_snapshot().unwrap().focus, target);
-                let focused_contents = CONTENT_BOUNDS.with(|bounds| *bounds.borrow());
+                let focused_contents = content_bounds(&renderer);
                 for (index, content) in focused_contents.into_iter().enumerate() {
                     let content = content.unwrap();
                     assert!(
@@ -492,9 +496,11 @@ fn narrow_article_tabs_keep_natural_labels_and_clip_scrolled_capsule() {
 #[test]
 #[ignore = "requires a native GPU adapter for responsive article navigation controls"]
 fn narrow_article_arrows_select_adjacent_pages_and_reveal_the_selected_tab() {
+    let output = tessera_ui::testing::TestProbe::default();
+    let probe = output.clone();
     let mut renderer = HeadlessRenderer::new(
-        Box::new(fixture),
-        vec![Box::new(Pipelines)],
+        Box::new(move || fixture(probe.clone())),
+        vec![Box::new(crate::TestPipelines)],
         HeadlessConfig {
             width: 500,
             height: 160,
@@ -505,8 +511,8 @@ fn narrow_article_arrows_select_adjacent_pages_and_reveal_the_selected_tab() {
     .unwrap();
     renderer.render_frames(12);
     for pinned in [false, true] {
-        PINNED.get().unwrap().set(pinned);
-        SELECTED.get().unwrap().set("Specs");
+        output.get().unwrap().1.set(pinned);
+        output.get().unwrap().0.set("Specs");
         renderer.render_frames(12);
         for (label, expected) in [
             ("Go to next tab", "Guidelines"),
@@ -528,7 +534,7 @@ fn narrow_article_arrows_select_adjacent_pages_and_reveal_the_selected_tab() {
                 data: None,
             }));
             renderer.render_frames(16);
-            assert_eq!(SELECTED.get().unwrap().get(), expected);
+            assert_eq!(output.get().unwrap().0.get(), expected);
             let tree = renderer.accessibility_snapshot().unwrap();
             let viewport = tree
                 .nodes

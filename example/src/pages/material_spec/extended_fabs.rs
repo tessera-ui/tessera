@@ -64,7 +64,9 @@ fn tone_colors(scheme: &MaterialColorScheme, tone: usize) -> (Color, Color) {
 }
 
 #[tessera]
-pub(super) fn extended_fabs_spec() {
+pub(super) fn extended_fabs_spec(
+    route: Option<crate::pages::material_spec::article::ArticleRoute>,
+) {
     article(
         "Extended FABs",
         "Extended floating action buttons (extended FABs) help people take primary actions",
@@ -103,6 +105,7 @@ pub(super) fn extended_fabs_spec() {
             },
         ],
     )
+    .route_optional(route.clone())
     .pages(vec![
         ArticlePage {
             title: "Overview",

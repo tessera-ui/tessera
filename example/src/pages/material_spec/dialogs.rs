@@ -4,7 +4,7 @@
 //!
 //! Inspect dialog anatomy, spacing and focus behavior.
 
-use std::{collections::BTreeMap, sync::OnceLock};
+use std::collections::BTreeMap;
 
 use tessera_components::{
     alignment::{Alignment, CrossAxisAlignment, MainAxisAlignment},
@@ -17,19 +17,18 @@ use tessera_components::{
     image::{ImageData, TryIntoImageData as _, image},
     material_icons::filled,
     menus::{MenuAnchor, MenuController, menu_item, menu_provider},
-    modifier::{MinimumInteractiveComponentEnforcement, ModifierExt as _, Padding, SemanticsArgs},
+    modifier::{ModifierExt as _, Padding, SemanticsArgs},
     row::row,
     shape_def::Shape,
     spacer::spacer,
     text::text,
-    text_field::{TextFieldBuilder, text_field},
+    text_field::text_field,
     text_input::TextInputController,
     theme::{MaterialTheme, material_theme},
 };
 use tessera_ui::{
     Callback, Color, Dp, LayoutCoordinates, Modifier, PxPosition, PxSize, RenderSlot, State,
-    accesskit::Role, modifier::FocusModifierExt as _, provide_context, remember, scaled_box,
-    tessera, use_context,
+    accesskit::Role, modifier::FocusModifierExt as _, remember, scaled_box, tessera, use_context,
 };
 
 use super::{
@@ -94,7 +93,7 @@ fn request_dialog_close(
 }
 
 #[tessera]
-pub(super) fn dialogs_spec() {
+pub(super) fn dialogs_spec(route: Option<crate::pages::material_spec::article::ArticleRoute>) {
     let open = remember(|| false);
     let full = remember(|| false);
     let saved = remember(|| false);
@@ -133,7 +132,7 @@ pub(super) fn dialogs_spec() {
                         content: RenderSlot::new(full_specs),
                     },
                 ],
-            )
+            ).route_optional(route.clone())
             .pages(vec![
                 ArticlePage {
                     title: "Overview",
@@ -213,11 +212,11 @@ pub(super) fn dialogs_spec() {
                 },
             ]);
         })
-        .dialog_content(move || {
+        .dialog_content(move |dialog_scope| {
             if full.get() {
-                event_dialog(draft, open, saved, discard, close);
+                event_dialog(draft, open, saved, discard, close).dialog(dialog_scope);
             } else {
-                basic_dialog()
+                basic_dialog().dialog(dialog_scope)
                     .headline("Reset settings?")
                     .supporting_text(
                         "This will reset your app preferences back to their default settings. The following accounts will also be signed out.",
@@ -361,15 +360,10 @@ fn labels(values: &[&str]) -> Vec<String> {
 }
 
 fn product_data() -> ImageData {
-    static PRODUCT: OnceLock<ImageData> = OnceLock::new();
-    PRODUCT
-        .get_or_init(|| {
-            include_bytes!("../../../assets/material_spec/dialog-guideline-product.png")
-                .as_slice()
-                .try_into_image_data()
-                .expect("dialog product example")
-        })
-        .clone()
+    include_bytes!("../../../assets/material_spec/dialog-guideline-product.png")
+        .as_slice()
+        .try_into_image_data()
+        .expect("dialog product example")
 }
 
 #[tessera]
@@ -676,7 +670,7 @@ fn backdrop_scene(backdrop: Backdrop, dialog: Option<RenderSlot>) {
             let dialog = dialog.clone();
             if backdrop == Backdrop::Product {
                 image()
-                    .raster(product_data())
+                    .raster(remember(product_data).get())
                     .modifier(Modifier::new().required_size(Dp(400.0), Dp(325.0)));
             } else if backdrop == Backdrop::Surface {
                 placeholder_lines();
@@ -691,7 +685,7 @@ fn backdrop_scene(backdrop: Backdrop, dialog: Option<RenderSlot>) {
                     .modifier(Modifier::new().fill_max_size())
                     .children(move || {
                         image()
-                            .raster(accessibility::photo_data())
+                            .raster(remember(accessibility::photo_data).get())
                             .modifier(Modifier::new().required_size(Dp(720.0), Dp(639.0)));
                     });
                 if backdrop == Backdrop::Photos {
@@ -1643,6 +1637,7 @@ fn event_dialog(
     saved: State<bool>,
     discard: State<bool>,
     close: Callback,
+    dialog: Option<tessera_components::dialog::DialogScope>,
 ) {
     dialog_provider()
         .role(DialogRole::AlertDialog)
@@ -1651,6 +1646,7 @@ fn event_dialog(
         .on_close_request(move || discard.set(false))
         .main_content(move || {
             full_screen_dialog(close)
+                .dialog_optional(dialog)
                 .title("New event")
                 .on_confirm(move || {
                     draft.set(EventDraft::default());
@@ -1662,8 +1658,9 @@ fn event_dialog(
                     event_form(draft);
                 });
         })
-        .dialog_content(move || {
+        .dialog_content(move |dialog_scope| {
             basic_dialog()
+                .dialog(dialog_scope)
                 .headline("Discard changes?")
                 .supporting_text("Discard the changes you've made to this event?")
                 .dismiss_button(move || {
@@ -1791,12 +1788,8 @@ fn basic_specs() {
 #[tessera]
 fn basic_figure(measurements: bool) {
     let geometry = remember(Geometry::new);
-    #[cfg(all(test, not(target_family = "wasm")))]
-    canonical_tests::GEOMETRY.set(Some(geometry));
     let scale = 1.0_f64;
     let notice = remember(String::new);
-    #[cfg(all(test, not(target_family = "wasm")))]
-    canonical_tests::NOTICE.set(Some(notice));
     let scheme = use_context::<MaterialTheme>().unwrap().get().color_scheme;
     column()
         .modifier(Modifier::new().fill_max_width())
@@ -1815,6 +1808,7 @@ fn basic_figure(measurements: bool) {
                                     Shape::rounded_rectangle(Dp(24.0)),
                                 )
                                 .semantics(SemanticsArgs {
+                                    test_tag: Some("dialog-figure-figure".into()),
                                     role: Some(Role::Group),
                                     merge_descendants: true,
                                     label: Some(
@@ -1851,6 +1845,7 @@ fn basic_figure(measurements: bool) {
                                         )
                                         .padding_all(Dp(24.0 * scale))
                                         .semantics(SemanticsArgs {
+                                            test_tag: Some("dialog-figure-container".into()),
                                             role: Some(Role::Group),
                                             merge_descendants: true,
                                             label: Some(
@@ -1875,7 +1870,16 @@ fn basic_figure(measurements: bool) {
                                                         .modifier(Modifier::new().fill_max_width())
                                                         .children(move || {
                                                             boxed()
-                                                                .modifier(watch(geometry, "icon"))
+                                                                .modifier(
+                                                                    watch(geometry, "icon")
+                                                                        .semantics(SemanticsArgs {
+                                                                        test_tag: Some(
+                                                                            "dialog-figure-icon"
+                                                                                .into(),
+                                                                        ),
+                                                                        ..Default::default()
+                                                                    }),
+                                                                )
                                                                 .children(move || {
                                                                     icon()
                                                                         .vector(
@@ -1896,9 +1900,22 @@ fn basic_figure(measurements: bool) {
                                                     .style(dialog_type_style(24.0, 32.0, scale))
                                                     .color(scheme.on_surface)
                                                     .modifier(if measurements {
-                                                        watch(geometry, "headline")
+                                                        watch(geometry, "headline").semantics(
+                                                            SemanticsArgs {
+                                                                test_tag: Some(
+                                                                    "dialog-figure-headline".into(),
+                                                                ),
+                                                                ..Default::default()
+                                                            },
+                                                        )
                                                     } else {
                                                         watch(geometry, "headline")
+                                                            .semantics(SemanticsArgs {
+                                                                test_tag: Some(
+                                                                    "dialog-figure-headline".into(),
+                                                                ),
+                                                                ..Default::default()
+                                                            })
                                                             .align(Alignment::Center)
                                                     });
                                                 gap(Dp(16.0 * scale));
@@ -2000,20 +2017,15 @@ fn dialog_figure_action(
 }
 
 fn dialog_account_photo() -> ImageData {
-    static PHOTO: OnceLock<ImageData> = OnceLock::new();
-    PHOTO
-        .get_or_init(|| {
-            include_bytes!("../../../assets/material_spec/dialog-basic-anatomy.png")
-                .as_slice()
-                .try_into_image_data()
-                .expect("official dialog account photographs")
-        })
-        .clone()
+    include_bytes!("../../../assets/material_spec/dialog-basic-anatomy.png")
+        .as_slice()
+        .try_into_image_data()
+        .expect("official dialog account photographs")
 }
 
 #[tessera]
 fn dialog_account_avatar(index: usize, scale: f64) {
-    let photo = dialog_account_photo();
+    let photo = remember(dialog_account_photo).get();
     boxed()
         .modifier(
             Modifier::new()
@@ -2046,10 +2058,12 @@ fn dialog_body(geometry: State<Geometry>, measurements: bool, scale: f64) {
         } else {
             "This will reset your app preferences back to their default settings. The following accounts will also be signed out:"
         }).style(dialog_type_style(14.0, 20.0, scale)).color(scheme.on_surface_variant)
-            .modifier(watch(geometry, "body").fill_max_width());
+            .modifier(watch(geometry, "body").semantics(SemanticsArgs { test_tag: Some("dialog-figure-body".into()), merge_descendants: true,
+..Default::default() }).fill_max_width());
         if !measurements {
             gap(Dp(16.0 * scale));
-            spacer().modifier(watch(geometry, "divider").fill_max_width().height(Dp(scale)).background(scheme.outline_variant));
+            spacer().modifier(watch(geometry, "divider").semantics(SemanticsArgs { test_tag: Some("dialog-figure-divider".into()), merge_descendants: true,
+..Default::default() }).fill_max_width().height(Dp(scale)).background(scheme.outline_variant));
             gap(Dp(8.0 * scale));
             for (index, email) in ["leevillanuevanotes@google.com", "alloalejandro@google.com", "oliortega@google.com"].into_iter().enumerate() {
                 row().cross_axis_alignment(CrossAxisAlignment::Center)
@@ -2322,10 +2336,7 @@ fn dialog_dimension(label: String, x: f64, y: f64, scale: f64) {
 
 #[tessera]
 fn dialog_touch_targets(child: RenderSlot) {
-    provide_context(
-        || MinimumInteractiveComponentEnforcement { enabled: false },
-        move || child.render(),
-    );
+    child.render();
 }
 
 #[tessera]
@@ -2351,8 +2362,6 @@ fn dialog_diagram_theme(scale: f64, child: RenderSlot) {
 fn dialog_overview_pair() {
     let scale = 1.0_f64;
     let notice = remember(String::new);
-    #[cfg(all(test, not(target_family = "wasm")))]
-    canonical_tests::NOTICE.set(Some(notice));
     let scheme = use_context::<MaterialTheme>().unwrap().get().color_scheme;
     column().modifier(Modifier::new().fill_max_width()).children(move || {
 dialog_canvas(1024.0, 622.0, RenderSlot::new(move || {
@@ -2577,7 +2586,8 @@ fn dialog_scene_input(
         )
         .children(move || {
             let content = RenderSlot::new(move || {
-                let field = TextFieldBuilder::outlined()
+                let field = text_field()
+                    .outlined()
                     .controller(controller)
                     .label(label.get())
                     .accessibility_label(name.get())
@@ -2612,9 +2622,9 @@ fn dialog_scene_input(
                     ))
                     .modifier(Modifier::new().size(Dp(width * scale), Dp(56.0 * scale)))
                     .main_content_shared(content)
-                    .menu_content(move || {
+                    .menu_content(move |menu| {
                         for value in ["Input", "Option 2", "Option 3"] {
-                            menu_item().label(value).on_click(move || {
+                            menu_item().menu(menu).label(value).on_click(move || {
                                 controller.with_mut(|controller| controller.set_text(value))
                             });
                         }
@@ -2629,24 +2639,23 @@ fn dialog_scene_input(
 fn basic_color_figure() {
     let scale = 1.0_f64;
     let geometry = remember(Geometry::new);
-    #[cfg(all(test, not(target_family = "wasm")))]
-    canonical_tests::GEOMETRY.set(Some(geometry));
     let notice = remember(String::new);
-    #[cfg(all(test, not(target_family = "wasm")))]
-    canonical_tests::NOTICE.set(Some(notice));
     let scheme = use_context::<MaterialTheme>().unwrap().get().color_scheme;
     column().modifier(Modifier::new().fill_max_width()).children(move || {
 dialog_canvas(1024.0, 486.0, RenderSlot::new(move || {
-        boxed().modifier(watch(geometry, "figure").fill_max_width().height(Dp(486.0 * scale))
+        boxed().modifier(watch(geometry, "figure").semantics(SemanticsArgs { test_tag: Some("dialog-figure-figure".into()), merge_descendants: true,
+..Default::default() }).fill_max_width().height(Dp(486.0 * scale))
             .background_with_shape(scheme.surface_container_low, Shape::rounded_rectangle(Dp(24.0))))
             .children(move || {
                 spacer().modifier(Modifier::new().fill_max_size().background_with_shape(scheme.scrim.with_alpha(0.32), Shape::rounded_rectangle(Dp(24.0))));
-                boxed().modifier(watch(geometry, "container").offset(Dp(341.0 * scale), Dp(114.0 * scale))
+                boxed().modifier(watch(geometry, "container").semantics(SemanticsArgs { test_tag: Some("dialog-figure-container".into()), merge_descendants: true,
+..Default::default() }).offset(Dp(341.0 * scale), Dp(114.0 * scale))
                     .size(Dp(340.0 * scale), Dp(264.0 * scale))
                     .background_with_shape(scheme.surface_container_high, Shape::rounded_rectangle(Dp(28.0 * scale)))
                     .padding_all(Dp(24.0 * scale)))
                     .children(move || {
-                        boxed().modifier(watch(geometry, "icon").offset(Dp(134.0 * scale), Dp::ZERO).size(Dp(24.0 * scale), Dp(24.0 * scale)))
+                        boxed().modifier(watch(geometry, "icon").semantics(SemanticsArgs { test_tag: Some("dialog-figure-icon".into()), merge_descendants: true,
+..Default::default() }).offset(Dp(134.0 * scale), Dp::ZERO).size(Dp(24.0 * scale), Dp(24.0 * scale)))
                             .children(move || {
                                 icon().vector(filled::PHONE_ANDROID_SVG).size(Dp(24.0 * scale)).tint(scheme.secondary);
                                 boxed().modifier(Modifier::new().offset(Dp(6.0 * scale), Dp(6.0 * scale))).children(move || {
@@ -2654,12 +2663,15 @@ dialog_canvas(1024.0, 486.0, RenderSlot::new(move || {
                                 });
                             });
                         text().content("Dialog with hero icon").style(dialog_type_style(24.0, 32.0, scale)).color(scheme.on_surface)
-                            .modifier(watch(geometry, "headline").offset(Dp::ZERO, Dp(40.0 * scale)).align(Alignment::TopCenter));
+                            .modifier(watch(geometry, "headline").semantics(SemanticsArgs { test_tag: Some("dialog-figure-headline".into()), merge_descendants: true,
+..Default::default() }).offset(Dp::ZERO, Dp(40.0 * scale)).align(Alignment::TopCenter));
                         text().content("A dialog is a modal window that appears in front of app content to provide critical information or ask for a decision.")
                             .style(dialog_type_style(14.0, 20.0, scale)).color(scheme.on_surface_variant)
-                            .modifier(watch(geometry, "body").offset(Dp::ZERO, Dp(88.0 * scale)).width(Dp(292.0 * scale)));
+                            .modifier(watch(geometry, "body").semantics(SemanticsArgs { test_tag: Some("dialog-figure-body".into()), merge_descendants: true,
+..Default::default() }).offset(Dp::ZERO, Dp(88.0 * scale)).width(Dp(292.0 * scale)));
                         dialog_touch_targets(RenderSlot::new(move || {
-                            boxed().modifier(watch(geometry, "actions").offset(Dp(116.0 * scale), Dp(176.0 * scale)).size(Dp(176.0 * scale), Dp(40.0 * scale)))
+                            boxed().modifier(watch(geometry, "actions").semantics(SemanticsArgs { test_tag: Some("dialog-figure-actions".into()), merge_descendants: true,
+..Default::default() }).offset(Dp(116.0 * scale), Dp(176.0 * scale)).size(Dp(176.0 * scale), Dp(40.0 * scale)))
                                 .children(move || {
                                     dialog_scene_action("Cancel".into(), "Cancel color dialog".into(), 0.0, 0.0, 80.0, scale,
                                         Callback::new(move || notice.set("Color dialog dismissed".into())));
@@ -2794,7 +2806,8 @@ fn dialog_plain_input(
         controller.set_text(initial.as_str());
         controller
     });
-    TextFieldBuilder::outlined()
+    text_field()
+        .outlined()
         .controller(controller)
         .placeholder(placeholder)
         .accessibility_label(name)
@@ -2814,11 +2827,7 @@ fn dialog_plain_input(
 fn full_spec_figure(mode: usize) {
     let scale = 1.0_f64;
     let geometry = remember(Geometry::new);
-    #[cfg(all(test, not(target_family = "wasm")))]
-    canonical_tests::GEOMETRY.set(Some(geometry));
     let notice = remember(String::new);
-    #[cfg(all(test, not(target_family = "wasm")))]
-    canonical_tests::NOTICE.set(Some(notice));
     let all_day = remember(|| false);
     let scheme = use_context::<MaterialTheme>().unwrap().get().color_scheme;
     let y = [103.0, 98.0, 67.0][mode];
@@ -2826,13 +2835,15 @@ fn full_spec_figure(mode: usize) {
         1024.0,
         [463.0, 508.0, 1030.0][mode],
         RenderSlot::new(move || {
-            boxed().modifier(watch(geometry, "figure").fill_max_width()
+            boxed().modifier(watch(geometry, "figure").semantics(SemanticsArgs { test_tag: Some("dialog-figure-figure".into()), merge_descendants: true,
+..Default::default() }).fill_max_width()
         .height(Dp([463.0, 508.0, 1030.0][mode] * scale)).clip_to_bounds()
         .background_with_shape(scheme.secondary_container, Shape::rounded_rectangle(Dp(24.0))))
         .children(move || {
             dialog_touch_targets(RenderSlot::new(move || {
                 dialog_diagram_theme(scale, RenderSlot::new(move || {
-                    boxed().modifier(watch(geometry, "container").offset(Dp(298.0 * scale), Dp(y * scale))
+                    boxed().modifier(watch(geometry, "container").semantics(SemanticsArgs { test_tag: Some("dialog-figure-container".into()), merge_descendants: true,
+..Default::default() }).offset(Dp(298.0 * scale), Dp(y * scale))
                         .size(Dp(428.0 * scale), Dp(909.0 * scale)))
                         .children(move || {
                             dialog_phone_frame(0.0, 0.0, 909.0, scale, RenderSlot::new(move || {
@@ -2852,9 +2863,11 @@ fn full_spec_figure(mode: usize) {
                                 if mode == 1 {
                                     text().content("With mamá’s birthday around the corner, I’d like to start planning location and food. I can host en mi casa if you all help with the food. Since we all know how much she loves to eat maybe we can cook together the day before? Should")
                                         .style(dialog_type_style(16.0, 24.0, scale)).color(scheme.on_surface_variant)
-                                        .modifier(watch(geometry, "body").offset(Dp(24.0 * scale), Dp(280.0 * scale)).width(Dp(364.0 * scale)));
+                                        .modifier(watch(geometry, "body").semantics(SemanticsArgs { test_tag: Some("dialog-figure-body".into()), merge_descendants: true,
+..Default::default() }).offset(Dp(24.0 * scale), Dp(280.0 * scale)).width(Dp(364.0 * scale)));
                                 } else {
-                                    spacer().modifier(watch(geometry, "divider").offset(Dp(if mode == 0 {27.0} else {24.0} * scale), Dp(if mode == 0 {290.0} else {295.0} * scale))
+                                    spacer().modifier(watch(geometry, "divider").semantics(SemanticsArgs { test_tag: Some("dialog-figure-divider".into()), merge_descendants: true,
+..Default::default() }).offset(Dp(if mode == 0 {27.0} else {24.0} * scale), Dp(if mode == 0 {290.0} else {295.0} * scale))
                                         .size(Dp(if mode == 0 {358.0} else {364.0} * scale), Dp(scale)).background(scheme.outline_variant));
                                     for (row, caption) in ["From", "To"].into_iter().enumerate() {
                                         if mode == 0 && row == 1 {continue;}
@@ -2911,6 +2924,11 @@ fn full_spec_header(
     boxed()
         .modifier(
             watch(geometry, "header")
+                .semantics(SemanticsArgs {
+                    test_tag: Some("dialog-figure-header".into()),
+                    merge_descendants: true,
+                    ..Default::default()
+                })
                 .offset(Dp::ZERO, Dp(y * scale))
                 .size(Dp(412.0 * scale), Dp(height * scale)),
         )
@@ -2921,6 +2939,11 @@ fn full_spec_header(
                 .on_click_shared(close)
                 .modifier(
                     watch(geometry, "close")
+                        .semantics(SemanticsArgs {
+                            test_tag: Some("dialog-figure-close".into()),
+                            merge_descendants: true,
+                            ..Default::default()
+                        })
                         .offset(Dp(8.0 * scale), Dp((center - 20.0) * scale))
                         .size(Dp(40.0 * scale), Dp(40.0 * scale)),
                 )
@@ -2937,12 +2960,22 @@ fn full_spec_header(
                 .color(scheme.on_surface)
                 .modifier(
                     watch(geometry, "headline")
+                        .semantics(SemanticsArgs {
+                            test_tag: Some("dialog-figure-headline".into()),
+                            merge_descendants: true,
+                            ..Default::default()
+                        })
                         .offset(Dp(56.0 * scale), Dp((center - 14.0) * scale))
                         .width(Dp(270.0 * scale)),
                 );
             boxed()
                 .modifier(
                     watch(geometry, "confirm")
+                        .semantics(SemanticsArgs {
+                            test_tag: Some("dialog-figure-confirm".into()),
+                            merge_descendants: true,
+                            ..Default::default()
+                        })
                         .offset(Dp(336.0 * scale), Dp((center - 20.0) * scale))
                         .size(Dp(64.0 * scale), Dp(40.0 * scale)),
                 )

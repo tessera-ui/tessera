@@ -1,119 +1,19 @@
-//! # Performance Profiler
+//! Streaming frame profiles.
 //!
 //! ## Usage
 //!
-//! Stream JSONL frame timing for external analyzer tools.
-//!
-//! ## Format
-//!
-//! Here is an example of the output file:
-//!
-//! Note that the frame record shown here is formatted for readability. The
-//! actual output file contains one JSON object per line to support streaming
-//! processing and parsing.
-//!
-//! ```jsonl
-//! {"version":1,"format":"tessera-profiler","generated_at":"1767008877"}
-//! {
-//!   "type": "frame",
-//!   "frame": 0,
-//!   "build_mode": "partial_replay",
-//!   "redraw_reasons": ["mouse_input"],
-//!   "inter_frame_wait_ns": 16564000,
-//!   "render_time_ns": 1349800,
-//!   "frame_total_ns": 57486200,
-//!   "components": [
-//!     {
-//!       "id": "1",
-//!       "fn_name": "entry_wrapper",
-//!       "abs_pos": { "x": 0, "y": 0 },
-//!       "size": { "w": 51, "h": 48 },
-//!       "layout_cache_hit": true,
-//!       "phases": { "build_ns": 55548600, "measure_ns": 55549000 },
-//!       "children": [
-//!         {
-//!           "id": "2",
-//!           "fn_name": "app",
-//!           "abs_pos": { "x": 0, "y": 0 },
-//!           "size": { "w": 51, "h": 48 },
-//!           "layout_cache_hit": false,
-//!           "phases": { "build_ns": 54978700, "measure_ns": 54979600 },
-//!           "children": [
-//!             {
-//!               "id": "3",
-//!               "fn_name": "text",
-//!               "abs_pos": { "x": 0, "y": 0 },
-//!               "size": { "w": 51, "h": 48 },
-//!               "layout_cache_hit": true,
-//!               "phases": { "build_ns": 54976500, "measure_ns": 54977000 },
-//!               "children": [
-//!                 {
-//!                   "id": "4",
-//!                   "fn_name": "modifier_semantics",
-//!                   "abs_pos": { "x": 0, "y": 0 },
-//!                   "size": { "w": 51, "h": 48 },
-//!                   "phases": {
-//!                     "build_ns": 8500,
-//!                     "measure_ns": 54974800,
-//!                     "input_ns": 7300
-//!                   },
-//!                   "children": [
-//!                     {
-//!                       "id": "5",
-//!                       "fn_name": "text_inner",
-//!                       "abs_pos": { "x": 0, "y": 0 },
-//!                       "size": { "w": 51, "h": 48 },
-//!                       "phases": {
-//!                         "build_ns": 54948400,
-//!                         "measure_ns": 54960100
-//!                       },
-//!                       "children": []
-//!                     }
-//!                   ]
-//!                 }
-//!               ]
-//!             }
-//!           ]
-//!         }
-//!       ]
-//!     }
-//!   ]
-//! }
-//! ```
-//!
-//! ### Frame Header
-//!
-//! The first line is a header that describes the profiler output format,
-//! including version and generation timestamp.
-//!
-//! See [`FrameHeader`] for equivalent Rust structure.
-//!
-//! ### Trace Events
-//!
-//! Each subsequent line is a tagged event record.
-//!
-//! `layout_cache_hit` is an optional boolean on each component record. When
-//! present, it indicates whether the layout cache was hit for that node in the
-//! current frame.
-//!
-//! See [`FrameEventRecord`] and [`ComponentRecord`] for equivalent Rust
-//! structures.
+//! Read JSONL [`FrameHeader`] and [`FrameEventRecord`] records with [`ComponentRecord`] measurements.
 use std::{
+    cell::{Cell, RefCell},
     collections::HashMap,
     fs::{File, OpenOptions, create_dir_all},
     io::{self, BufWriter, Write},
     path::{Path, PathBuf},
-    sync::{
-        OnceLock,
-        atomic::{AtomicU64, Ordering},
-        mpsc,
-    },
+    rc::Rc,
+    sync::mpsc,
     thread,
     time::{Duration, SystemTime, UNIX_EPOCH},
 };
-
-#[cfg(all(feature = "headless", feature = "profiling"))]
-use std::cell::Cell;
 
 use indextree::NodeId;
 use serde::Serialize;
@@ -319,6 +219,7 @@ enum Message {
 
 struct ProfilerRuntime {
     sender: mpsc::Sender<Message>,
+    worker: Option<thread::JoinHandle<()>>,
 }
 
 /// Destination for profiler records: a file for offline analysis, or a local
@@ -353,40 +254,61 @@ struct WorkerState {
     header_written: bool,
 }
 
-static RUNTIME: OnceLock<ProfilerRuntime> = OnceLock::new();
-static FRAME_INDEX: AtomicU64 = AtomicU64::new(0);
-
-#[cfg(all(feature = "headless", feature = "profiling"))]
-thread_local! { static FRAME_SUMMARY: Cell<bool> = const { Cell::new(false) }; }
-static OUTPUT_PATH: OnceLock<PathBuf> = OnceLock::new();
+#[derive(Default)]
+struct ProfilerSettings {
+    path: RefCell<Option<PathBuf>>,
+    frame: Cell<u64>,
+    summary: Cell<bool>,
+}
 
 fn output_path() -> PathBuf {
-    OUTPUT_PATH
-        .get()
-        .cloned()
+    crate::local_runtime_resource::<ProfilerSettings>()
+        .path
+        .borrow()
+        .clone()
         .unwrap_or_else(|| PathBuf::from("tessera-profiler.jsonl"))
 }
 
-/// Set profiler output path. Must be called before any profiling begins.
+/// Sets the output path for the current session before profiling begins.
 pub fn set_output_path(path: impl AsRef<Path>) {
-    let _ = OUTPUT_PATH.set(path.as_ref().to_path_buf());
+    crate::local_runtime_resource::<ProfilerSettings>()
+        .path
+        .replace(Some(path.as_ref().to_path_buf()));
 }
 
-fn profiler_runtime() -> &'static ProfilerRuntime {
-    RUNTIME.get_or_init(|| {
+impl Default for ProfilerRuntime {
+    fn default() -> Self {
         let (sender, receiver) = mpsc::channel::<Message>();
-        let _ = thread::Builder::new()
-            .name("tessera-profiler".to_string())
-            .spawn(move || worker_loop(receiver))
+        let path = output_path();
+        let worker = thread::Builder::new()
+            .name("tessera-profiler".into())
+            .spawn(move || worker_loop(receiver, path))
             .expect("failed to spawn profiler worker");
-        ProfilerRuntime { sender }
-    })
+        Self {
+            sender,
+            worker: Some(worker),
+        }
+    }
+}
+
+impl Drop for ProfilerRuntime {
+    fn drop(&mut self) {
+        let (replacement, _) = mpsc::channel();
+        drop(std::mem::replace(&mut self.sender, replacement));
+        if let Some(worker) = self.worker.take() {
+            let _ = worker.join();
+        }
+    }
+}
+
+fn profiler_runtime() -> Rc<ProfilerRuntime> {
+    crate::local_runtime_resource::<ProfilerRuntime>()
 }
 
 /// Opens the profiler destination. When `TESSERA_PROFILING_IPC` is set to a
 /// local socket name/path the records are streamed over IPC (live, no temp
 /// file, no network); otherwise they are written to the configured JSONL file.
-fn open_output_sink() -> Option<OutputSink> {
+fn open_output_sink(path: &Path) -> Option<OutputSink> {
     #[cfg(feature = "profiling")]
     if let Ok(raw) = std::env::var("TESSERA_PROFILING_IPC") {
         let raw = raw.trim();
@@ -399,7 +321,7 @@ fn open_output_sink() -> Option<OutputSink> {
             );
         }
     }
-    open_file_sink()
+    open_file_sink(path)
 }
 
 #[cfg(feature = "profiling")]
@@ -443,8 +365,7 @@ fn connect_ipc_sink(raw: &str) -> Option<OutputSink> {
     None
 }
 
-fn open_file_sink() -> Option<OutputSink> {
-    let output_path = output_path();
+fn open_file_sink(output_path: &Path) -> Option<OutputSink> {
     if let Some(parent) = output_path.parent()
         && !parent.as_os_str().is_empty()
         && let Err(err) = create_dir_all(parent)
@@ -469,8 +390,8 @@ fn open_file_sink() -> Option<OutputSink> {
     }
 }
 
-fn worker_loop(receiver: mpsc::Receiver<Message>) {
-    let Some(sink) = open_output_sink() else {
+fn worker_loop(receiver: mpsc::Receiver<Message>, path: PathBuf) {
+    let Some(sink) = open_output_sink(&path) else {
         return;
     };
     let mut state = WorkerState {
@@ -553,26 +474,37 @@ fn write_event(state: &mut WorkerState, event: &TraceEvent) {
 /// Reset the active frame index.
 pub fn begin_frame(frame_idx: u64) {
     #[cfg(all(feature = "headless", feature = "profiling"))]
-    FRAME_SUMMARY.set(false);
-    FRAME_INDEX.store(frame_idx, Ordering::Relaxed);
+    crate::local_runtime_resource::<ProfilerSettings>()
+        .summary
+        .set(false);
+    crate::local_runtime_resource::<ProfilerSettings>()
+        .frame
+        .set(frame_idx);
 }
 
 #[cfg(all(feature = "headless", feature = "profiling"))]
 pub(crate) fn begin_frame_summary(frame_idx: u64) {
     begin_frame(frame_idx);
-    FRAME_SUMMARY.set(true);
+    crate::local_runtime_resource::<ProfilerSettings>()
+        .summary
+        .set(true);
 }
 
 /// Samples are sent immediately; no-op for compatibility.
 pub fn end_frame() {}
 
 fn current_frame_idx() -> u64 {
-    FRAME_INDEX.load(Ordering::Relaxed)
+    crate::local_runtime_resource::<ProfilerSettings>()
+        .frame
+        .get()
 }
 
 fn push_sample(sample: Sample) {
     #[cfg(all(feature = "headless", feature = "profiling"))]
-    if FRAME_SUMMARY.get() {
+    if crate::local_runtime_resource::<ProfilerSettings>()
+        .summary
+        .get()
+    {
         return;
     }
     if let Err(err) = profiler_runtime().sender.send(Message::Sample(sample)) {
@@ -1147,6 +1079,8 @@ mod tests {
 
     #[test]
     fn mangle_shard_component_name() {
+        let _runtime_session = crate::RuntimeSession::new();
+        let _runtime_scope = _runtime_session.enter();
         assert_eq!(
             mangle_component_fn_name("__home_shard_component"),
             "home".to_string()
@@ -1155,6 +1089,8 @@ mod tests {
 
     #[test]
     fn keep_regular_component_name() {
+        let _runtime_session = crate::RuntimeSession::new();
+        let _runtime_scope = _runtime_session.enter();
         assert_eq!(mangle_component_fn_name("button"), "button".to_string());
         assert_eq!(
             mangle_component_fn_name_opt(Some("__settings_shard_component")),

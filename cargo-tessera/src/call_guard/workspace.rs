@@ -1,22 +1,39 @@
 use std::{
-    collections::HashSet,
+    collections::{HashMap, HashSet},
     env,
     path::{Path, PathBuf},
 };
 
 use anyhow::{Context, Result, anyhow};
-use cargo_metadata::{MetadataCommand, Target, TargetKind};
-use ra_ap_base_db::{Crate, all_crates};
+use ra_ap_base_db::all_crates;
+use ra_ap_cfg::{CfgAtom, CfgDiff};
 use ra_ap_hir::crate_def_map;
 use ra_ap_ide::{AnalysisHost, RootDatabase};
+use ra_ap_intern::Symbol;
 use ra_ap_load_cargo::{LoadCargoConfig, ProcMacroServerChoice, load_workspace_at};
 use ra_ap_project_model::{CargoConfig, CargoFeatures, RustLibSource};
 use ra_ap_vfs::{FileId, Vfs, VfsPath};
 
-use super::{CheckOptions, FeatureSelection, TargetSelection, types::LoadedWorkspace};
+use super::{
+    CheckOptions, FeatureSelection,
+    progress::Progress,
+    types::{LoadedWorkspace, SelectedSources},
+    utils::tessera_crates,
+};
 
-pub(crate) fn load_workspace(options: &CheckOptions<'_>) -> Result<LoadedWorkspace> {
+pub(crate) fn load_workspace(
+    options: &CheckOptions<'_>,
+    progress: &Progress,
+) -> Result<LoadedWorkspace> {
     let root = env::current_dir().context("Failed to resolve current directory")?;
+    load_workspace_from(options, progress, &root)
+}
+
+pub(crate) fn load_workspace_from(
+    options: &CheckOptions<'_>,
+    progress: &Progress,
+    root: &Path,
+) -> Result<LoadedWorkspace> {
     let mut cargo_config = CargoConfig {
         all_targets: options.target_selection.requires_cargo_all_targets(),
         features: cargo_features(&options.features),
@@ -30,6 +47,21 @@ pub(crate) fn load_workspace(options: &CheckOptions<'_>) -> Result<LoadedWorkspa
         cargo_config.extra_args.push(package.to_string());
         cargo_config.run_build_script_command = Some(build_script_command(options, package));
     }
+    if options.release {
+        cargo_config.extra_args.push("--release".to_string());
+        cargo_config.cfg_overrides.global = CfgDiff::new(
+            Vec::new(),
+            vec![CfgAtom::Flag(Symbol::intern("debug_assertions"))],
+        );
+    }
+    if options.workspace {
+        cargo_config.extra_args.push("--workspace".to_string());
+    }
+    if let Some(jobs) = options.jobs {
+        cargo_config
+            .extra_args
+            .extend(["--jobs".to_string(), jobs.to_string()]);
+    }
 
     let load_config = LoadCargoConfig {
         // Generated configuration handles require macro expansion to resolve
@@ -42,8 +74,10 @@ pub(crate) fn load_workspace(options: &CheckOptions<'_>) -> Result<LoadedWorkspa
     };
 
     let (db, vfs, proc_macro_client) =
-        load_workspace_at(&root, &cargo_config, &load_config, &|_| {})
-            .context("Failed to load rust-analyzer workspace for Tessera color checking")?;
+        load_workspace_at(root, &cargo_config, &load_config, &|message| {
+            progress.workspace(&message)
+        })
+        .context("Failed to load rust-analyzer workspace for CallGuard")?;
     drop(proc_macro_client);
 
     Ok(LoadedWorkspace {
@@ -62,6 +96,12 @@ fn build_script_command(options: &CheckOptions<'_>, package: &str) -> Vec<String
         "--package".to_string(),
         package.to_string(),
     ];
+    if options.release {
+        command.push("--release".to_string());
+    }
+    if let Some(jobs) = options.jobs {
+        command.extend(["--jobs".to_string(), jobs.to_string()]);
+    }
     if let Some(target) = options.target {
         command.extend(["--target".to_string(), target.to_string()]);
     }
@@ -98,14 +138,44 @@ fn build_script_command(options: &CheckOptions<'_>, package: &str) -> Vec<String
     command
 }
 
-pub(crate) fn selected_local_files(
+pub(crate) fn local_files_for_roots(
     db: &RootDatabase,
     vfs: &Vfs,
-    options: &CheckOptions<'_>,
+    target_roots: &[PathBuf],
 ) -> Result<HashSet<FileId>> {
-    let package_name = selected_package_name(options)?;
-    let manifest_dir = selected_package_manifest_dir(package_name.as_deref())?;
-    let target_roots = selected_target_roots(&manifest_dir, &options.target_selection)?;
+    let roots = target_roots.iter().map(|root| file_id_for_path(vfs, root).ok_or_else(|| anyhow!("rust-analyzer did not load target {}; refusing to proceed with unchecked calls", root.display()))).collect::<Result<HashSet<_>>>()?;
+    let loaded_roots = all_crates(db)
+        .iter()
+        .map(|krate| krate.root_file_id(db).file_id(db))
+        .collect::<HashSet<_>>();
+    if !roots.is_subset(&loaded_roots) {
+        return Err(anyhow!(
+            "rust-analyzer did not resolve every selected target crate; refusing to proceed with unchecked calls"
+        ));
+    }
+    let files = all_crates(db)
+        .iter()
+        .filter(|krate| roots.contains(&krate.root_file_id(db).file_id(db)))
+        .flat_map(|krate| {
+            crate_def_map(db, *krate)
+                .modules()
+                .filter_map(|(_, module)| module.definition_source_file_id().file_id())
+                .map(|file| file.file_id(db))
+        })
+        .collect::<HashSet<_>>();
+    if files.is_empty() {
+        return Err(anyhow!(
+            "rust-analyzer did not load the selected target modules; refusing to proceed with unchecked calls"
+        ));
+    }
+    Ok(files)
+}
+
+pub(crate) fn sources_for_roots(
+    db: &RootDatabase,
+    vfs: &Vfs,
+    target_roots: &[PathBuf],
+) -> Result<SelectedSources> {
     let target_root_files = target_roots
         .iter()
         .filter_map(|root| file_id_for_path(vfs, root))
@@ -113,32 +183,43 @@ pub(crate) fn selected_local_files(
     let allowed_crates = all_crates(db)
         .iter()
         .copied()
-        .filter(|krate| crate_matches(db, *krate, package_name.as_deref(), &target_root_files))
+        .filter(|krate| target_root_files.contains(&krate.root_file_id(db).file_id(db)))
         .collect::<HashSet<_>>();
 
-    // Only analyze source files that belong to the selected crates' module
-    // trees. Files that live in the VFS but are not declared as modules (for
-    // example a stray `src/pages/foo.rs` without a matching `mod` declaration)
-    // are not part of the build, so rust-analyzer cannot resolve anything in
-    // them and they would otherwise produce spurious diagnostics.
-    let local_files = allowed_crates
+    let local_files = local_files_for_roots(db, vfs, target_roots)?;
+
+    let dependencies = allowed_crates
         .iter()
-        .flat_map(|krate| {
-            crate_def_map(db, *krate)
-                .modules()
-                .map(|(_, module)| module.definition_source_file_id())
-        })
-        .filter_map(|file_id| file_id.file_id())
-        .map(|file_id| file_id.file_id(db))
+        .flat_map(|krate| krate.transitive_deps(db))
         .collect::<HashSet<_>>();
-
-    if local_files.is_empty() {
-        return Err(anyhow!(
-            "rust-analyzer did not load any local Rust source files for Tessera color checking"
-        ));
+    let sensitive_crates = tessera_crates(db)
+        .into_iter()
+        .flat_map(|krate| krate.transitive_rev_deps(db).into_vec())
+        .collect::<HashSet<_>>();
+    let mut file_crates = HashMap::<_, HashSet<_>>::new();
+    // Only crates in the selected dependency graph can supply call targets.
+    // Include third-party Tessera crates, but avoid expanding unrelated crates
+    // or traversing every source file in the VFS.
+    for krate in dependencies
+        .intersection(&sensitive_crates)
+        .chain(allowed_crates.iter())
+        .copied()
+        .collect::<HashSet<_>>()
+    {
+        for (_, module) in crate_def_map(db, krate).modules() {
+            if let Some(file_id) = module.definition_source_file_id().file_id() {
+                file_crates
+                    .entry(file_id.file_id(db))
+                    .or_default()
+                    .insert(krate);
+            }
+        }
     }
 
-    Ok(local_files)
+    Ok(SelectedSources {
+        local_files,
+        file_crates,
+    })
 }
 
 fn cargo_features(selection: &FeatureSelection<'_>) -> CargoFeatures {
@@ -154,148 +235,10 @@ fn cargo_features(selection: &FeatureSelection<'_>) -> CargoFeatures {
     }
 }
 
-fn selected_package_name(options: &CheckOptions<'_>) -> Result<Option<String>> {
-    if let Some(package) = options.package {
-        return Ok(Some(package.to_string()));
-    }
-
-    let metadata = MetadataCommand::new()
-        .no_deps()
-        .exec()
-        .context("Failed to read Cargo metadata for Tessera color checking")?;
-    let current_dir = env::current_dir().context("Failed to resolve current directory")?;
-    let current_dir = normalize_path(&current_dir);
-    let mut current_package = None;
-    for package in &metadata.packages {
-        let manifest_dir = package
-            .manifest_path
-            .parent()
-            .ok_or_else(|| anyhow!("Package manifest has no parent directory"))?;
-        if current_dir.starts_with(normalize_path(manifest_dir.as_std_path())) {
-            current_package = Some(package.name.to_string());
-            break;
-        }
-    }
-
-    Ok(current_package)
-}
-
-fn selected_package_manifest_dir(package: Option<&str>) -> Result<std::path::PathBuf> {
-    let metadata = MetadataCommand::new()
-        .no_deps()
-        .exec()
-        .context("Failed to read Cargo metadata for Tessera color checking")?;
-    let package = if let Some(package) = package {
-        metadata
-            .packages
-            .iter()
-            .find(|candidate| candidate.name.as_ref() == package)
-            .ok_or_else(|| anyhow!("Cargo package `{package}` was not found"))?
-    } else {
-        metadata
-            .root_package()
-            .ok_or_else(|| anyhow!("Unable to determine Cargo package for color checking"))?
-    };
-    let manifest_dir = package
-        .manifest_path
-        .parent()
-        .ok_or_else(|| anyhow!("Package manifest has no parent directory"))?;
-    Ok(normalize_path(manifest_dir.as_std_path()))
-}
-
-fn selected_target_roots(
-    manifest_dir: &Path,
-    target_selection: &TargetSelection,
-) -> Result<HashSet<std::path::PathBuf>> {
-    let manifest_path = manifest_dir.join("Cargo.toml");
-    let metadata = MetadataCommand::new()
-        .manifest_path(&manifest_path)
-        .no_deps()
-        .exec()
-        .with_context(|| {
-            format!(
-                "Failed to read Cargo metadata from {}",
-                manifest_path.display()
-            )
-        })?;
-    let normalized_manifest_path = normalize_path(&manifest_path);
-    let package = metadata
-        .packages
-        .iter()
-        .find(|candidate| {
-            let candidate_manifest_path: &Path = candidate.manifest_path.as_ref();
-            normalize_path(candidate_manifest_path) == normalized_manifest_path
-        })
-        .ok_or_else(|| {
-            anyhow!(
-                "Unable to find Cargo package manifest at {} for color checking",
-                manifest_path.display()
-            )
-        })?;
-    let mut roots = HashSet::new();
-    for target in &package.targets {
-        if target_is_selected(target, target_selection) {
-            roots.insert(normalize_path(target.src_path.as_std_path()));
-        }
-    }
-
-    Ok(roots)
-}
-
-fn target_is_selected(target: &Target, selection: &TargetSelection) -> bool {
-    if selection.all_targets {
-        return true;
-    }
-
-    let explicit = selection.lib
-        || selection.bins
-        || selection.examples
-        || selection.tests
-        || selection.benches;
-    if explicit {
-        return selection.lib && target_is_lib(target)
-            || selection.bins && target.is_bin()
-            || selection.examples && target.is_example()
-            || selection.tests && target.is_test()
-            || selection.benches && target.is_bench();
-    }
-
-    target_is_lib(target) || target.is_bin()
-}
-
-fn target_is_lib(target: &Target) -> bool {
-    target.is_lib()
-        || target.is_kind(TargetKind::RLib)
-        || target.is_kind(TargetKind::CDyLib)
-        || target.is_kind(TargetKind::DyLib)
-        || target.is_kind(TargetKind::StaticLib)
-        || target.is_proc_macro()
-}
-
 fn file_id_for_path(vfs: &Vfs, path: &Path) -> Option<FileId> {
     let path = normalize_path(path);
     let vfs_path = VfsPath::new_real_path(path.display().to_string());
     vfs.file_id(&vfs_path).map(|(file_id, _)| file_id)
-}
-
-fn crate_matches(
-    db: &RootDatabase,
-    krate: Crate,
-    selected_package: Option<&str>,
-    target_root_files: &HashSet<FileId>,
-) -> bool {
-    if !target_root_files.is_empty() {
-        return target_root_files.contains(&krate.root_file_id(db).file_id(db));
-    }
-
-    let Some(display_name) = krate.extra_data(db).display_name.as_ref() else {
-        return false;
-    };
-    if let Some(package) = selected_package {
-        return display_name.canonical_name().as_str() == package;
-    }
-
-    true
 }
 
 /// Normalizes a path so it can be compared against rust-analyzer VFS paths.
@@ -322,12 +265,10 @@ mod tests {
         fs,
         path::{Path, PathBuf},
         process::Command,
-        sync::atomic::{AtomicU64, Ordering},
     };
 
+    use super::super::TargetSelection;
     use super::*;
-
-    static NEXT_FIXTURE_ID: AtomicU64 = AtomicU64::new(0);
 
     #[test]
     fn build_script_check_ignores_unselected_workspace_members() {
@@ -396,25 +337,6 @@ mod tests {
     }
 
     #[test]
-    fn selected_target_roots_finds_workspace_member_manifest() {
-        let fixture = FixtureWorkspace::new();
-        let roots = selected_target_roots(fixture.member_dir(), &TargetSelection::default())
-            .expect("workspace member target roots should be selected");
-        let expected = fixture
-            .member_dir()
-            .join("src/lib.rs")
-            .canonicalize()
-            .expect("fixture source should canonicalize");
-        let contains_expected = roots.iter().any(|root| {
-            root.canonicalize()
-                .map(|root| root == expected)
-                .unwrap_or(false)
-        });
-
-        assert!(contains_expected, "selected roots: {roots:?}");
-    }
-
-    #[test]
     fn normalize_path_strips_verbatim_prefix() {
         assert_eq!(
             normalize_path(Path::new(r"\\?\C:\workspace\example")),
@@ -432,18 +354,14 @@ mod tests {
 
     struct FixtureWorkspace {
         root: PathBuf,
-        member_dir: PathBuf,
+        _directory: tempfile::TempDir,
     }
 
     impl FixtureWorkspace {
         fn new() -> Self {
-            let id = NEXT_FIXTURE_ID.fetch_add(1, Ordering::Relaxed);
-            let root = std::env::temp_dir().join(format!(
-                "tessera-color-check-workspace-fixture-{}-{id}",
-                std::process::id()
-            ));
+            let directory = tempfile::tempdir().expect("isolated checker fixture");
+            let root = directory.path().to_path_buf();
             let member_dir = root.join("member");
-            let _ = fs::remove_dir_all(&root);
             fs::create_dir_all(member_dir.join("src"))
                 .expect("fixture member src directory should be created");
             fs::write(
@@ -459,17 +377,10 @@ mod tests {
             fs::write(member_dir.join("src/lib.rs"), "")
                 .expect("fixture package source should be written");
 
-            Self { root, member_dir }
-        }
-
-        fn member_dir(&self) -> &Path {
-            &self.member_dir
-        }
-    }
-
-    impl Drop for FixtureWorkspace {
-        fn drop(&mut self) {
-            let _ = fs::remove_dir_all(&self.root);
+            Self {
+                root,
+                _directory: directory,
+            }
         }
     }
 }

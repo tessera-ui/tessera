@@ -1,5 +1,3 @@
-use std::cell::Cell;
-
 use tessera_ui::{
     Dp, FocusRequester, HeadlessConfig, HeadlessRenderer, MOUSE_POINTER_ID, Modifier,
     PressKeyEventType, PxPosition, State, accesskit::Role, remember, tessera,
@@ -15,23 +13,26 @@ use crate::{
 
 use super::{MenuController, close_for_traversal, menu_group, menu_item, menu_provider};
 
-thread_local! {
-    static CONTROLLER: Cell<Option<State<MenuController>>> = const { Cell::new(None) };
-    static ENABLED: Cell<Option<State<bool>>> = const { Cell::new(None) };
-    static EXPLICIT: Cell<Option<State<bool>>> = const { Cell::new(None) };
-    static OTHER_FOCUS: Cell<Option<FocusRequester>> = const { Cell::new(None) };
+#[derive(Clone, Copy, Default)]
+struct FixtureHandles {
+    controller: Option<State<MenuController>>,
+    enabled: Option<State<bool>>,
+    explicit: Option<State<bool>>,
+    other_focus: Option<FocusRequester>,
+    lazy_menu: Option<State<MenuController>>,
+    lazy_targets: Option<State<Vec<FocusRequester>>>,
 }
 
 #[tessera]
-fn fixture() {
+fn fixture(observed: tessera_ui::testing::TestProbe<FixtureHandles>) {
     let controller = remember(MenuController::new);
     let enabled = remember(|| true);
     let explicit_fallback = remember(|| false);
     let other = remember(FocusRequester::new).get();
-    CONTROLLER.set(Some(controller));
-    ENABLED.set(Some(enabled));
-    EXPLICIT.set(Some(explicit_fallback));
-    OTHER_FOCUS.set(Some(other));
+    observed.with_mut(|handles| handles.controller = Some(controller));
+    observed.with_mut(|handles| handles.enabled = Some(enabled));
+    observed.with_mut(|handles| handles.explicit = Some(explicit_fallback));
+    observed.with_mut(|handles| handles.other_focus = Some(other));
     material_theme().child(move || {
         menu_provider()
             .grouped(true)
@@ -58,9 +59,10 @@ fn fixture() {
                         .child(|| {});
                 });
             })
-            .menu_content(move || {
-                menu_group().children(move || {
+            .menu_content(move |menu| {
+                menu_group().menu(menu).children(move || {
                     menu_item()
+                        .menu(menu)
                         .label("Choose action")
                         .on_click(move || controller.with_mut(MenuController::close));
                 });
@@ -105,13 +107,8 @@ fn assert_focus(renderer: &HeadlessRenderer, label: &str, stage: &str) {
     );
 }
 
-thread_local! {
-    static LAZY_MENU: Cell<Option<State<MenuController>>> = const { Cell::new(None) };
-    static LAZY_TARGETS: Cell<Option<State<Vec<FocusRequester>>>> = const { Cell::new(None) };
-}
-
 #[tessera]
-fn lazy_fixture() {
+fn lazy_fixture(observed: tessera_ui::testing::TestProbe<FixtureHandles>) {
     let menu = remember(MenuController::new);
     let targets = remember(|| (0..30).map(|_| FocusRequester::new()).collect::<Vec<_>>());
     let list = remember(|| {
@@ -120,8 +117,8 @@ fn lazy_fixture() {
             .set_scroll_position(PxPosition::from_f32_xy(0.0, -480.0));
         list
     });
-    LAZY_MENU.set(Some(menu));
-    LAZY_TARGETS.set(Some(targets));
+    observed.with_mut(|handles| handles.lazy_menu = Some(menu));
+    observed.with_mut(|handles| handles.lazy_targets = Some(targets));
     material_theme().child(move || {
         menu_provider()
             .controller(menu)
@@ -147,8 +144,11 @@ fn lazy_fixture() {
                             .child(|| {});
                     });
             })
-            .menu_content(|| {
-                menu_item().label("Choose action").on_click(|| {});
+            .menu_content(|menu| {
+                menu_item()
+                    .menu(menu)
+                    .label("Choose action")
+                    .on_click(|| {});
             });
     });
 }
@@ -156,9 +156,13 @@ fn lazy_fixture() {
 #[test]
 #[ignore = "requires a native GPU adapter"]
 fn gpu_menu_tab_exit_reveals_virtualized_neighbors_before_traversing() {
+    let observed = tessera_ui::testing::TestProbe::default();
     let mut renderer = HeadlessRenderer::new(
-        Box::new(|| {
-            lazy_fixture();
+        Box::new({
+            let observed = observed.clone();
+            move || {
+                lazy_fixture(observed.clone());
+            }
         }),
         vec![Box::new(crate::TesseraComponents)],
         HeadlessConfig {
@@ -180,7 +184,7 @@ fn gpu_menu_tab_exit_reveals_virtualized_neighbors_before_traversing() {
     );
     click(&mut renderer, "Action 10");
     assert_focus(&renderer, "Choose action", "opened from a virtualized item");
-    close_for_traversal(LAZY_MENU.get().expect("menu"), &None, true);
+    close_for_traversal(observed.get().lazy_menu.expect("menu"), &None, true);
     renderer.render_frames(12);
     assert_focus(
         &renderer,
@@ -204,7 +208,7 @@ fn gpu_menu_tab_exit_reveals_virtualized_neighbors_before_traversing() {
     );
     renderer.render_frames(4);
     assert_focus(&renderer, "Action 8", "forward traversal after lazy reveal");
-    let current = LAZY_TARGETS.get().expect("targets").get()[8];
+    let current = observed.get().lazy_targets.expect("targets").get()[8];
     current.capture_focus();
     assert!(
         !tessera_ui::FocusManager::current()
@@ -229,9 +233,13 @@ fn gpu_menu_tab_exit_reveals_virtualized_neighbors_before_traversing() {
 #[test]
 #[ignore = "requires a native GPU adapter"]
 fn gpu_menu_restores_trigger_without_stealing_external_focus() {
+    let observed = tessera_ui::testing::TestProbe::default();
     let mut renderer = HeadlessRenderer::new(
-        Box::new(|| {
-            fixture();
+        Box::new({
+            let observed = observed.clone();
+            move || {
+                fixture(observed.clone());
+            }
         }),
         vec![Box::new(crate::TesseraComponents)],
         HeadlessConfig {
@@ -242,9 +250,13 @@ fn gpu_menu_restores_trigger_without_stealing_external_focus() {
     )
     .expect("renderer");
     renderer.render_frames(3);
-    let controller = CONTROLLER.get().expect("controller");
+    let controller = observed.get().controller.expect("controller");
     for explicit in [false, true] {
-        EXPLICIT.get().expect("explicit fallback").set(explicit);
+        observed
+            .get()
+            .explicit
+            .expect("explicit fallback")
+            .set(explicit);
         renderer.render_frames(2);
         for _ in 0..3 {
             click(&mut renderer, "Menu trigger");
@@ -271,14 +283,14 @@ fn gpu_menu_restores_trigger_without_stealing_external_focus() {
             }
         }
         click(&mut renderer, "Menu trigger");
-        OTHER_FOCUS.get().expect("other").request_focus();
+        observed.get().other_focus.expect("other").request_focus();
         renderer.render_frames(2);
         controller.with_mut(MenuController::close);
         renderer.render_frames(3);
         assert_focus(&renderer, "Unrelated action", "external focus");
 
         click(&mut renderer, "Menu trigger");
-        ENABLED.get().expect("enabled").set(false);
+        observed.get().enabled.expect("enabled").set(false);
         controller.with_mut(MenuController::close);
         renderer.render_frames(3);
         let tree = renderer.accessibility_snapshot().expect("tree");
@@ -291,7 +303,7 @@ fn gpu_menu_restores_trigger_without_stealing_external_focus() {
         if explicit {
             assert_focus(&renderer, "Unrelated action", "disabled trigger");
         }
-        ENABLED.get().expect("enabled").set(true);
+        observed.get().enabled.expect("enabled").set(true);
         renderer.render_frames(3);
         assert_ne!(
             renderer.accessibility_snapshot().expect("tree").focus,

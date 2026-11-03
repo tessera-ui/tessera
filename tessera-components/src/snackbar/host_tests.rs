@@ -5,7 +5,7 @@
 //! Restore a dismissed notification's origin without overriding later
 //! navigation.
 
-use std::{cell::Cell, time::Duration};
+use std::time::Duration;
 
 use tessera_ui::{
     Dp, HeadlessConfig, HeadlessRenderer, MOUSE_POINTER_ID, Modifier, PressKeyEventType,
@@ -26,20 +26,21 @@ struct Settings {
     origin_enabled: bool,
 }
 
-thread_local! {
-    static SETTINGS: Cell<Option<State<Settings>>> = const { Cell::new(None) };
-    static HOST: Cell<Option<State<SnackbarHostState>>> = const { Cell::new(None) };
+#[derive(Clone, Copy, Default)]
+struct FixtureHandles {
+    settings: Option<State<Settings>>,
+    host: Option<State<SnackbarHostState>>,
 }
 
 #[tessera]
-fn fixture() {
+fn fixture(observed: tessera_ui::testing::TestProbe<FixtureHandles>) {
     let settings = remember(|| Settings {
         show_origin: true,
         origin_enabled: true,
     });
     let host = remember(SnackbarHostState::new);
-    SETTINGS.set(Some(settings));
-    HOST.set(Some(host));
+    observed.with_mut(|handles| handles.settings = Some(settings));
+    observed.with_mut(|handles| handles.host = Some(host));
     material_theme().child(move || {
         column()
             .modifier(Modifier::new().width(Dp(400.0)))
@@ -65,13 +66,13 @@ fn fixture() {
 }
 
 fn node(renderer: &HeadlessRenderer, label: &str) -> (NodeId, Node) {
-    renderer
-        .accessibility_snapshot()
-        .unwrap()
-        .nodes
-        .into_iter()
-        .find(|(_, n)| n.label() == Some(label) && n.role() == Role::Button)
-        .unwrap_or_else(|| panic!("Missing button {label}"))
+    let snapshot = renderer
+        .inspect_accessibility()
+        .expect("accessibility tree");
+    let (id, node) = snapshot
+        .find(label, Role::Button)
+        .unwrap_or_else(|| panic!("missing button: {label}"));
+    (id, node.clone())
 }
 
 fn action(renderer: &mut HeadlessRenderer, label: &str, action: Action) {
@@ -84,8 +85,13 @@ fn action(renderer: &mut HeadlessRenderer, label: &str, action: Action) {
     renderer.render_frames(3);
 }
 
-fn show(renderer: &mut HeadlessRenderer, action_label: Option<&str>, duration: SnackbarDuration) {
-    HOST.get().unwrap().with_mut(|host| {
+fn show(
+    renderer: &mut HeadlessRenderer,
+    host: State<SnackbarHostState>,
+    action_label: Option<&str>,
+    duration: SnackbarDuration,
+) {
+    host.with_mut(|host| {
         let mut request = SnackbarRequest::new("Saved");
         request.with_dismiss_action = true;
         request.action_label = action_label.map(str::to_string);
@@ -97,8 +103,12 @@ fn show(renderer: &mut HeadlessRenderer, action_label: Option<&str>, duration: S
 
 fn check(samples: u32) {
     for scale in [1.0, 1.5] {
+        let observed = tessera_ui::testing::TestProbe::default();
         let mut renderer = HeadlessRenderer::new(
-            Box::new(fixture),
+            Box::new({
+                let observed = observed.clone();
+                move || fixture(observed.clone())
+            }),
             vec![Box::new(crate::TesseraComponents)],
             HeadlessConfig {
                 width: 800,
@@ -113,10 +123,15 @@ fn check(samples: u32) {
         renderer.render_frames(3);
         let origin = node(&renderer, "Origin").0;
         let other = node(&renderer, "Other task").0;
-        let host = HOST.get().unwrap();
-        let settings = SETTINGS.get().unwrap();
+        let host = observed.get().host.unwrap();
+        let settings = observed.get().settings.unwrap();
         action(&mut renderer, "Origin", Action::Focus);
-        show(&mut renderer, Some("Undo"), SnackbarDuration::Indefinite);
+        show(
+            &mut renderer,
+            host,
+            Some("Undo"),
+            SnackbarDuration::Indefinite,
+        );
         assert_eq!(renderer.accessibility_snapshot().unwrap().focus, origin);
         action(&mut renderer, "Undo", Action::Focus);
         action(&mut renderer, "Undo", Action::Click);
@@ -127,7 +142,7 @@ fn check(samples: u32) {
         );
         assert_eq!(renderer.accessibility_snapshot().unwrap().focus, origin);
 
-        show(&mut renderer, None, SnackbarDuration::Indefinite);
+        show(&mut renderer, host, None, SnackbarDuration::Indefinite);
         let bounds = node(&renderer, "Dismiss").1.bounds().unwrap();
         let point = PxPosition::from_f32_xy(
             ((bounds.x0 + bounds.x1) * 0.5) as f32,
@@ -141,7 +156,7 @@ fn check(samples: u32) {
         assert!(!host.with(SnackbarHostState::is_showing));
         assert_eq!(renderer.accessibility_snapshot().unwrap().focus, origin);
 
-        show(&mut renderer, None, SnackbarDuration::Indefinite);
+        show(&mut renderer, host, None, SnackbarDuration::Indefinite);
         action(&mut renderer, "Dismiss", Action::Focus);
         action(&mut renderer, "Other task", Action::Focus);
         host.with_mut(SnackbarHostState::dismiss_current);
@@ -149,8 +164,18 @@ fn check(samples: u32) {
         assert_eq!(renderer.accessibility_snapshot().unwrap().focus, other);
 
         action(&mut renderer, "Origin", Action::Focus);
-        show(&mut renderer, Some("First"), SnackbarDuration::Indefinite);
-        show(&mut renderer, Some("Second"), SnackbarDuration::Indefinite);
+        show(
+            &mut renderer,
+            host,
+            Some("First"),
+            SnackbarDuration::Indefinite,
+        );
+        show(
+            &mut renderer,
+            host,
+            Some("Second"),
+            SnackbarDuration::Indefinite,
+        );
         action(&mut renderer, "First", Action::Focus);
         action(&mut renderer, "First", Action::Click);
         assert!(host.with(SnackbarHostState::is_showing));
@@ -159,7 +184,7 @@ fn check(samples: u32) {
         assert!(!host.with(SnackbarHostState::is_showing));
         assert_eq!(renderer.accessibility_snapshot().unwrap().focus, origin);
 
-        show(&mut renderer, None, SnackbarDuration::Short);
+        show(&mut renderer, host, None, SnackbarDuration::Short);
         action(&mut renderer, "Dismiss", Action::Focus);
         renderer.render_frames(45);
         assert!(!host.with(SnackbarHostState::is_showing));
@@ -167,7 +192,7 @@ fn check(samples: u32) {
 
         for remove in [false, true] {
             action(&mut renderer, "Origin", Action::Focus);
-            show(&mut renderer, None, SnackbarDuration::Indefinite);
+            show(&mut renderer, host, None, SnackbarDuration::Indefinite);
             action(&mut renderer, "Dismiss", Action::Focus);
             settings.with_mut(|s| {
                 s.show_origin = !remove;
@@ -206,9 +231,9 @@ fn host_actions_queue_timeout_and_unavailable_origins_restore_focus_msaa4() {
 }
 
 #[tessera]
-fn custom_slot_fixture() {
+fn custom_slot_fixture(observed: tessera_ui::testing::TestProbe<FixtureHandles>) {
     let host = remember(SnackbarHostState::new);
-    HOST.set(Some(host));
+    observed.with_mut(|handles| handles.host = Some(host));
     material_theme().child(move || {
         snackbar_host()
             .state(host)
@@ -226,8 +251,12 @@ fn custom_host_slot_renders_current_queued_message() {
     crate::test_utils::run_isolated_test(
         "snackbar::host_tests::custom_host_slot_renders_current_queued_message",
         || {
+            let observed = tessera_ui::testing::TestProbe::default();
             let mut renderer = HeadlessRenderer::new(
-                Box::new(custom_slot_fixture),
+                Box::new({
+                    let observed = observed.clone();
+                    move || custom_slot_fixture(observed.clone())
+                }),
                 vec![Box::new(crate::TesseraComponents)],
                 HeadlessConfig {
                     width: 400,
@@ -238,7 +267,7 @@ fn custom_host_slot_renders_current_queued_message() {
             )
             .unwrap();
             renderer.render_frames(3);
-            let host = HOST.get().unwrap();
+            let host = observed.get().host.unwrap();
             for message in ["Saved", "Uploaded"] {
                 host.with_mut(|host| {
                     let mut request = SnackbarRequest::new(message);

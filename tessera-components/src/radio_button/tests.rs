@@ -4,7 +4,7 @@
 //!
 //! Verify radio semantics, exclusive selection, and keyboard navigation.
 
-use std::{cell::Cell, time::Duration};
+use std::time::Duration;
 
 use tessera_ui::{
     Color, Dp, FocusDirection, FocusManager, FocusProperties, HeadlessConfig, HeadlessRenderer,
@@ -12,6 +12,7 @@ use tessera_ui::{
     accesskit::{Action, ActionRequest, Node, NodeId, Orientation, Role, Toggled, TreeId},
     modifier::FocusModifierExt as _,
     remember, tessera,
+    testing::TestProbe,
 };
 
 use crate::{
@@ -22,41 +23,45 @@ use crate::{
 
 use super::{RadioButtonController, RadioGroupOrientation, radio_button, radio_group};
 
-thread_local! {
-    static SELECTED: Cell<Option<State<usize>>> = const { Cell::new(None) };
-    static ENABLED: Cell<Option<State<bool>>> = const { Cell::new(None) };
-    static CALLS: Cell<Option<State<u32>>> = const { Cell::new(None) };
-    static INK: Cell<Option<State<Option<Color>>>> = const { Cell::new(None) };
-    static ORIENTATION: Cell<Option<State<RadioGroupOrientation>>> = const { Cell::new(None) };
-    static SKIP_ALPHA: Cell<Option<State<bool>>> = const { Cell::new(None) };
-    static SHOW_MANAGED: Cell<Option<State<bool>>> = const { Cell::new(None) };
-    static MANAGED_CALLS: Cell<Option<State<[u32; 3]>>> = const { Cell::new(None) };
-    static PRESET: Cell<Option<State<RadioButtonController>>> = const { Cell::new(None) };
+#[derive(Clone, Copy, Default)]
+struct FixtureHandles {
+    selected: Option<State<usize>>,
+    enabled: Option<State<bool>>,
+    calls: Option<State<u32>>,
+    ink: Option<State<Option<Color>>>,
+    orientation: Option<State<RadioGroupOrientation>>,
+    skip_alpha: Option<State<bool>>,
+    show_managed: Option<State<bool>>,
+    managed_calls: Option<State<[u32; 3]>>,
+    preset: Option<State<RadioButtonController>>,
 }
 
 #[tessera]
-fn managed_fixture() {
+fn managed_fixture(observed: TestProbe<FixtureHandles>) {
     let show = remember(|| true);
     let calls = remember(|| [0u32; 3]);
     let preset = remember(|| RadioButtonController::new(true));
-    SHOW_MANAGED.set(Some(show));
-    MANAGED_CALLS.set(Some(calls));
-    PRESET.set(Some(preset));
+    observed.with_mut(|handles| handles.show_managed = Some(show));
+    observed.with_mut(|handles| handles.managed_calls = Some(calls));
+    observed.with_mut(|handles| handles.preset = Some(preset));
     material_theme().child(move || {
         column().children(move || {
             radio_group()
                 .accessibility_label("Managed choices")
-                .content(move || {
+                .content(move |group| {
                     column().children(move || {
                         radio_button()
+                            .group(group)
                             .accessibility_label("One")
                             .on_select(move |_| calls.with_mut(|calls| calls[0] += 1));
                         if show.get() {
                             radio_button()
+                                .group(group)
                                 .accessibility_label("Two")
                                 .on_select(move |_| calls.with_mut(|calls| calls[1] += 1));
                         }
                         radio_button()
+                            .group(group)
                             .accessibility_label("Preset")
                             .controller(preset)
                             .on_select(move |_| calls.with_mut(|calls| calls[2] += 1));
@@ -64,10 +69,10 @@ fn managed_fixture() {
                 });
             radio_group()
                 .accessibility_label("Independent choices")
-                .content(|| {
-                    column().children(|| {
-                        radio_button().accessibility_label("Other");
-                        radio_button().accessibility_label("Another");
+                .content(|group| {
+                    column().children(move || {
+                        radio_button().group(group).accessibility_label("Other");
+                        radio_button().group(group).accessibility_label("Another");
                     });
                 });
         });
@@ -89,8 +94,12 @@ fn assert_checked(renderer: &HeadlessRenderer, labels: &[&str]) {
 }
 
 fn check_managed_group(samples: u32) {
+    let observed = TestProbe::default();
+    let fixture_observed = observed.clone();
     let mut renderer = HeadlessRenderer::new(
-        Box::new(managed_fixture),
+        Box::new(move || {
+            managed_fixture(fixture_observed.clone());
+        }),
         vec![Box::new(crate::TesseraComponents)],
         HeadlessConfig {
             width: 320,
@@ -113,24 +122,24 @@ fn check_managed_group(samples: u32) {
     renderer.pointer_release(MOUSE_POINTER_ID, point, PressKeyEventType::Left);
     renderer.render_frames(30);
     assert_checked(&renderer, &["One"]);
-    assert_eq!(MANAGED_CALLS.get().unwrap().get(), [1, 0, 0]);
+    assert_eq!(observed.get().managed_calls.unwrap().get(), [1, 0, 0]);
     let two = node(&renderer, "Two").0;
     assert!(action(&mut renderer, two, Action::Click));
     renderer.render_frames(30);
     assert_checked(&renderer, &["Two"]);
     assert!(action(&mut renderer, two, Action::Click));
     renderer.render_frames(12);
-    assert_eq!(MANAGED_CALLS.get().unwrap().get(), [1, 1, 0]);
+    assert_eq!(observed.get().managed_calls.unwrap().get(), [1, 1, 0]);
     assert!(action_by_label(&mut renderer, "Other", Action::Click));
     renderer.render_frames(30);
     assert_checked(&renderer, &["Two", "Other"]);
-    SHOW_MANAGED.get().unwrap().set(false);
+    observed.get().show_managed.unwrap().set(false);
     renderer.render_frames(15);
     assert_checked(&renderer, &["Other"]);
     assert!(action_by_label(&mut renderer, "One", Action::Click));
     renderer.render_frames(30);
     assert_checked(&renderer, &["One", "Other"]);
-    SHOW_MANAGED.get().unwrap().set(true);
+    observed.get().show_managed.unwrap().set(true);
     renderer.render_frames(15);
     assert_checked(&renderer, &["One", "Other"]);
     assert!(action_by_label(&mut renderer, "Two", Action::Focus));
@@ -138,16 +147,17 @@ fn check_managed_group(samples: u32) {
     assert_checked(&renderer, &["One", "Other"]);
     traverse(&mut renderer, FocusDirection::Down, "Preset");
     assert_checked(&renderer, &["Preset", "Other"]);
-    assert_eq!(MANAGED_CALLS.get().unwrap().get(), [2, 1, 1]);
+    assert_eq!(observed.get().managed_calls.unwrap().get(), [2, 1, 1]);
     assert!(action_by_label(&mut renderer, "Two", Action::Click));
     renderer.render_frames(30);
-    PRESET
+    observed
         .get()
+        .preset
         .unwrap()
         .with_mut(|controller| controller.set_selected(true));
     renderer.render_frames(30);
     assert_checked(&renderer, &["Preset", "Other"]);
-    assert_eq!(MANAGED_CALLS.get().unwrap().get(), [2, 2, 1]);
+    assert_eq!(observed.get().managed_calls.unwrap().get(), [2, 2, 1]);
 }
 
 #[test]
@@ -169,19 +179,19 @@ fn native_radio_uncontrolled_groups_are_exclusive_and_release_removed_choices_ms
 }
 
 #[tessera]
-fn fixture() {
+fn fixture(observed: TestProbe<FixtureHandles>) {
     let selected = remember(|| 1usize);
     let enabled = remember(|| false);
     let calls = remember(|| 0u32);
     let ink = remember(|| None::<Color>);
     let orientation = remember(RadioGroupOrientation::default);
     let skip_alpha = remember(|| false);
-    SELECTED.set(Some(selected));
-    ENABLED.set(Some(enabled));
-    CALLS.set(Some(calls));
-    INK.set(Some(ink));
-    ORIENTATION.set(Some(orientation));
-    SKIP_ALPHA.set(Some(skip_alpha));
+    observed.with_mut(|handles| handles.selected = Some(selected));
+    observed.with_mut(|handles| handles.enabled = Some(enabled));
+    observed.with_mut(|handles| handles.calls = Some(calls));
+    observed.with_mut(|handles| handles.ink = Some(ink));
+    observed.with_mut(|handles| handles.orientation = Some(orientation));
+    observed.with_mut(|handles| handles.skip_alpha = Some(skip_alpha));
     material_theme()
         .theme(|| {
             let mut theme = MaterialTheme::default();
@@ -204,12 +214,13 @@ fn fixture() {
                         .orientation(orientation.get())
                         .accessibility_label("Choices")
                         .accessibility_description("Choose one option")
-                        .content(move || {
+                        .content(move |group| {
                             column().children(move || {
                                 for (index, label) in
                                     ["Alpha", "Beta", "Gamma"].into_iter().enumerate()
                                 {
                                     radio_button()
+                                        .group(group)
                                         .modifier(if index == 0 && skip_alpha.get() {
                                             Modifier::new().focusable().focus_properties(
                                                 FocusProperties::new().skip_traversal(true),
@@ -280,8 +291,12 @@ fn center_pixel(renderer: &HeadlessRenderer, node: &Node) -> [u8; 4] {
 }
 
 fn check_radios(samples: u32) {
+    let observed = TestProbe::default();
+    let fixture_observed = observed.clone();
     let mut renderer = HeadlessRenderer::new(
-        Box::new(fixture),
+        Box::new(move || {
+            fixture(fixture_observed.clone());
+        }),
         vec![Box::new(crate::TesseraComponents)],
         HeadlessConfig {
             width: 300,
@@ -321,32 +336,33 @@ fn check_radios(samples: u32) {
     renderer.pointer_press(MOUSE_POINTER_ID, point, PressKeyEventType::Left);
     renderer.pointer_release(MOUSE_POINTER_ID, point, PressKeyEventType::Left);
     renderer.render_frames(12);
-    assert_eq!(CALLS.get().unwrap().get(), 0);
-    assert_eq!(SELECTED.get().unwrap().get(), 1);
+    assert_eq!(observed.get().calls.unwrap().get(), 0);
+    assert_eq!(observed.get().selected.unwrap().get(), 1);
     assert!(action(&mut renderer, alpha, Action::Focus));
     renderer.render_frames(12);
-    assert_eq!(SELECTED.get().unwrap().get(), 1);
-    assert_eq!(CALLS.get().unwrap().get(), 0);
+    assert_eq!(observed.get().selected.unwrap().get(), 1);
+    assert_eq!(observed.get().calls.unwrap().get(), 0);
     assert!(action(&mut renderer, alpha, Action::Click));
     renderer.render_frames(30);
-    assert_eq!(SELECTED.get().unwrap().get(), 0);
+    assert_eq!(observed.get().selected.unwrap().get(), 0);
     assert_eq!(
         center_pixel(&renderer, &node(&renderer, "Alpha").1),
         [255, 0, 0, 255]
     );
     assert_eq!(node(&renderer, "Beta").1.toggled(), Some(Toggled::False));
     traverse(&mut renderer, FocusDirection::Down, "Gamma");
-    assert_eq!(SELECTED.get().unwrap().get(), 2);
+    assert_eq!(observed.get().selected.unwrap().get(), 2);
     traverse(&mut renderer, FocusDirection::Down, "Alpha");
-    assert_eq!(SELECTED.get().unwrap().get(), 0);
+    assert_eq!(observed.get().selected.unwrap().get(), 0);
     traverse(&mut renderer, FocusDirection::Up, "Gamma");
-    assert_eq!(SELECTED.get().unwrap().get(), 2);
+    assert_eq!(observed.get().selected.unwrap().get(), 2);
     traverse(&mut renderer, FocusDirection::Right, "Alpha");
-    assert_eq!(SELECTED.get().unwrap().get(), 0);
+    assert_eq!(observed.get().selected.unwrap().get(), 0);
     traverse(&mut renderer, FocusDirection::Left, "Gamma");
-    assert_eq!(SELECTED.get().unwrap().get(), 2);
-    ORIENTATION
+    assert_eq!(observed.get().selected.unwrap().get(), 2);
+    observed
         .get()
+        .orientation
         .unwrap()
         .set(RadioGroupOrientation::Horizontal);
     renderer.render_frames(12);
@@ -358,7 +374,7 @@ fn check_radios(samples: u32) {
     traverse(&mut renderer, FocusDirection::Left, "Gamma");
     traverse(&mut renderer, FocusDirection::Down, "Alpha");
     traverse(&mut renderer, FocusDirection::Up, "Gamma");
-    ENABLED.get().unwrap().set(true);
+    observed.get().enabled.unwrap().set(true);
     renderer.render_frames(12);
     let (restored_id, restored) = node(&renderer, "Beta");
     assert_eq!(restored_id, beta);
@@ -366,11 +382,11 @@ fn check_radios(samples: u32) {
     assert!(!restored.is_disabled());
     assert!(restored.supports_action(Action::Focus));
     assert!(restored.supports_action(Action::Click));
-    let before_drag = CALLS.get().unwrap().get();
+    let before_drag = observed.get().calls.unwrap().get();
     renderer.pointer_press(MOUSE_POINTER_ID, point, PressKeyEventType::Left);
     renderer.step_frame();
     assert_eq!(
-        SELECTED.get().unwrap().get(),
+        observed.get().selected.unwrap().get(),
         2,
         "pointer focus must wait for click completion"
     );
@@ -379,22 +395,22 @@ fn check_radios(samples: u32) {
     renderer.step_frame();
     renderer.pointer_release(MOUSE_POINTER_ID, dragged, PressKeyEventType::Left);
     renderer.render_frames(30);
-    assert_eq!(SELECTED.get().unwrap().get(), 2);
+    assert_eq!(observed.get().selected.unwrap().get(), 2);
     assert_eq!(
-        CALLS.get().unwrap().get(),
+        observed.get().calls.unwrap().get(),
         before_drag,
         "a cancelled pointer click must not select"
     );
     assert!(action(&mut renderer, gamma, Action::Focus));
     renderer.render_frames(30);
     traverse(&mut renderer, FocusDirection::Up, "Beta");
-    assert_eq!(SELECTED.get().unwrap().get(), 1);
+    assert_eq!(observed.get().selected.unwrap().get(), 1);
     assert_eq!(node(&renderer, "Beta").1.toggled(), Some(Toggled::True));
-    let calls = CALLS.get().unwrap().get();
+    let calls = observed.get().calls.unwrap().get();
     assert!(action(&mut renderer, beta, Action::Click));
     renderer.render_frames(12);
     assert_eq!(
-        CALLS.get().unwrap().get(),
+        observed.get().calls.unwrap().get(),
         calls,
         "selected radios do not activate twice"
     );
@@ -421,8 +437,8 @@ fn check_radios(samples: u32) {
         node(&renderer, "Standalone").1.toggled(),
         Some(Toggled::False)
     );
-    assert_eq!(SELECTED.get().unwrap().get(), 1);
-    INK.get().unwrap().set(Some(Color::RED));
+    assert_eq!(observed.get().selected.unwrap().get(), 1);
+    observed.get().ink.unwrap().set(Some(Color::RED));
     renderer.render_frames(30);
     let pixels = renderer.read_pixels().expect("custom focused ring");
     assert_eq!(&pixels[ring_offset..ring_offset + 4], &[255, 0, 0, 255]);
@@ -431,16 +447,16 @@ fn check_radios(samples: u32) {
         ((bounds.x0 + bounds.x1) / 2.0) as f32,
         ((bounds.y0 + bounds.y1) / 2.0) as f32,
     );
-    let before_click = CALLS.get().unwrap().get();
+    let before_click = observed.get().calls.unwrap().get();
     renderer.pointer_press(MOUSE_POINTER_ID, point, PressKeyEventType::Left);
     renderer.step_frame();
-    assert_eq!(SELECTED.get().unwrap().get(), 1);
+    assert_eq!(observed.get().selected.unwrap().get(), 1);
     renderer.pointer_release(MOUSE_POINTER_ID, point, PressKeyEventType::Left);
     renderer.render_frames(30);
-    assert_eq!(SELECTED.get().unwrap().get(), 0);
-    assert_eq!(CALLS.get().unwrap().get(), before_click + 1);
+    assert_eq!(observed.get().selected.unwrap().get(), 0);
+    assert_eq!(observed.get().calls.unwrap().get(), before_click + 1);
 
-    SELECTED.get().unwrap().set(2);
+    observed.get().selected.unwrap().set(2);
     renderer.render_frames(30);
     let before = node(&renderer, "Before").0;
     assert!(action(&mut renderer, before, Action::Focus));
@@ -449,13 +465,13 @@ fn check_radios(samples: u32) {
     traverse(&mut renderer, FocusDirection::Next, "Standalone");
     traverse(&mut renderer, FocusDirection::Previous, "Gamma");
     traverse(&mut renderer, FocusDirection::Previous, "Before");
-    SELECTED.get().unwrap().set(usize::MAX);
+    observed.get().selected.unwrap().set(usize::MAX);
     renderer.render_frames(30);
     traverse(&mut renderer, FocusDirection::Next, "Alpha");
-    assert_eq!(SELECTED.get().unwrap().get(), usize::MAX);
+    assert_eq!(observed.get().selected.unwrap().get(), usize::MAX);
     traverse(&mut renderer, FocusDirection::Right, "Beta");
-    assert_eq!(SELECTED.get().unwrap().get(), 1);
-    ENABLED.get().unwrap().set(false);
+    assert_eq!(observed.get().selected.unwrap().get(), 1);
+    observed.get().enabled.unwrap().set(false);
     renderer.render_frames(30);
     assert_eq!(
         renderer
@@ -464,14 +480,14 @@ fn check_radios(samples: u32) {
             .focus,
         alpha
     );
-    assert_eq!(SELECTED.get().unwrap().get(), 1);
+    assert_eq!(observed.get().selected.unwrap().get(), 1);
     traverse(&mut renderer, FocusDirection::Next, "Standalone");
-    SKIP_ALPHA.get().unwrap().set(true);
+    observed.get().skip_alpha.unwrap().set(true);
     renderer.render_frames(12);
     assert!(action(&mut renderer, before, Action::Focus));
     renderer.render_frames(12);
     traverse(&mut renderer, FocusDirection::Next, "Gamma");
-    assert_eq!(SELECTED.get().unwrap().get(), 1);
+    assert_eq!(observed.get().selected.unwrap().get(), 1);
     assert_eq!(FocusManager::current().focus_change_direction(), None);
 }
 

@@ -4,37 +4,18 @@
 //!
 //! Keep the input stationary while its optional calendar opens and closes.
 
-use std::{cell::Cell, time::Duration};
+use std::time::Duration;
 
 use tessera_components::{
     boxed::boxed, column::column, modifier::ModifierExt as _, theme::material_theme,
 };
 use tessera_ui::{
     Dp, HeadlessConfig, HeadlessRenderer, MOUSE_POINTER_ID, Modifier, PlacementModifierNode,
-    PressKeyEventType, PxPosition, RenderModule, State,
+    PressKeyEventType, PxPosition, State,
     accesskit::{Action, ActionRequest, Node, Role, TreeId},
     modifier::ModifierCapabilityExt as _,
     remember, tessera,
 };
-
-thread_local! {
-    static RANGE_FIGURE: Cell<super::Figure> = const { Cell::new(super::Figure::Range) };
-    static GUIDELINE_YEAR: Cell<bool> = const { Cell::new(false) };
-    static COLOR_PAIR: Cell<(super::Figure, bool, bool)> = const { Cell::new((super::Figure::Docked, false, false)) };
-    pub(super) static GEOMETRY: Cell<Option<State<super::ObservedGeometry>>> = const { Cell::new(None) };
-    pub(super) static ANNOTATION_BUILDS: Cell<usize> = const { Cell::new(0) };
-    static TRANSLATION: Cell<Option<State<Dp>>> = const { Cell::new(None) };
-    static DIALOG_SOURCE: Cell<Option<super::Sample>> = const { Cell::new(None) };
-    static DIALOG_OPEN: Cell<Option<State<bool>>> = const { Cell::new(None) };
-}
-
-struct Pipelines;
-
-impl RenderModule for Pipelines {
-    fn register_pipelines(&self, context: &mut tessera_ui::PipelineContext<'_>) {
-        tessera_components::pipelines::register_pipelines(context);
-    }
-}
 
 #[tessera]
 fn fixture() {
@@ -44,7 +25,9 @@ fn fixture() {
 }
 
 #[tessera]
-fn modal_example_fixture() {
+fn modal_example_fixture(
+    output: tessera_ui::testing::TestProbe<Option<(super::Sample, State<bool>)>>,
+) {
     let source = super::Sample {
         single: remember(|| super::single(super::DatePickerDisplayMode::Input)),
         range: remember(|| super::range(super::DatePickerDisplayMode::Input)),
@@ -61,8 +44,7 @@ fn modal_example_fixture() {
     };
     let open = remember(|| false);
     let input = remember(|| true);
-    DIALOG_SOURCE.set(Some(source));
-    DIALOG_OPEN.set(Some(open));
+    output.set(Some((source, open)));
     material_theme().child(move || {
         tessera_components::dialog::dialog_provider()
             .is_open(open.get())
@@ -73,8 +55,9 @@ fn modal_example_fixture() {
                     super::example(source, "Input", open, input, true, draft);
                 });
             })
-            .dialog_content(move || {
+            .dialog_content(move |dialog_scope| {
                 super::themed_picker(draft, "Modal")
+                    .dialog(dialog_scope)
                     .modal(open)
                     .commit_target(source);
             });
@@ -89,10 +72,11 @@ fn choose_modal_day(renderer: &mut HeadlessRenderer, day: &str) {
 #[test]
 #[ignore = "requires a native GPU adapter"]
 fn date_dialog_example_commits_only_confirmed_selection() {
-    let mut renderer = reference_renderer(modal_example_fixture);
+    let output = tessera_ui::testing::TestProbe::default();
+    let observed = output.clone();
+    let mut renderer = reference_renderer(Scene::Modal(observed));
     renderer.render_frames(4);
-    let source = DIALOG_SOURCE.get().unwrap();
-    let open = DIALOG_OPEN.get().unwrap();
+    let (source, open) = output.get().expect("mounted date dialog example");
     activate(&mut renderer, "Open Input date dialog");
     choose_modal_day(&mut renderer, "July 20, 2026");
     activate(&mut renderer, "Modal cancel date");
@@ -145,9 +129,9 @@ fn date_dialog_example_commits_only_confirmed_selection() {
 }
 
 #[tessera]
-fn translation_fixture() {
+fn translation_fixture(translation_probe: tessera_ui::testing::TestProbe<Option<State<Dp>>>) {
     let translation = remember(|| Dp::ZERO);
-    TRANSLATION.set(Some(translation));
+    translation_probe.set(Some(translation));
     material_theme().child(move || {
         boxed()
             .modifier(
@@ -173,10 +157,13 @@ impl PlacementModifierNode for Translation {
 #[test]
 #[ignore = "requires a native GPU adapter"]
 fn date_annotation_translation_keeps_raw_coordinates_without_rebuilding_local_callouts() {
-    ANNOTATION_BUILDS.set(0);
+    let translation_probe = tessera_ui::testing::TestProbe::default();
+    let observed = translation_probe.clone();
     let mut renderer = HeadlessRenderer::new(
-        Box::new(translation_fixture),
-        vec![Box::new(Pipelines)],
+        Box::new(move || {
+            translation_fixture(observed.clone());
+        }),
+        vec![Box::new(crate::TestPipelines)],
         HeadlessConfig {
             width: 800,
             height: 900,
@@ -187,14 +174,8 @@ fn date_annotation_translation_keeps_raw_coordinates_without_rebuilding_local_ca
     .unwrap();
     renderer.render_frames(36);
     let before = field(&renderer).bounds().unwrap();
-    let raw = GEOMETRY
-        .get()
-        .unwrap()
-        .with(|geometry| geometry.coordinates()["field"]);
-    let local = GEOMETRY
-        .get()
-        .unwrap()
-        .with(super::annotations::observed_relative_geometry);
+    let raw = field_coordinates(&renderer);
+    let local = relative_geometry(&renderer);
     assert!(local.contains_key("figure") && local.contains_key("field"));
     assert!(
         renderer
@@ -207,46 +188,34 @@ fn date_annotation_translation_keeps_raw_coordinates_without_rebuilding_local_ca
             }),
         "The native figure must publish its actual callouts before translation"
     );
-    let builds = ANNOTATION_BUILDS.get();
+    let builds = annotation_builds(&renderer);
     assert!(builds > 0, "The real figure must build its annotations");
     for translation in [48.0, 48.125, 96.625] {
-        TRANSLATION.get().unwrap().set(Dp(translation));
+        translation_probe.get().unwrap().set(Dp(translation));
         renderer.render_frames(6);
         let after = field(&renderer).bounds().unwrap();
-        let moved = GEOMETRY
-            .get()
-            .unwrap()
-            .with(|geometry| geometry.coordinates()["field"]);
+        let moved = field_coordinates(&renderer);
         assert_eq!(after.y0, before.y0 + translation);
         assert_eq!(
             moved.window_bounds().y,
             raw.window_bounds().y + translation as f32
         );
+        assert_eq!(relative_geometry(&renderer), local);
         assert_eq!(
-            GEOMETRY
-                .get()
-                .unwrap()
-                .with(super::annotations::observed_relative_geometry),
-            local
-        );
-        assert_eq!(
-            ANNOTATION_BUILDS.get(),
+            annotation_builds(&renderer),
             builds,
             "Outer translation must not rebuild local diagram callouts"
         );
     }
     activate(&mut renderer, "Choose month");
     renderer.render_frames(6);
-    let changed = GEOMETRY
-        .get()
-        .unwrap()
-        .with(super::annotations::observed_relative_geometry);
+    let changed = relative_geometry(&renderer);
     assert_ne!(
         changed["figure"].h, local["figure"].h,
         "The real month view changes the native artboard height"
     );
     assert!(
-        ANNOTATION_BUILDS.get() > builds,
+        annotation_builds(&renderer) > builds,
         "Real relative geometry changes must still update callouts"
     );
     assert!(
@@ -264,9 +233,9 @@ fn date_annotation_translation_keeps_raw_coordinates_without_rebuilding_local_ca
 }
 
 #[tessera]
-fn range_fixture() {
-    material_theme().child(|| {
-        super::date_figure(RANGE_FIGURE.get(), false, false);
+fn range_fixture(figure: super::Figure) {
+    material_theme().child(move || {
+        super::date_figure(figure, false, false);
     });
 }
 
@@ -276,11 +245,11 @@ fn article_fixture() {
 }
 
 #[tessera]
-fn guideline_fixture() {
-    material_theme().child(|| {
+fn guideline_fixture(year: bool) {
+    material_theme().child(move || {
         super::chapter_figure(
             super::Figure::Docked,
-            if GUIDELINE_YEAR.get() {
+            if year {
                 "Year selection"
             } else {
                 "Month selection"
@@ -292,12 +261,11 @@ fn guideline_fixture() {
 }
 
 #[tessera]
-fn color_fixture() {
-    material_theme().child(|| {
+fn color_fixture(figure: super::Figure, menu: bool, year: bool) {
+    material_theme().child(move || {
         column()
             .modifier(Modifier::new().fill_max_size())
-            .children(|| {
-                let (figure, menu, year) = COLOR_PAIR.get();
+            .children(move || {
                 super::date_color_pair(figure, menu, year);
             });
     });
@@ -337,7 +305,7 @@ fn activate(renderer: &mut HeadlessRenderer, label: &str) {
 fn date_figures_keep_docked_anchors_and_commit_only_complete_ranges() {
     let mut renderer = HeadlessRenderer::new(
         Box::new(fixture),
-        vec![Box::new(Pipelines)],
+        vec![Box::new(crate::TestPipelines)],
         HeadlessConfig {
             width: 800,
             height: 800,
@@ -349,10 +317,7 @@ fn date_figures_keep_docked_anchors_and_commit_only_complete_ranges() {
     .unwrap();
     renderer.render_frames(4);
     let before = field(&renderer).bounds().unwrap();
-    let visual = GEOMETRY
-        .get()
-        .unwrap()
-        .with(|geometry| geometry.coordinates()["field"]);
+    let visual = field_coordinates(&renderer);
     assert_eq!(visual.local_size.height.0, 56);
     let pixels = renderer.read_pixels().unwrap();
     let snapshot = renderer.accessibility_snapshot().unwrap();
@@ -439,10 +404,7 @@ fn date_figures_keep_docked_anchors_and_commit_only_complete_ranges() {
     renderer.resize(640, 800);
     renderer.render_frames(8);
     let narrow = field(&renderer).bounds().unwrap();
-    let container = GEOMETRY
-        .get()
-        .unwrap()
-        .with(|geometry| geometry.coordinates()["field"].window_bounds());
+    let container = field_coordinates(&renderer).window_bounds();
     assert_eq!(container.width, 195.0);
     assert_eq!(container.height, 35.0);
     assert!(
@@ -492,10 +454,12 @@ fn date_figures_keep_docked_anchors_and_commit_only_complete_ranges() {
 
 fn check_single_date_input_confirmation() {
     for (value, valid) in [("02/30/2025", false), ("02/28/2025", true)] {
-        RANGE_FIGURE.set(super::Figure::Input);
+        let figure = super::Figure::Input;
         let mut renderer = HeadlessRenderer::new(
-            Box::new(range_fixture),
-            vec![Box::new(Pipelines)],
+            Box::new(move || {
+                range_fixture(figure);
+            }),
+            vec![Box::new(crate::TestPipelines)],
             HeadlessConfig {
                 width: 800,
                 height: 800,
@@ -549,10 +513,11 @@ fn check_single_date_input_confirmation() {
 }
 
 fn check_range_confirmation_and_cancellation(figure: super::Figure) {
-    RANGE_FIGURE.set(figure);
     let mut renderer = HeadlessRenderer::new(
-        Box::new(range_fixture),
-        vec![Box::new(Pipelines)],
+        Box::new(move || {
+            range_fixture(figure);
+        }),
+        vec![Box::new(crate::TestPipelines)],
         HeadlessConfig {
             width: 800,
             height: 900,
@@ -623,7 +588,7 @@ fn assert_range_endpoints(renderer: &HeadlessRenderer, start: u8, end: u8) {
 fn date_article_switches_real_chapters_and_unmounts_inactive_pages() {
     let mut renderer = HeadlessRenderer::new(
         Box::new(article_fixture),
-        vec![Box::new(Pipelines)],
+        vec![Box::new(crate::TestPipelines)],
         HeadlessConfig {
             width: 900,
             height: 8000,
@@ -718,8 +683,7 @@ fn date_article_switches_real_chapters_and_unmounts_inactive_pages() {
 #[ignore = "requires a native GPU adapter"]
 fn date_reference_guidelines_and_color_pairs_mount_native_views() {
     for year in [false, true] {
-        GUIDELINE_YEAR.set(year);
-        let mut renderer = reference_renderer(guideline_fixture);
+        let mut renderer = reference_renderer(Scene::Guideline(year));
         renderer.render_frames(4);
         let label = if year { "2025" } else { "August" };
         assert!(
@@ -780,8 +744,7 @@ fn date_reference_guidelines_and_color_pairs_mount_native_views() {
             "Color role 7: Outline variant",
         ),
     ] {
-        COLOR_PAIR.set((figure, menu, year));
-        let mut renderer = reference_renderer(color_fixture);
+        let mut renderer = reference_renderer(Scene::Color(figure, menu, year));
         renderer.render_frames(4);
         let snapshot = renderer.accessibility_snapshot().unwrap();
         assert!(
@@ -832,10 +795,27 @@ fn date_reference_guidelines_and_color_pairs_mount_native_views() {
     }
 }
 
-fn reference_renderer<Output: 'static>(root: fn() -> Output) -> HeadlessRenderer {
+#[derive(Clone)]
+enum Scene {
+    Modal(tessera_ui::testing::TestProbe<Option<(super::Sample, State<bool>)>>),
+    Guideline(bool),
+    Color(super::Figure, bool, bool),
+}
+
+fn reference_renderer(scene: Scene) -> HeadlessRenderer {
     HeadlessRenderer::new(
-        Box::new(root),
-        vec![Box::new(Pipelines)],
+        Box::new(move || match scene.clone() {
+            Scene::Modal(output) => {
+                modal_example_fixture(output);
+            }
+            Scene::Guideline(year) => {
+                guideline_fixture(year);
+            }
+            Scene::Color(figure, menu, year) => {
+                color_fixture(figure, menu, year);
+            }
+        }),
+        vec![Box::new(crate::TestPipelines)],
         HeadlessConfig {
             width: 1000,
             height: 1000,
@@ -845,4 +825,41 @@ fn reference_renderer<Output: 'static>(root: fn() -> Output) -> HeadlessRenderer
         },
     )
     .unwrap()
+}
+
+fn field_coordinates(renderer: &HeadlessRenderer) -> tessera_ui::LayoutCoordinates {
+    renderer
+        .inspect_components()
+        .tagged("docked-date-field")
+        .layout_coordinates()
+        .expect("placed native date field")
+}
+
+fn relative_geometry(
+    renderer: &HeadlessRenderer,
+) -> std::collections::BTreeMap<&'static str, super::Rect> {
+    let snapshot = renderer.inspect_components();
+    let mut coordinates = std::collections::BTreeMap::new();
+    for name in ["figure", "field", "container", "calendar"] {
+        let tag = if name == "field" {
+            "docked-date-field".to_owned()
+        } else {
+            format!("observed-{name}")
+        };
+        if let Some(node) = snapshot.find_tag(&tag)
+            && let Some(value) = node.layout_coordinates()
+        {
+            coordinates.insert(name, value);
+        }
+    }
+    super::annotations::relative_precise_geometry(&coordinates)
+}
+
+fn annotation_builds(renderer: &HeadlessRenderer) -> usize {
+    renderer
+        .work_totals()
+        .count("date_annotations", tessera_ui::WorkPhase::Build)
+        + renderer
+            .work_totals()
+            .count("date_color_annotations", tessera_ui::WorkPhase::Build)
 }

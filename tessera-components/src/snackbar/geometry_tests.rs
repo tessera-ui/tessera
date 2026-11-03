@@ -4,8 +4,6 @@
 //!
 //! Keep notification text and actions aligned at compact and constrained sizes.
 
-use std::cell::Cell;
-
 use tessera_ui::{
     Dp, HeadlessConfig, HeadlessRenderer, Modifier, State,
     accesskit::{Node, Role},
@@ -30,10 +28,13 @@ struct Settings {
     padding: Option<Padding>,
 }
 
-thread_local! { static SETTINGS: Cell<Option<State<Settings>>> = const { Cell::new(None) }; }
+#[derive(Clone, Copy, Default)]
+struct FixtureHandles {
+    settings: Option<State<Settings>>,
+}
 
 #[tessera]
-fn fixture() {
+fn fixture(observed: tessera_ui::testing::TestProbe<FixtureHandles>) {
     let settings = remember(|| Settings {
         width: 320.0,
         message: "Saved".into(),
@@ -42,7 +43,7 @@ fn fixture() {
         stacked: false,
         padding: None,
     });
-    SETTINGS.set(Some(settings));
+    observed.with_mut(|handles| handles.settings = Some(settings));
     material_theme().child(move || {
         column().children(move || {
             let s = settings.get();
@@ -63,32 +64,23 @@ fn fixture() {
 }
 
 fn node(renderer: &HeadlessRenderer, label: &str, role: Role) -> Node {
-    renderer
-        .accessibility_snapshot()
-        .unwrap()
-        .nodes
-        .into_iter()
-        .find(|(_, n)| n.label() == Some(label) && n.role() == role)
-        .map(|(_, n)| n)
-        .unwrap_or_else(|| {
-            panic!(
-                "Missing {role:?}: {label}; settings: {:?}; nodes: {:?}",
-                SETTINGS.get().unwrap().get(),
-                renderer
-                    .accessibility_snapshot()
-                    .unwrap()
-                    .nodes
-                    .into_iter()
-                    .map(|(_, n)| (n.role(), n.label().map(str::to_string), n.bounds()))
-                    .collect::<Vec<_>>()
-            )
-        })
+    let snapshot = renderer
+        .inspect_accessibility()
+        .expect("accessibility tree");
+    let (_, node) = snapshot
+        .find(label, role)
+        .unwrap_or_else(|| panic!("missing {role:?}: {label}"));
+    node.clone()
 }
 
 fn check(samples: u32) {
     for scale in [1.0, 1.25, 1.5, 2.0] {
+        let observed = tessera_ui::testing::TestProbe::default();
         let mut renderer = HeadlessRenderer::new(
-            Box::new(fixture),
+            Box::new({
+                let observed = observed.clone();
+                move || fixture(observed.clone())
+            }),
             vec![Box::new(crate::TesseraComponents)],
             HeadlessConfig {
                 width: 800,
@@ -100,7 +92,7 @@ fn check(samples: u32) {
         )
         .unwrap();
         renderer.render_frames(4);
-        let settings = SETTINGS.get().unwrap();
+        let settings = observed.get().settings.unwrap();
         let initial = settings.get();
         let baseline = renderer.read_pixels().unwrap();
         for (message, text_height, height) in

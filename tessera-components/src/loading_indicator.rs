@@ -243,20 +243,15 @@ pub fn loading_indicator(
 
 #[cfg(test)]
 mod tests {
-    use std::{cell::Cell, sync::atomic::Ordering};
-
     use tessera_ui::{
         HeadlessConfig, HeadlessRenderer, State,
-        testing::{layout_test, pump_layout_test_session, start_layout_test_session},
+        testing::{TestProbe, layout_test, pump_layout_test_session, start_layout_test_session},
     };
 
     use crate::{
         boxed::boxed,
         column::column,
-        pipelines::loading_shape::{
-            geometry::{center, geometry},
-            pipeline::INSTANCE_ALLOCATIONS,
-        },
+        pipelines::loading_shape::geometry::{center, geometry},
         theme::material_theme,
     };
 
@@ -267,18 +262,16 @@ mod tests {
         progress: Option<f32>,
         paused: bool,
     }
-    thread_local! {
-        static CONFIG: Cell<Option<State<Config>>> = const { Cell::new(None) };
-        static POSE: Cell<Option<State<Pose>>> = const { Cell::new(None) };
-    }
 
     #[tessera]
-    fn fixture() {
+    fn fixture(probe: Option<TestProbe<Option<State<Config>>>>) {
         let config = remember(|| Config {
             progress: Some(0.0),
             paused: false,
         });
-        CONFIG.set(Some(config));
+        if let Some(probe) = probe {
+            probe.set(Some(config));
+        }
         material_theme().child(move || {
             column().children(move || {
                 for (index, contained) in [false, true].into_iter().enumerate() {
@@ -306,13 +299,13 @@ mod tests {
     }
 
     #[tessera]
-    fn shape_fixture() {
+    fn shape_fixture(probe: TestProbe<Option<State<Pose>>>) {
         let pose = remember(|| Pose {
             sequence: 0,
             progress: 0.0,
             rotation: 0.0,
         });
-        POSE.set(Some(pose));
+        probe.set(Some(pose));
         layout()
             .modifier(Modifier::new().size(Dp(64.0), Dp(64.0)))
             .policy(LoadingLayout)
@@ -376,11 +369,12 @@ mod tests {
         .viewport_px(32, 64)
         .run();
         snapshot.node("indicator-0").size(32, 48);
+        let probe = TestProbe::default();
         let mut session = start_layout_test_session(layout_test(|| {
-            fixture();
+            fixture().probe(probe.clone());
         }));
         pump_layout_test_session(&mut session, 0);
-        CONFIG
+        probe
             .get()
             .unwrap()
             .with_mut(|config| config.progress = Some(1.0));
@@ -392,9 +386,11 @@ mod tests {
     #[test]
     #[ignore = "requires a native GPU adapter"]
     fn gpu_loading_animation_pauses_reuses_buffers_and_publishes_progress() {
+        let probe = TestProbe::default();
+        let observed = probe.clone();
         let mut renderer = HeadlessRenderer::new(
-            Box::new(|| {
-                fixture();
+            Box::new(move || {
+                fixture().probe(observed.clone());
             }),
             vec![Box::new(crate::TesseraComponents)],
             HeadlessConfig {
@@ -418,19 +414,19 @@ mod tests {
                 .iter()
                 .all(|(_, node)| node.numeric_value() == Some(0.0))
         );
-        CONFIG
+        probe
             .get()
             .unwrap()
             .with_mut(|config| config.progress = Some(1.0));
         renderer.render_frames(3);
         assert_ne!(initial, renderer.read_pixels().unwrap());
-        CONFIG
+        probe
             .get()
             .unwrap()
             .with_mut(|config| config.progress = Some(0.0));
         renderer.render_frames(3);
         assert_eq!(initial, renderer.read_pixels().unwrap());
-        CONFIG
+        probe
             .get()
             .unwrap()
             .with_mut(|config| config.progress = None);
@@ -438,19 +434,34 @@ mod tests {
         let before = renderer.read_pixels().unwrap();
         renderer.render_frames(10);
         assert_ne!(before, renderer.read_pixels().unwrap());
-        let allocations = INSTANCE_ALLOCATIONS.load(Ordering::Relaxed);
+        let allocations = renderer
+            .graphics_work()
+            .group("loading_shape_instances")
+            .buffer_allocations;
         renderer.render_frames(180);
-        assert_eq!(allocations, INSTANCE_ALLOCATIONS.load(Ordering::Relaxed));
-        CONFIG
-            .get()
-            .unwrap()
-            .with_mut(|config| config.paused = true);
+        assert_eq!(
+            allocations,
+            renderer
+                .graphics_work()
+                .group("loading_shape_instances")
+                .buffer_allocations
+        );
+        probe.get().unwrap().with_mut(|config| config.paused = true);
         renderer.render_frames(3);
         let paused = renderer.read_pixels().unwrap();
-        let allocations = INSTANCE_ALLOCATIONS.load(Ordering::Relaxed);
+        let allocations = renderer
+            .graphics_work()
+            .group("loading_shape_instances")
+            .buffer_allocations;
         renderer.render_frames(180);
         assert_eq!(paused, renderer.read_pixels().unwrap());
-        assert_eq!(allocations, INSTANCE_ALLOCATIONS.load(Ordering::Relaxed));
+        assert_eq!(
+            allocations,
+            renderer
+                .graphics_work()
+                .group("loading_shape_instances")
+                .buffer_allocations
+        );
         let tree = renderer.accessibility_snapshot().unwrap();
         assert!(
             tree.nodes
@@ -517,9 +528,11 @@ mod tests {
     #[ignore = "requires a native GPU adapter"]
     fn gpu_loading_shapes_match_supersampled_cubic_references() {
         for sample_count in [1, 4] {
+            let probe = TestProbe::default();
+            let observed = probe.clone();
             let mut renderer = HeadlessRenderer::new(
-                Box::new(|| {
-                    shape_fixture();
+                Box::new(move || {
+                    shape_fixture(observed.clone());
                 }),
                 vec![Box::new(crate::TesseraComponents)],
                 HeadlessConfig {
@@ -538,7 +551,7 @@ mod tests {
                         progress,
                         rotation: 37.0,
                     };
-                    POSE.get().unwrap().set(pose);
+                    probe.get().unwrap().set(pose);
                     renderer.render_frames(2);
                     let pixels = renderer.read_pixels().unwrap();
                     let reference = reference_coverage(pose);

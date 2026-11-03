@@ -1,4 +1,4 @@
-use std::{cell::Cell, time::Duration};
+use std::time::Duration;
 
 use tessera_ui::{
     CursorEventContent, Dp, FocusDirection, FocusManager, GestureState, HeadlessConfig,
@@ -12,23 +12,25 @@ use crate::{modifier::ModifierExt as _, spacer::spacer, surface::surface, theme:
 
 use super::{BottomSheetController, BottomSheetExpansion, bottom_sheet_provider};
 
-thread_local! {
-    static CONTROLLER: Cell<Option<State<BottomSheetController>>> = const { Cell::new(None) };
-    static PARTIAL: Cell<Option<Dp>> = const { Cell::new(Some(Dp(240.0))) };
-    static CLOSES: Cell<usize> = const { Cell::new(0) };
+#[derive(Clone, Copy, Default)]
+struct FixtureHandles {
+    controller: Option<State<BottomSheetController>>,
+    partial: Option<Dp>,
+    closes: usize,
 }
 
 #[tessera]
-fn fixture() {
+fn fixture(observed: tessera_ui::testing::TestProbe<FixtureHandles>) {
     let controller = remember(|| BottomSheetController::new(true));
-    CONTROLLER.set(Some(controller));
+    observed.with_mut(|handles| handles.controller = Some(controller));
     material_theme().child(move || {
+        let observed = observed.clone();
         bottom_sheet_provider()
             .controller(controller)
-            .partial_height_optional(PARTIAL.get())
+            .partial_height_optional(observed.get().partial)
             .accessibility_label("Resizable sheet")
             .on_close_request(move || {
-                CLOSES.set(CLOSES.get() + 1);
+                observed.with_mut(|handles| handles.closes += 1);
                 controller.with_mut(BottomSheetController::close);
             })
             .main_content(|| {
@@ -64,10 +66,15 @@ fn tap(renderer: &mut HeadlessRenderer, point: PxPosition) {
 }
 
 fn check_handle() {
-    PARTIAL.set(Some(Dp(240.0)));
-    CLOSES.set(0);
+    let observed = tessera_ui::testing::TestProbe::new(FixtureHandles {
+        partial: Some(Dp(240.0)),
+        ..Default::default()
+    });
     let mut renderer = HeadlessRenderer::new(
-        Box::new(fixture),
+        Box::new({
+            let observed = observed.clone();
+            move || fixture(observed.clone())
+        }),
         vec![Box::new(crate::TesseraComponents)],
         HeadlessConfig {
             width: 400,
@@ -79,7 +86,7 @@ fn check_handle() {
     )
     .unwrap();
     renderer.render_frames(8);
-    let controller = CONTROLLER.get().unwrap();
+    let controller = observed.get().controller.unwrap();
     let tree = renderer.accessibility_snapshot().unwrap();
     let (handle_id, handle) = tree
         .nodes
@@ -106,7 +113,7 @@ fn check_handle() {
     );
     assert_eq!(bounds(&renderer, "Resizable sheet").height(), 568.0);
     assert!(controller.with(BottomSheetController::is_open));
-    assert_eq!(CLOSES.get(), 0);
+    assert_eq!(observed.get().closes, 0);
     let tree = renderer.accessibility_snapshot().unwrap();
     let handle_id = tree
         .nodes
@@ -149,12 +156,12 @@ fn check_handle() {
     );
     assert_eq!(bounds(&renderer, "Resizable sheet").height(), 240.0);
     assert_eq!(
-        CLOSES.get(),
+        observed.get().closes,
         0,
         "a short drag must settle without toggling or dismissing"
     );
     tap(&mut renderer, PxPosition::from_f32_xy(10.0, 10.0));
-    assert_eq!(CLOSES.get(), 1);
+    assert_eq!(observed.get().closes, 1);
     assert!(!controller.with(BottomSheetController::is_open));
 }
 
@@ -167,7 +174,12 @@ fn gpu_bottom_sheet_handle_cycles_real_heights_without_activating_after_a_drag()
     );
 }
 
-fn move_handle(renderer: &mut HeadlessRenderer, scale: f64, distance: f32) -> PxPosition {
+fn move_handle(
+    renderer: &mut HeadlessRenderer,
+    observed: &tessera_ui::testing::TestProbe<FixtureHandles>,
+    scale: f64,
+    distance: f32,
+) -> PxPosition {
     let handle = bounds(renderer, "Drag handle");
     let start = PxPosition::from_f32_xy(
         ((handle.x0 + handle.x1) * 0.5) as f32,
@@ -185,7 +197,7 @@ fn move_handle(renderer: &mut HeadlessRenderer, scale: f64, distance: f32) -> Px
     let end = PxPosition::from_f32_xy(start.x, start.y + distance * scale as f32);
     renderer.pointer_move(MOUSE_POINTER_ID, end);
     renderer.step_frame();
-    assert!(CONTROLLER.get().unwrap().with(|c| c.is_dragging));
+    assert!(observed.get().controller.unwrap().with(|c| c.is_dragging));
     // Input dispatch follows layout; publish the updated height on the next
     // frame.
     renderer.step_frame();
@@ -206,10 +218,15 @@ fn assert_sheet_height(renderer: &HeadlessRenderer, height: f64, scale: f64) {
 }
 
 fn check_handle_resize(scale: f64) {
-    PARTIAL.set(Some(Dp(240.0)));
-    CLOSES.set(0);
+    let observed = tessera_ui::testing::TestProbe::new(FixtureHandles {
+        partial: Some(Dp(240.0)),
+        ..Default::default()
+    });
     let mut renderer = HeadlessRenderer::new(
-        Box::new(fixture),
+        Box::new({
+            let observed = observed.clone();
+            move || fixture(observed.clone())
+        }),
         vec![Box::new(crate::TesseraComponents)],
         HeadlessConfig {
             width: (400.0 * scale) as u32,
@@ -222,7 +239,7 @@ fn check_handle_resize(scale: f64) {
     )
     .unwrap();
     renderer.render_frames(8);
-    let controller = CONTROLLER.get().unwrap();
+    let controller = observed.get().controller.unwrap();
     assert!(FocusManager::current().request_move_focus(FocusDirection::Next));
     renderer.render_frames(4);
     let tree = renderer.accessibility_snapshot().unwrap();
@@ -236,7 +253,7 @@ fn check_handle_resize(scale: f64) {
     assert_eq!(focus, handle_id);
     assert_sheet_height(&renderer, 240.0, scale);
 
-    let point = move_handle(&mut renderer, scale, -220.0);
+    let point = move_handle(&mut renderer, &observed, scale, -220.0);
     assert_sheet_height(&renderer, 456.0, scale);
     assert_eq!(
         controller.with(BottomSheetController::expansion),
@@ -250,9 +267,9 @@ fn check_handle_resize(scale: f64) {
     );
     assert_eq!(renderer.accessibility_snapshot().unwrap().focus, focus);
     assert!(controller.with(BottomSheetController::is_open));
-    assert_eq!(CLOSES.get(), 0);
+    assert_eq!(observed.get().closes, 0);
 
-    let point = move_handle(&mut renderer, scale, 220.0);
+    let point = move_handle(&mut renderer, &observed, scale, 220.0);
     assert_sheet_height(&renderer, 352.0, scale);
     release_handle(&mut renderer, point);
     assert_sheet_height(&renderer, 240.0, scale);
@@ -260,9 +277,13 @@ fn check_handle_resize(scale: f64) {
         controller.with(BottomSheetController::expansion),
         BottomSheetExpansion::PartiallyExpanded
     );
-    assert_eq!(CLOSES.get(), 0, "resizing to partial must not dismiss");
+    assert_eq!(
+        observed.get().closes,
+        0,
+        "resizing to partial must not dismiss"
+    );
 
-    let point = move_handle(&mut renderer, scale, -20.0);
+    let point = move_handle(&mut renderer, &observed, scale, -20.0);
     assert_sheet_height(&renderer, 256.0, scale);
     release_handle(&mut renderer, point);
     assert_sheet_height(&renderer, 240.0, scale);
@@ -271,7 +292,7 @@ fn check_handle_resize(scale: f64) {
         BottomSheetExpansion::PartiallyExpanded
     );
 
-    move_handle(&mut renderer, scale, -220.0);
+    move_handle(&mut renderer, &observed, scale, -220.0);
     assert_sheet_height(&renderer, 456.0, scale);
     renderer.inject_pointer(PointerChange::new(
         tessera_ui::time::Instant::now(),
@@ -288,7 +309,7 @@ fn check_handle_resize(scale: f64) {
     assert_eq!(renderer.accessibility_snapshot().unwrap().focus, focus);
     assert!(controller.with(BottomSheetController::is_open));
     assert_eq!(
-        CLOSES.get(),
+        observed.get().closes,
         0,
         "short and cancelled resizes must not activate"
     );
@@ -318,9 +339,12 @@ fn gpu_bottom_sheet_natural_height_and_small_viewport_remain_bounded() {
     crate::test_utils::run_isolated_test(
         "bottom_sheet::accessibility_tests::gpu_bottom_sheet_natural_height_and_small_viewport_remain_bounded",
         || {
-            PARTIAL.set(None);
+            let observed = tessera_ui::testing::TestProbe::default();
             let mut renderer = HeadlessRenderer::new(
-                Box::new(fixture),
+                Box::new({
+                    let observed = observed.clone();
+                    move || fixture(observed.clone())
+                }),
                 vec![Box::new(crate::TesseraComponents)],
                 HeadlessConfig {
                     width: 400,
@@ -332,7 +356,7 @@ fn gpu_bottom_sheet_natural_height_and_small_viewport_remain_bounded() {
             .unwrap();
             renderer.render_frames(8);
             assert_eq!(bounds(&renderer, "Resizable sheet").height(), 168.0);
-            let controller = CONTROLLER.get().unwrap();
+            let controller = observed.get().controller.unwrap();
             controller.with_mut(BottomSheetController::expand);
             renderer.render_frames(4);
             assert_eq!(bounds(&renderer, "Resizable sheet").height(), 568.0);

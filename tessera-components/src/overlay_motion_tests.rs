@@ -4,7 +4,7 @@
 //!
 //! Keep transient surfaces continuous during rapid visibility changes.
 
-use std::{cell::Cell, time::Duration};
+use std::time::Duration;
 
 use tessera_ui::{
     Color, Dp, HeadlessConfig, HeadlessRenderer, Modifier, State,
@@ -21,7 +21,7 @@ use crate::{
     theme::material_theme,
 };
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 enum Kind {
     Dialog,
     Bottom,
@@ -29,11 +29,6 @@ enum Kind {
     End,
     StandardStart,
     StandardEnd,
-}
-
-thread_local! {
-    static KIND: Cell<Kind> = const { Cell::new(Kind::Dialog) };
-    static OPEN: Cell<Option<State<bool>>> = const { Cell::new(None) };
 }
 
 #[tessera]
@@ -55,17 +50,17 @@ fn marker_content() {
 }
 
 #[tessera]
-fn fixture() {
+fn fixture(kind: Kind, output: tessera_ui::testing::TestProbe<Option<State<bool>>>) {
     let open = remember(|| false);
-    OPEN.set(Some(open));
-    material_theme().child(move || match KIND.get() {
+    output.set(Some(open));
+    material_theme().child(move || match kind {
         Kind::Dialog => {
             dialog_provider()
                 .is_open(open.get())
                 .main_content(|| {
                     main_content();
                 })
-                .dialog_content(|| {
+                .dialog_content(|_| {
                     marker_content();
                 });
         }
@@ -139,10 +134,11 @@ fn check(samples: u32) {
         Kind::StandardStart,
         Kind::StandardEnd,
     ] {
-        KIND.set(kind);
         for scale in [1.0, 1.5] {
+            let output = tessera_ui::testing::TestProbe::default();
+            let probe = output.clone();
             let mut renderer = HeadlessRenderer::new(
-                Box::new(fixture),
+                Box::new(move || fixture(kind, probe.clone())),
                 vec![Box::new(crate::TesseraComponents)],
                 HeadlessConfig {
                     width: 800,
@@ -156,7 +152,7 @@ fn check(samples: u32) {
             .unwrap();
             renderer.render_frames(4);
             let baseline = renderer.read_pixels().unwrap();
-            let open = OPEN.get().unwrap();
+            let open = output.get().unwrap();
             open.set(true);
             renderer.render_frames(8);
             let entering = marker(&renderer).unwrap();

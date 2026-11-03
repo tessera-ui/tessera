@@ -6,6 +6,22 @@ use crate::util::cli::{Report, Reportable};
 
 pub trait ExplicitEnv: Debug {
     fn explicit_env(&self) -> HashMap<String, OsString>;
+
+    fn removed_env_vars(&self) -> Vec<String> {
+        Vec::new()
+    }
+
+    fn configure_command(&self, command: duct::Expression) -> duct::Expression {
+        let values = self.explicit_env();
+        let removed = self.removed_env_vars();
+        command.before_spawn(move |command| {
+            command.envs(&values);
+            for key in &removed {
+                command.env_remove(key);
+            }
+            Ok(())
+        })
+    }
 }
 
 #[derive(Debug, Error)]
@@ -69,5 +85,62 @@ impl Env {
 impl ExplicitEnv for Env {
     fn explicit_env(&self) -> HashMap<String, OsString> {
         self.vars.clone()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[derive(Debug)]
+    struct CommandEnv;
+
+    impl ExplicitEnv for CommandEnv {
+        fn explicit_env(&self) -> HashMap<String, OsString> {
+            HashMap::from([("TESSERA_COMMAND_VALUE".to_owned(), "configured".into())])
+        }
+
+        fn removed_env_vars(&self) -> Vec<String> {
+            vec!["TESSERA_COMMAND_REMOVED".to_owned()]
+        }
+    }
+
+    #[test]
+    fn command_environment_child() {
+        if std::env::var_os("TESSERA_COMMAND_CHILD").is_some() {
+            println!(
+                "command-value={}",
+                std::env::var("TESSERA_COMMAND_VALUE").unwrap()
+            );
+            println!(
+                "command-removed={}",
+                std::env::var_os("TESSERA_COMMAND_REMOVED").is_none()
+            );
+        }
+    }
+
+    #[test]
+    fn command_environment_overrides_and_removals_are_applied_only_to_the_child() {
+        let before = std::env::var_os("TESSERA_COMMAND_VALUE");
+        let command = duct::cmd(
+            std::env::current_exe().unwrap(),
+            [
+                "--exact",
+                "env::tests::command_environment_child",
+                "--nocapture",
+            ],
+        )
+        .env("TESSERA_COMMAND_CHILD", "1")
+        .env("TESSERA_COMMAND_VALUE", "stale")
+        .env("TESSERA_COMMAND_REMOVED", "stale");
+        let output = CommandEnv
+            .configure_command(command)
+            .stdout_capture()
+            .run()
+            .unwrap();
+        let stdout = String::from_utf8(output.stdout).unwrap();
+        assert!(stdout.contains("command-value=configured"), "{stdout}");
+        assert!(stdout.contains("command-removed=true"), "{stdout}");
+        assert_eq!(std::env::var_os("TESSERA_COMMAND_VALUE"), before);
     }
 }

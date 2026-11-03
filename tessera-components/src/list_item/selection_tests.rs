@@ -4,13 +4,12 @@
 //!
 //! Keep selection requests, roles, focus, and disabled activation consistent.
 
-use std::cell::Cell;
-
 use tessera_ui::{
     Dp, FocusDirection, FocusManager, HeadlessConfig, HeadlessRenderer, MOUSE_POINTER_ID, Modifier,
     PressKeyEventType, PxPosition, State,
     accesskit::{Action, ActionRequest, Node, NodeId, Toggled, TreeId},
     remember, tessera,
+    testing::TestProbe,
 };
 
 use crate::{
@@ -31,10 +30,8 @@ struct Settings {
     actions: usize,
 }
 
-thread_local! { static SETTINGS: Cell<Option<State<Settings>>> = const { Cell::new(None) }; }
-
 #[tessera]
-fn fixture() {
+fn fixture(probe: Option<TestProbe<Option<State<Settings>>>>) {
     let settings = remember(|| Settings {
         mode: ListItemSelectionMode::Multiple,
         selected: [false; 3],
@@ -43,7 +40,9 @@ fn fixture() {
         requests: Vec::new(),
         actions: 0,
     });
-    SETTINGS.set(Some(settings));
+    if let Some(probe) = probe {
+        probe.set(Some(settings));
+    }
     material_theme().child(move || {
         column()
             .modifier(Modifier::new().width(Dp(280.0)))
@@ -154,8 +153,12 @@ fn verify(renderer: &HeadlessRenderer, settings: &Settings, ids: &[NodeId; 3]) {
 
 fn check(samples: u32) {
     for scale in [1.0, 1.5] {
+        let probe = TestProbe::<Option<State<Settings>>>::default();
+        let observed = probe.clone();
         let mut renderer = HeadlessRenderer::new(
-            Box::new(fixture),
+            Box::new(move || {
+                fixture().probe(probe.clone());
+            }),
             vec![Box::new(crate::TesseraComponents)],
             HeadlessConfig {
                 width: 600,
@@ -167,7 +170,13 @@ fn check(samples: u32) {
         )
         .unwrap();
         renderer.render_frames(4);
-        let settings = SETTINGS.get().unwrap();
+        assert!(
+            renderer
+                .work_totals()
+                .count("list_item", tessera_ui::WorkPhase::Build)
+                > 0
+        );
+        let settings = observed.get().unwrap();
         let ids =
             std::array::from_fn(|index| node(&renderer, &format!("Selection {}", index + 1)).0);
         verify(&renderer, &settings.get(), &ids);
@@ -233,10 +242,14 @@ fn check(samples: u32) {
         });
         renderer.render_frames(90);
         verify(&renderer, &settings.get(), &ids);
-        let builds = super::ITEM_BUILDS.get();
+        let builds = renderer
+            .work_totals()
+            .count("list_item", tessera_ui::WorkPhase::Build);
         renderer.render_frames(8);
         assert_eq!(
-            super::ITEM_BUILDS.get(),
+            renderer
+                .work_totals()
+                .count("list_item", tessera_ui::WorkPhase::Build),
             builds,
             "settled activation handles must not keep rebuilding rows"
         );

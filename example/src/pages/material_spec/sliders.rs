@@ -21,7 +21,7 @@ use tessera_components::{
     },
     surface::surface,
     text::text,
-    text_field::TextFieldBuilder,
+    text_field::text_field,
     text_input::TextInputController,
     theme::{MaterialColorScheme, MaterialTheme, material_theme},
 };
@@ -46,7 +46,7 @@ const SIZES: [SliderSize; 5] = [
 ];
 
 #[tessera]
-pub(super) fn slider_spec() {
+pub(super) fn slider_spec(route: Option<crate::pages::material_spec::article::ArticleRoute>) {
     article("Sliders","Sliders allow users to make selections from a range of values",vec![
         section("Variants",RenderSlot::new(variants)),
         section("Configurations",RenderSlot::new(configurations)),
@@ -55,7 +55,7 @@ pub(super) fn slider_spec() {
         section("Color",RenderSlot::new(colors)),
         section("States",RenderSlot::new(states)),
         section("Measurements",RenderSlot::new(measurements)),
-    ]).hero_shared(RenderSlot::new(hero)).pages(vec![
+    ]).route_optional(route.clone()).hero_shared(RenderSlot::new(hero)).pages(vec![
         ArticlePage{title:"Overview",intro:Some(RenderSlot::new(||{
             prose("Sliders select a value or range along a track. Use standard, centered, or range variants, show the full available range, and apply changes immediately.");gap(Dp(32.0));variants();
         })),sections:vec![
@@ -159,16 +159,17 @@ fn immediate_example() {
 }
 
 #[tessera]
-fn value_example() {
+fn value_example(editor: Option<State<TextInputController>>) {
     let value = remember(|| 0.5_f32);
     let invalid = remember(|| false);
-    let editor = remember(|| {
-        let mut editor = TextInputController::new(Dp(16.0), Some(Dp(24.0)));
-        editor.set_text("50");
-        editor
-    });
-    #[cfg(all(test, not(target_family = "wasm")))]
-    size_figure_tests::VALUE_EDITOR.set(Some(editor));
+    let editor = match editor {
+        Some(editor) => editor,
+        None => remember(|| {
+            let mut editor = TextInputController::new(Dp(16.0), Some(Dp(24.0)));
+            editor.set_text("50");
+            editor
+        }),
+    };
     text()
         .content("Keyboard-adjustable value")
         .style(type_style(16.0, 24.0));
@@ -189,7 +190,8 @@ fn value_example() {
                 })
                 .accessibility_label("Keyboard-adjustable value");
             tessera_components::spacer::spacer().modifier(Modifier::new().width(Dp(24.0)));
-            TextFieldBuilder::outlined()
+            text_field()
+                .outlined()
                 .controller(editor)
                 .label("Value")
                 .accessibility_label("Slider value")
@@ -630,7 +632,7 @@ fn configuration_figure(optional: bool) {
                 )
                 .children(move || {
                     figure_grid(Dp(width), Dp(height));
-                    slider_value_indicator_provider().child(move || {
+                    slider_value_indicator_provider().child(move |value_indicator_host| {
                         boxed()
                             .modifier(Modifier::new().fill_max_size())
                             .children(move || {
@@ -650,7 +652,8 @@ fn configuration_figure(optional: bool) {
                                         0,
                                         false,
                                         false,
-                                    );
+                                    )
+                                    .value_indicator_host(value_indicator_host);
                                     configuration_slider(
                                         "Stops configuration".into(),
                                         SliderSize::ExtraSmall,
@@ -663,7 +666,8 @@ fn configuration_figure(optional: bool) {
                                         9,
                                         false,
                                         false,
-                                    );
+                                    )
+                                    .value_indicator_host(value_indicator_host);
                                     configuration_slider(
                                         "Value indicator configuration".into(),
                                         SliderSize::ExtraSmall,
@@ -676,7 +680,8 @@ fn configuration_figure(optional: bool) {
                                         0,
                                         true,
                                         false,
-                                    );
+                                    )
+                                    .value_indicator_host(value_indicator_host);
                                 } else {
                                     configuration_marker(1, Dp(241.0 * scale), Dp(99.0 * scale));
                                     configuration_marker(2, Dp(719.0 * scale), Dp(99.0 * scale));
@@ -692,7 +697,8 @@ fn configuration_figure(optional: bool) {
                                         0,
                                         false,
                                         true,
-                                    );
+                                    )
+                                    .value_indicator_host(value_indicator_host);
                                     configuration_slider(
                                         "Vertical orientation configuration".into(),
                                         SliderSize::Medium,
@@ -705,7 +711,8 @@ fn configuration_figure(optional: bool) {
                                         0,
                                         false,
                                         true,
-                                    );
+                                    )
+                                    .value_indicator_host(value_indicator_host);
                                     for (index, center_y) in
                                         [185.0, 265.0, 349.0, 445.0, 569.0].into_iter().enumerate()
                                     {
@@ -725,7 +732,8 @@ fn configuration_figure(optional: bool) {
                                             0,
                                             false,
                                             true,
-                                        );
+                                        )
+                                        .value_indicator_host(value_indicator_host);
                                     }
                                 }
                             });
@@ -748,12 +756,15 @@ fn configuration_slider(
     steps: usize,
     indicator: bool,
     end_stop: bool,
+
+    value_indicator_host: Option<tessera_components::slider::SliderValueIndicatorHost>,
 ) {
     let value = remember(|| 0.5_f32);
     boxed()
         .modifier(Modifier::new().offset(x, y).width(width).height(height))
         .children(move || {
             let control = slider()
+                .value_indicator_host_optional(value_indicator_host)
                 .modifier(Modifier::new().fill_max_size())
                 .size(size)
                 .orientation(if vertical {
@@ -879,7 +890,7 @@ fn color_panel(width: Dp, height: Dp, dark: bool) {
                 .background(scheme.surface_container_low),
         )
         .children(move || {
-            slider_value_indicator_provider().child(move || {
+            slider_value_indicator_provider().child(move |value_indicator_host| {
                 boxed()
                     .modifier(Modifier::new().fill_max_size())
                     .children(move || {
@@ -891,6 +902,7 @@ fn color_panel(width: Dp, height: Dp, dark: bool) {
                             )
                             .children(move || {
                                 slider()
+                                    .value_indicator_host(value_indicator_host)
                                     .modifier(watch_precise(geometry, "standard").fill_max_width())
                                     .size(SliderSize::ExtraSmall)
                                     .value(value.get())
@@ -911,6 +923,7 @@ fn color_panel(width: Dp, height: Dp, dark: bool) {
                                 )
                                 .children(move || {
                                     slider()
+                                        .value_indicator_host(value_indicator_host)
                                         .modifier(watch_precise(geometry, name).fill_max_width())
                                         .size(SliderSize::Medium)
                                         .value(state.get())
@@ -1072,10 +1085,10 @@ fn state_panel(width: Dp, height: Dp, dark: bool) {
     let scale = width.0 / 512.0;
     let scheme = use_context::<MaterialTheme>().unwrap().get().color_scheme;
     boxed().modifier(Modifier::new().offset(if dark { width } else { Dp::ZERO }, Dp::ZERO).size(width, height).background(scheme.surface_container_low)).children(move || {
-        slider_value_indicator_provider().child(move || {
+        slider_value_indicator_provider().child(move |value_indicator_host| {
             boxed().modifier(Modifier::new().fill_max_size()).children(move || {
                 for (index, label, state) in [(0, "Enabled", InteractionVisualState::Rest), (1, "Disabled", InteractionVisualState::Rest), (2, "Hovered", InteractionVisualState::Hover), (3, "Focused", InteractionVisualState::Focus), (4, "Pressed", InteractionVisualState::Pressed)] {
-                    state_specimen(index, label.to_owned(), state, width, dark);
+                    state_specimen(index, label.to_owned(), state, width, dark).value_indicator_host(value_indicator_host);
                 }
             });
         });
@@ -1096,6 +1109,8 @@ fn state_specimen(
     state: InteractionVisualState,
     width: Dp,
     dark: bool,
+
+    value_indicator_host: Option<tessera_components::slider::SliderValueIndicatorHost>,
 ) {
     let value = remember(|| 0.5_f32);
     let scale = width.0 / 512.0;
@@ -1110,6 +1125,7 @@ fn state_specimen(
         )
         .children(move || {
             slider()
+                .value_indicator_host_optional(value_indicator_host)
                 .modifier(Modifier::new().fill_max_width())
                 .size(SliderSize::ExtraSmall)
                 .value(value.get())
@@ -1237,7 +1253,7 @@ fn slider_figure(measurements: bool) {
                 )
                 .children(move || {
                     figure_grid(Dp(width), Dp(height));
-                    slider_value_indicator_provider().child(move || {
+                    slider_value_indicator_provider().child(move |value_indicator_host| {
                         boxed()
                             .modifier(Modifier::new().fill_max_size())
                             .children(move || {
@@ -1250,6 +1266,7 @@ fn slider_figure(measurements: bool) {
                                     )
                                     .children(move || {
                                         slider()
+                                            .value_indicator_host(value_indicator_host)
                                             .modifier(
                                                 watch_precise(geometry, "standard")
                                                     .fill_max_width(),
@@ -1271,6 +1288,7 @@ fn slider_figure(measurements: bool) {
                                     )
                                     .children(move || {
                                         slider()
+                                            .value_indicator_host(value_indicator_host)
                                             .modifier(
                                                 watch_precise(geometry, "inset").fill_max_width(),
                                             )
@@ -1426,7 +1444,7 @@ fn slider_measurement_figure() {
                 )
                 .children(move || {
                     figure_grid(Dp(width), Dp(height));
-                    slider_value_indicator_provider().child(move || {
+                    slider_value_indicator_provider().child(move |value_indicator_host| {
                         boxed()
                             .modifier(Modifier::new().fill_max_size())
                             .children(move || {
@@ -1441,6 +1459,7 @@ fn slider_measurement_figure() {
                                         ))
                                         .children(move || {
                                             slider()
+                                                .value_indicator_host(value_indicator_host)
                                                 .modifier(
                                                     watch_precise(geometry, name).fill_max_width(),
                                                 )
@@ -1786,7 +1805,7 @@ fn size_annotation_geometry(
 
 #[cfg(all(test, not(target_family = "wasm")))]
 mod size_figure_tests {
-    use std::{cell::Cell, time::Duration};
+    use std::time::Duration;
 
     use tessera_ui::{
         HeadlessConfig, HeadlessRenderer, MOUSE_POINTER_ID, PressKeyEventType, PxPosition,
@@ -1795,23 +1814,14 @@ mod size_figure_tests {
 
     use super::*;
 
-    thread_local! {
-        pub(super) static VALUE_EDITOR: Cell<Option<State<TextInputController>>> = const { Cell::new(None) };
-        static OPTIONAL_CONFIGURATIONS: Cell<bool> = const { Cell::new(false) };
-        static NARROW_SCROLL: Cell<Option<State<tessera_components::scrollable::ScrollableController>>> = const { Cell::new(None) };
-    }
-
-    struct Pipelines;
-    impl tessera_ui::RenderModule for Pipelines {
-        fn register_pipelines(&self, context: &mut tessera_ui::PipelineContext<'_>) {
-            tessera_components::pipelines::register_pipelines(context);
-        }
-    }
-
     #[tessera]
-    fn narrow_configuration_fixture() {
+    fn narrow_configuration_fixture(
+        output: tessera_ui::testing::TestProbe<
+            Option<State<tessera_components::scrollable::ScrollableController>>,
+        >,
+    ) {
         let scroll = remember(tessera_components::scrollable::ScrollableController::default);
-        NARROW_SCROLL.set(Some(scroll));
+        output.set(Some(scroll));
         material_theme().child(move || {
             boxed()
                 .modifier(
@@ -1835,9 +1845,11 @@ mod size_figure_tests {
     #[test]
     #[ignore = "Requires a native GPU adapter for scaled slider input and value indicators"]
     fn narrow_native_configuration_maps_drag_and_value_indicator_without_scrolling() {
+        let output = tessera_ui::testing::TestProbe::default();
+        let probe = output.clone();
         let mut renderer = HeadlessRenderer::new(
-            Box::new(narrow_configuration_fixture),
-            vec![Box::new(Pipelines)],
+            Box::new(move || narrow_configuration_fixture(probe.clone())),
+            vec![Box::new(crate::TestPipelines)],
             HeadlessConfig {
                 width: 640,
                 height: 350,
@@ -1856,7 +1868,7 @@ mod size_figure_tests {
         assert_eq!(control.height(), 27.5);
         assert_eq!(control.x0, 436.25);
         assert_eq!(control.y0, 156.875);
-        let scroll = NARROW_SCROLL.get().unwrap();
+        let scroll = output.get().unwrap();
         let before =
             scroll.with(tessera_components::scrollable::ScrollableController::child_position);
         let start = PxPosition::from_f32_xy(
@@ -1981,13 +1993,13 @@ mod size_figure_tests {
     }
 
     fn node(renderer: &HeadlessRenderer, label: &str, role: Role) -> (NodeId, Node) {
-        renderer
-            .accessibility_snapshot()
-            .expect("size figure semantics")
-            .nodes
-            .into_iter()
-            .find(|(_, node)| node.role() == role && node.label() == Some(label))
-            .unwrap_or_else(|| panic!("missing {label}: {role:?}"))
+        let snapshot = renderer
+            .inspect_accessibility()
+            .expect("accessibility tree");
+        let (id, node) = snapshot
+            .find(label, role)
+            .unwrap_or_else(|| panic!("missing {label} {role:?}"));
+        (id, node.clone())
     }
 
     #[test]
@@ -1995,7 +2007,7 @@ mod size_figure_tests {
     fn slider_size_figure_places_five_native_sizes_and_tracks_accessible_value_changes() {
         let mut renderer = HeadlessRenderer::new(
             Box::new(fixture),
-            vec![Box::new(Pipelines)],
+            vec![Box::new(crate::TestPipelines)],
             HeadlessConfig {
                 width: 1200,
                 height: 700,
@@ -2074,11 +2086,19 @@ mod size_figure_tests {
     }
 
     #[tessera]
-    fn value_fixture() {
-        material_theme().child(|| {
+    fn value_fixture(output: tessera_ui::testing::TestProbe<Option<State<TextInputController>>>) {
+        let editor = remember(|| {
+            let mut editor = TextInputController::new(Dp(16.0), Some(Dp(24.0)));
+            editor.set_text("50");
+            editor
+        });
+        output.set(Some(editor));
+        material_theme().child(move || {
             column()
                 .modifier(Modifier::new().width(Dp(480.0)))
-                .children(value_example);
+                .children(move || {
+                    value_example().editor(editor);
+                });
         });
     }
 
@@ -2096,9 +2116,11 @@ mod size_figure_tests {
     #[test]
     #[ignore = "Requires a native GPU adapter for actual slider, field and focus routing"]
     fn external_value_field_synchronizes_both_directions_and_follows_the_slider_in_focus_order() {
+        let output = tessera_ui::testing::TestProbe::default();
+        let probe = output.clone();
         let mut renderer = HeadlessRenderer::new(
-            Box::new(value_fixture),
-            vec![Box::new(Pipelines)],
+            Box::new(move || value_fixture(probe.clone())),
+            vec![Box::new(crate::TestPipelines)],
             HeadlessConfig {
                 width: 640,
                 height: 160,
@@ -2135,7 +2157,7 @@ mod size_figure_tests {
             snapshot.focus,
             node(&renderer, "Slider value", Role::TextInput).0
         );
-        let editor = VALUE_EDITOR.get().unwrap();
+        let editor = output.get().unwrap();
         editor.with_mut(|editor| editor.set_text(""));
         renderer.render_frames(2);
         renderer.inject_text("75");
@@ -2259,7 +2281,7 @@ mod size_figure_tests {
     fn color_figure_places_nine_callouts_in_each_scheme_and_tracks_the_live_handle() {
         let mut renderer = HeadlessRenderer::new(
             Box::new(color_fixture),
-            vec![Box::new(Pipelines)],
+            vec![Box::new(crate::TestPipelines)],
             HeadlessConfig {
                 width: 1100,
                 height: 550,
@@ -2382,7 +2404,7 @@ mod size_figure_tests {
     fn anatomy_handle_callout_follows_the_painted_handle_away_from_the_midpoint() {
         let mut renderer = HeadlessRenderer::new(
             Box::new(anatomy_fixture),
-            vec![Box::new(Pipelines)],
+            vec![Box::new(crate::TestPipelines)],
             HeadlessConfig {
                 width: 1100,
                 height: 600,
@@ -2426,16 +2448,16 @@ mod size_figure_tests {
     }
 
     #[tessera]
-    fn configuration_fixture() {
-        material_theme().child(|| {
+    fn configuration_fixture(optional: bool) {
+        material_theme().child(move || {
             boxed()
                 .alignment(Alignment::TopStart)
                 .modifier(Modifier::new().fill_max_size())
-                .children(|| {
+                .children(move || {
                     column()
                         .modifier(Modifier::new().width(Dp(1024.0)))
-                        .children(|| {
-                            configuration_figure(OPTIONAL_CONFIGURATIONS.get());
+                        .children(move || {
+                            configuration_figure(optional);
                         });
                 });
         });
@@ -2445,10 +2467,9 @@ mod size_figure_tests {
     #[ignore = "Requires a native GPU adapter for actual slider configurations and geometry"]
     fn configuration_figures_keep_official_orientation_size_and_optional_control_geometry() {
         for optional in [false, true] {
-            OPTIONAL_CONFIGURATIONS.set(optional);
             let mut renderer = HeadlessRenderer::new(
-                Box::new(configuration_fixture),
-                vec![Box::new(Pipelines)],
+                Box::new(move || configuration_fixture(optional)),
+                vec![Box::new(crate::TestPipelines)],
                 HeadlessConfig {
                     width: 1100,
                     height: 800,

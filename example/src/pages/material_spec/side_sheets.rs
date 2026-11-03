@@ -29,8 +29,7 @@ use tessera_components::{
 use tessera_shard::RouterController;
 use tessera_ui::{
     Color, Dp, FocusProperties, FocusRequester, FocusState, Modifier, RenderSlot, State,
-    accesskit::Role, modifier::FocusModifierExt as _, provide_context, remember, tessera,
-    use_context,
+    accesskit::Role, modifier::FocusModifierExt as _, remember, tessera, use_context,
 };
 
 use self::figures::{guidance_card, legend, split};
@@ -56,8 +55,8 @@ impl FilterLabels {
 
 /// Live modal side sheet state owned by the app root while the article is
 /// mounted or remounted.
-#[derive(Clone, Copy)]
-struct LiveSideSheetSession {
+#[derive(Clone, Copy, PartialEq)]
+pub(crate) struct LiveSideSheetSession {
     open: State<bool>,
     filters: State<[bool; 5]>,
     notice: State<String>,
@@ -85,19 +84,12 @@ impl LiveSideSheetSession {
     }
 }
 
-#[cfg(all(test, not(target_family = "wasm")))]
-thread_local! {
-    static TEST_SESSION: std::cell::Cell<Option<LiveSideSheetSession>> = const {
-        std::cell::Cell::new(None)
-    };
-}
-
 #[tessera]
 pub(crate) fn live_side_sheet_host(
     directory: State<SideSheetController>,
     router: State<RouterController>,
     material: State<Option<usize>>,
-    main_content: RenderSlot,
+    main_content: tessera_ui::RenderSlotWith<LiveSideSheetSession>,
 ) {
     let session = LiveSideSheetSession {
         open: remember(|| false),
@@ -107,15 +99,20 @@ pub(crate) fn live_side_sheet_host(
         router,
         material,
     };
-    #[cfg(all(test, not(target_family = "wasm")))]
-    TEST_SESSION.set(Some(session));
     if !session.route_active() && session.open.get() {
         session.open.set(false);
     }
     let modal = RenderSlot::new(move || {
-        live_modal(session.open, session.filters, session.notice, main_content);
+        live_modal(
+            session.open,
+            session.filters,
+            session.notice,
+            RenderSlot::new(move || {
+                main_content.render(session);
+            }),
+        );
     });
-    provide_context(move || session, move || modal.render());
+    modal.render();
 }
 
 #[tessera]
@@ -138,8 +135,11 @@ fn live_modal(
 }
 
 #[tessera]
-pub(super) fn side_sheets_spec() {
-    let root = use_context::<LiveSideSheetSession>().map(|context| context.get());
+pub(super) fn side_sheets_spec(
+    route: Option<crate::pages::material_spec::article::ArticleRoute>,
+    session: Option<LiveSideSheetSession>,
+) {
+    let root = session;
     let local_open = remember(|| false);
     let local_filters = remember(FilterLabels::defaults);
     let local_notice = remember(|| String::from("No action selected"));
@@ -150,7 +150,9 @@ pub(super) fn side_sheets_spec() {
         (local_open, local_filters, local_notice)
     };
     let content = RenderSlot::new(move || {
-        sheet_article(open, standard_open, notice);
+        sheet_article(open, standard_open, notice)
+            .session_optional(session)
+            .route_optional(route.clone());
     });
     if root.is_some() {
         content.render();
@@ -160,7 +162,14 @@ pub(super) fn side_sheets_spec() {
 }
 
 #[tessera]
-fn sheet_article(modal_open: State<bool>, standard_open: State<bool>, notice: State<String>) {
+fn sheet_article(
+    modal_open: State<bool>,
+    standard_open: State<bool>,
+    notice: State<String>,
+    route: Option<crate::pages::material_spec::article::ArticleRoute>,
+
+    session: Option<LiveSideSheetSession>,
+) {
     article(
         "Side sheets",
         "Side sheets show secondary content anchored to the side of the screen",
@@ -171,23 +180,24 @@ fn sheet_article(modal_open: State<bool>, standard_open: State<bool>, notice: St
             },
             SpecSection {
                 title: "Standard side sheet",
-                content: RenderSlot::new(|| {
+                content: RenderSlot::new(move || {
                     variant_specs(false);
                 }),
             },
             SpecSection {
                 title: "Modal side sheet",
-                content: RenderSlot::new(|| {
+                content: RenderSlot::new(move || {
                     variant_specs(true);
                 }),
             },
         ],
     )
+    .route_optional(route.clone())
     .pages(vec![
         ArticlePage {
             title: "Overview",
             intro: Some(RenderSlot::new(move || {
-                overview_intro(modal_open);
+                overview_intro(modal_open).session_optional(session);
             })),
             sections: vec![
                 SpecSection {
@@ -202,7 +212,7 @@ fn sheet_article(modal_open: State<bool>, standard_open: State<bool>, notice: St
         },
         ArticlePage {
             title: "Guidelines",
-            intro: Some(RenderSlot::new(|| {
+            intro: Some(RenderSlot::new(move || {
                 figures::hero();
                 gap(Dp(24.0));
                 variants_legend();
@@ -211,7 +221,7 @@ fn sheet_article(modal_open: State<bool>, standard_open: State<bool>, notice: St
                 SpecSection {
                     title: "Usage",
                     content: RenderSlot::new(move || {
-                        usage(modal_open);
+                        usage(modal_open).session_optional(session);
                     }),
                 },
                 SpecSection {
@@ -227,7 +237,7 @@ fn sheet_article(modal_open: State<bool>, standard_open: State<bool>, notice: St
                 SpecSection {
                     title: "Behavior",
                     content: RenderSlot::new(move || {
-                        behavior(modal_open, notice);
+                        behavior(modal_open, notice).session_optional(session);
                     }),
                 },
             ],
@@ -239,7 +249,7 @@ fn sheet_article(modal_open: State<bool>, standard_open: State<bool>, notice: St
                 SpecSection {
                     title: "Use cases",
                     content: RenderSlot::new(move || {
-                        use_cases(modal_open);
+                        use_cases(modal_open).session_optional(session);
                     }),
                 },
                 SpecSection {
@@ -249,7 +259,7 @@ fn sheet_article(modal_open: State<bool>, standard_open: State<bool>, notice: St
                 SpecSection {
                     title: "Initial focus",
                     content: RenderSlot::new(move || {
-                        initial_focus(modal_open);
+                        initial_focus(modal_open).session_optional(session);
                     }),
                 },
                 SpecSection {
@@ -304,8 +314,7 @@ fn variants_legend() {
 }
 
 #[tessera]
-fn launch(open: State<bool>) {
-    let session = use_context::<LiveSideSheetSession>().map(|context| context.get());
+fn launch(open: State<bool>, session: Option<LiveSideSheetSession>) {
     column()
         .modifier(Modifier::new().fill_max_width())
         .children(move || {
@@ -328,7 +337,7 @@ fn launch(open: State<bool>) {
 }
 
 #[tessera]
-fn overview_intro(open: State<bool>) {
+fn overview_intro(open: State<bool>, session: Option<LiveSideSheetSession>) {
     bullets(vec![
         "Use side sheets to provide optional content and actions without interrupting the main content"
             .into(),
@@ -341,7 +350,7 @@ fn overview_intro(open: State<bool>) {
     gap(Dp(24.0));
     variants_legend();
     gap(Dp(24.0));
-    launch(open);
+    launch(open).session_optional(session);
 }
 
 #[tessera]
@@ -842,7 +851,7 @@ fn measurements(modal: bool) {
 }
 
 #[tessera]
-fn usage(modal_open: State<bool>) {
+fn usage(modal_open: State<bool>, session: Option<LiveSideSheetSession>) {
     split()
         .start(|| {
             prose(
@@ -877,7 +886,7 @@ fn usage(modal_open: State<bool>) {
                 "They can display the same kinds of content as standard side sheets, but must be dismissed in order to interact with the underlying content.",
             );
             gap(Dp(24.0));
-            launch(modal_open);
+            launch(modal_open).session_optional(session);
         })
         .end(|| {
             figures::usage_figure(true);
@@ -1189,7 +1198,7 @@ fn standard_content(open: State<bool>) {
 }
 
 #[tessera]
-fn behavior(modal_open: State<bool>, notice: State<String>) {
+fn behavior(modal_open: State<bool>, notice: State<String>, session: Option<LiveSideSheetSession>) {
     prose("Side sheets can vertically scroll independent of the rest of the UI.");
     gap(Dp(12.0));
     prose(
@@ -1218,7 +1227,7 @@ fn behavior(modal_open: State<bool>, notice: State<String>) {
             });
         });
     gap(Dp(32.0));
-    launch(modal_open);
+    launch(modal_open).session_optional(session);
     gap(Dp(16.0));
     caption(notice.get());
     gap(Dp(48.0));
@@ -1245,10 +1254,10 @@ fn behavior(modal_open: State<bool>, notice: State<String>) {
 }
 
 #[tessera]
-fn use_cases(modal_open: State<bool>) {
+fn use_cases(modal_open: State<bool>, session: Option<LiveSideSheetSession>) {
     prose("People should be able to dismiss the side sheet using assistive technology.");
     gap(Dp(24.0));
-    launch(modal_open);
+    launch(modal_open).session_optional(session);
 }
 
 #[tessera]
@@ -1277,7 +1286,7 @@ fn interaction_style() {
 }
 
 #[tessera]
-fn initial_focus(modal_open: State<bool>) {
+fn initial_focus(modal_open: State<bool>, session: Option<LiveSideSheetSession>) {
     prose(
         "Actions within a side sheet can be focused by tab order using a keyboard or switch control.",
     );
@@ -1297,7 +1306,7 @@ fn initial_focus(modal_open: State<bool>) {
         (4, "Cancel".into()),
     ]);
     gap(Dp(24.0));
-    launch(modal_open);
+    launch(modal_open).session_optional(session);
 }
 
 #[tessera]

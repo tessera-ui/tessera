@@ -520,7 +520,9 @@ pub fn text_input(
         display_transform,
         controller,
     };
-    let controller = args.controller.unwrap_or_else(|| {
+    let controller = if let Some(controller) = args.controller {
+        controller
+    } else {
         remember(|| {
             let mut c = TextInputController::new(args.font_size, args.line_height);
             if let Some(text) = &args.initial_text {
@@ -528,7 +530,7 @@ pub fn text_input(
             }
             c
         })
-    });
+    };
     let mut editor_args = args.clone();
     editor_args.controller = Some(controller);
 
@@ -645,8 +647,9 @@ pub(crate) fn visual_focus(args: &TextInputProps, controller: State<TextInputCon
         .is_focused()
 }
 
-pub(crate) fn text_input_core(args: &TextInputProps, controller: State<TextInputController>) {
-    let mut core_args = args.clone();
+#[tessera]
+pub(crate) fn text_input_core(args: TextInputProps, controller: State<TextInputController>) {
+    let mut core_args = args;
     core_args.controller = Some(controller);
     text_input_editor(core_args);
 }
@@ -1420,7 +1423,6 @@ pub(crate) fn create_surface_args(
     }
 }
 
-/// Interaction state that selects the Material 3 field colors.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 struct FieldVisualState {
     focused: bool,
@@ -1429,10 +1431,6 @@ struct FieldVisualState {
     outlined: bool,
 }
 
-/// Material 3 default container fill for the given state.
-///
-/// Outlined containers stay transparent, including when disabled; a disabled
-/// filled container uses the on-surface color at 4%.
 fn default_fill_color(scheme: &MaterialColorScheme, state: FieldVisualState) -> Color {
     if !state.enabled && !state.outlined {
         return scheme.on_surface.with_alpha(DISABLED_FILL_ALPHA);
@@ -1440,10 +1438,6 @@ fn default_fill_color(scheme: &MaterialColorScheme, state: FieldVisualState) -> 
     Color::TRANSPARENT
 }
 
-/// Material 3 default outline color for the given state.
-///
-/// The outline uses `outline` at rest, `primary` while focused, `error` while
-/// invalid, and the on-surface color at 12% when disabled.
 fn default_outline_color(scheme: &MaterialColorScheme, state: FieldVisualState) -> Color {
     if !state.enabled {
         return scheme.on_surface.with_alpha(DISABLED_OUTLINE_ALPHA);
@@ -1458,8 +1452,6 @@ fn default_outline_color(scheme: &MaterialColorScheme, state: FieldVisualState) 
     }
 }
 
-/// Resolves the container fill, letting explicit colors win over the Material
-/// defaults except while the field is disabled.
 fn determine_background_color(
     args: &TextInputProps,
     focused: bool,
@@ -1483,8 +1475,6 @@ fn determine_background_color(
     explicit.unwrap_or_else(|| default_fill_color(scheme, state))
 }
 
-/// Resolves the outline color, letting explicit colors win over the Material
-/// defaults except while the field is disabled or invalid.
 fn determine_border_color(
     args: &TextInputProps,
     focused: bool,
@@ -1509,9 +1499,6 @@ fn determine_border_color(
     }
 }
 
-/// Resolves the outline width for the current interaction state.
-///
-/// Disabled fields keep their resting width instead of the focused one.
 fn resolve_border_width(
     border_width: Dp,
     focus_border_width: Option<Dp>,
@@ -1537,7 +1524,7 @@ fn determine_border_width(args: &TextInputProps, focused: bool) -> Dp {
     )
 }
 
-/// Convenience constructors for common use cases
+/// Presets for an already declared text input.
 impl TextInputBuilder {
     /// Creates a simple text input with default styling.
     ///
@@ -1551,19 +1538,18 @@ impl TextInputBuilder {
     /// # use tessera_ui::tessera;
     /// # #[tessera]
     /// # fn component() {
-    /// use tessera_components::text_input::TextInputBuilder;
+    /// use tessera_components::text_input::text_input;
     /// # use tessera_components::theme::{MaterialTheme, material_theme};
     /// # material_theme()
     /// #     .theme(|| MaterialTheme::default())
     /// #     .child(|| {
-    /// let args = TextInputBuilder::simple();
+    /// let args = text_input().simple();
     /// # });
     /// # }
     /// # tessera_ui::testing::layout_test(component).run();
     /// ```
-    pub fn simple() -> Self {
-        text_input()
-            .min_width(Dp(120.0))
+    pub fn simple(&self) -> Self {
+        self.min_width(Dp(120.0))
             .background_color(Color::new(0.9, 0.9, 0.9, 1.0))
             .border_width(Dp(1.0))
             .border_color(Color::new(0.7, 0.7, 0.7, 1.0))
@@ -1584,18 +1570,18 @@ impl TextInputBuilder {
     /// # use tessera_ui::tessera;
     /// # #[tessera]
     /// # fn component() {
-    /// use tessera_components::text_input::TextInputBuilder;
+    /// use tessera_components::text_input::text_input;
     /// # use tessera_components::theme::{MaterialTheme, material_theme};
     /// # material_theme()
     /// #     .theme(|| MaterialTheme::default())
     /// #     .child(|| {
-    /// let args = TextInputBuilder::outlined();
+    /// let args = text_input().outlined();
     /// # });
     /// # }
     /// # tessera_ui::testing::layout_test(component).run();
     /// ```
-    pub fn outlined() -> Self {
-        Self::simple()
+    pub fn outlined(&self) -> Self {
+        self.simple()
             .border_width(Dp(1.0))
             .focus_border_color(Color::new(0.0, 0.5, 1.0, 1.0))
     }
@@ -1609,19 +1595,18 @@ impl TextInputBuilder {
     /// # use tessera_ui::tessera;
     /// # #[tessera]
     /// # fn component() {
-    /// use tessera_components::text_input::TextInputBuilder;
+    /// use tessera_components::text_input::text_input;
     /// # use tessera_components::theme::{MaterialTheme, material_theme};
     /// # material_theme()
     /// #     .theme(|| MaterialTheme::default())
     /// #     .child(|| {
-    /// let args = TextInputBuilder::minimal();
+    /// let args = text_input().minimal();
     /// # });
     /// # }
     /// # tessera_ui::testing::layout_test(component).run();
     /// ```
-    pub fn minimal() -> Self {
-        text_input()
-            .min_width(Dp(120.0))
+    pub fn minimal(&self) -> Self {
+        self.min_width(Dp(120.0))
             .background_color(Color::WHITE)
             .shape(Shape::RoundedRectangle {
                 top_left: RoundedCorner::manual(Dp(0.0), 3.0),
@@ -1729,6 +1714,8 @@ mod tests {
 
     #[test]
     fn escape_disposition_leaves_a_plain_caret_unhandled_without_mutating_text() {
+        let runtime = tessera_ui::RuntimeSession::new();
+        let _scope = runtime.enter();
         let mut controller = TextEditorController::new(Dp(16.0), Some(Dp(24.0)));
         controller.set_text_and_selection("café", TextSelection::collapsed(5));
         assert!(!handle_editor_escape(
@@ -1744,6 +1731,8 @@ mod tests {
 
     #[test]
     fn escape_disposition_cancels_a_nonempty_selection_once_without_editing_text() {
+        let runtime = tessera_ui::RuntimeSession::new();
+        let _scope = runtime.enter();
         let mut controller = TextEditorController::new(Dp(16.0), Some(Dp(24.0)));
         controller.set_text_and_selection("café", TextSelection { start: 0, end: 3 });
         assert_eq!(controller.selection(), TextSelection { start: 0, end: 3 });
@@ -1766,6 +1755,8 @@ mod tests {
 
     #[test]
     fn escape_disposition_clears_active_composition_and_selection_before_becoming_unhandled() {
+        let runtime = tessera_ui::RuntimeSession::new();
+        let _scope = runtime.enter();
         let mut controller = TextEditorController::new(Dp(16.0), Some(Dp(24.0)));
         controller.set_text_and_selection("preedit", TextSelection { start: 2, end: 5 });
         controller.set_composition(Some(ImeComposition {
@@ -1791,6 +1782,8 @@ mod tests {
 
     #[test]
     fn escape_release_does_not_cancel_an_owned_selection_or_composition() {
+        let runtime = tessera_ui::RuntimeSession::new();
+        let _scope = runtime.enter();
         let mut controller = TextEditorController::new(Dp(16.0), Some(Dp(24.0)));
         let selection = TextSelection { start: 0, end: 3 };
         let composition = ImeComposition {
@@ -1926,6 +1919,8 @@ mod tests {
 
     #[test]
     fn plan_ime_edit_preedit_reuses_existing_composition_range() {
+        let runtime = tessera_ui::RuntimeSession::new();
+        let _scope = runtime.enter();
         let composition = ImeComposition {
             range: 2..5,
             selection: TextSelection::collapsed(5),
@@ -1949,6 +1944,8 @@ mod tests {
 
     #[test]
     fn plan_ime_edit_empty_preedit_clears_composition_range() {
+        let runtime = tessera_ui::RuntimeSession::new();
+        let _scope = runtime.enter();
         let composition = ImeComposition {
             range: 2..5,
             selection: TextSelection::collapsed(5),
@@ -1972,6 +1969,8 @@ mod tests {
 
     #[test]
     fn plan_ime_edit_preedit_without_cursor_offset_preserves_previous_composition_selection() {
+        let runtime = tessera_ui::RuntimeSession::new();
+        let _scope = runtime.enter();
         let composition = ImeComposition {
             range: 2..5,
             selection: TextSelection { start: 3, end: 4 },
@@ -1995,6 +1994,8 @@ mod tests {
 
     #[test]
     fn plan_ime_edit_commit_replaces_current_composition_range() {
+        let runtime = tessera_ui::RuntimeSession::new();
+        let _scope = runtime.enter();
         let composition = ImeComposition {
             range: 3..6,
             selection: TextSelection::collapsed(6),
@@ -2018,6 +2019,8 @@ mod tests {
 
     #[test]
     fn plan_ime_edit_commit_without_composition_replaces_current_selection_range() {
+        let runtime = tessera_ui::RuntimeSession::new();
+        let _scope = runtime.enter();
         assert_eq!(
             plan_ime_event_for_state(
                 TextSelection { start: 6, end: 3 },
@@ -2036,6 +2039,8 @@ mod tests {
 
     #[test]
     fn plan_ime_edit_preedit_tracks_full_composition_range_instead_of_caret_range() {
+        let runtime = tessera_ui::RuntimeSession::new();
+        let _scope = runtime.enter();
         assert_eq!(
             plan_ime_event_for_state(
                 TextSelection::collapsed(1),
@@ -2054,6 +2059,8 @@ mod tests {
 
     #[test]
     fn text_input_pointer_sequence_single_click_drag_selects_backward_range() {
+        let runtime = tessera_ui::RuntimeSession::new();
+        let _scope = runtime.enter();
         let text = "hello world";
         let mut controller = TextEditorController::new(tessera_ui::Dp(14.0), None);
         controller.set_text_and_selection(text, TextSelection::collapsed(6));
@@ -2079,6 +2086,8 @@ mod tests {
 
     #[test]
     fn text_input_pointer_sequence_double_click_drag_selects_word_range() {
+        let runtime = tessera_ui::RuntimeSession::new();
+        let _scope = runtime.enter();
         let text = "foo bar baz";
         let mut controller = TextEditorController::new(tessera_ui::Dp(14.0), None);
         controller.set_text_and_selection(text, TextSelection::collapsed(5));
@@ -2114,6 +2123,8 @@ mod tests {
 
     #[test]
     fn text_input_pointer_sequence_triple_click_drag_selects_line_range() {
+        let runtime = tessera_ui::RuntimeSession::new();
+        let _scope = runtime.enter();
         let text = "111\n222\n333";
         let mut controller = TextEditorController::new(tessera_ui::Dp(14.0), None);
         controller.set_text_and_selection(text, TextSelection::collapsed(5));
@@ -2206,6 +2217,8 @@ mod tests {
 
     #[test]
     fn single_line_ime_commit_newline_uses_submit_behavior() {
+        let runtime = tessera_ui::RuntimeSession::new();
+        let _scope = runtime.enter();
         assert_eq!(
             plan_ime_event_for_state(
                 TextSelection::collapsed(0),
@@ -2228,6 +2241,8 @@ mod tests {
 
     #[test]
     fn multi_line_ime_commit_newline_keeps_default_editing_behavior() {
+        let runtime = tessera_ui::RuntimeSession::new();
+        let _scope = runtime.enter();
         assert_eq!(
             plan_ime_event_for_state(
                 TextSelection::collapsed(0),
@@ -2246,6 +2261,8 @@ mod tests {
 
     #[test]
     fn single_line_ime_commit_text_does_not_trigger_submit_behavior() {
+        let runtime = tessera_ui::RuntimeSession::new();
+        let _scope = runtime.enter();
         assert_eq!(
             plan_ime_event_for_state(
                 TextSelection::collapsed(0),
@@ -2264,6 +2281,8 @@ mod tests {
 
     #[test]
     fn non_submit_single_line_commit_keeps_edit_plan_instead_of_submit_plan() {
+        let runtime = tessera_ui::RuntimeSession::new();
+        let _scope = runtime.enter();
         assert!(matches!(
             plan_ime_event_for_state(
                 TextSelection::collapsed(0),
@@ -2514,7 +2533,6 @@ mod tests {
     }
 
     mod scroll_propagation {
-        use std::cell::RefCell;
 
         use tessera_ui::{
             CursorEventContent, Dp, GestureState, Modifier, PointerChange, PressKeyEventType, Px,
@@ -2525,7 +2543,6 @@ mod tests {
                 layout_test, pump_layout_test_session, pump_layout_test_session_with_input,
                 start_layout_test_session,
             },
-            time::Instant,
         };
 
         use crate::{
@@ -2538,15 +2555,19 @@ mod tests {
             theme::{MaterialTheme, material_theme},
         };
 
-        thread_local! {
-            static CONTROLLER: RefCell<Option<State<ScrollableController>>> =
-                const { RefCell::new(None) };
+        #[derive(Clone, Copy)]
+        enum ProbeKind {
+            Plain,
+            Input,
+            Field,
         }
 
         #[tessera]
-        fn scroll_probe_with_input() {
+        fn scroll_probe_with_input(
+            output: tessera_ui::testing::TestProbe<Option<State<ScrollableController>>>,
+        ) {
             let controller = remember(ScrollableController::new);
-            CONTROLLER.with(|slot| *slot.borrow_mut() = Some(controller));
+            output.set(Some(controller));
             material_theme()
                 .theme(|| MaterialTheme::default())
                 .child(move || {
@@ -2567,9 +2588,11 @@ mod tests {
         }
 
         #[tessera]
-        fn scroll_probe_plain() {
+        fn scroll_probe_plain(
+            output: tessera_ui::testing::TestProbe<Option<State<ScrollableController>>>,
+        ) {
             let controller = remember(ScrollableController::new);
-            CONTROLLER.with(|slot| *slot.borrow_mut() = Some(controller));
+            output.set(Some(controller));
             material_theme()
                 .theme(|| MaterialTheme::default())
                 .child(move || {
@@ -2589,16 +2612,30 @@ mod tests {
                 });
         }
 
-        fn scrolled_after_wheel(content: impl Fn(), focus_first: bool) -> f32 {
-            let mut session = start_layout_test_session(layout_test(content).viewport_px(200, 100));
+        fn scrolled_after_wheel(kind: ProbeKind, focus_first: bool) -> f32 {
+            let output = tessera_ui::testing::TestProbe::default();
+            let probe = output.clone();
+            let mut session = start_layout_test_session(
+                layout_test(move || match kind {
+                    ProbeKind::Plain => {
+                        scroll_probe_plain(probe.clone());
+                    }
+                    ProbeKind::Input => {
+                        scroll_probe_with_input(probe.clone());
+                    }
+                    ProbeKind::Field => {
+                        scroll_probe_with_field(probe.clone());
+                    }
+                })
+                .viewport_px(200, 100),
+            );
             let _ = pump_layout_test_session(&mut session, 0);
-            let controller =
-                CONTROLLER.with(|slot| (*slot.borrow()).expect("scrollable controller"));
+            let controller = output.get().expect("scrollable controller");
             let cursor = Some(PxPosition::new(Px::new(100), Px::new(20)));
 
             if focus_first {
                 let press = PointerChange::new(
-                    Instant::now(),
+                    tessera_ui::current_frame_time().unwrap(),
                     1,
                     CursorEventContent::Pressed(PressKeyEventType::Left),
                     GestureState::TapCandidate,
@@ -2610,7 +2647,7 @@ mod tests {
                     cursor,
                 );
                 let release = PointerChange::new(
-                    Instant::now(),
+                    tessera_ui::current_frame_time().unwrap(),
                     1,
                     CursorEventContent::Released(PressKeyEventType::Left),
                     GestureState::TapCandidate,
@@ -2624,7 +2661,7 @@ mod tests {
             }
 
             let scroll = PointerChange::new(
-                Instant::now(),
+                tessera_ui::current_frame_time().unwrap(),
                 1,
                 CursorEventContent::Scroll(ScrollEventContent {
                     delta_x: 0.0,
@@ -2647,12 +2684,7 @@ mod tests {
 
         #[test]
         fn parent_scrollable_scrolls_without_text_input() {
-            let offset = scrolled_after_wheel(
-                || {
-                    scroll_probe_plain();
-                },
-                false,
-            );
+            let offset = scrolled_after_wheel(ProbeKind::Plain, false);
             assert!(
                 offset != 0.0,
                 "plain content should scroll, got y={offset:?}"
@@ -2661,12 +2693,7 @@ mod tests {
 
         #[test]
         fn wheel_over_unfocused_input_reaches_parent_scrollable() {
-            let offset = scrolled_after_wheel(
-                || {
-                    scroll_probe_with_input();
-                },
-                false,
-            );
+            let offset = scrolled_after_wheel(ProbeKind::Input, false);
             assert!(
                 offset != 0.0,
                 "wheel over an unfocused text input should scroll the parent, got y={offset:?}"
@@ -2675,12 +2702,7 @@ mod tests {
 
         #[test]
         fn wheel_over_focused_input_reaches_parent_scrollable() {
-            let offset = scrolled_after_wheel(
-                || {
-                    scroll_probe_with_input();
-                },
-                true,
-            );
+            let offset = scrolled_after_wheel(ProbeKind::Input, true);
             assert!(
                 offset != 0.0,
                 "wheel over a focused text input should scroll the parent, got y={offset:?}"
@@ -2688,9 +2710,11 @@ mod tests {
         }
 
         #[tessera]
-        fn scroll_probe_with_field() {
+        fn scroll_probe_with_field(
+            output: tessera_ui::testing::TestProbe<Option<State<ScrollableController>>>,
+        ) {
             let controller = remember(ScrollableController::new);
-            CONTROLLER.with(|slot| *slot.borrow_mut() = Some(controller));
+            output.set(Some(controller));
             material_theme()
                 .theme(|| MaterialTheme::default())
                 .child(move || {
@@ -2712,12 +2736,7 @@ mod tests {
 
         #[test]
         fn wheel_over_text_field_reaches_parent_scrollable() {
-            let offset = scrolled_after_wheel(
-                || {
-                    scroll_probe_with_field();
-                },
-                false,
-            );
+            let offset = scrolled_after_wheel(ProbeKind::Field, false);
             assert!(
                 offset != 0.0,
                 "wheel over a text field should scroll the parent, got y={offset:?}"

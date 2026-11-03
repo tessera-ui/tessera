@@ -273,15 +273,18 @@ impl CheckmarkState {
 /// use tessera_components::checkbox::{CheckboxController, checkbox};
 /// use tessera_ui::{remember, tessera};
 ///
-/// let mut controller = CheckboxController::new(false);
-/// controller.set_indeterminate(true);
-/// assert!(controller.is_indeterminate());
-/// controller.toggle();
-/// assert!(controller.is_checked());
-/// assert!(!controller.is_indeterminate());
-///
 /// #[tessera]
 /// fn checkbox_demo() {
+///     let controller = remember(|| {
+///         let mut controller = CheckboxController::new(false);
+///         controller.set_indeterminate(true);
+///         assert!(controller.is_indeterminate());
+///         controller.toggle();
+///         assert!(controller.is_checked());
+///         assert!(!controller.is_indeterminate());
+///         controller
+///     });
+///     checkbox().controller(controller);
 ///     let choices = remember(|| [true, false]);
 ///     let all = choices.with(|values| values.iter().all(|value| *value));
 ///     let some = choices.with(|values| values.iter().any(|value| *value));
@@ -292,6 +295,11 @@ impl CheckmarkState {
 ///         .accessibility_description("Choose at least one option")
 ///         .on_toggle(move |value| choices.set([value; 2]));
 /// }
+/// # #[tessera]
+/// # fn demo() {
+/// #     tessera_components::theme::material_theme().child(|| { checkbox_demo(); });
+/// # }
+/// # tessera_ui::testing::layout_test(demo).run();
 /// ```
 #[tessera]
 pub fn checkbox(
@@ -514,8 +522,6 @@ fn checkbox_inner(
     if controller.with(CheckboxController::is_animating) || colors.with(ColorsMotion::is_animating)
     {
         receive_frame_nanos(move |frame| {
-            #[cfg(all(test, not(target_family = "wasm")))]
-            motion_tests::TICKS.set(motion_tests::TICKS.get() + 1);
             let stroke_active = controller.with_mut(|controller| {
                 controller.update_progress(frame);
                 controller.is_animating()
@@ -729,6 +735,8 @@ mod tests {
 
     #[test]
     fn mixed_activation_selects_and_morph_retargeting_preserves_the_stroke() {
+        let runtime = tessera_ui::RuntimeSession::new();
+        let _scope = runtime.enter();
         let mut controller = CheckboxController::new(false);
         controller.set_indeterminate(true);
         assert!(controller.is_indeterminate());

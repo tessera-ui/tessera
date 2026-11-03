@@ -4,8 +4,6 @@
 //!
 //! Keep notification markers stable when content and themes change.
 
-use std::cell::Cell;
-
 use tessera_ui::{
     Color, Dp, HeadlessConfig, HeadlessRenderer, MOUSE_POINTER_ID, Modifier, PressKeyEventType,
     PxPosition, State, accesskit::Role, remember, tessera, use_context,
@@ -86,12 +84,8 @@ struct Settings {
     activations: usize,
 }
 
-thread_local! {
-    static SETTINGS: Cell<Option<State<Settings>>> = const { Cell::new(None) };
-}
-
 #[tessera]
-fn fixture() {
+fn fixture(probe: tessera_ui::testing::TestProbe<Option<State<Settings>>>) {
     let settings = remember(Settings::default);
     let palettes = remember(|| {
         [
@@ -99,7 +93,7 @@ fn fixture() {
             MaterialTheme::from_seed(Color::from_rgb(0.135633335, 0.080219820, 0.371237695), true),
         ]
     });
-    SETTINGS.set(Some(settings));
+    probe.set(Some(settings));
     material_theme()
         .theme(move || {
             let mut theme =
@@ -202,19 +196,13 @@ fn fixture() {
 }
 
 fn rect(renderer: &HeadlessRenderer, key: &str) -> [i64; 4] {
-    let snapshot = renderer.snapshot();
-    let mut pending = vec![&snapshot["root"]];
-    while let Some(node) = pending.pop() {
-        if node["accessibility"]["key"] == key || node["accessibility"]["label"] == key {
-            return ["x", "y", "width", "height"].map(|key| node["bounds"][key].as_i64().unwrap());
-        }
-        if let Some(children) = node["children"].as_array() {
-            pending.extend(children);
-        }
-    }
-    panic!("missing {key}");
+    let snapshot = renderer.inspect_components();
+    let node = snapshot
+        .find_tag(key)
+        .unwrap_or_else(|| snapshot.labeled(key));
+    let bounds = node.bounds().expect("placed test target");
+    [bounds.x, bounds.y, bounds.width, bounds.height].map(|value| value as i64)
 }
-
 fn assert_pixel(renderer: &HeadlessRenderer, x: i64, y: i64, color: Color) {
     let pixels = renderer.read_pixels().unwrap();
     let offset = ((y as u32 * renderer.physical_size().width + x as u32) * 4) as usize;
@@ -250,8 +238,10 @@ fn check_rendering(samples: u32) {
 
 fn check_density(samples: u32, scale: f64, expected: [i64; 5]) {
     let [anchor, dot_size, vertical, line, large_line] = expected;
+    let probe = tessera_ui::testing::TestProbe::default();
+    let observed = probe.clone();
     let mut renderer = HeadlessRenderer::new(
-        Box::new(fixture),
+        Box::new(move || fixture(observed.clone())),
         vec![Box::new(crate::TesseraComponents)],
         HeadlessConfig {
             width: 240,
@@ -263,7 +253,7 @@ fn check_density(samples: u32, scale: f64, expected: [i64; 5]) {
     )
     .unwrap();
     renderer.render_frames(5);
-    let settings = SETTINGS.get().unwrap();
+    let settings = probe.get().unwrap();
     let group = rect(&renderer, "group");
     assert_eq!((group[2], group[3]), (anchor, anchor));
     let dot = rect(&renderer, "badge");

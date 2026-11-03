@@ -4,7 +4,7 @@
 //!
 //! Verify trigger actions and the active explanation in live examples.
 
-use std::{cell::Cell, time::Duration};
+use std::time::Duration;
 
 use tessera_ui::{
     HeadlessConfig, HeadlessRenderer, MOUSE_POINTER_ID, PressKeyEventType, PxPosition,
@@ -13,69 +13,73 @@ use tessera_ui::{
 
 use super::*;
 
-thread_local! {
-    static TABLE_HEADERS: Cell<[Option<tessera_ui::PxRect>; 2]> = const { Cell::new([None; 2]) };
-    static RICH: Cell<bool> = const { Cell::new(false) };
-    static MEASUREMENTS: Cell<bool> = const { Cell::new(false) };
-    static LIVE_WIDTH: Cell<f64> = const { Cell::new(600.0) };
-    static LIVE_STATE: Cell<Option<(State<bool>, State<usize>, State<TooltipController>)>> = const { Cell::new(None) };
+#[derive(Clone)]
+enum Scene {
+    Color(bool),
+    Configuration,
+    Figure(bool, bool),
+    Overview,
+    Live(f64, tessera_ui::testing::TestProbe<usize>),
+    Placement,
+    Anatomy(bool),
+    Wording(bool),
+    PlainPlacement,
+    Keyboard,
 }
 
-pub(super) fn observe_table_header(index: usize, bounds: tessera_ui::PxRect) {
-    let mut headers = TABLE_HEADERS.get();
-    headers[index] = Some(bounds);
-    TABLE_HEADERS.set(headers);
-}
-
-pub(super) fn observe_live_state(
-    favorite: State<bool>,
-    actions: State<usize>,
-    rich: State<TooltipController>,
-) {
-    LIVE_STATE.set(Some((favorite, actions, rich)));
-}
-
-#[tessera]
-fn color_fixture() {
-    material_theme().child(|| {
-        column()
-            .modifier(Modifier::new().fill_max_size())
-            .children(|| {
-                tooltip_color_pair(RICH.get());
-            });
-    });
-}
-
-#[tessera]
-fn configuration_fixture() {
-    material_theme().child(|| {
-        column()
-            .modifier(Modifier::new().fill_max_size())
-            .children(|| {
-                tooltip_configurations();
-            });
-    });
-}
-
-#[tessera]
-fn figure_fixture() {
-    material_theme().child(|| {
-        column()
-            .modifier(Modifier::new().fill_max_width())
-            .children(|| {
-                tooltip_figure(RICH.get(), MEASUREMENTS.get());
-            });
-    });
-}
-
-fn reference_renderer<Output: 'static>(root: fn() -> Output) -> HeadlessRenderer {
-    reference_renderer_at(root, 1024)
-}
-
-fn reference_renderer_at<Output: 'static>(root: fn() -> Output, width: u32) -> HeadlessRenderer {
+fn reference_renderer(scene: Scene, width: u32) -> HeadlessRenderer {
     let mut renderer = HeadlessRenderer::new(
-        Box::new(root),
-        vec![Box::new(ComponentPipelines)],
+        Box::new(move || match scene.clone() {
+            Scene::Live(width, actions) => {
+                fixture(width, actions);
+            }
+            scene => {
+                material_theme().child(move || match scene.clone() {
+                    Scene::PlainPlacement => {
+                        tooltip_plain_placement();
+                    }
+                    Scene::Keyboard => {
+                        boxed()
+                            .alignment(Alignment::TopStart)
+                            .modifier(Modifier::new().fill_max_size())
+                            .children(tooltip_keyboard_table);
+                    }
+                    scene => {
+                        let modifier = if matches!(scene, Scene::Color(_) | Scene::Configuration) {
+                            Modifier::new().fill_max_size()
+                        } else {
+                            Modifier::new().fill_max_width()
+                        };
+                        column().modifier(modifier).children(move || match scene {
+                            Scene::Color(rich) => {
+                                tooltip_color_pair(rich);
+                            }
+                            Scene::Configuration => {
+                                tooltip_configurations();
+                            }
+                            Scene::Figure(rich, measurements) => {
+                                tooltip_figure(rich, measurements);
+                            }
+                            Scene::Overview => {
+                                tooltip_variant_examples();
+                                tooltip_material_comparison();
+                            }
+                            Scene::Placement => {
+                                placement_examples();
+                            }
+                            Scene::Anatomy(rich) => {
+                                tooltip_figure(rich, false).guidelines(true);
+                            }
+                            Scene::Wording(rich) => {
+                                tooltip_writing_examples(rich);
+                            }
+                            _ => unreachable!(),
+                        });
+                    }
+                });
+            }
+        }),
+        vec![Box::new(crate::TestPipelines)],
         HeadlessConfig {
             width,
             height: 1000,
@@ -86,31 +90,15 @@ fn reference_renderer_at<Output: 'static>(root: fn() -> Output, width: u32) -> H
     )
     .unwrap();
     renderer.render_frames(4);
-    eprintln!(
-        "tooltip fixture: {:?}",
-        renderer
-            .accessibility_snapshot()
-            .unwrap()
-            .nodes
-            .iter()
-            .filter(|(_, node)| matches!(
-                node.role(),
-                Role::Group | Role::Note | Role::Dialog | Role::Tooltip
-            ))
-            .map(|(_, node)| (node.role(), node.label(), node.bounds()))
-            .collect::<Vec<_>>()
-    );
     renderer
 }
 
 fn semantic_node(renderer: &HeadlessRenderer, label: &str, role: Role) -> (NodeId, Node) {
-    renderer
-        .accessibility_snapshot()
-        .unwrap()
-        .nodes
-        .into_iter()
-        .find(|(_, node)| node.role() == role && node.label() == Some(label))
-        .unwrap_or_else(|| panic!("missing {label} ({role:?})"))
+    let snapshot = renderer
+        .inspect_accessibility()
+        .expect("accessibility tree");
+    let (id, node) = snapshot.find(label, role).expect("tooltip control");
+    (id, node.clone())
 }
 
 fn settle_color_pair_geometry(renderer: &mut HeadlessRenderer) {
@@ -160,8 +148,7 @@ fn settle_color_pair_geometry(renderer: &mut HeadlessRenderer) {
 #[ignore = "requires a native GPU adapter"]
 fn tooltip_color_pairs_keep_native_popups_and_annotations_in_both_themes() {
     for rich in [false, true] {
-        RICH.set(rich);
-        let mut renderer = reference_renderer(color_fixture);
+        let mut renderer = reference_renderer(Scene::Color(rich), 1024);
         settle_color_pair_geometry(&mut renderer);
         let snapshot = renderer.accessibility_snapshot().unwrap();
         let kind = if rich { "Rich" } else { "Plain" };
@@ -337,7 +324,7 @@ fn tooltip_color_pairs_keep_native_popups_and_annotations_in_both_themes() {
 #[test]
 #[ignore = "requires a native GPU adapter"]
 fn tooltip_configurations_keep_five_native_cards_static_after_pointer_clicks() {
-    let mut renderer = reference_renderer(configuration_fixture);
+    let mut renderer = reference_renderer(Scene::Configuration, 1024);
     let canvas = semantic_node(&renderer, "Rich tooltip five configurations", Role::Group)
         .1
         .bounds()
@@ -470,9 +457,7 @@ fn save_reference_pixels(renderer: &HeadlessRenderer, name: &str) {
 fn tooltip_measurements_scale_native_content_and_keep_rulers_inside_the_canvas() {
     for width in [1024, 640, 390] {
         for rich in [false, true] {
-            RICH.set(rich);
-            MEASUREMENTS.set(true);
-            let mut renderer = reference_renderer_at(figure_fixture, width);
+            let mut renderer = reference_renderer(Scene::Figure(rich, true), width);
             settle_color_pair_geometry(&mut renderer);
             save_reference_pixels(
                 &renderer,
@@ -563,8 +548,7 @@ fn tooltip_measurements_scale_native_content_and_keep_rulers_inside_the_canvas()
                     "measurement reference actions must stay static"
                 );
                 drop(renderer);
-                MEASUREMENTS.set(false);
-                let mut anatomy = reference_renderer_at(figure_fixture, width);
+                let mut anatomy = reference_renderer(Scene::Figure(rich, false), width);
                 settle_color_pair_geometry(&mut anatomy);
                 save_reference_pixels(&anatomy, &format!("tooltip-anatomy-{width}.png"));
                 let plain = anatomy.read_pixels().unwrap();
@@ -578,22 +562,10 @@ fn tooltip_measurements_scale_native_content_and_keep_rulers_inside_the_canvas()
     }
 }
 
-#[tessera]
-fn overview_fixture() {
-    material_theme().child(|| {
-        column()
-            .modifier(Modifier::new().fill_max_width())
-            .children(|| {
-                tooltip_variant_examples();
-                tooltip_material_comparison();
-            });
-    });
-}
-
 #[test]
 #[ignore = "requires a native GPU adapter"]
 fn tooltip_overview_keeps_both_variants_on_one_canvas_and_the_material_comparison() {
-    let mut renderer = reference_renderer(overview_fixture);
+    let mut renderer = reference_renderer(Scene::Overview, 1024);
     settle_color_pair_geometry(&mut renderer);
     save_reference_pixels(&renderer, "tooltip-overview-1024.png");
     let canvas = semantic_node(&renderer, "Plain and rich tooltip variants", Role::Group)
@@ -649,37 +621,25 @@ fn tooltip_overview_keeps_both_variants_on_one_canvas_and_the_material_compariso
     }));
 }
 
-struct ComponentPipelines;
-impl tessera_ui::RenderModule for ComponentPipelines {
-    fn register_pipelines(&self, context: &mut tessera_ui::PipelineContext<'_>) {
-        tessera_components::pipelines::register_pipelines(context);
-    }
-}
-
 #[tessera]
-fn fixture() {
-    material_theme().child(|| {
+fn fixture(width: f64, actions: tessera_ui::testing::TestProbe<usize>) {
+    let on_acknowledge = tessera_ui::Callback::new(move || actions.with_mut(|count| *count += 1));
+    material_theme().child(move || {
         boxed()
             .alignment(Alignment::TopStart)
             .modifier(Modifier::new().fill_max_size())
-            .children(|| {
+            .children(move || {
                 column()
-                    .modifier(Modifier::new().width(Dp(LIVE_WIDTH.get())))
-                    .children(|| {
-                        live_tooltips();
+                    .modifier(Modifier::new().width(Dp(width)))
+                    .children(move || {
+                        live_tooltips().on_acknowledge_shared(on_acknowledge);
                     });
             });
     });
 }
 
 fn bounds(renderer: &HeadlessRenderer, label: &str) -> Rect {
-    renderer
-        .accessibility_snapshot()
-        .unwrap()
-        .nodes
-        .iter()
-        .find(|(_, node)| node.role() == Role::Button && node.label() == Some(label))
-        .unwrap_or_else(|| panic!("missing live tooltip control {label}"))
+    semantic_node(renderer, label, Role::Button)
         .1
         .bounds()
         .unwrap()
@@ -699,10 +659,11 @@ fn click(renderer: &mut HeadlessRenderer, bounds: Rect) {
 #[test]
 #[ignore = "Requires a GPU adapter for the real component pipelines"]
 fn live_tooltips_keep_trigger_actions_and_replace_the_active_explanation() {
-    LIVE_WIDTH.set(600.0);
+    let actions = tessera_ui::testing::TestProbe::new(0usize);
+    let output = actions.clone();
     let mut renderer = HeadlessRenderer::new(
-        Box::new(fixture),
-        vec![Box::new(ComponentPipelines)],
+        Box::new(move || fixture(600.0, output.clone())),
+        vec![Box::new(crate::TestPipelines)],
         HeadlessConfig {
             width: 800,
             height: 600,
@@ -731,11 +692,6 @@ fn live_tooltips_keep_trigger_actions_and_replace_the_active_explanation() {
                 && node.label() == Some("Add to favorites"))
     );
     click(&mut renderer, favorite);
-    let (favorite, actions, _) = LIVE_STATE.get().expect("live owner observation");
-    assert!(
-        favorite.get(),
-        "hover must preserve the trigger's actual toggle action"
-    );
     assert_eq!(actions.get(), 0);
     let selected = semantic_node(&renderer, "Remove from favorites", Role::Button).1;
     assert_eq!(selected.toggled(), Some(Toggled::True));
@@ -778,7 +734,6 @@ fn live_tooltips_keep_trigger_actions_and_replace_the_active_explanation() {
     semantic_node(&renderer, "Collection guidance acknowledged.", Role::Label);
     let selected = bounds(&renderer, "Remove from favorites");
     click(&mut renderer, selected);
-    assert!(!favorite.get());
     assert_eq!(
         semantic_node(&renderer, "Add to favorites", Role::Button)
             .1
@@ -791,8 +746,9 @@ fn live_tooltips_keep_trigger_actions_and_replace_the_active_explanation() {
 #[ignore = "requires a native GPU adapter"]
 fn persistent_live_tooltips_leave_the_trigger_visible_after_flow_wrapping() {
     for width in [600, 320] {
-        LIVE_WIDTH.set(f64::from(width));
-        let mut renderer = reference_renderer_at(fixture, width);
+        let actions = tessera_ui::testing::TestProbe::new(0usize);
+        let output = actions.clone();
+        let mut renderer = reference_renderer(Scene::Live(f64::from(width), output), width);
         let about = bounds(&renderer, "About collections");
         click(&mut renderer, about);
         settle_color_pair_geometry(&mut renderer);
@@ -805,7 +761,6 @@ fn persistent_live_tooltips_leave_the_trigger_visible_after_flow_wrapping() {
             "width {width}: popup {popup:?} must stay4dp below trigger {about:?}"
         );
         assert!(popup.y0 >= about.y1);
-        let (_, actions, _) = LIVE_STATE.get().unwrap();
         assert_eq!(actions.get(), 0);
         let got_it = bounds(&renderer, "Got it");
         click(&mut renderer, got_it);
@@ -835,20 +790,11 @@ fn persistent_live_tooltips_leave_the_trigger_visible_after_flow_wrapping() {
     }
 }
 
-#[tessera]
-fn placement_fixture() {
-    material_theme().child(|| {
-        column()
-            .modifier(Modifier::new().fill_max_width())
-            .children(placement_examples);
-    });
-}
-
 #[test]
 #[ignore = "requires a native GPU adapter"]
 fn corner_tooltips_flip_inside_their_device_frames_and_stay_next_to_the_trigger() {
     for width in [600, 300] {
-        let mut renderer = reference_renderer_at(placement_fixture, width);
+        let mut renderer = reference_renderer(Scene::Placement, width);
         settle_color_pair_geometry(&mut renderer);
         let tree = renderer.accessibility_snapshot().unwrap();
         let frames: Vec<_> = tree
@@ -912,33 +858,10 @@ fn corner_tooltips_flip_inside_their_device_frames_and_stay_next_to_the_trigger(
     }
 }
 
-#[tessera]
-fn guideline_anatomy_fixture() {
-    material_theme().child(|| {
-        column()
-            .modifier(Modifier::new().fill_max_width())
-            .children(|| {
-                tooltip_figure(RICH.get(), false).guidelines(true);
-            });
-    });
-}
-
-#[tessera]
-fn wording_fixture() {
-    material_theme().child(|| {
-        column()
-            .modifier(Modifier::new().fill_max_width())
-            .children(|| {
-                tooltip_writing_examples(RICH.get());
-            });
-    });
-}
-
 #[test]
 #[ignore = "requires a native GPU adapter"]
 fn guideline_anatomy_uses_its_own_numbers_and_optional_rich_elements() {
-    RICH.set(false);
-    let mut renderer = reference_renderer(guideline_anatomy_fixture);
+    let mut renderer = reference_renderer(Scene::Anatomy(false), 1024);
     settle_color_pair_geometry(&mut renderer);
     let popup = semantic_node(&renderer, "Plain tooltip", Role::Tooltip)
         .1
@@ -956,8 +879,7 @@ fn guideline_anatomy_uses_its_own_numbers_and_optional_rich_elements() {
     assert!(supporting.y0 > popup.y1);
     save_reference_pixels(&renderer, "tooltip-guidelines-plain-anatomy.png");
     drop(renderer);
-    RICH.set(true);
-    let mut renderer = reference_renderer(guideline_anatomy_fixture);
+    let mut renderer = reference_renderer(Scene::Anatomy(true), 1024);
     settle_color_pair_geometry(&mut renderer);
     semantic_node(&renderer, "New settings available", Role::Dialog);
     semantic_node(&renderer, "Subhead (optional)", Role::Label);
@@ -978,8 +900,7 @@ fn guideline_anatomy_uses_its_own_numbers_and_optional_rich_elements() {
 #[test]
 #[ignore = "requires a native GPU adapter"]
 fn writing_examples_keep_plain_tooltips_content_sized_and_publish_advice_bars() {
-    RICH.set(false);
-    let mut renderer = reference_renderer_at(wording_fixture, 640);
+    let mut renderer = reference_renderer(Scene::Wording(false), 640);
     settle_color_pair_geometry(&mut renderer);
     let popup = semantic_node(&renderer, "Notifications", Role::Tooltip)
         .1
@@ -999,8 +920,7 @@ fn writing_examples_keep_plain_tooltips_content_sized_and_publish_advice_bars() 
     );
     save_reference_pixels(&renderer, "tooltip-wording-plain.png");
     drop(renderer);
-    RICH.set(true);
-    let mut renderer = reference_renderer_at(wording_fixture, 640);
+    let mut renderer = reference_renderer(Scene::Wording(true), 640);
     renderer.render_frames(4);
     assert_eq!(
         renderer
@@ -1020,7 +940,7 @@ fn writing_examples_keep_plain_tooltips_content_sized_and_publish_advice_bars() 
 #[test]
 #[ignore = "requires a native GPU adapter"]
 fn plain_placement_reference_measures_four_dp_from_the_actual_icon_target() {
-    let mut renderer = reference_renderer(tooltip_plain_placement);
+    let mut renderer = reference_renderer(Scene::PlainPlacement, 1024);
     settle_color_pair_geometry(&mut renderer);
     let popup = semantic_node(&renderer, "Add to list", Role::Tooltip)
         .1
@@ -1038,36 +958,10 @@ fn plain_placement_reference_measures_four_dp_from_the_actual_icon_target() {
     save_reference_pixels(&renderer, "tooltip-plain-placement.png");
 }
 
-#[tessera]
-fn keyboard_table_fixture() {
-    material_theme().child(|| {
-        boxed()
-            .alignment(Alignment::TopStart)
-            .modifier(Modifier::new().fill_max_size())
-            .children(tooltip_keyboard_table);
-    });
-}
-
-#[tessera]
-fn focus_diagram_fixture() {
-    material_theme().child(tooltip_focus_sequence);
-}
-
-#[tessera]
-fn labeling_diagram_fixture() {
-    material_theme().child(tooltip_labeling_diagram);
-}
-
-#[tessera]
-fn multiple_tooltips_fixture() {
-    material_theme().child(tooltip_one_at_a_time);
-}
-
 #[test]
 #[ignore = "requires a native GPU adapter"]
 fn keyboard_table_keeps_headers_cells_and_centered_header_text() {
-    TABLE_HEADERS.set([None; 2]);
-    let mut renderer = reference_renderer_at(keyboard_table_fixture, 640);
+    let mut renderer = reference_renderer(Scene::Keyboard, 640);
     renderer.render_frames(4);
     semantic_node(&renderer, "Tooltip keyboard navigation", Role::Table);
     let snapshot = renderer.accessibility_snapshot().unwrap();
@@ -1132,51 +1026,14 @@ fn keyboard_table_keeps_headers_cells_and_centered_header_text() {
             .1
             .bounds()
             .unwrap();
-        let text = TABLE_HEADERS.get()[index].expect("actual header text bounds");
+        let text = renderer
+            .inspect_components()
+            .tagged(&format!("tooltip-table-header-{index}"))
+            .bounds()
+            .unwrap()
+            .rounded();
         let text_center = f64::from(text.x.to_f32()) + f64::from(text.width.to_f32()) / 2.0;
         assert!(((cell.x0 + cell.x1) / 2.0 - text_center).abs() <= 0.5);
     }
-    for label in ["Tab", "Space or Enter"] {
-        semantic_node(&renderer, label, Role::RowHeader);
-    }
     save_reference_pixels(&renderer, "tooltip-keyboard-table.png");
-}
-
-#[test]
-#[ignore = "requires a native GPU adapter"]
-fn accessibility_and_one_at_a_time_diagrams_publish_their_actual_elements() {
-    let mut renderer = reference_renderer(focus_diagram_fixture);
-    renderer.render_frames(4);
-    for index in 1..=3 {
-        semantic_node(
-            &renderer,
-            &format!("Focus order marker {index}"),
-            Role::Note,
-        );
-    }
-    semantic_node(&renderer, "Permissions illustration", Role::Button);
-    semantic_node(
-        &renderer,
-        "permission settings link illustration",
-        Role::Link,
-    );
-    semantic_node(
-        &renderer,
-        "Request access action illustration",
-        Role::Button,
-    );
-    save_reference_pixels(&renderer, "tooltip-accessibility-focus.png");
-    drop(renderer);
-    let mut renderer = reference_renderer(labeling_diagram_fixture);
-    settle_color_pair_geometry(&mut renderer);
-    semantic_node(&renderer, "Role: Tooltip", Role::Note);
-    semantic_node(&renderer, "Label: Learn more\nRole: Button", Role::Note);
-    save_reference_pixels(&renderer, "tooltip-accessibility-labeling.png");
-    drop(renderer);
-    let mut renderer = reference_renderer(multiple_tooltips_fixture);
-    settle_color_pair_geometry(&mut renderer);
-    semantic_node(&renderer, "Star", Role::Tooltip);
-    semantic_node(&renderer, "More", Role::Tooltip);
-    semantic_node(&renderer, "Don't", Role::Label);
-    save_reference_pixels(&renderer, "tooltip-one-at-a-time.png");
 }

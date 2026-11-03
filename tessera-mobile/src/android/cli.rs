@@ -19,9 +19,7 @@ use crate::{
     os,
     target::{TargetInvalid, TargetTrait as _, call_for_targets_with_fallback},
     util::{
-        cli::{
-            self, Exec, GlobalFlags, Report, Reportable, TextWrapper, VERSION_LONG, VERSION_SHORT,
-        },
+        cli::{self, Exec, GlobalFlags, Report, Reportable, TextWrapper, VERSION_SHORT},
         prompt,
     },
 };
@@ -30,7 +28,6 @@ use crate::{
 #[structopt(
     bin_name = cli::bin_name(NAME),
     version = VERSION_SHORT,
-    long_version = VERSION_LONG.as_str(),
     global_settings = cli::GLOBAL_SETTINGS,
     settings = cli::SETTINGS,
 )]
@@ -235,14 +232,18 @@ impl Exec for Input {
 
         fn get_targets_or_all<'a>(targets: Vec<String>) -> Result<Vec<&'a Target<'a>>, Error> {
             if targets.is_empty() {
-                Ok(Target::all().iter().map(|t| t.1).collect())
+                Ok(Target::all().iter().map(|t| &t.1).collect())
             } else {
                 let mut outs = Vec::new();
                 for t in targets {
                     let target = Target::for_name(&t)
                         .ok_or_else(|| TargetInvalid {
                             name: t,
-                            possible: Target::all().keys().map(|key| key.to_string()).collect(),
+                            possible: Target::all()
+                                .iter()
+                                .map(|(key, _)| key)
+                                .map(|key| key.to_string())
+                                .collect(),
                         })
                         .map_err(|err| Error::TargetInvalid(Box::new(err)))?;
                     outs.push(target);

@@ -4,7 +4,7 @@
 //!
 //! Preserve selection and pressed silhouettes while chip states change.
 
-use std::{cell::Cell, time::Duration};
+use std::time::Duration;
 
 use tessera_ui::{
     Color, Dp, HeadlessConfig, HeadlessRenderer, MOUSE_POINTER_ID, Modifier, PressKeyEventType,
@@ -29,14 +29,10 @@ struct Settings {
     input: bool,
 }
 
-thread_local! {
-    static SETTINGS: Cell<Option<State<Settings>>> = const { Cell::new(None) };
-}
-
 #[tessera]
-fn fixture() {
+fn fixture(probe: tessera_ui::testing::TestProbe<Option<State<Settings>>>) {
     let settings = remember(Settings::default);
-    SETTINGS.set(Some(settings));
+    probe.set(Some(settings));
     material_theme().child(move || {
         column()
             .modifier(
@@ -96,20 +92,11 @@ fn fixture() {
 }
 
 fn bounds(renderer: &HeadlessRenderer) -> [i64; 4] {
-    let snapshot = renderer.snapshot();
-    let mut nodes = vec![&snapshot["root"]];
-    while let Some(node) = nodes.pop() {
-        if node["accessibility"]["key"] == "shape_chip" {
-            return ["x", "y", "width", "height"]
-                .map(|field| node["bounds"][field].as_i64().unwrap());
-        }
-        if let Some(children) = node["children"].as_array() {
-            nodes.extend(children);
-        }
-    }
-    panic!("missing chip");
+    let snapshot = renderer.inspect_components();
+    let node = snapshot.tagged("shape_chip");
+    let bounds = node.bounds().expect("placed test target");
+    [bounds.x, bounds.y, bounds.width, bounds.height].map(|value| value as i64)
 }
-
 fn corners(renderer: &HeadlessRenderer) -> Vec<bool> {
     let [x, y, width, height] = bounds(renderer);
     assert_eq!((width, height), (160, 48));
@@ -131,8 +118,10 @@ fn assert_shape(renderer: &HeadlessRenderer, expected: [bool; 3]) {
 }
 
 fn check_shapes(samples: u32) {
+    let probe = tessera_ui::testing::TestProbe::default();
+    let observed = probe.clone();
     let mut renderer = HeadlessRenderer::new(
-        Box::new(fixture),
+        Box::new(move || fixture(observed.clone())),
         vec![Box::new(crate::TesseraComponents)],
         HeadlessConfig {
             width: 220,
@@ -144,7 +133,7 @@ fn check_shapes(samples: u32) {
     )
     .unwrap();
     renderer.render_frames(5);
-    let settings = SETTINGS.get().expect("settings");
+    let settings = probe.get().expect("settings");
     for input in [false, true] {
         settings.set(Settings {
             input,

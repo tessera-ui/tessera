@@ -4,8 +4,6 @@
 //!
 //! Verify clock values, focus, periods, and manual-entry transitions.
 
-use std::cell::Cell;
-
 use tessera_ui::{
     FocusDirection, FocusManager, HeadlessConfig, HeadlessRenderer, MOUSE_POINTER_ID, Modifier,
     PressKeyEventType, PxPosition, State,
@@ -28,20 +26,20 @@ use super::{
     time_picker_dialog,
 };
 
-thread_local! {
-    static STATE: Cell<Option<State<TimePickerState>>> = const { Cell::new(None) };
-    static STEPS: Cell<Option<State<(u8, u8)>>> = const { Cell::new(None) };
-    static LAYOUT: Cell<Option<State<TimePickerLayout>>> = const { Cell::new(None) };
-}
-
 #[tessera]
-fn fixture() {
+fn fixture(
+    output: tessera_ui::testing::TestProbe<
+        Option<(
+            State<TimePickerState>,
+            State<(u8, u8)>,
+            State<TimePickerLayout>,
+        )>,
+    >,
+) {
     let state = remember(|| TimePickerState::new(14, 8, false, TimePickerDisplayMode::Picker));
     let steps = remember(|| (1, 1));
     let arrangement = remember(TimePickerLayout::default);
-    STATE.set(Some(state));
-    STEPS.set(Some(steps));
-    LAYOUT.set(Some(arrangement));
+    output.set(Some((state, steps, arrangement)));
     material_theme().child(move || {
         column().children(move || {
             surface()
@@ -126,8 +124,10 @@ fn save(renderer: &mut HeadlessRenderer, name: &str, samples: u32) {
 }
 
 fn check_accessibility(samples: u32) {
+    let output = tessera_ui::testing::TestProbe::default();
+    let probe = output.clone();
     let mut renderer = HeadlessRenderer::new(
-        Box::new(fixture),
+        Box::new(move || fixture(probe.clone())),
         vec![Box::new(crate::TesseraComponents)],
         HeadlessConfig {
             width: 600,
@@ -139,8 +139,8 @@ fn check_accessibility(samples: u32) {
     )
     .expect("renderer");
     renderer.render_frames(8);
-    let state = STATE.get().expect("state");
-    let steps = STEPS.get().expect("steps");
+    let state = output.get().unwrap().0;
+    let steps = output.get().unwrap().1;
     let tree = renderer.accessibility_snapshot().expect("tree");
     let slots: Vec<_> = tree
         .nodes
@@ -390,7 +390,7 @@ fn check_accessibility(samples: u32) {
     renderer.render_frames(8);
     let pm = control(&renderer, "PM", Role::RadioButton).0;
     action(&mut renderer, pm, Action::Focus);
-    let arrangement = LAYOUT.get().expect("arrangement");
+    let arrangement = output.get().unwrap().2;
     arrangement.set(TimePickerLayout::Horizontal);
     renderer.resize(1000, 1000);
     renderer.render_frames(8);

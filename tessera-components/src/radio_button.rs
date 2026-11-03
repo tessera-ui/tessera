@@ -10,12 +10,12 @@ use tessera_foundation::gesture::TapRecognizer;
 use tessera_ui::{
     AccessibilityActionHandler, AccessibilityNode, AxisConstraint, Callback, CallbackWith, Color,
     Dp, FocusDirection, FocusManager, FocusRequester, FocusState, FocusTraversalPolicy, Modifier,
-    Px, PxSize, RenderSlot, SemanticsModifierNode, State,
+    Px, PxSize, RenderSlotWith, SemanticsModifierNode, State,
     accesskit::{Orientation, Role, Toggled},
     current_frame_nanos,
     layout::layout,
     modifier::{FocusModifierExt as _, ModifierCapabilityExt as _},
-    provide_context, receive_frame_nanos, remember, tessera, use_context,
+    receive_frame_nanos, remember, tessera, use_context,
 };
 
 use crate::{
@@ -76,8 +76,9 @@ impl SemanticsModifierNode for RadioSemantics {
     }
 }
 
-#[derive(Clone, Copy)]
-struct RadioGroupContext {
+/// Selection coordination shared explicitly by the choices of a radio group.
+#[derive(Clone, Copy, PartialEq)]
+pub struct RadioGroupSelection {
     selected: State<Option<State<RadioButtonController>>>,
 }
 
@@ -228,7 +229,7 @@ fn interpolate_color(a: Color, b: Color, t: f32) -> Color {
 /// - `wrap` — whether arrow traversal wraps at either end; defaults to `true`.
 /// - `accessibility_label` — optional name for the related choices.
 /// - `accessibility_description` — optional additional group instructions.
-/// - `content` — optional group content slot.
+/// - `content` — content receiving the selection handle for its choices.
 ///
 /// ## Examples
 ///
@@ -239,11 +240,13 @@ fn interpolate_color(a: Color, b: Color, t: f32) -> Color {
 /// #[tessera]
 /// fn radio_group_demo() {
 ///     let selected = remember(|| 0usize);
-///     radio_group().content(move || {
+///     radio_group().content(move |group| {
 ///         radio_button()
+///             .group(group)
 ///             .selected(selected.get() == 0)
 ///             .on_select({ move |_| selected.set(0) });
 ///         radio_button()
+///             .group(group)
 ///             .selected(selected.get() == 1)
 ///             .on_select({ move |_| selected.set(1) });
 ///     });
@@ -256,11 +259,10 @@ pub fn radio_group(
     wrap: Option<bool>,
     #[prop(into)] accessibility_label: Option<String>,
     #[prop(into)] accessibility_description: Option<String>,
-    content: Option<RenderSlot>,
+    content: Option<RenderSlotWith<RadioGroupSelection>>,
 ) {
     let modifier = modifier.unwrap_or_default();
     let wrap = wrap.unwrap_or(true);
-    let content = content.unwrap_or_else(RenderSlot::empty);
     let selected = remember(|| None::<State<RadioButtonController>>);
     let orientation = match orientation.unwrap_or_default() {
         RadioGroupOrientation::Horizontal => Orientation::Horizontal,
@@ -279,13 +281,9 @@ pub fn radio_group(
         orientation: Some(orientation),
     });
     layout().modifier(modifier).child(move || {
-        let content = content;
-        provide_context(
-            move || RadioGroupContext { selected },
-            move || {
-                content.render();
-            },
-        );
+        if let Some(content) = content {
+            content.render(RadioGroupSelection { selected });
+        }
     });
 }
 
@@ -305,6 +303,7 @@ pub fn radio_group(
 ///   requests.
 /// - `on_select` — optional callback invoked when the radio transitions to the
 ///   selected state.
+/// - `group` — selection handle received from the enclosing radio group.
 /// - `selected` — externally controlled selection; omit on every choice to let
 ///   its radio group coordinate the controllers.
 /// - `size` — optional visual diameter of the radio glyph.
@@ -341,6 +340,7 @@ pub fn radio_button(
     focus_requester: Option<FocusRequester>,
     on_select: Option<CallbackWith<bool, ()>>,
     selected: Option<bool>,
+    group: Option<RadioGroupSelection>,
     size: Option<Dp>,
     touch_target_size: Option<Dp>,
     stroke_width: Option<Dp>,
@@ -396,6 +396,7 @@ pub fn radio_button(
         .modifier(modifier)
         .on_select_shared(on_select)
         .selected_optional(selected)
+        .group_optional(group)
         .size(size)
         .touch_target_size(touch_target_size)
         .stroke_width(stroke_width)
@@ -417,6 +418,7 @@ fn radio_button_inner(
     focus_requester: Option<FocusRequester>,
     on_select: Option<CallbackWith<bool, ()>>,
     selected: Option<bool>,
+    group: Option<RadioGroupSelection>,
     size: Option<Dp>,
     touch_target_size: Option<Dp>,
     stroke_width: Option<Dp>,
@@ -442,7 +444,7 @@ fn radio_button_inner(
     let disabled_selected_color = disabled_selected_color.unwrap_or(Color::TRANSPARENT);
     let disabled_unselected_color = disabled_unselected_color.unwrap_or(Color::TRANSPARENT);
     let enabled = enabled.unwrap_or(true);
-    let radio_group = use_context::<RadioGroupContext>().map(|context| context.get());
+    let radio_group = group;
     let controller = controller.expect("radio_button_inner requires controller to be set");
     let group_selection = if selected.is_none() {
         radio_group.map(|group| group.selected)

@@ -25,7 +25,7 @@ use crate::{
     spacer::spacer,
     surface::surface,
     text::text,
-    text_field::TextFieldBuilder,
+    text_field::text_field,
     text_input::TextInputController,
     theme::MaterialTheme,
 };
@@ -296,6 +296,7 @@ pub fn date_range_picker(
     first_day_of_week: Option<Weekday>,
     today: Option<CalendarDate>,
     calendar_height: Option<Dp>,
+    focus_requester: Option<FocusRequester>,
     show_mode_toggle: Option<bool>,
     #[prop(into)] title: Option<String>,
     #[prop(into)] headline: Option<String>,
@@ -449,7 +450,8 @@ pub fn date_range_picker(
                     first_day_of_week.unwrap_or_default(),
                     calendar_height.unwrap_or(Dp(360.0)),
                     today,
-                );
+                )
+                .focus_requester_optional(focus_requester);
             }
         });
 }
@@ -460,6 +462,7 @@ fn range_calendar(
     first_day: Weekday,
     height: Dp,
     today: CalendarDate,
+    focus_requester: Option<FocusRequester>,
 ) {
     let theme = use_context::<MaterialTheme>().expect("theme").get();
     let controller = remember(LazyListController::new);
@@ -467,7 +470,7 @@ fn range_calendar(
     let viewport_focus = remember(FocusRequester::new).get();
     let owner = CalendarOwner::Range(state);
     let initial = owner.initial_date(today);
-    let focus = remember(move || CalendarFocus::new(initial));
+    let focus = remember(move || CalendarFocus::new(initial, focus_requester));
     let keyboard = CalendarKeyboard {
         focus,
         owner,
@@ -727,7 +730,8 @@ fn range_input_field(
     let value = controller.with(|controller| controller.text());
     let error = state.with(|state| input_error(&value, start, state));
     let theme = use_context::<MaterialTheme>().expect("theme").get();
-    TextFieldBuilder::outlined()
+    text_field()
+        .outlined()
         .modifier(Modifier::new().fill_max_width().height(Dp(56.0)))
         .controller(controller)
         .background_color(theme.color_scheme.surface_container_high)

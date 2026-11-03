@@ -4,12 +4,13 @@
 //!
 //! Preserve interrupted thumb motion and stop work after controls settle.
 
-use std::{cell::Cell, time::Duration};
+use std::time::Duration;
 
 use tessera_ui::{
     HeadlessConfig, HeadlessRenderer, MOUSE_POINTER_ID, PressKeyEventType, PxPosition, State,
     accesskit::{Action, ActionRequest, TreeId},
     remember, tessera,
+    testing::TestProbe,
 };
 
 use crate::{column::column, icon::icon, material_icons::filled, theme::material_theme};
@@ -23,18 +24,20 @@ struct Settings {
     activations: usize,
 }
 
-thread_local! {
-    static SETTINGS: Cell<Option<State<Settings>>> = const { Cell::new(None) };
-    static CONTROLLER: Cell<Option<State<SwitchController>>> = const { Cell::new(None) };
-    pub(super) static TICKS: Cell<usize> = const { Cell::new(0) };
+#[derive(Clone, Copy, Default, PartialEq)]
+struct FixtureHandles {
+    settings: Option<State<Settings>>,
+    controller: Option<State<SwitchController>>,
 }
 
 #[tessera]
-fn fixture() {
+fn fixture(probe: TestProbe<FixtureHandles>) {
     let settings = remember(Settings::default);
     let controller = remember(|| SwitchController::new(false));
-    SETTINGS.set(Some(settings));
-    CONTROLLER.set(Some(controller));
+    probe.set(FixtureHandles {
+        settings: Some(settings),
+        controller: Some(controller),
+    });
     material_theme().child(move || {
         column().children(move || {
             switch()
@@ -69,9 +72,12 @@ fn thumb(renderer: &HeadlessRenderer) -> [i64; 4] {
 }
 
 fn check_motion(samples: u32) {
-    TICKS.set(0);
+    let probe = TestProbe::default();
+    let observed = probe.clone();
     let mut renderer = HeadlessRenderer::new(
-        Box::new(fixture),
+        Box::new(move || {
+            fixture(probe.clone());
+        }),
         vec![Box::new(crate::TesseraComponents)],
         HeadlessConfig {
             width: 200,
@@ -84,8 +90,8 @@ fn check_motion(samples: u32) {
     )
     .unwrap();
     renderer.render_frames(30);
-    let settings = SETTINGS.get().unwrap();
-    let controller = CONTROLLER.get().unwrap();
+    let settings = observed.get().settings.unwrap();
+    let controller = observed.get().controller.unwrap();
     let initial = thumb(&renderer);
     assert_eq!((initial[0], initial[2], initial[3]), (16, 32, 32));
     let initial_pixels = renderer.read_pixels().unwrap();
@@ -166,9 +172,15 @@ fn check_motion(samples: u32) {
     assert_eq!((thumb(&renderer)[0], thumb(&renderer)[2]), (48, 48));
     assert_eq!(settings.get().activations, 1);
     assert!(!controller.with(SwitchController::is_animating));
-    let ticks = TICKS.get();
-    renderer.render_frames(100);
-    assert_eq!(TICKS.get(), ticks, "settled switch frame receivers stop");
+    for _ in 0..100 {
+        renderer.step_frame();
+        let clock = renderer.frame_clock_diagnostics();
+        assert_eq!(
+            clock.callbacks_executed, 0,
+            "settled switch frame receivers stop"
+        );
+        assert_eq!(clock.pending_subscriptions, 0);
+    }
 }
 
 #[test]

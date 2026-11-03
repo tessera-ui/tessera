@@ -4,7 +4,7 @@
 //!
 //! Preserve disabled controls, controlled values, and cancelled activation.
 
-use std::{cell::Cell, time::Duration};
+use std::time::Duration;
 
 use tessera_ui::{
     Color, Dp, FocusDirection, FocusManager, FocusRequester, HeadlessConfig, HeadlessRenderer,
@@ -20,16 +20,17 @@ use crate::{
 
 use super::{CheckboxController, checkbox};
 
-thread_local! {
-    static ENABLED: Cell<Option<State<bool>>> = const { Cell::new(None) };
-    static CHECKED: Cell<Option<State<bool>>> = const { Cell::new(None) };
-    static CALLS: Cell<Option<State<[u32; 2]>>> = const { Cell::new(None) };
-    static MIXED: Cell<Option<State<bool>>> = const { Cell::new(None) };
-    static REQUESTERS: Cell<Option<[FocusRequester;3]>> = const { Cell::new(None) };
+#[derive(Clone, Default)]
+struct FixtureHandles {
+    enabled: Option<State<bool>>,
+    checked: Option<State<bool>>,
+    calls: Option<State<[u32; 2]>>,
+    mixed: Option<State<bool>>,
+    requesters: Option<[FocusRequester; 3]>,
 }
 
 #[tessera]
-fn fixture() {
+fn fixture(probe: tessera_ui::testing::TestProbe<FixtureHandles>) {
     let enabled = remember(|| false);
     let checked = remember(|| true);
     let calls = remember(|| [0u32; 2]);
@@ -42,16 +43,16 @@ fn fixture() {
         ]
     })
     .get();
-    REQUESTERS.set(Some(requesters));
+    probe.with_mut(|handles| handles.requesters = Some(requesters));
     let internal = remember(|| {
         let mut controller = CheckboxController::new(false);
         controller.set_indeterminate(true);
         controller
     });
-    ENABLED.set(Some(enabled));
-    CHECKED.set(Some(checked));
-    CALLS.set(Some(calls));
-    MIXED.set(Some(mixed));
+    probe.with_mut(|handles| handles.enabled = Some(enabled));
+    probe.with_mut(|handles| handles.checked = Some(checked));
+    probe.with_mut(|handles| handles.calls = Some(calls));
+    probe.with_mut(|handles| handles.mixed = Some(mixed));
     material_theme().child(move || {
         column()
             .modifier(Modifier::new().padding_all(Dp(16.0)))
@@ -133,8 +134,10 @@ fn assert_values(renderer: &HeadlessRenderer, checked: bool) {
 }
 
 fn check_controls(samples: u32) {
+    let probe = tessera_ui::testing::TestProbe::default();
+    let observed = probe.clone();
     let mut renderer = HeadlessRenderer::new(
-        Box::new(fixture),
+        Box::new(move || fixture(observed.clone())),
         vec![Box::new(crate::TesseraComponents)],
         HeadlessConfig {
             width: 320,
@@ -147,8 +150,10 @@ fn check_controls(samples: u32) {
     )
     .expect("renderer");
     renderer.render_frames(12);
-    let allocations = crate::pipelines::checkmark::pipeline::ALLOCATIONS
-        .load(std::sync::atomic::Ordering::Relaxed);
+    let allocations = renderer
+        .graphics_work()
+        .group("checkmark_instances")
+        .buffer_allocations;
     let identities = [node(&renderer, "Checkbox").0, node(&renderer, "Switch").0];
     for (label, role, description, width) in [
         ("Checkbox", Role::CheckBox, "Checkbox description", 72.0),
@@ -170,7 +175,7 @@ fn check_controls(samples: u32) {
     }
     renderer.render_frames(12);
     assert_values(&renderer, true);
-    assert_eq!(CALLS.get().unwrap().get(), [0, 0]);
+    assert_eq!(probe.get().calls.unwrap().get(), [0, 0]);
     assert!(action(&mut renderer, "Before", Action::Focus));
     FocusManager::current().request_move_focus(FocusDirection::Next);
     renderer.render_frames(12);
@@ -178,13 +183,14 @@ fn check_controls(samples: u32) {
         renderer.accessibility_snapshot().unwrap().focus,
         node(&renderer, "After").0
     );
-    CHECKED.get().unwrap().set(false);
+    probe.get().checked.unwrap().set(false);
     renderer.render_frames(30);
     assert_values(&renderer, false);
-    ENABLED.get().unwrap().set(true);
+    probe.get().enabled.unwrap().set(true);
     renderer.render_frames(12);
-    for (requester, label) in REQUESTERS
+    for (requester, label) in probe
         .get()
+        .requesters
         .unwrap()
         .into_iter()
         .zip(["Checkbox", "Switch", "Before"])
@@ -197,7 +203,7 @@ fn check_controls(samples: u32) {
             "external focus must target the control semantics"
         );
         assert_eq!(
-            CALLS.get().unwrap().get(),
+            probe.get().calls.unwrap().get(),
             [0, 0],
             "focus requests must not activate controls"
         );
@@ -224,31 +230,31 @@ fn check_controls(samples: u32) {
     renderer.pointer_release(MOUSE_POINTER_ID, point, PressKeyEventType::Left);
     renderer.render_frames(30);
     assert_values(&renderer, true);
-    assert_eq!(CALLS.get().unwrap().get(), [1, 0]);
+    assert_eq!(probe.get().calls.unwrap().get(), [1, 0]);
     assert!(action(&mut renderer, "Switch", Action::Click));
     renderer.render_frames(30);
     assert_values(&renderer, false);
-    assert_eq!(CALLS.get().unwrap().get(), [1, 1]);
+    assert_eq!(probe.get().calls.unwrap().get(), [1, 1]);
     let point = center(&node(&renderer, "Switch").1);
     renderer.pointer_press(MOUSE_POINTER_ID, point, PressKeyEventType::Left);
     renderer.step_frame();
-    ENABLED.get().unwrap().set(false);
+    probe.get().enabled.unwrap().set(false);
     renderer.render_frames(12);
     renderer.pointer_release(MOUSE_POINTER_ID, point, PressKeyEventType::Left);
     renderer.render_frames(30);
     assert_values(&renderer, false);
-    assert_eq!(CALLS.get().unwrap().get(), [1, 1]);
-    CHECKED.get().unwrap().set(true);
+    assert_eq!(probe.get().calls.unwrap().get(), [1, 1]);
+    probe.get().checked.unwrap().set(true);
     renderer.render_frames(30);
     assert_values(&renderer, true);
-    assert_eq!(CALLS.get().unwrap().get(), [1, 1]);
-    ENABLED.get().unwrap().set(true);
+    assert_eq!(probe.get().calls.unwrap().get(), [1, 1]);
+    probe.get().enabled.unwrap().set(true);
     renderer.render_frames(12);
     assert!(action(&mut renderer, "Switch", Action::Click));
     renderer.render_frames(30);
     assert_values(&renderer, false);
-    assert_eq!(CALLS.get().unwrap().get(), [1, 2]);
-    MIXED.get().unwrap().set(true);
+    assert_eq!(probe.get().calls.unwrap().get(), [1, 2]);
+    probe.get().mixed.unwrap().set(true);
     renderer.render_frames(30);
     let (mixed_id, mixed_node) = node(&renderer, "Checkbox");
     assert_eq!(mixed_id, identities[0]);
@@ -277,28 +283,28 @@ fn check_controls(samples: u32) {
     let internal_ink = pixel(internal_center.x as u32, internal_center.y as u32);
     assert!(internal_ink[0] > internal_ink[1].saturating_add(80));
     assert!(internal_ink[0] > internal_ink[2].saturating_add(80));
-    ENABLED.get().unwrap().set(false);
+    probe.get().enabled.unwrap().set(false);
     renderer.render_frames(12);
     assert_eq!(
         node(&renderer, "Checkbox").1.toggled(),
         Some(Toggled::Mixed)
     );
     assert!(!action(&mut renderer, "Checkbox", Action::Click));
-    assert_eq!(CALLS.get().unwrap().get(), [1, 2]);
-    ENABLED.get().unwrap().set(true);
+    assert_eq!(probe.get().calls.unwrap().get(), [1, 2]);
+    probe.get().enabled.unwrap().set(true);
     renderer.render_frames(12);
     assert!(action(&mut renderer, "Checkbox", Action::Click));
     renderer.render_frames(30);
     assert_values(&renderer, true);
-    assert!(!MIXED.get().unwrap().get());
-    assert_eq!(CALLS.get().unwrap().get(), [2, 2]);
+    assert!(!probe.get().mixed.unwrap().get());
+    assert_eq!(probe.get().calls.unwrap().get(), [2, 2]);
     let checked_pixels = renderer.read_pixels().expect("checked pixels");
     let offset = ((y * renderer.physical_size().width + x + 4) * 4) as usize;
     assert!(
         checked_pixels[offset + 1].saturating_add(20) < mixed_green,
         "the selected glyph must morph from the dash to a checkmark"
     );
-    MIXED.get().unwrap().set(true);
+    probe.get().mixed.unwrap().set(true);
     renderer.render_frames(30);
     assert_eq!(
         node(&renderer, "Checkbox").1.toggled(),
@@ -307,7 +313,7 @@ fn check_controls(samples: u32) {
     assert!(action(&mut renderer, "Checkbox", Action::Click));
     renderer.render_frames(30);
     assert_values(&renderer, true);
-    assert_eq!(CALLS.get().unwrap().get(), [3, 2]);
+    assert_eq!(probe.get().calls.unwrap().get(), [3, 2]);
     assert_eq!(
         node(&renderer, "Internal mixed").1.toggled(),
         Some(Toggled::Mixed)
@@ -325,8 +331,10 @@ fn check_controls(samples: u32) {
         Some(Toggled::False)
     );
     assert_eq!(
-        crate::pipelines::checkmark::pipeline::ALLOCATIONS
-            .load(std::sync::atomic::Ordering::Relaxed),
+        renderer
+            .graphics_work()
+            .group("checkmark_instances")
+            .buffer_allocations,
         allocations,
         "selection changes must reuse instance pages across frames"
     );

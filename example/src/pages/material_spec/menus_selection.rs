@@ -14,7 +14,7 @@ use tessera_components::{
     material_icons::filled,
     menus::{MenuItemSelectionMode, menu_group, menu_item},
     modifier::{InteractionVisualState, ModifierExt as _, SemanticsArgs},
-    text_field::TextFieldBuilder,
+    text_field::text_field,
     text_input::TextInputController,
     theme::{MaterialTheme, material_theme},
 };
@@ -121,7 +121,8 @@ fn selection_column(multiple: bool) {
                     ..Default::default()
                 }))
                 .children(move || {
-                    TextFieldBuilder::outlined()
+                    text_field()
+                        .outlined()
                         .controller(controller)
                         .label("Diet")
                         .accessibility_label(format!("{mode} selection Diet"))
@@ -196,13 +197,6 @@ mod tests {
 
     use super::*;
 
-    struct Pipelines;
-    impl tessera_ui::RenderModule for Pipelines {
-        fn register_pipelines(&self, context: &mut tessera_ui::PipelineContext<'_>) {
-            tessera_components::pipelines::register_pipelines(context);
-        }
-    }
-
     #[tessera]
     fn fixture() {
         super::super::super::media::load_fonts();
@@ -210,13 +204,13 @@ mod tests {
     }
 
     fn node(renderer: &HeadlessRenderer, label: &str, role: Role) -> (NodeId, Node) {
-        renderer
-            .accessibility_snapshot()
-            .unwrap()
-            .nodes
-            .into_iter()
-            .find(|(_, node)| node.label() == Some(label) && node.role() == role)
-            .unwrap_or_else(|| panic!("missing {label} {role:?}"))
+        let snapshot = renderer
+            .inspect_accessibility()
+            .expect("accessibility tree");
+        let (id, node) = snapshot
+            .find(label, role)
+            .unwrap_or_else(|| panic!("missing {label} {role:?}"));
+        (id, node.clone())
     }
 
     fn click(renderer: &mut HeadlessRenderer, label: &str, role: Role) {
@@ -240,28 +234,15 @@ mod tests {
     }
 
     fn items_in_reading_order(renderer: &HeadlessRenderer, label: &str, role: Role) -> Vec<Node> {
-        let tree = renderer.accessibility_snapshot().unwrap();
-        let root = tree
-            .nodes
-            .iter()
-            .find(|(_, node)| node.role() == Role::Menu && node.label() == Some(label))
-            .expect("native selection menu")
-            .0;
-        let mut pending = vec![root];
-        let mut items = Vec::new();
-        while let Some(id) = pending.pop() {
-            let node = &tree
-                .nodes
-                .iter()
-                .find(|(node_id, _)| *node_id == id)
-                .expect("published semantic child")
-                .1;
-            if node.role() == role {
-                items.push(node.clone());
-            }
-            pending.extend(node.children().iter().rev().copied());
-        }
-        items
+        let snapshot = renderer
+            .inspect_accessibility()
+            .expect("accessibility tree");
+        let root = snapshot.find(label, Role::Menu).expect("selection menu").0;
+        snapshot
+            .subtree(root)
+            .filter(|(_, node)| node.role() == role)
+            .map(|(_, node)| node.clone())
+            .collect()
     }
 
     fn save(renderer: &HeadlessRenderer, name: &str) {
@@ -284,7 +265,7 @@ mod tests {
     fn diet_choices_keep_radio_and_checkbox_state_independent_and_scale_as_one_figure() {
         let mut renderer = HeadlessRenderer::new(
             Box::new(fixture),
-            vec![Box::new(Pipelines)],
+            vec![Box::new(crate::TestPipelines)],
             HeadlessConfig {
                 width: 676,
                 height: 418,

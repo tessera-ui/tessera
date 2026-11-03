@@ -1,5 +1,3 @@
-use std::{cell::Cell, sync::atomic::Ordering};
-
 use tessera_ui::{
     Color, Dp, HeadlessConfig, HeadlessRenderer, LayoutModifierNode, LayoutResult,
     MeasurementError, Modifier, PxPosition, State,
@@ -16,12 +14,6 @@ use crate::{
 
 use super::{DividerDefaults, horizontal_divider, vertical_divider};
 
-thread_local! {
-    static DARK: Cell<Option<State<bool>>> = const { Cell::new(None) };
-    static FAINT: Cell<Option<State<bool>>> = const { Cell::new(None) };
-    static CLIPPED: Cell<Option<State<bool>>> = const { Cell::new(None) };
-}
-
 #[derive(Clone, PartialEq)]
 struct HalfPosition;
 
@@ -36,12 +28,19 @@ impl LayoutModifierNode for HalfPosition {
     }
 }
 
+#[derive(Clone, Copy, Default)]
+struct FixtureHandles {
+    dark: Option<State<bool>>,
+    faint: Option<State<bool>>,
+    clipped: Option<State<bool>>,
+}
+
 #[tessera]
-fn fractional_fixture() {
+fn fractional_fixture(observed: tessera_ui::testing::TestProbe<FixtureHandles>) {
     let faint = remember(|| false);
     let clipped = remember(|| false);
-    FAINT.set(Some(faint));
-    CLIPPED.set(Some(clipped));
+    observed.with_mut(|handles| handles.faint = Some(faint));
+    observed.with_mut(|handles| handles.clipped = Some(clipped));
     column()
         .modifier(
             Modifier::new()
@@ -78,9 +77,9 @@ fn tagged(name: &str) -> Modifier {
 }
 
 #[tessera]
-fn fixture() {
+fn fixture(observed: tessera_ui::testing::TestProbe<FixtureHandles>) {
     let dark = remember(|| false);
-    DARK.set(Some(dark));
+    observed.with_mut(|handles| handles.dark = Some(dark));
     material_theme()
         .theme(move || {
             let mut theme = MaterialTheme::default();
@@ -115,17 +114,14 @@ fn fixture() {
 }
 
 fn rect(renderer: &HeadlessRenderer, tag: &str) -> [i64; 4] {
-    let snapshot = renderer.snapshot();
-    let mut pending = vec![&snapshot["root"]];
-    while let Some(node) = pending.pop() {
-        if node["accessibility"]["key"] == tag {
-            return ["x", "y", "width", "height"].map(|key| node["bounds"][key].as_i64().unwrap());
-        }
-        if let Some(children) = node["children"].as_array() {
-            pending.extend(children);
-        }
-    }
-    panic!("missing {tag}");
+    let snapshot = renderer.inspect_components();
+    let bounds = snapshot
+        .find_tag(tag)
+        .unwrap_or_else(|| panic!("missing {tag}"))
+        .bounds()
+        .expect("divider bounds")
+        .rounded();
+    [bounds.x.0, bounds.y.0, bounds.width.0, bounds.height.0].map(i64::from)
 }
 
 fn pixel(renderer: &HeadlessRenderer, pixels: &[u8], x: i64, y: i64) -> [u8; 4] {
@@ -150,8 +146,12 @@ fn check(samples: u32) {
         (1.5, 120, 2, 3, 24, 6, 48),
         (2.0, 160, 2, 4, 32, 8, 64),
     ] {
+        let observed = tessera_ui::testing::TestProbe::default();
         let mut renderer = HeadlessRenderer::new(
-            Box::new(fixture),
+            Box::new({
+                let observed = observed.clone();
+                move || fixture(observed.clone())
+            }),
             vec![Box::new(crate::TesseraComponents)],
             HeadlessConfig {
                 width: 200,
@@ -164,9 +164,12 @@ fn check(samples: u32) {
         .unwrap();
         renderer.render_frames(3);
         let baseline = renderer.read_pixels().unwrap();
-        let allocations = crate::pipelines::divider::ALLOCATIONS.load(Ordering::Relaxed);
+        let allocations = renderer
+            .graphics_work()
+            .group("divider_instances")
+            .buffer_allocations;
         for dark in [true, false] {
-            DARK.get().unwrap().set(dark);
+            observed.get().dark.unwrap().set(dark);
             renderer.render_frames(3);
             let pixels = renderer.read_pixels().unwrap();
             let expected = if dark {
@@ -270,7 +273,10 @@ fn check(samples: u32) {
         assert_eq!(renderer.read_pixels().unwrap(), baseline);
         renderer.render_frames(8);
         assert_eq!(
-            crate::pipelines::divider::ALLOCATIONS.load(Ordering::Relaxed),
+            renderer
+                .graphics_work()
+                .group("divider_instances")
+                .buffer_allocations,
             allocations
         );
     }
@@ -283,8 +289,12 @@ fn interior_pixel(renderer: &HeadlessRenderer, pixels: &[u8], x: i64, y: i64) ->
 }
 
 fn check_fractional_placement(samples: u32) {
+    let observed = tessera_ui::testing::TestProbe::default();
     let mut renderer = HeadlessRenderer::new(
-        Box::new(fractional_fixture),
+        Box::new({
+            let observed = observed.clone();
+            move || fractional_fixture(observed.clone())
+        }),
         vec![Box::new(crate::TesseraComponents)],
         HeadlessConfig {
             width: 20,
@@ -297,7 +307,7 @@ fn check_fractional_placement(samples: u32) {
     renderer.render_frames(3);
     let baseline = renderer.read_pixels().unwrap();
     for (faint, edge, corner) in [(false, 188, 225), (true, 225, 240)] {
-        FAINT.get().unwrap().set(faint);
+        observed.get().faint.unwrap().set(faint);
         renderer.render_frames(3);
         let pixels = renderer.read_pixels().unwrap();
         for y in [0, 1] {
@@ -317,7 +327,7 @@ fn check_fractional_placement(samples: u32) {
         assert_eq!(interior_pixel(&renderer, &pixels, 9, 0), [255; 4]);
         assert_eq!(interior_pixel(&renderer, &pixels, 1, 2), [255; 4]);
     }
-    CLIPPED.get().unwrap().set(true);
+    observed.get().clipped.unwrap().set(true);
     renderer.render_frames(3);
     let clipped = renderer.read_pixels().unwrap();
     assert_pixel_near(
@@ -326,8 +336,8 @@ fn check_fractional_placement(samples: u32) {
     );
     assert_eq!(interior_pixel(&renderer, &clipped, 1, 1), [255; 4]);
     assert_eq!(interior_pixel(&renderer, &clipped, 8, 0), [255; 4]);
-    CLIPPED.get().unwrap().set(false);
-    FAINT.get().unwrap().set(false);
+    observed.get().clipped.unwrap().set(false);
+    observed.get().faint.unwrap().set(false);
     renderer.render_frames(3);
     assert_eq!(renderer.read_pixels().unwrap(), baseline);
 }

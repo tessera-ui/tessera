@@ -10,14 +10,6 @@ use tessera_ui::{
     tessera,
 };
 
-struct Pipelines;
-
-impl tessera_ui::RenderModule for Pipelines {
-    fn register_pipelines(&self, context: &mut tessera_ui::PipelineContext<'_>) {
-        tessera_components::pipelines::register_pipelines(context);
-    }
-}
-
 #[tessera]
 fn anatomy_fixture() {
     super::super::super::media::load_fonts();
@@ -39,14 +31,14 @@ fn configuration_fixture() {
 }
 
 fn node(renderer: &HeadlessRenderer, label: &str, role: Role) -> Node {
-    renderer
-        .accessibility_snapshot()
-        .unwrap()
-        .nodes
-        .into_iter()
-        .find(|(_, node)| node.role() == role && node.label() == Some(label))
-        .unwrap_or_else(|| panic!("missing native {role:?} {label}"))
+    let snapshot = renderer
+        .inspect_accessibility()
+        .expect("accessibility tree");
+    snapshot
+        .find(label, role)
+        .unwrap_or_else(|| panic!("missing {label} {role:?}"))
         .1
+        .clone()
 }
 
 fn click(renderer: &mut HeadlessRenderer, label: &str) {
@@ -89,7 +81,7 @@ fn switch_figures_preserve_native_parts_numbered_markers_and_independent_scaled_
                     anatomy_fixture();
                 })
             },
-            vec![Box::new(Pipelines)],
+            vec![Box::new(crate::TestPipelines)],
             HeadlessConfig {
                 width,
                 height: 480,

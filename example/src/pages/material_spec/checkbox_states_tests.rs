@@ -10,13 +10,6 @@ use tessera_ui::{
     tessera,
 };
 
-struct Pipelines;
-impl tessera_ui::RenderModule for Pipelines {
-    fn register_pipelines(&self, context: &mut tessera_ui::PipelineContext<'_>) {
-        tessera_components::pipelines::register_pipelines(context);
-    }
-}
-
 #[tessera]
 fn fixture() {
     super::super::super::media::load_fonts();
@@ -68,7 +61,7 @@ fn save_pixels(renderer: &HeadlessRenderer, name: &str) {
 fn checkbox_states_preserve_sixty_native_controls_error_mixed_and_scaled_pointer_actions() {
     let mut renderer = HeadlessRenderer::new(
         Box::new(fixture),
-        vec![Box::new(Pipelines)],
+        vec![Box::new(crate::TestPipelines)],
         HeadlessConfig {
             width: 1024,
             height: 1700,

@@ -18,7 +18,8 @@ use std::{
 
 use anyhow::{Context, Result};
 use interprocess::local_socket::{
-    Listener, ListenerNonblockingMode, ListenerOptions, Name, traits::Listener as _,
+    Listener, ListenerNonblockingMode, ListenerOptions, Name,
+    traits::{Listener as _, Stream as _},
 };
 use ratatui::{
     Frame, Terminal,
@@ -134,7 +135,7 @@ struct FrameSample {
 }
 
 struct WatchState {
-    events: Receiver<StreamEvent>,
+    events: StreamReader,
     connected: bool,
     buffer: Vec<u8>,
     logs: VecDeque<String>,
@@ -157,7 +158,7 @@ struct WatchState {
 
 impl WatchState {
     fn new(
-        events: Receiver<StreamEvent>,
+        events: StreamReader,
         logs_rx: Receiver<String>,
         stop: Arc<AtomicBool>,
         options: &WatchOptions,
@@ -300,7 +301,7 @@ pub fn run_view(
     logs_rx: Receiver<String>,
     stop: Arc<AtomicBool>,
 ) -> Result<()> {
-    let events = spawn_reader(listener, Arc::clone(&stop));
+    let events = spawn_reader(listener, Arc::clone(&stop))?;
     let mut state = WatchState::new(events, logs_rx, stop, &options);
 
     if !wait_for_connection(&mut state, &options)? {
@@ -453,14 +454,34 @@ enum StreamEvent {
 
 /// Reads the app's profiler stream on a background thread so the UI never
 /// blocks on accept/read, forwarding bytes to the view over a channel.
-fn spawn_reader(listener: Listener, stop: Arc<AtomicBool>) -> Receiver<StreamEvent> {
+struct StreamReader {
+    events: Receiver<StreamEvent>,
+    stop: Arc<AtomicBool>,
+    worker: Option<thread::JoinHandle<()>>,
+}
+
+impl Drop for StreamReader {
+    fn drop(&mut self) {
+        self.stop.store(true, Ordering::Relaxed);
+        if let Some(worker) = self.worker.take() {
+            let _ = worker.join();
+        }
+    }
+}
+
+fn spawn_reader(listener: Listener, stop: Arc<AtomicBool>) -> io::Result<StreamReader> {
     let (tx, rx) = channel();
-    let _ = thread::Builder::new()
+    let worker_stop = Arc::clone(&stop);
+    let worker = thread::Builder::new()
         .name("tessera-profiler-ipc".to_string())
         .spawn(move || {
-            read_loop(listener, stop, tx);
-        });
-    rx
+            read_loop(listener, worker_stop, tx);
+        })?;
+    Ok(StreamReader {
+        events: rx,
+        stop,
+        worker: Some(worker),
+    })
 }
 
 fn read_loop(listener: Listener, stop: Arc<AtomicBool>, tx: Sender<StreamEvent>) {
@@ -470,6 +491,9 @@ fn read_loop(listener: Listener, stop: Arc<AtomicBool>, tx: Sender<StreamEvent>)
         }
         match listener.accept() {
             Ok(mut stream) => {
+                if stream.set_nonblocking(true).is_err() {
+                    continue;
+                }
                 if tx.send(StreamEvent::Connected).is_err() {
                     return;
                 }
@@ -478,7 +502,7 @@ fn read_loop(listener: Listener, stop: Arc<AtomicBool>, tx: Sender<StreamEvent>)
                     if stop.load(Ordering::Relaxed) {
                         return;
                     }
-                    match stream.read(&mut chunk) {
+                    match read_chunk(&mut stream, &mut chunk) {
                         Ok(0) => break,
                         Ok(read) => {
                             if tx.send(StreamEvent::Bytes(chunk[..read].to_vec())).is_err() {
@@ -486,6 +510,9 @@ fn read_loop(listener: Listener, stop: Arc<AtomicBool>, tx: Sender<StreamEvent>)
                             }
                         }
                         Err(err) if err.kind() == io::ErrorKind::Interrupted => continue,
+                        Err(err) if err.kind() == io::ErrorKind::WouldBlock => {
+                            thread::sleep(Duration::from_millis(2));
+                        }
                         Err(_) => break,
                     }
                 }
@@ -501,8 +528,42 @@ fn read_loop(listener: Listener, stop: Arc<AtomicBool>, tx: Sender<StreamEvent>)
     }
 }
 
+fn read_chunk(
+    stream: &mut interprocess::local_socket::Stream,
+    chunk: &mut [u8],
+) -> io::Result<usize> {
+    #[cfg(windows)]
+    {
+        use std::os::windows::io::{AsHandle, AsRawHandle};
+
+        use windows_sys::Win32::System::Pipes::PeekNamedPipe;
+
+        let interprocess::local_socket::Stream::NamedPipe(pipe) = &*stream;
+        let mut available = 0;
+        // An empty nonblocking named-pipe read can appear as EOF. Peek first
+        // so an idle connection remains live while cancellation stays bounded.
+        let ready = unsafe {
+            PeekNamedPipe(
+                pipe.as_handle().as_raw_handle(),
+                std::ptr::null_mut(),
+                0,
+                std::ptr::null_mut(),
+                &mut available,
+                std::ptr::null_mut(),
+            )
+        };
+        if ready == 0 {
+            return Err(io::Error::last_os_error());
+        }
+        if available == 0 {
+            return Err(io::ErrorKind::WouldBlock.into());
+        }
+    }
+    stream.read(chunk)
+}
+
 fn poll_stream(state: &mut WatchState, window: usize) -> Result<()> {
-    while let Ok(event) = state.events.try_recv() {
+    while let Ok(event) = state.events.events.try_recv() {
         match event {
             StreamEvent::Connected => {
                 state.connected = true;
@@ -848,26 +909,39 @@ mod tests {
         .to_string()
     }
 
-    fn unique_name() -> String {
-        use std::sync::atomic::{AtomicU64 as Counter, Ordering as CounterOrdering};
-        static COUNTER: Counter = Counter::new(0);
-        format!(
-            "tessera-profiler-test-{}-{}",
-            std::process::id(),
-            COUNTER.fetch_add(1, CounterOrdering::Relaxed)
-        )
+    fn endpoint(directory: &tempfile::TempDir) -> String {
+        #[cfg(windows)]
+        {
+            directory
+                .path()
+                .file_name()
+                .unwrap()
+                .to_str()
+                .unwrap()
+                .into()
+        }
+        #[cfg(unix)]
+        {
+            directory
+                .path()
+                .join("profiler.sock")
+                .to_str()
+                .unwrap()
+                .into()
+        }
     }
 
-    fn listening_state() -> (WatchState, LocalSocketStream) {
-        let raw = unique_name();
+    fn listening_state() -> (WatchState, LocalSocketStream, tempfile::TempDir) {
+        let directory = tempfile::tempdir().unwrap();
+        let raw = endpoint(&directory);
         let listener = bind_ipc_listener(&raw).unwrap();
         let client = LocalSocketStream::connect(ipc_listener_name(&raw).unwrap()).unwrap();
         let stop = Arc::new(AtomicBool::new(false));
-        let events = spawn_reader(listener, Arc::clone(&stop));
+        let events = spawn_reader(listener, Arc::clone(&stop)).unwrap();
         let (_logs_tx, logs_rx) = std::sync::mpsc::channel();
         let mut state = WatchState::new(events, logs_rx, stop, &options());
         state.recording = true;
-        (state, client)
+        (state, client, directory)
     }
 
     fn pump(state: &mut WatchState, options: &WatchOptions, iterations: usize) {
@@ -879,7 +953,7 @@ mod tests {
 
     #[test]
     fn aggregates_streamed_frames_over_ipc() {
-        let (mut state, mut client) = listening_state();
+        let (mut state, mut client, _directory) = listening_state();
         let options = options();
 
         client
@@ -914,7 +988,7 @@ mod tests {
 
     #[test]
     fn waits_for_complete_lines() {
-        let (mut state, mut client) = listening_state();
+        let (mut state, mut client, _directory) = listening_state();
         let options = options();
 
         client.write_all(frame_line(1, 100, 50).as_bytes()).unwrap();
@@ -931,9 +1005,10 @@ mod tests {
     #[test]
     fn renders_with_and_without_frames() {
         let options = options();
-        let listener = bind_ipc_listener(&unique_name()).unwrap();
+        let directory = tempfile::tempdir().unwrap();
+        let listener = bind_ipc_listener(&endpoint(&directory)).unwrap();
         let stop = Arc::new(AtomicBool::new(false));
-        let events = spawn_reader(listener, Arc::clone(&stop));
+        let events = spawn_reader(listener, Arc::clone(&stop)).unwrap();
         let (_logs_tx, logs_rx) = std::sync::mpsc::channel();
         let mut state = WatchState::new(events, logs_rx, stop, &options);
         state.recording = true;

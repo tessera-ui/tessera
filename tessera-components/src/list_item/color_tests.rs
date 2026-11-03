@@ -4,10 +4,9 @@
 //!
 //! Preserve transitions and state precedence without pointer or shape updates.
 
-use std::cell::Cell;
-
 use tessera_ui::{
-    Color, Dp, HeadlessConfig, HeadlessRenderer, Modifier, State, remember, tessera, use_context,
+    Color, Dp, HeadlessConfig, HeadlessRenderer, Modifier, State, remember, tessera,
+    testing::TestProbe, use_context,
 };
 
 use crate::{
@@ -28,10 +27,6 @@ struct Settings {
     custom: bool,
 }
 
-thread_local! {
-    static SETTINGS: Cell<Option<State<Settings>>> = const { Cell::new(None) };
-}
-
 #[tessera]
 fn ink(name: String) {
     let color = use_context::<ContentColor>().unwrap().get().current;
@@ -47,7 +42,7 @@ fn ink(name: String) {
 }
 
 #[tessera]
-fn fixture() {
+fn fixture(probe: Option<TestProbe<Option<State<Settings>>>>) {
     let settings = remember(|| Settings {
         selected: false,
         dragged: false,
@@ -55,7 +50,9 @@ fn fixture() {
         alternate: false,
         custom: false,
     });
-    SETTINGS.set(Some(settings));
+    if let Some(probe) = probe {
+        probe.set(Some(settings));
+    }
     material_theme()
         .theme(move || {
             let mut theme = MaterialTheme::default();
@@ -128,8 +125,12 @@ fn near(actual: [u8; 4], expected: [u8; 4]) {
 
 fn check(samples: u32) {
     for scale in [1.0, 1.5] {
+        let probe = TestProbe::<Option<State<Settings>>>::default();
+        let observed = probe.clone();
         let mut renderer = HeadlessRenderer::new(
-            Box::new(fixture),
+            Box::new(move || {
+                fixture().probe(probe.clone());
+            }),
             vec![Box::new(crate::TesseraComponents)],
             HeadlessConfig {
                 width: 300,
@@ -141,7 +142,13 @@ fn check(samples: u32) {
         )
         .unwrap();
         renderer.render_frames(4);
-        let settings = SETTINGS.get().unwrap();
+        assert!(
+            renderer
+                .work_totals()
+                .count("list_item", tessera_ui::WorkPhase::Build)
+                > 0
+        );
+        let settings = observed.get().unwrap();
         near(pixel(&renderer, 4, 4), [255; 4]);
         near(slot_pixel(&renderer, "lead"), [0, 255, 0, 255]);
         settings.with_mut(|s| s.selected = true);
@@ -192,11 +199,15 @@ fn check(samples: u32) {
         renderer.render_frames(30);
         near(pixel(&renderer, 4, 4), [255; 4]);
         near(slot_pixel(&renderer, "lead"), [0, 255, 0, 255]);
-        let builds = super::ITEM_BUILDS.get();
+        let builds = renderer
+            .work_totals()
+            .count("list_item", tessera_ui::WorkPhase::Build);
         let final_pixels = renderer.read_pixels().unwrap();
         renderer.render_frames(8);
         assert_eq!(
-            super::ITEM_BUILDS.get(),
+            renderer
+                .work_totals()
+                .count("list_item", tessera_ui::WorkPhase::Build),
             builds,
             "settled colors must stop scheduling builds"
         );

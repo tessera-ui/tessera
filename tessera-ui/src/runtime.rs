@@ -30,12 +30,17 @@ use crate::{
     time::Instant,
 };
 
+mod state_owner;
+
+pub use state_owner::StateOwner;
+
 #[derive(Clone, Copy)]
 enum OrderCounterKind {
     Remember,
     Functor,
     Context,
     FrameReceiver,
+    ModifierAttachment,
 }
 
 fn push_order_frame() {
@@ -69,6 +74,14 @@ fn next_order_counter(kind: OrderCounterKind, empty_message: &str) -> u64 {
             OrderCounterKind::Context => {
                 let counter = frame.context;
                 frame.context = frame.context.wrapping_add(1);
+                counter
+            }
+            OrderCounterKind::ModifierAttachment => {
+                let counter = frame.modifier_attachment;
+                frame.modifier_attachment = frame
+                    .modifier_attachment
+                    .checked_add(1)
+                    .expect("modifier attachment counter exhausted");
                 counter
             }
             OrderCounterKind::FrameReceiver => {
@@ -115,6 +128,7 @@ pub(crate) fn compute_context_slot_key() -> (u64, u64) {
 
 #[derive(Hash, Eq, PartialEq, Clone, Copy)]
 struct SlotKey {
+    owned_owner: Option<u128>,
     instance_logic_id: u64,
     slot_hash: u64,
     type_id: TypeId,
@@ -123,6 +137,7 @@ struct SlotKey {
 impl Default for SlotKey {
     fn default() -> Self {
         Self {
+            owned_owner: None,
             instance_logic_id: 0,
             slot_hash: 0,
             type_id: TypeId::of::<()>(),
@@ -184,6 +199,7 @@ impl InstanceSlotCursor {
 
 #[derive(Default)]
 struct SlotTable {
+    owned_slots: HashMap<u128, HashSet<SlotHandle>>,
     entries: SlotMap<SlotHandle, SlotEntry>,
     key_to_slot: HashMap<SlotKey, SlotHandle>,
     slots_by_owner: HashMap<u64, HashSet<SlotHandle>>,
@@ -193,6 +209,10 @@ struct SlotTable {
 impl SlotTable {
     fn index_slot(&mut self, key: SlotKey, slot: SlotHandle) {
         self.key_to_slot.insert(key, slot);
+        if let Some(owner) = key.owned_owner {
+            self.owned_slots.entry(owner).or_default().insert(slot);
+            return;
+        }
         self.slots_by_owner
             .entry(key.instance_logic_id)
             .or_default()
@@ -202,6 +222,15 @@ impl SlotTable {
     fn remove_slot(&mut self, slot: SlotHandle) -> Option<SlotEntry> {
         let entry = self.entries.remove(slot)?;
         self.key_to_slot.remove(&entry.key);
+        if let Some(owner) = entry.key.owned_owner {
+            if let Some(slots) = self.owned_slots.get_mut(&owner) {
+                slots.remove(&slot);
+                if slots.is_empty() {
+                    self.owned_slots.remove(&owner);
+                }
+            }
+            return Some(entry);
+        }
         if let Some(slots) = self.slots_by_owner.get_mut(&entry.key.instance_logic_id) {
             slots.remove(&slot);
             if slots.is_empty() {
@@ -219,6 +248,7 @@ impl SlotTable {
         let removed = self.entries.drain().map(|(_, entry)| entry).collect();
         self.key_to_slot.clear();
         self.slots_by_owner.clear();
+        self.owned_slots.clear();
         self.cursors_by_instance_logic_id.clear();
         self.epoch = 0;
         removed
@@ -399,13 +429,18 @@ fn with_slot_table_mut<R>(f: impl FnOnce(&mut SlotTable) -> R) -> R {
 
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 pub(crate) struct FunctorHandle {
+    session: u128,
     slot: SlotHandle,
     generation: u64,
 }
 
 impl FunctorHandle {
     fn new(slot: SlotHandle, generation: u64) -> Self {
-        Self { slot, generation }
+        Self {
+            session: crate::session::current_session_identity().expect("active functor session"),
+            slot,
+            generation,
+        }
     }
 }
 
@@ -421,7 +456,8 @@ impl CallbackCell {
     }
 
     fn update(&self, next: Arc<dyn Fn() + Send + Sync>) {
-        *self.current.write() = next;
+        let previous = std::mem::replace(&mut *self.current.write(), next);
+        drop(previous);
     }
 
     fn shared(&self) -> Arc<dyn Fn() + Send + Sync> {
@@ -441,7 +477,8 @@ impl<T, R> CallbackWithCell<T, R> {
     }
 
     fn update(&self, next: Arc<dyn Fn(T) -> R + Send + Sync>) {
-        *self.current.write() = next;
+        let previous = std::mem::replace(&mut *self.current.write(), next);
+        drop(previous);
     }
 
     fn shared(&self) -> Arc<dyn Fn(T) -> R + Send + Sync> {
@@ -605,9 +642,8 @@ pub(crate) fn finalize_frame_component_replay_tracking_partial() {
 }
 
 pub(crate) fn reset_component_replay_tracking() {
-    with_component_replay_tracker_mut(|tracker| {
-        *tracker = ComponentReplayTracker::default();
-    });
+    let removed = with_component_replay_tracker_mut(std::mem::take);
+    drop(removed);
 }
 
 pub(crate) fn previous_component_replay_nodes(keys: &[u64]) -> HashMap<u64, ReplayNodeSnapshot> {
@@ -742,11 +778,15 @@ pub(crate) fn schedule_runtime_redraw() {
 }
 
 pub(crate) fn install_redraw_waker(callback: RedrawWaker) {
-    with_redraw_waker_mut(|waker| *waker = Some(callback));
+    crate::dispatcher::set_waker(Some(callback.clone()));
+    let previous = with_redraw_waker_mut(|waker| waker.replace(callback));
+    drop(previous);
 }
 
 pub(crate) fn clear_redraw_waker() {
-    with_redraw_waker_mut(|waker| *waker = None);
+    crate::dispatcher::set_waker(None);
+    let removed = with_redraw_waker_mut(Option::take);
+    drop(removed);
 }
 
 pub(crate) fn current_replay_boundary_instance_key_from_scope() -> Option<u64> {
@@ -996,7 +1036,7 @@ pub(crate) fn record_replay_boundary_invalidation_for_instance_key(instance_key:
     }
 }
 
-fn record_cross_instance_build_invalidation(instance_key: u64) {
+pub(crate) fn record_cross_instance_build_invalidation(instance_key: u64) {
     with_build_invalidation_tracker_mut(|tracker| {
         tracker.dirty_instance_keys.insert(instance_key);
         tracker
@@ -1019,9 +1059,8 @@ pub(crate) fn defer_build_invalidations(instance_keys: &HashSet<u64>) {
     schedule_runtime_redraw();
 }
 
-thread_local! {
-    static POINTER_STATE_READER: std::cell::Cell<Option<u64>> = const { std::cell::Cell::new(None) };
-}
+const POINTER_STATE_READER: crate::session::SessionLocal<std::cell::Cell<Option<u64>>> =
+    crate::session::SessionLocal::new();
 
 pub(crate) fn with_pointer_state_reader<R>(key: u64, run: impl FnOnce() -> R) -> R {
     struct ReaderGuard(Option<u64>);
@@ -1289,6 +1328,7 @@ fn render_slot_read_subscribers(handle: FunctorHandle) -> Vec<u64> {
 }
 
 pub(crate) fn remove_state_read_dependencies(instance_keys: &HashSet<u64>) {
+    crate::nested_scroll::remove_readers(instance_keys);
     if instance_keys.is_empty() {
         return;
     }
@@ -1414,6 +1454,7 @@ struct FrameClockTracker {
     previous_frame_time: Option<Instant>,
     frame_delta: Duration,
     receivers: HashMap<FrameNanosReceiverKey, FrameNanosReceiver>,
+    executed_receiver_owners: Vec<u64>,
     receivers_by_owner: HashMap<u64, HashSet<FrameNanosReceiverKey>>,
 }
 
@@ -1464,58 +1505,126 @@ pub(crate) fn begin_frame_clock(now: Instant) {
 }
 
 pub(crate) fn reset_frame_clock() {
-    with_frame_clock_tracker_mut(|tracker| *tracker = FrameClockTracker::default());
+    let removed = with_frame_clock_tracker_mut(std::mem::take);
+    drop(removed);
 }
 
 pub(crate) fn has_pending_frame_nanos_receivers() -> bool {
     with_frame_clock_tracker(|tracker| !tracker.receivers.is_empty())
 }
 
+/// Frame-clock work performed by a completed frame.
+#[derive(Clone, Debug, Default)]
+pub struct FrameClockDiagnostics {
+    /// Runtime session that owns these subscriptions.
+    pub session: Option<crate::RuntimeSessionId>,
+    /// Number of actual frame callback invocations.
+    pub callbacks_executed: usize,
+    /// Number of subscriptions remaining after the frame.
+    pub pending_subscriptions: usize,
+    /// Replay boundary owners whose callbacks executed this frame.
+    pub executed_owners: Vec<u64>,
+}
+
+#[cfg(any(
+    test,
+    feature = "testing",
+    all(feature = "headless", not(target_family = "wasm"))
+))]
+pub(crate) fn frame_clock_diagnostics() -> FrameClockDiagnostics {
+    with_frame_clock_tracker(|tracker| FrameClockDiagnostics {
+        session: crate::RuntimeSession::current().map(|session| session.identity()),
+        callbacks_executed: tracker.executed_receiver_owners.len(),
+        pending_subscriptions: tracker.receivers.len(),
+        executed_owners: tracker.executed_receiver_owners.clone(),
+    })
+}
+
 pub(crate) fn tick_frame_nanos_receivers() {
-    with_frame_clock_tracker_mut(|tracker| {
-        let frame_nanos = tracker.current_frame_nanos;
-        let mut stopped = Vec::new();
-        tracker.receivers.retain(|key, receiver| {
-            let active = matches!(
-                (receiver.callback)(frame_nanos),
-                FrameNanosControl::Continue
-            );
-            if !active {
-                stopped.push((*key, receiver.owner_instance_key));
-            }
-            active
+    crate::dispatcher::flush();
+    let (frame_nanos, receivers) = with_frame_clock_tracker_mut(|tracker| {
+        tracker.executed_receiver_owners.clear();
+        (
+            tracker.current_frame_nanos,
+            std::mem::take(&mut tracker.receivers),
+        )
+    });
+    for (key, mut receiver) in receivers {
+        let registered = with_frame_clock_tracker(|tracker| {
+            tracker
+                .receivers_by_owner
+                .get(&receiver.owner_instance_key)
+                .is_some_and(|keys| keys.contains(&key))
         });
-        for (key, owner) in stopped {
-            if let Some(keys) = tracker.receivers_by_owner.get_mut(&owner) {
-                keys.remove(&key);
-                if keys.is_empty() {
-                    tracker.receivers_by_owner.remove(&owner);
+        if !registered {
+            continue;
+        }
+        with_frame_clock_tracker_mut(|tracker| {
+            tracker
+                .executed_receiver_owners
+                .push(receiver.owner_instance_key)
+        });
+        let active = matches!(
+            (receiver.callback)(frame_nanos),
+            FrameNanosControl::Continue
+        );
+        let discarded = with_frame_clock_tracker_mut(|tracker| {
+            if active
+                && tracker
+                    .receivers_by_owner
+                    .get(&receiver.owner_instance_key)
+                    .is_some_and(|keys| keys.contains(&key))
+            {
+                match tracker.receivers.entry(key) {
+                    std::collections::hash_map::Entry::Vacant(entry) => {
+                        entry.insert(receiver);
+                        return None;
+                    }
+                    std::collections::hash_map::Entry::Occupied(_) => {}
+                }
+            } else if !tracker.receivers.contains_key(&key) {
+                if let Some(keys) = tracker
+                    .receivers_by_owner
+                    .get_mut(&receiver.owner_instance_key)
+                {
+                    keys.remove(&key);
+                    if keys.is_empty() {
+                        tracker
+                            .receivers_by_owner
+                            .remove(&receiver.owner_instance_key);
+                    }
                 }
             }
-        }
-    });
+            Some(receiver)
+        });
+        drop(discarded);
+    }
 }
 
 pub(crate) fn remove_frame_nanos_receivers(instance_keys: &HashSet<u64>) {
     if instance_keys.is_empty() {
         return;
     }
-    with_frame_clock_tracker_mut(|tracker| {
+    let removed = with_frame_clock_tracker_mut(|tracker| {
+        let mut removed = Vec::new();
         for owner in instance_keys {
             if let Some(keys) = tracker.receivers_by_owner.remove(owner) {
                 for key in keys {
-                    tracker.receivers.remove(&key);
+                    removed.extend(tracker.receivers.remove(&key));
                 }
             }
         }
+        removed
     });
+    drop(removed);
 }
 
 pub(crate) fn clear_frame_nanos_receivers() {
-    with_frame_clock_tracker_mut(|tracker| {
-        tracker.receivers.clear();
+    let removed = with_frame_clock_tracker_mut(|tracker| {
         tracker.receivers_by_owner.clear();
+        std::mem::take(&mut tracker.receivers)
     });
+    drop(removed);
 }
 
 /// Returns the timestamp of the current frame, if available.
@@ -1581,9 +1690,10 @@ where
         .unwrap_or_else(|| panic!("receive_frame_nanos requires an active component node context"));
     let key = compute_frame_nanos_receiver_key();
 
+    let mut unused = Some(callback);
     with_frame_clock_tracker_mut(|tracker| {
         tracker.receivers.entry(key).or_insert_with(|| {
-            let mut callback = callback;
+            let mut callback = unused.take().expect("new component clock callback");
             FrameNanosReceiver {
                 owner_instance_key,
                 callback: Box::new(move |frame_nanos| {
@@ -1602,9 +1712,11 @@ where
             .or_default()
             .insert(key);
     });
+    drop(unused);
 }
 
 pub(crate) fn drop_slots_for_instance_logic_ids(instance_logic_ids: &HashSet<u64>) {
+    crate::nested_scroll::remove_owners(instance_logic_ids);
     if instance_logic_ids.is_empty() {
         return;
     }
@@ -1861,8 +1973,12 @@ pub(crate) fn take_layout_structure_changes() -> StructureReconcileResult {
 /// `State<T>` is `Copy + Send + Sync` and provides `with`, `with_mut`, `get`,
 /// `set`, and `cloned` to read or update the stored value.
 ///
-/// Handles are validated with a slot generation token so stale references fail
-/// fast if their slot has been recycled.
+/// Component factories such as [`remember`] run only during a Tessera build.
+/// Remembered state survives recomposition while its slot is used; [`retain`]
+/// also keeps unused slots until the component unmounts. [`StateOwner`] provides
+/// a controller or route lifetime independent of component mounting.
+///
+/// Access rejects stale handles and handles owned by another UI session.
 ///
 /// # Examples
 ///
@@ -1878,6 +1994,7 @@ pub(crate) fn take_layout_structure_changes() -> StructureReconcileResult {
 /// }
 /// ```
 pub struct State<T> {
+    session: u128,
     slot: SlotHandle,
     generation: u64,
     _marker: PhantomData<T>,
@@ -1893,7 +2010,9 @@ impl<T> Clone for State<T> {
 
 impl<T> PartialEq for State<T> {
     fn eq(&self, other: &Self) -> bool {
-        self.slot == other.slot && self.generation == other.generation
+        self.session == other.session
+            && self.slot == other.slot
+            && self.generation == other.generation
     }
 }
 
@@ -1901,6 +2020,7 @@ impl<T> Eq for State<T> {}
 
 impl<T> Hash for State<T> {
     fn hash<H: Hasher>(&self, state: &mut H) {
+        self.session.hash(state);
         self.slot.hash(state);
         self.generation.hash(state);
     }
@@ -1909,6 +2029,7 @@ impl<T> Hash for State<T> {
 impl<T> State<T> {
     fn new(slot: SlotHandle, generation: u64) -> Self {
         Self {
+            session: crate::session::current_session_identity().expect("active state session"),
             slot,
             generation,
             _marker: PhantomData,
@@ -1925,6 +2046,9 @@ where
     /// Remembered state can expire when its component leaves the tree;
     /// retained state remains alive until the runtime is reset.
     pub fn is_alive(&self) -> bool {
+        if crate::session::current_session_identity() != Some(self.session) {
+            return false;
+        }
         RUNTIME_GLOBALS
             .try_with(|globals| {
                 let table = globals.slot_table.borrow();
@@ -1939,6 +2063,11 @@ where
 
     /// Execute a closure with a shared reference to the stored value.
     pub fn with<R>(&self, f: impl FnOnce(&T) -> R) -> R {
+        assert_eq!(
+            crate::session::current_session_identity(),
+            Some(self.session),
+            "state belongs to a different runtime session"
+        );
         track_state_read_dependency(self.slot, self.generation);
         with_slot_table(|table| {
             let value = state_value_ref::<T>(table, self.slot, self.generation);
@@ -1949,6 +2078,11 @@ where
     /// Execute a closure with a mutable reference to the stored value.
     #[track_caller]
     pub fn with_mut<R>(&self, f: impl FnOnce(&mut T) -> R) -> R {
+        assert_eq!(
+            crate::session::current_session_identity(),
+            Some(self.session),
+            "state belongs to a different runtime session"
+        );
         // Move the value out for the duration of the closure so user code can
         // re-enter runtime APIs (`remember`, callback handles) without hitting
         // the active slot-table borrow. The guard restores it on unwind too.
@@ -1963,27 +2097,12 @@ where
         let value = guard.value.take().expect("state value is present");
         let slot = self.slot;
         let generation = self.generation;
-        with_slot_table_mut(|table| restore_state_value::<T>(table, slot, generation, value));
-
-        let subscribers = state_read_subscribers(self.slot, self.generation);
-        // A write performed while another component is building is a backwards
-        // write for every other reader: they may already have been rebuilt in
-        // this pass with the old value, so their invalidation must not be
-        // treated as already covered by the current replay round.
-        let writer_instance_key = if matches!(current_phase(), Some(RuntimePhase::Build)) {
-            current_replay_boundary_instance_key_from_scope()
-        } else {
-            None
-        };
-        for instance_key in subscribers {
-            match writer_instance_key {
-                Some(writer) if writer != instance_key => {
-                    record_cross_instance_build_invalidation(instance_key);
-                }
-                _ => record_replay_boundary_invalidation_for_instance_key(instance_key),
-            }
+        let removed =
+            with_slot_table_mut(|table| restore_state_value::<T>(table, slot, generation, value));
+        if removed.is_none() {
+            publish_state_write(self.slot, self.generation);
         }
-        mark_layout_state_readers_dirty(self.slot, self.generation);
+        drop(removed);
         result
     }
 
@@ -1995,11 +2114,72 @@ where
         self.with(Clone::clone)
     }
 
+    /// Replaces the value and invalidates readers only when it differs.
+    ///
+    /// The comparison does not subscribe the caller to the state. This permits
+    /// publishing derived geometry without making its publisher a reader.
+    #[track_caller]
+    pub fn set_if_changed(&self, value: T) -> bool
+    where
+        T: PartialEq,
+    {
+        assert_eq!(
+            crate::session::current_session_identity(),
+            Some(self.session),
+            "state belongs to a different runtime session"
+        );
+        let taken =
+            with_slot_table_mut(|table| take_state_value::<T>(table, self.slot, self.generation));
+        let mut guard = StateValueRestore {
+            slot: self.slot,
+            generation: self.generation,
+            value: Some(taken),
+        };
+        let changed = guard.value.as_ref().expect("state value is present") != &value;
+        let removed = if changed {
+            guard.value.replace(value)
+        } else {
+            Some(value)
+        };
+        let current = guard.value.take().expect("state value is present");
+        let discarded = with_slot_table_mut(|table| {
+            restore_state_value(table, self.slot, self.generation, current)
+        });
+        if changed && discarded.is_none() {
+            publish_state_write(self.slot, self.generation);
+        }
+        drop(discarded);
+        drop(removed);
+        changed
+    }
+
     /// Replace the stored value.
     #[track_caller]
     pub fn set(&self, value: T) {
         self.with_mut(|slot| *slot = value);
     }
+}
+
+fn publish_state_write(slot: SlotHandle, generation: u64) {
+    let subscribers = state_read_subscribers(slot, generation);
+    // A write performed while another component is building is a backwards
+    // write for every other reader: they may already have been rebuilt in
+    // this pass with the old value, so their invalidation must not be
+    // treated as already covered by the current replay round.
+    let writer_instance_key = if matches!(current_phase(), Some(RuntimePhase::Build)) {
+        current_replay_boundary_instance_key_from_scope()
+    } else {
+        None
+    };
+    for instance_key in subscribers {
+        match writer_instance_key {
+            Some(writer) if writer != instance_key => {
+                record_cross_instance_build_invalidation(instance_key);
+            }
+            _ => record_replay_boundary_invalidation_for_instance_key(instance_key),
+        }
+    }
+    mark_layout_state_readers_dirty(slot, generation);
 }
 
 struct RuntimeGlobals {
@@ -2036,9 +2216,13 @@ impl RuntimeGlobals {
     }
 }
 
-thread_local! {
-    static RUNTIME_GLOBALS: RuntimeGlobals = RuntimeGlobals::new();
+impl Default for RuntimeGlobals {
+    fn default() -> Self {
+        Self::new()
+    }
 }
+const RUNTIME_GLOBALS: crate::session::SessionLocal<RuntimeGlobals> =
+    crate::session::SessionLocal::new();
 
 /// Runtime state container.
 #[derive(Default)]
@@ -2740,7 +2924,7 @@ fn pop_current_node() {
     pop_order_frame("ORDER_FRAME_STACK underflow: attempted to pop from empty stack");
 }
 
-/// Get the node id at the top of the thread-local component stack.
+/// Get the node id at the top of the active session's component stack.
 pub fn current_node_id() -> Option<NodeId> {
     with_execution_context(|context| context.node_context_stack.last().copied())
 }
@@ -2791,14 +2975,14 @@ pub(crate) fn current_phase() -> Option<RuntimePhase> {
     with_execution_context(|context| context.phase_stack.last().copied())
 }
 
-/// Push a group id onto the thread-local control-flow stack.
+/// Push a group id onto the active session's control-flow stack.
 pub(crate) fn push_group_id(group_id: u64) {
     with_execution_context_mut(|context| {
         context.group_path_stack.push(group_id);
     });
 }
 
-/// Pop a group id from the thread-local control-flow stack.
+/// Pop a group id from the active session's control-flow stack.
 pub(crate) fn pop_group_id(expected_group_id: u64) {
     with_execution_context_mut(|context| {
         if let Some(popped) = context.group_path_stack.pop() {
@@ -2864,7 +3048,10 @@ impl<T: Send + Sync + 'static> Drop for StateValueRestore<T> {
         if let Some(value) = self.value.take() {
             let slot = self.slot;
             let generation = self.generation;
-            with_slot_table_mut(|table| restore_state_value::<T>(table, slot, generation, value));
+            let removed = with_slot_table_mut(|table| {
+                restore_state_value::<T>(table, slot, generation, value)
+            });
+            drop(removed);
         }
     }
 }
@@ -2901,16 +3088,18 @@ fn restore_state_value<T: Send + Sync + 'static>(
     slot: SlotHandle,
     generation: u64,
     value: T,
-) {
+) -> Option<T> {
     let Some(entry) = table.entries.get_mut(slot) else {
-        return;
+        return Some(value);
     };
-    if entry.generation != generation || entry.key.type_id != TypeId::of::<T>() {
-        return;
+    if entry.generation != generation
+        || entry.key.type_id != TypeId::of::<T>()
+        || entry.value.is_some()
+    {
+        return Some(value);
     }
-    if entry.value.is_none() {
-        entry.value = Some(Box::new(value));
-    }
+    entry.value = Some(Box::new(value));
+    None
 }
 
 fn box_state_value<T: Send + Sync + 'static>(value: T) -> Box<dyn Any + Send + Sync> {
@@ -2928,71 +3117,154 @@ fn downcast_functor_arc<T: Send + Sync + 'static>(value: &dyn Any, slot: SlotHan
         .clone()
 }
 
-fn touch_state_slot<T, F>(
-    table: &mut SlotTable,
-    slot: SlotHandle,
-    init: &mut Option<F>,
-    retained: bool,
-    type_name: &'static str,
-) -> u64
-where
-    T: Send + Sync + 'static,
-    F: FnOnce() -> T,
-{
-    let epoch = table.epoch;
-    let entry = table
-        .entries
-        .get_mut(slot)
-        .expect("slot entry should exist");
-    if entry.key.type_id != TypeId::of::<T>() {
-        panic!(
-            "{type_name} type mismatch: expected {}, found {:?}",
-            std::any::type_name::<T>(),
-            entry.key.type_id
-        );
-    }
-    entry.last_alive_epoch = epoch;
-    if retained {
-        entry.retained = true;
-    }
-    if entry.value.is_none() {
-        let init_fn = init
-            .take()
-            .unwrap_or_else(|| panic!("{type_name} init called more than once"));
-        entry.value = Some(box_state_value(init_fn()));
-        entry.generation = entry.generation.wrapping_add(1);
-    }
-    entry.generation
-}
-
-fn insert_state_slot<T, F>(
-    table: &mut SlotTable,
+fn resolve_state_key<T: Send + Sync + 'static>(
     key: SlotKey,
-    init: &mut Option<F>,
     retained: bool,
-    type_name: &'static str,
-) -> (SlotHandle, u64)
-where
-    T: Send + Sync + 'static,
-    F: FnOnce() -> T,
-{
-    let epoch = table.epoch;
-    let init_fn = init
-        .take()
-        .unwrap_or_else(|| panic!("{type_name} init called more than once"));
-    let generation = 1u64;
-    let slot = table.entries.insert(SlotEntry {
-        key,
-        generation,
-        value: Some(box_state_value(init_fn())),
-        last_alive_epoch: epoch,
-        retained,
+    init: impl FnOnce() -> T,
+) -> State<T> {
+    if let Some(state) = with_slot_table_mut(|table| {
+        let slot = *table.key_to_slot.get(&key)?;
+        let epoch = table.epoch;
+        let entry = table.entries.get_mut(slot)?;
+        entry.last_alive_epoch = epoch;
+        entry.retained |= retained;
+        if key.owned_owner.is_none() {
+            entry.value.as_ref()?;
+        }
+        Some(State::new(slot, entry.generation))
+    }) {
+        return state;
+    }
+    let value = init();
+    let (state, unused) = with_slot_table_mut(|table| {
+        if let Some(&slot) = table.key_to_slot.get(&key) {
+            let epoch = table.epoch;
+            let entry = &mut table.entries[slot];
+            entry.last_alive_epoch = epoch;
+            entry.retained |= retained;
+            if entry.value.is_some() || key.owned_owner.is_some() {
+                return (State::new(slot, entry.generation), Some(value));
+            }
+            entry.value = Some(box_state_value(value));
+            entry.generation = entry
+                .generation
+                .checked_add(1)
+                .expect("state generation exhausted");
+            return (State::new(slot, entry.generation), None);
+        }
+        let slot = table.entries.insert(SlotEntry {
+            key,
+            generation: 1,
+            value: Some(box_state_value(value)),
+            last_alive_epoch: table.epoch,
+            retained,
+        });
+        table.index_slot(key, slot);
+        (State::new(slot, 1), None)
     });
-    table.index_slot(key, slot);
-    (slot, generation)
+    drop(unused);
+    state
 }
 
-fn resolve_state_slot<K, F, T>(key: K, init: F, retained: bool, type_name: &'static str) -> State<T>
+pub(crate) fn modifier_attachment_path() -> [u64; 2] {
+    [
+        current_group_path_hash(),
+        next_order_counter(
+            OrderCounterKind::ModifierAttachment,
+            "modifier attachment requires a build scope",
+        ),
+    ]
+}
+
+pub(crate) fn modifier_state<T: Send + Sync + 'static>(
+    instance: u64,
+    path: &[u64],
+    ordinal: usize,
+    init: impl FnOnce() -> T,
+) -> State<T> {
+    let key = SlotKey {
+        owned_owner: None,
+        instance_logic_id: instance,
+        slot_hash: hash_components(&[&("modifier-state", path, ordinal)]),
+        type_id: TypeId::of::<T>(),
+    };
+    resolve_state_key(key, false, init)
+}
+
+struct ModifierClockLifetime {
+    session: u128,
+    key: FrameNanosReceiverKey,
+    owner: u64,
+}
+
+impl Drop for ModifierClockLifetime {
+    fn drop(&mut self) {
+        if crate::session::current_session_identity() != Some(self.session) {
+            return;
+        }
+        let removed = with_frame_clock_tracker_mut(|tracker| {
+            if let Some(keys) = tracker.receivers_by_owner.get_mut(&self.owner) {
+                keys.remove(&self.key);
+                if keys.is_empty() {
+                    tracker.receivers_by_owner.remove(&self.owner);
+                }
+            }
+            tracker.receivers.remove(&self.key)
+        });
+        drop(removed);
+    }
+}
+
+pub(crate) fn modifier_frame_receiver<F>(
+    instance: u64,
+    owner: u64,
+    path: &[u64],
+    ordinal: usize,
+    callback: F,
+) where
+    F: FnMut(u64) -> FrameNanosControl + Send + 'static,
+{
+    let state = modifier_state(instance, path, ordinal, current_frame_nanos);
+    let _ = state.get();
+    let key = FrameNanosReceiverKey {
+        instance_logic_id: instance,
+        receiver_hash: hash_components(&[&("modifier-clock", path, ordinal)]),
+    };
+    let _lifetime = modifier_state(instance, path, ordinal, || ModifierClockLifetime {
+        session: crate::session::current_session_identity().expect("modifier clock session"),
+        key,
+        owner,
+    });
+    let mut unused = Some(callback);
+    with_frame_clock_tracker_mut(|tracker| {
+        tracker.receivers.entry(key).or_insert_with(|| {
+            let mut callback = unused.take().expect("new modifier clock callback");
+            FrameNanosReceiver {
+                owner_instance_key: owner,
+                callback: Box::new(move |nanos| {
+                    if !state.is_alive() {
+                        return FrameNanosControl::Stop;
+                    }
+                    state.set(nanos);
+                    callback(nanos)
+                }),
+            }
+        });
+        tracker
+            .receivers_by_owner
+            .entry(owner)
+            .or_default()
+            .insert(key);
+    });
+    drop(unused);
+}
+
+fn resolve_state_slot<K, F, T>(
+    key: K,
+    init: F,
+    retained: bool,
+    _type_name: &'static str,
+) -> State<T>
 where
     K: Hash,
     F: FnOnce() -> T,
@@ -3020,23 +3292,13 @@ where
         hash_components(&[&group_path_hash, &key_hash])
     };
     let slot_key = SlotKey {
+        owned_owner: None,
         instance_logic_id,
         slot_hash,
         type_id: TypeId::of::<T>(),
     };
 
-    with_slot_table_mut(|table| {
-        let mut init_opt = Some(init);
-        if let Some(slot) = table.key_to_slot.get(&slot_key).copied() {
-            let generation =
-                touch_state_slot::<T, F>(table, slot, &mut init_opt, retained, type_name);
-            return State::new(slot, generation);
-        }
-
-        let (slot, generation) =
-            insert_state_slot::<T, F>(table, slot_key, &mut init_opt, retained, type_name);
-        State::new(slot, generation)
-    })
+    resolve_state_key(slot_key, retained, init)
 }
 
 pub(crate) fn current_instance_key_override() -> Option<u64> {
@@ -3208,6 +3470,7 @@ where
     ensure_build_phase();
     let (instance_logic_id, slot_hash) = compute_functor_slot_key(&key);
     let slot_key = SlotKey {
+        owned_owner: None,
         instance_logic_id,
         slot_hash,
         type_id: TypeId::of::<T>(),
@@ -3332,6 +3595,11 @@ fn load_functor_cell<T>(handle: FunctorHandle) -> Arc<T>
 where
     T: Send + Sync + 'static,
 {
+    assert_eq!(
+        crate::session::current_session_identity(),
+        Some(handle.session),
+        "functor belongs to a different runtime session"
+    );
     with_slot_table(|table| {
         let entry = table
             .entries
@@ -3474,7 +3742,33 @@ pub fn begin_recompose_slot_epoch() {
     with_slot_table_mut(SlotTable::begin_epoch);
 }
 
-/// Reset all slot buffers (used on suspension).
+pub(crate) fn shutdown_runtime() {
+    clear_frame_nanos_receivers();
+    reset_slots();
+    reset_component_replay_tracking();
+    clear_redraw_waker();
+    let tree = TesseraRuntime::with_mut(|runtime| std::mem::take(&mut runtime.component_tree));
+    drop(tree);
+}
+
+pub(crate) fn reset_component_slots() {
+    crate::component_call::reset_pending_calls();
+    crate::context::reset_context_slots();
+    let removed = with_slot_table_mut(|table| {
+        let slots = table
+            .entries
+            .iter()
+            .filter_map(|(slot, entry)| entry.key.owned_owner.is_none().then_some(slot))
+            .collect::<Vec<_>>();
+        slots
+            .into_iter()
+            .filter_map(|slot| table.remove_slot(slot))
+            .collect::<Vec<_>>()
+    });
+    drop(removed);
+}
+
+/// Releases all slots when the UI session shuts down.
 pub fn reset_slots() {
     crate::component_call::reset_pending_calls();
     crate::context::reset_context_slots();
@@ -3519,32 +3813,10 @@ pub(crate) fn live_slot_instance_logic_ids() -> HashSet<u64> {
     with_slot_table(|table| table.slots_by_owner.keys().copied().collect())
 }
 
-/// Remember a value across frames with an explicit key.
+/// Initializes state by an explicit key within the current component build.
 ///
-/// This function allows a component to "remember" state across recomposition
-/// (build) passes, using a user-provided key to identify the state. This is
-/// particularly useful for state generated inside loops or dynamic collections
-/// where the execution order might change.
-///
-/// The `init` closure is executed only once — when the key is first
-/// encountered. On subsequent updates with the same key, the stored value is
-/// returned and `init` is not called.
-///
-/// # Interior mutability
-///
-/// This function returns a `State<T>` handle stored in the thread-local slot
-/// table. Use `with`, `with_mut`, `get`, or `set` to read or update the value.
-///
-/// # Comparison with [`remember`]
-///
-/// Use this function when the state is generated inside a loop or dynamic
-/// collection where the execution order might change. In other cases,
-/// [`remember`] is sufficient.
-///
-/// # Panics
-///
-/// This function must be called during a component's build/render phase.
-/// Calling it during the measure or input handling phases will panic.
+/// Use stable business keys for reordered collections. The initializer runs only
+/// when the slot is first used; see [`State`] for access and lifetime rules.
 pub fn remember_with_key<K, F, T>(key: K, init: F) -> State<T>
 where
     K: Hash,
@@ -3554,31 +3826,10 @@ where
     resolve_state_slot(key, init, false, "remember_with_key")
 }
 
-/// Remember a value across recomposition (build) passes.
+/// Initializes state by call order and control-flow position during a component build.
 ///
-/// This function allows a component to "remember" state across recomposition
-/// (build) passes.
-/// The `init` closure is executed only once — when the component first runs.
-/// On subsequent updates, the stored value is returned and `init` is not
-/// called.
-///
-/// # Interior mutability
-///
-/// This function returns a `State<T>` handle stored in the thread-local slot
-/// table. Use `with`, `with_mut`, `get`, or `set` to read or update the value.
-///
-/// # Comparison with [`remember_with_key`]
-///
-/// `remember` identifies stored state based on the component's call order and
-/// control-flow path. It associates state by position within a component, but
-/// this does not work reliably for dynamically generated state inside loops.
-/// For state that is allocated dynamically in loops, consider using
-/// [`remember_with_key`] to explicitly provide a unique key.
-///
-/// # Panics
-///
-/// This function must be called during a component's build/render phase.
-/// Calling it during the measure or input handling phases will panic.
+/// Use [`remember_with_key`] for reordered collections; see [`State`] for access
+/// and lifetime rules.
 pub fn remember<F, T>(init: F) -> State<T>
 where
     F: FnOnce() -> T,
@@ -3587,41 +3838,10 @@ where
     remember_with_key((), init)
 }
 
-/// Retain a value across recomposition (build) passes with an explicit key,
-/// even if unused.
+/// Initializes keyed state during a build and keeps it until the component unmounts.
 ///
-/// Unlike [`remember_with_key`], state created with this function will **not**
-/// be recycled when the component stops calling it. This is useful for state
-/// that should persist across navigation, such as scroll positions or form
-/// inputs.
-///
-/// The `init` closure is executed only once — when the key is first
-/// encountered. On subsequent updates with the same key, the stored value is
-/// returned and `init` is not called.
-///
-/// # Use Cases
-///
-/// - Preserving scroll position when navigating away and returning to a page
-/// - Retaining form input values across route changes
-/// - Caching expensive computation results that should survive component
-///   unmounts
-///
-/// # Interior mutability
-///
-/// This function returns a `State<T>` handle stored in the thread-local slot
-/// table. Use `with`, `with_mut`, `get`, or `set` to read or update the value.
-///
-/// # Comparison with [`remember_with_key`]
-///
-/// Use [`remember_with_key`] for ephemeral component state that should be
-/// cleaned up when the component is no longer rendered. Use `retain_with_key`
-/// for persistent state that must survive even when a subtree is not rebuilt
-/// for some time.
-///
-/// # Panics
-///
-/// This function must be called during a component's build/render phase.
-/// Calling it during the measure or input handling phases will panic.
+/// Unused retained slots survive conditional branches; see [`State`] for access
+/// rules and [`StateOwner`] for independent controller or route lifetimes.
 pub fn retain_with_key<K, F, T>(key: K, init: F) -> State<T>
 where
     K: Hash,
@@ -3631,40 +3851,10 @@ where
     resolve_state_slot(key, init, true, "retain_with_key")
 }
 
-/// Retain a value across recomposition (build) passes, even if unused.
+/// Initializes state by call order during a build, retaining it until unmount.
 ///
-/// Unlike [`remember`], state created with this function will **not** be
-/// recycled when the component stops calling it. This is useful for state that
-/// should persist across navigation, such as scroll positions or form inputs.
-///
-/// The `init` closure is executed only once — when the component first runs.
-/// On subsequent updates, the stored value is returned and `init` is not
-/// called.
-///
-/// # Use Cases
-///
-/// - Preserving scroll position when navigating away and returning to a page
-/// - Retaining form input values across route changes
-/// - Caching expensive computation results that should survive component
-///   unmounts
-///
-/// # Interior mutability
-///
-/// This function returns a `State<T>` handle stored in the thread-local slot
-/// table. Use `with`, `with_mut`, `get`, or `set` to read or update the value.
-///
-/// # Comparison with [`retain_with_key`]
-///
-/// `retain` identifies stored state based on the component's call order and
-/// control-flow path. It associates state by position within a component, but
-/// this does not work reliably for dynamically generated state inside loops.
-/// For state that is allocated dynamically in loops, consider using
-/// [`retain_with_key`] to explicitly provide a unique key.
-///
-/// # Panics
-///
-/// This function must be called during a component's build/render phase.
-/// Calling it during the measure or input handling phases will panic.
+/// Use [`retain_with_key`] for reordered collections; see [`State`] for access
+/// and lifetime rules.
 pub fn retain<F, T>(init: F) -> State<T>
 where
     F: FnOnce() -> T,
@@ -3705,10 +3895,6 @@ where
 
 #[cfg(test)]
 mod tests {
-    use std::sync::{
-        Arc,
-        atomic::{AtomicU64, AtomicUsize, Ordering},
-    };
 
     use super::*;
     use crate::component_tree::{ComponentNode, NodeRole};
@@ -3720,10 +3906,11 @@ mod tests {
     use crate::prop::{CallbackWith, ComponentReplayData, RenderSlot, make_component_runner};
     use crate::tessera;
 
-    thread_local! {
-        static CONDITIONAL_LOOP_VALUES: std::cell::Cell<[Option<State<usize>>; 3]> = const { std::cell::Cell::new([None; 3]) };
-        static CONDITIONAL_LOOP_ORDER: std::cell::Cell<Option<State<Vec<usize>>>> = const { std::cell::Cell::new(None) };
-        static CONDITIONAL_LOOP_TICK: std::cell::Cell<Option<State<usize>>> = const { std::cell::Cell::new(None) };
+    #[derive(Clone, Default, PartialEq)]
+    struct ConditionalLoopProbe {
+        values: crate::testing::TestProbe<[Option<State<usize>>; 3]>,
+        order: crate::testing::TestProbe<Option<State<Vec<usize>>>>,
+        tick: crate::testing::TestProbe<Option<State<usize>>>,
     }
 
     #[derive(Clone, PartialEq)]
@@ -3775,22 +3962,22 @@ mod tests {
     }
 
     #[tessera(crate)]
-    fn conditional_loop_item(index: usize) {
+    fn conditional_loop_item(index: usize, probe: ConditionalLoopProbe) {
         let value = remember(|| index);
-        let mut values = CONDITIONAL_LOOP_VALUES.get();
+        let mut values = probe.values.get();
         values[index] = Some(value);
-        CONDITIONAL_LOOP_VALUES.set(values);
+        probe.values.set(values);
         crate::layout::layout()
             .policy(ConditionalLoopWidth(value))
             .modifier(crate::Modifier::new().push_semantics(ConditionalLoopTag(index)));
     }
 
     #[tessera(crate)]
-    fn conditional_loop_fixture(keyed: bool) {
+    fn conditional_loop_fixture(keyed: bool, probe: ConditionalLoopProbe) {
         let order = remember(|| vec![0, 1, 2]);
         let tick = remember(|| 0);
-        CONDITIONAL_LOOP_ORDER.set(Some(order));
-        CONDITIONAL_LOOP_TICK.set(Some(tick));
+        probe.order.set(Some(order));
+        probe.tick.set(Some(tick));
         crate::layout::layout()
             .policy(ConditionalLoopRow)
             .child(move || {
@@ -3799,10 +3986,10 @@ mod tests {
                     if index > 0 {
                         if keyed {
                             key(index, || {
-                                conditional_loop_item(index);
+                                conditional_loop_item(index, probe.clone());
                             });
                         } else {
-                            conditional_loop_item(index);
+                            conditional_loop_item(index, probe.clone());
                         }
                     }
                 }
@@ -3811,16 +3998,19 @@ mod tests {
 
     #[test]
     fn conditional_loop_components_keep_independent_state_through_replay_and_keyed_reorder() {
+        let _runtime_session = crate::RuntimeSession::new();
+        let _runtime_scope = _runtime_session.enter();
         for keyed in [false, true] {
-            CONDITIONAL_LOOP_VALUES.set([None; 3]);
+            let probe = ConditionalLoopProbe::default();
             let mut session = crate::testing::start_layout_test_session(
-                crate::testing::layout_test(move || {
-                    conditional_loop_fixture(keyed);
+                crate::testing::layout_test({
+                    let probe = probe.clone();
+                    move || conditional_loop_fixture(keyed, probe.clone())
                 })
                 .viewport_px(100, 20),
             );
             let initial = crate::testing::pump_layout_test_session(&mut session, 0);
-            let values = CONDITIONAL_LOOP_VALUES.get();
+            let values = probe.values.get();
             let first = values[1].unwrap();
             let second = values[2].unwrap();
             assert_eq!(first.get(), 1);
@@ -3833,20 +4023,20 @@ mod tests {
             changed.node("loop-item-1").size(11, 10).position(0, 0);
             changed.node("loop-item-2").size(2, 10).position(11, 0);
             assert_eq!(second.get(), 2);
-            CONDITIONAL_LOOP_TICK.get().unwrap().set(1);
+            probe.tick.get().unwrap().set(1);
             let replayed = crate::testing::pump_layout_test_session(&mut session, 33_333_334);
             replayed.node("loop-item-1").size(11, 10).position(0, 0);
             replayed.node("loop-item-2").size(2, 10).position(11, 0);
 
             if keyed {
-                CONDITIONAL_LOOP_ORDER.get().unwrap().set(vec![0, 2, 1]);
+                probe.order.get().unwrap().set(vec![0, 2, 1]);
                 let reordered = crate::testing::pump_layout_test_session(&mut session, 50_000_001);
                 reordered.node("loop-item-2").size(2, 10).position(0, 0);
                 reordered.node("loop-item-1").size(11, 10).position(2, 0);
-                assert!(CONDITIONAL_LOOP_VALUES.get()[1].unwrap() == first);
-                assert!(CONDITIONAL_LOOP_VALUES.get()[2].unwrap() == second);
+                assert!(probe.values.get()[1].unwrap() == first);
+                assert!(probe.values.get()[2].unwrap() == second);
 
-                CONDITIONAL_LOOP_ORDER.get().unwrap().set(vec![0, 2]);
+                probe.order.get().unwrap().set(vec![0, 2]);
                 let removed = crate::testing::pump_layout_test_session(&mut session, 66_666_668);
                 removed.node("loop-item-2").size(2, 10).position(0, 0);
                 assert!(!first.is_alive());
@@ -3903,6 +4093,8 @@ mod tests {
 
     #[test]
     fn state_liveness_survives_updates_and_rejects_expired_slots() {
+        let _runtime_session = crate::RuntimeSession::new();
+        let _runtime_scope = _runtime_session.enter();
         reset_slots();
         let state = with_test_component_scope(815, || remember(|| 4_u32));
         assert!(state.is_alive());
@@ -3920,6 +4112,8 @@ mod tests {
 
     #[test]
     fn receive_frame_nanos_panics_without_component_scope() {
+        let _runtime_session = crate::RuntimeSession::new();
+        let _runtime_scope = _runtime_session.enter();
         reset_frame_clock();
         begin_frame_clock(Instant::now());
 
@@ -3931,6 +4125,8 @@ mod tests {
 
     #[test]
     fn tick_frame_nanos_receivers_removes_stopped_receivers() {
+        let _runtime_session = crate::RuntimeSession::new();
+        let _runtime_scope = _runtime_session.enter();
         reset_frame_clock();
         begin_frame_clock(Instant::now());
 
@@ -3955,6 +4151,8 @@ mod tests {
 
     #[test]
     fn with_build_dirty_instance_keys_marks_current_scope() {
+        let _runtime_session = crate::RuntimeSession::new();
+        let _runtime_scope = _runtime_session.enter();
         let mut outer = HashSet::default();
         outer.insert(7);
 
@@ -3978,6 +4176,8 @@ mod tests {
 
     #[test]
     fn with_build_dirty_instance_keys_restores_on_panic() {
+        let _runtime_session = crate::RuntimeSession::new();
+        let _runtime_scope = _runtime_session.enter();
         let mut dirty = HashSet::default();
         dirty.insert(11);
 
@@ -4036,6 +4236,8 @@ mod tests {
 
     #[test]
     fn layout_dirty_tracking_separates_measure_and_placement_changes() {
+        let _runtime_session = crate::RuntimeSession::new();
+        let _runtime_scope = _runtime_session.enter();
         reset_layout_dirty_tracking();
 
         begin_frame_layout_dirty_tracking();
@@ -4092,6 +4294,8 @@ mod tests {
 
     #[test]
     fn measure_state_write_dirties_layout_before_next_build() {
+        let _runtime_session = crate::RuntimeSession::new();
+        let _runtime_scope = _runtime_session.enter();
         reset_layout_dirty_tracking();
         begin_recompose_slot_epoch();
         let root_node = TesseraRuntime::with_mut(|runtime| {
@@ -4150,6 +4354,8 @@ mod tests {
 
     #[test]
     fn layout_dirty_tracking_marks_measure_when_layout_modifier_changes() {
+        let _runtime_session = crate::RuntimeSession::new();
+        let _runtime_scope = _runtime_session.enter();
         reset_layout_dirty_tracking();
 
         begin_frame_layout_dirty_tracking();
@@ -4189,6 +4395,8 @@ mod tests {
 
     #[test]
     fn with_replay_scope_restores_group_path_and_override() {
+        let _runtime_session = crate::RuntimeSession::new();
+        let _runtime_scope = _runtime_session.enter();
         with_execution_context_mut(|context| {
             context.group_path_stack = vec![1, 2, 3];
         });
@@ -4215,6 +4423,8 @@ mod tests {
 
     #[test]
     fn with_replay_scope_restores_on_panic() {
+        let _runtime_session = crate::RuntimeSession::new();
+        let _runtime_scope = _runtime_session.enter();
         with_execution_context_mut(|context| {
             context.group_path_stack = vec![5];
         });
@@ -4243,6 +4453,8 @@ mod tests {
 
     #[test]
     fn group_local_remember_does_not_shift_following_slots() {
+        let _runtime_session = crate::RuntimeSession::new();
+        let _runtime_scope = _runtime_session.enter();
         reset_slots();
 
         begin_recompose_slot_epoch();
@@ -4264,6 +4476,8 @@ mod tests {
 
     #[test]
     fn conditional_frame_receiver_does_not_shift_following_remember_slots() {
+        let _runtime_session = crate::RuntimeSession::new();
+        let _runtime_scope = _runtime_session.enter();
         reset_slots();
         reset_frame_clock();
         begin_frame_clock(Instant::now());
@@ -4287,60 +4501,63 @@ mod tests {
 
     #[test]
     fn tessera_uses_none_for_omitted_option_props() {
-        let observed = Arc::new(AtomicUsize::new(99));
+        let _runtime_session = crate::RuntimeSession::new();
+        let _runtime_scope = _runtime_session.enter();
+        let observed = crate::testing::TestProbe::new(99usize);
 
         with_test_component_scope(11014, || {
-            let observed = Arc::clone(&observed);
+            let observed = observed.clone();
             optional_value_component().on_value(move |value: Option<usize>| {
-                observed.store(
-                    value.map_or(0, |next| next.saturating_add(1)),
-                    Ordering::SeqCst,
-                );
+                observed.set(value.map_or(0, |next| next.saturating_add(1)));
             });
         });
 
-        assert_eq!(observed.load(Ordering::SeqCst), 0);
+        assert_eq!(observed.get(), 0);
     }
 
     #[test]
     fn tessera_accepts_non_default_required_props_when_provided() {
-        let observed = Arc::new(AtomicUsize::new(0));
+        let _runtime_session = crate::RuntimeSession::new();
+        let _runtime_scope = _runtime_session.enter();
+        let observed = crate::testing::TestProbe::new(0usize);
 
         with_test_component_scope(11016, || {
-            let observed = Arc::clone(&observed);
+            let observed = observed.clone();
             required_value_component()
                 .value(13)
                 .on_value(move |value: usize| {
-                    observed.store(value, Ordering::SeqCst);
+                    observed.set(value);
                 });
         });
 
-        assert_eq!(observed.load(Ordering::SeqCst), 13);
+        assert_eq!(observed.get(), 13);
     }
 
     #[test]
     fn render_slot_update_invalidates_reader_instance() {
+        let _runtime_session = crate::RuntimeSession::new();
+        let _runtime_scope = _runtime_session.enter();
         reset_slots();
         reset_component_replay_tracking();
         reset_render_slot_read_dependencies();
         reset_build_invalidations();
 
-        let reader_boundary_key = Arc::new(AtomicU64::new(0));
+        let reader_boundary_key = crate::testing::TestProbe::new(0u64);
 
         begin_recompose_slot_epoch();
         let first = with_test_component_scope(11002, || {
-            let reader_boundary_key = Arc::clone(&reader_boundary_key);
+            let reader_boundary_key = reader_boundary_key.clone();
             RenderSlot::new(move || {
                 let instance_key = current_replay_boundary_instance_key_from_scope()
                     .expect("slot render must run inside replay boundary");
-                reader_boundary_key.store(instance_key, Ordering::SeqCst);
+                reader_boundary_key.set(instance_key);
             })
         });
 
         with_test_component_scope(11003, || {
             first.render();
         });
-        let reader_instance_key = reader_boundary_key.load(Ordering::SeqCst);
+        let reader_instance_key = reader_boundary_key.get();
         assert!(reader_instance_key != 0);
         seed_previous_replay_snapshot(reader_instance_key);
 
@@ -4360,28 +4577,30 @@ mod tests {
 
     #[test]
     fn render_slot_update_skips_reader_already_dirty_in_current_build() {
+        let _runtime_session = crate::RuntimeSession::new();
+        let _runtime_scope = _runtime_session.enter();
         reset_slots();
         reset_component_replay_tracking();
         reset_render_slot_read_dependencies();
         reset_build_invalidations();
         reset_execution_context();
 
-        let reader_boundary_key = Arc::new(AtomicU64::new(0));
+        let reader_boundary_key = crate::testing::TestProbe::new(0u64);
 
         begin_recompose_slot_epoch();
         let first = with_test_component_scope(12002, || {
-            let reader_boundary_key = Arc::clone(&reader_boundary_key);
+            let reader_boundary_key = reader_boundary_key.clone();
             RenderSlot::new(move || {
                 let instance_key = current_replay_boundary_instance_key_from_scope()
                     .expect("slot render must run inside replay boundary");
-                reader_boundary_key.store(instance_key, Ordering::SeqCst);
+                reader_boundary_key.set(instance_key);
             })
         });
 
         with_test_component_scope(12003, || {
             first.render();
         });
-        let reader_instance_key = reader_boundary_key.load(Ordering::SeqCst);
+        let reader_instance_key = reader_boundary_key.get();
         assert!(reader_instance_key != 0);
         seed_previous_replay_snapshot(reader_instance_key);
 
@@ -4405,6 +4624,8 @@ mod tests {
 
     #[test]
     fn group_local_child_identity_does_not_shift_following_siblings() {
+        let _runtime_session = crate::RuntimeSession::new();
+        let _runtime_scope = _runtime_session.enter();
         fn stable_child_instance_logic_id(with_group_child: bool) -> u64 {
             let mut arena = crate::Arena::<()>::new();
             let root_node = arena.new_node(());
@@ -4437,6 +4658,8 @@ mod tests {
 
     #[test]
     fn child_components_in_different_groups_get_distinct_instance_logic_ids() {
+        let _runtime_session = crate::RuntimeSession::new();
+        let _runtime_scope = _runtime_session.enter();
         let mut arena = crate::Arena::<()>::new();
         let root_node = arena.new_node(());
         let first_child_node = arena.new_node(());
@@ -4463,6 +4686,8 @@ mod tests {
 
     #[test]
     fn child_components_in_repeated_path_groups_keep_distinct_instance_logic_ids() {
+        let _runtime_session = crate::RuntimeSession::new();
+        let _runtime_scope = _runtime_session.enter();
         let mut arena = crate::Arena::<()>::new();
         let root_node = arena.new_node(());
         let first_child_node = arena.new_node(());
@@ -4489,6 +4714,8 @@ mod tests {
 
     #[test]
     fn conditional_remember_keeps_later_state_stable() {
+        let _runtime_session = crate::RuntimeSession::new();
+        let _runtime_scope = _runtime_session.enter();
         begin_recompose_slot_epoch();
         let root_node = TesseraRuntime::with_mut(|runtime| {
             runtime.component_tree.add_node(ComponentNode {
@@ -4552,13 +4779,17 @@ mod tests {
 
     #[test]
     fn drop_slots_for_instance_logic_ids_keeps_retained_entries() {
+        let _runtime_session = crate::RuntimeSession::new();
+        let _runtime_scope = _runtime_session.enter();
         let mut table = SlotTable::default();
         let keep_key = SlotKey {
+            owned_owner: None,
             instance_logic_id: 7,
             slot_hash: 11,
             type_id: TypeId::of::<i32>(),
         };
         let drop_key = SlotKey {
+            owned_owner: None,
             instance_logic_id: 7,
             slot_hash: 12,
             type_id: TypeId::of::<i32>(),

@@ -4,8 +4,6 @@
 //!
 //! Navigate long specifications without constructing every unseen figure.
 
-use std::sync::Mutex;
-
 use tessera_components::{
     alignment::Alignment,
     boxed::boxed,
@@ -41,7 +39,7 @@ struct HeaderPositions {
 }
 
 fn update_header_pin(
-    positions: State<Mutex<HeaderPositions>>,
+    positions: State<HeaderPositions>,
     pinned: State<bool>,
     viewport_top: Option<f32>,
     header_top: Option<f32>,
@@ -49,8 +47,7 @@ fn update_header_pin(
     if !positions.is_alive() || !pinned.is_alive() {
         return;
     }
-    let next = positions.with(|positions| {
-        let mut positions = positions.lock().unwrap();
+    let next = positions.with_mut(|positions| {
         if let Some(top) = viewport_top {
             positions.viewport_top = Some(top);
         }
@@ -62,9 +59,7 @@ fn update_header_pin(
             .zip(positions.header_top)
             .is_some_and(|(viewport, header)| header <= viewport)
     });
-    if pinned.get() != next {
-        pinned.set(next);
-    }
+    pinned.set_if_changed(next);
 }
 
 fn content_inset(width: Dp) -> Dp {
@@ -90,7 +85,7 @@ pub(super) fn viewport(
     let controller = remember_with_key((page.title.clone(), page.page), LazyListController::new);
     let height = remember(|| Px(1));
     let pinned = remember(|| false);
-    let positions = remember(|| Mutex::new(HeaderPositions::default()));
+    let positions = remember(HeaderPositions::default);
     let next = ChapterBindings {
         controller,
         pages,

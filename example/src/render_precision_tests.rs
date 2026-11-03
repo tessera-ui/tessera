@@ -27,14 +27,6 @@ const ACCENT: Color = Color::from_rgb(0.1356333, 0.08021982, 0.3712377);
 const DARK_SURFACE: [u8; 4] = [15, 13, 18, 255];
 const WHITE_UNDER_LINEAR_SCRIM: [u8; 4] = [215, 215, 215, 255];
 
-struct Pipelines;
-
-impl tessera_ui::RenderModule for Pipelines {
-    fn register_pipelines(&self, context: &mut tessera_ui::PipelineContext<'_>) {
-        tessera_components::pipelines::register_pipelines(context);
-    }
-}
-
 fn observed_region(label: &str) -> Modifier {
     Modifier::new().semantics(SemanticsArgs {
         role: Some(Role::Group),
@@ -93,14 +85,17 @@ fn dark_surface_fixture() {
                                 .then(observed_region("Precision rail wrapper")),
                         )
                         .children(|| {
-                            navigation_rail().expanded(false).content(|| {
-                                navigation_rail_item()
-                                    .label("Home")
-                                    .selected(true)
-                                    .icon(|| {
-                                        spacer().modifier(Modifier::new().size(Dp(24.0), Dp(24.0)));
-                                    });
-                            });
+                            navigation_rail()
+                                .expanded(false)
+                                .content(move |rail_scope| {
+                                    navigation_rail_item(rail_scope)
+                                        .label("Home")
+                                        .selected(true)
+                                        .icon(|| {
+                                            spacer()
+                                                .modifier(Modifier::new().size(Dp(24.0), Dp(24.0)));
+                                        });
+                                });
                         });
                 });
         });
@@ -137,7 +132,7 @@ fn render<Output: 'static>(
 ) -> HeadlessRenderer {
     let mut renderer = HeadlessRenderer::new(
         Box::new(root),
-        vec![Box::new(Pipelines)],
+        vec![Box::new(crate::TestPipelines)],
         HeadlessConfig {
             width,
             height,

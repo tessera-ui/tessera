@@ -1,7 +1,10 @@
-use std::collections::{HashMap, HashSet};
+use std::{
+    cell::RefCell,
+    collections::{HashMap, HashSet},
+};
 
 use ra_ap_base_db::Crate;
-use ra_ap_hir::Semantics;
+use ra_ap_hir::{Function, Semantics};
 use ra_ap_ide::{AnalysisHost, FileId, RootDatabase};
 use ra_ap_span::TextRange;
 use ra_ap_vfs::Vfs;
@@ -51,22 +54,58 @@ pub(crate) struct LoadedWorkspace {
     pub(crate) vfs: Vfs,
 }
 
-pub(crate) struct ColorAnalyzer<'db> {
-    pub(crate) display_root: std::path::PathBuf,
-    pub(crate) db: &'db RootDatabase,
-    pub(crate) sema: Semantics<'db, RootDatabase>,
-    pub(crate) tessera_crates: HashSet<Crate>,
-    pub(crate) vfs: &'db Vfs,
+#[derive(Clone)]
+pub(crate) struct SelectedSources {
     pub(crate) local_files: HashSet<FileId>,
-    pub(crate) metadata_files: HashSet<FileId>,
-    pub(crate) selected_package: Option<String>,
+    pub(crate) file_crates: HashMap<FileId, HashSet<Crate>>,
+}
+
+#[derive(Clone, Default)]
+pub(crate) struct CallIndex {
+    pub(crate) tessera_crates: HashSet<Crate>,
     pub(crate) tessera_function_names: HashSet<String>,
     pub(crate) tessera_function_paths: HashSet<String>,
     pub(crate) render_slot_setter_indexes_by_type_path:
         HashMap<String, HashMap<String, HashSet<usize>>>,
     pub(crate) render_slot_constructor_indexes_by_function_path: HashMap<String, HashSet<usize>>,
     pub(crate) inactive_code_ranges: HashMap<FileId, Vec<Vec<TextRange>>>,
+}
+
+impl CallIndex {
+    pub(crate) fn merge(&mut self, partial: Self) {
+        self.tessera_function_names
+            .extend(partial.tessera_function_names);
+        self.tessera_function_paths
+            .extend(partial.tessera_function_paths);
+        for (path, setters) in partial.render_slot_setter_indexes_by_type_path {
+            let target = self
+                .render_slot_setter_indexes_by_type_path
+                .entry(path)
+                .or_default();
+            for (setter, arguments) in setters {
+                target.entry(setter).or_default().extend(arguments);
+            }
+        }
+        for (path, arguments) in partial.render_slot_constructor_indexes_by_function_path {
+            self.render_slot_constructor_indexes_by_function_path
+                .entry(path)
+                .or_default()
+                .extend(arguments);
+        }
+    }
+}
+
+pub(crate) struct CallAnalyzer<'db> {
+    pub(crate) display_root: std::path::PathBuf,
+    pub(crate) db: &'db RootDatabase,
+    pub(crate) index: CallIndex,
+    pub(crate) sema: Semantics<'db, RootDatabase>,
+    pub(crate) vfs: &'db Vfs,
+    pub(crate) local_files: HashSet<FileId>,
+    pub(crate) metadata_files: HashSet<FileId>,
     pub(crate) diagnostics: Vec<Diagnostic>,
+    pub(crate) inactive_bodies: HashMap<FileId, Vec<TextRange>>,
+    pub(crate) call_targets: RefCell<HashMap<Function, Option<CallTarget>>>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -88,6 +127,8 @@ pub(crate) enum TesseraRuntimeApi {
     Key,
     RenderSlotNew,
     RenderSlotWithNew,
+    RenderSlotRender,
+    RenderSlotWithRender,
     InternalRuntime,
 }
 
@@ -101,11 +142,4 @@ pub(crate) enum CallKind {
 pub(crate) enum CallTarget {
     Resolved { path: String, kind: CallKind },
     Unresolved { path: String },
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) enum ResolvedMethod {
-    RenderSlotNew,
-    RenderSlotWithNew,
-    Other,
 }

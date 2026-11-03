@@ -198,9 +198,10 @@ fn token_menu(
                     }
                 });
         })
-        .menu_content(move || {
+        .menu_content(move |menu| {
             for (index, label) in SET_NAMES.into_iter().enumerate() {
                 menu_item()
+                    .menu(menu)
                     .label(label)
                     .selected(selected.get() == index)
                     .selection_mode(MenuItemSelectionMode::Radio)

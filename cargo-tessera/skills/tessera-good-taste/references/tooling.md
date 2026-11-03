@@ -4,7 +4,7 @@
 | --- | --- |
 | Scaffold an app | `cargo tessera new my-app --template basic` or `--template blank` |
 | Scaffold a plugin | `cargo tessera plugin new my-plugin --template basic` or `--template android` |
-| Check compilation and call colors | `cargo tessera check -p my-app` |
+| Check compilation and Tessera call boundaries | `cargo tessera check -p my-app` |
 | Develop on desktop | `cargo tessera dev -p my-app` |
 | Build a native release | `cargo tessera build -p my-app --release` |
 | Develop on web | `cargo tessera web dev` |

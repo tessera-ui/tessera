@@ -291,6 +291,7 @@ fn create_msaa_view(
 
 /// Render core holding device, surface, pipelines, and frame resources.
 pub struct RenderCore {
+    graphics: crate::GraphicsDevice,
     /// Window handle when rendering to a surface; `None` for offscreen cores.
     #[allow(unused)]
     window: Option<Arc<Window>>,
@@ -342,6 +343,8 @@ pub struct RenderCore {
 
 /// Shared GPU resources used when creating pipelines.
 pub struct RenderResources<'a> {
+    /// Renderer-owned resource creation, uploads, and work observations.
+    pub graphics: &'a crate::GraphicsDevice,
     /// WGPU device used for pipeline creation.
     pub device: &'a wgpu::Device,
     /// WGPU queue used by pipelines that upload data.
@@ -358,6 +361,7 @@ impl RenderCore {
     /// Returns shared GPU resources used for pipeline creation.
     pub fn resources(&self) -> RenderResources<'_> {
         RenderResources {
+            graphics: &self.graphics,
             device: &self.device,
             queue: &self.queue,
             surface_config: &self.draw_config,
@@ -483,6 +487,7 @@ impl RenderCore {
             ..
         } = self;
         let resources = RenderResources {
+            graphics: &self.graphics,
             device,
             queue,
             surface_config: draw_config,
@@ -517,6 +522,8 @@ mod tests {
     #[test]
     #[ignore = "requires a GPU adapter"]
     fn evicting_an_unused_texture_preserves_live_slot_indices() {
+        let _runtime_session = crate::RuntimeSession::new();
+        let _runtime_scope = _runtime_session.enter();
         let core = pollster::block_on(RenderCore::new_offscreen(
             winit::dpi::PhysicalSize::new(1, 1),
             wgpu::TextureFormat::Rgba8Unorm,

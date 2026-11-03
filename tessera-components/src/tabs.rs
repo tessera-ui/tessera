@@ -9,11 +9,11 @@ use tessera_foundation::gesture::{ScrollRecognizer, ScrollSettings};
 use tessera_ui::{
     AxisConstraint, Callback, Color, ComputedData, Constraint, Dp, FocusManager, FocusProperties,
     FocusRequester, FocusState, LayoutResult, MeasurementError, Modifier, ParentDataMap,
-    ParentDataModifierNode, Px, PxPosition, RenderSlot, State,
+    ParentDataModifierNode, Px, PxPosition, RenderSlot, RenderSlotWith, State,
     accesskit::Role,
     layout::{MeasureScope, layout},
     modifier::{FocusModifierExt as _, ModifierCapabilityExt as _},
-    provide_context, receive_frame_nanos, remember, tessera, use_context,
+    receive_frame_nanos, remember, tessera, use_context,
 };
 
 use crate::{
@@ -386,7 +386,8 @@ struct TabsConfig {
 }
 
 #[derive(Clone, Copy, PartialEq)]
-struct TabsCompositionContext {
+/// The row configuration and selection handles supplied to its tab content.
+pub struct TabRow {
     controller: State<TabsController>,
     selected: State<usize>,
     enabled: bool,
@@ -494,6 +495,7 @@ impl TabBuilder {
 ///
 /// ## Parameters
 ///
+/// - `row` — row configuration received by the enclosing tabs content slot.
 /// - `selected` — optional controlled selection; otherwise follows the tab row.
 /// - `on_click` — callback invoked when the tab is activated.
 /// - `enabled` — whether this tab can be focused or activated.
@@ -518,8 +520,8 @@ impl TabBuilder {
 /// #         .theme(|| MaterialTheme::default())
 /// #         .child(|| {
 ///     let selected = remember(|| 0usize);
-///     tabs().selected(selected).content(move || {
-///         tab()
+///     tabs().selected(selected).content(move |row| {
+///         tab(row)
 ///             .label("Home")
 ///             .selected(selected.get() == 0)
 ///             .on_click(move || selected.set(0));
@@ -529,6 +531,7 @@ impl TabBuilder {
 /// ```
 #[tessera]
 pub fn tab(
+    row: TabRow,
     selected: Option<bool>,
     enabled: Option<bool>,
     #[prop(skip_setter)] title_slot: Option<RenderSlot>,
@@ -537,9 +540,7 @@ pub fn tab(
     on_click: Option<Callback>,
     #[prop(into)] accessibility_label: Option<String>,
 ) {
-    let composition = use_context::<TabsCompositionContext>()
-        .expect("tab must be used inside tabs")
-        .get();
+    let composition = row;
     let focus_requester = remember(FocusRequester::new).get();
     let controller = composition.controller;
     let selected_state = composition.selected;
@@ -1248,12 +1249,12 @@ impl tessera_ui::DrawModifierNode for TabsLayout {
 ///     let selected = remember(|| 1usize);
 ///     let active_tab = selected.get();
 ///
-///     tabs().selected(selected).content(move || {
-///         tab()
+///     tabs().selected(selected).content(move |row| {
+///         tab(row)
 ///             .label("Flights")
 ///             .selected(selected.get() == 0)
 ///             .on_click(move || selected.set(0));
-///         tab()
+///         tab(row)
 ///             .label("Hotel")
 ///             .selected(selected.get() == 1)
 ///             .on_click(move || selected.set(1));
@@ -1288,7 +1289,7 @@ pub fn tabs(
     scrollable: Option<bool>,
     edge_padding: Option<Dp>,
     min_scrollable_tab_width: Option<Dp>,
-    content: Option<RenderSlot>,
+    content: Option<RenderSlotWith<TabRow>>,
 ) {
     let selected = if let Some(selected) = selected {
         selected
@@ -1298,7 +1299,6 @@ pub fn tabs(
     let modifier = modifier.unwrap_or_default();
     let variant = variant.unwrap_or_default();
     let scrollable = scrollable.unwrap_or(false);
-    let content = content.unwrap_or_else(RenderSlot::empty);
     let scheme = use_context::<MaterialTheme>()
         .expect("MaterialTheme must be provided")
         .get()
@@ -1370,18 +1370,20 @@ pub fn tabs(
             }
         });
     }
-    tabs_content()
+    let body = tabs_content()
         .args(config)
         .controller(controller)
-        .content_shared(content)
         .tab_row_scroll_recognizer(tab_row_scroll_recognizer);
+    if let Some(content) = content {
+        body.content_shared(content);
+    }
 }
 
 #[tessera]
 fn tabs_content(
     args: Option<TabsConfig>,
     controller: Option<State<TabsController>>,
-    content: Option<RenderSlot>,
+    content: Option<RenderSlotWith<TabRow>>,
     tab_row_scroll_recognizer: Option<State<ScrollRecognizer>>,
 ) {
     let args = args.expect("tabs_content requires args to be set");
@@ -1390,7 +1392,6 @@ fn tabs_content(
         live.set(args.clone());
     }
     let controller = controller.expect("tabs_content requires controller to be set");
-    let content = content.expect("tabs_content requires content to be set");
     let tab_row_scroll_recognizer =
         tab_row_scroll_recognizer.expect("tabs_content requires scroll recognizer to be set");
     let tab_row_scroll_px = controller.with(|c| c.tab_row_scroll_px());
@@ -1490,7 +1491,7 @@ fn tabs_content(
                 .shape(indicator_shape)
                 .child(|| {});
 
-            let composition = TabsCompositionContext {
+            let composition = TabRow {
                 controller,
                 selected: args.selection,
                 enabled: args.enabled,
@@ -1502,15 +1503,9 @@ fn tabs_content(
                 min_tab_height: args.min_tab_height,
                 tab_padding: args.tab_padding,
             };
-            let children = RenderSlot::new(move || {
-                let context = use_context::<TabsCompositionContext>()
-                    .expect("Tabs composition context must be provided");
-                if context.with(|current| current != &composition) {
-                    context.set(composition);
-                }
-                content.render();
-            });
-            provide_context(|| composition, move || children.render());
+            if let Some(content) = content {
+                content.render(composition);
+            }
         });
 }
 
@@ -1662,7 +1657,6 @@ fn tab_title_content(title: Option<TabTitle>, tab_padding: Option<Dp>) {
 
 #[cfg(test)]
 mod tests {
-    use std::cell::Cell;
 
     use tessera_ui::{
         CursorEventContent, Dp, GestureState, Modifier, PointerChange, PressKeyEventType, Px,
@@ -1720,21 +1714,15 @@ mod tests {
         assert!(scaled.has_pending_animation_frame());
     }
 
-    thread_local! {
-        static IDLE_BUILDS: Cell<usize> = const { Cell::new(0) };
-    }
-
     #[tessera]
     fn idle_tabs_probe() {
         material_theme().theme(MaterialTheme::default).child(|| {
-            IDLE_BUILDS.with(|builds| builds.set(builds.get() + 1));
             tabs_row();
         });
     }
 
     #[test]
     fn tabs_stop_rebuilding_after_the_indicator_settles() {
-        IDLE_BUILDS.with(|builds| builds.set(0));
         let mut session = tessera_ui::testing::start_layout_test_session(
             tessera_ui::testing::layout_test(|| {
                 idle_tabs_probe();
@@ -1744,27 +1732,31 @@ mod tests {
         for frame in 0..90 {
             let _ = tessera_ui::testing::pump_layout_test_session(&mut session, frame * 16_666_667);
         }
-        let settled_builds = IDLE_BUILDS.with(Cell::get);
         for frame in 90..98 {
             let _ = tessera_ui::testing::pump_layout_test_session(&mut session, frame * 16_666_667);
+            assert_eq!(
+                session
+                    .work()
+                    .count("tabs_row", tessera_ui::WorkPhase::Build),
+                0
+            );
         }
-        assert_eq!(IDLE_BUILDS.with(Cell::get), settled_builds);
     }
 
     #[tessera]
     fn tabs_row() {
         let selected = remember(|| 0usize);
         column().children(move || {
-            tabs().selected(selected).content(move || {
-                tab()
+            tabs().selected(selected).content(move |row| {
+                tab(row)
                     .label("Flights")
                     .selected(selected.get() == 0)
                     .on_click(move || selected.set(0));
-                tab()
+                tab(row)
                     .label("Hotels")
                     .selected(selected.get() == 1)
                     .on_click(move || selected.set(1));
-                tab()
+                tab(row)
                     .label("Trains")
                     .selected(selected.get() == 2)
                     .on_click(move || selected.set(2));
@@ -1861,42 +1853,38 @@ mod tests {
 
 #[cfg(test)]
 mod custom_title_tests {
-    use std::cell::Cell;
 
-    use tessera_ui::{Dp, Modifier, Px, State, remember, tessera, use_context};
+    use tessera_ui::{Dp, Modifier, Px, State, remember, tessera};
 
     use crate::{modifier::ModifierExt as _, spacer::spacer, theme::material_theme};
 
-    use super::{TabsCompositionContext, TabsController, tab, tabs};
+    use super::{TabsController, tab, tabs};
 
-    thread_local! {
-        static CONTROLLER: Cell<Option<State<TabsController>>> = const { Cell::new(None) };
-        static SELECTED: Cell<Option<State<usize>>> = const { Cell::new(None) };
-        static SCROLLABLE: Cell<Option<State<bool>>> = const { Cell::new(None) };
+    #[derive(Clone, Copy, Default)]
+    struct FixtureHandles {
+        controller: Option<State<TabsController>>,
+        selected: Option<State<usize>>,
+        scrollable: Option<State<bool>>,
     }
 
     #[tessera]
-    fn fixture() {
+    fn fixture(observed: tessera_ui::testing::TestProbe<FixtureHandles>) {
         let selected = remember(|| 0usize);
         let scrollable = remember(|| false);
-        SELECTED.set(Some(selected));
-        SCROLLABLE.set(Some(scrollable));
+        observed.with_mut(|handles| handles.selected = Some(selected));
+        observed.with_mut(|handles| handles.scrollable = Some(scrollable));
         material_theme().child(move || {
+            let observed = observed.clone();
             tabs()
                 .selected(selected)
                 .scrollable(scrollable.get())
                 .modifier(Modifier::new().width(Dp(300.0)))
-                .content(|| {
-                    CONTROLLER.set(Some(
-                        use_context::<TabsCompositionContext>()
-                            .unwrap()
-                            .get()
-                            .controller,
-                    ));
-                    tab().accessibility_label("Eighty").title(|| {
+                .content(move |row| {
+                    observed.with_mut(|handles| handles.controller = Some(row.controller));
+                    tab(row).accessibility_label("Eighty").title(|| {
                         spacer().modifier(Modifier::new().width(Dp(80.0)).height(Dp(24.0)));
                     });
-                    tab().accessibility_label("One twenty").title(|| {
+                    tab(row).accessibility_label("One twenty").title(|| {
                         spacer().modifier(Modifier::new().width(Dp(120.0)).height(Dp(24.0)));
                     });
                 });
@@ -1905,14 +1893,17 @@ mod custom_title_tests {
 
     #[test]
     fn primary_custom_title_indicator_uses_unpadded_slot_width_in_both_row_modes() {
+        let observed = tessera_ui::testing::TestProbe::default();
+        let fixture_observed = observed.clone();
         let mut session = tessera_ui::testing::start_layout_test_session(
-            tessera_ui::testing::layout_test(fixture).viewport_px(300, 100),
+            tessera_ui::testing::layout_test(move || fixture(fixture_observed.clone()))
+                .viewport_px(300, 100),
         );
         let mut frame = 0_u64;
         tessera_ui::testing::pump_layout_test_session(&mut session, frame);
-        let selected = SELECTED.get().unwrap();
-        let scrollable = SCROLLABLE.get().unwrap();
-        let controller = CONTROLLER.get().unwrap();
+        let selected = observed.get().selected.unwrap();
+        let scrollable = observed.get().scrollable.unwrap();
+        let controller = observed.get().controller.unwrap();
         for scrolling in [false, true] {
             scrollable.set(scrolling);
             for (index, width) in [(0, 80), (1, 120)] {
@@ -1929,12 +1920,12 @@ mod custom_title_tests {
 
 #[cfg(all(test, not(target_family = "wasm")))]
 mod small_custom_title_tests {
-    use std::{cell::Cell, time::Duration};
+    use std::time::Duration;
 
     use tessera_ui::{
         Color, Dp, HeadlessConfig, HeadlessRenderer, Modifier, Px, State,
         accesskit::{Action, ActionRequest, Node, NodeId, Role, TreeId},
-        remember, tessera, use_context,
+        remember, tessera,
     };
 
     use crate::{
@@ -1943,20 +1934,21 @@ mod small_custom_title_tests {
         theme::{MaterialTheme, material_theme},
     };
 
-    use super::{TabsCompositionContext, TabsController, tab, tabs};
+    use super::{TabsController, tab, tabs};
 
-    thread_local! {
-        static CONTROLLER: Cell<Option<State<TabsController>>> = const { Cell::new(None) };
-        static SELECTED: Cell<Option<State<usize>>> = const { Cell::new(None) };
-        static SCROLLABLE: Cell<Option<State<bool>>> = const { Cell::new(None) };
+    #[derive(Clone, Copy, Default)]
+    struct FixtureHandles {
+        controller: Option<State<TabsController>>,
+        selected: Option<State<usize>>,
+        scrollable: Option<State<bool>>,
     }
 
     #[tessera]
-    fn fixture() {
+    fn fixture(observed: tessera_ui::testing::TestProbe<FixtureHandles>) {
         let selected = remember(|| 0usize);
         let scrollable = remember(|| false);
-        SELECTED.set(Some(selected));
-        SCROLLABLE.set(Some(scrollable));
+        observed.with_mut(|handles| handles.selected = Some(selected));
+        observed.with_mut(|handles| handles.scrollable = Some(scrollable));
         material_theme()
             .theme(|| {
                 let mut theme = MaterialTheme::default();
@@ -1965,20 +1957,16 @@ mod small_custom_title_tests {
                 theme
             })
             .child(move || {
+                let observed = observed.clone();
                 tabs()
                     .selected(selected)
                     .scrollable(scrollable.get())
                     .min_scrollable_tab_width(Dp::ZERO)
                     .edge_padding(Dp::ZERO)
                     .modifier(Modifier::new().width(Dp(300.0)))
-                    .content(|| {
-                        CONTROLLER.set(Some(
-                            use_context::<TabsCompositionContext>()
-                                .unwrap()
-                                .get()
-                                .controller,
-                        ));
-                        tab().accessibility_label("Small title").title(|| {
+                    .content(move |row| {
+                        observed.with_mut(|handles| handles.controller = Some(row.controller));
+                        tab(row).accessibility_label("Small title").title(|| {
                             spacer().modifier(
                                 Modifier::new()
                                     .width(Dp(32.0))
@@ -1986,7 +1974,7 @@ mod small_custom_title_tests {
                                     .background(Color::BLUE),
                             );
                         });
-                        tab().accessibility_label("Minimum title").title(|| {
+                        tab(row).accessibility_label("Minimum title").title(|| {
                             spacer().modifier(
                                 Modifier::new()
                                     .width(Dp(16.0))
@@ -2014,8 +2002,12 @@ mod small_custom_title_tests {
         crate::test_utils::run_isolated_test(
             "tabs::small_custom_title_tests::gpu_small_custom_title_indicators_exclude_minimum_interactive_padding",
             || {
+                let observed = tessera_ui::testing::TestProbe::default();
+                let fixture_observed = observed.clone();
                 let mut renderer = HeadlessRenderer::new(
-                    Box::new(fixture),
+                    Box::new(move || {
+                        fixture(fixture_observed.clone());
+                    }),
                     vec![Box::new(crate::TesseraComponents)],
                     HeadlessConfig {
                         width: 300,
@@ -2027,9 +2019,9 @@ mod small_custom_title_tests {
                 )
                 .unwrap();
                 renderer.render_frames(12);
-                let selected = SELECTED.get().unwrap();
-                let scrollable = SCROLLABLE.get().unwrap();
-                let controller = CONTROLLER.get().unwrap();
+                let selected = observed.get().selected.unwrap();
+                let scrollable = observed.get().scrollable.unwrap();
+                let controller = observed.get().controller.unwrap();
                 for scrolling in [false, true] {
                     scrollable.set(scrolling);
                     renderer.render_frames(90);

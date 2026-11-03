@@ -140,7 +140,9 @@ fn label_items() -> Vec<Item> {
 }
 
 #[tessera]
-pub(super) fn button_groups_spec() {
+pub(super) fn button_groups_spec(
+    route: Option<crate::pages::material_spec::article::ArticleRoute>,
+) {
     article(
         "Button groups",
         "Button groups organize buttons and add interactions between them",
@@ -179,6 +181,7 @@ pub(super) fn button_groups_spec() {
             },
         ],
     )
+    .route_optional(route.clone())
     .pages(vec![
         ArticlePage {
             title: "Overview",

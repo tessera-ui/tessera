@@ -268,7 +268,6 @@ pub fn navigation_drawer_item(
 
 #[cfg(test)]
 mod tests {
-    use std::cell::Cell;
 
     use tessera_ui::{
         CursorEventContent, GestureState, PointerChange, PressKeyEventType, PxPosition, State,
@@ -282,12 +281,10 @@ mod tests {
 
     use super::*;
 
-    thread_local! { static SELECTED: Cell<Option<State<usize>>> = const { Cell::new(None) }; }
-
     #[tessera]
-    fn fixture() {
+    fn fixture(output: tessera_ui::testing::TestProbe<Option<State<usize>>>) {
         let selected = remember(|| 0usize);
-        SELECTED.set(Some(selected));
+        output.set(Some(selected));
         material_theme().child(move || {
             column().children(move || {
                 navigation_drawer()
@@ -331,9 +328,11 @@ mod tests {
 
     #[test]
     fn destinations_keep_token_bounds_select_and_ignore_disabled_input() {
+        let output = tessera_ui::testing::TestProbe::default();
+        let probe = output.clone();
         let mut session = start_layout_test_session(
-            layout_test(|| {
-                fixture();
+            layout_test(move || {
+                fixture(probe.clone());
             })
             .viewport_px(400, 400),
         );
@@ -367,7 +366,7 @@ mod tests {
                     &mut session,
                     (index * 2 + event + 1) as u64 * 16_666_667,
                     vec![PointerChange::new(
-                        tessera_ui::time::Instant::now(),
+                        tessera_ui::current_frame_time().unwrap(),
                         1,
                         content,
                         GestureState::TapCandidate,
@@ -376,7 +375,7 @@ mod tests {
                 );
             }
             pump_layout_test_session(&mut session, (index as u64 + 1) * 100_000_000);
-            assert_eq!(SELECTED.get().unwrap().get(), 1);
+            assert_eq!(output.get().unwrap().get(), 1);
         }
     }
 

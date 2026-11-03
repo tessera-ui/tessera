@@ -205,6 +205,8 @@ pub(super) fn selection_article(
     example: RenderSlot,
     overview_example: RenderSlot,
     anatomy: RenderSlot,
+
+    route: Option<crate::pages::material_spec::article::ArticleRoute>,
 ) {
     let title = match kind {
         Kind::Checkbox => "Checkbox",
@@ -232,7 +234,9 @@ pub(super) fn selection_article(
             }),
         });
     }
-    let mut page = article(title, description, sections).hero_shared(example);
+    let mut page = article(title, description, sections)
+        .route_optional(route.clone())
+        .hero_shared(example);
     if kind == Kind::Switch {
         page = page.intro_shared(anatomy);
     }

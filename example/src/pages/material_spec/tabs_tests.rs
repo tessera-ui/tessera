@@ -4,7 +4,7 @@
 //!
 //! Verify swipeable fixed tabs and badge dismissal through real pointer input.
 
-use std::{cell::Cell, time::Duration};
+use std::time::Duration;
 
 use tessera_ui::{
     HeadlessConfig, HeadlessRenderer, MOUSE_POINTER_ID, PressKeyEventType, PxPosition,
@@ -13,46 +13,31 @@ use tessera_ui::{
 
 use super::*;
 
-thread_local! {
-    static SELECTED: Cell<Option<State<usize>>> = const { Cell::new(None) };
-}
-
-struct Pipelines;
-
-impl tessera_ui::RenderModule for Pipelines {
-    fn register_pipelines(&self, context: &mut tessera_ui::PipelineContext<'_>) {
-        tessera_components::pipelines::register_pipelines(context);
-    }
-}
-
-#[tessera]
-fn swipe_fixture() {
-    let selected = remember(|| 0usize);
-    SELECTED.set(Some(selected));
-    material_theme().child(move || {
-        boxed()
-            .modifier(Modifier::new().fill_max_size())
-            .children(move || {
-                swipe_tabs().selected(selected);
-            });
-    });
-}
-
-#[tessera]
-fn badge_fixture() {
-    material_theme().child(|| {
-        boxed()
-            .modifier(Modifier::new().fill_max_size())
-            .children(|| {
-                native_tabs_figure(true, true, false, 0, 3);
-            });
-    });
-}
-
-fn renderer<Output: 'static>(fixture: fn() -> Output) -> HeadlessRenderer {
+fn renderer(
+    selection: Option<tessera_ui::testing::TestProbe<Option<State<usize>>>>,
+) -> HeadlessRenderer {
     let mut renderer = HeadlessRenderer::new(
-        Box::new(fixture),
-        vec![Box::new(Pipelines)],
+        Box::new(move || {
+            material_theme().child({
+                let selection = selection.clone();
+                move || {
+                    boxed().modifier(Modifier::new().fill_max_size()).children({
+                        let selection = selection.clone();
+                        move || match &selection {
+                            Some(selection) => {
+                                let selected = remember(|| 0usize);
+                                selection.set(Some(selected));
+                                swipe_tabs().selected(selected);
+                            }
+                            None => {
+                                native_tabs_figure(true, true, false, 0, 3);
+                            }
+                        }
+                    });
+                }
+            });
+        }),
+        vec![Box::new(crate::TestPipelines)],
         HeadlessConfig {
             width: 600,
             height: 480,
@@ -128,8 +113,10 @@ fn panel_center(renderer: &HeadlessRenderer) -> PxPosition {
 #[test]
 #[ignore = "requires a native GPU adapter"]
 fn swiping_fixed_tab_content_moves_selection_between_neighbours() {
-    let mut renderer = renderer(swipe_fixture);
-    let selected = SELECTED.get().unwrap();
+    let selection = tessera_ui::testing::TestProbe::default();
+    let observed = selection.clone();
+    let mut renderer = renderer(Some(observed));
+    let selected = selection.get().expect("mounted swipe tabs");
     assert_eq!(selected.get(), 0);
 
     let start = panel_center(&renderer);
@@ -175,7 +162,7 @@ fn swiping_fixed_tab_content_moves_selection_between_neighbours() {
 #[test]
 #[ignore = "requires a native GPU adapter"]
 fn viewing_badged_tab_removes_badge_from_its_accessibility_label() {
-    let mut renderer = renderer(badge_fixture);
+    let mut renderer = renderer(None);
     let badged = center(tab_bounds(&renderer, "Flights, 3 new items"));
     click(&mut renderer, badged);
     assert!(

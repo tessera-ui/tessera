@@ -184,6 +184,8 @@ pub(crate) struct LayoutContext<'a> {
 #[cfg_attr(not(feature = "profiling"), allow(dead_code))]
 #[derive(Clone, Copy, Debug, Default)]
 /// Layout work observed during one frame.
+///
+/// Work counts include every settling pass; only pointer dispatch nodes are distinct.
 pub struct LayoutFrameDiagnostics {
     /// Number of nodes whose window geometry was resolved in this frame.
     pub geometry_nodes_updated: u64,
@@ -231,6 +233,34 @@ pub struct LayoutFrameDiagnostics {
     /// Layouts excluded from caching because child measurements were incomplete
     /// or inconsistent.
     pub cache_drop_non_cacheable_count: u64,
+}
+
+impl LayoutFrameDiagnostics {
+    pub(crate) fn accumulate_pass(&mut self, pass: Self) {
+        self.geometry_nodes_updated += pass.geometry_nodes_updated;
+        self.geometry_nodes_visited += pass.geometry_nodes_visited;
+        self.measure_dirty_children_checked += pass.measure_dirty_children_checked;
+        self.pointer_nodes_updated += pass.pointer_nodes_updated;
+        // Pointer selection is already deduplicated across the frame.
+        self.pointer_nodes_dispatched = pass.pointer_nodes_dispatched;
+        self.pointer_hit_test_candidates += pass.pointer_hit_test_candidates;
+        self.paint_nodes_recorded += pass.paint_nodes_recorded;
+        self.scene_nodes_updated += pass.scene_nodes_updated;
+        self.accessibility_nodes_updated += pass.accessibility_nodes_updated;
+        self.dirty_nodes_param += pass.dirty_nodes_param;
+        self.dirty_nodes_structural += pass.dirty_nodes_structural;
+        self.dirty_nodes_with_ancestors += pass.dirty_nodes_with_ancestors;
+        self.dirty_expand_ns += pass.dirty_expand_ns;
+        self.measure_node_calls += pass.measure_node_calls;
+        self.cache_hits_direct += pass.cache_hits_direct;
+        self.cache_hits_boundary += pass.cache_hits_boundary;
+        self.cache_miss_no_entry += pass.cache_miss_no_entry;
+        self.cache_miss_constraint += pass.cache_miss_constraint;
+        self.cache_miss_dirty_self += pass.cache_miss_dirty_self;
+        self.cache_miss_child_size += pass.cache_miss_child_size;
+        self.cache_store_count += pass.cache_store_count;
+        self.cache_drop_non_cacheable_count += pass.cache_drop_non_cacheable_count;
+    }
 }
 
 #[derive(Default)]
@@ -512,7 +542,7 @@ pub struct ComponentTree {
     /// Each path stores node instance keys from root to leaf.
     active_pointer_paths: HashMap<u64, Vec<u64>>,
     active_pointer_positions: HashMap<u64, Option<PxPosition>>,
-    pointer_work: (u64, u64),
+    pointer_work: (u64, HashSet<u64>),
     /// Per-tree focus owner used for keyboard and IME routing.
     focus_owner: FocusOwner,
     pending_keyboard_events: VecDeque<QueuedFocusedInput>,
@@ -593,7 +623,7 @@ impl ComponentTree {
             removed_focus_owners: HashSet::default(),
             active_pointer_paths: HashMap::default(),
             active_pointer_positions: HashMap::default(),
-            pointer_work: (0, 0),
+            pointer_work: (0, HashSet::default()),
             focus_owner: FocusOwner::new(),
             pending_keyboard_events: VecDeque::new(),
             pending_ime_events: Vec::new(),
@@ -651,10 +681,15 @@ impl ComponentTree {
         self.clear();
         self.active_pointer_paths.clear();
         self.active_pointer_positions.clear();
+        self.pointer_work.1.clear();
         self.focus_owner.reset();
         self.pending_keyboard_events.clear();
         clipboard::clear_requests();
         self.pending_ime_events.clear();
+    }
+
+    pub(crate) fn begin_frame_diagnostics(&mut self) {
+        self.pointer_work.1.clear();
     }
 
     pub(crate) fn refresh_scale_factor(&mut self) -> bool {
@@ -1655,7 +1690,9 @@ impl ComponentTree {
             final_position,
             selected.into_iter(),
         );
-        self.pointer_work.1 = plan.nodes.len() as u64;
+        self.pointer_work
+            .1
+            .extend(plan.nodes.values().map(|node| node.context.instance_key));
         for node in plan.nodes.values() {
             crate::runtime::clear_phase_state_reads(
                 node.context.instance_key,
@@ -2076,7 +2113,10 @@ impl ComponentTree {
             return (
                 RenderGraph::default(),
                 WindowRequests::default(),
-                LayoutFrameDiagnostics::default(),
+                LayoutFrameDiagnostics {
+                    pointer_nodes_dispatched: self.pointer_work.1.len() as u64,
+                    ..Default::default()
+                },
                 std::time::Duration::ZERO,
                 None,
                 false,
@@ -2269,7 +2309,7 @@ impl ComponentTree {
                 );
                 diagnostics_snapshot.geometry_nodes_visited = self.metadatas.geometry_visits;
                 diagnostics_snapshot.pointer_nodes_updated = self.pointer_work.0;
-                diagnostics_snapshot.pointer_nodes_dispatched = self.pointer_work.1;
+                diagnostics_snapshot.pointer_nodes_dispatched = self.pointer_work.1.len() as u64;
                 diagnostics_snapshot.pointer_hit_test_candidates =
                     self.pointer_index.hit_candidates.get();
                 return (
@@ -2349,7 +2389,7 @@ impl ComponentTree {
 
         diagnostics_snapshot.geometry_nodes_visited = self.metadatas.geometry_visits;
         diagnostics_snapshot.pointer_nodes_updated = self.pointer_work.0;
-        diagnostics_snapshot.pointer_nodes_dispatched = self.pointer_work.1;
+        diagnostics_snapshot.pointer_nodes_dispatched = self.pointer_work.1.len() as u64;
         diagnostics_snapshot.pointer_hit_test_candidates = self.pointer_index.hit_candidates.get();
         self.focus_owner.commit_pending();
         let requested_move = self
@@ -2655,6 +2695,11 @@ fn node_handles_pointer_at_position(
         match action {
             OrderedModifierAction::Placement(placement) => {
                 if transforms.is_empty() {
+                    crate::work::record(
+                        node.instance_logic_id,
+                        crate::WorkPhase::Transform,
+                        placement.node().diagnostic_name(),
+                    );
                     current_abs_pos = placement.node().transform_position(current_abs_pos);
                 }
             }
@@ -2693,6 +2738,11 @@ fn resolve_node_hover_cursor_icon(
         match action {
             OrderedModifierAction::Placement(placement) => {
                 if transforms.is_empty() {
+                    crate::work::record(
+                        node.instance_logic_id,
+                        crate::WorkPhase::Transform,
+                        placement.node().diagnostic_name(),
+                    );
                     current_abs_pos = placement.node().transform_position(current_abs_pos);
                 }
             }
@@ -2846,6 +2896,11 @@ fn dispatch_pointer_modifiers_for_node_pass(
         match action {
             OrderedModifierAction::Placement(placement) => {
                 if plan.context.input_transforms.is_empty() {
+                    crate::work::record(
+                        plan.context.instance_logic_id,
+                        crate::WorkPhase::Transform,
+                        placement.node().diagnostic_name(),
+                    );
                     current_abs_pos = placement.node().transform_position(current_abs_pos);
                 }
             }
@@ -3085,7 +3140,7 @@ fn run_keyboard_handler_for_node(
 struct KeyboardInputDispatchContext<'a> {
     tree: &'a ComponentNodeTree,
     metadatas: &'a ComponentNodeMetaDatas,
-    keyboard_events: &'a mut Vec<winit::event::KeyEvent>,
+    keyboard_events: &'a mut Vec<crate::KeyboardEvent>,
     modifiers: winit::keyboard::ModifiersState,
     window_requests: &'a mut WindowRequests,
     focus_owner: &'a mut FocusOwner,
@@ -3259,7 +3314,7 @@ fn run_ime_input_for_node<F>(
 
 fn dispatch_default_focus_keyboard_navigation(
     tree: &ComponentNodeTree,
-    keyboard_events: &mut Vec<winit::event::KeyEvent>,
+    keyboard_events: &mut Vec<crate::KeyboardEvent>,
     modifiers: winit::keyboard::ModifiersState,
     focus_owner: &mut FocusOwner,
 ) -> Option<FocusDirection> {
@@ -3288,7 +3343,7 @@ fn dispatch_default_focus_keyboard_navigation(
 }
 
 fn default_focus_navigation_direction(
-    event: &winit::event::KeyEvent,
+    event: &crate::KeyboardEvent,
     modifiers: winit::keyboard::ModifiersState,
 ) -> Option<FocusDirection> {
     if event.state != winit::event::ElementState::Pressed {
@@ -3506,6 +3561,7 @@ fn record_layout_commands(
     gpu: &wgpu::Device,
 ) {
     struct DrawModifierChainContent<'a> {
+        instance: u64,
         draw_nodes: &'a [(Arc<dyn crate::modifier::DrawModifierNode>, DrawLayoutBounds)],
         node_draw: &'a dyn crate::modifier::DrawModifierNode,
         node_bounds: Option<DrawLayoutBounds>,
@@ -3529,12 +3585,18 @@ fn record_layout_commands(
                     render_input: input,
                 };
                 let mut next = DrawModifierChainContent {
+                    instance: self.instance,
                     draw_nodes: remaining,
                     node_draw: self.node_draw,
                     node_bounds: self.node_bounds,
                     parent_bounds: *bounds,
                     pending_start: start,
                 };
+                crate::work::record(
+                    self.instance,
+                    crate::WorkPhase::Paint,
+                    draw_modifier.diagnostic_name(),
+                );
                 draw_modifier.draw(&mut draw_ctx, &mut next);
                 input.finish_draw_range(next.pending_start, *bounds);
             } else if let Some(bounds) = self.node_bounds {
@@ -3543,6 +3605,11 @@ fn record_layout_commands(
                 let mut draw_ctx = DrawModifierContext {
                     render_input: input,
                 };
+                crate::work::record(
+                    self.instance,
+                    crate::WorkPhase::Paint,
+                    self.node_draw.diagnostic_name(),
+                );
                 self.node_draw.draw(&mut draw_ctx, &mut TerminalDrawContent);
                 input.finish_draw_range(start, bounds);
             }
@@ -3618,6 +3685,7 @@ fn record_layout_commands(
             }
         }
         let mut content = DrawModifierChainContent {
+            instance: node_ref.instance_logic_id,
             draw_nodes: &draw_nodes,
             node_draw: node_ref.draw_node.as_ref(),
             node_bounds: bounds,
@@ -3771,7 +3839,9 @@ fn prepare_layout_metadata_for_node(
             node.instance_key,
             crate::runtime::ReadPhase::Transform,
         );
-        let (position, inputs) = node.modifier.resolve_placement(rel_pos);
+        let (position, inputs) = node
+            .modifier
+            .resolve_placement(rel_pos, node.instance_logic_id);
         if metadata.input_local_positions.as_ref() != inputs.as_slice() {
             metadata.input_local_positions = inputs.into();
         }
@@ -4180,6 +4250,8 @@ mod tests {
 
     #[test]
     fn unchanged_child_coordinates_stop_geometry_propagation_but_shape_changes_reach_inputs() {
+        let _runtime_session = crate::RuntimeSession::new();
+        let _runtime_scope = _runtime_session.enter();
         let mut tree = ComponentTree::new();
         let root = tree.add_node(node("root", 1, 1));
         let moving = tree.add_node(node("moving", 2, 2));
@@ -4304,33 +4376,51 @@ mod tests {
         );
     }
 
-    thread_local! {
-        static RETRY_REVEAL_HANDLER: std::cell::Cell<Option<crate::CallbackWith<crate::focus::FocusRevealRequest, bool>>> = const { std::cell::Cell::new(None) };
-        static RETRY_SCROLL_POSITION: std::cell::Cell<i32> = const { std::cell::Cell::new(0) };
-        static RETRY_REVEALED_RECTS: std::cell::RefCell<Vec<crate::PxRect>> = const { std::cell::RefCell::new(Vec::new()) };
+    #[derive(Clone, Default, PartialEq)]
+    struct RevealProbe {
+        handler: crate::testing::TestProbe<
+            Option<crate::CallbackWith<crate::focus::FocusRevealRequest, bool>>,
+        >,
+        scroll: crate::testing::TestProbe<i32>,
+        rects: crate::testing::TestProbe<Vec<crate::PxRect>>,
     }
 
     #[crate::tessera(crate)]
-    fn retry_reveal_callback_fixture() {
-        RETRY_REVEAL_HANDLER.set(Some(crate::CallbackWith::new(
-            |request: crate::focus::FocusRevealRequest| {
-                RETRY_REVEALED_RECTS.with_borrow_mut(|rects| rects.push(request.target_rect));
-                RETRY_SCROLL_POSITION.set(-request.target_rect.y.0);
+    fn retry_reveal_callback_fixture(probe: RevealProbe) {
+        let handler = crate::CallbackWith::new({
+            let probe = probe.clone();
+            move |request: crate::focus::FocusRevealRequest| {
+                probe
+                    .rects
+                    .with_mut(|rects| rects.push(request.target_rect));
+                probe.scroll.set(-request.target_rect.y.0);
                 true
-            },
-        )));
+            }
+        });
+        probe.handler.set(Some(handler));
         crate::layout::layout();
     }
 
-    fn reveal_viewport_tree() -> (ComponentTree, NodeId, crate::focus::FocusRegistration) {
+    fn reveal_viewport_tree(
+        probe: RevealProbe,
+    ) -> (
+        ComponentTree,
+        NodeId,
+        crate::focus::FocusRegistration,
+        crate::testing::LayoutTestSession<impl Fn()>,
+    ) {
         use crate::focus::{FocusNode, FocusRegistration};
 
-        crate::testing::layout_test(retry_reveal_callback_fixture).run();
-        RETRY_REVEALED_RECTS.with_borrow_mut(Vec::clear);
-        RETRY_SCROLL_POSITION.set(0);
+        let mut session = crate::testing::start_layout_test_session(crate::testing::layout_test({
+            let probe = probe.clone();
+            move || retry_reveal_callback_fixture(probe.clone())
+        }));
+        crate::testing::pump_layout_test_session(&mut session, 0);
+        probe.rects.with_mut(Vec::clear);
+        probe.scroll.set(0);
         let mut tree = ComponentTree::new();
         let mut viewport = node("viewport", 1, 1);
-        viewport.focus_reveal_handler = RETRY_REVEAL_HANDLER.get();
+        viewport.focus_reveal_handler = probe.handler.get();
         let root = tree.add_node(viewport);
         let focus = FocusRegistration::target(FocusNode::new());
         let mut target = node("focused control", 2, 2);
@@ -4348,14 +4438,17 @@ mod tests {
             });
         }
         tree.focus_owner.sync_from_component_tree(root, &tree.tree);
-        (tree, root, focus)
+        (tree, root, focus, session)
     }
 
     #[test]
     fn pending_focus_reveal_retries_a_keyboard_barrier_without_queued_input() {
+        let _runtime_session = crate::RuntimeSession::new();
+        let _runtime_scope = _runtime_session.enter();
+        let probe = RevealProbe::default();
         use crate::focus::{FocusManager, bind_focus_owner};
 
-        let (mut tree, _, focus) = reveal_viewport_tree();
+        let (mut tree, _, focus, _session) = reveal_viewport_tree(probe.clone());
         {
             let _binding = bind_focus_owner(&mut tree.focus_owner);
             FocusManager::current().defer_keyboard_until_layout();
@@ -4384,12 +4477,12 @@ mod tests {
             false
         ));
         assert_eq!(
-            RETRY_SCROLL_POSITION.get(),
+            probe.scroll.get(),
             -300,
             "the settled barrier must allow the real viewport handler to reveal the pending target"
         );
         assert_eq!(
-            RETRY_REVEALED_RECTS.with_borrow(|rects| rects.clone()),
+            probe.rects.with(|rects| rects.clone()),
             [crate::PxRect::new(Px::ZERO, Px(300), Px(80), Px(24))]
         );
         assert!(!needs_deferred_focus_retry(&tree.focus_owner, false));
@@ -4401,7 +4494,10 @@ mod tests {
 
     #[test]
     fn reveal_retry_consumes_the_request_before_a_later_pointer_frame() {
-        let (mut tree, root, focus) = reveal_viewport_tree();
+        let _runtime_session = crate::RuntimeSession::new();
+        let _runtime_scope = _runtime_session.enter();
+        let probe = RevealProbe::default();
+        let (mut tree, root, focus, _session) = reveal_viewport_tree(probe.clone());
         tree.focus_owner.request_focus(focus.id);
         assert!(dispatch_pending_focus_reveal_request(
             &tree.tree,
@@ -4410,15 +4506,15 @@ mod tests {
             true
         ));
         assert_eq!(
-            RETRY_SCROLL_POSITION.get(),
+            probe.scroll.get(),
             -300,
             "the retry must deliver the actual pending reveal to the viewport handler"
         );
         assert_eq!(
-            RETRY_REVEALED_RECTS.with_borrow(|rects| rects.clone()),
+            probe.rects.with(|rects| rects.clone()),
             [crate::PxRect::new(Px::ZERO, Px(300), Px(80), Px(24))]
         );
-        RETRY_SCROLL_POSITION.set(-600);
+        probe.scroll.set(-600);
         let mut pointer = Some(PxPosition::new(Px(180), Px(50)));
         let mut changes = [crate::PointerChange {
             timestamp: crate::time::Instant::now(),
@@ -4445,11 +4541,11 @@ mod tests {
             "an ordinary pointer frame must not repeat a reveal already handled by the retry"
         );
         assert_eq!(
-            RETRY_SCROLL_POSITION.get(),
+            probe.scroll.get(),
             -600,
             "the later pointer frame preserves the user's new scroll position"
         );
-        assert_eq!(RETRY_REVEALED_RECTS.with_borrow(Vec::len), 1);
+        assert_eq!(probe.rects.with(Vec::len), 1);
         assert!(
             dispatch_pending_focus_reveal_request(
                 &tree.tree,
@@ -4459,16 +4555,19 @@ mod tests {
             ),
             "an explicit retry without a new request still visits the active target"
         );
-        assert_eq!(RETRY_REVEALED_RECTS.with_borrow(Vec::len), 2);
+        assert_eq!(probe.rects.with(Vec::len), 2);
     }
 
     #[test]
     fn newer_nonzero_scroll_suppresses_only_the_reveal_of_an_older_deferred_focus_command() {
+        let _runtime_session = crate::RuntimeSession::new();
+        let _runtime_scope = _runtime_session.enter();
+        let probe = RevealProbe::default();
         use crate::focus::{FocusNode, FocusRegistration};
 
         for delta_y in [0.0, -24.0] {
             for newer_request_before_attach in [false, true] {
-                let (mut tree, root, original) = reveal_viewport_tree();
+                let (mut tree, root, original, _session) = reveal_viewport_tree(probe.clone());
                 let original_node = tree.focus_owner.component_node_id_of(original.id).unwrap();
                 let delayed = FocusRegistration::target(FocusNode::new());
                 tree.focus_owner.request_focus(delayed.id);
@@ -4530,7 +4629,7 @@ mod tests {
                     "a zero scroll must preserve the deferred reveal; a newer nonzero scroll must suppress it"
                 );
                 assert_eq!(
-                    RETRY_REVEALED_RECTS.with_borrow(Vec::len),
+                    probe.rects.with(Vec::len),
                     usize::from(newer_request_before_attach || delta_y == 0.0)
                 );
 
@@ -4551,9 +4650,9 @@ mod tests {
                 } else {
                     300
                 };
-                assert_eq!(RETRY_SCROLL_POSITION.get(), -revealed_y);
+                assert_eq!(probe.scroll.get(), -revealed_y);
                 assert_eq!(
-                    RETRY_REVEALED_RECTS.with_borrow(|rects| rects.last().copied()),
+                    probe.rects.with(|rects| rects.last().copied()),
                     Some(crate::PxRect::new(Px(0), Px(revealed_y), Px(80), Px(24)))
                 );
             }
@@ -4562,6 +4661,8 @@ mod tests {
 
     #[test]
     fn retained_scene_keeps_child_drawing_when_parent_paint_appears_and_disappears() {
+        let _runtime_session = crate::RuntimeSession::new();
+        let _runtime_scope = _runtime_session.enter();
         #[derive(Clone)]
         struct Marker(u32);
         impl crate::DrawCommand for Marker {
@@ -4647,17 +4748,19 @@ mod tests {
 
     #[test]
     fn retained_scene_reuses_fragment_commands_on_translation_and_refreshes_paint() {
-        use std::sync::atomic::{AtomicUsize, Ordering};
+        let _runtime_session = crate::RuntimeSession::new();
+        let _runtime_scope = _runtime_session.enter();
+        use crate::testing::TestProbe;
 
         struct Marker {
-            clones: Arc<AtomicUsize>,
+            clones: TestProbe<usize>,
             value: u32,
             opacity: f32,
         }
 
         impl Clone for Marker {
             fn clone(&self) -> Self {
-                self.clones.fetch_add(1, Ordering::Relaxed);
+                self.clones.with_mut(|clones| *clones += 1);
                 Self {
                     clones: self.clones.clone(),
                     value: self.value,
@@ -4672,7 +4775,7 @@ mod tests {
             }
         }
 
-        let clones = Arc::new(AtomicUsize::new(0));
+        let clones = TestProbe::new(0usize);
         let mut tree = ComponentTree::new();
         let root = tree.add_node(node("root", 1, 1));
         let leaf = tree.add_node(node("leaf", 2, 2));
@@ -4690,7 +4793,7 @@ mod tests {
             });
             metadata.rel_position = Some(PxPosition::ZERO);
         }
-        let outside_clones = Arc::new(AtomicUsize::new(0));
+        let outside_clones = TestProbe::new(0usize);
         let metadata = tree.metadatas.entry_or_default(outside);
         metadata.rel_position = Some(PxPosition::from_f32_xy(150.0, 0.0));
         metadata.fragment.push_draw_command(Marker {
@@ -4702,7 +4805,7 @@ mod tests {
             .entry_or_default(sibling)
             .fragment
             .push_draw_command(Marker {
-                clones: Arc::new(AtomicUsize::new(0)),
+                clones: TestProbe::new(0usize),
                 value: 5,
                 opacity: 1.0,
             });
@@ -4725,7 +4828,7 @@ mod tests {
             &HashSet::default(),
             viewport,
         );
-        clones.store(0, Ordering::Relaxed);
+        clones.set(0);
         tree.metadatas.geometry_changed.clear();
         let metadata = tree.metadatas.entry_or_default(outside);
         metadata.fragment = Default::default();
@@ -4744,7 +4847,7 @@ mod tests {
             viewport,
         );
         assert_eq!(
-            clones.load(Ordering::Relaxed),
+            clones.get(),
             0,
             "offscreen paint must not reassemble unchanged visible commands"
         );
@@ -4768,12 +4871,12 @@ mod tests {
             viewport,
         );
         assert_eq!(
-            clones.load(Ordering::Relaxed),
+            clones.get(),
             0,
             "an unchanged draw in the geometry journal must retain its visible output"
         );
         for (offset, opacity) in [(1.25, 1.0), (2.5, 0.5), (3.75, 0.5)] {
-            clones.store(0, Ordering::Relaxed);
+            clones.set(0);
             tree.metadatas.geometry_changed.clear();
             tree.metadatas.mark_geometry_dirty(root);
             let metadata = tree.metadatas.entry_or_default(root);
@@ -4799,7 +4902,7 @@ mod tests {
                 viewport,
             );
             assert_eq!(
-                clones.load(Ordering::Relaxed),
+                clones.get(),
                 1,
                 "translation must copy the command only into the frame output"
             );
@@ -4896,6 +4999,8 @@ mod tests {
 
     #[test]
     fn unplaced_layout_subtrees_hide_geometry_input_drawing_semantics_and_focus() {
+        let _runtime_session = crate::RuntimeSession::new();
+        let _runtime_scope = _runtime_session.enter();
         use crate::focus::{FocusNode, FocusRegistration};
 
         #[derive(Clone)]
@@ -5058,6 +5163,8 @@ mod tests {
 
     #[test]
     fn pointer_samples_route_at_their_own_positions_and_complete_passes_in_order() {
+        let _runtime_session = crate::RuntimeSession::new();
+        let _runtime_scope = _runtime_session.enter();
         use crate::cursor::{GestureState, MOUSE_POINTER_ID, PressKeyEventType};
 
         let log = Arc::new(std::sync::Mutex::new(Vec::new()));
@@ -5252,6 +5359,8 @@ mod tests {
 
     #[test]
     fn recomposition_preserves_pointer_capture_but_runtime_reset_discards_it() {
+        let _runtime_session = crate::RuntimeSession::new();
+        let _runtime_scope = _runtime_session.enter();
         let mut tree = ComponentTree::new();
         tree.active_pointer_paths.insert(7, vec![1, 2]);
         tree.active_pointer_positions
@@ -5290,6 +5399,8 @@ mod tests {
 
     #[test]
     fn repeated_focus_request_does_not_replay_after_action_restores_another_target() {
+        let _runtime_session = crate::RuntimeSession::new();
+        let _runtime_scope = _runtime_session.enter();
         let (mut tree, targets) = focus_targets(true);
         let [(action, action_handle), (anchor, anchor_handle)] = targets.as_slice() else {
             unreachable!();
@@ -5306,6 +5417,8 @@ mod tests {
 
     #[test]
     fn clearing_an_unfocused_attached_target_does_not_clear_its_future_focus() {
+        let _runtime_session = crate::RuntimeSession::new();
+        let _runtime_scope = _runtime_session.enter();
         let (mut tree, targets) = focus_targets(true);
         tree.focus_owner.request_focus(targets[1].1);
         tree.focus_owner.clear_focus(targets[0].1);
@@ -5319,6 +5432,8 @@ mod tests {
 
     #[test]
     fn rejected_capture_does_not_capture_a_later_focus_request() {
+        let _runtime_session = crate::RuntimeSession::new();
+        let _runtime_scope = _runtime_session.enter();
         let (mut tree, targets) = focus_targets(true);
         tree.focus_owner.request_focus(targets[1].1);
         tree.focus_owner.capture_focus(targets[0].1);
@@ -5334,6 +5449,8 @@ mod tests {
 
     #[test]
     fn redundant_free_does_not_release_a_later_capture() {
+        let _runtime_session = crate::RuntimeSession::new();
+        let _runtime_scope = _runtime_session.enter();
         let (mut tree, targets) = focus_targets(true);
         tree.focus_owner.request_focus(targets[0].1);
         tree.focus_owner.free_focus(targets[0].1);
@@ -5349,6 +5466,8 @@ mod tests {
 
     #[test]
     fn requests_before_attachment_are_consumed_once_the_target_is_attached() {
+        let _runtime_session = crate::RuntimeSession::new();
+        let _runtime_scope = _runtime_session.enter();
         let (mut tree, targets) = focus_targets(false);
         tree.focus_owner.request_focus(targets[0].1);
         tree.focus_owner.request_focus(targets[0].1);
@@ -5369,6 +5488,8 @@ mod tests {
 
     #[test]
     fn deferred_request_rejected_after_attachment_does_not_activate_on_enable() {
+        let _runtime_session = crate::RuntimeSession::new();
+        let _runtime_scope = _runtime_session.enter();
         let (mut tree, targets) = focus_targets(false);
         tree.focus_owner.request_focus(targets[0].1);
         let root = tree.tree.get(targets[0].0).unwrap().parent().unwrap();
@@ -5400,6 +5521,8 @@ mod tests {
 
     #[test]
     fn queued_navigation_routes_activation_to_the_new_focus_chain() {
+        let _runtime_session = crate::RuntimeSession::new();
+        let _runtime_scope = _runtime_session.enter();
         use crate::focus::{FocusNode, FocusRegistration};
 
         let mut tree = ComponentTree::new();
@@ -5443,6 +5566,8 @@ mod tests {
 
     #[test]
     fn skipped_focus_targets_anchor_navigation_without_becoming_destinations() {
+        let _runtime_session = crate::RuntimeSession::new();
+        let _runtime_scope = _runtime_session.enter();
         use crate::focus::{FocusNode, FocusRegistration, FocusScopeNode};
 
         let mut tree = ComponentTree::new();
@@ -5511,6 +5636,8 @@ mod tests {
 
     #[test]
     fn removing_unscoped_focus_does_not_activate_an_unrelated_control() {
+        let _runtime_session = crate::RuntimeSession::new();
+        let _runtime_scope = _runtime_session.enter();
         let (mut tree, targets) = focus_targets(true);
         tree.focus_owner.request_focus(targets[0].1);
         assert_eq!(
@@ -5524,6 +5651,8 @@ mod tests {
 
     #[test]
     fn removing_focused_handles_restores_to_a_surviving_scope_target() {
+        let _runtime_session = crate::RuntimeSession::new();
+        let _runtime_scope = _runtime_session.enter();
         use crate::focus::{FocusNode, FocusRegistration, FocusRequester, FocusScopeNode};
 
         let mut tree = ComponentTree::new();
@@ -5559,6 +5688,8 @@ mod tests {
 
     #[test]
     fn detached_focus_scopes_retain_their_target_through_layout_until_reattached() {
+        let _runtime_session = crate::RuntimeSession::new();
+        let _runtime_scope = _runtime_session.enter();
         use crate::focus::{FocusNode, FocusRegistration, FocusScopeNode};
 
         let mut tree = ComponentTree::new();
@@ -5602,6 +5733,8 @@ mod tests {
 
     #[test]
     fn redundant_scope_restore_does_not_pull_focus_back_from_another_scope() {
+        let _runtime_session = crate::RuntimeSession::new();
+        let _runtime_scope = _runtime_session.enter();
         use crate::focus::{FocusNode, FocusRegistration, FocusScopeNode};
 
         let mut tree = ComponentTree::new();
@@ -5635,6 +5768,8 @@ mod tests {
 
     #[test]
     fn focus_retry_keeps_later_keys_before_newly_received_input() {
+        let _runtime_session = crate::RuntimeSession::new();
+        let _runtime_scope = _runtime_session.enter();
         let mut events = VecDeque::from(["Tab into lazy content", "Enter", "Shift+Tab"]);
         let mut dispatched = Vec::new();
         let retry = drain_pending_keyboard_events(&mut events, |event| {
@@ -5660,6 +5795,8 @@ mod tests {
 
     #[test]
     fn keyboard_barrier_preserves_order_until_a_subsequent_layout_finishes() {
+        let _runtime_session = crate::RuntimeSession::new();
+        let _runtime_scope = _runtime_session.enter();
         use crate::focus::{FocusManager, bind_focus_owner};
 
         let mut owner = FocusOwner::new();
@@ -5711,6 +5848,8 @@ mod tests {
 
     #[test]
     fn recomposition_retains_deferred_input_but_runtime_reset_discards_it() {
+        let _runtime_session = crate::RuntimeSession::new();
+        let _runtime_scope = _runtime_session.enter();
         use crate::focus::{FocusManager, bind_focus_owner};
 
         let mut tree = ComponentTree::new();
@@ -5765,6 +5904,8 @@ mod tests {
 
     #[test]
     fn ime_commit_is_delivered_once_to_the_final_focused_control() {
+        let _runtime_session = crate::RuntimeSession::new();
+        let _runtime_scope = _runtime_session.enter();
         use crate::focus::{FocusNode, FocusRegistration};
 
         let delivered = Arc::new(std::sync::Mutex::new(Vec::new()));
@@ -5804,6 +5945,8 @@ mod tests {
 
     #[test]
     fn begin_replace_subtree_rejects_root_instance_key() {
+        let _runtime_session = crate::RuntimeSession::new();
+        let _runtime_scope = _runtime_session.enter();
         let mut tree = ComponentTree::new();
 
         let root = tree.add_node(node("root", 1, 1));
@@ -5819,6 +5962,8 @@ mod tests {
 
     #[test]
     fn finish_replace_subtree_keeps_inserted_roots_before_next_sibling() {
+        let _runtime_session = crate::RuntimeSession::new();
+        let _runtime_scope = _runtime_session.enter();
         let mut tree = ComponentTree::new();
 
         let root = tree.add_node(node("root", 1, 1));
@@ -5876,6 +6021,8 @@ mod tests {
 
     #[test]
     fn finish_replace_subtree_keeps_reused_subtree_and_excludes_it_from_removed_sets() {
+        let _runtime_session = crate::RuntimeSession::new();
+        let _runtime_scope = _runtime_session.enter();
         let mut tree = ComponentTree::new();
 
         let root = tree.add_node(node("root", 1, 1));
@@ -5926,6 +6073,8 @@ mod tests {
 
     #[test]
     fn replay_preserves_nested_layout_adjacency_and_ancestor_counts() {
+        let _runtime_session = crate::RuntimeSession::new();
+        let _runtime_scope = _runtime_session.enter();
         let mut tree = ComponentTree::new();
         let root = tree.add_node(node_with_role("root", NodeRole::Composition, 1, 1));
         let outer = tree.add_node(node("outer", 2, 2));
@@ -5971,6 +6120,8 @@ mod tests {
 
     #[test]
     fn layout_adjacency_tracks_transparent_subtree_replacement() {
+        let _runtime_session = crate::RuntimeSession::new();
+        let _runtime_scope = _runtime_session.enter();
         let mut tree = ComponentTree::new();
 
         let root = tree.add_node(node_with_role("root", NodeRole::Composition, 1, 1));

@@ -1,6 +1,5 @@
-use std::{collections::BTreeMap, fmt, io, path::PathBuf, str};
+use std::{fmt, io, path::PathBuf, str};
 
-use once_cell_regex::exports::once_cell::sync::OnceCell;
 use serde::Serialize;
 use thiserror::Error;
 
@@ -115,11 +114,9 @@ pub struct Target<'a> {
 impl<'a> TargetTrait<'a> for Target<'a> {
     const DEFAULT_KEY: &'static str = "aarch64";
 
-    fn all() -> &'a BTreeMap<&'a str, Self> {
-        static TARGETS: OnceCell<BTreeMap<&'static str, Target<'static>>> = OnceCell::new();
-        TARGETS.get_or_init(|| {
-            let mut targets = BTreeMap::new();
-            targets.insert(
+    fn all() -> &'a [(&'a str, Self)] {
+        &[
+            (
                 "aarch64",
                 Target {
                     triple: "aarch64-linux-android",
@@ -128,8 +125,8 @@ impl<'a> TargetTrait<'a> for Target<'a> {
                     abi: "arm64-v8a",
                     arch: "arm64",
                 },
-            );
-            targets.insert(
+            ),
+            (
                 "armv7",
                 Target {
                     triple: "armv7-linux-androideabi",
@@ -138,8 +135,8 @@ impl<'a> TargetTrait<'a> for Target<'a> {
                     abi: "armeabi-v7a",
                     arch: "arm",
                 },
-            );
-            targets.insert(
+            ),
+            (
                 "i686",
                 Target {
                     triple: "i686-linux-android",
@@ -148,8 +145,8 @@ impl<'a> TargetTrait<'a> for Target<'a> {
                     abi: "x86",
                     arch: "x86",
                 },
-            );
-            targets.insert(
+            ),
+            (
                 "x86_64",
                 Target {
                     triple: "x86_64-linux-android",
@@ -158,13 +155,16 @@ impl<'a> TargetTrait<'a> for Target<'a> {
                     abi: "x86_64",
                     arch: "x86_64",
                 },
-            );
-            targets
-        })
+            ),
+        ]
     }
 
     fn name_list() -> Vec<&'a str> {
-        Self::all().keys().copied().collect::<Vec<_>>()
+        Self::all()
+            .iter()
+            .map(|(key, _)| key)
+            .copied()
+            .collect::<Vec<_>>()
     }
 
     fn triple(&'a self) -> &'a str {
@@ -186,7 +186,10 @@ impl<'a> Target<'a> {
     }
 
     pub fn for_abi(abi: &str) -> Option<&'a Self> {
-        Self::all().values().find(|target| target.abi == abi)
+        Self::all()
+            .iter()
+            .map(|(_, target)| target)
+            .find(|target| target.abi == abi)
     }
 
     pub fn arch_upper_camel_case(&'a self) -> &'a str {

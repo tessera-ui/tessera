@@ -47,7 +47,7 @@ mod selection_figures;
 mod guides;
 
 #[tessera]
-pub(super) fn menus_spec() {
+pub(super) fn menus_spec(route: Option<crate::pages::material_spec::article::ArticleRoute>) {
     article(
         "Menus",
         "Menus display a list of choices on a temporary surface",
@@ -92,6 +92,7 @@ pub(super) fn menus_spec() {
             },
         ],
     )
+    .route_optional(route.clone())
     .pages(vec![
         ArticlePage {
             title: "Overview",
@@ -1033,34 +1034,43 @@ fn launch() {
                         prose(notice.get());
                     });
                 })
-                .menu_content(move || {
+                .menu_content(move |menu| {
                     menu_group()
+                        .menu(menu)
                         .position(MenuPosition::First)
                         .children(move || {
                             menu_item()
+                                .menu(menu)
                                 .label("Preview")
                                 .leading_icon(filled::VISIBILITY_SVG)
                                 .on_click(move || notice.set("Preview selected".into()));
                             menu_item()
+                                .menu(menu)
                                 .label("Share")
                                 .leading_icon(filled::SHARE_SVG)
-                                .submenu_content(move || {
+                                .submenu_content(move |menu| {
                                     menu_item()
+                                        .menu(menu)
                                         .label("Copy link")
                                         .leading_icon(filled::LINK_SVG)
                                         .on_click(move || notice.set("Link copied".into()));
                                     menu_item()
+                                        .menu(menu)
                                         .label("Email")
                                         .leading_icon(filled::EMAIL_SVG)
                                         .on_click(move || notice.set("Email selected".into()));
                                 });
                         });
-                    menu_group().position(MenuPosition::Last).children(move || {
-                        menu_item()
-                            .label("Delete")
-                            .leading_icon(filled::DELETE_SVG)
-                            .on_click(move || notice.set("Delete selected".into()));
-                    });
+                    menu_group()
+                        .menu(menu)
+                        .position(MenuPosition::Last)
+                        .children(move || {
+                            menu_item()
+                                .menu(menu)
+                                .label("Delete")
+                                .leading_icon(filled::DELETE_SVG)
+                                .on_click(move || notice.set("Delete selected".into()));
+                        });
                 });
         });
 }
@@ -1738,13 +1748,6 @@ mod tests {
 
     use super::*;
 
-    struct Pipelines;
-    impl tessera_ui::RenderModule for Pipelines {
-        fn register_pipelines(&self, context: &mut tessera_ui::PipelineContext<'_>) {
-            tessera_components::pipelines::register_pipelines(context);
-        }
-    }
-
     #[tessera]
     fn fixture() {
         material_theme().child(|| {
@@ -1777,7 +1780,7 @@ mod tests {
     fn contextual_menu_executes_action_and_closes_its_popup() {
         let mut renderer = HeadlessRenderer::new(
             Box::new(fixture),
-            vec![Box::new(Pipelines)],
+            vec![Box::new(crate::TestPipelines)],
             HeadlessConfig {
                 width: 600,
                 height: 500,

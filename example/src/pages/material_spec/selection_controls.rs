@@ -42,7 +42,7 @@ mod checkbox_states;
 mod pointer;
 
 #[tessera]
-pub(super) fn checkbox_spec() {
+pub(super) fn checkbox_spec(route: Option<crate::pages::material_spec::article::ArticleRoute>) {
     selection_article(
         Kind::Checkbox,
         vec![
@@ -82,11 +82,12 @@ pub(super) fn checkbox_spec() {
             settings(false);
         }),
         RenderSlot::new(checkbox_anatomy),
-    );
+    )
+    .route_optional(route.clone());
 }
 
 #[tessera]
-pub(super) fn switch_spec() {
+pub(super) fn switch_spec(route: Option<crate::pages::material_spec::article::ArticleRoute>) {
     selection_article(
         Kind::Switch,
         vec![
@@ -126,7 +127,8 @@ pub(super) fn switch_spec() {
             settings(true);
         }),
         RenderSlot::new(switch_figures::anatomy),
-    );
+    )
+    .route_optional(route.clone());
 }
 
 #[tessera]

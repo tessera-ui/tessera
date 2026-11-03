@@ -4,9 +4,6 @@
 //!
 //! Offer related creation actions above a persistent floating action button.
 
-use std::sync::Arc;
-
-use parking_lot::RwLock;
 use tessera_ui::{
     AxisConstraint, Callback, Color, ComputedData, Constraint, Dp, FocusProperties, FocusRequester,
     FocusScopeNode, FrameNanosControl, LayoutResult, MeasurementError, Modifier, Px, PxPosition,
@@ -207,12 +204,12 @@ impl Default for PanelBounds {
 #[derive(Clone)]
 struct MenuLayout {
     alignment: FloatingActionButtonMenuAlignment,
-    bounds: Arc<RwLock<PanelBounds>>,
+    bounds: State<PanelBounds>,
 }
 
 impl PartialEq for MenuLayout {
     fn eq(&self, other: &Self) -> bool {
-        self.alignment == other.alignment
+        self.alignment == other.alignment && self.bounds == other.bounds
     }
 }
 
@@ -243,10 +240,10 @@ impl tessera_ui::LayoutModifierNode for MenuLayout {
             }
         };
         let position = PxPosition::new(x, (size.height - margin - panel.height).max(Px::ZERO));
-        *self.bounds.write() = PanelBounds {
+        self.bounds.set_if_changed(PanelBounds {
             position,
             size: panel.size(),
-        };
+        });
         let mut result = LayoutResult::new(size);
         result.place_child(children[0], PxPosition::ZERO);
         result.place_child(children[1], PxPosition::ZERO);
@@ -568,7 +565,7 @@ pub fn floating_action_button_menu(
             }
         });
     }
-    let bounds = remember(|| Arc::new(RwLock::new(PanelBounds::default()))).get();
+    let bounds = remember(PanelBounds::default);
     let pending_focus = remember(|| false);
     let previous = remember(|| false);
     if previous.get() != expanded {
@@ -599,13 +596,13 @@ fn fab_menu_scrim(
     data: State<MenuData>,
     state: State<FloatingActionButtonMenuState>,
     motion: State<MenuMotion>,
-    bounds: Option<Arc<RwLock<PanelBounds>>>,
+    bounds: Option<State<PanelBounds>>,
 ) {
     let bounds = bounds.expect("menu bounds must be provided");
     let active = data.with(|data| data.expanded) || motion.with(MenuMotion::is_visible);
     let modifier = if active {
         with_pointer_input(Modifier::new().fill_max_size(), move |mut input| {
-            let bounds = *bounds.read();
+            let bounds = bounds.get();
             let outside = input.cursor_position_rel.is_some_and(|position| {
                 !is_position_in_rect(
                     position,
@@ -863,8 +860,6 @@ fn fab_menu_action(
 
 #[cfg(test)]
 mod tests {
-    use std::cell::Cell;
-
     use tessera_ui::{
         CursorEventContent, GestureState, PointerChange, PressKeyEventType,
         testing::{
@@ -877,10 +872,11 @@ mod tests {
 
     use super::*;
 
-    thread_local! {
-        static STATE: Cell<Option<State<FloatingActionButtonMenuState>>> = const { Cell::new(None) };
-        static BACKGROUND: Cell<Option<State<usize>>> = const { Cell::new(None) };
-        static ACTION: Cell<Option<State<usize>>> = const { Cell::new(None) };
+    #[derive(Clone, Default)]
+    struct FixtureHandles {
+        state: Option<State<FloatingActionButtonMenuState>>,
+        background: Option<State<usize>>,
+        action: Option<State<usize>>,
     }
 
     fn click(
@@ -911,12 +907,22 @@ mod tests {
     }
 
     #[tessera]
-    fn fixture(expanded: bool, alignment: FloatingActionButtonMenuAlignment, count: usize) {
+    fn fixture(
+        expanded: bool,
+        alignment: FloatingActionButtonMenuAlignment,
+        count: usize,
+        probe: Option<tessera_ui::testing::TestProbe<FixtureHandles>>,
+    ) {
         let state = remember(|| FloatingActionButtonMenuState { expanded });
         let action = remember(|| 0usize);
-        STATE.set(Some(state));
-        ACTION.set(Some(action));
+        if let Some(probe) = &probe {
+            probe.with_mut(|handles| handles.state = Some(state));
+        }
+        if let Some(probe) = &probe {
+            probe.with_mut(|handles| handles.action = Some(action));
+        }
         material_theme().child(move || {
+            let probe = probe.clone();
             let items = (0..count)
                 .map(|index| FloatingActionButtonMenuItem {
                     label: format!("Action {index}"),
@@ -934,7 +940,9 @@ mod tests {
                 .items(items)
                 .main_content(move || {
                     let background = remember(|| 7usize);
-                    BACKGROUND.set(Some(background));
+                    if let Some(probe) = &probe {
+                        probe.with_mut(|handles| handles.background = Some(background));
+                    }
                     surface()
                         .modifier(Modifier::new().size(Dp(120.0), Dp(48.0)))
                         .on_click(move || background.with_mut(|value| *value += 1))
@@ -1009,20 +1017,23 @@ mod tests {
 
     #[test]
     fn overlay_blocks_background_preserves_state_and_actions_dismiss() {
+        let probe = tessera_ui::testing::TestProbe::<FixtureHandles>::default();
+
         let mut session = start_layout_test_session(
             layout_test(|| {
-                fixture(false, FloatingActionButtonMenuAlignment::End, 3);
+                fixture(false, FloatingActionButtonMenuAlignment::End, 3).probe(probe.clone());
             })
             .viewport_px(400, 400),
         );
         pump_layout_test_session(&mut session, 0);
         let mut frame = 0u64;
         click(&mut session, &mut frame, 60.0, 24.0);
-        assert_eq!(BACKGROUND.get().unwrap().get(), 8);
+        assert_eq!(probe.get().background.unwrap().get(), 8);
         click(&mut session, &mut frame, 356.0, 356.0);
         assert!(
-            STATE
+            probe
                 .get()
+                .state
                 .unwrap()
                 .with(FloatingActionButtonMenuState::is_expanded)
         );
@@ -1030,11 +1041,12 @@ mod tests {
             frame += 1;
             pump_layout_test_session(&mut session, frame * 16_666_667);
         }
-        assert_eq!(BACKGROUND.get().unwrap().get(), 8);
+        assert_eq!(probe.get().background.unwrap().get(), 8);
         let snapshot = click(&mut session, &mut frame, 350.0, 232.0);
         assert!(
-            STATE
+            probe
                 .get()
+                .state
                 .unwrap()
                 .with(FloatingActionButtonMenuState::is_expanded),
             "disabled action must not dismiss"
@@ -1046,28 +1058,31 @@ mod tests {
             bounds.x.to_f32() + 50.0,
             bounds.y.to_f32() + 28.0,
         );
-        assert_eq!(ACTION.get().unwrap().get(), 3);
+        assert_eq!(probe.get().action.unwrap().get(), 3);
         assert!(
-            !STATE
+            !probe
                 .get()
+                .state
                 .unwrap()
                 .with(FloatingActionButtonMenuState::is_expanded)
         );
-        STATE
+        probe
             .get()
+            .state
             .unwrap()
             .with_mut(FloatingActionButtonMenuState::open);
         frame += 1;
         pump_layout_test_session(&mut session, frame * 16_666_667);
         click(&mut session, &mut frame, 60.0, 24.0);
         assert!(
-            !STATE
+            !probe
                 .get()
+                .state
                 .unwrap()
                 .with(FloatingActionButtonMenuState::is_expanded)
         );
         assert_eq!(
-            BACKGROUND.get().unwrap().get(),
+            probe.get().background.unwrap().get(),
             8,
             "dismissal must not click through"
         );
@@ -1076,6 +1091,9 @@ mod tests {
     #[test]
     #[ignore = "requires a native GPU adapter"]
     fn rendered_menu_restores_pixels_and_exposes_disclosure_state() {
+        let probe = tessera_ui::testing::TestProbe::<FixtureHandles>::default();
+        let observed = probe.clone();
+
         use tessera_ui::{HeadlessConfig, HeadlessRenderer};
 
         fn disclosure_states(renderer: &HeadlessRenderer) -> Vec<bool> {
@@ -1107,8 +1125,8 @@ mod tests {
         }
 
         let mut renderer = HeadlessRenderer::new(
-            Box::new(|| {
-                fixture(true, FloatingActionButtonMenuAlignment::End, 3);
+            Box::new(move || {
+                fixture(true, FloatingActionButtonMenuAlignment::End, 3).probe(observed.clone());
             }),
             vec![Box::new(crate::TesseraComponents)],
             HeadlessConfig {
@@ -1130,15 +1148,17 @@ mod tests {
             "the expanded close button must have circular corners instead of a squircle"
         );
         assert_eq!(disclosure_states(&renderer), vec![true]);
-        STATE
+        probe
             .get()
+            .state
             .unwrap()
             .with_mut(FloatingActionButtonMenuState::close);
         renderer.render_frames(120);
         assert_ne!(expanded, renderer.read_pixels().unwrap());
         assert_eq!(disclosure_states(&renderer), vec![false]);
-        STATE
+        probe
             .get()
+            .state
             .unwrap()
             .with_mut(FloatingActionButtonMenuState::open);
         renderer.render_frames(120);

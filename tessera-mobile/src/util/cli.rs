@@ -143,7 +143,6 @@ mod interface {
     use std::fmt::Debug;
 
     use crate::{opts, util};
-    use once_cell_regex::exports::once_cell::sync::Lazy;
     use structopt::{
         StructOpt,
         clap::{self, AppSettings},
@@ -163,14 +162,16 @@ mod interface {
         format!("cargo {name}")
     }
 
-    pub static VERSION_LONG: Lazy<String> = Lazy::new(|| match util::installed_commit_msg() {
-        Ok(Some(msg)) => format!("{}\n{}", VERSION_SHORT, util::format_commit_msg(msg)),
-        Ok(None) => VERSION_SHORT.to_owned(),
-        Err(err) => {
-            log::error!("failed to get current commit msg: {}", err);
-            VERSION_SHORT.to_owned()
+    fn version_long() -> String {
+        match util::installed_commit_msg() {
+            Ok(Some(msg)) => format!("{}\n{}", VERSION_SHORT, util::format_commit_msg(msg)),
+            Ok(None) => VERSION_SHORT.to_owned(),
+            Err(err) => {
+                log::error!("failed to get current commit msg: {}", err);
+                VERSION_SHORT.to_owned()
+            }
         }
-    });
+    }
 
     #[derive(Clone, Copy, Debug, StructOpt)]
     pub struct GlobalFlags {
@@ -304,7 +305,12 @@ mod interface {
     pub fn exec<E: Exec>(name: &str) {
         Exit::main(|wrapper| {
             let args = get_args(name);
-            let input = E::from_iter_safe(&args).map_err(Exit::Clap)?;
+            let version = version_long();
+            let matches = E::clap()
+                .long_version(version.as_str())
+                .get_matches_from_safe(&args)
+                .map_err(Exit::Clap)?;
+            let input = E::from_clap(&matches);
             init_logging(input.global_flags().noise_level);
             log::debug!("raw args: {:#?}", args);
             input.exec(wrapper).map_err(Exit::report)

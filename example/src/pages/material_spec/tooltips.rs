@@ -14,7 +14,7 @@ use tessera_components::{
     flow_row::flow_row,
     icon_button::icon_button,
     material_icons::filled,
-    modifier::{MinimumInteractiveComponentEnforcement, ModifierExt as _, SemanticsArgs},
+    modifier::{ModifierExt as _, SemanticsArgs},
     row::row,
     shape_def::Shape,
     spacer::spacer,
@@ -31,7 +31,7 @@ use tessera_ui::{
     RenderSlot, State,
     accesskit::Role,
     modifier::{FocusModifierExt as _, ModifierCapabilityExt as _},
-    provide_context, remember, scaled_box, tessera, use_context,
+    remember, scaled_box, tessera, use_context,
 };
 
 use super::{
@@ -42,7 +42,7 @@ use super::{
 };
 
 #[tessera]
-pub(super) fn tooltips_spec() {
+pub(super) fn tooltips_spec(route: Option<crate::pages::material_spec::article::ArticleRoute>) {
     article(
         "Tooltips",
         "Tooltips display brief labels or messages",
@@ -55,7 +55,7 @@ pub(super) fn tooltips_spec() {
                 detail(true);
             })),
         ],
-    )
+    ).route_optional(route.clone())
     .pages(vec![
         ArticlePage {
             title: "Overview",
@@ -698,10 +698,7 @@ fn tooltip_rich_mock(
                                     });
                             }
                         });
-                        provide_context(
-                            || MinimumInteractiveComponentEnforcement { enabled: false },
-                            move || content.render(),
-                        );
+                        content.render();
                     }
                 });
         });
@@ -1274,12 +1271,11 @@ fn tooltip_plain_placement() {
                     .controller(controller)
                     .placement(TooltipPlacement::Above)
                     .popup_modifier(watch_in_space(geometry, "placement_popup"))
-                    .child(move || {
+                    .child(move |_| {
                         boxed()
                             .modifier(Modifier::new().required_size(Dp(1024.0), Dp(300.0)))
                             .children(move || {
-                                tooltip_anchor()
-                                    .controller(controller)
+                                tooltip_anchor(controller)
                                     .modifier(Modifier::new().offset(Dp(488.0), Dp(150.0)))
                                     .child(move || {
                                         icon_button()
@@ -1455,19 +1451,10 @@ fn tooltip_keyboard_table() {
                                                         type_style(16.0, 24.0)
                                                     };
                                                     let modifier = Modifier::new();
-                                                    #[cfg(all(test, not(target_family = "wasm")))]
                                                     let modifier = if index == 0 {
-                                                        modifier.on_globally_positioned(
-                                                            move |rect| {
-                                                                tests::observe_table_header(
-                                                                    column_index,
-                                                                    rect,
-                                                                );
-                                                            },
-                                                        )
-                                                    } else {
-                                                        modifier
-                                                    };
+                                                        modifier.semantics(SemanticsArgs { test_tag: Some(format!("tooltip-table-header-{column_index}")), merge_descendants: true,
+..Default::default() })
+                                                    } else { modifier };
                                                     text()
                                                         .modifier(modifier)
                                                         .content(content)
@@ -1533,10 +1520,7 @@ fn tooltip_focus_sequence() {
                             .icon(filled::LOCK_SVG)
                             .accessibility_label("Permissions illustration");
                     });
-                    provide_context(
-                        || MinimumInteractiveComponentEnforcement { enabled: false },
-                        move || content.render(),
-                    );
+                    content.render();
                 });
             let scheme = use_context::<MaterialTheme>().unwrap().get().color_scheme;
             surface()
@@ -1604,10 +1588,7 @@ fn tooltip_focus_sequence() {
                                                 text().content("Request access");
                                             });
                                     });
-                                    provide_context(
-                                        || MinimumInteractiveComponentEnforcement { enabled: false },
-                                        move || content.render(),
-                                    );
+                                    content.render();
                                 });
                         });
                 });
@@ -2192,9 +2173,9 @@ fn tooltip_configuration(number: usize, headline: bool, actions: usize, x: Dp, y
                         });
                     })
                     .placement(TooltipPlacement::Below).persistent(true).popup_modifier(watch_in_space(geometry,"popup").width(Dp(312.0)))
-                    .child(move || {
+                    .child(move |_| {
                         boxed().modifier(Modifier::new().required_size(Dp(328.0),Dp(popup_height+56.0))).children(move || {
-                            tooltip_anchor().controller(controller).modifier(Modifier::new().offset(Dp(8.0),Dp(8.0)).size(Dp(312.0),Dp(36.0))).child(move || {
+                            tooltip_anchor(controller).modifier(Modifier::new().offset(Dp(8.0),Dp(8.0)).size(Dp(312.0),Dp(36.0))).child(move || {
                                 boxed().modifier(Modifier::new().size(Dp(312.0),Dp(36.0))).children(move || {
                                     boxed().alignment(Alignment::Center).modifier(Modifier::new().required_size(Dp(24.0), Dp(24.0)).border_with_shape(Dp(1.0), scheme.on_surface, Shape::Ellipse))
                                         .children(move || { text().content(number.to_string()).style(type_style(14.0,20.0)).color(scheme.on_surface); });
@@ -2206,9 +2187,9 @@ fn tooltip_configuration(number: usize, headline: bool, actions: usize, x: Dp, y
                 tooltip_provider("Rich tooltips bring attention to a particular element or feature that warrants a person’s focus.")
                     .controller(controller).variant(TooltipVariant::Rich).headline("Rich tooltip")
                     .placement(TooltipPlacement::Below).persistent(false).popup_modifier(watch_in_space(geometry,"popup").width(Dp(312.0)))
-                    .child(move || {
+                    .child(move |_| {
                         boxed().modifier(Modifier::new().required_size(Dp(328.0),Dp(popup_height+56.0))).children(move || {
-                            tooltip_anchor().controller(controller).modifier(Modifier::new().offset(Dp(8.0),Dp(8.0)).size(Dp(312.0),Dp(36.0))).child(move || {
+                            tooltip_anchor(controller).modifier(Modifier::new().offset(Dp(8.0),Dp(8.0)).size(Dp(312.0),Dp(36.0))).child(move || {
                                 boxed().modifier(Modifier::new().size(Dp(312.0),Dp(36.0))).children(move || {
                                     boxed().alignment(Alignment::Center).modifier(Modifier::new().required_size(Dp(24.0), Dp(24.0)).border_with_shape(Dp(1.0), scheme.on_surface, Shape::Ellipse))
                                         .children(move || { text().content(number.to_string()).style(type_style(14.0,20.0)).color(scheme.on_surface); });
@@ -2227,9 +2208,9 @@ fn tooltip_configuration(number: usize, headline: bool, actions: usize, x: Dp, y
                         });
                     })
                     .placement(TooltipPlacement::Below).persistent(true).popup_modifier(watch_in_space(geometry,"popup").width(Dp(312.0)))
-                    .child(move || {
+                    .child(move |_| {
                         boxed().modifier(Modifier::new().required_size(Dp(328.0),Dp(popup_height+56.0))).children(move || {
-                            tooltip_anchor().controller(controller).modifier(Modifier::new().offset(Dp(8.0),Dp(8.0)).size(Dp(312.0),Dp(36.0))).child(move || {
+                            tooltip_anchor(controller).modifier(Modifier::new().offset(Dp(8.0),Dp(8.0)).size(Dp(312.0),Dp(36.0))).child(move || {
                                 boxed().modifier(Modifier::new().size(Dp(312.0),Dp(36.0))).children(move || {
                                     boxed().alignment(Alignment::Center).modifier(Modifier::new().required_size(Dp(24.0), Dp(24.0)).border_with_shape(Dp(1.0), scheme.on_surface, Shape::Ellipse))
                                         .children(move || { text().content(number.to_string()).style(type_style(14.0,20.0)).color(scheme.on_surface); });
@@ -2241,9 +2222,9 @@ fn tooltip_configuration(number: usize, headline: bool, actions: usize, x: Dp, y
                 tooltip_provider("Rich tooltips bring attention to a particular element or feature that warrants a person’s focus.")
                     .controller(controller).variant(TooltipVariant::Rich)
                     .placement(TooltipPlacement::Below).persistent(false).popup_modifier(watch_in_space(geometry,"popup").width(Dp(312.0)))
-                    .child(move || {
+                    .child(move |_| {
                         boxed().modifier(Modifier::new().required_size(Dp(328.0),Dp(popup_height+56.0))).children(move || {
-                            tooltip_anchor().controller(controller).modifier(Modifier::new().offset(Dp(8.0),Dp(8.0)).size(Dp(312.0),Dp(36.0))).child(move || {
+                            tooltip_anchor(controller).modifier(Modifier::new().offset(Dp(8.0),Dp(8.0)).size(Dp(312.0),Dp(36.0))).child(move || {
                                 boxed().modifier(Modifier::new().size(Dp(312.0),Dp(36.0))).children(move || {
                                     boxed().alignment(Alignment::Center).modifier(Modifier::new().required_size(Dp(24.0), Dp(24.0)).border_with_shape(Dp(1.0), scheme.on_surface, Shape::Ellipse))
                                         .children(move || { text().content(number.to_string()).style(type_style(14.0,20.0)).color(scheme.on_surface); });
@@ -2253,10 +2234,7 @@ fn tooltip_configuration(number: usize, headline: bool, actions: usize, x: Dp, y
                     });
             }
         });
-        provide_context(
-            || MinimumInteractiveComponentEnforcement { enabled: false },
-            move || content.render(),
-        );
+        content.render();
     });
 }
 
@@ -2419,8 +2397,7 @@ fn tooltip_reference_popup(
                 boxed()
                     .modifier(Modifier::new().required_size(Dp(width), Dp(height)))
                     .children(move || {
-                        tooltip_anchor()
-                            .controller(controller)
+                        tooltip_anchor(controller)
                             .modifier(Modifier::new().offset(
                                 Dp(center_x - 0.5),
                                 Dp(center_y + popup_height * 0.5 + 4.0),
@@ -2454,20 +2431,21 @@ fn tooltip_reference_popup(
                         });
                 })
                 .placement(TooltipPlacement::Above)
-                .child_shared(anchor);
+                .child(move |_| {
+                    (anchor).render();
+                });
         } else {
             tooltip_provider(message.clone())
                 .controller(controller)
                 .variant(TooltipVariant::Plain)
                 .popup_modifier(modifier.clone())
                 .placement(TooltipPlacement::Above)
-                .child_shared(anchor);
+                .child(move |_| {
+                    (anchor).render();
+                });
         }
     });
-    provide_context(
-        || MinimumInteractiveComponentEnforcement { enabled: false },
-        move || content.render(),
-    );
+    content.render();
     if rich {
         let style = use_context::<MaterialTheme>()
             .unwrap()
@@ -2931,13 +2909,12 @@ fn tooltip_color_marker(number: usize, label: String, x: Dp, y: Dp) {
 }
 
 #[tessera]
-fn live_tooltips() {
+fn live_tooltips(on_acknowledge: Option<tessera_ui::Callback>) {
+    let group = remember(|| None::<State<TooltipController>>);
     let plain = remember(TooltipController::new);
     let rich = remember(TooltipController::new);
     let favorite = remember(|| false);
-    let actions = remember(|| 0_usize);
-    #[cfg(all(test, not(target_family = "wasm")))]
-    tests::observe_live_state(favorite, actions, rich);
+    let acknowledged = remember(|| false);
     let scheme = use_context::<MaterialTheme>().unwrap().get().color_scheme;
     tooltip_provider(if favorite.get() {
         "Remove from favorites"
@@ -2945,17 +2922,24 @@ fn live_tooltips() {
         "Add to favorites"
     })
     .controller(plain)
+    .group(group)
     .persistent(false)
-    .child(move || {
+    .child(move |_| {
         tooltip_provider("Keep related items together so you can find them again.")
             .controller(rich)
+            .group(group)
             .variant(TooltipVariant::Rich)
             .headline("Collections")
             .placement(TooltipPlacement::Below)
             .persistent(true)
             .action_label("Got it")
-            .on_action(move || actions.set(actions.get() + 1))
-            .child(move || {
+            .on_action(move || {
+                acknowledged.set(true);
+                if let Some(callback) = on_acknowledge {
+                    callback.call();
+                }
+            })
+            .child(move |_| {
                 column()
                     .modifier(
                         Modifier::new()
@@ -2974,7 +2958,7 @@ fn live_tooltips() {
                             .item_spacing(Dp(24.0))
                             .line_spacing(Dp(16.0))
                             .children(move || {
-                                tooltip_anchor().controller(plain).child(move || {
+                                tooltip_anchor(plain).child(move || {
                                     icon_button()
                                         .standard()
                                         .selected(favorite.get())
@@ -2990,7 +2974,7 @@ fn live_tooltips() {
                                         })
                                         .on_click(move || favorite.set(!favorite.get()));
                                 });
-                                tooltip_anchor().controller(rich).child(move || {
+                                tooltip_anchor(rich).child(move || {
                                     button()
                                         .text()
                                         .accessibility_label("About collections")
@@ -3004,7 +2988,7 @@ fn live_tooltips() {
                     });
             });
     });
-    if actions.get() > 0 {
+    if acknowledged.get() {
         gap(Dp(16.0));
         prose("Collection guidance acknowledged.".into());
     }
@@ -3081,12 +3065,11 @@ fn placement_examples() {
                                     text().content("Learn more");
                                 });
                             })
-                            .child(move || {
+                            .child(move |_| {
                                 boxed()
                                     .modifier(Modifier::new().fill_max_size().padding_all(Dp(36.0)))
                                     .children(move || {
-                                        tooltip_anchor()
-                                            .controller(controller)
+                                        tooltip_anchor(controller)
                                             .modifier(Modifier::new().align(alignment))
                                             .child(move || {
                                                 icon_button()

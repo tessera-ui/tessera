@@ -1,15 +1,19 @@
 use std::{
+    cell::RefCell,
     collections::{HashMap, HashSet},
-    env,
 };
 
 use anyhow::{Result, anyhow};
-use ra_ap_base_db::{Crate, SourceDatabase};
+use ra_ap_base_db::Crate;
 use ra_ap_hir::{
     AsAssocItem, CallableKind, EditionedFileId, Function, ModuleDef, PathResolution, Semantics,
     Trait, Type, crate_def_map,
 };
-use ra_ap_hir_def::nameres::diagnostics::DefDiagnosticKind;
+use ra_ap_hir_def::{
+    DefWithBodyId,
+    expr_store::{ExpressionStoreDiagnostics, body::Body},
+    nameres::diagnostics::DefDiagnosticKind,
+};
 use ra_ap_ide::{FileId, RootDatabase};
 use ra_ap_syntax::{
     AstNode, SyntaxNode,
@@ -20,7 +24,7 @@ use ra_ap_vfs::Vfs;
 use super::{
     error_codes::ErrorCode,
     types::{
-        CallKind, CallTarget, ColorAnalyzer, ContextColor, Diagnostic, ResolvedMethod,
+        CallAnalyzer, CallIndex, CallKind, CallTarget, ContextColor, Diagnostic, SelectedSources,
         TesseraRuntimeApi,
     },
     utils::{
@@ -64,54 +68,26 @@ const STD_OPTION_TYPE_PATH: &str = "std::option::Option";
 const CORE_INTO_TRAIT_PATH: &str = "core::convert::Into";
 const STD_INTO_TRAIT_PATH: &str = "std::convert::Into";
 
-impl<'db> ColorAnalyzer<'db> {
+impl<'db> CallAnalyzer<'db> {
     pub(crate) fn new(
         db: &'db RootDatabase,
         vfs: &'db Vfs,
-        selected_package: Option<String>,
-        local_files: HashSet<FileId>,
-    ) -> Result<ColorAnalyzer<'db>> {
+        sources: SelectedSources,
+    ) -> Result<CallAnalyzer<'db>> {
         let sema = Semantics::new(db);
         let tessera_crates = tessera_crates(db);
-        let mut metadata_files = HashSet::new();
-
-        for (file_id, path) in vfs.iter() {
-            let Some(path) = path.as_path() else {
-                continue;
-            };
-            let std_path: &std::path::Path = path.as_ref();
-            if !std_path.extension().is_some_and(|ext| ext == "rs") {
-                continue;
-            }
-
-            let source_root_id = db.file_source_root(file_id).source_root_id(db);
-            let source_root = db.source_root(source_root_id);
-            let source_root = source_root.source_root(db);
-            let relevant_crates = ra_ap_base_db::relevant_crates(db, file_id);
-            let is_tessera_workspace_source = relevant_crates
-                .iter()
-                .any(|krate| tessera_crates.contains(krate));
-            if !source_root.is_library || is_tessera_workspace_source {
-                metadata_files.insert(file_id);
-            }
-        }
+        let SelectedSources {
+            local_files,
+            file_crates,
+        } = sources;
+        let metadata_files = file_crates.keys().copied().collect::<HashSet<_>>();
 
         if local_files.is_empty() {
             return Err(anyhow!(
-                "rust-analyzer did not load any local Rust source files for Tessera color checking"
+                "rust-analyzer did not load any selected Rust source files for CallGuard"
             ));
         }
 
-        let file_crates = metadata_files
-            .iter()
-            .map(|file_id| {
-                let crates = sema
-                    .file_to_module_defs(*file_id)
-                    .map(|module| module.krate(db).base())
-                    .collect::<HashSet<_>>();
-                (*file_id, crates)
-            })
-            .collect::<HashMap<_, _>>();
         let relevant_crates = file_crates
             .values()
             .flat_map(|crates| crates.iter().copied())
@@ -148,38 +124,70 @@ impl<'db> ColorAnalyzer<'db> {
             })
             .collect();
 
-        Ok(ColorAnalyzer {
-            display_root: env::current_dir()?,
+        Ok(CallAnalyzer {
+            display_root: std::env::current_dir().unwrap_or_default(),
             db,
             sema,
-            tessera_crates,
+            index: CallIndex {
+                tessera_crates,
+                inactive_code_ranges,
+                ..CallIndex::default()
+            },
             vfs,
             local_files,
             metadata_files,
-            selected_package,
-            tessera_function_names: HashSet::new(),
-            tessera_function_paths: HashSet::new(),
-            render_slot_setter_indexes_by_type_path: HashMap::new(),
-            render_slot_constructor_indexes_by_function_path: HashMap::new(),
-            inactive_code_ranges,
             diagnostics: Vec::new(),
+            inactive_bodies: HashMap::new(),
+            call_targets: RefCell::new(HashMap::new()),
         })
     }
 
-    pub(crate) fn analyze(&mut self) -> Result<()> {
-        let files = self.metadata_files.iter().copied().collect::<Vec<_>>();
+    #[cfg(test)]
+    pub(crate) fn collect_index(&mut self) -> Result<()> {
+        let mut files = self.metadata_files.iter().copied().collect::<Vec<_>>();
+        files.sort_unstable();
         for file_id in files {
             self.collect_file_metadata(file_id)?;
         }
+        Ok(())
+    }
 
-        let files = self.local_files.iter().copied().collect::<Vec<_>>();
+    pub(crate) fn check_files(&mut self) -> Result<()> {
+        let mut files = self.local_files.iter().copied().collect::<Vec<_>>();
+        files.sort_unstable();
         for file_id in files {
             self.analyze_file(file_id)?;
         }
         Ok(())
     }
 
-    fn collect_file_metadata(&mut self, file_id: FileId) -> Result<()> {
+    pub(crate) fn from_index(
+        db: &'db RootDatabase,
+        vfs: &'db Vfs,
+        local_files: HashSet<FileId>,
+        index: CallIndex,
+    ) -> Self {
+        Self {
+            display_root: std::env::current_dir().unwrap_or_default(),
+            db,
+            sema: Semantics::new(db),
+            vfs,
+            local_files,
+            metadata_files: HashSet::new(),
+            index,
+            diagnostics: Vec::new(),
+            inactive_bodies: HashMap::new(),
+            call_targets: RefCell::new(HashMap::new()),
+        }
+    }
+
+    #[cfg(test)]
+    pub(crate) fn analyze(&mut self) -> Result<()> {
+        self.collect_index()?;
+        self.check_files()
+    }
+
+    pub(crate) fn collect_file_metadata(&mut self, file_id: FileId) -> Result<()> {
         let tree = self
             .sema
             .parse(EditionedFileId::current_edition(self.db, file_id));
@@ -198,7 +206,13 @@ impl<'db> ColorAnalyzer<'db> {
     fn is_inactive(&self, syntax: &SyntaxNode) -> bool {
         let source = self.sema.original_range(syntax);
         let file_id = source.file_id.file_id(self.db);
-        self.inactive_code_ranges
+        self.inactive_bodies.get(&file_id).is_some_and(|ranges| {
+            ranges
+                .iter()
+                .any(|range| range.contains_range(source.range))
+        }) || self
+            .index
+            .inactive_code_ranges
             .get(&file_id)
             .is_some_and(|contexts| {
                 // A shared file remains active if any loaded crate context
@@ -230,10 +244,12 @@ impl<'db> ColorAnalyzer<'db> {
         match item {
             ast::Item::Fn(function) if self.is_tessera_function(function) => {
                 if let Some(name) = function.name() {
-                    self.tessera_function_names.insert(name.text().to_string());
+                    self.index
+                        .tessera_function_names
+                        .insert(name.text().to_string());
                 }
                 if let Some(path) = self.source_function_path(function) {
-                    self.tessera_function_paths.insert(path);
+                    self.index.tessera_function_paths.insert(path);
                 }
             }
             ast::Item::Module(module) => {
@@ -338,7 +354,8 @@ impl<'db> ColorAnalyzer<'db> {
                 index += 1;
             }
             if !slots.is_empty() {
-                self.render_slot_constructor_indexes_by_function_path
+                self.index
+                    .render_slot_constructor_indexes_by_function_path
                     .insert(path, slots);
             }
         }
@@ -363,6 +380,7 @@ impl<'db> ColorAnalyzer<'db> {
                 continue;
             };
             let setters = self
+                .index
                 .render_slot_setter_indexes_by_type_path
                 .entry(type_path.clone())
                 .or_default();
@@ -394,7 +412,8 @@ impl<'db> ColorAnalyzer<'db> {
             };
             let slot_indexes = self.render_slot_carrier_param_indexes(&function);
             if !slot_indexes.is_empty() {
-                self.render_slot_setter_indexes_by_type_path
+                self.index
+                    .render_slot_setter_indexes_by_type_path
                     .entry(type_path.clone())
                     .or_default()
                     .insert(name.text().to_string(), slot_indexes);
@@ -433,7 +452,7 @@ impl<'db> ColorAnalyzer<'db> {
             path.push_str(name.as_str());
         }
         path.push_str("::");
-        path.push_str(name.text().as_str());
+        path.push_str(name.text());
         Some(path)
     }
 
@@ -628,6 +647,36 @@ impl<'db> ColorAnalyzer<'db> {
         let Some(body) = function.body() else {
             return;
         };
+        let expanded = self
+            .sema
+            .expand_attr_macro(&ast::Item::Fn(function.clone()));
+        let expanded_functions = expanded.iter().flat_map(|expansion| {
+            expansion
+                .value
+                .value
+                .descendants()
+                .filter_map(ast::Fn::cast)
+        });
+        for candidate in std::iter::once(function.clone()).chain(expanded_functions) {
+            let Some(definition) = self.sema.to_def(&candidate) else {
+                continue;
+            };
+            let Ok(id) = DefWithBodyId::try_from(ra_ap_hir::DefWithBody::Function(definition))
+            else {
+                continue;
+            };
+            let (_, source_map) = Body::with_source_map(self.db, id);
+            for diagnostic in source_map.diagnostics() {
+                if let ExpressionStoreDiagnostics::InactiveCode { node, .. } = diagnostic {
+                    let root = self.sema.parse_or_expand(node.file_id);
+                    let source = self.sema.original_range(&node.value.to_node(&root));
+                    self.inactive_bodies
+                        .entry(source.file_id.file_id(self.db))
+                        .or_default()
+                        .push(source.range);
+                }
+            }
+        }
         let allow_entry_point_new = self.is_entry_function(&function) || allow_runtime_body;
         let color = if self.is_colored_function(&function) || allow_runtime_body {
             ContextColor::Tessera
@@ -710,117 +759,94 @@ impl<'db> ColorAnalyzer<'db> {
     }
 
     fn analyze_method_call(&mut self, call: ast::MethodCallExpr, color: ContextColor) {
-        match self.resolve_method_call(&call) {
-            Some(ResolvedMethod::RenderSlotNew) => {
-                if color == ContextColor::Plain {
-                    self.push_forbidden_call(
-                        call.syntax(),
-                        RENDER_SLOT_NEW_PATH,
-                        CallKind::RuntimeApi(TesseraRuntimeApi::RenderSlotNew),
-                    );
-                }
+        let function = self
+            .method_call_variants(&call)
+            .find_map(|call| self.sema.resolve_method_call(&call));
+        if let Some(function) = function {
+            if color == ContextColor::Plain
+                && let Some(CallTarget::Resolved { path, kind }) =
+                    self.call_target_for_function(function)
+            {
+                self.push_forbidden_call(call.syntax(), &path, kind);
             }
-            Some(ResolvedMethod::RenderSlotWithNew) => {
-                if color == ContextColor::Plain {
-                    self.push_forbidden_call(
-                        call.syntax(),
-                        RENDER_SLOT_WITH_NEW_PATH,
-                        CallKind::RuntimeApi(TesseraRuntimeApi::RenderSlotWithNew),
-                    );
-                }
-            }
-            Some(ResolvedMethod::Other) => {}
-            None => {
-                if color == ContextColor::Plain {
-                    let path = self.method_call_path(&call);
-                    if self.is_semantically_relevant_unresolved_method(&path) {
-                        self.push_unresolved_call(call.syntax(), &path);
-                    }
-                }
+        } else if color == ContextColor::Plain {
+            let path = self.method_call_path(&call);
+            if self.is_semantically_relevant_unresolved_method(&path) {
+                self.push_unresolved_call(call.syntax(), &path);
             }
         }
     }
 
     fn resolve_call_target(&self, call: &ast::CallExpr) -> Option<CallTarget> {
         let expr = call.expr()?;
-        for expanded in self.sema.descend_node_into_attributes(expr.clone()) {
-            if let Some(target) = self.resolve_call_expr_target(&expanded) {
-                return Some(target);
+        let mut known = false;
+        let mut unresolved = None;
+        for expr in
+            std::iter::once(expr.clone()).chain(self.sema.descend_node_into_attributes(expr))
+        {
+            let (resolved, target) = self.resolve_call_expr_target(&expr);
+            if resolved {
+                known = true;
+                if target.is_some() {
+                    return target;
+                }
+            } else if unresolved.is_none() {
+                unresolved = target;
             }
         }
-        self.resolve_call_expr_target(&expr)
+        if known { None } else { unresolved }
     }
 
-    fn resolve_call_expr_target(&self, expr: &ast::Expr) -> Option<CallTarget> {
+    fn resolve_call_expr_target(&self, expr: &ast::Expr) -> (bool, Option<CallTarget>) {
         if ast::ClosureExpr::can_cast(expr.syntax().kind()) {
-            return None;
+            return (true, None);
         }
-
         if let Some(callable) = self.sema.resolve_expr_as_callable(expr) {
-            let CallableKind::Function(function) = callable.kind() else {
-                return None;
-            };
-            let path = self.function_path(function);
-            if self.is_tessera_function_def(function) {
-                return Some(CallTarget::Resolved {
-                    path,
-                    kind: CallKind::TesseraFunction,
-                });
-            }
-            if let Some(api) = self.runtime_api_for_function(function, &path) {
-                return Some(CallTarget::Resolved {
-                    path,
-                    kind: CallKind::RuntimeApi(api),
-                });
-            }
-            return None;
+            return (
+                true,
+                match callable.kind() {
+                    CallableKind::Function(function) => self.call_target_for_function(function),
+                    _ => None,
+                },
+            );
         }
-
         if let Some(path) = expr_path(expr) {
             if let Some(resolution) = self.sema.resolve_path(&path) {
-                if let Some(target) = self.call_target_for_path_resolution(resolution) {
-                    return Some(target);
-                }
-                return None;
+                return (true, self.call_target_for_path_resolution(resolution));
             }
             let path = path_text(&path);
             if self.is_semantically_relevant_unresolved_path(&path) {
-                return Some(CallTarget::Unresolved { path });
+                return (false, Some(CallTarget::Unresolved { path }));
             }
         }
-
-        None
+        (false, None)
     }
 
     fn call_target_for_path_resolution(&self, resolution: PathResolution) -> Option<CallTarget> {
         match resolution {
             PathResolution::Def(ModuleDef::Function(function)) => {
-                let path = self.function_path(function);
-                if self.is_tessera_function_def(function) {
-                    Some(CallTarget::Resolved {
-                        path,
-                        kind: CallKind::TesseraFunction,
-                    })
-                } else {
-                    self.runtime_api_for_function(function, &path)
-                        .map(|api| CallTarget::Resolved {
-                            path,
-                            kind: CallKind::RuntimeApi(api),
-                        })
-                }
+                self.call_target_for_function(function)
             }
             _ => None,
         }
     }
 
-    fn resolve_method_call(&self, call: &ast::MethodCallExpr) -> Option<ResolvedMethod> {
-        let function = self.sema.resolve_method_call(call)?;
-        let path = self.function_path(function);
-        match self.runtime_api_for_function(function, &path) {
-            Some(TesseraRuntimeApi::RenderSlotNew) => Some(ResolvedMethod::RenderSlotNew),
-            Some(TesseraRuntimeApi::RenderSlotWithNew) => Some(ResolvedMethod::RenderSlotWithNew),
-            _ => Some(ResolvedMethod::Other),
+    fn call_target_for_function(&self, function: Function) -> Option<CallTarget> {
+        if let Some(target) = self.call_targets.borrow().get(&function) {
+            return target.clone();
         }
+        let path = self.function_path(function);
+        let kind = if self.is_tessera_function_def(function) {
+            Some(CallKind::TesseraFunction)
+        } else {
+            self.runtime_api_for_function(function, &path)
+                .map(CallKind::RuntimeApi)
+        };
+        let target = kind.map(|kind| CallTarget::Resolved { path, kind });
+        self.call_targets
+            .borrow_mut()
+            .insert(function, target.clone());
+        target
     }
 
     fn is_tessera_function(&self, function: &ast::Fn) -> bool {
@@ -845,9 +871,7 @@ impl<'db> ColorAnalyzer<'db> {
     }
 
     fn is_colored_function(&self, function: &ast::Fn) -> bool {
-        self.is_tessera_function(function)
-            || self.is_runtime_api_function(function)
-            || self.is_test_function(function)
+        self.is_tessera_function(function) || self.is_runtime_api_function(function)
     }
 
     fn is_entry_function(&self, function: &ast::Fn) -> bool {
@@ -861,7 +885,7 @@ impl<'db> ColorAnalyzer<'db> {
         }
 
         let path = self.function_path(function);
-        if self.tessera_function_paths.contains(&path) {
+        if self.index.tessera_function_paths.contains(&path) {
             return true;
         }
 
@@ -877,7 +901,7 @@ impl<'db> ColorAnalyzer<'db> {
             .original_range(original.syntax())
             .file_id
             .file_id(self.db);
-        if !self.local_files.contains(&file_id) || !self.package_matches(function) {
+        if !self.local_files.contains(&file_id) {
             return false;
         }
         if original
@@ -913,34 +937,10 @@ impl<'db> ColorAnalyzer<'db> {
         }
     }
 
-    fn is_test_function(&self, function: &ast::Fn) -> bool {
-        function.attrs().any(|attr| {
-            attr.path()
-                .and_then(|path| path_last_segment(&path))
-                .is_some_and(|name| name == "test")
-        })
-    }
-
-    fn package_matches(&self, function: Function) -> bool {
-        let Some(selected_package) = self.selected_package.as_deref() else {
-            return true;
-        };
-        function
-            .module(self.db)
-            .krate(self.db)
-            .display_name(self.db)
-            .is_some_and(|name| name.canonical_name().as_str() == selected_package)
-    }
-
     fn is_tessera_attribute(&self, attr: &ast::Attr) -> bool {
         let Some(path) = attr.path() else {
             return false;
         };
-        if path_last_segment(&path).is_some_and(|name| matches!(name.as_str(), "tessera" | "shard"))
-        {
-            return true;
-        }
-
         if let Some(PathResolution::Def(ModuleDef::Macro(mac))) = self.sema.resolve_path(&path) {
             return matches!(mac.name(self.db).as_str(), "tessera" | "shard")
                 && self.is_tessera_crate(mac.module(self.db).krate(self.db).into());
@@ -953,10 +953,6 @@ impl<'db> ColorAnalyzer<'db> {
         let Some(path) = attr.path() else {
             return false;
         };
-        if path_last_segment(&path).is_some_and(|name| name == "entry") {
-            return true;
-        }
-
         if let Some(PathResolution::Def(ModuleDef::Macro(mac))) = self.sema.resolve_path(&path) {
             return mac.name(self.db).as_str() == "entry"
                 && self.is_tessera_crate(mac.module(self.db).krate(self.db).into());
@@ -1025,6 +1021,23 @@ impl<'db> ColorAnalyzer<'db> {
             "new" if self.is_render_slot_method(function, PUBLIC_RENDER_SLOT_WITH_TYPE_PATH) => {
                 Some(TesseraRuntimeApi::RenderSlotWithNew)
             }
+            "render"
+                if [RENDER_SLOT_TYPE_PATH, PUBLIC_RENDER_SLOT_TYPE_PATH]
+                    .iter()
+                    .any(|path| self.is_render_slot_method(function, path)) =>
+            {
+                Some(TesseraRuntimeApi::RenderSlotRender)
+            }
+            "render"
+                if [
+                    RENDER_SLOT_WITH_TYPE_PATH,
+                    PUBLIC_RENDER_SLOT_WITH_TYPE_PATH,
+                ]
+                .iter()
+                .any(|path| self.is_render_slot_method(function, path)) =>
+            {
+                Some(TesseraRuntimeApi::RenderSlotWithRender)
+            }
             _ => None,
         }
     }
@@ -1068,7 +1081,7 @@ impl<'db> ColorAnalyzer<'db> {
     }
 
     fn is_tessera_crate(&self, krate: Crate) -> bool {
-        self.tessera_crates.contains(&krate)
+        self.index.tessera_crates.contains(&krate)
     }
 
     fn type_adt_canonical_path(&self, ty: &Type<'db>) -> Option<String> {
@@ -1128,8 +1141,22 @@ impl<'db> ColorAnalyzer<'db> {
         let closure_range = closure.syntax().text_range();
         let mut current = closure.syntax().parent();
         while let Some(node) = current {
-            if ast::ClosureExpr::can_cast(node.kind()) || ast::BlockExpr::can_cast(node.kind()) {
+            if ast::ClosureExpr::can_cast(node.kind()) {
                 return false;
+            }
+            if let Some(block) = ast::BlockExpr::cast(node.clone()) {
+                if block.async_token().is_some()
+                    || block.gen_token().is_some()
+                    || block.const_token().is_some()
+                    || block
+                        .stmt_list()
+                        .and_then(|list| list.tail_expr())
+                        .is_none_or(|tail| {
+                            !tail.syntax().text_range().contains_range(closure_range)
+                        })
+                {
+                    return false;
+                }
             }
             if let Some(call) = ast::CallExpr::cast(node.clone()) {
                 let Some(index) = call.arg_list().and_then(|arg_list| {
@@ -1139,6 +1166,10 @@ impl<'db> ColorAnalyzer<'db> {
                 }) else {
                     return false;
                 };
+                if index == 0 && self.call_is_box_constructor(&call) {
+                    current = node.parent();
+                    continue;
+                }
                 return self.call_takes_tessera_carrier_closure_at(&call, index);
             }
             if let Some(call) = ast::MethodCallExpr::cast(node.clone()) {
@@ -1150,7 +1181,8 @@ impl<'db> ColorAnalyzer<'db> {
                     return false;
                 };
                 return self.method_call_takes_render_slot_setter_at(&call, index)
-                    || self.method_call_takes_render_slot_closure_at(&call, index);
+                    || self.method_call_takes_render_slot_closure_at(&call, index)
+                    || self.method_call_takes_pending_property_at(&call, index);
             }
             current = node.parent();
         }
@@ -1159,6 +1191,9 @@ impl<'db> ColorAnalyzer<'db> {
     }
 
     fn call_takes_tessera_carrier_closure_at(&self, call: &ast::CallExpr, index: usize) -> bool {
+        if index == 0 && self.call_is_build_entry(&call) {
+            return true;
+        }
         match self.resolve_call_target(call) {
             Some(CallTarget::Resolved {
                 kind:
@@ -1168,14 +1203,88 @@ impl<'db> ColorAnalyzer<'db> {
                 ..
             }) => index == 0,
             Some(CallTarget::Resolved {
+                kind:
+                    CallKind::RuntimeApi(TesseraRuntimeApi::ProvideContext | TesseraRuntimeApi::Key),
+                ..
+            }) => index == 1,
+            Some(CallTarget::Resolved {
                 path,
                 kind: CallKind::TesseraFunction,
             }) => self
+                .index
                 .render_slot_constructor_indexes_by_function_path
                 .get(&path)
                 .is_some_and(|indexes| indexes.contains(&index)),
             _ => false,
         }
+    }
+
+    fn method_call_takes_pending_property_at(
+        &self,
+        call: &ast::MethodCallExpr,
+        index: usize,
+    ) -> bool {
+        index == 1
+            && self.method_call_variants(call).any(|call| {
+                self.sema
+                    .resolve_method_call(&call)
+                    .is_some_and(|function| {
+                        matches!(
+                            function.name(self.db).as_str(),
+                            "append" | "configure_deferred"
+                        ) && self.is_render_slot_method(
+                            function,
+                            "tessera_ui::component_call::ComponentCall",
+                        )
+                    })
+            })
+    }
+
+    fn call_resolves_to(&self, call: &ast::CallExpr, matches: impl Fn(Function) -> bool) -> bool {
+        let Some(expr) = call.expr() else {
+            return false;
+        };
+        std::iter::once(expr.clone())
+            .chain(self.sema.descend_node_into_attributes(expr))
+            .filter_map(|expr| {
+                if let Some(callable) = self.sema.resolve_expr_as_callable(&expr)
+                    && let CallableKind::Function(function) = callable.kind()
+                {
+                    return Some(function);
+                }
+                let path = expr_path(&expr)?;
+                match self.sema.resolve_path(&path)? {
+                    PathResolution::Def(ModuleDef::Function(function)) => Some(function),
+                    _ => None,
+                }
+            })
+            .any(matches)
+    }
+
+    fn call_is_box_constructor(&self, call: &ast::CallExpr) -> bool {
+        self.call_resolves_to(call, |function| {
+            function.name(self.db).as_str() == "new"
+                && ["alloc::boxed::Box", "std::boxed::Box"]
+                    .iter()
+                    .any(|path| self.is_render_slot_method(function, path))
+        })
+    }
+
+    fn call_is_build_entry(&self, call: &ast::CallExpr) -> bool {
+        self.call_resolves_to(call, |function| {
+            let name = function.name(self.db);
+            self.function_path(function) == "tessera_ui::testing::layout_test"
+                || (name.as_str() == "new"
+                    && (self.is_entry_point_method(function)
+                        || self.is_render_slot_method(
+                            function,
+                            "tessera_ui::headless::HeadlessRenderer",
+                        )))
+                || (matches!(
+                    name.as_str(),
+                    "run" | "run_with_config" | "run_web_with_config"
+                ) && self.is_render_slot_method(function, "tessera_ui::renderer::Renderer"))
+        })
     }
 
     fn method_call_takes_render_slot_closure_at(
@@ -1218,15 +1327,16 @@ impl<'db> ColorAnalyzer<'db> {
         };
         let name = name.text();
 
-        let Some(receiver_type_path) = call
-            .receiver()
-            .and_then(|receiver| self.receiver_type_key(&receiver))
-            .or_else(|| self.method_call_implementing_type_key(call))
-        else {
-            return false;
-        };
-
-        self.setter_accepts_render_slot_at(&receiver_type_path, name.as_str(), index)
+        self.method_call_variants(call).any(|variant| {
+            let receiver = variant
+                .receiver()
+                .and_then(|receiver| self.receiver_type_key(&receiver));
+            let implementation = self.method_call_implementing_type_key(&variant);
+            receiver
+                .into_iter()
+                .chain(implementation)
+                .any(|path| self.setter_accepts_render_slot_at(&path, name, index))
+        })
     }
 
     fn setter_accepts_render_slot_at(
@@ -1235,7 +1345,8 @@ impl<'db> ColorAnalyzer<'db> {
         name: &str,
         index: usize,
     ) -> bool {
-        self.render_slot_setter_indexes_by_type_path
+        self.index
+            .render_slot_setter_indexes_by_type_path
             .get(receiver_type_path)
             .and_then(|setters| setters.get(name))
             .is_some_and(|indexes| indexes.contains(&index))
@@ -1313,7 +1424,7 @@ impl<'db> ColorAnalyzer<'db> {
                 | "use_context"
                 | "receive_frame_nanos"
                 | "key"
-        ) || self.tessera_function_names.contains(last)
+        ) || self.index.tessera_function_names.contains(last)
             || Self::is_render_slot_constructor_path(path)
             || Self::is_entry_point_constructor_path(path)
             || is_internal_runtime_name(last)
@@ -1466,18 +1577,110 @@ impl<'db> ColorAnalyzer<'db> {
 #[cfg(test)]
 mod tests {
     use std::{
-        env, fs,
+        fs,
         path::{Path, PathBuf},
-        sync::{
-            Mutex, OnceLock,
-            atomic::{AtomicU64, Ordering},
-        },
     };
 
-    use super::super::{CheckOptions, types::ColorAnalyzer, workspace};
+    use super::super::{CheckOptions, types::CallAnalyzer, workspace};
 
-    static CURRENT_DIR_LOCK: OnceLock<Mutex<()>> = OnceLock::new();
-    static NEXT_FIXTURE_ID: AtomicU64 = AtomicU64::new(0);
+    #[test]
+    fn dependency_components_and_slots_are_indexed_without_unrelated_members() {
+        with_analyzer(
+            r#"
+use fixture_widgets::foreign_component;
+
+#[tessera_ui::tessera]
+fn local_component() {}
+
+#[tessera_ui::tessera]
+fn host() {
+    foreign_component().children(|| { local_component(); });
+}
+
+fn plain() { foreign_component(); }
+"#,
+            |analyzer| {
+                assert_eq!(analyzer.diagnostics.len(), 1);
+                assert!(
+                    analyzer.diagnostics[0]
+                        .message
+                        .contains("foreign_component"),
+                    "{}; indexed components: {:?}",
+                    analyzer.diagnostics[0].message,
+                    analyzer.index.tessera_function_paths,
+                );
+                let paths = analyzer
+                    .metadata_files
+                    .iter()
+                    .map(|file| analyzer.absolute_path(*file))
+                    .collect::<Vec<_>>();
+                assert!(
+                    paths
+                        .iter()
+                        .any(|path| Path::new(path).ends_with("widgets/src/lib.rs"))
+                );
+                assert!(
+                    !paths
+                        .iter()
+                        .any(|path| Path::new(path).ends_with("unrelated/src/lib.rs"))
+                );
+                assert!(
+                    !paths
+                        .iter()
+                        .any(|path| Path::new(path).ends_with("src/orphan.rs"))
+                );
+                let dependency_files = analyzer
+                    .metadata_files
+                    .iter()
+                    .copied()
+                    .filter(|file| {
+                        Path::new(&analyzer.absolute_path(*file)).ends_with("widgets/src/lib.rs")
+                    })
+                    .collect();
+                let jobs = [
+                    super::super::AnalysisJob {
+                        index: 0,
+                        display: "fixture v0.0.0".to_string(),
+                        files: analyzer.local_files.clone(),
+                    },
+                    super::super::AnalysisJob {
+                        index: 1,
+                        display: "widgets v0.0.0".to_string(),
+                        files: dependency_files,
+                    },
+                ];
+                for workers in [1, 2] {
+                    let index = super::super::collect_index_parallel(analyzer, workers)
+                        .expect("parallel semantic index");
+                    let progress = super::super::progress::Progress::new(false);
+                    let mut results = super::super::analyze_parallel(
+                        analyzer.db,
+                        analyzer.vfs,
+                        &index,
+                        &jobs,
+                        workers,
+                        &progress,
+                    )
+                    .expect("crate workers");
+                    results.sort_by_key(|(index, _)| *index);
+                    let messages = results
+                        .into_iter()
+                        .map(|(_, result)| {
+                            result
+                                .expect("complete semantic analysis")
+                                .into_iter()
+                                .map(|diagnostic| diagnostic.message)
+                                .collect::<Vec<_>>()
+                        })
+                        .collect::<Vec<_>>();
+                    assert_eq!(messages[0].len(), 1);
+                    assert!(messages[0][0].contains("foreign_component"));
+                    assert_eq!(messages[1].len(), 1);
+                    assert!(messages[1][0].contains("remember"));
+                }
+            },
+        );
+    }
 
     #[test]
     fn direct_slot_carriers_remain_colored() {
@@ -1502,6 +1705,19 @@ pub fn required_host(value: usize, optional: Option<bool>, slot: RenderSlotWith<
 
 fn configure(handle: &HostBuilder) {
     handle.slot(|| child());
+    handle.custom_slot();
+}
+
+impl HostBuilder {
+    fn custom_slot(&self) -> Self {
+        self.props.append("slot", |props| {
+            props.slot = Some(RenderSlot::new(|| { child(); }));
+        });
+        self.props.configure_deferred("slot", |props| {
+            props.slot = Some(RenderSlot::new(|| { child(); }));
+        });
+        Self { props: self.props }
+    }
 }
 
 #[tessera_ui::tessera]
@@ -1511,6 +1727,7 @@ pub fn root() {
         let _state = remember(|| 1usize);
     });
     let _slot_with = RenderSlotWith::<u32>::new(|_| child());
+    tessera_ui::key(7u32, || { child(); let _state = remember(|| 0u32); });
     host().slot(|| child());
     let saved = host();
     if true {
@@ -1522,7 +1739,19 @@ pub fn root() {
 
 #[tessera_ui::entry]
 pub fn run() -> EntryPoint {
-    EntryPoint::new(root)
+    EntryPoint::new(|| { root(); })
+}
+
+pub fn inspect_root() {
+    let _ = tessera_ui::testing::layout_test({ let _input = 1; move || { child(); } });
+    let _ = tessera_ui::headless::HeadlessRenderer::new(
+        Box::new(|| { child(); }), Vec::new(), Default::default(),
+    );
+}
+
+#[tessera_ui::tessera]
+fn themed() {
+    tessera_ui::provide_context(|| 0u32, { let _input = 1; move || { child(); } });
 }
 "#,
         );
@@ -1538,7 +1767,7 @@ pub fn run() -> EntryPoint {
     fn ordinary_closures_and_indirect_wrappers_stay_plain() {
         let diagnostics = diagnostics_for(
             r#"
-use tessera_ui::{EntryPoint, RenderSlot, remember};
+use tessera_ui::{Callback, CallbackWith, EntryPoint, RenderSlot, RenderSlotWith, remember};
 
 #[tessera_ui::tessera]
 fn child() {}
@@ -1553,6 +1782,8 @@ mod plain {
     }
 
     pub fn accept(_: impl Into<RenderSlot>) {}
+
+    pub fn layout_test(_: impl Fn()) {}
 
     pub struct Builder;
     impl Builder {
@@ -1576,19 +1807,48 @@ pub fn root() {
     wrapper(|| { child(); });
     plain::host().slot(|| { child(); });
     plain::accept(|| { child(); });
+    plain::layout_test(|| { child(); });
+    let _boxed = Box::new(|| { child(); });
+    tessera_ui::provide_context(|| { let _ = remember(|| 1usize); 0u32 }, || {});
+}
+
+fn render_from_helper(slot: RenderSlot, indexed: RenderSlotWith<u32>) {
+    slot.render();
+    indexed.render(1);
+    RenderSlot::render(&slot);
+    RenderSlotWith::render(&indexed, 2);
+}
+
+#[tessera_ui::tessera]
+fn wrapped_render_calls() {
+    let slot = RenderSlot::new(child);
+    let indexed = RenderSlotWith::new(|_: u32| { child(); });
+    let _ = Callback::new(move || slot.render());
+    let _ = CallbackWith::new(move |value| indexed.render(value));
+    let _ = move || slot.render();
+    let _ = Some(1).map(move |value| indexed.render(value));
 }
 
 pub fn plain_entry() -> EntryPoint {
     EntryPoint::new(root)
 }
+
+#[test]
+fn test_functions_are_plain() { child(); }
 "#,
         );
 
         assert_contains(&diagnostics, "RenderSlot::new");
         assert_contains(&diagnostics, "EntryPoint::new");
+        assert_eq!(count_containing(&diagnostics, "RenderSlot::render"), 4);
+        assert_eq!(count_containing(&diagnostics, "RenderSlotWith::render"), 4);
         assert_contains(&diagnostics, "remember");
         assert!(
-            count_containing(&diagnostics, "Tessera component") >= 5,
+            count_containing(&diagnostics, "remember") >= 2,
+            "initializer factories stay plain: {diagnostics:?}"
+        );
+        assert!(
+            count_containing(&diagnostics, "Tessera component") >= 8,
             "expected ordinary closures to report Tessera component calls:\n{}",
             diagnostics.join("\n")
         );
@@ -1604,14 +1864,29 @@ use tessera_components::{app_bar::top_app_bar, button_groups::button_groups, laz
 fn child() {}
 
 #[tessera_ui::tessera]
-pub fn root() {
+pub fn root(value: usize) {
+    let _slot = tessera_ui::RenderSlot::new(move || {
+    let _ = value;
     top_app_bar().action(|| child());
+    #[cfg(not(target_family = "wasm"))]
+    {
+        top_app_bar()
+            .title(if true { "Title" } else { "Other" })
+            .title_area_modifier(tessera_ui::Modifier::new())
+            .navigation_icon(|| { child(); })
+            .window_control_minimize();
+    }
+    #[cfg(target_family = "wasm")]
+    {
+        top_app_bar().navigation_icon(|| { child(); }).title("Web");
+    }
     tab().title(|| child());
     button_groups().child(|| child(), |_| {});
     lazy_column().item(child).items(2, |_| child()).items_from_iter(vec![1, 2], |_, _| child());
     lazy_vertical_grid().columns(GridCells::fixed(2)).items_with_key(2, |index| index, |_| child());
     lazy_column().items_with_key(2, |index| { child(); index }, |_| {});
     button_groups().child(|| {}, |_| { child(); });
+    });
 }
 "#,
         );
@@ -1636,6 +1911,8 @@ fn use_context() {}
 fn receive_frame_nanos() {}
 fn key() {}
 fn current_instance() {}
+struct Ordinary;
+impl Ordinary { fn render(&self) {} }
 
 pub fn helper() {
     remember();
@@ -1647,6 +1924,7 @@ pub fn helper() {
     receive_frame_nanos();
     key();
     current_instance();
+    Ordinary.render();
 }
 "#,
         );
@@ -1674,6 +1952,24 @@ mod web {
 mod native {
     fn control() {}
     pub fn helper() { control(); }
+}
+
+#[tessera_ui::tessera]
+fn cfg_fragment(value: usize) {
+    const DATE_COLUMNS: usize = 7;
+    let mut days = [0usize; DATE_COLUMNS];
+    for (index, day) in days.iter_mut().enumerate() {
+        *day = index;
+    }
+    let _slot = tessera_ui::RenderSlot::new(move || {
+    #[cfg(target_family = "wasm")]
+    { web::helper(); }
+    #[cfg(not(target_family = "wasm"))]
+    { native::helper(); }
+    #[cfg(any())]
+    { missing::control(); }
+    let _ = value;
+    });
 }
 
 pub fn unresolved() { missing::control(); }
@@ -1767,31 +2063,36 @@ pub fn unresolved() { missing::control(); }
         })
     }
 
-    fn with_analyzer<T>(source: &str, inspect: impl FnOnce(&ColorAnalyzer<'_>) -> T) -> T {
+    fn with_analyzer<T>(source: &str, inspect: impl FnOnce(&CallAnalyzer<'_>) -> T) -> T {
         with_analyzer_target(source, None, inspect)
     }
 
     fn with_analyzer_target<T>(
         source: &str,
         target: Option<&str>,
-        inspect: impl FnOnce(&ColorAnalyzer<'_>) -> T,
+        inspect: impl FnOnce(&CallAnalyzer<'_>) -> T,
     ) -> T {
-        let _lock = CURRENT_DIR_LOCK
-            .get_or_init(|| Mutex::new(()))
-            .lock()
-            .expect("current directory lock poisoned");
         let project = FixtureProject::new(source);
-        let _current_dir = CurrentDirGuard::push(project.root());
         let options = CheckOptions::new(Some("fixture"), target);
-        let workspace = workspace::load_workspace(&options).expect("fixture workspace should load");
+        let progress = super::super::progress::Progress::new(false);
+        let workspace = workspace::load_workspace_from(&options, &progress, project.root())
+            .expect("fixture workspace should load");
         let db = workspace.host.raw_database();
 
         ra_ap_hir::attach_db(db, || {
-            let local_files = workspace::selected_local_files(db, &workspace.vfs, &options)
+            let plan = super::super::plan::Plan::resolve_at(&options, project.root())
+                .expect("fixture plan");
+            let roots = &plan
+                .jobs
+                .iter()
+                .find(|job| job.name == "fixture")
+                .expect("fixture job")
+                .target_roots;
+            let sources = workspace::sources_for_roots(db, &workspace.vfs, roots)
                 .expect("fixture files should be selected");
-            let mut analyzer =
-                ColorAnalyzer::new(db, &workspace.vfs, Some("fixture".to_string()), local_files)
-                    .expect("fixture analyzer should initialize");
+            let mut analyzer = CallAnalyzer::new(db, &workspace.vfs, sources)
+                .expect("fixture analyzer should initialize");
+            analyzer.display_root = project.root().to_path_buf();
             analyzer.analyze().expect("fixture should analyze");
             inspect(&analyzer)
         })
@@ -1814,16 +2115,13 @@ pub fn unresolved() { missing::control(); }
 
     struct FixtureProject {
         root: PathBuf,
+        _directory: tempfile::TempDir,
     }
 
     impl FixtureProject {
         fn new(source: &str) -> Self {
-            let id = NEXT_FIXTURE_ID.fetch_add(1, Ordering::Relaxed);
-            let root = env::temp_dir().join(format!(
-                "tessera-color-check-fixture-{}-{id}",
-                std::process::id()
-            ));
-            let _ = fs::remove_dir_all(&root);
+            let directory = tempfile::tempdir().expect("isolated checker fixture");
+            let root = directory.path().to_path_buf();
             fs::create_dir_all(root.join("src")).expect("fixture src directory should be created");
             fs::create_dir_all(root.join(".cargo"))
                 .expect("fixture config directory should be created");
@@ -1837,7 +2135,36 @@ pub fn unresolved() { missing::control(); }
             .expect("fixture target directory should be configured");
 
             let tessera_ui_path = workspace_root().join("tessera-ui");
+            let ui_features =
+                if source.contains("HeadlessRenderer") || source.contains("testing::layout_test") {
+                    ", features = [\"testing\", \"headless\"]"
+                } else {
+                    ""
+                };
             let tessera_components_path = workspace_root().join("tessera-components");
+            let widgets_dependency = if source.contains("use fixture_widgets::") {
+                for name in ["widgets", "unrelated"] {
+                    fs::create_dir_all(root.join(name).join("src")).expect("dependency sources");
+                    fs::write(
+                        root.join(name).join("Cargo.toml"),
+                        format!("[package]\nname = \"fixture-{name}\"\nversion = \"0.0.0\"\nedition = \"2024\"\n[dependencies]\ntessera-ui = {{ path = \"{}\" }}\n", toml_path(&tessera_ui_path)),
+                    ).expect("dependency manifest");
+                }
+                fs::write(root.join("widgets/src/lib.rs"), "#[tessera_ui::tessera]\npub fn foreign_component(children: Option<tessera_ui::RenderSlot>) {}\nfn invalid_helper() { tessera_ui::remember(|| 1); }\n").expect("dependency component");
+                fs::write(
+                    root.join("unrelated/src/lib.rs"),
+                    "compile_error!(\"unselected workspace member\");\n",
+                )
+                .expect("unrelated source");
+                fs::write(
+                    root.join("src/orphan.rs"),
+                    "fn orphan() { tessera_ui::remember(|| 1); }\n",
+                )
+                .expect("orphan source");
+                "fixture-widgets = { path = \"widgets\" }\n\n[workspace]\nmembers = [\"widgets\", \"unrelated\"]\n"
+            } else {
+                ""
+            };
             let components_dependency = if source.contains("use tessera_components::") {
                 format!(
                     "tessera-components = {{ path = \"{}\" }}\n",
@@ -1849,7 +2176,7 @@ pub fn unresolved() { missing::control(); }
             fs::write(
                 root.join("Cargo.toml"),
                 format!(
-                    "[package]\nname = \"fixture\"\nversion = \"0.0.0\"\nedition = \"2024\"\n\n[dependencies]\ntessera-ui = {{ path = \"{}\" }}\n{components_dependency}",
+                    "[package]\nname = \"fixture\"\nversion = \"0.0.0\"\nedition = \"2024\"\n\n[dependencies]\ntessera-ui = {{ path = \"{}\"{ui_features} }}\n{components_dependency}{widgets_dependency}",
                     toml_path(&tessera_ui_path)
                 ),
             )
@@ -1858,35 +2185,14 @@ pub fn unresolved() { missing::control(); }
             fs::write(root.join("src/main.rs"), "fn main() {}")
                 .expect("fixture binary source should be written");
 
-            Self { root }
+            Self {
+                root,
+                _directory: directory,
+            }
         }
 
         fn root(&self) -> &Path {
             &self.root
-        }
-    }
-
-    impl Drop for FixtureProject {
-        fn drop(&mut self) {
-            let _ = fs::remove_dir_all(&self.root);
-        }
-    }
-
-    struct CurrentDirGuard {
-        previous: PathBuf,
-    }
-
-    impl CurrentDirGuard {
-        fn push(path: &Path) -> Self {
-            let previous = env::current_dir().expect("current directory should resolve");
-            env::set_current_dir(path).expect("current directory should switch to fixture");
-            Self { previous }
-        }
-    }
-
-    impl Drop for CurrentDirGuard {
-        fn drop(&mut self) {
-            let _ = env::set_current_dir(&self.previous);
         }
     }
 

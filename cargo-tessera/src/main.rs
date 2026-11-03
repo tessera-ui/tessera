@@ -9,7 +9,7 @@ use commands::{
     plugin, web,
 };
 
-mod color_check;
+mod call_guard;
 mod commands;
 mod output;
 mod template;
@@ -99,11 +99,11 @@ enum TesseraCommands {
         #[arg(long, value_enum)]
         asset_backend: Option<AssetBackendArg>,
     },
-    /// Check the project for compilation errors and Tessera color violations
+    /// Check the project for compilation errors and invalid Tessera calls
     Check {
         /// Explain a Tessera diagnostic code without checking a project
         #[arg(long, value_name = "CODE")]
-        explain: Option<color_check::ErrorCode>,
+        explain: Option<call_guard::ErrorCode>,
         /// Specify package to check
         #[arg(short, long)]
         package: Option<String>,
@@ -226,7 +226,7 @@ enum WebCommands {
         /// Override package/binary name (-p)
         #[arg(long, short)]
         package: Option<String>,
-        /// Features to activate for color checking and the web build
+        /// Features to activate for Tessera checking and the web build
         #[arg(short = 'F', long, value_delimiter = ',')]
         features: Vec<String>,
     },

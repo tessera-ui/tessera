@@ -5,11 +5,6 @@ use std::{
 
 use tessera_ui::DrawCommand;
 
-#[cfg(test)]
-thread_local! {
-    pub(crate) static PIXEL_BUFFER_COMPARISONS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
-}
-
 /// Image pixel data for rendering.
 ///
 /// # Fields
@@ -62,20 +57,36 @@ impl Hash for ImageData {
     }
 }
 
-impl PartialEq for ImageData {
-    fn eq(&self, other: &Self) -> bool {
+#[derive(Debug, PartialEq)]
+pub(crate) enum ImageComparison {
+    DifferentMetadata,
+    SharedPixels,
+    ComparedPixels(bool),
+}
+
+impl ImageData {
+    pub(crate) fn comparison(&self, other: &Self) -> ImageComparison {
         if self.width != other.width
             || self.height != other.height
             || self.content_hash != other.content_hash
         {
-            return false;
+            return ImageComparison::DifferentMetadata;
         }
         if Arc::ptr_eq(&self.data, &other.data) {
-            return true;
+            ImageComparison::SharedPixels
+        } else {
+            ImageComparison::ComparedPixels(self.data.as_ref() == other.data.as_ref())
         }
-        #[cfg(test)]
-        PIXEL_BUFFER_COMPARISONS.set(PIXEL_BUFFER_COMPARISONS.get() + 1);
-        self.data.as_ref() == other.data.as_ref()
+    }
+}
+
+impl PartialEq for ImageData {
+    fn eq(&self, other: &Self) -> bool {
+        match self.comparison(other) {
+            ImageComparison::DifferentMetadata => false,
+            ImageComparison::SharedPixels => true,
+            ImageComparison::ComparedPixels(equal) => equal,
+        }
     }
 }
 
@@ -105,16 +116,28 @@ impl DrawCommand for ImageCommand {
 mod tests {
     use std::sync::Arc;
 
-    use super::ImageData;
+    use super::{ImageComparison, ImageData};
 
     #[test]
     fn independently_allocated_images_compare_pixels_even_when_hashes_collide() {
         let first = ImageData::from_rgba(vec![255, 0, 0, 255], 1, 1);
         let equal = ImageData::from_rgba(vec![255, 0, 0, 255], 1, 1);
         assert_eq!(first, equal);
+        assert_eq!(
+            first.comparison(&equal),
+            ImageComparison::ComparedPixels(true)
+        );
+        assert_eq!(
+            first.comparison(&first.clone()),
+            ImageComparison::SharedPixels
+        );
         let mut collision = ImageData::from_rgba(vec![0, 0, 255, 255], 1, 1);
         collision.content_hash = first.content_hash;
         assert_ne!(first, collision);
+        assert_eq!(
+            first.comparison(&collision),
+            ImageComparison::ComparedPixels(false)
+        );
     }
 
     #[test]

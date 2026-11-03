@@ -1,5 +1,3 @@
-use std::cell::Cell;
-
 use tessera_ui::{
     Color, Dp, FocusRequester, HeadlessConfig, HeadlessRenderer, MOUSE_POINTER_ID, Modifier,
     PressKeyEventType, PxPosition, State,
@@ -15,26 +13,31 @@ use crate::{
 
 use super::{MenuAnchor, MenuController, MenuItemSelectionMode, menu_item, menu_provider};
 
-thread_local! {
-    static ROOT: Cell<Option<State<MenuController>>> = const { Cell::new(None) };
-    static ACTIONS: Cell<Option<State<u32>>> = const { Cell::new(None) };
-    static SHOW: Cell<Option<State<bool>>> = const { Cell::new(None) };
-    static ENABLED: Cell<Option<State<bool>>> = const { Cell::new(None) };
-    static EXTERNAL: Cell<Option<FocusRequester>> = const { Cell::new(None) };
+#[derive(Clone, Copy, Default)]
+struct FixtureHandles {
+    root: Option<State<MenuController>>,
+    actions: Option<State<u32>>,
+    show: Option<State<bool>>,
+    enabled: Option<State<bool>>,
+    external: Option<FocusRequester>,
+    trailing: Option<State<u8>>,
+    checked_root: Option<State<MenuController>>,
+    checked_config: Option<State<(MenuItemSelectionMode, bool)>>,
+    checked_calls: Option<State<(usize, usize)>>,
 }
 
 #[tessera]
-fn fixture() {
+fn fixture(observed: tessera_ui::testing::TestProbe<FixtureHandles>) {
     let root = remember(MenuController::new);
     let actions = remember(|| 0);
     let show = remember(|| true);
     let enabled = remember(|| true);
     let external = remember(FocusRequester::new).get();
-    ROOT.set(Some(root));
-    ACTIONS.set(Some(actions));
-    SHOW.set(Some(show));
-    ENABLED.set(Some(enabled));
-    EXTERNAL.set(Some(external));
+    observed.with_mut(|handles| handles.root = Some(root));
+    observed.with_mut(|handles| handles.actions = Some(actions));
+    observed.with_mut(|handles| handles.show = Some(show));
+    observed.with_mut(|handles| handles.enabled = Some(enabled));
+    observed.with_mut(|handles| handles.external = Some(external));
     material_theme()
         .theme(|| {
             let mut theme = MaterialTheme::default();
@@ -63,23 +66,30 @@ fn fixture() {
                             });
                         });
                 })
-                .menu_content(move || {
+                .menu_content(move |menu| {
                     if show.get() {
                         menu_item()
+                            .menu(menu)
                             .label("Share")
                             .enabled(enabled.get())
-                            .submenu_content(move || {
+                            .submenu_content(move |menu| {
                                 menu_item()
+                                    .menu(menu)
                                     .label("Copy link")
                                     .on_click(move || actions.set(actions.get() + 1));
-                                menu_item().label("More options").submenu_content(move || {
-                                    menu_item()
-                                        .label("Export link")
-                                        .on_click(move || actions.set(actions.get() + 10));
-                                });
+                                menu_item()
+                                    .menu(menu)
+                                    .label("More options")
+                                    .submenu_content(move |menu| {
+                                        menu_item()
+                                            .menu(menu)
+                                            .label("Export link")
+                                            .on_click(move || actions.set(actions.get() + 10));
+                                    });
                             });
                     }
                     menu_item()
+                        .menu(menu)
                         .label("Other action")
                         .on_click(move || actions.set(actions.get() + 100));
                 });
@@ -130,8 +140,12 @@ fn assert_focus(renderer: &HeadlessRenderer, label: &str) {
     );
 }
 
-fn open(renderer: &mut HeadlessRenderer, x: f64) {
-    ROOT.get().expect("root").with_mut(|root| {
+fn open(
+    renderer: &mut HeadlessRenderer,
+    observed: &tessera_ui::testing::TestProbe<FixtureHandles>,
+    x: f64,
+) {
+    observed.get().root.expect("root").with_mut(|root| {
         root.open_at(MenuAnchor::from_dp((Dp(x), Dp(40.0)), (Dp(80.0), Dp(40.0))))
     });
     renderer.render_frames(4);
@@ -139,9 +153,13 @@ fn open(renderer: &mut HeadlessRenderer, x: f64) {
 }
 
 fn check_submenu_chain(samples: u32) {
+    let observed = tessera_ui::testing::TestProbe::default();
     let mut renderer = HeadlessRenderer::new(
-        Box::new(|| {
-            fixture();
+        Box::new({
+            let observed = observed.clone();
+            move || {
+                fixture(observed.clone());
+            }
         }),
         vec![Box::new(crate::TesseraComponents)],
         HeadlessConfig {
@@ -153,7 +171,7 @@ fn check_submenu_chain(samples: u32) {
     )
     .expect("renderer");
     renderer.render_frames(3);
-    ROOT.get().expect("root").with_mut(|root| {
+    observed.get().root.expect("root").with_mut(|root| {
         root.open_at(MenuAnchor::from_dp(
             (Dp(40.0), Dp(40.0)),
             (Dp(80.0), Dp(40.0)),
@@ -192,14 +210,18 @@ fn check_submenu_chain(samples: u32) {
         &previous[pixel..pixel + 4],
         "closing removes the child surface pixels"
     );
-    assert_eq!(ACTIONS.get().expect("actions").get(), 1);
+    assert_eq!(observed.get().actions.expect("actions").get(), 1);
     assert!(
-        !ROOT.get().expect("root").with(MenuController::is_open),
+        !observed
+            .get()
+            .root
+            .expect("root")
+            .with(MenuController::is_open),
         "a leaf selection closes the entire menu chain"
     );
     assert_focus(&renderer, "Menu trigger");
 
-    open(&mut renderer, 40.0);
+    open(&mut renderer, &observed, 40.0);
     click(&mut renderer, "More options");
     let parent = bounds(&renderer, "More options");
     let deep = bounds(&renderer, "Export link");
@@ -208,25 +230,37 @@ fn check_submenu_chain(samples: u32) {
         "third level: {parent:?}, {deep:?}"
     );
     click(&mut renderer, "Export link");
-    assert_eq!(ACTIONS.get().expect("actions").get(), 11);
+    assert_eq!(observed.get().actions.expect("actions").get(), 11);
     assert_focus(&renderer, "Menu trigger");
 
-    open(&mut renderer, 40.0);
+    open(&mut renderer, &observed, 40.0);
     click(&mut renderer, "Other action");
     assert_eq!(
-        ACTIONS.get().expect("actions").get(),
+        observed.get().actions.expect("actions").get(),
         111,
         "one click on an ancestor action must pass through the child scrim"
     );
-    assert!(!ROOT.get().expect("root").with(MenuController::is_open));
+    assert!(
+        !observed
+            .get()
+            .root
+            .expect("root")
+            .with(MenuController::is_open)
+    );
     assert_focus(&renderer, "Menu trigger");
 
-    open(&mut renderer, 40.0);
+    open(&mut renderer, &observed, 40.0);
     click_point(&mut renderer, PxPosition::from_f32_xy(900.0, 650.0));
-    assert!(!ROOT.get().expect("root").with(MenuController::is_open));
+    assert!(
+        !observed
+            .get()
+            .root
+            .expect("root")
+            .with(MenuController::is_open)
+    );
     assert_focus(&renderer, "Menu trigger");
 
-    open(&mut renderer, 690.0);
+    open(&mut renderer, &observed, 690.0);
     let parent = bounds(&renderer, "Share");
     let child = bounds(&renderer, "Copy link");
     assert!(
@@ -242,43 +276,71 @@ fn check_submenu_chain(samples: u32) {
         "narrow popup: {narrow:?}"
     );
     click(&mut renderer, "Export link");
-    assert_eq!(ACTIONS.get().expect("actions").get(), 121);
-    assert!(!ROOT.get().expect("root").with(MenuController::is_open));
+    assert_eq!(observed.get().actions.expect("actions").get(), 121);
+    assert!(
+        !observed
+            .get()
+            .root
+            .expect("root")
+            .with(MenuController::is_open)
+    );
 
     renderer.resize(1000, 700);
     renderer.render_frames(3);
     for disable in [false, true] {
         for _ in 0..3 {
-            open(&mut renderer, 40.0);
+            open(&mut renderer, &observed, 40.0);
             click(&mut renderer, "More options");
             if disable {
-                ENABLED.get().expect("enabled").set(false);
+                observed.get().enabled.expect("enabled").set(false);
             } else {
-                SHOW.get().expect("show").set(false);
+                observed.get().show.expect("show").set(false);
             }
             renderer.render_frames(4);
-            assert!(ROOT.get().expect("root").with(MenuController::is_open));
+            assert!(
+                observed
+                    .get()
+                    .root
+                    .expect("root")
+                    .with(MenuController::is_open)
+            );
             let tree = renderer.accessibility_snapshot().expect("tree");
             assert!(!tree.nodes.iter().any(|(_, node)| matches!(
                 node.label(),
                 Some("Copy link" | "More options" | "Export link")
             )));
             assert_focus(&renderer, "Other action");
-            SHOW.get().expect("show").set(true);
-            ENABLED.get().expect("enabled").set(true);
+            observed.get().show.expect("show").set(true);
+            observed.get().enabled.expect("enabled").set(true);
             renderer.render_frames(3);
             assert_focus(&renderer, "Other action");
-            ROOT.get().expect("root").with_mut(MenuController::close);
+            observed
+                .get()
+                .root
+                .expect("root")
+                .with_mut(MenuController::close);
             renderer.render_frames(4);
         }
     }
-    open(&mut renderer, 40.0);
-    ROOT.get().expect("root").with_mut(MenuController::close);
+    open(&mut renderer, &observed, 40.0);
+    observed
+        .get()
+        .root
+        .expect("root")
+        .with_mut(MenuController::close);
     renderer.render_frames(4);
     assert_focus(&renderer, "Menu trigger");
-    open(&mut renderer, 40.0);
-    EXTERNAL.get().expect("external focus").request_focus();
-    ROOT.get().expect("root").with_mut(MenuController::close);
+    open(&mut renderer, &observed, 40.0);
+    observed
+        .get()
+        .external
+        .expect("external focus")
+        .request_focus();
+    observed
+        .get()
+        .root
+        .expect("root")
+        .with_mut(MenuController::close);
     renderer.render_frames(4);
     assert_focus(&renderer, "External action");
 }
@@ -295,22 +357,21 @@ fn gpu_submenus_escape_parent_clip_and_close_the_complete_chain_msaa() {
     check_submenu_chain(4);
 }
 
-thread_local! {
-    static TRAILING: Cell<Option<State<u8>>> = const { Cell::new(None) };
-}
-
 #[tessera]
-fn disclosure_fixture() {
+fn disclosure_fixture(observed: tessera_ui::testing::TestProbe<FixtureHandles>) {
     let trailing = remember(|| 0_u8);
-    TRAILING.set(Some(trailing));
+    observed.with_mut(|handles| handles.trailing = Some(trailing));
     material_theme().child(move || {
         menu_provider()
             .is_open(true)
             .modifier(Modifier::new().width(Dp(240.0)))
-            .menu_content(move || {
-                let item = menu_item().label("Share").submenu_content(|| {
-                    menu_item().label("Copy link").on_click(|| {});
-                });
+            .menu_content(move |menu| {
+                let item = menu_item()
+                    .menu(menu)
+                    .label("Share")
+                    .submenu_content(|menu| {
+                        menu_item().menu(menu).label("Copy link").on_click(|| {});
+                    });
                 match trailing.get() {
                     1 => {
                         item.trailing_text("Hint");
@@ -330,8 +391,12 @@ fn gpu_submenu_disclosure_remains_visible_with_custom_trailing_content() {
     crate::test_utils::run_isolated_test(
         "menus::submenu_tests::gpu_submenu_disclosure_remains_visible_with_custom_trailing_content",
         || {
+            let observed = tessera_ui::testing::TestProbe::default();
             let mut renderer = HeadlessRenderer::new(
-                Box::new(disclosure_fixture),
+                Box::new({
+                    let observed = observed.clone();
+                    move || disclosure_fixture(observed.clone())
+                }),
                 vec![Box::new(crate::TesseraComponents)],
                 HeadlessConfig {
                     width: 400,
@@ -359,7 +424,7 @@ fn gpu_submenu_disclosure_remains_visible_with_custom_trailing_content() {
                 "the disclosure region must contain painted arrow pixels"
             );
             for variant in [1, 2] {
-                TRAILING.get().unwrap().set(variant);
+                observed.get().trailing.unwrap().set(variant);
                 renderer.render_frames(30);
                 let changed = crop(renderer.read_pixels().unwrap());
                 assert_eq!(
@@ -371,32 +436,28 @@ fn gpu_submenu_disclosure_remains_visible_with_custom_trailing_content() {
     );
 }
 
-thread_local! {
-    static CHECKED_ROOT: Cell<Option<State<MenuController>>> = const { Cell::new(None) };
-    static CHECKED_CONFIG: Cell<Option<State<(MenuItemSelectionMode, bool)>>> = const { Cell::new(None) };
-    static CHECKED_CALLS: Cell<Option<State<(usize, usize)>>> = const { Cell::new(None) };
-}
-
 #[tessera]
-fn checked_branch_fixture() {
+fn checked_branch_fixture(observed: tessera_ui::testing::TestProbe<FixtureHandles>) {
     let controller = remember(MenuController::new);
     let config = remember(|| (MenuItemSelectionMode::Checkbox, false));
     let calls = remember(|| (0_usize, 0_usize));
-    CHECKED_ROOT.set(Some(controller));
-    CHECKED_CONFIG.set(Some(config));
-    CHECKED_CALLS.set(Some(calls));
+    observed.with_mut(|handles| handles.checked_root = Some(controller));
+    observed.with_mut(|handles| handles.checked_config = Some(config));
+    observed.with_mut(|handles| handles.checked_calls = Some(calls));
     material_theme().child(move || {
         menu_provider()
             .controller(controller)
-            .menu_content(move || {
+            .menu_content(move |menu| {
                 menu_item()
+                    .menu(menu)
                     .label("Checked branch")
                     .selection_mode(config.get().0)
                     .selected(config.get().1)
                     .close_on_click(true)
                     .on_click(move || calls.with_mut(|calls| calls.0 += 1))
-                    .submenu_content(move || {
+                    .submenu_content(move |menu| {
                         menu_item()
+                            .menu(menu)
                             .label("Checked child leaf")
                             .close_on_click(true)
                             .on_click(move || calls.with_mut(|calls| calls.1 += 1));
@@ -432,8 +493,12 @@ fn gpu_checkable_branches_preserve_controlled_state_and_expand_before_leaf_activ
     crate::test_utils::run_isolated_test(
         "menus::submenu_tests::gpu_checkable_branches_preserve_controlled_state_and_expand_before_leaf_activation",
         || {
+            let observed = tessera_ui::testing::TestProbe::default();
             let mut renderer = HeadlessRenderer::new(
-                Box::new(checked_branch_fixture),
+                Box::new({
+                    let observed = observed.clone();
+                    move || checked_branch_fixture(observed.clone())
+                }),
                 vec![Box::new(crate::TesseraComponents)],
                 HeadlessConfig {
                     width: 700,
@@ -444,9 +509,9 @@ fn gpu_checkable_branches_preserve_controlled_state_and_expand_before_leaf_activ
             )
             .unwrap();
             renderer.render_frames(4);
-            let controller = CHECKED_ROOT.get().unwrap();
-            let config = CHECKED_CONFIG.get().unwrap();
-            let calls = CHECKED_CALLS.get().unwrap();
+            let controller = observed.get().checked_root.unwrap();
+            let config = observed.get().checked_config.unwrap();
+            let calls = observed.get().checked_calls.unwrap();
             let mut completed_leaves = 0;
             for (mode, role) in [
                 (MenuItemSelectionMode::Radio, Role::MenuItemRadio),

@@ -22,6 +22,7 @@ pub use crate::{
         CurrentComponentInstanceGuard, GroupGuard, NodeContextGuard, PathGroupGuard, PhaseGuard,
         RuntimePhase, push_current_component_instance_key, push_current_node, push_phase,
     },
+    session::{local_runtime_resource, runtime_resource},
 };
 
 pub fn record_current_context_snapshot_for(instance_key: u64) {
@@ -32,12 +33,20 @@ pub fn current_instance_logic_id() -> u64 {
     crate::runtime::current_instance_logic_id()
 }
 
+pub fn record_component_execution(name: &'static str, instance: u64) {
+    crate::work::record(instance, crate::WorkPhase::Build, name);
+}
+
 pub fn current_instance_key() -> u64 {
     crate::runtime::current_instance_key()
 }
 
 pub fn current_phase() -> Option<RuntimePhase> {
     crate::runtime::current_phase()
+}
+
+pub fn current_runtime_session() -> Option<crate::WeakRuntimeSession> {
+    crate::RuntimeSession::current().map(|session| session.downgrade())
 }
 
 pub fn current_replay_boundary_instance_key_from_scope() -> Option<u64> {

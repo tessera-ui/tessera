@@ -843,6 +843,10 @@ pub fn progress(
     track_color: Option<Color>,
 ) {
     let value = value.unwrap_or(0.0);
+    let scheme = use_context::<MaterialTheme>()
+        .expect("MaterialTheme must be provided")
+        .get()
+        .color_scheme;
     linear_progress_indicator()
         .progress(value)
         .modifier(modifier.unwrap_or_else(|| {
@@ -851,38 +855,26 @@ pub fn progress(
                 ProgressIndicatorDefaults::LINEAR_INDICATOR_HEIGHT,
             )
         }))
-        .color(progress_color.unwrap_or_else(|| {
-            use_context::<MaterialTheme>()
-                .expect("MaterialTheme must be provided")
-                .get()
-                .color_scheme
-                .primary
-        }))
-        .track_color(track_color.unwrap_or_else(|| {
-            use_context::<MaterialTheme>()
-                .expect("MaterialTheme must be provided")
-                .get()
-                .color_scheme
-                .surface_variant
-        }));
+        .color(progress_color.unwrap_or(scheme.primary))
+        .track_color(track_color.unwrap_or(scheme.surface_variant));
 }
 
 #[cfg(all(test, not(target_family = "wasm")))]
 mod tests {
-    use std::{cell::Cell, time::Duration};
+    use std::time::Duration;
 
-    use tessera_ui::{Color, HeadlessConfig, HeadlessRenderer, State, remember, tessera};
+    use tessera_ui::{
+        Color, HeadlessConfig, HeadlessRenderer, State, remember, tessera, testing::TestProbe,
+    };
 
     use crate::theme::material_theme;
 
     use super::{circular_progress_indicator, linear_progress_indicator};
 
-    thread_local! { static DETERMINATE: Cell<Option<State<bool>>> = const { Cell::new(None) }; }
-
     #[tessera]
-    fn animated_fixture(linear: bool) {
+    fn animated_fixture(linear: bool, probe: TestProbe<Option<State<bool>>>) {
         let determinate = remember(|| false);
-        DETERMINATE.set(Some(determinate));
+        probe.set(Some(determinate));
         material_theme().child(move || {
             if linear {
                 let indicator = linear_progress_indicator()
@@ -909,9 +901,11 @@ mod tests {
             "progress::tests::indeterminate_progress_advances_with_the_frame_clock_and_determinate_progress_stays_still",
             || {
                 for linear in [false, true] {
+                    let probe = TestProbe::default();
+                    let observed = probe.clone();
                     let mut renderer = HeadlessRenderer::new(
                         Box::new(move || {
-                            animated_fixture(linear);
+                            animated_fixture(linear, probe.clone());
                         }),
                         vec![Box::new(crate::TesseraComponents)],
                         HeadlessConfig {
@@ -931,7 +925,7 @@ mod tests {
                         first != moving,
                         "indeterminate progress must subscribe to frame changes, linear={linear}"
                     );
-                    DETERMINATE.get().unwrap().set(true);
+                    observed.get().unwrap().set(true);
                     renderer.render_frames(2);
                     let stopped = renderer.read_pixels().expect("determinate pose");
                     renderer.render_frames(4);

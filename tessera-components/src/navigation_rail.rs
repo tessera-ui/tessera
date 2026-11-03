@@ -79,8 +79,9 @@ enum NavigationRailIconPosition {
     Start,
 }
 
-#[derive(Clone, PartialEq)]
-struct NavigationRailCompositionContext {
+/// Layout configuration supplied by a navigation rail content slot.
+#[derive(Clone, Copy, PartialEq)]
+pub struct NavigationRailScope {
     icon_position: NavigationRailIconPosition,
     indicator_start_width: Dp,
     item_min_height: Dp,
@@ -672,6 +673,7 @@ struct NavigationRailItemDefinition {
 ///
 /// ## Parameters
 ///
+/// - `rail` — layout configuration supplied by the parent content slot.
 /// - `label` — text label shown next to or below the icon.
 /// - `icon` — optional icon rendered for the item.
 /// - `badge` — optional update marker, overlapping a collapsed icon or
@@ -690,8 +692,8 @@ struct NavigationRailItemDefinition {
 /// #[tessera]
 /// fn demo() {
 ///     let selected = remember(|| 0usize);
-///     navigation_rail().content(move || {
-///         navigation_rail_item()
+///     navigation_rail().content(move |rail| {
+///         navigation_rail_item(rail)
 ///             .label("Home")
 ///             .selected(selected.get() == 0)
 ///             .on_click(move || selected.set(0));
@@ -700,6 +702,7 @@ struct NavigationRailItemDefinition {
 /// ```
 #[tessera]
 pub fn navigation_rail_item(
+    rail: NavigationRailScope,
     #[prop(into)] label: Option<String>,
     icon: Option<RenderSlot>,
     on_click: Option<Callback>,
@@ -710,9 +713,7 @@ pub fn navigation_rail_item(
     let label = label.unwrap_or_default();
     let on_click = on_click.unwrap_or_default();
     let selected = selected.unwrap_or(false);
-    let composition = use_context::<NavigationRailCompositionContext>()
-        .expect("navigation_rail_item must be used inside navigation_rail")
-        .get();
+    let composition = rail;
 
     // Each item owns its own selection animation, keyed by call position, so
     // there is no shared index registry that could drift across rebuilds.
@@ -782,8 +783,8 @@ pub fn navigation_rail_item(
 /// #[tessera]
 /// fn demo() {
 ///     let selected = remember(|| 0usize);
-///     navigation_rail().expanded(true).content(move || {
-///         navigation_rail_item()
+///     navigation_rail().expanded(true).content(move |rail| {
+///         navigation_rail_item(rail)
 ///             .label("Home")
 ///             .selected(selected.get() == 0)
 ///             .on_click(move || selected.set(0));
@@ -793,10 +794,9 @@ pub fn navigation_rail_item(
 #[tessera]
 pub fn navigation_rail(
     expanded: Option<bool>,
-    content: Option<RenderSlot>,
+    content: Option<tessera_ui::RenderSlotWith<NavigationRailScope>>,
     header: Option<RenderSlot>,
 ) {
-    let content = content.unwrap_or_else(RenderSlot::empty);
     let expanded = expanded.unwrap_or(false);
     let scheme = use_context::<MaterialTheme>()
         .expect("MaterialTheme must be provided")
@@ -840,7 +840,7 @@ pub fn navigation_rail(
     };
     let indicator_start_width =
         Dp((container_width.0 - ITEM_HORIZONTAL_PADDING.0 * 2.0).max(INDICATOR_TOP_WIDTH.0));
-    let composition = NavigationRailCompositionContext {
+    let composition = NavigationRailScope {
         icon_position,
         indicator_start_width,
         item_min_height,
@@ -851,18 +851,18 @@ pub fn navigation_rail(
         .focus_group()
         .focus_traversal_policy(FocusTraversalPolicy::vertical().wrap(true));
     layout().modifier(modifier).child({
-        let composition = composition.clone();
+        let composition = composition;
         move || {
-            let composition = composition.clone();
+            let composition = composition;
             surface()
                 .modifier(Modifier::new().fill_max_height().width(container_width))
                 .style(scheme.surface.into())
                 .block_input(true)
                 .child(move || {
                     navigation_rail_content()
-                        .composition(composition.clone())
+                        .composition(composition)
                         .header_optional(header)
-                        .content_shared(content);
+                        .content_optional(content);
                 });
         }
     });
@@ -870,12 +870,11 @@ pub fn navigation_rail(
 
 #[tessera]
 fn navigation_rail_content(
-    composition: Option<NavigationRailCompositionContext>,
+    composition: Option<NavigationRailScope>,
     header: Option<RenderSlot>,
-    content: Option<RenderSlot>,
+    content: Option<tessera_ui::RenderSlotWith<NavigationRailScope>>,
 ) {
     let content_context = composition.expect("rail content requires item composition");
-    let content = content.unwrap_or_default();
     column()
         .modifier(Modifier::new().fill_max_size().padding(Padding::new(
             Dp::ZERO,
@@ -900,18 +899,9 @@ fn navigation_rail_content(
                 layout().modifier(Modifier::new().height(HEADER_BOTTOM_PADDING));
             }
 
-            let provided_context = content_context.clone();
-            let content_context = content_context.clone();
-            provide_context(
-                move || provided_context.clone(),
-                move || {
-                    let current = use_context::<NavigationRailCompositionContext>().unwrap();
-                    if current.get() != content_context {
-                        current.set(content_context.clone());
-                    }
-                    content.render();
-                },
-            );
+            if let Some(content) = content {
+                content.render(content_context);
+            }
         });
 }
 
@@ -961,8 +951,8 @@ fn navigation_rail_content(
 ///                     text().content("Open navigation");
 ///                 });
 ///             })
-///             .content(move || {
-///                 navigation_rail_item()
+///             .content(move |rail| {
+///                 navigation_rail_item(rail)
 ///                     .label("Inbox")
 ///                     .selected(selected.get() == 0)
 ///                     .on_click(move || {
@@ -981,12 +971,11 @@ pub fn modal_navigation_rail(
     #[prop(into)] accessibility_label: Option<String>,
     main_content: Option<RenderSlot>,
     header: Option<RenderSlot>,
-    content: Option<RenderSlot>,
+    content: Option<tessera_ui::RenderSlotWith<NavigationRailScope>>,
 ) {
     let is_open = is_open.unwrap_or(false);
     let on_close_request = on_close_request.unwrap_or_default();
     let main_content = main_content.unwrap_or_default();
-    let content = content.unwrap_or_default();
     let scheme = use_context::<MaterialTheme>()
         .expect("MaterialTheme must be provided")
         .get()
@@ -1062,7 +1051,7 @@ pub fn modal_navigation_rail(
                     .block_input(true)
                     .child(move || {
                         navigation_rail_content()
-                            .composition(NavigationRailCompositionContext {
+                            .composition(NavigationRailScope {
                                 icon_position: NavigationRailIconPosition::Start,
                                 indicator_start_width: Dp(
                                     EXPANDED_MIN_WIDTH.0 - ITEM_HORIZONTAL_PADDING.0 * 2.0
@@ -1071,7 +1060,7 @@ pub fn modal_navigation_rail(
                                 item_spacing: ITEM_VERTICAL_SPACING_EXPANDED,
                             })
                             .header_optional(header)
-                            .content_shared(content);
+                            .content_optional(content);
                     });
             }
         });
@@ -1248,16 +1237,16 @@ mod tests {
     fn navigation_rail_row() {
         let selected = remember(|| 0usize);
         column().children(move || {
-            navigation_rail().content(move || {
-                navigation_rail_item()
+            navigation_rail().content(move |rail| {
+                navigation_rail_item(rail)
                     .label("Home")
                     .selected(selected.get() == 0)
                     .on_click(move || selected.set(0));
-                navigation_rail_item()
+                navigation_rail_item(rail)
                     .label("Search")
                     .selected(selected.get() == 1)
                     .on_click(move || selected.set(1));
-                navigation_rail_item()
+                navigation_rail_item(rail)
                     .label("Settings")
                     .selected(selected.get() == 2)
                     .on_click(move || selected.set(2));
@@ -1353,7 +1342,6 @@ mod tests {
 
 #[cfg(all(test, not(target_family = "wasm")))]
 mod modal_tests {
-    use std::cell::{Cell, RefCell};
 
     use tessera_ui::{
         HeadlessConfig, HeadlessRenderer, MOUSE_POINTER_ID, PressKeyEventType,
@@ -1368,20 +1356,14 @@ mod modal_tests {
 
     use super::*;
 
-    thread_local! {
-        static OPEN: Cell<Option<State<bool>>> = const { Cell::new(None) };
-        static SELECTED: Cell<Option<State<usize>>> = const { Cell::new(None) };
-        static CLOSE: RefCell<Option<Callback>> = const { RefCell::new(None) };
-    }
-
     #[tessera]
-    fn fixture() {
+    fn fixture(
+        output: tessera_ui::testing::TestProbe<Option<(State<bool>, State<usize>, Callback)>>,
+    ) {
         let open = remember(|| false);
         let selected = remember(|| 0usize);
-        OPEN.set(Some(open));
-        SELECTED.set(Some(selected));
         let close = Callback::new(move || open.set(false));
-        CLOSE.with_borrow_mut(|value| *value = Some(close));
+        output.set(Some((open, selected, close)));
         material_theme().child(move || {
             modal_navigation_rail()
                 .is_open(open.get())
@@ -1407,9 +1389,9 @@ mod modal_tests {
                             text().content("Close rail");
                         });
                 })
-                .content(move || {
+                .content(move |rail| {
                     for (index, label) in ["Inbox", "Saved"].into_iter().enumerate() {
-                        navigation_rail_item()
+                        navigation_rail_item(rail)
                             .label(label)
                             .selected(selected.get() == index)
                             .on_click(move || {
@@ -1449,10 +1431,17 @@ mod modal_tests {
             layout_test, pump_layout_test_session, start_layout_test_session,
         };
 
-        let mut session = start_layout_test_session(layout_test(fixture).viewport_px(600, 480));
+        let output = tessera_ui::testing::TestProbe::default();
+        let observed = output.clone();
+        let mut session = start_layout_test_session(
+            layout_test(move || {
+                fixture(observed.clone());
+            })
+            .viewport_px(600, 480),
+        );
         pump_layout_test_session(&mut session, 0);
-        let open = OPEN.get().unwrap();
-        let close = CLOSE.with_borrow(|close| close.unwrap());
+        let open = output.get().expect("mounted modal rail").0;
+        let close = output.get().expect("mounted modal rail").2;
         open.set(true);
         assert!(!modal_rail_key(
             PhysicalKey::Code(KeyCode::Enter),
@@ -1480,8 +1469,12 @@ mod modal_tests {
         crate::test_utils::run_isolated_test(
             "navigation_rail::modal_tests::modal_scrim_destination_and_escape_adapter_restore_origin_without_focus_activation",
             || {
+                let output = tessera_ui::testing::TestProbe::default();
+                let observed = output.clone();
                 let mut renderer = HeadlessRenderer::new(
-                    Box::new(fixture),
+                    Box::new(move || {
+                        fixture(observed.clone());
+                    }),
                     vec![Box::new(crate::TesseraComponents)],
                     HeadlessConfig {
                         width: 600,
@@ -1496,7 +1489,7 @@ mod modal_tests {
                     let origin = node(&renderer, Role::Button, "Open rail").0;
                     action(&mut renderer, origin, Action::Focus);
                     action(&mut renderer, origin, Action::Click);
-                    assert!(OPEN.get().unwrap().get());
+                    assert!(output.get().expect("mounted modal rail").0.get());
                     let snapshot = renderer.accessibility_snapshot().unwrap();
                     assert!(!snapshot.nodes.iter().any(|(id, _)| *id == origin));
                     let dialog = node(&renderer, Role::Dialog, "Mail destinations").1;
@@ -1508,11 +1501,11 @@ mod modal_tests {
                     node(&renderer, Role::Button, "Close rail");
                     node(&renderer, Role::Tab, "Inbox");
                     let saved = node(&renderer, Role::Tab, "Saved").0;
-                    let selected = SELECTED.get().unwrap().get();
+                    let selected = output.get().expect("mounted modal rail").1.get();
                     action(&mut renderer, saved, Action::Focus);
                     assert_eq!(renderer.accessibility_snapshot().unwrap().focus, saved);
-                    assert_eq!(SELECTED.get().unwrap().get(), selected);
-                    assert!(OPEN.get().unwrap().get());
+                    assert_eq!(output.get().expect("mounted modal rail").1.get(), selected);
+                    assert!(output.get().expect("mounted modal rail").0.get());
                     match dismiss {
                         0 => {
                             let point = PxPosition::from_f32_xy(550.0, 240.0);
@@ -1533,15 +1526,15 @@ mod modal_tests {
                             assert!(modal_rail_key(
                                 PhysicalKey::Code(KeyCode::Escape),
                                 ElementState::Pressed,
-                                CLOSE.with_borrow(|close| close.unwrap())
+                                output.get().expect("mounted modal rail").2
                             ));
                         }
                     }
                     renderer.render_frames(6);
-                    assert!(!OPEN.get().unwrap().get());
+                    assert!(!output.get().expect("mounted modal rail").0.get());
                     assert_eq!(renderer.accessibility_snapshot().unwrap().focus, origin);
                     assert_eq!(
-                        SELECTED.get().unwrap().get(),
+                        output.get().expect("mounted modal rail").1.get(),
                         if dismiss == 0 { 0 } else { 1 }
                     );
                 }

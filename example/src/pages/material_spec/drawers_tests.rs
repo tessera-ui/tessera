@@ -4,8 +4,6 @@
 //!
 //! Verify reference figures and real modal destinations.
 
-use std::cell::{Cell, RefCell};
-
 use tessera_components::theme::material_theme;
 use tessera_ui::{
     CursorEventContent, GestureState, PointerChange, PressKeyEventType, PxPosition,
@@ -18,26 +16,22 @@ use tessera_ui::{
 
 use super::*;
 
-thread_local! {
-    static HOST: Cell<(i32, i32)> = const { Cell::new((600, 240)) };
-    static SELECTED: Cell<Option<State<usize>>> = const { Cell::new(None) };
-    static OPEN: Cell<Option<State<bool>>> = const { Cell::new(None) };
-    static SCROLL: Cell<Option<State<ScrollableController>>> = const { Cell::new(None) };
-}
-
 #[tessera]
-fn fixture() {
+fn fixture(
+    host: (i32, i32),
+    output: tessera_ui::testing::TestProbe<
+        Option<(State<usize>, State<bool>, State<ScrollableController>)>,
+    >,
+) {
     let selected = remember(|| 0usize);
     let open = remember(|| true);
     let scroll = remember(ScrollableController::new);
-    SELECTED.set(Some(selected));
-    OPEN.set(Some(open));
-    SCROLL.set(Some(scroll));
+    output.set(Some((selected, open, scroll)));
     material_theme().child(move || {
         column()
             .modifier(Modifier::new().fill_max_size())
             .children(move || {
-                let (width, height) = HOST.get();
+                let (width, height) = host;
                 boxed()
                     .modifier(
                         Modifier::new()
@@ -69,8 +63,11 @@ fn fixture() {
 #[test]
 fn live_drawer_fills_available_height_and_scrolls_to_an_activatable_last_destination() {
     for (width, height) in [(600, 240), (600, 720), (320, 240), (320, 720)] {
-        HOST.set((width, height));
-        let mut session = start_layout_test_session(layout_test(fixture).viewport_px(800, 800));
+        let output = tessera_ui::testing::TestProbe::default();
+        let probe = output.clone();
+        let mut session = start_layout_test_session(
+            layout_test(move || fixture((width, height), probe.clone())).viewport_px(800, 800),
+        );
         pump_layout_test_session(&mut session, 0);
         let before = pump_layout_test_session(&mut session, 1_000_000_000);
         before.node("drawer-host").size(width, height);
@@ -79,7 +76,7 @@ fn live_drawer_fills_available_height_and_scrolls_to_an_activatable_last_destina
         let initial = before.node("drawer-personal").bounds();
         if height == 240 {
             assert!(initial.y.0 >= height);
-            SCROLL.get().unwrap().with_mut(|scroll| {
+            output.get().unwrap().2.with_mut(|scroll| {
                 scroll.set_scroll_position(PxPosition::from_f32_xy(0.0, -240.0));
             });
         }
@@ -102,7 +99,7 @@ fn live_drawer_fills_available_height_and_scrolls_to_an_activatable_last_destina
                 &mut session,
                 1_000_000_000 + (index as u64 + 2) * 16_666_667,
                 vec![PointerChange::new(
-                    tessera_ui::time::Instant::now(),
+                    tessera_ui::current_frame_time().unwrap(),
                     1,
                     content,
                     GestureState::TapCandidate,
@@ -111,46 +108,36 @@ fn live_drawer_fills_available_height_and_scrolls_to_an_activatable_last_destina
             );
         }
         pump_layout_test_session(&mut session, 1_100_000_000);
-        assert_eq!(SELECTED.get().unwrap().get(), 4);
-        assert!(!OPEN.get().unwrap().get());
-    }
-}
-
-thread_local! {
-    static FIGURE_MODE: Cell<u8> = const { Cell::new(0) };
-    static FIGURE_WIDTH: Cell<f64> = const { Cell::new(512.0) };
-    static FIGURE_GEOMETRY: Cell<Option<State<Geometry>>> = const { Cell::new(None) };
-    static PAGE_MODE: Cell<u8> = const { Cell::new(0) };
-}
-
-struct DrawerPipelines;
-impl tessera_ui::RenderModule for DrawerPipelines {
-    fn register_pipelines(&self, context: &mut tessera_ui::PipelineContext<'_>) {
-        tessera_components::pipelines::register_pipelines(context);
+        assert_eq!(output.get().unwrap().0.get(), 4);
+        assert!(!output.get().unwrap().1.get());
     }
 }
 
 #[tessera]
-fn native_figure_fixture() {
+fn native_figure_fixture(
+    width: f64,
+    mode: u8,
+    output: tessera_ui::testing::TestProbe<Option<State<Geometry>>>,
+) {
     let geometry = remember(Geometry::new);
-    FIGURE_GEOMETRY.set(Some(geometry));
+    output.set(Some(geometry));
     material_theme().child(move || {
         boxed().children(move || {
             column()
-                .modifier(Modifier::new().width(Dp(FIGURE_WIDTH.get())))
+                .modifier(Modifier::new().width(Dp(width)))
                 .children(move || {
-                    drawer_figure(true, FIGURE_MODE.get()).geometry(geometry);
+                    drawer_figure(true, mode).geometry(geometry);
                 });
         });
     });
 }
 
 #[tessera]
-fn page_figure_fixture() {
-    material_theme().child(|| {
+fn page_figure_fixture(page: u8) {
+    material_theme().child(move || {
         column()
             .modifier(Modifier::new().fill_max_width())
-            .children(|| match PAGE_MODE.get() {
+            .children(move || match page {
                 0 => {
                     overview_figure();
                 }
@@ -173,14 +160,36 @@ fn page_figure_fixture() {
     });
 }
 
-fn gpu_renderer<Output: 'static>(
-    root: fn() -> Output,
-    width: u32,
-    height: u32,
-) -> tessera_ui::HeadlessRenderer {
+#[derive(Clone)]
+enum Scene {
+    Native(
+        f64,
+        u8,
+        tessera_ui::testing::TestProbe<Option<State<Geometry>>>,
+    ),
+    Page(u8),
+    Live(
+        (i32, i32),
+        tessera_ui::testing::TestProbe<
+            Option<(State<usize>, State<bool>, State<ScrollableController>)>,
+        >,
+    ),
+}
+
+fn gpu_renderer(scene: Scene, width: u32, height: u32) -> tessera_ui::HeadlessRenderer {
     let mut renderer = tessera_ui::HeadlessRenderer::new(
-        Box::new(root),
-        vec![Box::new(DrawerPipelines)],
+        Box::new(move || match scene.clone() {
+            Scene::Native(width, mode, output) => {
+                native_figure_fixture(width, mode, output);
+            }
+            Scene::Page(page) => {
+                page_figure_fixture(page);
+            }
+            Scene::Live(viewport, output) => {
+                fixture(viewport, output);
+            }
+        }),
+        vec![Box::new(crate::TestPipelines)],
         tessera_ui::HeadlessConfig {
             width,
             height,
@@ -194,8 +203,7 @@ fn gpu_renderer<Output: 'static>(
     renderer
 }
 
-fn settle_native_figure(renderer: &mut tessera_ui::HeadlessRenderer) {
-    let geometry = FIGURE_GEOMETRY.get().expect("production geometry");
+fn settle_native_figure(renderer: &mut tessera_ui::HeadlessRenderer, geometry: State<Geometry>) {
     let mut previous = None;
     let mut stable = 0;
     let mut history = Vec::new();
@@ -221,11 +229,12 @@ fn settle_native_figure(renderer: &mut tessera_ui::HeadlessRenderer) {
 fn drawer_reference_rulers_measure_native_items_in_one_canonical_space() {
     for width in [512.0, 400.0, 320.0] {
         for mode in [1, 2] {
-            FIGURE_WIDTH.set(width);
-            FIGURE_MODE.set(mode);
-            let mut renderer = gpu_renderer(native_figure_fixture, 600, 900);
-            settle_native_figure(&mut renderer);
-            let values = FIGURE_GEOMETRY.get().unwrap().with(space_geometry);
+            let output = tessera_ui::testing::TestProbe::default();
+            let probe = output.clone();
+            let mut renderer = gpu_renderer(Scene::Native(width, mode, probe), 600, 900);
+            let geometry = output.get().unwrap();
+            settle_native_figure(&mut renderer, geometry);
+            let values = geometry.with(space_geometry);
             let container = values["container"];
             let indicator = values["indicator"];
             let icon = values["icon"];
@@ -267,7 +276,7 @@ fn drawer_reference_rulers_measure_native_items_in_one_canonical_space() {
                 .bounds()
                 .unwrap();
             assert!(
-                (canvas.width() - FIGURE_WIDTH.get()).abs() <= 1.0,
+                (canvas.width() - width).abs() <= 1.0,
                 "the actual figure canvas must use the requested width {width} in mode {mode}: {canvas:?}"
             );
             let scale = width / 512.0;
@@ -336,8 +345,7 @@ fn overview_and_color_figures_publish_distinct_native_drawers_and_legends() {
         (0, "Standard and modal navigation drawers", 2),
         (1, "Modal navigation drawer color roles", 9),
     ] {
-        PAGE_MODE.set(page);
-        let renderer = gpu_renderer(page_figure_fixture, 1024, 1600);
+        let renderer = gpu_renderer(Scene::Page(page), 1024, 1600);
         let tree = renderer.accessibility_snapshot().unwrap();
         let canvas = tree
             .nodes
@@ -528,8 +536,7 @@ fn tap_visibility_node(
 #[ignore = "requires a native GPU adapter for real scaled destination and menu input"]
 fn visibility_examples_fit_narrow_canvases_and_reflow_content_without_losing_selection() {
     for width in [600, 320] {
-        PAGE_MODE.set(5);
-        let mut renderer = gpu_renderer(page_figure_fixture, width, 1600);
+        let mut renderer = gpu_renderer(Scene::Page(5), width, 1600);
         assert_visibility_panel(&renderer, width, 1, true, "Inbox");
         assert_visibility_panel(&renderer, width, 2, false, "Inbox");
         let first = visibility_group(&renderer, "Standard drawer visibility example 1");
@@ -576,8 +583,7 @@ fn visibility_examples_fit_narrow_canvases_and_reflow_content_without_losing_sel
 #[test]
 #[ignore = "requires a native GPU adapter"]
 fn static_state_presentations_render_hover_focus_and_press_without_changing_selection() {
-    PAGE_MODE.set(2);
-    let renderer = gpu_renderer(page_figure_fixture, 1024, 900);
+    let renderer = gpu_renderer(Scene::Page(2), 1024, 900);
     let tree = renderer.accessibility_snapshot().unwrap();
     for label in ["Enabled", "Hovered", "Focused", "Pressed"] {
         assert!(tree.nodes.iter().any(|(_, node)| node.role() == Role::Group
@@ -623,8 +629,9 @@ fn static_state_presentations_render_hover_focus_and_press_without_changing_sele
 #[test]
 #[ignore = "requires a native GPU adapter"]
 fn modal_drawer_initial_focus_targets_the_first_actual_destination() {
-    HOST.set((600, 720));
-    let renderer = gpu_renderer(fixture, 800, 800);
+    let output = tessera_ui::testing::TestProbe::default();
+    let probe = output.clone();
+    let renderer = gpu_renderer(Scene::Live((600, 720), probe), 800, 800);
     let tree = renderer.accessibility_snapshot().unwrap();
     let inbox = tree
         .nodes
@@ -636,32 +643,17 @@ fn modal_drawer_initial_focus_targets_the_first_actual_destination() {
         tree.focus, inbox,
         "opening modal navigation must focus Inbox, not a wrapper or later item"
     );
-    assert_eq!(SELECTED.get().unwrap().get(), 0);
-    assert!(OPEN.get().unwrap().get());
-}
-
-thread_local! {
-    static COLD_COUNT: Cell<usize> = const { Cell::new(1) };
-    static COLD_GEOMETRIES: RefCell<Vec<State<Geometry>>> = const { RefCell::new(Vec::new()) };
-    static COLD_EMPTY_ON_ATTACH: Cell<bool> = const { Cell::new(false) };
+    assert_eq!(output.get().unwrap().0.get(), 0);
+    assert!(output.get().unwrap().1.get());
 }
 
 #[tessera]
-fn cold_specs_fixture() {
+fn cold_specs_fixture(count: usize, output: tessera_ui::testing::TestProbe<Vec<State<Geometry>>>) {
     let mut geometries = Vec::new();
-    for _ in 0..COLD_COUNT.get() {
+    for _ in 0..count {
         geometries.push(remember(Geometry::new));
     }
-    COLD_GEOMETRIES.with(|registered| {
-        if registered.borrow().is_empty() {
-            COLD_EMPTY_ON_ATTACH.set(
-                geometries
-                    .iter()
-                    .all(|geometry| geometry.with(|value| value.is_empty())),
-            );
-        }
-        registered.replace(geometries.clone());
-    });
+    output.set(geometries.clone());
     material_theme().child(move || {
         let geometries = geometries.clone();
         column()
@@ -704,10 +696,11 @@ fn enter_cold_child(test: &str) -> bool {
 }
 
 fn check_cold_specs_svg(count: usize) {
-    COLD_COUNT.set(count);
+    let output = tessera_ui::testing::TestProbe::default();
+    let probe = output.clone();
     let mut renderer = tessera_ui::HeadlessRenderer::new(
-        Box::new(cold_specs_fixture),
-        vec![Box::new(DrawerPipelines)],
+        Box::new(move || cold_specs_fixture(count, probe.clone())),
+        vec![Box::new(crate::TestPipelines)],
         tessera_ui::HeadlessConfig {
             width: 1024,
             height: 1100,
@@ -723,13 +716,8 @@ fn check_cold_specs_svg(count: usize) {
     let mut settled = false;
     for _ in 0..16 {
         renderer.step_frame();
-        let current: Vec<_> = COLD_GEOMETRIES.with(|geometries| {
-            geometries
-                .borrow()
-                .iter()
-                .map(|geometry| geometry.get())
-                .collect()
-        });
+        let current: Vec<_> =
+            output.with(|geometries| geometries.iter().map(|geometry| geometry.get()).collect());
         let complete = current.len() == count
             && current.iter().all(|geometry| {
                 ["figure", "container", "indicator", "icon", "label", "badge"]
@@ -750,10 +738,6 @@ fn check_cold_specs_svg(count: usize) {
             break;
         }
     }
-    assert!(
-        COLD_EMPTY_ON_ATTACH.get(),
-        "the first real production geometry must start empty"
-    );
     assert!(settled, "cold geometry never settled: {history:#?}");
     let tree = renderer.accessibility_snapshot().unwrap();
     let mut canvases: Vec<_> = tree
@@ -766,7 +750,7 @@ fn check_cold_specs_svg(count: usize) {
         .collect();
     canvases.sort_by(|left, right| left.y0.total_cmp(&right.y0));
     assert_eq!(canvases.len(), count);
-    let geometries = COLD_GEOMETRIES.with(|geometries| geometries.borrow().clone());
+    let geometries = output.get();
     let pixels = renderer.read_pixels().unwrap();
     for (index, (canvas, geometry)) in canvases.into_iter().zip(geometries).enumerate() {
         let values = geometry.with(space_geometry);

@@ -7,9 +7,7 @@ use cargo_mobile2::{
     NAME, doctor, init, update,
     util::{
         self,
-        cli::{
-            self, Exec, GlobalFlags, Report, Reportable, TextWrapper, VERSION_LONG, VERSION_SHORT,
-        },
+        cli::{self, Exec, GlobalFlags, Report, Reportable, TextWrapper, VERSION_SHORT},
     },
 };
 use structopt::StructOpt;
@@ -18,7 +16,6 @@ use structopt::StructOpt;
 #[structopt(
     bin_name = cli::bin_name(NAME),
     version = VERSION_SHORT,
-    long_version = VERSION_LONG.as_str(),
     global_settings = cli::GLOBAL_SETTINGS,
     settings = cli::SETTINGS,
 )]

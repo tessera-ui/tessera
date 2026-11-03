@@ -1,5 +1,3 @@
-use std::cell::Cell;
-
 use tessera_components::theme::material_theme;
 use tessera_ui::{
     HeadlessConfig, HeadlessRenderer,
@@ -12,30 +10,26 @@ use super::{
     *,
 };
 
-thread_local! {
-    static MODAL: Cell<bool> = const { Cell::new(false) };
-}
-
 const FRAME: u64 = 16_666_667;
 
 #[tessera]
-fn measurement_fixture() {
-    material_theme().child(|| {
+fn measurement_fixture(modal: bool) {
+    material_theme().child(move || {
         column()
             .modifier(Modifier::new().fill_max_size())
-            .children(|| {
-                figures::measurement_figure(MODAL.get());
+            .children(move || {
+                figures::measurement_figure(modal);
             });
     });
 }
 
 #[tessera]
-fn anatomy_fixture() {
-    material_theme().child(|| {
+fn anatomy_fixture(modal: bool) {
+    material_theme().child(move || {
         column()
             .modifier(Modifier::new().fill_max_size())
-            .children(|| {
-                figures::anatomy(MODAL.get(), "fixture");
+            .children(move || {
+                figures::anatomy(modal, "fixture");
             });
     });
 }
@@ -47,10 +41,13 @@ fn glyph_center(rect: tessera_ui::PxRect) -> (i32, i32) {
 #[test]
 fn measurement_figures_place_real_header_glyphs_at_the_official_insets() {
     for modal in [false, true] {
-        MODAL.set(modal);
         for (width, sheet_width) in [(720, 400), (320, 256)] {
-            let mut session =
-                start_layout_test_session(layout_test(measurement_fixture).viewport_px(width, 800));
+            let mut session = start_layout_test_session(
+                layout_test(move || {
+                    measurement_fixture(modal);
+                })
+                .viewport_px(width, 800),
+            );
             pump_layout_test_session(&mut session, 0);
             pump_layout_test_session(&mut session, FRAME);
             let snapshot = pump_layout_test_session(&mut session, FRAME * 2);
@@ -88,8 +85,11 @@ fn measurement_figures_place_real_header_glyphs_at_the_official_insets() {
 #[test]
 fn anatomy_figures_number_every_legend_entry() {
     for modal in [false, true] {
-        MODAL.set(modal);
-        let snapshot = layout_test(anatomy_fixture).viewport_px(1000, 900).run();
+        let snapshot = layout_test(move || {
+            anatomy_fixture(modal);
+        })
+        .viewport_px(1000, 900)
+        .run();
         let count = figures::anatomy_legend(modal).len();
         assert_eq!(count, if modal { 7 } else { 4 });
         let mut previous = None;
@@ -108,8 +108,14 @@ fn anatomy_figures_number_every_legend_entry() {
 #[test]
 fn live_modal_side_sheet_covers_the_app_bar_and_closes_when_its_route_exits() {
     let (width, height) = (907, 871);
-    let mut session =
-        start_layout_test_session(layout_test(crate::app::app).viewport_px(width, height));
+    let navigation = tessera_ui::testing::TestProbe::default();
+    let observed = navigation.clone();
+    let mut session = start_layout_test_session(
+        layout_test(move || {
+            crate::app::app_fixture(observed.clone());
+        })
+        .viewport_px(width, height),
+    );
     let mut frame = 0;
     let mut pump = |session: &mut _, frames: u64| {
         let mut snapshot = None;
@@ -120,15 +126,20 @@ fn live_modal_side_sheet_covers_the_app_bar_and_closes_when_its_route_exits() {
         snapshot.unwrap()
     };
     pump(&mut session, 2);
-    let navigation = crate::app::test_navigation();
+    let navigation = navigation.get().expect("mounted app navigation");
     navigation.router.with_mut(|router| {
-        router.replace(crate::pages::material_components::MaterialComponentsPageDestination {})
+        router.replace(
+            crate::pages::material_components::MaterialComponentsPageDestination {
+                selected: Some(navigation.material),
+                sessions: navigation.sessions,
+            },
+        )
     });
     navigation
         .material
         .set(super::super::catalog::component_index(34));
     pump(&mut session, 2);
-    let live = TEST_SESSION.get().expect("root side sheet host");
+    let live = navigation.sessions.expect("root app sessions").side_sheet;
     assert!(live.route_active());
     assert!(
         !live.can_open(),
@@ -153,23 +164,16 @@ fn live_modal_side_sheet_covers_the_app_bar_and_closes_when_its_route_exits() {
     assert!(!live.can_open());
 }
 
-struct Pipelines;
-
-impl tessera_ui::RenderModule for Pipelines {
-    fn register_pipelines(&self, context: &mut tessera_ui::PipelineContext<'_>) {
-        tessera_components::pipelines::register_pipelines(context);
-    }
-}
-
 #[test]
 #[ignore = "Requires a native GPU adapter for complete side-sheet measurement accessibility snapshots"]
 fn measurement_figures_publish_real_headlines_content_and_controls_in_both_variants() {
     for modal in [false, true] {
-        MODAL.set(modal);
         for width in [720, 320] {
             let mut renderer = HeadlessRenderer::new(
-                Box::new(measurement_fixture),
-                vec![Box::new(Pipelines)],
+                Box::new(move || {
+                    measurement_fixture(modal);
+                }),
+                vec![Box::new(crate::TestPipelines)],
                 HeadlessConfig {
                     width,
                     height: 800,

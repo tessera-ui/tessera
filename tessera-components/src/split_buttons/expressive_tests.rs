@@ -1,9 +1,8 @@
-use std::cell::{Cell, RefCell};
-
 use tessera_ui::{
     HeadlessConfig, HeadlessRenderer, MOUSE_POINTER_ID, PressKeyEventType, State,
     accesskit::{Action, HasPopup, Node, NodeId, Rect, Role, TreeUpdate},
     remember,
+    testing::TestProbe,
 };
 
 use crate::{
@@ -48,10 +47,10 @@ impl Default for Settings {
     }
 }
 
-thread_local! {
-    static SETTINGS: Cell<Option<State<Settings>>> = const { Cell::new(None) };
-    static ACTIVATED: Cell<Option<State<Vec<usize>>>> = const { Cell::new(None) };
-    static STYLES: RefCell<[Option<TextStyle>; 5]> = const { RefCell::new([None; 5]) };
+#[derive(Clone, Copy, Default, PartialEq)]
+struct FixtureHandles {
+    settings: Option<State<Settings>>,
+    activated: Option<State<Vec<usize>>>,
 }
 
 #[tessera]
@@ -68,74 +67,82 @@ fn sized_icon(index: usize) {
 }
 
 #[tessera]
-fn label(index: usize) {
+fn label(index: usize, styles: TestProbe<[Option<TextStyle>; 5]>) {
     let style = use_context::<TextStyle>().unwrap().get();
-    STYLES.with(|styles| styles.borrow_mut()[index] = Some(style));
+    styles.with_mut(|styles| styles[index] = Some(style));
     text().content("Send");
 }
 
 #[tessera]
-fn fixture() {
+fn fixture(probe: TestProbe<FixtureHandles>, styles: TestProbe<[Option<TextStyle>; 5]>) {
     let settings = remember(Settings::default);
     let activated = remember(Vec::<usize>::new);
-    SETTINGS.set(Some(settings));
-    ACTIVATED.set(Some(activated));
+    probe.set(FixtureHandles {
+        settings: Some(settings),
+        activated: Some(activated),
+    });
     material_theme().child(move || {
-        column().children(move || {
-            for (index, preset) in SIZES.into_iter().enumerate() {
-                let value = settings.get();
-                let size = if index == 2 {
-                    value.middle_size.unwrap_or(preset)
-                } else {
-                    preset
-                };
-                split_button_layout()
-                    .modifier(Modifier::new().width(value.width))
-                    .leading_button(move || {
-                        let button = split_leading_button().enabled(settings.get().enabled);
-                        let button = match settings.get().variant {
-                            SplitButtonVariant::Filled => button.filled(),
-                            SplitButtonVariant::Tonal => button.tonal(),
-                            SplitButtonVariant::Elevated => button.elevated(),
-                            SplitButtonVariant::Outlined => button.outlined(),
-                        };
-                        button
-                            .size(size)
-                            .accessibility_label(format!("Send {index}"))
-                            .on_click(move || activated.with_mut(|items| items.push(index * 2)))
-                            .content(move || {
-                                sized_icon(index * 2);
-                                spacer().modifier(
-                                    Modifier::new().width(SplitButtonDefaults::icon_spacing(size)),
-                                );
-                                label(index);
-                            });
-                    })
-                    .trailing_button(move || {
-                        let button = split_trailing_button().enabled(settings.get().enabled);
-                        let button = match settings.get().variant {
-                            SplitButtonVariant::Filled => button.filled(),
-                            SplitButtonVariant::Tonal => button.tonal(),
-                            SplitButtonVariant::Elevated => button.elevated(),
-                            SplitButtonVariant::Outlined => button.outlined(),
-                        };
-                        button
-                            .size(size)
-                            .expanded_optional(settings.get().expanded)
-                            .accessibility_label(format!("More {index}"))
-                            .on_click(move || {
-                                activated.with_mut(|items| items.push(index * 2 + 1));
-                                settings.with_mut(|settings| {
-                                    if let Some(expanded) = &mut settings.expanded {
-                                        *expanded = !*expanded;
-                                    }
+        column().children({
+            let styles = styles.clone();
+            move || {
+                for (index, preset) in SIZES.into_iter().enumerate() {
+                    let value = settings.get();
+                    let size = if index == 2 {
+                        value.middle_size.unwrap_or(preset)
+                    } else {
+                        preset
+                    };
+                    let styles = styles.clone();
+                    split_button_layout()
+                        .modifier(Modifier::new().width(value.width))
+                        .leading_button(move || {
+                            let styles = styles.clone();
+                            let button = split_leading_button().enabled(settings.get().enabled);
+                            let button = match settings.get().variant {
+                                SplitButtonVariant::Filled => button.filled(),
+                                SplitButtonVariant::Tonal => button.tonal(),
+                                SplitButtonVariant::Elevated => button.elevated(),
+                                SplitButtonVariant::Outlined => button.outlined(),
+                            };
+                            button
+                                .size(size)
+                                .accessibility_label(format!("Send {index}"))
+                                .on_click(move || activated.with_mut(|items| items.push(index * 2)))
+                                .content(move || {
+                                    sized_icon(index * 2);
+                                    spacer().modifier(
+                                        Modifier::new()
+                                            .width(SplitButtonDefaults::icon_spacing(size)),
+                                    );
+                                    label(index, styles.clone());
                                 });
-                            })
-                            .content(move || {
-                                sized_icon(index * 2 + 1);
-                            });
-                    });
-                spacer().modifier(Modifier::new().height(Dp(8.0)));
+                        })
+                        .trailing_button(move || {
+                            let button = split_trailing_button().enabled(settings.get().enabled);
+                            let button = match settings.get().variant {
+                                SplitButtonVariant::Filled => button.filled(),
+                                SplitButtonVariant::Tonal => button.tonal(),
+                                SplitButtonVariant::Elevated => button.elevated(),
+                                SplitButtonVariant::Outlined => button.outlined(),
+                            };
+                            button
+                                .size(size)
+                                .expanded_optional(settings.get().expanded)
+                                .accessibility_label(format!("More {index}"))
+                                .on_click(move || {
+                                    activated.with_mut(|items| items.push(index * 2 + 1));
+                                    settings.with_mut(|settings| {
+                                        if let Some(expanded) = &mut settings.expanded {
+                                            *expanded = !*expanded;
+                                        }
+                                    });
+                                })
+                                .content(move || {
+                                    sized_icon(index * 2 + 1);
+                                });
+                        });
+                    spacer().modifier(Modifier::new().height(Dp(8.0)));
+                }
             }
         });
     });
@@ -165,9 +172,13 @@ fn click(renderer: &mut HeadlessRenderer, rect: Rect) {
 }
 
 fn check_sizes_and_shrink(samples: u32, scale: f64) {
+    let probe = TestProbe::default();
+    let observed = probe.clone();
+    let styles = TestProbe::default();
+    let observed_styles = styles.clone();
     let mut renderer = HeadlessRenderer::new(
-        Box::new(|| {
-            fixture();
+        Box::new(move || {
+            fixture(probe.clone(), styles.clone());
         }),
         vec![Box::new(crate::TesseraComponents)],
         HeadlessConfig {
@@ -200,11 +211,11 @@ fn check_sizes_and_shrink(samples: u32, scale: f64) {
             }
         }
         assert_eq!(
-            STYLES.with(|styles| styles.borrow()[index].unwrap().font_size),
+            observed_styles.with(|styles| styles[index].as_ref().unwrap().font_size),
             Dp([14.0, 14.0, 16.0, 24.0, 32.0][index])
         );
     }
-    let settings = SETTINGS.get().unwrap();
+    let settings = observed.get().settings.unwrap();
     for width in [360.0, 200.0, 100.0, 72.0, 1.0] {
         settings.with_mut(|settings| settings.width = Dp(width));
         renderer.render_frames(4);
@@ -224,7 +235,7 @@ fn check_sizes_and_shrink(samples: u32, scale: f64) {
     let narrow = renderer.accessibility_snapshot().unwrap();
     click(&mut renderer, bounds(&narrow, "Send 0"));
     click(&mut renderer, bounds(&narrow, "More 0"));
-    assert_eq!(ACTIVATED.get().unwrap().get(), [0, 1]);
+    assert_eq!(observed.get().activated.unwrap().get(), [0, 1]);
     for variant in [
         SplitButtonVariant::Filled,
         SplitButtonVariant::Tonal,
@@ -247,7 +258,7 @@ fn check_sizes_and_shrink(samples: u32, scale: f64) {
         }
         click(&mut renderer, bounds(&disabled, "More 0"));
         assert_eq!(
-            ACTIVATED.get().unwrap().get(),
+            observed.get().activated.unwrap().get(),
             [0, 1],
             "visual presets must not re-enable input"
         );
@@ -261,7 +272,7 @@ fn check_sizes_and_shrink(samples: u32, scale: f64) {
     assert_eq!(bounds(&changed, "Split icon 4").width(), 40.0 * scale);
     assert_eq!(bounds(&changed, "Split icon 5").width(), 50.0 * scale);
     assert_eq!(
-        STYLES.with(|styles| styles.borrow()[2].unwrap().font_size),
+        observed_styles.with(|styles| styles[2].as_ref().unwrap().font_size),
         Dp(32.0)
     );
     settings.set(Settings {

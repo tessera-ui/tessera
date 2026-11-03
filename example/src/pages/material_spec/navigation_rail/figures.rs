@@ -24,7 +24,7 @@ use tessera_components::{
 };
 use tessera_ui::{
     Color, Dp, LayoutCoordinates, Modifier, RenderSlot, State, accesskit::Role,
-    modifier::FocusModifierExt as _, provide_context, remember, tessera, use_context,
+    modifier::FocusModifierExt as _, remember, tessera, use_context,
 };
 
 use super::super::{
@@ -36,10 +36,6 @@ use super::super::{
 /// Callout marker: number, geometry key and whether it sits on the trailing
 /// lane.
 pub(super) type Callout = (usize, &'static str, bool);
-
-/// Geometry sink that static rail illustrations report their parts to.
-#[derive(Clone, Copy)]
-struct MockGeometry(State<Geometry>);
 
 fn tagged(sink: Option<State<Geometry>>, name: &'static str) -> Modifier {
     match sink {
@@ -323,7 +319,7 @@ fn specimen_rail(
     navigation_rail()
         .expanded(expanded)
         .header_optional(header)
-        .content(move || {
+        .content(move |rail_scope| {
             for index in 0..count {
                 specimen_item(
                     index,
@@ -334,6 +330,7 @@ fn specimen_rail(
                     badge_series,
                     selected,
                     geometry,
+                    rail_scope,
                 );
             }
         });
@@ -349,6 +346,7 @@ fn specimen_item(
     badge_series: bool,
     selected: State<usize>,
     geometry: State<Geometry>,
+    rail_scope: tessera_components::navigation_rail::NavigationRailScope,
 ) {
     let name = if named {
         super::super::navigation::NAMES[index.min(4)].to_string()
@@ -358,7 +356,7 @@ fn specimen_item(
     boxed()
         .modifier(watch(geometry, ITEM_KEYS[index.min(5)]))
         .children(move || {
-            let item = navigation_rail_item()
+            let item = navigation_rail_item(rail_scope)
                 .label(name.clone())
                 .selected(selected.get() == index)
                 .on_click(move || selected.set(index))
@@ -507,7 +505,7 @@ fn specimen_header(
 pub(super) fn annotated_mock(
     width: Dp,
     height: Dp,
-    content: RenderSlot,
+    content: tessera_ui::RenderSlotWith<State<Geometry>>,
     callouts: Option<Vec<Callout>>,
     marks: Option<usize>,
     filled: Option<bool>,
@@ -528,7 +526,7 @@ pub(super) fn annotated_mock(
         .modifier(watch(geometry, "figure").size(width, height))
         .children(move || {
             let content = content.clone();
-            provide_context(move || MockGeometry(geometry), move || content.render());
+            content.render(geometry);
             let callouts = callouts.clone();
             boxed()
                 .alignment(Alignment::TopStart)
@@ -1037,9 +1035,11 @@ pub(super) fn mock_rail(
     low_contrast: Option<bool>,
     focus_box: Option<bool>,
     focus_badge: Option<bool>,
+
+    geometry: Option<State<Geometry>>,
 ) {
     let scheme = use_context::<MaterialTheme>().unwrap().get().color_scheme;
-    let sink = use_context::<MockGeometry>().map(|context| context.get().0);
+    let sink = geometry;
     let low_contrast = low_contrast.unwrap_or(false);
     let focus_box = focus_box.unwrap_or(false);
     let focus_badge = focus_badge.unwrap_or(true);
@@ -1123,11 +1123,13 @@ pub(super) fn mock_rail(
                                     fab && !fab_bottom,
                                     set,
                                     fab_tertiary,
-                                );
+                                )
+                                .geometry_optional(geometry);
                             }
                         });
                 } else if has_header {
-                    mock_header(expanded, logo, menu, fab && !fab_bottom, set, fab_tertiary);
+                    mock_header(expanded, logo, menu, fab && !fab_bottom, set, fab_tertiary)
+                        .geometry_optional(geometry);
                     gap(Dp(if baseline { 24.0 } else { 40.0 }));
                 }
                 if center {
@@ -1162,13 +1164,15 @@ pub(super) fn mock_rail(
                         label_scale,
                         baseline,
                         badge_start,
-                    );
+                    )
+                    .geometry_optional(geometry);
                 }
                 if center || fab_bottom {
                     spacer().modifier(Modifier::new().weight(1.0));
                 }
                 if fab && fab_bottom {
-                    mock_header(expanded, false, false, true, set, fab_tertiary);
+                    mock_header(expanded, false, false, true, set, fab_tertiary)
+                        .geometry_optional(geometry);
                 }
             });
     });
@@ -1197,9 +1201,17 @@ pub(super) fn mock_rail(
 }
 
 #[tessera]
-fn mock_header(expanded: bool, logo: bool, menu: bool, fab: bool, set: usize, tertiary: bool) {
+fn mock_header(
+    expanded: bool,
+    logo: bool,
+    menu: bool,
+    fab: bool,
+    set: usize,
+    tertiary: bool,
+    geometry: Option<State<Geometry>>,
+) {
     let scheme = use_context::<MaterialTheme>().unwrap().get().color_scheme;
-    let sink = use_context::<MockGeometry>().map(|context| context.get().0);
+    let sink = geometry;
     column()
         .cross_axis_alignment(if expanded {
             CrossAxisAlignment::Start
@@ -1246,13 +1258,13 @@ fn mock_header(expanded: bool, logo: bool, menu: bool, fab: bool, set: usize, te
                 gap(Dp(4.0));
             }
             if fab {
-                mock_fab(expanded, set, tertiary);
+                mock_fab(expanded, set, tertiary).geometry_optional(geometry);
             }
         });
 }
 
 #[tessera]
-fn mock_fab(expanded: bool, set: usize, tertiary: bool) {
+fn mock_fab(expanded: bool, set: usize, tertiary: bool, geometry: Option<State<Geometry>>) {
     let theme = use_context::<MaterialTheme>().unwrap().get();
     let scheme = theme.color_scheme;
     let (fill, ink) = if tertiary {
@@ -1261,7 +1273,7 @@ fn mock_fab(expanded: bool, set: usize, tertiary: bool) {
         (scheme.primary_container, scheme.on_primary_container)
     };
     let style = theme.typography.title_medium;
-    let sink = use_context::<MockGeometry>().map(|context| context.get().0);
+    let sink = geometry;
     let (symbol, word) = if set == 1 {
         (filled::HOURGLASS_EMPTY_SVG, "Add timer")
     } else {
@@ -1319,10 +1331,12 @@ fn mock_item(
     label_scale: f64,
     baseline: bool,
     badge_start: usize,
+
+    geometry: Option<State<Geometry>>,
 ) {
     let theme = use_context::<MaterialTheme>().unwrap().get();
     let scheme = theme.color_scheme;
-    let sink = use_context::<MockGeometry>().map(|context| context.get().0);
+    let sink = geometry;
     let layer = if active {
         scheme.on_secondary_container
     } else {

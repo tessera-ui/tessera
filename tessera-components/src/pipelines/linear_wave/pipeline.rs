@@ -5,10 +5,6 @@ use tessera_ui::{
 
 use super::command::LinearWaveCommand;
 
-#[cfg(test)]
-pub(crate) static ALLOCATIONS: std::sync::atomic::AtomicUsize =
-    std::sync::atomic::AtomicUsize::new(0);
-
 #[repr(C)]
 #[derive(Clone, Copy, bytemuck::Pod, bytemuck::Zeroable)]
 struct Instance {
@@ -20,7 +16,7 @@ struct Instance {
 }
 
 struct Buffer {
-    buffer: wgpu::Buffer,
+    buffer: tessera_ui::TrackedBuffer,
     bind_group: wgpu::BindGroup,
     capacity: usize,
 }
@@ -34,7 +30,7 @@ pub(crate) struct LinearWavePipeline {
 
 impl LinearWavePipeline {
     pub(crate) fn new(
-        device: &wgpu::Device,
+        device: &tessera_ui::GraphicsDevice,
         config: &wgpu::SurfaceConfiguration,
         cache: Option<&wgpu::PipelineCache>,
         sample_count: u32,
@@ -94,7 +90,7 @@ impl LinearWavePipeline {
         }
     }
 
-    fn ensure_buffer(&mut self, device: &wgpu::Device, count: usize) {
+    fn ensure_buffer(&mut self, device: &tessera_ui::GraphicsDevice, count: usize) {
         if self
             .buffers
             .get(self.cursor)
@@ -103,12 +99,15 @@ impl LinearWavePipeline {
             return;
         }
         let capacity = count.max(1).next_power_of_two();
-        let buffer = device.create_buffer(&wgpu::BufferDescriptor {
-            label: Some("Linear Wave Instances"),
-            size: (capacity * std::mem::size_of::<Instance>()) as u64,
-            usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
-            mapped_at_creation: false,
-        });
+        let buffer = device.create_buffer(
+            "linear_wave_instances",
+            &wgpu::BufferDescriptor {
+                label: Some("Linear Wave Instances"),
+                size: (capacity * std::mem::size_of::<Instance>()) as u64,
+                usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
+                mapped_at_creation: false,
+            },
+        );
         let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
             label: Some("Linear Wave Instances"),
             layout: &self.layout,
@@ -117,8 +116,7 @@ impl LinearWavePipeline {
                 resource: buffer.as_entire_binding(),
             }],
         });
-        #[cfg(test)]
-        ALLOCATIONS.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+
         let buffer = Buffer {
             buffer,
             bind_group,
@@ -172,10 +170,10 @@ impl DrawablePipeline<LinearWaveCommand> for LinearWavePipeline {
                 }
             })
             .collect();
-        self.ensure_buffer(context.device, instances.len());
+        self.ensure_buffer(context.graphics, instances.len());
         let buffer = &self.buffers[self.cursor];
         context
-            .queue
+            .graphics
             .write_buffer(&buffer.buffer, 0, bytemuck::cast_slice(&instances));
         context.render_pass.set_pipeline(&self.pipeline);
         context

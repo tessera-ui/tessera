@@ -38,24 +38,24 @@ use crate::{
 /// ## Examples
 ///
 /// ```
-/// use tessera_components::{flow_row::flow_row, text::text};
-/// use tessera_ui::tessera;
+/// use tessera_components::{boxed::boxed, flow_row::flow_row, modifier::{ModifierExt as _, SemanticsArgs}};
+/// use tessera_ui::{Dp, Modifier, tessera, testing::layout_test};
 ///
-/// # use std::sync::{Arc, atomic::{AtomicUsize, Ordering}};
 /// #[tessera]
-/// fn demo(rendered: Arc<AtomicUsize>) {
-///     flow_row().children(move || {
-///         rendered.fetch_or(1, Ordering::Relaxed);
-///         text().content("First");
-///         rendered.fetch_or(2, Ordering::Relaxed);
-///         text().content("Second");
+/// fn demo() {
+///     flow_row().modifier(Modifier::new().width(Dp(50.0))).children(|| {
+///         for tag in ["first", "second"] {
+///             boxed().modifier(
+///                 Modifier::new().size(Dp(30.0), Dp(10.0))
+///                     .semantics(SemanticsArgs { test_tag: Some(tag.into()), ..Default::default() })
+///             ).children(|| {});
+///         }
 ///     });
 /// }
 ///
-/// let rendered = Arc::new(AtomicUsize::new(0));
-/// let observed = Arc::clone(&rendered);
-/// tessera_ui::testing::layout_test(move || demo(Arc::clone(&observed))).run();
-/// assert_eq!(rendered.load(Ordering::Relaxed), 3);
+/// let snapshot = layout_test(demo).viewport_px(50, 100).run();
+/// snapshot.node("first").position(0, 0).size(30, 10);
+/// snapshot.node("second").position(0, 10).size(30, 10);
 /// ```
 #[tessera]
 pub fn flow_row(

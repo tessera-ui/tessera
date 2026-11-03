@@ -356,10 +356,10 @@ pub fn floating_action_button(
     let elevation = args.elevation;
     let interactive = args.enabled && args.on_click.is_some();
     let interaction_state = if interactive {
-        Some(
-            args.interaction_state
-                .unwrap_or_else(|| remember(InteractionState::new)),
-        )
+        Some(match args.interaction_state {
+            Some(value) => value,
+            None => remember(InteractionState::new),
+        })
     } else {
         args.interaction_state
     };
@@ -419,11 +419,6 @@ pub fn floating_action_button(
 }
 
 impl FloatingActionButtonBuilder {
-    /// Creates a configuration with the required click handler.
-    pub fn new(on_click: impl Fn() + Send + Sync + 'static) -> Self {
-        floating_action_button().on_click(on_click)
-    }
-
     /// Applies the small floating action button preset.
     pub fn small(&self, on_click: impl Fn() + Send + Sync + 'static) -> Self {
         self.on_click(on_click)

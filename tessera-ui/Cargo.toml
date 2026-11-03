@@ -17,6 +17,7 @@ testing = []
 headless = ["serde", "serde_json"]
 
 [dependencies]
+uuid = { version = "1.26.1", features = ["v4", "js"] }
 bytemuck = { version = "1.24.0", features = ["derive"] }
 tracing = "0.1.44"
 tracing-subscriber = { version = "0.3.22", features = ["env-filter"] }
@@ -60,6 +61,7 @@ objc2-quartz-core = { version = "0.3.2", default-features = false, features = [
 winit = "0.30.12"
 
 [target.'cfg(target_family = "wasm")'.dependencies]
+console_error_panic_hook = "0.1.7"
 web-sys = { version = "0.3.93", features = ["console", "CssStyleDeclaration", "Document", "Element", "HtmlCanvasElement", "Window"] }
 wasm-bindgen-futures = "0.4.55"
 web-time = "1.1.0"
@@ -69,3 +71,6 @@ winit = { version = "0.30.12", features = ["android-game-activity"] }
 ndk-sys = "0.6.0"
 jni = "0.21.1"
 ndk-context = "0.1.1"
+
+[dev-dependencies]
+tempfile = "3.27"

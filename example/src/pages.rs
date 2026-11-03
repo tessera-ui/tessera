@@ -8,5 +8,9 @@ mod material_spec;
 
 pub(crate) use material_spec::live_side_sheet_host;
 #[cfg(all(target_family = "wasm", feature = "md3-diagnostics"))]
-pub(crate) use material_spec::{diagnostic_drawer_figures, diagnostic_drawer_observations};
-pub(crate) use material_spec::{live_drawer_host, live_rail_host};
+pub(crate) use material_spec::{
+    DrawerObservations, diagnostic_drawer_figures, diagnostic_drawer_observations,
+};
+pub(crate) use material_spec::{
+    LiveDrawerSession, LiveRailSession, LiveSideSheetSession, live_drawer_host, live_rail_host,
+};

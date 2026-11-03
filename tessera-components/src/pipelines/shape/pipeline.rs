@@ -32,13 +32,6 @@ const CACHE_HEAT_THRESHOLD: u32 = 3;
 /// Number of frames to keep heat tracking data before cleanup.
 const HEAT_TRACKING_WINDOW: u32 = 10;
 
-#[cfg(test)]
-thread_local! {
-    pub(super) static BATCH_ALLOCATIONS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
-    pub(super) static BATCH_UPLOADS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
-    pub(super) static CACHE_BUILDS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
-}
-
 type CachedInstanceBatch = Option<(Arc<ShapeCacheEntry>, Vec<(PxPosition, PxSize)>)>;
 
 struct ShapeCacheEntry {
@@ -92,7 +85,7 @@ impl ShapePipeline {
     /// Creates the shape rendering pipeline, configuring multisampling and
     /// caches.
     pub fn new(
-        gpu: &wgpu::Device,
+        gpu: &tessera_ui::GraphicsDevice,
         config: &wgpu::SurfaceConfiguration,
         pipeline_cache: Option<&wgpu::PipelineCache>,
         sample_count: u32,
@@ -288,8 +281,6 @@ impl ShapePipeline {
 
 impl DrawablePipeline<ShapeCommand> for ShapePipeline {
     fn begin_frame(&mut self, _: &FrameContext<'_>) {
-        #[cfg(test)]
-        BATCH_UPLOADS.set(0);
         self.uncached_batches.begin_frame();
         self.cached_batches.begin_frame();
         self.current_frame = self.current_frame.wrapping_add(1);
@@ -299,13 +290,8 @@ impl DrawablePipeline<ShapeCommand> for ShapePipeline {
     }
 
     fn end_frame(&mut self, context: &FrameContext<'_>) {
-        let uncached = self.uncached_batches.finish_frame(context.queue);
-        let cached = self.cached_batches.finish_frame(context.queue);
-        tracing::debug!(
-            uploads = uncached.0 + cached.0,
-            bytes = uncached.1 + cached.1,
-            "shape_frame_uploads"
-        );
+        self.uncached_batches.finish_frame(context.graphics);
+        self.cached_batches.finish_frame(context.graphics);
     }
 
     fn draw(&mut self, context: &mut DrawContext<ShapeCommand>) {
@@ -323,7 +309,7 @@ impl DrawablePipeline<ShapeCommand> for ShapePipeline {
                 && position.x.fract() == 0.0
                 && position.y.fract() == 0.0
             {
-                self.get_or_create_cache_entry(context.device, context.queue, command, size)
+                self.get_or_create_cache_entry(context.graphics, context.queue, command, size)
             } else {
                 None
             };
@@ -344,7 +330,7 @@ impl DrawablePipeline<ShapeCommand> for ShapePipeline {
             if let Some(entry) = cache_entry {
                 if !pending_uncached.is_empty() {
                     self.draw_uncached_batch(
-                        context.device,
+                        context.graphics,
                         context.target_size,
                         context.render_pass,
                         context.commands,
@@ -358,7 +344,7 @@ impl DrawablePipeline<ShapeCommand> for ShapePipeline {
                         transforms.push((position, size));
                     } else {
                         self.flush_cached_run(
-                            context.device,
+                            context.graphics,
                             context.target_size,
                             context.render_pass,
                             &mut pending_cached_run,
@@ -370,7 +356,7 @@ impl DrawablePipeline<ShapeCommand> for ShapePipeline {
                 }
             } else {
                 self.flush_cached_run(
-                    context.device,
+                    context.graphics,
                     context.target_size,
                     context.render_pass,
                     &mut pending_cached_run,
@@ -380,7 +366,7 @@ impl DrawablePipeline<ShapeCommand> for ShapePipeline {
         }
 
         self.flush_cached_run(
-            context.device,
+            context.graphics,
             context.target_size,
             context.render_pass,
             &mut pending_cached_run,
@@ -388,7 +374,7 @@ impl DrawablePipeline<ShapeCommand> for ShapePipeline {
 
         if !pending_uncached.is_empty() {
             self.draw_uncached_batch(
-                context.device,
+                context.graphics,
                 context.target_size,
                 context.render_pass,
                 context.commands,

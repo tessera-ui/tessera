@@ -14,14 +14,6 @@ use tessera_ui::{
 
 use super::*;
 
-struct Pipelines;
-
-impl tessera_ui::RenderModule for Pipelines {
-    fn register_pipelines(&self, context: &mut tessera_ui::PipelineContext<'_>) {
-        tessera_components::pipelines::register_pipelines(context);
-    }
-}
-
 #[tessera]
 fn tokens_fixture() {
     material_theme().child(|| {
@@ -36,7 +28,7 @@ fn tokens_fixture() {
 fn renderer<Output: 'static>(fixture: fn() -> Output) -> HeadlessRenderer {
     let mut renderer = HeadlessRenderer::new(
         Box::new(fixture),
-        vec![Box::new(Pipelines)],
+        vec![Box::new(crate::TestPipelines)],
         HeadlessConfig {
             width: 1024,
             height: 1000,

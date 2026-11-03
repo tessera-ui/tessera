@@ -21,7 +21,7 @@ use crate::{
     shape_def::Shape,
     spacer::spacer,
     surface::surface,
-    text_field::{TextFieldBuilder, TextFieldDefaults, TextFieldLineLimit},
+    text_field::{TextFieldDefaults, TextFieldLineLimit, text_field},
     text_input::TextInputController,
     theme::MaterialTheme,
 };
@@ -85,7 +85,7 @@ impl SearchBarDefaults {
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, PartialEq)]
 struct SearchBarProps {
     modifier: Modifier,
     enabled: bool,
@@ -272,7 +272,11 @@ pub fn search_bar(
     controller: Option<State<SearchBarController>>,
     content: Option<RenderSlot>,
 ) {
-    resolve_search_bar(
+    let scheme = use_context::<MaterialTheme>()
+        .expect("MaterialTheme must be provided")
+        .get()
+        .color_scheme;
+    let args = resolve_search_bar(
         modifier,
         enabled,
         read_only,
@@ -294,8 +298,9 @@ pub fn search_bar(
         content_padding,
         controller,
         content,
-        SearchBarLayoutKind::FullScreen,
+        scheme,
     );
+    mount_search_bar(args, SearchBarLayoutKind::FullScreen);
 }
 
 fn resolve_search_bar(
@@ -320,18 +325,15 @@ fn resolve_search_bar(
     content_padding: Option<Dp>,
     controller: Option<State<SearchBarController>>,
     content: Option<RenderSlot>,
-    kind: SearchBarLayoutKind,
-) {
+    scheme: crate::theme::MaterialColorScheme,
+) -> SearchBarProps {
     let modifier = modifier.unwrap_or_default();
     let enabled = enabled.unwrap_or(true);
     let read_only = read_only.unwrap_or(false);
-    let theme = use_context::<MaterialTheme>()
-        .expect("MaterialTheme must be provided")
-        .get();
     let shape = shape.unwrap_or(SearchBarDefaults::docked_shape());
     let colors = colors.unwrap_or(SearchBarColors {
-        container_color: theme.color_scheme.surface_container_high,
-        divider_color: theme.color_scheme.outline,
+        container_color: scheme.surface_container_high,
+        divider_color: scheme.outline,
     });
     let defaults = SearchBarProps::default();
     let tonal_elevation = tonal_elevation.unwrap_or(defaults.tonal_elevation);
@@ -340,34 +342,29 @@ fn resolve_search_bar(
     let dropdown_gap = dropdown_gap.unwrap_or(defaults.dropdown_gap);
     let show_divider = show_divider.unwrap_or(defaults.show_divider);
     let content_padding = content_padding.unwrap_or(defaults.content_padding);
-    let controller = controller
-        .unwrap_or_else(|| remember(|| SearchBarController::new(is_active.unwrap_or(false))));
-    mount_search_bar(
-        SearchBarProps {
-            modifier,
-            enabled,
-            read_only,
-            is_active,
-            placeholder,
-            leading_icon,
-            trailing_icon,
-            on_query_change,
-            on_search,
-            on_active_change,
-            shape,
-            colors,
-            results_container_color,
-            tonal_elevation,
-            shadow_elevation,
-            dropdown_shape,
-            dropdown_gap,
-            show_divider,
-            content_padding,
-            controller: Some(controller),
-            content,
-        },
-        kind,
-    );
+    SearchBarProps {
+        modifier,
+        enabled,
+        read_only,
+        is_active,
+        placeholder,
+        leading_icon,
+        trailing_icon,
+        on_query_change,
+        on_search,
+        on_active_change,
+        shape,
+        colors,
+        results_container_color,
+        tonal_elevation,
+        shadow_elevation,
+        dropdown_shape,
+        dropdown_gap,
+        show_divider,
+        content_padding,
+        controller,
+        content,
+    }
 }
 
 /// # docked_search_bar
@@ -423,7 +420,11 @@ pub fn docked_search_bar(
     controller: Option<State<SearchBarController>>,
     content: Option<RenderSlot>,
 ) {
-    resolve_search_bar(
+    let scheme = use_context::<MaterialTheme>()
+        .expect("MaterialTheme must be provided")
+        .get()
+        .color_scheme;
+    let args = resolve_search_bar(
         modifier,
         enabled,
         read_only,
@@ -445,11 +446,20 @@ pub fn docked_search_bar(
         content_padding,
         controller,
         content,
-        SearchBarLayoutKind::Docked,
+        scheme,
     );
+    mount_search_bar(args, SearchBarLayoutKind::Docked);
 }
 
+#[tessera]
 fn mount_search_bar(args: SearchBarProps, kind: SearchBarLayoutKind) {
+    let mut args = args;
+    let controller = if let Some(controller) = args.controller {
+        controller
+    } else {
+        remember(|| SearchBarController::new(args.is_active.unwrap_or(false)))
+    };
+    args.controller = Some(controller);
     let render_args = build_search_bar_props(args, kind);
     let modifier = render_args.modifier.clone();
     layout().modifier(modifier).child(move || {
@@ -827,7 +837,8 @@ fn search_field(args: Option<SearchFieldArgs>) {
                     boxed()
                         .modifier(Modifier::new().weight(1.0).fill_max_height())
                         .children(move || {
-                            TextFieldBuilder::filled()
+                            text_field()
+                                .filled()
                                 .enabled(args.enabled)
                                 .read_only(args.read_only)
                                 .modifier(
@@ -891,13 +902,11 @@ fn sync_query(
 
 #[cfg(test)]
 mod tests {
-    use std::cell::RefCell;
-
     use tessera_ui::{
         CursorEventContent, GestureState, Modifier, PointerChange, PressKeyEventType, Px,
         PxPosition, State, remember, tessera,
         testing::{
-            layout_test, pump_layout_test_session, pump_layout_test_session_with_input,
+            TestProbe, layout_test, pump_layout_test_session, pump_layout_test_session_with_input,
             start_layout_test_session,
         },
     };
@@ -906,14 +915,16 @@ mod tests {
 
     use super::{SearchBarController, docked_search_bar};
 
-    thread_local! {
-        static CONTROLLER: RefCell<Option<State<SearchBarController>>> = const { RefCell::new(None) };
-    }
-
     #[tessera]
-    fn search_fixture(active: Option<bool>, show_divider: Option<bool>) {
+    fn search_fixture(
+        active: Option<bool>,
+        show_divider: Option<bool>,
+        probe: Option<TestProbe<Option<State<SearchBarController>>>>,
+    ) {
         let controller = remember(SearchBarController::default);
-        CONTROLLER.with(|slot| *slot.borrow_mut() = Some(controller));
+        if let Some(probe) = probe {
+            probe.set(Some(controller));
+        }
         material_theme().child(move || {
             docked_search_bar()
                 .controller(controller)
@@ -989,9 +1000,12 @@ mod tests {
     #[test]
     fn clicking_search_field_opens_uncontrolled_results_and_preserves_controlled_state() {
         for (active, expected) in [(None, true), (Some(false), false), (Some(true), true)] {
+            let probe = TestProbe::default();
             let mut session = start_layout_test_session(
                 layout_test(|| {
-                    search_fixture().active_optional(active);
+                    search_fixture()
+                        .active_optional(active)
+                        .probe(probe.clone());
                 })
                 .viewport_px(400, 300),
             );
@@ -1018,7 +1032,7 @@ mod tests {
                 );
             }
             let _ = pump_layout_test_session(&mut session, 50_000_001);
-            let controller = CONTROLLER.with(|slot| slot.borrow().unwrap());
+            let controller = probe.get().unwrap();
             assert_eq!(
                 controller.with(SearchBarController::is_active),
                 expected,

@@ -514,8 +514,8 @@ struct NavigationBarItemDefinition {
 /// #[tessera]
 /// fn demo() {
 ///     let selected = remember(|| 0usize);
-///     navigation_bar().content(move || {
-///         navigation_bar_item()
+///     navigation_bar().content(move |position| {
+///         navigation_bar_item().icon_position(position)
 ///             .label("Home")
 ///             .selected(selected.get() == 0)
 ///             .on_click(move || selected.set(0));
@@ -534,7 +534,6 @@ pub fn navigation_bar_item(
 ) {
     let icon_position = icon_position
         .filter(|position| *position != NavigationBarIconPosition::Auto)
-        .or_else(|| use_context::<NavigationBarIconPosition>().map(|position| position.get()))
         .unwrap_or(NavigationBarIconPosition::Top);
     let label = label.unwrap_or_default();
     let on_click = on_click.unwrap_or_default();
@@ -605,12 +604,12 @@ pub fn navigation_bar_item(
 /// #[tessera]
 /// fn demo() {
 ///     let selected = remember(|| 0usize);
-///     navigation_bar().content(move || {
-///         navigation_bar_item()
+///     navigation_bar().content(move |position| {
+///         navigation_bar_item().icon_position(position)
 ///             .label("Home")
 ///             .selected(selected.get() == 0)
 ///             .on_click(move || selected.set(0));
-///         navigation_bar_item()
+///         navigation_bar_item().icon_position(position)
 ///             .label("Search")
 ///             .selected(selected.get() == 1)
 ///             .on_click(move || selected.set(1));
@@ -619,7 +618,7 @@ pub fn navigation_bar_item(
 /// ```
 #[tessera]
 pub fn navigation_bar(
-    content: Option<RenderSlot>,
+    content: Option<tessera_ui::RenderSlotWith<NavigationBarIconPosition>>,
     icon_position: Option<NavigationBarIconPosition>,
 ) {
     let icon_position = icon_position.unwrap_or_default();
@@ -633,7 +632,6 @@ pub fn navigation_bar(
     } else {
         icon_position
     };
-    let content = content.unwrap_or_else(RenderSlot::empty);
     let scheme = use_context::<MaterialTheme>()
         .expect("MaterialTheme must be provided")
         .get()
@@ -659,22 +657,15 @@ pub fn navigation_bar(
                 .style(scheme.surface_container.into())
                 .block_input(true)
                 .child(move || {
-                    provide_context(
-                        || resolved_position,
-                        || {
-                            let position = use_context::<NavigationBarIconPosition>().unwrap();
-                            if position.get() != resolved_position {
-                                position.set(resolved_position);
+                    layout()
+                        .policy(NavigationBarLayout {
+                            centered: resolved_position == NavigationBarIconPosition::Start,
+                        })
+                        .child(move || {
+                            if let Some(content) = content {
+                                content.render(resolved_position);
                             }
-                            layout()
-                                .policy(NavigationBarLayout {
-                                    centered: resolved_position == NavigationBarIconPosition::Start,
-                                })
-                                .child(move || {
-                                    content.render();
-                                });
-                        },
-                    );
+                        });
                 });
         }
     });
@@ -819,16 +810,19 @@ mod tests {
     fn navigation_bar_row() {
         let selected = remember(|| 0usize);
         column().children(move || {
-            navigation_bar().content(move || {
+            navigation_bar().content(move |position| {
                 navigation_bar_item()
+                    .icon_position(position)
                     .label("Home")
                     .selected(selected.get() == 0)
                     .on_click(move || selected.set(0));
                 navigation_bar_item()
+                    .icon_position(position)
                     .label("Search")
                     .selected(selected.get() == 1)
                     .on_click(move || selected.set(1));
                 navigation_bar_item()
+                    .icon_position(position)
                     .label("Settings")
                     .selected(selected.get() == 2)
                     .on_click(move || selected.set(2));

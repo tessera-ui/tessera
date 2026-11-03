@@ -158,9 +158,9 @@ fn sample(
                                 } else {
                                     None
                                 })
-                                .content(move || {
+                                .content(move |rail_scope| {
                                     for (index, name) in NAMES.into_iter().take(3).enumerate() {
-                                        navigation_rail_item()
+                                        navigation_rail_item(rail_scope)
                                             .label(name)
                                             .selected(selected.get() == index)
                                             .on_click(move || selected.set(index))
@@ -174,9 +174,10 @@ fn sample(
             } else {
                 navigation_bar()
                     .icon_position(position.get())
-                    .content(move || {
+                    .content(move |icon_position| {
                         for (index, name) in NAMES.into_iter().take(count.get()).enumerate() {
                             navigation_bar_item()
+                                .icon_position(icon_position)
                                 .label(name)
                                 .selected(selected.get() == index)
                                 .on_click(move || selected.set(index))
@@ -435,9 +436,9 @@ fn color_specimen(rail: bool, initially_expanded: bool, dark: bool, backdrop: Co
                                                 .on_click(move || actions.set(actions.get() + 1));
                                         });
                                     })
-                                    .content(move || {
+                                    .content(move |rail_scope| {
                                         for index in 0..4 {
-                                            let item = navigation_rail_item()
+                                            let item = navigation_rail_item(rail_scope)
                                                 .label("Label")
                                                 .selected(selected.get() == index)
                                                 .accessibility_description(format!(
@@ -465,9 +466,10 @@ fn color_specimen(rail: bool, initially_expanded: bool, dark: bool, backdrop: Co
                             } else {
                                 navigation_bar()
                                     .icon_position(NavigationBarIconPosition::Top)
-                                    .content(move || {
+                                    .content(move |icon_position| {
                                         for index in 0..3 {
                                             navigation_bar_item()
+                                                .icon_position(icon_position)
                                                 .label("Label")
                                                 .selected(selected.get() == index)
                                                 .accessibility_description(format!(
@@ -1202,9 +1204,9 @@ fn native_figure(rail: bool, expanded: bool, annotation: usize, badges: bool) {
                                                         });
                                                 });
                                             })
-                                            .content(move || {
+                                            .content(move |rail_scope| {
                                                 for index in 0..3 {
-                                                    let item = navigation_rail_item()
+                                                    let item = navigation_rail_item(rail_scope)
                                                         .label("Label")
                                                         .selected(selected.get() == index)
                                                         .on_click(move || selected.set(index))
@@ -1241,9 +1243,10 @@ fn native_figure(rail: bool, expanded: bool, annotation: usize, badges: bool) {
                                             } else {
                                                 NavigationBarIconPosition::Top
                                             })
-                                            .content(move || {
+                                            .content(move |icon_position| {
                                                 for index in 0..4 {
                                                     navigation_bar_item()
+                                                        .icon_position(icon_position)
                                                         .label("Label")
                                                         .selected(selected.get() == index)
                                                         .accessibility_description_optional(
@@ -1548,9 +1551,9 @@ fn placement(rail: bool) {
                 row()
                     .modifier(Modifier::new().fill_max_size())
                     .children(move || {
-                        navigation_rail().content(move || {
+                        navigation_rail().content(move |rail_scope| {
                             for (index, name) in NAMES.into_iter().take(3).enumerate() {
-                                navigation_rail_item()
+                                navigation_rail_item(rail_scope)
                                     .label(name)
                                     .selected(selected.get() == index)
                                     .on_click(move || selected.set(index))
@@ -1594,9 +1597,10 @@ fn placement(rail: bool) {
                                             .on_click(move || count.set(count.get() + 1));
                                     });
                             });
-                        navigation_bar().content(move || {
+                        navigation_bar().content(move |icon_position| {
                             for (index, name) in NAMES.into_iter().take(3).enumerate() {
                                 navigation_bar_item()
+                                    .icon_position(icon_position)
                                     .label(name)
                                     .selected(selected.get() == index)
                                     .on_click(move || selected.set(index))
@@ -1654,9 +1658,9 @@ fn modal_rail() {
                         .accessibility_label("Close modal expanded rail")
                         .on_click(move || open.set(false));
                 })
-                .content(move || {
+                .content(move |rail_scope| {
                     for (index, name) in NAMES.into_iter().enumerate() {
-                        navigation_rail_item()
+                        navigation_rail_item(rail_scope)
                             .label(name)
                             .selected(selected.get() == index)
                             .on_click(move || {

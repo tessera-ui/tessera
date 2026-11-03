@@ -4,64 +4,43 @@
 //!
 //! Keep the dialog background around its content padding.
 
-use std::{cell::Cell, time::Duration};
+use std::time::Duration;
 
 use tessera_components::{column::column, modifier::ModifierExt as _, theme::material_theme};
 use tessera_ui::{
     HeadlessConfig, HeadlessRenderer, MOUSE_POINTER_ID, Modifier, PressKeyEventType, PxPosition,
-    RenderModule, State,
     accesskit::{Action, ActionRequest, Node, NodeId, Rect, Role, TreeId},
     tessera,
     winit::event::Ime,
 };
 
-thread_local! {
-    static INPUT: Cell<bool> = const { Cell::new(false) };
-    static TWENTY_FOUR: Cell<bool> = const { Cell::new(false) };
-    pub(super) static GEOMETRY: Cell<Option<State<super::PreciseGeometry>>> = const { Cell::new(None) };
+#[derive(Clone, Copy)]
+enum Scene {
+    Overview,
+    Color(bool),
+    Configuration(bool, bool),
 }
 
-#[tessera]
-fn color_fixture() {
-    material_theme().child(|| {
-        column()
-            .modifier(Modifier::new().fill_max_size())
-            .children(|| {
-                super::time_color_pair(INPUT.get());
-            });
-    });
-}
-
-#[tessera]
-fn overview_fixture() {
-    material_theme().child(|| {
-        column()
-            .modifier(Modifier::new().fill_max_size())
-            .children(|| {
-                super::time_variants();
-            });
-    });
-}
-
-#[tessera]
-fn configuration_fixture() {
-    material_theme().child(|| {
-        column()
-            .modifier(Modifier::new().fill_max_size())
-            .children(|| {
-                super::time_configuration_pair(INPUT.get(), TWENTY_FOUR.get());
-            });
-    });
-}
-
-fn renderer<Output: 'static>(root: fn() -> Output) -> HeadlessRenderer {
-    renderer_at_width(root, 1100)
-}
-
-fn renderer_at_width<Output: 'static>(root: fn() -> Output, width: u32) -> HeadlessRenderer {
+fn renderer(scene: Scene, width: u32) -> HeadlessRenderer {
     let mut renderer = HeadlessRenderer::new(
-        Box::new(root),
-        vec![Box::new(Pipelines)],
+        Box::new(move || {
+            material_theme().child(move || {
+                column()
+                    .modifier(Modifier::new().fill_max_size())
+                    .children(move || match scene {
+                        Scene::Overview => {
+                            super::time_variants();
+                        }
+                        Scene::Color(input) => {
+                            super::time_color_pair(input);
+                        }
+                        Scene::Configuration(input, twenty_four) => {
+                            super::time_configuration_pair(input, twenty_four);
+                        }
+                    });
+            });
+        }),
+        vec![Box::new(crate::TestPipelines)],
         HeadlessConfig {
             width,
             height: 1400,
@@ -79,7 +58,7 @@ fn renderer_at_width<Output: 'static>(root: fn() -> Output, width: u32) -> Headl
 #[ignore = "requires a native GPU adapter"]
 fn overview_variants_wrap_without_shrinking_touch_targets() {
     for width in [640, 1100] {
-        let mut renderer = renderer_at_width(overview_fixture, width);
+        let mut renderer = renderer(Scene::Overview, width);
         let dial = node(
             &renderer,
             "Time picker dial time configuration",
@@ -136,9 +115,7 @@ fn overview_variants_wrap_without_shrinking_touch_targets() {
 #[test]
 #[ignore = "requires a native GPU adapter"]
 fn narrow_configuration_keeps_horizontal_dial_and_maps_pointer_selection() {
-    INPUT.set(false);
-    TWENTY_FOUR.set(false);
-    let mut renderer = renderer_at_width(configuration_fixture, 640);
+    let mut renderer = renderer(Scene::Configuration(false, false), 640);
     let left = node(
         &renderer,
         "12-hour vertical dial time configuration",
@@ -227,8 +204,7 @@ fn action(renderer: &mut HeadlessRenderer, target_node: NodeId, action: Action) 
 #[ignore = "requires a native GPU adapter"]
 fn time_color_pairs_keep_native_roles_aligned_and_selection_independent() {
     for input in [false, true] {
-        INPUT.set(input);
-        let mut renderer = renderer(color_fixture);
+        let mut renderer = renderer(Scene::Color(input), 1100);
         let kind = if input { "input" } else { "dial" };
         let left = node(
             &renderer,
@@ -360,9 +336,7 @@ fn time_configuration_pairs_keep_native_orientation_and_independent_lifetime() {
         ),
         (true, false, "12-hour input", "24-hour input", 328.0),
     ] {
-        INPUT.set(input);
-        TWENTY_FOUR.set(twenty_four);
-        let mut renderer = renderer(configuration_fixture);
+        let mut renderer = renderer(Scene::Configuration(input, twenty_four), 1100);
         let left = node(
             &renderer,
             &format!("{left_label} time configuration"),
@@ -454,17 +428,9 @@ fn time_configuration_pairs_keep_native_orientation_and_independent_lifetime() {
     }
 }
 
-struct Pipelines;
-
-impl RenderModule for Pipelines {
-    fn register_pipelines(&self, context: &mut tessera_ui::PipelineContext<'_>) {
-        tessera_components::pipelines::register_pipelines(context);
-    }
-}
-
 #[tessera]
 fn fixture() {
-    material_theme().child(|| {
+    material_theme().child(move || {
         super::time_figure(
             false,
             false,
@@ -480,7 +446,7 @@ fn fixture() {
 fn annotated_time_surface_paints_its_24dp_content_inset() {
     let mut renderer = HeadlessRenderer::new(
         Box::new(fixture),
-        vec![Box::new(Pipelines)],
+        vec![Box::new(crate::TestPipelines)],
         HeadlessConfig {
             width: 900,
             height: 800,
@@ -490,9 +456,15 @@ fn annotated_time_surface_paints_its_24dp_content_inset() {
     )
     .unwrap();
     renderer.render_frames(4);
-    let geometry = GEOMETRY.get().unwrap().get();
-    let container = geometry["container"];
-    let headline = geometry["headline"];
+    let snapshot = renderer.inspect_components();
+    let container = snapshot
+        .tagged("time-spec-container")
+        .layout_coordinates()
+        .unwrap();
+    let headline = snapshot
+        .tagged("time-spec-headline")
+        .layout_coordinates()
+        .unwrap();
     assert_eq!(container.local_size.width.0, 328);
     let local_headline = container
         .local_to_window

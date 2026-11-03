@@ -16,7 +16,7 @@ use tessera_ui::{
     State, current_frame_nanos, current_frame_time,
     layout::{MeasureScope, PlacementResult, PlacementScope, layout},
     modifier::FocusModifierExt as _,
-    provide_context, receive_frame_nanos, remember, remember_with_key, tessera,
+    receive_frame_nanos, remember, remember_with_key, tessera,
     time::Instant,
     use_context, winit,
 };
@@ -668,27 +668,24 @@ fn bottom_sheet_content_wrapper(
     layout().modifier(modifier).child(move || {
         let bottom_sheet_content = bottom_sheet_content;
         let nested_scroll_connection = nested_scroll_connection.clone();
-        let content_wrapper = move || {
+        let content_wrapper = RenderSlot::new(move || {
             let bottom_sheet_content = bottom_sheet_content;
             let nested_scroll_connection = nested_scroll_connection.clone();
             column()
-                .modifier(Modifier::new().fill_max_width())
+                .modifier(
+                    Modifier::new()
+                        .fill_max_width()
+                        .nested_scroll(nested_scroll_connection.clone()),
+                )
                 .cross_axis_alignment(CrossAxisAlignment::Center)
                 .children(move || {
                     bottom_sheet_drag_handle()
                         .controller(controller)
                         .on_close_shared(on_close);
 
-                    let bottom_sheet_content = bottom_sheet_content;
-                    let nested_scroll_connection = nested_scroll_connection.clone();
-                    provide_context(
-                        || nested_scroll_connection.clone(),
-                        move || {
-                            bottom_sheet_content.render();
-                        },
-                    );
+                    bottom_sheet_content.render();
                 });
-        };
+        });
         surface()
             .style(
                 use_context::<MaterialTheme>()
@@ -713,7 +710,7 @@ fn bottom_sheet_content_wrapper(
                 },
             ))
             .block_input(true)
-            .child(content_wrapper);
+            .child_shared(content_wrapper);
     });
 }
 
@@ -778,9 +775,11 @@ pub fn bottom_sheet_provider(
     let main_content = main_content.unwrap_or_else(RenderSlot::empty);
     let bottom_sheet_content = bottom_sheet_content.unwrap_or_else(RenderSlot::empty);
     let external_controller = controller;
-    let controller =
-        external_controller.unwrap_or_else(|| remember(|| BottomSheetController::new(is_open)));
-    let parent_nested_scroll = use_context::<NestedScrollConnection>().map(|context| context.get());
+    let controller = match external_controller {
+        Some(value) => value,
+        None => remember(|| BottomSheetController::new(is_open)),
+    };
+    let parent_nested_scroll = NestedScrollConnection::nearest();
     let coordinate_scale = remember(|| 1.0_f32);
     let nested_scroll_connection = build_bottom_sheet_nested_scroll_connection(
         controller,

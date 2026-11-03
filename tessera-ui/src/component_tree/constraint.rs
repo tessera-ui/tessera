@@ -222,6 +222,8 @@ mod tests {
 
     #[test]
     fn axis_exact_is_tight_interval() {
+        let _runtime_session = crate::RuntimeSession::new();
+        let _runtime_scope = _runtime_session.enter();
         let axis = AxisConstraint::exact(Px(100));
         assert_eq!(axis.min, Px(100));
         assert_eq!(axis.max, Some(Px(100)));
@@ -229,6 +231,8 @@ mod tests {
 
     #[test]
     fn axis_new_clamps_max_to_min() {
+        let _runtime_session = crate::RuntimeSession::new();
+        let _runtime_scope = _runtime_session.enter();
         let axis = AxisConstraint::new(Px(40), Some(Px(20)));
         assert_eq!(axis.min, Px(40));
         assert_eq!(axis.max, Some(Px(40)));
@@ -236,6 +240,8 @@ mod tests {
 
     #[test]
     fn axis_intersect_returns_interval_overlap() {
+        let _runtime_session = crate::RuntimeSession::new();
+        let _runtime_scope = _runtime_session.enter();
         let parent = Constraint::new(
             AxisConstraint::new(Px(20), Some(Px(100))),
             AxisConstraint::new(Px(10), Some(Px(80))),
@@ -254,6 +260,8 @@ mod tests {
 
     #[test]
     fn axis_intersect_keeps_unbounded_max_when_parent_is_unbounded() {
+        let _runtime_session = crate::RuntimeSession::new();
+        let _runtime_scope = _runtime_session.enter();
         let parent = Constraint::new(AxisConstraint::at_least(Px(50)), AxisConstraint::NONE);
         let child = Constraint::new(
             AxisConstraint::new(Px(20), None),
@@ -269,6 +277,8 @@ mod tests {
 
     #[test]
     fn arithmetic_adjusts_intervals() {
+        let _runtime_session = crate::RuntimeSession::new();
+        let _runtime_scope = _runtime_session.enter();
         let mut axis = AxisConstraint::new(Px(20), Some(Px(60)));
         axis -= Px(5);
         assert_eq!(axis, AxisConstraint::new(Px(15), Some(Px(55))));

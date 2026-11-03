@@ -12,14 +12,6 @@ use tessera_ui::{
 
 use super::tokens;
 
-struct Pipelines;
-
-impl tessera_ui::RenderModule for Pipelines {
-    fn register_pipelines(&self, context: &mut tessera_ui::PipelineContext<'_>) {
-        tessera_components::pipelines::register_pipelines(context);
-    }
-}
-
 #[tessera]
 fn fixture() {
     material_theme().child(|| {
@@ -95,7 +87,7 @@ fn select(renderer: &mut HeadlessRenderer, label: &str) {
 fn dialog_token_sets_switch_variants_and_accordion_controls_reveal_their_own_rows() {
     let mut renderer = HeadlessRenderer::new(
         Box::new(fixture),
-        vec![Box::new(Pipelines)],
+        vec![Box::new(crate::TestPipelines)],
         HeadlessConfig {
             width: 1100,
             height: 2400,

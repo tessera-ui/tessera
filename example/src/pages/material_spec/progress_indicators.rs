@@ -29,7 +29,9 @@ use super::{
 };
 
 #[tessera]
-pub(super) fn progress_indicators_spec() {
+pub(super) fn progress_indicators_spec(
+    route: Option<crate::pages::material_spec::article::ArticleRoute>,
+) {
     article(
         "Progress indicators",
         "Progress indicators show the status of a process in real time.",
@@ -64,6 +66,7 @@ pub(super) fn progress_indicators_spec() {
             },
         ],
     )
+    .route_optional(route.clone())
     .pages(vec![
         ArticlePage {
             title: "Overview",

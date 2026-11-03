@@ -166,7 +166,7 @@ fn frame() -> Color {
 }
 
 #[tessera]
-pub(super) fn divider_spec() {
+pub(super) fn divider_spec(route: Option<crate::pages::material_spec::article::ArticleRoute>) {
     article(
         "Divider",
         "Dividers are thin lines that group content in lists or other containers",
@@ -185,6 +185,7 @@ pub(super) fn divider_spec() {
             },
         ],
     )
+    .route_optional(route.clone())
     .intro(divider_anatomy)
     .pages(vec![
         ArticlePage {

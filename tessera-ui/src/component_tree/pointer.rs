@@ -247,6 +247,11 @@ impl PointerIndex {
                 match action {
                     OrderedModifierAction::Placement(placement) => {
                         if context.input_transforms.is_empty() {
+                            crate::work::record(
+                                context.instance_logic_id,
+                                crate::WorkPhase::Transform,
+                                placement.node().diagnostic_name(),
+                            );
                             position = placement.node().transform_position(position);
                         }
                     }
@@ -454,7 +459,6 @@ impl PointerIndex {
 
 #[cfg(test)]
 mod tests {
-    use std::cell::Cell;
 
     use crate::{
         ComputedData, Constraint, LayoutResult, Modifier, Px, PxPosition, State,
@@ -466,12 +470,13 @@ mod tests {
         testing::{layout_test, pump_layout_test_session, start_layout_test_session},
     };
 
-    thread_local! {
-        static POSITION: Cell<Option<State<PxPosition>>> = const { Cell::new(None) };
-        static SIZE: Cell<Option<State<ComputedData>>> = const { Cell::new(None) };
-        static PLACED: Cell<Option<State<bool>>> = const { Cell::new(None) };
-        static REBUILD: Cell<Option<State<bool>>> = const { Cell::new(None) };
-        static OBSERVED_HANDLER: Cell<bool> = const { Cell::new(false) };
+    #[derive(Clone, Default, PartialEq)]
+    struct PointerProbe {
+        position: crate::testing::TestProbe<Option<State<PxPosition>>>,
+        size: crate::testing::TestProbe<Option<State<ComputedData>>>,
+        placed: crate::testing::TestProbe<Option<State<bool>>>,
+        rebuild: crate::testing::TestProbe<Option<State<bool>>>,
+        observed_handler: crate::testing::TestProbe<bool>,
     }
 
     #[derive(Clone, PartialEq)]
@@ -515,18 +520,18 @@ mod tests {
         }
     }
 
-    struct Input(bool);
+    struct Input(bool, crate::testing::TestProbe<bool>);
 
     impl PointerInputModifierNode for Input {
         fn on_pointer_input(&self, input: crate::PointerInput<'_>) {
             if input.pass == crate::PointerEventPass::Main {
-                OBSERVED_HANDLER.set(self.0);
+                self.1.set(self.0);
             }
         }
     }
 
     #[tessera(crate)]
-    fn moving_control() {
+    fn moving_control(probe: PointerProbe) {
         let position = remember(|| PxPosition::new(Px(10), Px(10)));
         let size = remember(|| ComputedData {
             width: Px(20),
@@ -534,24 +539,32 @@ mod tests {
         });
         let placed = remember(|| true);
         let rebuild = remember(|| false);
-        POSITION.set(Some(position));
-        SIZE.set(Some(size));
-        PLACED.set(Some(placed));
-        REBUILD.set(Some(rebuild));
+        probe.position.set(Some(position));
+        probe.size.set(Some(size));
+        probe.placed.set(Some(placed));
+        probe.rebuild.set(Some(rebuild));
         let generation = rebuild.get();
         layout().policy(Canvas(placed)).child(move || {
             layout().policy(ControlSize(size)).modifier(
                 Modifier::new()
                     .push_placement(Position(position))
-                    .push_pointer_input(Input(generation)),
+                    .push_pointer_input(Input(generation, probe.observed_handler.clone())),
             );
         });
     }
 
     #[test]
     fn pointer_grid_reuses_overlapping_cells_and_updates_hits_across_visibility_and_size_changes() {
-        let mut session =
-            start_layout_test_session(layout_test(moving_control).viewport_px(8000, 8000));
+        let _runtime_session = crate::RuntimeSession::new();
+        let _runtime_scope = _runtime_session.enter();
+        let probe = PointerProbe::default();
+        let mut session = start_layout_test_session(
+            layout_test({
+                let probe = probe.clone();
+                move || moving_control(probe.clone())
+            })
+            .viewport_px(8000, 8000),
+        );
         pump_layout_test_session(&mut session, 0);
         let target = TesseraRuntime::with(|runtime| {
             let index = &runtime.component_tree.pointer_index;
@@ -575,7 +588,7 @@ mod tests {
             });
         };
         check(1, 0, PxPosition::new(Px(15), Px(15)), true);
-        let position = POSITION.get().unwrap();
+        let position = probe.position.get().unwrap();
         position.set(PxPosition::new(Px(40), Px(10)));
         pump_layout_test_session(&mut session, 16_666_667);
         check(0, 0, PxPosition::new(Px(15), Px(15)), false);
@@ -588,7 +601,7 @@ mod tests {
         check(0, 1, PxPosition::new(Px(265), Px(15)), false);
         check(0, 1, PxPosition::new(Px(275), Px(15)), true);
 
-        let placed = PLACED.get().unwrap();
+        let placed = probe.placed.get().unwrap();
         placed.set(false);
         pump_layout_test_session(&mut session, 66_666_668);
         check(0, 1, PxPosition::new(Px(275), Px(15)), false);
@@ -596,7 +609,7 @@ mod tests {
         pump_layout_test_session(&mut session, 83_333_335);
         check(1, 0, PxPosition::new(Px(275), Px(15)), true);
 
-        let size = SIZE.get().unwrap();
+        let size = probe.size.get().unwrap();
         size.set(ComputedData {
             width: Px(5000),
             height: Px(5000),
@@ -635,11 +648,11 @@ mod tests {
         pump_layout_test_session(&mut session, 166_666_670);
         check(0, 0, PxPosition::new(Px(275), Px(15)), true);
 
-        OBSERVED_HANDLER.set(false);
-        REBUILD.get().unwrap().set(true);
+        probe.observed_handler.set(false);
+        probe.rebuild.get().unwrap().set(true);
         pump_layout_test_session(&mut session, 183_333_337);
         assert!(
-            OBSERVED_HANDLER.get(),
+            probe.observed_handler.get(),
             "replay must replace the cached input handler"
         );
         TesseraRuntime::with(|runtime| {

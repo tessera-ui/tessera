@@ -4,15 +4,11 @@
 //!
 //! Verify native control rendering and interaction after uniform scaling.
 
-use std::{
-    cell::{Cell, RefCell},
-    collections::BTreeMap,
-    time::Duration,
-};
+use std::time::Duration;
 
 use tessera_ui::{
-    Color, Dp, FloatRect, FocusManager, FocusModifierExt as _, HeadlessConfig, HeadlessRenderer,
-    LayoutCoordinates, MOUSE_POINTER_ID, Modifier, PressKeyEventType, Px, PxPosition, State,
+    Color, Dp, FloatRect, FocusManager, HeadlessConfig, HeadlessRenderer, LayoutCoordinates,
+    MOUSE_POINTER_ID, Modifier, PressKeyEventType, Px, PxPosition, State,
     accesskit::{Action, ActionRequest, Node, NodeId, Role, TreeId},
     modifier::ModifierCapabilityExt as _,
     remember, scaled_box, tessera,
@@ -26,17 +22,17 @@ use crate::{
     material_icons::filled,
     modifier::ModifierExt as _,
     shape_def::Shape,
-    text_field::TextFieldBuilder,
+    text_field::text_field,
     text_input::TextInputController,
     theme::material_theme,
     time_picker::{TimePickerDisplayMode, TimePickerState, time_picker},
 };
 
-thread_local! {
-    static COORDINATES: RefCell<BTreeMap<&'static str, LayoutCoordinates>> = const { RefCell::new(BTreeMap::new()) };
-    static EDITOR: Cell<Option<State<TextInputController>>> = const { Cell::new(None) };
-    static CLIPPED: Cell<Option<State<bool>>> = const { Cell::new(None) };
-    static TIME: Cell<Option<State<TimePickerState>>> = const { Cell::new(None) };
+#[derive(Clone, Copy, Default)]
+struct FixtureHandles {
+    editor: Option<State<TextInputController>>,
+    clipped: Option<State<bool>>,
+    time: Option<State<TimePickerState>>,
 }
 
 #[derive(Clone, Copy, PartialEq)]
@@ -49,23 +45,23 @@ impl tessera_ui::PlacementModifierNode for FractionalOrigin {
 }
 
 fn observe(name: &'static str) -> Modifier {
-    Modifier::new().on_layout_coordinates(move |coordinates: LayoutCoordinates| {
-        COORDINATES.with_borrow_mut(|values| {
-            values.insert(name, coordinates);
-        });
+    Modifier::new().semantics(crate::modifier::SemanticsArgs {
+        test_tag: Some(name.into()),
+        merge_descendants: true,
+        ..Default::default()
     })
 }
 
 #[tessera]
-fn field_fixture() {
+fn field_fixture(observed: tessera_ui::testing::TestProbe<FixtureHandles>) {
     let editor = remember(|| {
         let mut editor = TextInputController::new(Dp(16.0), Some(Dp(24.0)));
         editor.set_text("Input");
         editor
     });
     let clipped = remember(|| false);
-    EDITOR.set(Some(editor));
-    CLIPPED.set(Some(clipped));
+    observed.with_mut(|handles| handles.editor = Some(editor));
+    observed.with_mut(|handles| handles.clipped = Some(clipped));
     material_theme().child(move || {
         boxed()
             .alignment(Alignment::TopStart)
@@ -84,7 +80,8 @@ fn field_fixture() {
                     .modifier(modifier)
                     .children(move || {
                         scaled_box(0.625).child(move || {
-                            TextFieldBuilder::outlined()
+                            text_field()
+                                .outlined()
                                 .controller(editor)
                                 .label("Label")
                                 .accessibility_label("Scaled outlined editor")
@@ -101,9 +98,9 @@ fn field_fixture() {
 }
 
 #[tessera]
-fn time_fixture() {
+fn time_fixture(observed: tessera_ui::testing::TestProbe<FixtureHandles>) {
     let time = remember(|| TimePickerState::new(10, 8, false, TimePickerDisplayMode::Picker));
-    TIME.set(Some(time));
+    observed.with_mut(|handles| handles.time = Some(time));
     material_theme().child(move || {
         boxed()
             .alignment(Alignment::TopStart)
@@ -118,17 +115,25 @@ fn time_fixture() {
                     .modifier(Modifier::new().push_placement(FractionalOrigin))
                     .children(move || {
                         scaled_box(0.625).child(move || {
-                            time_picker().state(time).modifier(observe("picker"));
+                            time_picker().state(time);
                         });
                     });
             });
     });
 }
 
-fn renderer<Output: 'static>(entry: fn() -> Output, samples: u32) -> HeadlessRenderer {
-    COORDINATES.with_borrow_mut(BTreeMap::clear);
+fn renderer<Output: 'static>(
+    entry: fn(tessera_ui::testing::TestProbe<FixtureHandles>) -> Output,
+    samples: u32,
+    observed: &tessera_ui::testing::TestProbe<FixtureHandles>,
+) -> HeadlessRenderer {
     let mut renderer = HeadlessRenderer::new(
-        Box::new(entry),
+        Box::new({
+            let observed = observed.clone();
+            move || {
+                entry(observed.clone());
+            }
+        }),
         vec![Box::new(crate::TesseraComponents)],
         HeadlessConfig {
             width: 300,
@@ -143,8 +148,13 @@ fn renderer<Output: 'static>(entry: fn() -> Output, samples: u32) -> HeadlessRen
     renderer
 }
 
-fn coordinates(name: &str) -> LayoutCoordinates {
-    COORDINATES.with_borrow(|values| *values.get(name).expect("observed native control"))
+fn coordinates(renderer: &HeadlessRenderer, name: &str) -> LayoutCoordinates {
+    renderer
+        .inspect_components()
+        .find_tag(name)
+        .expect("native control")
+        .layout_coordinates()
+        .expect("control geometry")
 }
 
 fn control(renderer: &HeadlessRenderer, label: &str, role: Role) -> (NodeId, Node) {
@@ -190,8 +200,9 @@ fn scaled_outlined_field_keeps_native_insets_notch_ime_focus_and_ancestor_clippi
         "scaled_controls_tests::scaled_outlined_field_keeps_native_insets_notch_ime_focus_and_ancestor_clipping",
         || {
             for samples in [1, 4] {
-                let mut renderer = renderer(field_fixture, samples);
-                let field = coordinates("field");
+                let observed = tessera_ui::testing::TestProbe::default();
+                let mut renderer = renderer(field_fixture, samples, &observed);
+                let field = coordinates(&renderer, "field");
                 assert_eq!(field.local_size.width, Px(240));
                 assert_eq!(field.local_size.height, Px(56));
                 assert_eq!(
@@ -203,7 +214,7 @@ fn scaled_outlined_field_keeps_native_insets_notch_ime_focus_and_ancestor_clippi
                         height: 35.0
                     }
                 );
-                let icon = coordinates("icon").window_bounds();
+                let icon = coordinates(&renderer, "icon").window_bounds();
                 assert_eq!((icon.width, icon.height), (15.0, 15.0));
                 assert_eq!(
                     icon.x + icon.width * 0.5 - field.window_bounds().x,
@@ -238,7 +249,10 @@ fn scaled_outlined_field_keeps_native_insets_notch_ime_focus_and_ancestor_clippi
                 assert_eq!(renderer.accessibility_snapshot().unwrap().focus, input);
                 renderer.inject_ime_event(Ime::Commit("!".into()));
                 renderer.render_frames(4);
-                assert_eq!(EDITOR.get().unwrap().with(|editor| editor.text()), "Input!");
+                assert_eq!(
+                    observed.get().editor.unwrap().with(|editor| editor.text()),
+                    "Input!"
+                );
                 assert_eq!(
                     control(&renderer, "Scaled outlined editor", Role::TextInput)
                         .1
@@ -254,39 +268,46 @@ fn scaled_outlined_field_keeps_native_insets_notch_ime_focus_and_ancestor_clippi
                 FocusManager::current().clear_focus(true);
                 renderer.render_frames(4);
                 assert!(
-                    !EDITOR
+                    !observed
                         .get()
+                        .editor
                         .unwrap()
                         .with(|editor| editor.focus_handler().is_focused()),
                     "focus must be cleared before the unclipped hit-test control"
                 );
                 click(&mut renderer, PxPosition::from_f32_xy(11.25, 21.5));
                 assert!(
-                    EDITOR
+                    observed
                         .get()
+                        .editor
                         .unwrap()
                         .with(|editor| editor.focus_handler().is_focused()),
                     "the same corner reaches the native field before ancestor clipping"
                 );
                 FocusManager::current().clear_focus(true);
-                CLIPPED.get().unwrap().set(true);
+                observed.get().clipped.unwrap().set(true);
                 renderer.render_frames(4);
                 assert!(
-                    !EDITOR
+                    !observed
                         .get()
+                        .editor
                         .unwrap()
                         .with(|editor| editor.focus_handler().is_focused()),
                     "focus must be cleared before testing the clipped corner"
                 );
                 click(&mut renderer, PxPosition::from_f32_xy(11.25, 21.5));
                 assert!(
-                    !EDITOR
+                    !observed
                         .get()
+                        .editor
                         .unwrap()
                         .with(|editor| editor.focus_handler().is_focused()),
                     "a point in the rounded ancestor's clipped corner cannot focus its native field"
                 );
-                assert_eq!(coordinates("field").window_bounds(), field.window_bounds());
+                assert_eq!(
+                    coordinates(&renderer, "field").window_bounds(),
+                    field.window_bounds()
+                );
             }
         },
     );
@@ -299,8 +320,14 @@ fn scaled_time_picker_keeps_dial_targets_and_maps_physical_digit_click_to_state(
         "scaled_controls_tests::scaled_time_picker_keeps_dial_targets_and_maps_physical_digit_click_to_state",
         || {
             for samples in [1, 4] {
-                let mut renderer = renderer(time_fixture, samples);
-                assert_eq!(coordinates("picker").local_to_window.scale(), 0.625);
+                let observed = tessera_ui::testing::TestProbe::default();
+                let mut renderer = renderer(time_fixture, samples, &observed);
+                assert_eq!(
+                    coordinates(&renderer, "time-picker")
+                        .local_to_window
+                        .scale(),
+                    0.625
+                );
                 let dial = control(&renderer, "Hours", Role::Group).1.bounds().unwrap();
                 assert_eq!((dial.width(), dial.height()), (160.0, 160.0));
                 let (digit, node) = control(&renderer, "Hour 3 of 12", Role::Button);
@@ -316,7 +343,7 @@ fn scaled_time_picker_keeps_dial_targets_and_maps_physical_digit_click_to_state(
                 }));
                 renderer.render_frames(3);
                 assert_eq!(
-                    TIME.get().unwrap().with(TimePickerState::hour),
+                    observed.get().time.unwrap().with(TimePickerState::hour),
                     10,
                     "accessibility focus must not activate a clock digit"
                 );
@@ -327,8 +354,11 @@ fn scaled_time_picker_keeps_dial_targets_and_maps_physical_digit_click_to_state(
                         ((bounds.y0 + bounds.y1) * 0.5) as f32,
                     ),
                 );
-                assert_eq!(TIME.get().unwrap().with(TimePickerState::hour), 3);
-                assert_eq!(TIME.get().unwrap().with(TimePickerState::minute), 8);
+                assert_eq!(observed.get().time.unwrap().with(TimePickerState::hour), 3);
+                assert_eq!(
+                    observed.get().time.unwrap().with(TimePickerState::minute),
+                    8
+                );
                 let after = renderer.read_pixels().unwrap();
                 save_pixels(&renderer, &after, "scaled-time-after", samples);
                 let changed = (dial.y0.ceil() as usize..dial.y1.floor() as usize).any(|y| {

@@ -25,15 +25,17 @@ fn fixture() {
                     .modifier(Modifier::new().fill_max_size())
                     .child(|| {});
             })
-            .menu_content(move || {
-                menu_group().children(move || {
+            .menu_content(move |menu| {
+                menu_group().menu(menu).children(move || {
                     menu_item()
+                        .menu(menu)
                         .label("Visual selection action")
                         .selected(true)
                         .close_on_click(false)
                         .on_click(|| {});
                     for (index, label) in ["Nut-free", "Vegan"].into_iter().enumerate() {
                         menu_item()
+                            .menu(menu)
                             .label(label)
                             .selection_mode(MenuItemSelectionMode::Checkbox)
                             .selected(choices.get()[index])
@@ -44,6 +46,7 @@ fn fixture() {
                     }
                     for (index, label) in ["Standard", "Vibrant"].into_iter().enumerate() {
                         menu_item()
+                            .menu(menu)
                             .label(label)
                             .selection_mode(MenuItemSelectionMode::Radio)
                             .selected(radio.get() == index)

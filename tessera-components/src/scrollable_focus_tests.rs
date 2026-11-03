@@ -4,12 +4,12 @@
 //!
 //! Scroll past an active editor without forcing it back into the viewport.
 
-use std::{cell::Cell, time::Duration};
+use std::time::Duration;
 
 use tessera_ui::{
     Dp, FocusRequester, HeadlessConfig, HeadlessRenderer, MOUSE_POINTER_ID, Modifier,
-    PressKeyEventType, PxPosition, PxRect, RenderModule, State, modifier::FocusModifierExt as _,
-    remember, tessera,
+    PressKeyEventType, PxPosition, PxRect, State, modifier::FocusModifierExt as _, remember,
+    tessera,
 };
 
 use crate::{
@@ -17,36 +17,41 @@ use crate::{
     column::column,
     modifier::{ModifierExt as _, SemanticsArgs},
     spacer::spacer,
-    text_field::TextFieldBuilder,
+    text_field::text_field,
     text_input::TextInputController,
     theme::material_theme,
 };
 
 use super::ScrollableController;
 
-thread_local! {
-    static SCROLL: Cell<Option<State<ScrollableController>>> = const {Cell::new(None)};
-    static EDITOR: Cell<Option<State<TextInputController>>> = const {Cell::new(None)};
-    static FIELD_BOUNDS: Cell<Option<PxRect>> = const {Cell::new(None)};
-    static NESTED_SCROLL: Cell<Option<(State<ScrollableController>, State<ScrollableController>, FocusRequester)>> = const { Cell::new(None) };
-    static OUTER_BOUNDS: Cell<Option<PxRect>> = const { Cell::new(None) };
-    static INNER_BOUNDS: Cell<Option<PxRect>> = const { Cell::new(None) };
-    static TARGET_BOUNDS: Cell<Option<PxRect>> = const { Cell::new(None) };
+#[derive(Clone, Copy, Default)]
+struct FixtureHandles {
+    scroll: Option<State<ScrollableController>>,
+    editor: Option<State<TextInputController>>,
+    nested: Option<(
+        State<ScrollableController>,
+        State<ScrollableController>,
+        FocusRequester,
+    )>,
 }
 
 #[tessera]
-fn nested_reveal_fixture() {
+fn nested_reveal_fixture(observed: tessera_ui::testing::TestProbe<FixtureHandles>) {
     let outer = remember(ScrollableController::new);
     let inner = remember(ScrollableController::new);
     let target = remember(FocusRequester::new).get();
-    NESTED_SCROLL.set(Some((outer, inner, target)));
+    observed.with_mut(|handles| handles.nested = Some((outer, inner, target)));
     material_theme().child(move || {
         column()
             .modifier(
                 Modifier::new()
                     .size(Dp(300.0), Dp(240.0))
                     .vertical_scroll(outer)
-                    .on_globally_positioned(|bounds| OUTER_BOUNDS.set(Some(bounds))),
+                    .semantics(SemanticsArgs {
+                        test_tag: Some("scroll-outer".into()),
+                        merge_descendants: true,
+                        ..Default::default()
+                    }),
             )
             .children(move || {
                 spacer().modifier(Modifier::new().height(Dp(600.0)));
@@ -55,7 +60,11 @@ fn nested_reveal_fixture() {
                         Modifier::new()
                             .size(Dp(240.0), Dp(160.0))
                             .vertical_scroll(inner)
-                            .on_globally_positioned(|bounds| INNER_BOUNDS.set(Some(bounds))),
+                            .semantics(SemanticsArgs {
+                                test_tag: Some("scroll-inner".into()),
+                                merge_descendants: true,
+                                ..Default::default()
+                            }),
                     )
                     .children(move || {
                         spacer().modifier(Modifier::new().height(Dp(600.0)));
@@ -67,9 +76,10 @@ fn nested_reveal_fixture() {
                                 .semantics(SemanticsArgs {
                                     role: Some(tessera_ui::accesskit::Role::Button),
                                     label: Some("Nested focus target".into()),
+                                    test_tag: Some("scroll-target".into()),
+                                    merge_descendants: true,
                                     ..Default::default()
-                                })
-                                .on_globally_positioned(|bounds| TARGET_BOUNDS.set(Some(bounds))),
+                                }),
                         );
                         spacer().modifier(Modifier::new().height(Dp(600.0)));
                     });
@@ -87,9 +97,13 @@ fn focus_request_reveals_the_target_through_both_nested_scroll_viewports() {
     );
     let name = name.split_once("::").unwrap().1;
     crate::test_utils::run_isolated_test(name, || {
+        let observed = tessera_ui::testing::TestProbe::default();
         let mut renderer = HeadlessRenderer::new(
-            Box::new(nested_reveal_fixture),
-            vec![Box::new(Pipelines)],
+            Box::new({
+                let observed = observed.clone();
+                move || nested_reveal_fixture(observed.clone())
+            }),
+            vec![Box::new(crate::TesseraComponents)],
             HeadlessConfig {
                 width: 400,
                 height: 300,
@@ -100,7 +114,7 @@ fn focus_request_reveals_the_target_through_both_nested_scroll_viewports() {
         )
         .unwrap();
         renderer.render_frames(3);
-        let (outer, inner, target) = NESTED_SCROLL.get().unwrap();
+        let (outer, inner, target) = observed.get().nested.unwrap();
         target.request_focus();
         renderer.step_frame();
         assert!(target.is_focused());
@@ -109,8 +123,11 @@ fn focus_request_reveals_the_target_through_both_nested_scroll_viewports() {
             outer.with(|scroll| scroll.child_position().y) < 0.0,
             "revealing the inner viewport must continue into its outer viewport"
         );
-        let target_bounds = TARGET_BOUNDS.get().unwrap();
-        for viewport in [OUTER_BOUNDS.get().unwrap(), INNER_BOUNDS.get().unwrap()] {
+        let target_bounds = bounds(&renderer, "scroll-target");
+        for viewport in [
+            bounds(&renderer, "scroll-outer"),
+            bounds(&renderer, "scroll-inner"),
+        ] {
             assert!(target_bounds.y >= viewport.y);
             assert!(
                 target_bounds.y + target_bounds.height <= viewport.y + viewport.height,
@@ -138,28 +155,30 @@ fn focus_request_reveals_the_target_through_both_nested_scroll_viewports() {
 }
 
 #[tessera]
-fn fixture() {
+fn fixture(observed: tessera_ui::testing::TestProbe<FixtureHandles>) {
     let scroll = remember(ScrollableController::new);
     let editor = remember(|| {
         let mut editor = TextInputController::new(Dp(16.0), Some(Dp(24.0)));
         editor.set_text("Input");
         editor
     });
-    SCROLL.set(Some(scroll));
-    EDITOR.set(Some(editor));
+    observed.with_mut(|handles| handles.scroll = Some(scroll));
+    observed.with_mut(|handles| handles.editor = Some(editor));
     material_theme().child(move || {
         column()
             .modifier(Modifier::new().fill_max_size().vertical_scroll(scroll))
             .children(move || {
                 spacer().modifier(Modifier::new().height(Dp(600.0)));
-                TextFieldBuilder::outlined()
+                text_field()
+                    .outlined()
                     .controller(editor)
-                    .modifier(
-                        Modifier::new()
-                            .width(Dp(240.0))
-                            .height(Dp(56.0))
-                            .on_globally_positioned(|bounds| FIELD_BOUNDS.set(Some(bounds))),
-                    )
+                    .modifier(Modifier::new().width(Dp(240.0)).height(Dp(56.0)).semantics(
+                        SemanticsArgs {
+                            test_tag: Some("scroll-field".into()),
+                            merge_descendants: true,
+                            ..Default::default()
+                        },
+                    ))
                     .label("Label")
                     .accessibility_label("Scrollable editor");
                 spacer().modifier(Modifier::new().height(Dp(600.0)));
@@ -167,19 +186,16 @@ fn fixture() {
     });
 }
 
-struct Pipelines;
-impl RenderModule for Pipelines {
-    fn register_pipelines(&self, context: &mut tessera_ui::PipelineContext<'_>) {
-        crate::pipelines::register_pipelines(context);
-    }
-}
-
 #[test]
 #[ignore = "requires a native GPU adapter"]
 fn wheel_scroll_keeps_a_focused_editor_offscreen_through_later_idle_frames() {
+    let observed = tessera_ui::testing::TestProbe::default();
     let mut renderer = HeadlessRenderer::new(
-        Box::new(fixture),
-        vec![Box::new(Pipelines)],
+        Box::new({
+            let observed = observed.clone();
+            move || fixture(observed.clone())
+        }),
+        vec![Box::new(crate::TesseraComponents)],
         HeadlessConfig {
             width: 360,
             height: 240,
@@ -190,8 +206,8 @@ fn wheel_scroll_keeps_a_focused_editor_offscreen_through_later_idle_frames() {
     )
     .unwrap();
     renderer.render_frames(3);
-    let scroll = SCROLL.get().unwrap();
-    let editor = EDITOR.get().unwrap();
+    let scroll = observed.get().scroll.unwrap();
+    let editor = observed.get().editor.unwrap();
     scroll.with_mut(|scroll| scroll.set_scroll_position(PxPosition::from_f32_xy(0.0, -520.0)));
     renderer.render_frames(3);
     let field = renderer
@@ -231,7 +247,7 @@ fn wheel_scroll_keeps_a_focused_editor_offscreen_through_later_idle_frames() {
             "manual wheel should pass the focused editor: previous {previous}, current {moved}"
         );
         assert!(
-            FIELD_BOUNDS.get().unwrap().y.to_f32() >= renderer.physical_size().height as f32,
+            bounds(&renderer, "scroll-field").y.to_f32() >= renderer.physical_size().height as f32,
             "the focused field must actually be beyond the viewport"
         );
         assert!(
@@ -246,4 +262,14 @@ fn wheel_scroll_keeps_a_focused_editor_offscreen_through_later_idle_frames() {
         assert!(editor.with(|editor| editor.focus_handler().is_focused()));
         previous = moved;
     }
+}
+
+fn bounds(renderer: &HeadlessRenderer, tag: &str) -> PxRect {
+    renderer
+        .inspect_components()
+        .find_tag(tag)
+        .expect("scroll target")
+        .bounds()
+        .expect("scroll target bounds")
+        .rounded()
 }

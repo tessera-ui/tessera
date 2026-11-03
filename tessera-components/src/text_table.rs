@@ -16,9 +16,6 @@ use tessera_ui::{
 };
 use unicode_linebreak::linebreaks;
 
-#[cfg(test)]
-use tessera_ui::modifier::FocusModifierExt as _;
-
 use crate::{
     alignment::Alignment,
     boxed::boxed,
@@ -281,15 +278,6 @@ fn table_row(
             modifier.background(header_background)
         } else {
             modifier
-        };
-        #[cfg(test)]
-        let modifier = {
-            let key = (cell.row, cell.column);
-            modifier.on_layout_coordinates(move |coordinates| {
-                tests::CELLS.with_borrow_mut(|cells| {
-                    cells.insert(key, coordinates);
-                });
-            })
         };
         boxed()
             .alignment(Alignment::CenterStart)

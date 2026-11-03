@@ -3,19 +3,16 @@
 //! ## Usage
 //!
 //! Present anchored overflow or context actions as surfaced menus.
-use std::sync::Arc;
-
-use parking_lot::RwLock;
 use tessera_ui::{
     AxisConstraint, Callback, ClipRegion, ClipShape, Color, ComputedData, CursorEventContent, Dp,
     DrawModifierContent, DrawModifierContext, DrawModifierNode, FocusDirection, FocusManager,
     FocusRequester, FocusScopeNode, FocusTraversalPolicy, FrameNanosControl, KeyboardInput,
     KeyboardInputModifierNode, LayoutResult, MOUSE_POINTER_ID, MeasurementError, Modifier,
     ParentConstraint, PointerInput, PointerInputModifierNode, Px, PxPosition, PxSize, RenderSlot,
-    State,
+    RenderSlotWith, State,
     accesskit::{HasPopup, Role, Toggled},
     current_frame_nanos,
-    layout::{MeasureScope, layout},
+    layout::{LayoutPlacementTarget, MeasureScope, PlacementResult, PlacementScope, layout},
     modifier::{FocusModifierExt as _, ModifierCapabilityExt as _},
     provide_context, receive_frame_nanos, remember, tessera, use_context, winit,
 };
@@ -191,10 +188,19 @@ pub enum MenuPlacement {
     LeftStart,
 }
 
+/// The owner of actions declared in one open menu.
+#[derive(Clone, Copy, PartialEq)]
+pub struct MenuScope {
+    host: MenuHost,
+    controller: State<MenuController>,
+    typeahead: typeahead::MenuTypeahead,
+}
+
 #[derive(Clone, PartialEq)]
 struct MenuProviderConfig {
+    pub host: Option<MenuHost>,
     pub anchor: Option<MenuAnchor>,
-    pub precise_anchor: Option<tessera_ui::FloatRect>,
+    pub window_anchor: Option<State<tessera_ui::LayoutCoordinates>>,
     pub bounds: Option<MenuBoundsHandle>,
     pub focus_scope: Option<FocusScopeNode>,
     pub parent_request: Option<State<MenuPopupRequest>>,
@@ -216,14 +222,15 @@ struct MenuProviderConfig {
     pub controller: Option<State<MenuController>>,
     pub focus_restorer_fallback: Option<FocusRequester>,
     pub main_content: Option<RenderSlot>,
-    pub menu_content: Option<RenderSlot>,
+    pub menu_content: Option<RenderSlotWith<MenuScope>>,
 }
 
 impl Default for MenuProviderConfig {
     fn default() -> Self {
         Self {
+            host: None,
             anchor: None,
-            precise_anchor: None,
+            window_anchor: None,
             bounds: None,
             focus_scope: None,
             parent_request: None,
@@ -256,12 +263,12 @@ struct MenuBounds {
     size: ComputedData,
 }
 
-#[derive(Clone)]
-struct MenuBoundsHandle(Arc<RwLock<Option<MenuBounds>>>);
+#[derive(Clone, Copy)]
+struct MenuBoundsHandle(State<Option<MenuBounds>>);
 
 impl PartialEq for MenuBoundsHandle {
     fn eq(&self, other: &Self) -> bool {
-        Arc::ptr_eq(&self.0, &other.0)
+        self.0 == other.0
     }
 }
 
@@ -274,14 +281,37 @@ impl Default for MenuBounds {
     }
 }
 
+#[derive(Clone, Copy, PartialEq)]
+enum MenuAnchorSource {
+    Local(Option<tessera_ui::FloatRect>),
+    Window {
+        anchor: State<tessera_ui::LayoutCoordinates>,
+        origin: State<tessera_ui::LayoutCoordinates>,
+    },
+}
+
+impl MenuAnchorSource {
+    fn resolve(self, main: ComputedData) -> tessera_ui::FloatRect {
+        match self {
+            Self::Local(anchor) => anchor.unwrap_or_else(|| {
+                tessera_ui::FloatRect::from_position_size(PxPosition::ZERO, main.into())
+            }),
+            Self::Window { anchor, origin } => origin
+                .get()
+                .local_to_window
+                .inverse_rect(anchor.get().window_bounds()),
+        }
+    }
+}
+
 #[derive(Clone)]
 struct MenuLayout {
     is_open: bool,
     has_background: bool,
     placement: MenuPlacement,
     offset: [Dp; 2],
-    anchor: Option<tessera_ui::FloatRect>,
-    bounds: Arc<RwLock<Option<MenuBounds>>>,
+    anchor: MenuAnchorSource,
+    bounds: State<Option<MenuBounds>>,
 }
 
 struct MenuScrollClip {
@@ -321,61 +351,89 @@ impl PartialEq for MenuLayout {
             && self.placement == other.placement
             && self.offset == other.offset
             && self.anchor == other.anchor
+            && self.bounds == other.bounds
+    }
+}
+
+impl MenuLayout {
+    fn place<T: LayoutPlacementTarget>(
+        &self,
+        children: &[T],
+        sizes: &[ComputedData],
+        fallback: ComputedData,
+    ) -> LayoutResult {
+        let main = sizes[0];
+        let mut result = LayoutResult::new(main);
+        result.place_child(children[0], PxPosition::ZERO);
+        if !self.is_open {
+            self.bounds.set_if_changed(None);
+            return result;
+        }
+        let (menu_index, available) = if self.has_background {
+            result.place_child(children[1], PxPosition::ZERO);
+            let background = sizes[1];
+            (
+                2,
+                if background.width > Px::ZERO && background.height > Px::ZERO {
+                    background
+                } else {
+                    fallback
+                },
+            )
+        } else {
+            (1, fallback)
+        };
+        let menu_size = sizes[menu_index];
+        let position = resolve_menu_position(
+            self.anchor.resolve(main),
+            self.placement,
+            menu_size,
+            available,
+            self.offset,
+        );
+        result.place_child(children[menu_index], position);
+        self.bounds.set_if_changed(Some(MenuBounds {
+            origin: position,
+            size: menu_size,
+        }));
+        result
     }
 }
 
 impl tessera_ui::LayoutModifierNode for MenuLayout {
+    fn measure_eq(&self, other: &Self) -> bool {
+        self.is_open == other.is_open && self.has_background == other.has_background
+    }
+
     fn measure(&self, input: &mut MeasureScope<'_>) -> Result<LayoutResult, MeasurementError> {
-        let mut result = LayoutResult::default();
         let children = input.children();
-        let child_constraint = input.parent_constraint().without_min();
-        let main_content = children
-            .first()
-            .copied()
-            .expect("main content should exist");
-        let main_size = main_content.measure(input, &child_constraint)?;
-        result.place_child(main_content, PxPosition::new(Px::ZERO, Px::ZERO));
+        let constraint = input.parent_constraint().without_min();
+        let sizes = children
+            .iter()
+            .map(|child| child.measure(input, &constraint).map(|child| child.size()))
+            .collect::<Result<Vec<_>, _>>()?;
+        let fallback = extract_available_size(input.parent_constraint());
+        Ok(input.placement(|| self.place(&children, &sizes, fallback)))
+    }
 
-        if !self.is_open {
-            *self.bounds.write() = None;
-            return Ok(result.with_size(main_size.size()));
-        }
-
-        let (menu_index, available) = if self.has_background {
-            let background = children[1];
-            let background_size = background.measure(input, &child_constraint)?.size();
-            result.place_child(background, PxPosition::ZERO);
-            let available = if background_size.width > Px::ZERO && background_size.height > Px::ZERO
-            {
-                background_size
-            } else {
-                extract_available_size(input.parent_constraint())
-            };
-            (2, available)
-        } else {
-            (1, extract_available_size(input.parent_constraint()))
-        };
-        let menu = children[menu_index];
-
-        let menu_size = menu.measure(input, &child_constraint)?;
-        let menu_size = menu_size.size();
-        let main_size = main_size.size();
-        let anchor = self.anchor.unwrap_or_else(|| {
-            tessera_ui::FloatRect::from_position_size(
-                PxPosition::ZERO,
-                PxSize::new(main_size.width, main_size.height),
+    fn place_children(
+        &self,
+        scope: &PlacementScope<'_>,
+        _inner: &PlacementResult,
+    ) -> Option<PlacementResult> {
+        let children = scope.children();
+        let sizes = children
+            .iter()
+            .map(|child| child.size())
+            .collect::<Vec<_>>();
+        Some(
+            self.place(
+                &children,
+                &sizes,
+                extract_available_size(scope.parent_constraint()),
             )
-        });
-        let menu_position =
-            resolve_menu_position(anchor, self.placement, menu_size, available, self.offset);
-        result.place_child(menu, menu_position);
-
-        *self.bounds.write() = Some(MenuBounds {
-            origin: menu_position,
-            size: menu_size,
-        });
-
-        Ok(result.with_size(main_size))
+            .into_placement_result(),
+        )
     }
 }
 
@@ -555,8 +613,8 @@ impl PointerInputModifierNode for MenuKeyboardBoundary {
 ///     .main_content(|| {
 ///         text().content("Main content");
 ///     })
-///     .menu_content(|| {
-///         menu_item().label("Edit").on_click(|| {});
+///     .menu_content(|menu| {
+///         menu_item().menu(menu).label("Edit").on_click(|| {});
 ///     });
 /// # });
 /// # }
@@ -582,7 +640,7 @@ pub fn menu_provider(
     controller: Option<State<MenuController>>,
     focus_restorer_fallback: Option<FocusRequester>,
     main_content: Option<RenderSlot>,
-    menu_content: Option<RenderSlot>,
+    menu_content: Option<RenderSlotWith<MenuScope>>,
 ) {
     let controlled_is_open = is_open;
     let is_open = is_open.unwrap_or(false);
@@ -594,8 +652,9 @@ pub fn menu_provider(
         .get()
         .color_scheme;
     let mut provider_args = MenuProviderConfig {
+        host: None,
         anchor,
-        precise_anchor: None,
+        window_anchor: None,
         bounds: None,
         focus_scope: None,
         parent_request: None,
@@ -654,10 +713,14 @@ pub fn menu_provider(
 fn menu_provider_content(provider: Option<MenuProviderConfig>) {
     let provider_args = provider.unwrap_or_default();
     let controller = provider_args.controller.expect("menu controller");
-    let host = use_context::<MenuHost>().expect("menu host").get();
+    let host = provider_args.host.expect("menu host");
 
     let main_content = provider_args.main_content.unwrap_or_else(RenderSlot::empty);
-    let menu_content = provider_args.menu_content.unwrap_or_else(RenderSlot::empty);
+    let menu_content = if let Some(content) = provider_args.menu_content {
+        content
+    } else {
+        RenderSlotWith::new(|_| {})
+    };
     let menu_open_state = remember(|| false);
     let main_focus_scope = remember(FocusScopeNode::new).get();
     let internal_focus_scope = remember(FocusScopeNode::new).get();
@@ -665,12 +728,17 @@ fn menu_provider_content(provider: Option<MenuProviderConfig>) {
     let pending_focus_restore = remember(|| None::<Option<FocusRequester>>);
 
     let (is_open, anchor) = controller.with(|c| c.snapshot());
-    let anchor = provider_args.precise_anchor.or_else(|| {
-        provider_args
-            .anchor
-            .or(anchor)
-            .map(|anchor| tessera_ui::FloatRect::from_position_size(anchor.origin, anchor.size))
-    });
+    let anchor =
+        if let Some(anchor) = provider_args.window_anchor {
+            MenuAnchorSource::Window {
+                anchor,
+                origin: host.origin,
+            }
+        } else {
+            MenuAnchorSource::Local(provider_args.anchor.or(anchor).map(|anchor| {
+                tessera_ui::FloatRect::from_position_size(anchor.origin, anchor.size)
+            }))
+        };
     let mut just_opened = false;
     let mut just_closed = false;
     menu_open_state.with_mut(|was_open| {
@@ -689,7 +757,7 @@ fn menu_provider_content(provider: Option<MenuProviderConfig>) {
     if just_closed && can_restore && (menu_focus_scope.has_focus() || root_restore) {
         pending_focus_restore.set(Some(provider_args.focus_restorer_fallback));
     }
-    let internal_bounds = remember(|| Arc::new(RwLock::new(None))).get();
+    let internal_bounds = remember(|| None);
     let bounds = provider_args
         .bounds
         .clone()
@@ -697,7 +765,7 @@ fn menu_provider_content(provider: Option<MenuProviderConfig>) {
         .unwrap_or(internal_bounds);
 
     // Parent pointer handler: block propagation and close on background click.
-    let bounds = bounds.clone();
+    let bounds = bounds;
     let on_dismiss = provider_args.on_dismiss;
     let close_on_escape = provider_args.close_on_escape;
     let close_on_background = provider_args.close_on_background;
@@ -723,10 +791,10 @@ fn menu_provider_content(provider: Option<MenuProviderConfig>) {
     }
     if is_open && parent_request.is_none() {
         modifier = with_pointer_input(modifier, {
-            let bounds = bounds.clone();
+            let bounds = bounds;
             move |mut input| {
                 let cursor_position = input.cursor_position_rel;
-                let menu_bounds = *bounds.read();
+                let menu_bounds = bounds.get();
                 let should_close_click = close_on_background
                     && input.has_unconsumed_release()
                     && is_click_outside_menu(cursor_position, menu_bounds);
@@ -775,14 +843,14 @@ fn menu_provider_content(provider: Option<MenuProviderConfig>) {
             placement: provider_args.placement,
             offset: provider_args.offset,
             anchor,
-            bounds: bounds.clone(),
+            bounds: bounds,
         })
         .child(move || {
             layout()
                 .modifier(Modifier::new().focus_scope_with(main_focus_scope))
                 .child_shared(main_content);
             if is_open {
-                let bounds = bounds.clone();
+                let bounds = bounds;
                 if parent_request.is_none() {
                     surface()
                         .style(SurfaceStyle::Filled {
@@ -795,7 +863,7 @@ fn menu_provider_content(provider: Option<MenuProviderConfig>) {
                                     && input.has_unconsumed_release()
                                     && is_click_outside_menu(
                                         input.cursor_position_rel,
-                                        *bounds.read(),
+                                        bounds.get(),
                                     );
                                 input.block_all();
                                 if should_close {
@@ -839,7 +907,7 @@ fn menu_panel(
     provider: Option<MenuProviderConfig>,
     controller: Option<State<MenuController>>,
     focus_scope: Option<FocusScopeNode>,
-    menu_content: Option<RenderSlot>,
+    menu_content: Option<RenderSlotWith<MenuScope>>,
     just_opened: Option<bool>,
 ) {
     let provider = provider.unwrap_or_default();
@@ -850,11 +918,11 @@ fn menu_panel(
     let on_dismiss = provider.on_dismiss;
     let placement = provider.placement;
     let is_submenu = provider.parent_request.is_some();
-    let typeahead = remember(|| parking_lot::Mutex::new(typeahead::Registry::default()));
+    let typeahead = remember(typeahead::Registry::default);
     let scroll = remember(ScrollableController::new);
     let color_style = provider.color_style;
     let grouped = provider.grouped;
-    let host = use_context::<MenuHost>().expect("menu host").get();
+    let host = provider.host.expect("menu host");
     let frame = current_frame_nanos();
     let motion = remember(|| MenuShapeMotion::new(MenuPosition::Standalone, frame));
     let focused = focus_scope.has_focus();
@@ -956,47 +1024,35 @@ fn menu_panel(
             .child(move || {
                 let menu_content = menu_content;
                 provide_context(
-                    || controller,
+                    || color_style,
                     move || {
-                        let inherited =
-                            use_context::<State<MenuController>>().expect("menu controller");
-                        if inherited.get() != controller {
-                            inherited.set(controller);
+                        let inherited = use_context::<MenuColorStyle>().expect("menu colors");
+                        if inherited.get() != color_style {
+                            inherited.set(color_style);
                         }
-                        provide_context(
-                            || color_style,
-                            move || {
-                                let inherited =
-                                    use_context::<MenuColorStyle>().expect("menu colors");
-                                if inherited.get() != color_style {
-                                    inherited.set(color_style);
-                                }
-                                let modifier = Modifier::new().fill_max_width();
-                                let modifier = if grouped {
-                                    modifier.push_draw(MenuScrollClip { controller: scroll })
-                                } else {
-                                    modifier.clip_shape(if provider.animate_shape {
-                                        motion.with(MenuShapeMotion::shape)
-                                    } else {
-                                        provider.shape
-                                    })
-                                };
-                                column()
-                                    .modifier(modifier.vertical_scroll(scroll).padding_symmetric(
-                                        Dp::ZERO,
-                                        if grouped { Dp::ZERO } else { Dp(2.0) },
-                                    ))
-                                    .cross_axis_alignment(CrossAxisAlignment::Start)
-                                    .children(move || {
-                                        provide_context(
-                                            || typeahead::MenuTypeahead(typeahead),
-                                            move || {
-                                                menu_content.render();
-                                            },
-                                        );
-                                    });
-                            },
-                        );
+                        let modifier = Modifier::new().fill_max_width();
+                        let modifier = if grouped {
+                            modifier.push_draw(MenuScrollClip { controller: scroll })
+                        } else {
+                            modifier.clip_shape(if provider.animate_shape {
+                                motion.with(MenuShapeMotion::shape)
+                            } else {
+                                provider.shape
+                            })
+                        };
+                        column()
+                            .modifier(modifier.vertical_scroll(scroll).padding_symmetric(
+                                Dp::ZERO,
+                                if grouped { Dp::ZERO } else { Dp(2.0) },
+                            ))
+                            .cross_axis_alignment(CrossAxisAlignment::Start)
+                            .children(move || {
+                                menu_content.render(MenuScope {
+                                    host,
+                                    controller,
+                                    typeahead: typeahead::MenuTypeahead(typeahead),
+                                });
+                            });
                     },
                 );
             });
@@ -1015,12 +1071,13 @@ pub enum MenuItemSelectionMode {
 
 #[derive(Clone, PartialEq)]
 struct MenuItemConfig {
+    pub menu: Option<MenuScope>,
     pub label: String,
     pub supporting_text: Option<String>,
     pub trailing_text: Option<String>,
     pub leading_icon: Option<Painter>,
     pub trailing_icon: Option<Painter>,
-    pub submenu_content: Option<RenderSlot>,
+    pub submenu_content: Option<RenderSlotWith<MenuScope>>,
     pub submenu_placement: MenuPlacement,
     pub selected: bool,
     pub selection: Option<Toggled>,
@@ -1039,6 +1096,7 @@ struct MenuItemConfig {
 impl MenuItemConfig {
     pub fn new(label: impl Into<String>) -> Self {
         Self {
+            menu: None,
             label: label.into(),
             supporting_text: None,
             trailing_text: None,
@@ -1080,6 +1138,7 @@ impl Default for MenuItemConfig {
 ///
 /// ## Parameters
 ///
+/// - `menu` — action owner received from the enclosing menu content slot.
 /// - `label` — primary text shown for the menu action
 /// - `supporting_text` — optional supporting text below the label
 /// - `trailing_text` — optional trailing text such as a shortcut hint
@@ -1123,8 +1182,8 @@ impl Default for MenuItemConfig {
 /// #     .child(|| {
 /// menu_provider()
 ///     .is_open(true)
-///     .menu_content(|| {
-///         menu_item().label("Open");
+///     .menu_content(|menu| {
+///         menu_item().menu(menu).label("Open");
 ///     })
 ///     .main_content(|| {
 ///         text().content("Main content");
@@ -1135,12 +1194,13 @@ impl Default for MenuItemConfig {
 /// ```
 #[tessera]
 pub fn menu_item(
+    menu: Option<MenuScope>,
     #[prop(into)] label: Option<String>,
     #[prop(into)] supporting_text: Option<String>,
     #[prop(into)] trailing_text: Option<String>,
     #[prop(into)] leading_icon: Option<Painter>,
     #[prop(into)] trailing_icon: Option<Painter>,
-    submenu_content: Option<RenderSlot>,
+    submenu_content: Option<RenderSlotWith<MenuScope>>,
     submenu_placement: Option<MenuPlacement>,
     selected: Option<bool>,
     selection_mode: Option<MenuItemSelectionMode>,
@@ -1175,6 +1235,7 @@ pub fn menu_item(
         .color_scheme;
 
     let mut args = MenuItemConfig {
+        menu,
         label,
         supporting_text,
         trailing_text,
@@ -1210,20 +1271,15 @@ pub fn menu_item(
     if args.close_on_click
         && args.on_click.is_some()
         && args.submenu_content.is_none()
-        && let Some(controller_context) = use_context::<State<MenuController>>()
+        && let Some(menu) = args.menu
     {
-        let controller = controller_context.get();
-        let host = use_context::<MenuHost>();
+        let host = menu.host;
         let previous = args.on_click;
         args.on_click = Some(Callback::new(move || {
             if let Some(callback) = previous {
                 callback.call();
             }
-            if let Some(host) = host {
-                host.get().close_all();
-            } else {
-                controller.with_mut(MenuController::close);
-            }
+            host.close_all();
         }));
     }
 
@@ -1245,15 +1301,15 @@ fn menu_item_surface(
     } else {
         remember(FocusRequester::new).get()
     };
-    let typeahead = use_context::<typeahead::MenuTypeahead>().map(|context| context.get());
+    let typeahead = item.menu.map(|menu| menu.typeahead);
     let _typeahead_lease =
         remember(|| typeahead.map(|context| typeahead::ItemLease::new(context.0, focus_requester)));
     if let Some(context) = typeahead {
         typeahead::update(context.0, focus_requester, &item.label, enabled);
     }
     let hover = remember(MenuHoverIntent::default);
-    let host = use_context::<MenuHost>().map(|host| host.get());
-    let parent = use_context::<State<MenuController>>().map(|controller| controller.get());
+    let host = item.menu.map(|menu| menu.host);
+    let parent = item.menu.map(|menu| menu.controller);
     if enabled && hover.with(|hover| hover.deadline.is_some()) {
         let host = host.clone();
         receive_frame_nanos(move |frame| {
@@ -1563,12 +1619,9 @@ fn menu_item_inner(args: Option<MenuItemConfig>) {
     if let Some(submenu_content) = submenu_content {
         let submenu_controller = remember(MenuController::new);
         let focus_requester = remember(FocusRequester::new).get();
-        let host = use_context::<MenuHost>()
-            .expect("submenu items require a menu provider")
-            .get();
-        let parent = use_context::<State<MenuController>>()
-            .expect("submenu parent")
-            .get();
+        let menu = args.menu.expect("submenu items require a menu scope");
+        let host = menu.host;
+        let parent = menu.controller;
         let value = MenuPopupRequest {
             host: host.clone(),
             parent,
@@ -1582,7 +1635,7 @@ fn menu_item_inner(args: Option<MenuItemConfig>) {
                 .map(|style| style.get())
                 .unwrap_or_default(),
             enabled: args.enabled,
-            bounds: remember(|| Arc::new(RwLock::new(None))).get(),
+            bounds: remember(|| None),
         };
         let request = remember(|| value.clone());
         if request.get() != value {
@@ -1610,8 +1663,6 @@ fn menu_item_inner(args: Option<MenuItemConfig>) {
 
 #[cfg(test)]
 mod tests {
-    use std::cell::RefCell;
-
     use tessera_ui::testing::{
         layout_test, pump_layout_test_session, pump_layout_test_session_with_input,
         start_layout_test_session,
@@ -1630,53 +1681,54 @@ mod tests {
 
     use super::{MenuAnchor, MenuController, menu_item, menu_provider};
 
-    thread_local! {
-        pub(super) static TYPEAHEAD: RefCell<Option<State<parking_lot::Mutex<super::typeahead::Registry>>>> = const { RefCell::new(None) };
-
-        static CHILD_TYPEAHEAD: RefCell<Option<State<parking_lot::Mutex<super::typeahead::Registry>>>> = const { RefCell::new(None) };
-        static REMOVE_DELETE: RefCell<Option<State<bool>>> = const { RefCell::new(None) };
-        static MENU_CONTROLLER: RefCell<Option<State<MenuController>>> =
-            const { RefCell::new(None) };
-        static MAIN_STATE: RefCell<Option<State<u32>>> = const { RefCell::new(None) };
+    #[derive(Clone, Copy, Default)]
+    struct FixtureHandles {
+        typeahead: Option<State<super::typeahead::Registry>>,
+        child_typeahead: Option<State<super::typeahead::Registry>>,
+        remove_delete: Option<State<bool>>,
+        controller: Option<State<MenuController>>,
+        main_state: Option<State<u32>>,
     }
 
     #[tessera]
-    fn typeahead_fixture() {
+    fn typeahead_fixture(observed: tessera_ui::testing::TestProbe<FixtureHandles>) {
         let controller = remember(|| {
             let mut controller = MenuController::new();
             controller.open();
             controller
         });
         let remove_delete = remember(|| false);
-        MENU_CONTROLLER.with(|slot| *slot.borrow_mut() = Some(controller));
-        REMOVE_DELETE.with(|slot| *slot.borrow_mut() = Some(remove_delete));
+        observed.with_mut(|handles| handles.controller = Some(controller));
+        observed.with_mut(|handles| handles.remove_delete = Some(remove_delete));
         material_theme().child(move || {
+            let observed = observed.clone();
             menu_provider()
                 .controller(controller)
                 .main_content(|| {
                     crate::spacer::spacer().modifier(Modifier::new().fill_max_size());
                 })
-                .menu_content(move || {
-                    let registry = tessera_ui::use_context::<super::typeahead::MenuTypeahead>()
-                        .unwrap()
-                        .get()
-                        .0;
-                    TYPEAHEAD.with(|slot| *slot.borrow_mut() = Some(registry));
-                    menu_item().label("Preview").on_click(|| {});
-                    menu_item().label("Share").submenu_content(|| {
-                        let registry = tessera_ui::use_context::<super::typeahead::MenuTypeahead>()
-                            .unwrap()
-                            .get()
-                            .0;
-                        CHILD_TYPEAHEAD.with(|slot| *slot.borrow_mut() = Some(registry));
-                        menu_item().label("Copy link").on_click(|| {});
-                        menu_item().label("Send").on_click(|| {});
+                .menu_content(move |menu| {
+                    let registry = menu.typeahead.0;
+                    observed.with_mut(|handles| handles.typeahead = Some(registry));
+                    menu_item().menu(menu).label("Preview").on_click(|| {});
+                    menu_item().menu(menu).label("Share").submenu_content({
+                        let observed = observed.clone();
+                        move |menu| {
+                            let registry = menu.typeahead.0;
+                            observed.with_mut(|handles| handles.child_typeahead = Some(registry));
+                            menu_item().menu(menu).label("Copy link").on_click(|| {});
+                            menu_item().menu(menu).label("Send").on_click(|| {});
+                        }
                     });
                     if !remove_delete.get() {
-                        menu_item().label("Delete").on_click(|| {});
+                        menu_item().menu(menu).label("Delete").on_click(|| {});
                     }
-                    menu_item().label("Duplicate").on_click(|| {});
-                    menu_item().label("Download").enabled(false).on_click(|| {});
+                    menu_item().menu(menu).label("Duplicate").on_click(|| {});
+                    menu_item()
+                        .menu(menu)
+                        .label("Download")
+                        .enabled(false)
+                        .on_click(|| {});
                 });
         });
     }
@@ -1690,9 +1742,13 @@ mod tests {
             accesskit::{Action, ActionRequest, Role, TreeId},
         };
 
+        let observed = tessera_ui::testing::TestProbe::default();
         let mut renderer = HeadlessRenderer::new(
-            Box::new(|| {
-                typeahead_fixture();
+            Box::new({
+                let observed = observed.clone();
+                move || {
+                    typeahead_fixture(observed.clone());
+                }
             }),
             vec![Box::new(crate::TesseraComponents)],
             HeadlessConfig {
@@ -1704,7 +1760,7 @@ mod tests {
         )
         .unwrap();
         renderer.render_frames(6);
-        let registry = TYPEAHEAD.with(|slot| slot.borrow().unwrap());
+        let registry = observed.get().typeahead.unwrap();
         let focused = |renderer: &HeadlessRenderer| {
             let tree = renderer.accessibility_snapshot().unwrap();
             tree.nodes
@@ -1730,7 +1786,7 @@ mod tests {
                 "prefix {text}"
             );
         }
-        REMOVE_DELETE.with(|slot| slot.borrow().unwrap().set(true));
+        observed.get().remove_delete.unwrap().set(true);
         renderer.render_frames(3);
         super::typeahead::type_text(registry, "d", 8_000_000_000);
         renderer.render_frames(2);
@@ -1749,47 +1805,57 @@ mod tests {
             data: None,
         }));
         renderer.render_frames(6);
-        let child = CHILD_TYPEAHEAD.with(|slot| slot.borrow().unwrap());
+        let child = observed.get().child_typeahead.unwrap();
         super::typeahead::type_text(child, "s", 0);
         renderer.render_frames(2);
         assert_eq!(focused(&renderer).as_deref(), Some("Send"));
-        MENU_CONTROLLER.with(|slot| slot.borrow().unwrap().with_mut(MenuController::close));
+        observed
+            .get()
+            .controller
+            .unwrap()
+            .with_mut(MenuController::close);
         renderer.render_frames(4);
         assert!(!registry.is_alive());
         assert!(!child.is_alive());
     }
 
     #[tessera]
-    fn menu_controller_fixture() {
+    fn menu_controller_fixture(observed: tessera_ui::testing::TestProbe<FixtureHandles>) {
         let controller = remember(MenuController::new);
-        MENU_CONTROLLER.with(|slot| *slot.borrow_mut() = Some(controller));
+        observed.with_mut(|handles| handles.controller = Some(controller));
         material_theme().child(move || {
             menu_provider()
                 .controller(controller)
-                .main_content(|| {
-                    let state = remember(|| 0_u32);
-                    MAIN_STATE.with(|slot| *slot.borrow_mut() = Some(state));
-                    column().children(|| {});
+                .main_content({
+                    let observed = observed.clone();
+                    move || {
+                        let state = remember(|| 0_u32);
+                        observed.with_mut(|handles| handles.main_state = Some(state));
+                        column().children(|| {});
+                    }
                 })
-                .menu_content(|| {
+                .menu_content(|menu| {
                     column()
                         .modifier(Modifier::new().semantics(SemanticsArgs {
                             test_tag: Some("menu_content_tag".to_string()),
                             ..Default::default()
                         }))
-                        .children(|| {
-                            menu_item().label("Edit");
+                        .children(move || {
+                            menu_item().menu(menu).label("Edit");
                         });
                 });
         });
     }
 
     #[tessera]
-    fn menu_background_fixture(close_on_background: bool) {
+    fn menu_background_fixture(
+        close_on_background: bool,
+        observed: tessera_ui::testing::TestProbe<FixtureHandles>,
+    ) {
         let controller = remember(MenuController::new);
         let state = remember(|| 0_u32);
-        MENU_CONTROLLER.with(|slot| *slot.borrow_mut() = Some(controller));
-        MAIN_STATE.with(|slot| *slot.borrow_mut() = Some(state));
+        observed.with_mut(|handles| handles.controller = Some(controller));
+        observed.with_mut(|handles| handles.main_state = Some(state));
         material_theme().child(move || {
             menu_provider()
                 .controller(controller)
@@ -1799,14 +1865,14 @@ mod tests {
                         .modifier(Modifier::new().fill_max_size())
                         .on_click(move || state.with_mut(|count| *count += 1));
                 })
-                .menu_content(|| {
+                .menu_content(|menu| {
                     column()
                         .modifier(Modifier::new().semantics(SemanticsArgs {
                             test_tag: Some("menu_background_content".to_string()),
                             ..Default::default()
                         }))
-                        .children(|| {
-                            menu_item().label("Edit").enabled(false);
+                        .children(move || {
+                            menu_item().menu(menu).label("Edit").enabled(false);
                         });
                 });
         });
@@ -1819,14 +1885,18 @@ mod tests {
             (false, false, true),
             (true, true, true),
         ] {
+            let observed = tessera_ui::testing::TestProbe::default();
             let mut session = start_layout_test_session(
-                layout_test(|| {
-                    menu_background_fixture(close_on_background);
+                layout_test({
+                    let observed = observed.clone();
+                    move || {
+                        menu_background_fixture(close_on_background, observed.clone());
+                    }
                 })
                 .viewport_px(400, 300),
             );
             let _ = pump_layout_test_session(&mut session, 0);
-            let controller = MENU_CONTROLLER.with(|slot| slot.borrow().expect("menu controller"));
+            let controller = observed.get().controller.expect("controller");
             controller.with_mut(|menu| {
                 menu.open_at(MenuAnchor::at(PxPosition::new(Px(10), Px(10))));
             });
@@ -1858,19 +1928,23 @@ mod tests {
                 expected_open,
                 "close_on_background={close_on_background}, click_inside={click_inside}"
             );
-            assert_eq!(MAIN_STATE.with(|slot| slot.borrow().unwrap().get()), 0);
+            assert_eq!(observed.get().main_state.unwrap().get(), 0);
         }
     }
 
     #[test]
     fn menu_provider_renders_menu_items_after_controller_opens() {
+        let observed = tessera_ui::testing::TestProbe::default();
         let mut session = start_layout_test_session(
-            layout_test(|| menu_controller_fixture()).viewport_px(400, 300),
+            layout_test({
+                let observed = observed.clone();
+                move || menu_controller_fixture(observed.clone())
+            })
+            .viewport_px(400, 300),
         );
         let _ = pump_layout_test_session(&mut session, 0);
 
-        let controller =
-            MENU_CONTROLLER.with(|slot| slot.borrow().expect("menu controller available"));
+        let controller = observed.get().controller.expect("controller");
         controller.with_mut(|menu| {
             menu.open_at(MenuAnchor::at(PxPosition::new(Px(10), Px(10))));
         });
@@ -1881,23 +1955,28 @@ mod tests {
 
     #[test]
     fn menu_visibility_preserves_main_content_state() {
+        let observed = tessera_ui::testing::TestProbe::default();
         let mut session = start_layout_test_session(
-            layout_test(|| menu_controller_fixture()).viewport_px(400, 300),
+            layout_test({
+                let observed = observed.clone();
+                move || menu_controller_fixture(observed.clone())
+            })
+            .viewport_px(400, 300),
         );
         let _ = pump_layout_test_session(&mut session, 0);
-        let main_state = MAIN_STATE.with(|slot| slot.borrow().expect("main content state"));
+        let main_state = observed.get().main_state.expect("main_state");
         main_state.set(7);
-        let controller = MENU_CONTROLLER.with(|slot| slot.borrow().expect("menu controller"));
+        let controller = observed.get().controller.expect("controller");
         controller.with_mut(|menu| {
             menu.open_at(MenuAnchor::at(PxPosition::new(Px(10), Px(10))));
         });
         let _ = pump_layout_test_session(&mut session, 16_666_667);
-        assert!(MAIN_STATE.with(|slot| slot.borrow().unwrap()) == main_state);
+        assert!(observed.get().main_state.unwrap() == main_state);
         assert_eq!(main_state.get(), 7);
 
         controller.with_mut(MenuController::close);
         let _ = pump_layout_test_session(&mut session, 33_333_334);
-        assert!(MAIN_STATE.with(|slot| slot.borrow().unwrap()) == main_state);
+        assert!(observed.get().main_state.unwrap() == main_state);
         assert_eq!(main_state.get(), 7);
     }
 }

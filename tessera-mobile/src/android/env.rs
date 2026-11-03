@@ -51,6 +51,7 @@ pub struct Env {
     pub base: CoreEnv,
     android_home: PathBuf,
     pub ndk: ndk::Env,
+    command_vars: HashMap<String, Option<OsString>>,
 }
 
 impl Env {
@@ -97,7 +98,13 @@ impl Env {
             base,
             android_home,
             ndk: ndk::Env::new()?,
+            command_vars: HashMap::new(),
         })
+    }
+
+    pub fn with_command_var(mut self, key: impl Into<String>, value: Option<OsString>) -> Self {
+        self.command_vars.insert(key.into(), value);
+        self
     }
 
     pub fn path(&self) -> &OsString {
@@ -129,6 +136,20 @@ impl ExplicitEnv for Env {
             "NDK_HOME".into(),
             self.ndk.home().as_os_str().to_os_string(),
         );
+        for (key, value) in &self.command_vars {
+            if let Some(value) = value {
+                envs.insert(key.clone(), value.clone());
+            } else {
+                envs.remove(key);
+            }
+        }
         envs
+    }
+
+    fn removed_env_vars(&self) -> Vec<String> {
+        self.command_vars
+            .iter()
+            .filter_map(|(key, value)| value.is_none().then(|| key.clone()))
+            .collect()
     }
 }

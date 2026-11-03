@@ -6,9 +6,9 @@
 //! behavior.
 
 use tessera_ui::{
-    Callback, CallbackWith, FocusProperties, FocusRequester, Modifier, PointerInput,
-    PointerInputModifierNode, Px, PxPosition, PxSize, State, accesskit,
-    modifier::ModifierCapabilityExt as _, remember,
+    BuildModifierNode, Callback, CallbackWith, FocusProperties, FocusRequester, Modifier,
+    ModifierBuildContext, PointerInput, PointerInputModifierNode, Px, PxPosition, PxSize, State,
+    accesskit, modifier::ModifierCapabilityExt as _,
 };
 
 use crate::gesture::{DragAxis, DragRecognizer, DragSettings, LongPressRecognizer, TapRecognizer};
@@ -435,36 +435,13 @@ pub(crate) fn apply_draggable_modifier(base: Modifier, args: DraggableArgs) -> M
         drag_recognizer,
     } = args;
 
-    if !enabled {
-        if let Some(interaction_state) = interaction_state {
-            interaction_state.with_mut(|state| state.set_dragged(false));
-        }
-        return base;
-    }
-
     let settings = DragSettings {
         slop_px,
         consume_when_dragging,
         axis,
     };
-    let drag_recognizer = if let Some(drag_recognizer) = drag_recognizer {
-        drag_recognizer.with_mut(|recognizer| {
-            recognizer.set_settings(settings);
-        });
-        DragRecognizerHandle::State(drag_recognizer)
-    } else {
-        // Persist the recognizer across rebuilds. A drag updates component
-        // state which triggers a rebuild, and a freshly created
-        // recognizer would lose its active pointer and last position,
-        // making the drag let go mid-gesture.
-        let recognizer = remember(|| DragRecognizer::new(settings));
-        recognizer.with_mut(|recognizer| {
-            recognizer.set_settings(settings);
-        });
-        DragRecognizerHandle::State(recognizer)
-    };
-
-    base.push_pointer_input(DraggablePointerModifierNode {
+    base.push_build(DraggableBuild {
+        settings,
         drag_recognizer,
         on_drag_delta,
         enabled,
@@ -472,6 +449,41 @@ pub(crate) fn apply_draggable_modifier(base: Modifier, args: DraggableArgs) -> M
         on_drag_stopped,
         interaction_state,
     })
+}
+
+struct DraggableBuild {
+    settings: DragSettings,
+    drag_recognizer: Option<State<DragRecognizer>>,
+    on_drag_delta: DragCallback,
+    enabled: bool,
+    on_drag_started: Option<Callback>,
+    on_drag_stopped: Option<Callback>,
+    interaction_state: Option<State<InteractionState>>,
+}
+
+impl BuildModifierNode for DraggableBuild {
+    fn materialize(&self, context: &mut ModifierBuildContext) -> Option<Modifier> {
+        if !self.enabled {
+            if let Some(state) = self.interaction_state {
+                state.with_mut(|state| state.set_dragged(false));
+            }
+            return Some(Modifier::new());
+        }
+        let recognizer = self
+            .drag_recognizer
+            .unwrap_or_else(|| context.state(|| DragRecognizer::new(self.settings)));
+        recognizer.with_mut(|recognizer| recognizer.set_settings(self.settings));
+        Some(
+            Modifier::new().push_pointer_input(DraggablePointerModifierNode {
+                drag_recognizer: DragRecognizerHandle::State(recognizer),
+                on_drag_delta: self.on_drag_delta,
+                enabled: self.enabled,
+                on_drag_started: self.on_drag_started,
+                on_drag_stopped: self.on_drag_stopped,
+                interaction_state: self.interaction_state,
+            }),
+        )
+    }
 }
 
 #[cfg(test)]

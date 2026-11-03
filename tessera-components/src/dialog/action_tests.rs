@@ -4,18 +4,19 @@
 //!
 //! Keep dialog actions visible when available width changes.
 
-use std::{cell::Cell, time::Duration};
+use std::time::Duration;
 
 use tessera_ui::{
     Callback, Dp, HeadlessConfig, HeadlessRenderer, Modifier, State,
     accesskit::{Node, Role},
     remember, tessera,
+    testing::{TestProbe, layout_test},
 };
 
 use crate::{
     button::button,
     dialog::{DialogRole, basic_dialog, dialog_provider, full_screen_dialog},
-    modifier::ModifierExt as _,
+    modifier::{ModifierExt as _, SemanticsArgs},
     text::text,
     theme::material_theme,
 };
@@ -26,14 +27,18 @@ fn dialog_action_fixture() {
         dialog_provider()
             .accessibility_label("Confirmation")
             .is_open(true)
-            .dialog_content(|| {
+            .dialog_content(|dialog| {
                 basic_dialog()
+                    .dialog(dialog)
                     .headline("Confirmation")
                     .supporting_text("Choose an action.")
                     .dismiss_button(|| {
                         button()
                             .text()
-                            .modifier(Modifier::new().width(Dp(160.0)))
+                            .modifier(Modifier::new().width(Dp(160.0)).semantics(SemanticsArgs {
+                                test_tag: Some("dismiss".into()),
+                                ..Default::default()
+                            }))
                             .accessibility_label("Dismiss action")
                             .on_click(|| {})
                             .child(|| {
@@ -43,7 +48,10 @@ fn dialog_action_fixture() {
                     .confirm_button(|| {
                         button()
                             .text()
-                            .modifier(Modifier::new().width(Dp(160.0)))
+                            .modifier(Modifier::new().width(Dp(160.0)).semantics(SemanticsArgs {
+                                test_tag: Some("confirm".into()),
+                                ..Default::default()
+                            }))
                             .accessibility_label("Confirm action")
                             .on_click(|| {})
                             .child(|| {
@@ -54,69 +62,42 @@ fn dialog_action_fixture() {
     });
 }
 
-fn action_node(renderer: &HeadlessRenderer, label: &str) -> Node {
-    renderer
-        .accessibility_snapshot()
-        .unwrap()
-        .nodes
-        .into_iter()
-        .map(|(_, node)| node)
-        .find(|node| node.role() == Role::Button && node.label() == Some(label))
-        .expect("dialog action must appear in the accessibility tree")
-}
-
 #[test]
-#[ignore = "requires a native GPU adapter"]
 fn dialog_actions_wrap_when_the_row_cannot_fit() {
-    crate::test_utils::run_isolated_test(
-        "dialog::action_tests::dialog_actions_wrap_when_the_row_cannot_fit",
-        || {
-            for (width, should_wrap) in [(340, true), (800, false)] {
-                let mut renderer = HeadlessRenderer::new(
-                    Box::new(dialog_action_fixture),
-                    vec![Box::new(crate::TesseraComponents)],
-                    HeadlessConfig {
-                        width,
-                        height: 500,
-                        sample_count: 1,
-                        frame_time: Duration::from_millis(20),
-                        ..Default::default()
-                    },
-                )
-                .unwrap();
-                renderer.render_frames(4);
-                let dismiss = action_node(&renderer, "Dismiss action").bounds().unwrap();
-                let confirm = action_node(&renderer, "Confirm action").bounds().unwrap();
-                if should_wrap {
-                    assert!(
-                        confirm.y0 >= dismiss.y1,
-                        "actions must wrap without overlap"
-                    );
-                } else {
-                    assert_eq!(dismiss.y0, confirm.y0, "actions should share a row");
-                    assert!(dismiss.x1 <= confirm.x0, "actions must not overlap");
-                }
-            }
-        },
-    );
-}
-
-thread_local! {
-    static CONTENT: Cell<Option<State<(u8, bool)>>> = const { Cell::new(None) };
+    for (width, should_wrap) in [(340, true), (800, false)] {
+        let snapshot = layout_test(dialog_action_fixture)
+            .viewport_px(width, 500)
+            .run();
+        let dismiss = snapshot.node("dismiss").bounds();
+        let confirm = snapshot.node("confirm").bounds();
+        if should_wrap {
+            assert!(
+                confirm.y >= dismiss.y + dismiss.height,
+                "actions must wrap without overlap"
+            );
+        } else {
+            assert_eq!(dismiss.y, confirm.y, "actions should share a row");
+            assert!(
+                dismiss.x + dismiss.width <= confirm.x,
+                "actions must not overlap"
+            );
+        }
+    }
 }
 
 #[tessera]
-fn dialog_accessibility_fixture() {
+fn dialog_accessibility_fixture(observed: TestProbe<Option<State<(u8, bool)>>>) {
     let settings = remember(|| (0_u8, false));
-    CONTENT.set(Some(settings));
+    observed.set(Some(settings));
     material_theme().child(move || {
         let provider = dialog_provider()
             .is_open(true)
             .role(DialogRole::AlertDialog)
-            .dialog_content(move || match settings.get().0 {
+            .dialog_content(move |dialog| match settings.get().0 {
                 0 | 1 => {
                     let updated = settings.get().0 == 1;
                     basic_dialog()
+                        .dialog(dialog)
                         .headline(if updated {
                             "Updated title"
                         } else {
@@ -132,10 +113,23 @@ fn dialog_accessibility_fixture() {
                     text().content("Custom content");
                 }
                 3 => {
-                    full_screen_dialog(Callback::new(|| {})).title("Editor");
+                    full_screen_dialog(Callback::new(|| {}))
+                        .dialog(dialog)
+                        .title("Editor");
+                }
+                5 => {
+                    crate::date_picker::date_picker_dialog()
+                        .dialog(dialog)
+                        .title("Pick departure");
+                }
+                6 => {
+                    crate::time_picker::time_picker_dialog()
+                        .dialog(dialog)
+                        .title("Pick time");
                 }
                 _ => {
                     basic_dialog()
+                        .dialog(dialog)
                         .headline("Custom body")
                         .supporting_text("Unused supporting text")
                         .content(|| {
@@ -171,8 +165,12 @@ fn standard_dialog_content_names_and_describes_the_modal_across_updates() {
     crate::test_utils::run_isolated_test(
         "dialog::action_tests::standard_dialog_content_names_and_describes_the_modal_across_updates",
         || {
+            let observed = TestProbe::default();
+            let fixture_observed = observed.clone();
             let mut renderer = HeadlessRenderer::new(
-                Box::new(dialog_accessibility_fixture),
+                Box::new(move || {
+                    dialog_accessibility_fixture(fixture_observed.clone());
+                }),
                 vec![Box::new(crate::TesseraComponents)],
                 HeadlessConfig {
                     width: 600,
@@ -184,13 +182,15 @@ fn standard_dialog_content_names_and_describes_the_modal_across_updates() {
             )
             .unwrap();
             renderer.render_frames(4);
-            let settings = CONTENT.get().unwrap();
+            let settings = observed.get().unwrap();
             for (variant, label, description) in [
                 (0, Some("Initial title"), Some("Initial message")),
                 (1, Some("Updated title"), Some("Updated message")),
                 (2, None, None),
                 (3, Some("Editor"), None),
                 (4, Some("Custom body"), None),
+                (5, Some("Pick departure"), None),
+                (6, Some("Pick time"), None),
             ] {
                 settings.set((variant, false));
                 renderer.render_frames(4);

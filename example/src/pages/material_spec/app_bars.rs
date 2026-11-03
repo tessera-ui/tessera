@@ -45,7 +45,7 @@ const DO_COLOR: Color = Color::from_rgb(0.121, 0.478, 0.196);
 const DONT_COLOR: Color = Color::from_rgb(0.741, 0.161, 0.161);
 
 #[tessera]
-pub(super) fn app_bars_spec() {
+pub(super) fn app_bars_spec(route: Option<crate::pages::material_spec::article::ArticleRoute>) {
     article(
         "App bars",
         "Navigate between screens and expose relevant actions.",
@@ -59,6 +59,7 @@ pub(super) fn app_bars_spec() {
             section("Baseline app bars", RenderSlot::new(baseline_app_bars)),
         ],
     )
+    .route_optional(route.clone())
     .pages(vec![
         ArticlePage {
             title: "Overview",
@@ -1528,6 +1529,7 @@ fn sample(
                             .children(move || {
                                 let logo_slot = RenderSlot::new(brand);
                                 top_app_bar()
+                                    .scroll_state(scroll)
                                     .variant(variant.get())
                                     .title("Library")
                                     .subtitle_optional(
@@ -1910,7 +1912,7 @@ fn search_sample(
                         });
                 });
         })
-        .dialog_content(move || {
+        .dialog_content(move |_| {
             let initial_query = query.get();
             let view = remember(move || {
                 let mut view = SearchBarController::new(true);
@@ -3503,7 +3505,6 @@ fn app_annotations(geometry: State<Geometry>, measurements: bool, variant: TopAp
 
 #[cfg(all(test, not(target_family = "wasm")))]
 mod tests {
-    use std::cell::Cell;
 
     use tessera_ui::{
         HeadlessConfig, HeadlessRenderer, MOUSE_POINTER_ID, PressKeyEventType, PxPosition, PxRect,
@@ -3512,7 +3513,7 @@ mod tests {
 
     use super::*;
 
-    #[derive(Clone, Copy)]
+    #[derive(Clone, Copy, PartialEq)]
     enum Case {
         Bar(TopAppBarVariant),
         Search(f64, f32),
@@ -3523,23 +3524,13 @@ mod tests {
         Hiding,
     }
 
-    thread_local! {
-        static CASE: Cell<Case> = const { Cell::new(Case::Bar(TopAppBarVariant::Small)) };
-        static GEOMETRY: Cell<Option<State<Geometry>>> = const { Cell::new(None) };
-    }
-
-    struct ComponentPipelines;
-    impl tessera_ui::RenderModule for ComponentPipelines {
-        fn register_pipelines(&self, context: &mut tessera_ui::PipelineContext<'_>) {
-            tessera_components::pipelines::register_pipelines(context);
-        }
-    }
-
     #[tessera]
-    fn fixture() {
-        let case = CASE.get();
+    fn fixture(
+        case: Case,
+        observed_geometry: tessera_ui::testing::TestProbe<Option<State<Geometry>>>,
+    ) {
         let geometry = remember(Geometry::new);
-        GEOMETRY.set(Some(geometry));
+        observed_geometry.set(Some(geometry));
         material_theme().child(move || {
             boxed()
                 .alignment(Alignment::TopStart)
@@ -3603,11 +3594,14 @@ mod tests {
         });
     }
 
-    fn renderer(case: Case) -> HeadlessRenderer {
-        CASE.set(case);
+    fn renderer(case: Case) -> (HeadlessRenderer, State<Geometry>) {
+        let geometry = tessera_ui::testing::TestProbe::default();
+        let observed = geometry.clone();
         let mut renderer = HeadlessRenderer::new(
-            Box::new(fixture),
-            vec![Box::new(ComponentPipelines)],
+            Box::new(move || {
+                fixture(case, observed.clone());
+            }),
+            vec![Box::new(crate::TestPipelines)],
             HeadlessConfig {
                 width: 1200,
                 height: 800,
@@ -3617,7 +3611,7 @@ mod tests {
         )
         .expect("native app bar figures");
         renderer.render_frames(6);
-        renderer
+        (renderer, geometry.get().expect("mounted app bar geometry"))
     }
 
     fn click(renderer: &mut HeadlessRenderer, bounds: PxRect) {
@@ -3636,7 +3630,7 @@ mod tests {
             (TopAppBarVariant::MediumFlexible, 112.0),
             (TopAppBarVariant::LargeFlexible, 120.0),
         ] {
-            let renderer = renderer(Case::Bar(variant));
+            let (renderer, _geometry_state) = renderer(Case::Bar(variant));
             let snapshot = renderer
                 .accessibility_snapshot()
                 .expect("app bar semantics");
@@ -3694,8 +3688,8 @@ mod tests {
             assert!(back.width() >= 48.0 && back.height() >= 48.0);
         }
         for (width, field_width) in [(400.0, 280.0), (600.0, 396.0), (1000.0, 596.0)] {
-            let mut renderer = renderer(Case::Search(width, 1.0));
-            let geometry = GEOMETRY.get().expect("search geometry").get();
+            let (mut renderer, geometry_state) = renderer(Case::Search(width, 1.0));
+            let geometry = geometry_state.get();
             let bar = geometry.get("container").expect("actual app bar container");
             let field = *geometry.get("search").expect("actual native search field");
             assert_eq!(bar.width.0 as f64, width);
@@ -3745,8 +3739,8 @@ mod tests {
             );
         }
         for scale in [0.5, 1.5] {
-            let _renderer = renderer(Case::Search(600.0, scale));
-            let geometry = GEOMETRY.get().expect("scaled search geometry").get();
+            let (_renderer, geometry_state) = renderer(Case::Search(600.0, scale));
+            let geometry = geometry_state.get();
             let bar = geometry.get("container").expect("scaled app bar container");
             let field = geometry.get("search").expect("scaled native search field");
             assert_eq!(bar.width.to_f32(), 600.0 * scale);
@@ -3760,7 +3754,7 @@ mod tests {
     #[ignore = "Requires a GPU adapter for the real component pipelines"]
     fn search_measurement_callouts_stay_outside_native_controls_at_both_layouts() {
         for width in [1200.0, 600.0, 320.0] {
-            let renderer = renderer(Case::SearchMeasurements(width));
+            let (renderer, _geometry_state) = renderer(Case::SearchMeasurements(width));
             let snapshot = renderer
                 .accessibility_snapshot()
                 .expect("measurement semantics");
@@ -3839,7 +3833,7 @@ mod tests {
     #[test]
     #[ignore = "Requires a GPU adapter for the real component pipelines"]
     fn variant_figure_search_bar_keeps_its_natural_height_and_spacing() {
-        let renderer = renderer(Case::Variants);
+        let (renderer, _geometry_state) = renderer(Case::Variants);
         let search = find_bounds(&renderer, Some(Role::Toolbar), "Search app bar")
             .expect("native search app bar");
         assert_eq!(search[3] - search[1], 64.0);
@@ -3854,8 +3848,8 @@ mod tests {
     #[test]
     #[ignore = "Requires a GPU adapter for the real component pipelines"]
     fn search_app_bar_field_paints_the_surface_container_role() {
-        let renderer = renderer(Case::SearchColor);
-        let geometry = GEOMETRY.get().expect("search geometry").get();
+        let (renderer, geometry_state) = renderer(Case::SearchColor);
+        let geometry = geometry_state.get();
         let field = *geometry.get("search").expect("native search field");
         let pixels = renderer.read_pixels().unwrap();
         let at = |x: i32, y: i32| {
@@ -3881,7 +3875,7 @@ mod tests {
     #[test]
     #[ignore = "Requires a GPU adapter for the real component pipelines"]
     fn labeled_app_bar_exposes_a_heading_and_a_labeled_action() {
-        let mut renderer = renderer(Case::Labeled);
+        let (mut renderer, _geometry_state) = renderer(Case::Labeled);
         find_bounds(
             &renderer,
             Some(Role::Heading),
@@ -3898,7 +3892,7 @@ mod tests {
     #[test]
     #[ignore = "Requires a GPU adapter for the real component pipelines"]
     fn hiding_app_bar_hides_on_scroll_up_and_returns_on_scroll_down() {
-        let mut renderer = renderer(Case::Hiding);
+        let (mut renderer, _geometry_state) = renderer(Case::Hiding);
         let height = |renderer: &HeadlessRenderer| {
             find_bounds(renderer, None, "Hiding app bar bar").map_or(0.0, |rect| rect[3] - rect[1])
         };

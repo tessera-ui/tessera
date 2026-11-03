@@ -1195,6 +1195,7 @@ pub fn tessera(attr: TokenStream, item: TokenStream) -> TokenStream {
                     return;
                 }
                 #crate_path::__private::with_pending_scope(|| {
+                    #crate_path::__private::record_component_execution(stringify!(#fn_name), __tessera_instance_logic_id);
                     #(#field_resolutions)*
                     #fn_block;
                 });
@@ -1275,26 +1276,6 @@ pub fn entry(attr: TokenStream, item: TokenStream) -> TokenStream {
 /// * Function parameters are treated as explicit destination props.
 /// * When `state = T` is configured, shard state is injected as local variable
 ///   `state` and does not appear in the function signature.
-///
-/// # Generated Destination (Conceptual)
-///
-/// ```rust,ignore
-/// struct ProfilePageDestination { /* non-state params as public fields */ }
-/// impl RouterDestination for ProfilePageDestination {
-///     fn exec_component(&self) { profile_page(/* fields */); }
-///     fn destination_id() -> &'static str { "<module>::profile_page" }
-/// }
-/// ```
-///
-/// # Limitations
-///
-/// * Do not manually implement `RouterDestination` for these pages; rely on
-///   generation
-///
-/// # See Also
-///
-/// * Routing helper: `tessera_shard::shard_home`
-/// * Router controller internals: `tessera_shard::RouterController`
 ///
 /// # Errors
 ///
@@ -1395,7 +1376,7 @@ pub fn shard(attr: TokenStream, input: TokenStream) -> TokenStream {
     let func_attrs = &func.attrs;
     let func_vis = &func.vis;
     let router_controller_resolution = quote! {
-        #shard_crate_path::__private::current_router_controller!()
+        __tessera_router_controller
     };
 
     let router_binding =
@@ -1409,6 +1390,9 @@ pub fn shard(attr: TokenStream, input: TokenStream) -> TokenStream {
                 }
             });
     let mut func_sig_modified = func.sig.clone();
+    func_sig_modified.inputs.insert(0, parse_quote!(
+        #[prop(skip_setter)] __tessera_router_controller: #ui_crate_path::State<#shard_crate_path::router::RouterController>
+    ));
     for input in &mut func_sig_modified.inputs {
         let FnArg::Typed(pat_type) = input else {
             continue;
@@ -1474,14 +1458,14 @@ pub fn shard(attr: TokenStream, input: TokenStream) -> TokenStream {
                 }
 
                 impl #shard_crate_path::router::RouterDestination for #struct_name {
-                    fn exec_component(&self) {
-                        let __tessera_builder = #func_name();
+                    fn exec_component(&self, controller: #ui_crate_path::State<#shard_crate_path::router::RouterController>) {
+                        let __tessera_builder = #func_name(controller);
                         #(#destination_builder_setters)*
                     }
 
-                    fn exec_component_handle(&self) -> std::sync::Arc<dyn Fn() + Send + Sync> {
+                    fn exec_component_handle(&self) -> std::sync::Arc<dyn Fn(#ui_crate_path::State<#shard_crate_path::router::RouterController>) + Send + Sync> {
                         let destination = self.clone();
-                        std::sync::Arc::new(move || destination.exec_component())
+                        std::sync::Arc::new(move |controller| destination.exec_component(controller))
                     }
 
                     fn destination_id() -> &'static str {
@@ -1513,14 +1497,14 @@ pub fn shard(attr: TokenStream, input: TokenStream) -> TokenStream {
                 }
 
                 impl #shard_crate_path::router::RouterDestination for #struct_name {
-                    fn exec_component(&self) {
-                        let __tessera_builder = #func_name();
+                    fn exec_component(&self, controller: #ui_crate_path::State<#shard_crate_path::router::RouterController>) {
+                        let __tessera_builder = #func_name(controller);
                         #(#destination_builder_setters)*
                     }
 
-                    fn exec_component_handle(&self) -> std::sync::Arc<dyn Fn() + Send + Sync> {
+                    fn exec_component_handle(&self) -> std::sync::Arc<dyn Fn(#ui_crate_path::State<#shard_crate_path::router::RouterController>) + Send + Sync> {
                         let destination = self.clone();
-                        std::sync::Arc::new(move || destination.exec_component())
+                        std::sync::Arc::new(move |controller| destination.exec_component(controller))
                     }
 
                     fn destination_id() -> &'static str {

@@ -4,7 +4,7 @@
 //!
 //! Verify the painted extent of full-width, inset, and open-space list figures.
 
-use std::{cell::Cell, time::Duration};
+use std::time::Duration;
 
 use tessera_ui::{HeadlessConfig, HeadlessRenderer};
 
@@ -12,39 +12,26 @@ use super::*;
 
 const LIST_WIDTH: usize = 300;
 
-struct Pipelines;
-
-impl tessera_ui::RenderModule for Pipelines {
-    fn register_pipelines(&self, context: &mut tessera_ui::PipelineContext<'_>) {
-        tessera_components::pipelines::register_pipelines(context);
-    }
-}
-
-thread_local! {
-    static RULES: Cell<u8> = const { Cell::new(FULL) };
-}
-
 #[tessera]
-fn list_fixture() {
-    material_theme().child(|| {
+fn list_fixture(rules: u8) {
+    material_theme().child(move || {
         let scheme = use_context::<MaterialTheme>().unwrap().get().color_scheme;
         boxed()
             .modifier(Modifier::new().fill_max_size().background(scheme.surface))
-            .children(|| {
+            .children(move || {
                 boxed()
                     .modifier(Modifier::new().width(Dp(LIST_WIDTH as f64)))
-                    .children(|| {
-                        list_screen(INBOX, RULES.get());
+                    .children(move || {
+                        list_screen(INBOX, rules);
                     });
             });
     });
 }
 
 fn render(rules: u8) -> HeadlessRenderer {
-    RULES.set(rules);
     let mut renderer = HeadlessRenderer::new(
-        Box::new(list_fixture),
-        vec![Box::new(Pipelines)],
+        Box::new(move || list_fixture(rules)),
+        vec![Box::new(crate::TestPipelines)],
         HeadlessConfig {
             width: 400,
             height: 400,

@@ -536,6 +536,7 @@ impl RenderCore {
 
         Self {
             window,
+            graphics: crate::GraphicsDevice::new(device.clone(), queue.clone()),
             instance,
             device,
             surface,

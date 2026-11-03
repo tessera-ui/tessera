@@ -27,8 +27,8 @@ use tessera_components::{
 };
 use tessera_shard::RouterController;
 use tessera_ui::{
-    Dp, Modifier, RenderSlot, State, accesskit::Role, modifier::FocusModifierExt as _,
-    provide_context, remember, scaled_box, tessera, use_context,
+    Callback, Dp, Modifier, RenderSlot, State, accesskit::Role, modifier::FocusModifierExt as _,
+    remember, scaled_box, tessera, use_context,
 };
 
 use super::{
@@ -51,15 +51,26 @@ struct DiagnosticDrawerObservation {
 }
 
 #[cfg(all(target_family = "wasm", feature = "md3-diagnostics"))]
-thread_local! {
-    static DIAGNOSTIC_DRAWER_OBSERVATIONS: std::cell::RefCell<Vec<DiagnosticDrawerObservation>> = const {
-        std::cell::RefCell::new(Vec::new())
-    };
+#[derive(Default)]
+pub(crate) struct DrawerObservations(std::sync::Mutex<Vec<DiagnosticDrawerObservation>>);
+
+#[cfg(all(target_family = "wasm", feature = "md3-diagnostics"))]
+struct DrawerObservationOwner(std::sync::Arc<DrawerObservations>);
+
+#[cfg(all(target_family = "wasm", feature = "md3-diagnostics"))]
+impl Drop for DrawerObservationOwner {
+    fn drop(&mut self) {
+        self.0.0.lock().unwrap().clear();
+    }
 }
 
 #[cfg(all(target_family = "wasm", feature = "md3-diagnostics"))]
 #[tessera]
-pub(crate) fn diagnostic_drawer_figures(count: usize) {
+pub(crate) fn diagnostic_drawer_figures(
+    count: usize,
+    #[prop(skip_eq)] observations: std::sync::Arc<DrawerObservations>,
+) {
+    let _owner = remember(|| DrawerObservationOwner(std::sync::Arc::clone(&observations)));
     assert!(
         (1..=2).contains(&count),
         "diagnostic drawer count must be one or two"
@@ -67,27 +78,27 @@ pub(crate) fn diagnostic_drawer_figures(count: usize) {
     let mut geometries = Vec::with_capacity(count);
     for index in 0..count {
         let geometry = remember(Geometry::new);
-        DIAGNOSTIC_DRAWER_OBSERVATIONS.with(|observations| {
-            let mut observations = observations.borrow_mut();
-            if observations
+        {
+            let mut entries = observations.0.lock().unwrap();
+            if entries
                 .get(index)
                 .is_none_or(|entry| entry.geometry != geometry)
             {
-                let observation = DiagnosticDrawerObservation {
+                let entry = DiagnosticDrawerObservation {
                     geometry,
                     initial_geometry_empty: geometry.with(|geometry| geometry.is_empty()),
                     wrapper_window_bounds: None,
                 };
-                if let Some(entry) = observations.get_mut(index) {
-                    *entry = observation;
+                if index < entries.len() {
+                    entries[index] = entry;
                 } else {
-                    observations.push(observation);
+                    entries.push(entry);
                 }
             }
-        });
+        }
         geometries.push(geometry);
     }
-    DIAGNOSTIC_DRAWER_OBSERVATIONS.with(|observations| observations.borrow_mut().truncate(count));
+    observations.0.lock().unwrap().truncate(count);
     column()
         .modifier(
             Modifier::new()
@@ -96,16 +107,15 @@ pub(crate) fn diagnostic_drawer_figures(count: usize) {
         )
         .children(move || {
             for (index, geometry) in geometries.iter().copied().enumerate() {
+                let observations = std::sync::Arc::clone(&observations);
                 boxed()
                     .modifier(Modifier::new().fill_max_width().on_globally_positioned(
-                        move |bounds: tessera_ui::PxRect| {
-                            DIAGNOSTIC_DRAWER_OBSERVATIONS.with(|observations| {
-                                if let Some(entry) = observations.borrow_mut().get_mut(index)
-                                    && entry.geometry == geometry
-                                {
-                                    entry.wrapper_window_bounds = Some(bounds);
-                                }
-                            });
+                        move |bounds| {
+                            if let Some(entry) = observations.0.lock().unwrap().get_mut(index)
+                                && entry.geometry == geometry
+                            {
+                                entry.wrapper_window_bounds = Some(bounds);
+                            }
                         },
                     ))
                     .children(move || {
@@ -119,9 +129,9 @@ pub(crate) fn diagnostic_drawer_figures(count: usize) {
 }
 
 #[cfg(all(target_family = "wasm", feature = "md3-diagnostics"))]
-pub(crate) fn diagnostic_drawer_observations() -> String {
-    DIAGNOSTIC_DRAWER_OBSERVATIONS.with(|observations| {
-        let observations = observations.borrow();
+pub(crate) fn diagnostic_drawer_observations(observations: &DrawerObservations) -> String {
+    {
+        let observations = observations.0.lock().unwrap();
         let mut json = String::from(
             r#"{"window_units":"px","canonical_units":"dp","rect_encoding":"x,y,width,height","figures":["#,
         );
@@ -136,13 +146,18 @@ pub(crate) fn diagnostic_drawer_observations() -> String {
             if let Some(bounds) = &observation.wrapper_window_bounds {
                 json.push_str(&format!(
                     "[{},{},{},{}]",
-                    bounds.x.to_f32(), bounds.y.to_f32(), bounds.width.to_f32(), bounds.height.to_f32()
+                    bounds.x.to_f32(),
+                    bounds.y.to_f32(),
+                    bounds.width.to_f32(),
+                    bounds.height.to_f32()
                 ));
             } else {
                 json.push_str("null");
             }
             let alive = observation.geometry.is_alive();
-            json.push_str(&format!(",\"geometry_alive\":{alive},\"canonical_geometry\":"));
+            json.push_str(&format!(
+                ",\"geometry_alive\":{alive},\"canonical_geometry\":"
+            ));
             if alive {
                 let geometry = observation.geometry.with(space_geometry);
                 json.push('{');
@@ -150,7 +165,10 @@ pub(crate) fn diagnostic_drawer_observations() -> String {
                     if index != 0 {
                         json.push(',');
                     }
-                    json.push_str(&format!("\"{name}\":[{},{},{},{}]", rect.x, rect.y, rect.w, rect.h));
+                    json.push_str(&format!(
+                        "\"{name}\":[{},{},{},{}]",
+                        rect.x, rect.y, rect.w, rect.h
+                    ));
                 }
                 json.push('}');
             } else {
@@ -160,11 +178,11 @@ pub(crate) fn diagnostic_drawer_observations() -> String {
         }
         json.push_str("]}");
         json
-    })
+    }
 }
 
-#[derive(Clone, Copy)]
-struct LiveDrawerSession {
+#[derive(Clone, Copy, PartialEq)]
+pub(crate) struct LiveDrawerSession {
     open: State<bool>,
     selected: State<usize>,
     scroll: State<ScrollableController>,
@@ -195,7 +213,7 @@ pub(crate) fn live_drawer_host(
     directory: State<SideSheetController>,
     router: State<RouterController>,
     material: State<Option<usize>>,
-    main_content: RenderSlot,
+    main_content: tessera_ui::RenderSlotWith<LiveDrawerSession>,
 ) {
     let open = remember(|| false);
     let selected = remember(|| 0usize);
@@ -219,17 +237,24 @@ pub(crate) fn live_drawer_host(
             .is_open(open.get())
             .accessibility_label("Mail navigation")
             .on_close_request(move || open.set(false))
-            .main_content_shared(main_content.clone())
+            .main_content(move || {
+                main_content.render(session);
+            })
             .side_sheet_content(move || {
                 live_drawer(selected, open, scroll);
             });
     });
-    provide_context(move || session, move || modal.render());
+    modal.render();
 }
 
 #[tessera]
-pub(super) fn drawers_spec() {
-    let root = use_context::<LiveDrawerSession>().map(|context| context.get());
+pub(super) fn drawers_spec(
+    route: Option<crate::pages::material_spec::article::ArticleRoute>,
+    on_recommended: Option<Callback>,
+
+    session: Option<LiveDrawerSession>,
+) {
+    let root = session;
     let local_open = remember(|| false);
     let local_selected = remember(|| 0usize);
     let local_scroll = remember(ScrollableController::new);
@@ -257,7 +282,7 @@ pub(super) fn drawers_spec() {
                 },
                 SpecSection {
                     title: "Measurements",
-                    content: RenderSlot::new(|| {
+                    content: RenderSlot::new(move || {
                         subheading("Standard navigation drawer".into());
                         gap(Dp(24.0));
                         measurement_pair(false);
@@ -272,9 +297,9 @@ pub(super) fn drawers_spec() {
                     }),
                 },
             ],
-        )
-        .intro(|| {
-            recommendation();
+        ).route_optional(route.clone())
+        .intro(move || {
+            recommendation().on_recommended_optional(on_recommended);
             figure(true, false);
             legend();
         })
@@ -282,7 +307,7 @@ pub(super) fn drawers_spec() {
             ArticlePage {
                 title: "Overview",
                 intro: Some(RenderSlot::new(move || {
-                    recommendation();
+                    recommendation().on_recommended_optional(on_recommended);
                     bullets(vec![
                         "Use standard navigation drawers in expanded, large, and extra-large breakpoints".into(),
                         "Use modal navigation drawers in compact and medium breakpoints".into(),
@@ -293,7 +318,7 @@ pub(super) fn drawers_spec() {
                     gap(Dp(32.0));
                     overview_figure();
                     gap(Dp(32.0));
-                    launch(open, selected);
+                    launch(open, selected).session_optional(session);
                 })),
                 sections: vec![
                     SpecSection {
@@ -312,8 +337,8 @@ pub(super) fn drawers_spec() {
             },
             ArticlePage {
                 title: "Guidelines",
-                intro: Some(RenderSlot::new(|| {
-                    recommendation();
+                intro: Some(RenderSlot::new(move || {
+                    recommendation().on_recommended_optional(on_recommended);
                     guides::guide(0);
                 })),
                 sections: vec![
@@ -325,13 +350,13 @@ pub(super) fn drawers_spec() {
                     },
                     SpecSection {
                         title: "Anatomy",
-                        content: RenderSlot::new(|| {
+                        content: RenderSlot::new(move || {
                             guides::anatomy();
                         }),
                     },
                     SpecSection {
                         title: "Responsive layout",
-                        content: RenderSlot::new(|| {
+                        content: RenderSlot::new(move || {
                             guides::responsive_layout();
                         }),
                     },
@@ -345,8 +370,8 @@ pub(super) fn drawers_spec() {
             },
             ArticlePage {
                 title: "Accessibility",
-                intro: Some(RenderSlot::new(|| {
-                    recommendation().window_size_classes(true);
+                intro: Some(RenderSlot::new(move || {
+                    recommendation().on_recommended_optional(on_recommended).window_size_classes(true);
                 })),
                 sections: vec![
                     SpecSection {
@@ -357,7 +382,7 @@ pub(super) fn drawers_spec() {
                     },
                     SpecSection {
                         title: "Interaction & style",
-                        content: RenderSlot::new(|| {
+                        content: RenderSlot::new(move || {
                             guides::interaction();
                         }),
                     },
@@ -375,19 +400,19 @@ pub(super) fn drawers_spec() {
                     },
                     SpecSection {
                         title: "Visual indicators",
-                        content: RenderSlot::new(|| {
+                        content: RenderSlot::new(move || {
                             guides::visual_indicators();
                         }),
                     },
                     SpecSection {
                         title: "Keyboard navigation",
-                        content: RenderSlot::new(|| {
+                        content: RenderSlot::new(move || {
                             guides::keyboard();
                         }),
                     },
                     SpecSection {
                         title: "Labeling elements",
-                        content: RenderSlot::new(|| {
+                        content: RenderSlot::new(move || {
                             guides::labeling();
                         }),
                     },
@@ -524,9 +549,9 @@ fn mail_messages(selected: State<usize>, width: f64) {
 
 #[tessera]
 fn small_rail() {
-    tessera_components::navigation_rail::navigation_rail().content(|| {
+    tessera_components::navigation_rail::navigation_rail().content(move |rail_scope| {
         for (index, label) in ["Inbox", "Outbox", "Favorites"].into_iter().enumerate() {
-            tessera_components::navigation_rail::navigation_rail_item()
+            tessera_components::navigation_rail::navigation_rail_item(rail_scope)
                 .label(label)
                 .selected(index == 0)
                 .icon(move || {
@@ -712,8 +737,7 @@ fn visibility_examples() {
 }
 
 #[tessera]
-fn recommendation(window_size_classes: Option<bool>) {
-    let navigation = use_context::<crate::app::MaterialNavigation>().map(|context| context.get().0);
+fn recommendation(window_size_classes: Option<bool>, on_recommended: Option<Callback>) {
     let ending = if window_size_classes.unwrap_or(false) {
         "window size classes"
     } else {
@@ -744,16 +768,12 @@ fn recommendation(window_size_classes: Option<bool>) {
                         .content(format!("Note: The navigation drawer is no longer recommended in the Material 3 Expressive update. For those who have updated, use an expanded navigation rail, which has mostly the same functionality of the navigation drawer and adapts better across {ending}."))
                         .style(type_style(14.0, 24.0))
                         .color(ink);
-                    if let Some(navigation) = navigation {
+                    if let Some(on_recommended) = on_recommended {
                         gap(Dp(8.0));
                         button()
                             .text()
                             .accessibility_label("Open recommended navigation rail")
-                            .on_click(move || {
-                                if let Some(index) = super::catalog::component_index(32) {
-                                    navigation.set(Some(index));
-                                }
-                            })
+                            .on_click_shared(on_recommended)
                             .child(move || {
                                 text().content("Expanded navigation rail").color(ink);
                             });
@@ -764,8 +784,7 @@ fn recommendation(window_size_classes: Option<bool>) {
 }
 
 #[tessera]
-fn launch(open: State<bool>, selected: State<usize>) {
-    let session = use_context::<LiveDrawerSession>().map(|context| context.get());
+fn launch(open: State<bool>, selected: State<usize>, session: Option<LiveDrawerSession>) {
     column().children(move || {
         button()
             .outlined()

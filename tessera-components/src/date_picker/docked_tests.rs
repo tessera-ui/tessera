@@ -4,7 +4,7 @@
 //!
 //! Keep compact calendars usable through month changes and restricted dates.
 
-use std::{cell::Cell, time::Duration};
+use std::time::Duration;
 
 use tessera_ui::{
     HeadlessConfig, HeadlessRenderer, State,
@@ -18,16 +18,18 @@ use super::{
     CalendarDate, DatePickerState, DockedDatePickerView, Weekday, YearMonth, docked_date_picker,
 };
 
-thread_local! {
-    static STATE: Cell<Option<State<DatePickerState>>> = const { Cell::new(None) };
-    static CHANGES: Cell<Option<State<u32>>> = const { Cell::new(None) };
-    static VIEW: Cell<Option<State<DockedDatePickerView>>> = const { Cell::new(None) };
-    static OFFSET: Cell<Option<State<tessera_ui::Dp>>> = const { Cell::new(None) };
-}
-
 #[tessera]
-fn fixture() {
-    material_theme().child(|| {
+fn fixture(
+    output: tessera_ui::testing::TestProbe<
+        Option<(
+            State<DatePickerState>,
+            State<u32>,
+            State<DockedDatePickerView>,
+            State<tessera_ui::Dp>,
+        )>,
+    >,
+) {
+    material_theme().child(move || {
         let selectable = tessera_ui::CallbackWith::new(|date: CalendarDate| date.day() != 18);
         let initial = DatePickerState::new(
             CalendarDate::new(2025, 8, 17),
@@ -40,11 +42,8 @@ fn fixture() {
         let state = remember(move || initial);
         let changes = remember(|| 0_u32);
         let view = remember(|| DockedDatePickerView::Month);
-        STATE.set(Some(state));
-        CHANGES.set(Some(changes));
-        VIEW.set(Some(view));
         let offset = remember(|| tessera_ui::Dp::ZERO);
-        OFFSET.set(Some(offset));
+        output.set(Some((state, changes, view, offset)));
         crate::boxed::boxed()
             .modifier(tessera_ui::Modifier::new().offset(tessera_ui::Dp::ZERO, offset.get()))
             .children(move || {
@@ -90,8 +89,10 @@ fn activate(renderer: &mut HeadlessRenderer, label: &str) {
 }
 
 fn check_calendar() {
+    let output = tessera_ui::testing::TestProbe::default();
+    let probe = output.clone();
     let mut renderer = HeadlessRenderer::new(
-        Box::new(fixture),
+        Box::new(move || fixture(probe.clone())),
         vec![Box::new(crate::TesseraComponents)],
         HeadlessConfig {
             width: 420,
@@ -120,9 +121,9 @@ fn check_calendar() {
             Some("Cancel" | "OK" | "Previous month" | "Next year")
         )
     }));
-    let state = STATE.get().unwrap();
-    let changes = CHANGES.get().unwrap();
-    let view = VIEW.get().unwrap();
+    let state = output.get().unwrap().0;
+    let changes = output.get().unwrap().1;
+    let view = output.get().unwrap().2;
     assert!(
         renderer
             .accessibility_snapshot()
@@ -171,7 +172,7 @@ fn check_calendar() {
             "month and year captions must be vertically centered in their targets"
         );
     }
-    let offset = OFFSET.get().unwrap();
+    let offset = output.get().unwrap().3;
     offset.set(tessera_ui::Dp(600.0));
     renderer.render_frames(3);
     offset.set(tessera_ui::Dp::ZERO);

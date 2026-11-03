@@ -6,7 +6,6 @@
 
 use std::collections::BTreeMap;
 
-use parking_lot::Mutex;
 use tessera_ui::{FocusManager, FocusRequester, FocusScopeNode, State, winit::keyboard::NamedKey};
 
 use super::CarouselController;
@@ -14,7 +13,7 @@ use super::CarouselController;
 #[derive(Clone, Copy, PartialEq)]
 pub(super) struct Navigation {
     pub(super) viewport: FocusRequester,
-    pub(super) items: State<Mutex<BTreeMap<usize, FocusScopeNode>>>,
+    pub(super) items: State<BTreeMap<usize, FocusScopeNode>>,
     pub(super) pending: State<Option<usize>>,
 }
 
@@ -23,7 +22,6 @@ impl Navigation {
         self.pending.get().or_else(|| {
             self.items.with(|items| {
                 items
-                    .lock()
                     .iter()
                     .find_map(|(&index, scope)| scope.has_focus().then_some(index))
             })
@@ -46,7 +44,6 @@ impl Navigation {
         }
         let focused = self.items.with(|items| {
             items
-                .lock()
                 .iter()
                 .find_map(|(&index, scope)| scope.has_focus().then_some(index))
         });
@@ -93,7 +90,7 @@ impl Navigation {
         };
         FocusManager::current().defer_keyboard_until_layout();
         self.pending.set(Some(target));
-        if !self.items.with(|items| items.lock().contains_key(&target)) {
+        if !self.items.with(|items| items.contains_key(&target)) {
             self.viewport.request_focus();
         }
         if controller.with(|state| state.navigation_required(target)) {
@@ -111,7 +108,7 @@ impl Navigation {
             self.pending.set(None);
             return true;
         }
-        let scope = self.items.with(|items| items.lock().get(&target).copied());
+        let scope = self.items.with(|items| items.get(&target).copied());
         if let Some(scope) = scope {
             scope.request_focus();
             if scope.has_focus() || settled {
@@ -131,8 +128,8 @@ pub(super) struct ItemLease {
 impl Drop for ItemLease {
     fn drop(&mut self) {
         if self.navigation.items.is_alive() {
-            self.navigation.items.with(|items| {
-                items.lock().remove(&self.index);
+            self.navigation.items.with_mut(|items| {
+                items.remove(&self.index);
             });
         }
     }

@@ -5,8 +5,6 @@
 //! Verify action targets, live labeling and anchored annotations after resize
 //! and scroll.
 
-use std::cell::Cell;
-
 use tessera_components::{scrollable::ScrollableController, theme::material_theme};
 use tessera_ui::{
     HeadlessConfig, HeadlessRenderer, MOUSE_POINTER_ID, PressKeyEventType, PxPosition,
@@ -15,29 +13,19 @@ use tessera_ui::{
 
 use super::*;
 
-thread_local! {
-    static SCENE: Cell<usize> = const { Cell::new(0) };
-    static SCROLL: Cell<Option<State<ScrollableController>>> = const { Cell::new(None) };
-}
-
-struct Pipelines;
-
-impl tessera_ui::RenderModule for Pipelines {
-    fn register_pipelines(&self, context: &mut tessera_ui::PipelineContext<'_>) {
-        tessera_components::pipelines::register_pipelines(context);
-    }
-}
-
 #[tessera]
-fn fixture() {
+fn fixture(
+    scene: usize,
+    observed_scroll: tessera_ui::testing::TestProbe<Option<State<ScrollableController>>>,
+) {
     let scroll = remember(ScrollableController::new);
-    SCROLL.set(Some(scroll));
+    observed_scroll.set(Some(scroll));
     material_theme().child(move || {
         column()
             .modifier(Modifier::new().fill_max_size().vertical_scroll(scroll))
-            .children(|| {
+            .children(move || {
                 spacer().modifier(Modifier::new().height(Dp(32.0)));
-                match SCENE.get() {
+                match scene {
                     0 => {
                         app_bar_figure();
                     }
@@ -57,25 +45,14 @@ fn fixture() {
 }
 
 fn node(renderer: &HeadlessRenderer, label: &str, role: Role) -> Node {
-    renderer
-        .accessibility_snapshot()
-        .unwrap()
-        .nodes
-        .into_iter()
-        .find(|(_, node)| node.label() == Some(label) && node.role() == role)
-        .unwrap_or_else(|| {
-            panic!(
-                "missing native {role:?}: {label}; nodes: {:?}",
-                renderer
-                    .accessibility_snapshot()
-                    .unwrap()
-                    .nodes
-                    .iter()
-                    .map(|(_, node)| (node.role(), node.label(), node.bounds()))
-                    .collect::<Vec<_>>()
-            )
-        })
+    let snapshot = renderer
+        .inspect_accessibility()
+        .expect("accessibility tree");
+    snapshot
+        .find(label, role)
+        .unwrap_or_else(|| panic!("missing {label} {role:?}"))
         .1
+        .clone()
 }
 
 fn click(renderer: &mut HeadlessRenderer, label: &str) {
@@ -95,10 +72,13 @@ fn click(renderer: &mut HeadlessRenderer, label: &str) {
 #[ignore = "requires a native GPU adapter"]
 fn contextual_actions_and_annotations_survive_scaled_resize_and_scroll() {
     for scene in 0..4 {
-        SCENE.set(scene);
+        let scroll = tessera_ui::testing::TestProbe::default();
+        let observed = scroll.clone();
         let mut renderer = HeadlessRenderer::new(
-            Box::new(fixture),
-            vec![Box::new(Pipelines)],
+            Box::new(move || {
+                fixture(scene, observed.clone());
+            }),
+            vec![Box::new(crate::TestPipelines)],
             HeadlessConfig {
                 width: 676,
                 height: 520,
@@ -111,7 +91,7 @@ fn contextual_actions_and_annotations_survive_scaled_resize_and_scroll() {
         for width in [676, 390, 1024] {
             renderer.resize(width, 720);
             renderer.render_frames(16);
-            SCROLL
+            scroll
                 .get()
                 .unwrap()
                 .with_mut(|scroll| scroll.set_scroll_position(PxPosition::from_f32_xy(0.0, -24.0)));

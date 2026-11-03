@@ -14,14 +14,6 @@ use tessera_ui::{
 
 use super::*;
 
-struct Pipelines;
-
-impl tessera_ui::RenderModule for Pipelines {
-    fn register_pipelines(&self, context: &mut tessera_ui::PipelineContext<'_>) {
-        tessera_components::pipelines::register_pipelines(context);
-    }
-}
-
 #[tessera]
 fn fixture() {
     material_theme().child(|| {
@@ -30,13 +22,13 @@ fn fixture() {
 }
 
 fn node(renderer: &HeadlessRenderer, label: &str, role: Role) -> (NodeId, Node) {
-    renderer
-        .accessibility_snapshot()
-        .unwrap()
-        .nodes
-        .into_iter()
-        .find(|(_, node)| node.role() == role && node.label() == Some(label))
-        .unwrap_or_else(|| panic!("missing {label} {role:?}"))
+    let snapshot = renderer
+        .inspect_accessibility()
+        .expect("accessibility tree");
+    let (id, node) = snapshot
+        .find(label, role)
+        .unwrap_or_else(|| panic!("missing {label} {role:?}"));
+    (id, node.clone())
 }
 
 fn exists(renderer: &HeadlessRenderer, label: &str, role: Role) -> bool {
@@ -92,7 +84,7 @@ fn assert_default_draft(renderer: &HeadlessRenderer) {
 fn event_dialog_keeps_edits_when_discard_is_cancelled_and_resets_after_discard_or_save() {
     let mut renderer = HeadlessRenderer::new(
         Box::new(fixture),
-        vec![Box::new(Pipelines)],
+        vec![Box::new(crate::TestPipelines)],
         HeadlessConfig {
             width: 900,
             height: 1000,

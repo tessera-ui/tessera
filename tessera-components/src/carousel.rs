@@ -905,8 +905,8 @@ fn carousel_item(
 ) {
     let scope = remember(FocusScopeNode::new).get();
     let _lease = remember(move || focus::ItemLease { navigation, index });
-    navigation.items.with(|items| {
-        items.lock().insert(index, scope);
+    navigation.items.with_mut(|items| {
+        items.insert(index, scope);
     });
     let shape = render_state.with(|state| state.shape);
     let vertical = controller.with(|state| {
@@ -1110,7 +1110,7 @@ pub fn carousel(
     let reverse = reverse_layout.unwrap_or(false);
     let navigation = focus::Navigation {
         viewport: focus,
-        items: remember(|| parking_lot::Mutex::new(std::collections::BTreeMap::new())),
+        items: remember(std::collections::BTreeMap::new),
         pending: remember(|| None),
     };
     if !enabled
@@ -1348,7 +1348,6 @@ fn finite_dp(value: Dp, fallback: f32) -> f32 {
 
 #[cfg(test)]
 mod tests {
-    use std::cell::Cell;
 
     use tessera_ui::{
         Color, MOUSE_POINTER_ID, PressKeyEventType,
@@ -1516,6 +1515,8 @@ mod tests {
 
     #[test]
     fn retargeted_snaps_settle_inside_the_scroll_range() {
+        let runtime = tessera_ui::RuntimeSession::new();
+        let _scope = runtime.enter();
         let mut state = CarouselController::default();
         state.configure(configuration(CarouselVariant::MultiBrowse, 100));
         state.animate_to_item(90);
@@ -1592,15 +1593,16 @@ mod tests {
         height: f64,
     }
 
-    thread_local! {
-        static SETTINGS: Cell<Option<State<Settings>>> = const { Cell::new(None) };
-        static CONTROLLER: Cell<Option<State<CarouselController>>> = const { Cell::new(None) };
-        static ACTIVATED: Cell<Option<State<Vec<usize>>>> = const { Cell::new(None) };
-        static RASTER: Cell<Option<State<ImageData>>> = const { Cell::new(None) };
+    #[derive(Clone, Default, PartialEq)]
+    struct Probe {
+        settings: tessera_ui::testing::TestProbe<Option<State<Settings>>>,
+        controller: tessera_ui::testing::TestProbe<Option<State<CarouselController>>>,
+        activated: tessera_ui::testing::TestProbe<Option<State<Vec<usize>>>>,
+        raster: tessera_ui::testing::TestProbe<Option<State<ImageData>>>,
     }
 
     #[tessera]
-    fn fixture() {
+    fn fixture(probe: Probe) {
         let settings = remember(|| Settings {
             variant: CarouselVariant::MultiBrowse,
             count: 10,
@@ -1628,10 +1630,10 @@ mod tests {
             }
             ImageData::from_rgba(pixels, 16, 8)
         });
-        SETTINGS.set(Some(settings));
-        CONTROLLER.set(Some(controller));
-        ACTIVATED.set(Some(activated));
-        RASTER.set(Some(raster));
+        probe.settings.set(Some(settings));
+        probe.controller.set(Some(controller));
+        probe.activated.set(Some(activated));
+        probe.raster.set(Some(raster));
         material_theme().child(move || {
             boxed()
                 .modifier(Modifier::new().fill_max_size().background(Color::WHITE))
@@ -1722,9 +1724,11 @@ mod tests {
     }
 
     fn check_native_carousel(samples: u32) {
+        let probe = Probe::default();
+        let output = probe.clone();
         let mut renderer = HeadlessRenderer::new(
-            Box::new(|| {
-                fixture();
+            Box::new(move || {
+                fixture(output.clone());
             }),
             vec![Box::new(crate::TesseraComponents)],
             HeadlessConfig {
@@ -1736,9 +1740,9 @@ mod tests {
         )
         .expect("carousel renderer");
         renderer.render_frames(8);
-        let controller = CONTROLLER.get().expect("controller");
-        let settings = SETTINGS.get().expect("settings");
-        let activated = ACTIVATED.get().expect("activations");
+        let controller = probe.controller.get().expect("controller");
+        let settings = probe.settings.get().expect("settings");
+        let activated = probe.activated.get().expect("activations");
         let initial = renderer.read_pixels().expect("pixels");
         if let Some(directory) = std::env::var_os("TESSERA_CAROUSEL_QA_DIR") {
             let directory = std::path::PathBuf::from(directory);
@@ -1783,7 +1787,7 @@ mod tests {
             (i16::from(color[1]) - 188).abs() <= 1 && (i16::from(color[2]) - 188).abs() <= 1,
             "image opacity must be applied exactly once: {color:?}"
         );
-        let raster = RASTER.get().expect("raster state");
+        let raster = probe.raster.get().expect("raster state");
         let original = raster.get();
         settings.with_mut(|settings| settings.dimmed = false);
         raster.set(ImageData::from_rgba(Arc::clone(&original.data), 8, 16));
@@ -2134,7 +2138,7 @@ mod tests {
         renderer.pointer_move(MOUSE_POINTER_ID, PxPosition::from_f32_xy(740.0, 440.0));
         renderer.render_frames(8);
         assert_eq!(renderer.snapshot()["scale_factor"], 1.5);
-        assert!(CONTROLLER.get() == Some(controller));
+        assert!(probe.controller.get() == Some(controller));
         assert_eq!(controller.with(CarouselController::current_item), 3);
         let scaled = renderer.read_pixels().expect("density change pixels");
         for (_, center, width) in controller.with(|state| state.masks.clone()) {
@@ -2169,8 +2173,10 @@ mod tests {
         controller.with_mut(|state| state.jump_to_item(0));
         renderer.render_frames(8);
         assert!(renderer.read_pixels().expect("restored density pixels") == initial);
-        let uploads = crate::pipelines::image::pipeline::TEXTURE_UPLOADS
-            .load(std::sync::atomic::Ordering::Relaxed);
+        let uploads = renderer
+            .graphics_work()
+            .group("image_textures")
+            .texture_uploads;
         let original = raster.get();
         raster.set(ImageData::from_rgba(
             original.data.as_ref().clone(),
@@ -2180,8 +2186,10 @@ mod tests {
         settings.with_mut(|settings| settings.stress = true);
         renderer.render_frames(3);
         assert_eq!(
-            crate::pipelines::image::pipeline::TEXTURE_UPLOADS
-                .load(std::sync::atomic::Ordering::Relaxed),
+            renderer
+                .graphics_work()
+                .group("image_textures")
+                .texture_uploads,
             uploads,
             "independently decoded identical pixels reuse the existing texture"
         );
@@ -2196,25 +2204,27 @@ mod tests {
             );
             assert_eq!(pixel(&repeated, x + 18, y + 12), [0, 0, 255, 255]);
         }
-        let allocations = crate::pipelines::image::pipeline::INSTANCE_ALLOCATIONS
-            .load(std::sync::atomic::Ordering::Relaxed);
-        let uploads = crate::pipelines::image::pipeline::TEXTURE_UPLOADS
-            .load(std::sync::atomic::Ordering::Relaxed);
-        let comparisons = crate::pipelines::image::command::PIXEL_BUFFER_COMPARISONS.get();
+        let allocations = renderer
+            .graphics_work()
+            .group("image_instances")
+            .buffer_allocations;
+        let uploads = renderer
+            .graphics_work()
+            .group("image_textures")
+            .texture_uploads;
         renderer.render_frames(5);
         assert_eq!(
-            crate::pipelines::image::command::PIXEL_BUFFER_COMPARISONS.get(),
-            comparisons,
-            "rendering shared raster instances must not scan their pixel buffers"
-        );
-        assert_eq!(
-            crate::pipelines::image::pipeline::INSTANCE_ALLOCATIONS
-                .load(std::sync::atomic::Ordering::Relaxed),
+            renderer
+                .graphics_work()
+                .group("image_instances")
+                .buffer_allocations,
             allocations
         );
         assert_eq!(
-            crate::pipelines::image::pipeline::TEXTURE_UPLOADS
-                .load(std::sync::atomic::Ordering::Relaxed),
+            renderer
+                .graphics_work()
+                .group("image_textures")
+                .texture_uploads,
             uploads
         );
         settings.with_mut(|settings| {
@@ -2225,8 +2235,10 @@ mod tests {
         settings.with_mut(|settings| settings.stress = true);
         renderer.render_frames(3);
         assert_eq!(
-            crate::pipelines::image::pipeline::TEXTURE_UPLOADS
-                .load(std::sync::atomic::Ordering::Relaxed),
+            renderer
+                .graphics_work()
+                .group("image_textures")
+                .texture_uploads,
             uploads,
             "unused textures stay cached while they fit the byte budget"
         );
@@ -2240,14 +2252,18 @@ mod tests {
             raster.set(ImageData::from_rgba(pixels, 2048, 2048));
             renderer.render_frames(2);
         }
-        let pressure_uploads = crate::pipelines::image::pipeline::TEXTURE_UPLOADS
-            .load(std::sync::atomic::Ordering::Relaxed);
+        let pressure_uploads = renderer
+            .graphics_work()
+            .group("image_textures")
+            .texture_uploads;
         assert_eq!(pressure_uploads, uploads + 5);
         raster.set(duplicate);
         renderer.render_frames(3);
         assert_eq!(
-            crate::pipelines::image::pipeline::TEXTURE_UPLOADS
-                .load(std::sync::atomic::Ordering::Relaxed),
+            renderer
+                .graphics_work()
+                .group("image_textures")
+                .texture_uploads,
             pressure_uploads + 1,
             "exceeding the byte budget evicts the oldest unused texture"
         );
@@ -2299,9 +2315,9 @@ mod tests {
     }
 
     #[tessera]
-    fn responsive_feed() {
+    fn responsive_feed(probe: Probe) {
         let controller = remember(CarouselController::default);
-        CONTROLLER.set(Some(controller));
+        probe.controller.set(Some(controller));
         material_theme().child(move || {
             let theme = tessera_ui::use_context::<MaterialTheme>().expect("material theme");
             scaffold()
@@ -2338,9 +2354,11 @@ mod tests {
     #[test]
     #[ignore = "Requires a native GPU adapter"]
     fn native_responsive_feed_keeps_following_items_visible_after_density_changes() {
+        let probe = Probe::default();
+        let output = probe.clone();
         let mut renderer = HeadlessRenderer::new(
-            Box::new(|| {
-                responsive_feed();
+            Box::new(move || {
+                responsive_feed(output.clone());
             }),
             vec![Box::new(crate::TesseraComponents)],
             HeadlessConfig {
@@ -2353,7 +2371,7 @@ mod tests {
         )
         .expect("responsive renderer");
         renderer.render_frames(20);
-        let controller = CONTROLLER.get().expect("responsive controller");
+        let controller = probe.controller.get().expect("responsive controller");
         controller.with_mut(|state| state.animate_to_item(4));
         renderer.render_frames(120);
         tessera_ui::dp::set_scale_factor(1.0);

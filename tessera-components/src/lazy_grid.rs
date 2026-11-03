@@ -3,12 +3,7 @@
 //! ## Usage
 //!
 //! Use lazy grids to display large, scrollable collections of tiles.
-use std::{
-    collections::hash_map::DefaultHasher,
-    hash::{Hash, Hasher},
-    ops::Range,
-    sync::Arc,
-};
+use std::{hash::Hash, ops::Range, sync::Arc};
 
 use tessera_ui::{
     AxisConstraint, CallbackWith, Color, ComputedData, Constraint, Dp, FocusDirection,
@@ -22,7 +17,10 @@ use tessera_ui::{
 use crate::{
     alignment::{CrossAxisAlignment, MainAxisAlignment},
     layout_flex::cross_axis_child_constraint,
-    lazy_shared::{MeasuredMain, clamp_reported_main},
+    lazy_shared::{
+        LazyItemsPlan as LazySlotPlan, LazyItemsSlot as LazySlot, MeasuredMain, ZeroLayout,
+        clamp_reported_main, hash_key,
+    },
     scrollable::{
         ScrollBarBehavior, ScrollBarLayout, ScrollableController, scrollable,
         synchronize_scroll_density,
@@ -118,15 +116,6 @@ impl LazyGridController {
     }
 }
 
-fn hash_key<K>(key: K) -> u64
-where
-    K: Hash,
-{
-    let mut hasher = DefaultHasher::new();
-    key.hash(&mut hasher);
-    hasher.finish()
-}
-
 /// Accumulated lazy-grid item declarations carried by the builder.
 #[derive(Clone, Default, PartialEq)]
 pub struct LazyGridContent {
@@ -136,15 +125,6 @@ pub struct LazyGridContent {
 impl LazyGridContent {
     fn push(&mut self, slot: LazySlot) {
         self.slots.push(slot);
-    }
-}
-
-#[derive(Clone, Copy, Default, PartialEq, Eq)]
-struct ZeroLayout;
-
-impl tessera_ui::LayoutModifierNode for ZeroLayout {
-    fn measure(&self, _input: &mut MeasureScope<'_>) -> Result<LayoutResult, MeasurementError> {
-        Ok(LayoutResult::new(ComputedData::ZERO))
     }
 }
 
@@ -426,24 +406,26 @@ impl tessera_ui::LayoutModifierNode for LazyGridLayout {
 ///     lazy_grid::{GridCells, lazy_vertical_grid},
 ///     text::text,
 /// };
-/// use tessera_ui::tessera;
-///
-/// # use std::sync::{Arc, atomic::{AtomicUsize, Ordering}};
+/// use tessera_components::modifier::{ModifierExt as _, SemanticsArgs};
+/// use tessera_ui::{Modifier, tessera};
 /// #[tessera]
-/// fn demo(rendered: Arc<AtomicUsize>) {
+/// fn demo() {
 ///     lazy_vertical_grid()
 ///         .columns(GridCells::fixed(2))
 ///         .overscan(0)
 ///         .items(4, move |i| {
-///             rendered.fetch_or(1 << i, Ordering::Relaxed);
-///             text().content(format!("Tile {i}"));
+///             text().content(format!("Tile {i}")).modifier(
+///                 Modifier::new().semantics(SemanticsArgs {
+///                     test_tag: Some(format!("tile-{i}")), ..Default::default()
+///                 })
+///             );
 ///         });
 /// }
 ///
-/// let rendered = Arc::new(AtomicUsize::new(0));
-/// let observed = Arc::clone(&rendered);
-/// tessera_ui::testing::layout_test(move || demo(Arc::clone(&observed))).run();
-/// assert_eq!(rendered.load(Ordering::Relaxed), 15);
+/// let snapshot = tessera_ui::testing::layout_test(demo).run();
+/// for index in 0..4 {
+///     snapshot.node(&format!("tile-{index}")).exists();
+/// }
 /// ```
 #[tessera]
 pub fn lazy_vertical_grid(
@@ -478,7 +460,10 @@ pub fn lazy_vertical_grid(
     let estimated_item_size = estimated_item_size.unwrap_or(Dp(0.0));
     let content_padding = content_padding.unwrap_or(Dp(0.0));
     let content = content.unwrap_or_default();
-    let controller = controller.unwrap_or_else(|| remember(LazyGridController::new));
+    let controller = match controller {
+        Some(value) => value,
+        None => remember(LazyGridController::new),
+    };
     let scroll_controller = remember(ScrollableController::default);
     lazy_vertical_grid_slots(LazyGridSlotsArgs {
         modifier: modifier.unwrap_or_default(),
@@ -503,7 +488,7 @@ pub fn lazy_vertical_grid(
     });
 }
 
-#[derive(Clone)]
+#[derive(Clone, PartialEq)]
 struct LazyGridSlotsArgs {
     modifier: Modifier,
     scroll_smoothing: f32,
@@ -526,6 +511,7 @@ struct LazyGridSlotsArgs {
     slots: Vec<LazySlot>,
 }
 
+#[tessera]
 fn lazy_vertical_grid_slots(args: LazyGridSlotsArgs) {
     let scroll_controller = args.scroll_controller;
     let main_axis_spacing = sanitize_spacing(Px::from(args.main_axis_spacing));
@@ -607,24 +593,26 @@ fn lazy_vertical_grid_slots(args: LazyGridSlotsArgs) {
 ///     lazy_grid::{GridCells, lazy_horizontal_grid},
 ///     text::text,
 /// };
-/// use tessera_ui::tessera;
-///
-/// # use std::sync::{Arc, atomic::{AtomicUsize, Ordering}};
+/// use tessera_components::modifier::{ModifierExt as _, SemanticsArgs};
+/// use tessera_ui::{Modifier, tessera};
 /// #[tessera]
-/// fn demo(rendered: Arc<AtomicUsize>) {
+/// fn demo() {
 ///     lazy_horizontal_grid()
 ///         .rows(GridCells::fixed(2))
 ///         .overscan(0)
 ///         .items(3, move |i| {
-///             rendered.fetch_or(1 << i, Ordering::Relaxed);
-///             text().content(format!("Tile {i}"));
+///             text().content(format!("Tile {i}")).modifier(
+///                 Modifier::new().semantics(SemanticsArgs {
+///                     test_tag: Some(format!("tile-{i}")), ..Default::default()
+///                 })
+///             );
 ///         });
 /// }
 ///
-/// let rendered = Arc::new(AtomicUsize::new(0));
-/// let observed = Arc::clone(&rendered);
-/// tessera_ui::testing::layout_test(move || demo(Arc::clone(&observed))).run();
-/// assert_eq!(rendered.load(Ordering::Relaxed), 7);
+/// let snapshot = tessera_ui::testing::layout_test(demo).run();
+/// for index in 0..3 {
+///     snapshot.node(&format!("tile-{index}")).exists();
+/// }
 /// ```
 #[tessera]
 pub fn lazy_horizontal_grid(
@@ -659,7 +647,10 @@ pub fn lazy_horizontal_grid(
     let estimated_item_size = estimated_item_size.unwrap_or(Dp(0.0));
     let content_padding = content_padding.unwrap_or(Dp(0.0));
     let content = content.unwrap_or_default();
-    let controller = controller.unwrap_or_else(|| remember(LazyGridController::new));
+    let controller = match controller {
+        Some(value) => value,
+        None => remember(LazyGridController::new),
+    };
     let scroll_controller = remember(ScrollableController::default);
     lazy_horizontal_grid_slots(LazyGridSlotsArgs {
         modifier: modifier.unwrap_or_default(),
@@ -684,6 +675,7 @@ pub fn lazy_horizontal_grid(
     });
 }
 
+#[tessera]
 fn lazy_horizontal_grid_slots(args: LazyGridSlotsArgs) {
     let scroll_controller = args.scroll_controller;
     let main_axis_spacing = sanitize_spacing(Px::from(args.main_axis_spacing));
@@ -722,214 +714,8 @@ fn lazy_horizontal_grid_slots(args: LazyGridSlotsArgs) {
         });
 }
 
-macro_rules! impl_lazy_grid_builder {
-    ($builder:ident) => {
-        impl $builder {
-            /// Append a single lazy item.
-            pub fn item<F, Output>(&self, builder: F) -> Self
-            where
-                F: Fn() -> Output + Send + Sync + 'static,
-            {
-                self.push_slot(move || Some(lazy_grid_item_slot(builder)));
-                Self { props: self.props }
-            }
-
-            /// Append a single lazy item with a stable key.
-            pub fn item_with_key<K, F, Output>(&self, key: K, builder: F) -> Self
-            where
-                K: Hash,
-                F: Fn() -> Output + Send + Sync + 'static,
-            {
-                let key = hash_key(key);
-                self.push_slot(move || {
-                    Some(LazySlot::items(
-                        1,
-                        move |_| builder(),
-                        Some(CallbackWith::new(move |_| key)),
-                    ))
-                });
-                Self { props: self.props }
-            }
-
-            /// Append a batch of indexed lazy items.
-            pub fn items<F, Output>(&self, count: usize, builder: F) -> Self
-            where
-                F: Fn(usize) -> Output + Send + Sync + 'static,
-            {
-                self.push_slot(move || Some(LazySlot::items(count, builder, None)));
-                Self { props: self.props }
-            }
-
-            /// Append indexed lazy items with stable keys.
-            pub fn items_with_key<K, KF, F, Output>(
-                &self,
-                count: usize,
-                key_provider: KF,
-                builder: F,
-            ) -> Self
-            where
-                K: Hash,
-                KF: Fn(usize) -> K + Send + Sync + 'static,
-                F: Fn(usize) -> Output + Send + Sync + 'static,
-            {
-                self.push_slot(move || {
-                    let key_provider =
-                        CallbackWith::new(move |index| hash_key(key_provider(index)));
-                    Some(LazySlot::items(count, builder, Some(key_provider)))
-                });
-                Self { props: self.props }
-            }
-
-            /// Append lazy items from an iterator, exposing index and element.
-            pub fn items_from_iter<I, T, F, Output>(&self, iter: I, builder: F) -> Self
-            where
-                I: IntoIterator<Item = T>,
-                T: Send + Sync + 'static,
-                F: Fn(usize, &T) -> Output + Send + Sync + 'static,
-            {
-                let iter: Vec<T> = iter.into_iter().collect();
-                self.push_slot(move || lazy_grid_items_from_iter_slot(iter, builder));
-                Self { props: self.props }
-            }
-
-            /// Append lazy items from an iterator with stable keys.
-            pub fn items_from_iter_with_key<I, T, K, KF, F, Output>(
-                &self,
-                iter: I,
-                key_provider: KF,
-                builder: F,
-            ) -> Self
-            where
-                I: IntoIterator<Item = T>,
-                T: Send + Sync + 'static,
-                K: Hash,
-                KF: Fn(usize, &T) -> K + Send + Sync + 'static,
-                F: Fn(usize, &T) -> Output + Send + Sync + 'static,
-            {
-                let iter: Vec<T> = iter.into_iter().collect();
-                self.push_slot(move || {
-                    lazy_grid_items_from_iter_with_key_slot(iter, key_provider, builder)
-                });
-                Self { props: self.props }
-            }
-
-            /// Append lazy items from an iterator when only the element is used.
-            pub fn items_from_iter_values<I, T, F, Output>(&self, iter: I, builder: F) -> Self
-            where
-                I: IntoIterator<Item = T>,
-                T: Send + Sync + 'static,
-                F: Fn(&T) -> Output + Send + Sync + 'static,
-            {
-                self.items_from_iter(iter, move |_, item| builder(item))
-            }
-
-            fn push_slot(
-                &self,
-                make_slot: impl FnOnce() -> Option<LazySlot> + Send + Sync + 'static,
-            ) {
-                self.props.append("content", move |props| {
-                    if let Some(slot) = make_slot() {
-                        props
-                            .content
-                            .get_or_insert_with(LazyGridContent::default)
-                            .push(slot);
-                    }
-                });
-            }
-        }
-    };
-}
-
-impl_lazy_grid_builder!(LazyVerticalGridBuilder);
-impl_lazy_grid_builder!(LazyHorizontalGridBuilder);
-
-fn lazy_grid_item_slot<F, Output>(builder: F) -> LazySlot
-where
-    F: Fn() -> Output + Send + Sync + 'static,
-{
-    LazySlot::items(
-        1,
-        move |_| {
-            builder();
-        },
-        None,
-    )
-}
-
-fn lazy_grid_items_from_iter_slot<I, T, F, Output>(iter: I, builder: F) -> Option<LazySlot>
-where
-    I: IntoIterator<Item = T>,
-    T: Send + Sync + 'static,
-    F: Fn(usize, &T) -> Output + Send + Sync + 'static,
-{
-    let items: Arc<Vec<T>> = Arc::new(iter.into_iter().collect());
-    if items.is_empty() {
-        return None;
-    }
-    let builder = Arc::new(builder);
-    let count = items.len();
-    Some(LazySlot::items(
-        count,
-        {
-            let items = items.clone();
-            let builder = builder.clone();
-            move |idx| {
-                if let Some(item) = items.get(idx) {
-                    builder(idx, item);
-                }
-            }
-        },
-        None,
-    ))
-}
-
-fn lazy_grid_items_from_iter_with_key_slot<I, T, K, KF, F, Output>(
-    iter: I,
-    key_provider: KF,
-    builder: F,
-) -> Option<LazySlot>
-where
-    I: IntoIterator<Item = T>,
-    T: Send + Sync + 'static,
-    K: Hash,
-    KF: Fn(usize, &T) -> K + Send + Sync + 'static,
-    F: Fn(usize, &T) -> Output + Send + Sync + 'static,
-{
-    let items: Arc<Vec<T>> = Arc::new(iter.into_iter().collect());
-    if items.is_empty() {
-        return None;
-    }
-    let builder = Arc::new(builder);
-    let key_provider = Arc::new(key_provider);
-    let count = items.len();
-
-    let slot_builder = {
-        let items = items.clone();
-        let builder = builder.clone();
-        move |idx: usize| {
-            if let Some(item) = items.get(idx) {
-                builder(idx, item);
-            }
-        }
-    };
-
-    let slot_key_provider = {
-        let items = items.clone();
-        let key_provider = key_provider.clone();
-        move |idx: usize| -> u64 {
-            items
-                .get(idx)
-                .map(|item| hash_key(key_provider(idx, item)))
-                .unwrap_or(0)
-        }
-    };
-
-    Some(LazySlot::items(
-        count,
-        slot_builder,
-        Some(CallbackWith::new(slot_key_provider)),
-    ))
-}
+crate::lazy_shared::impl_lazy_builder!(LazyVerticalGridBuilder, LazyGridContent);
+crate::lazy_shared::impl_lazy_builder!(LazyHorizontalGridBuilder, LazyGridContent);
 
 #[derive(Clone, Copy, PartialEq, Eq, Default)]
 enum LazyGridAxis {
@@ -1142,9 +928,7 @@ fn compute_visible_items(
                 let key_hash = if let Some(provider) = &slot.key_provider {
                     provider.call(local_index)
                 } else {
-                    let mut hasher = DefaultHasher::new();
-                    index.hash(&mut hasher);
-                    hasher.finish()
+                    hash_key(index)
                 };
 
                 items.push(VisibleGridItem {
@@ -1381,90 +1165,6 @@ struct MeasuredGridItem {
     line_index: usize,
     slot_index: usize,
     size: ComputedData,
-}
-#[derive(Clone, PartialEq)]
-enum LazySlot {
-    Items(LazyItemsSlot),
-}
-
-impl LazySlot {
-    fn items<F, Output>(
-        count: usize,
-        builder: F,
-        key_provider: Option<CallbackWith<usize, u64>>,
-    ) -> Self
-    where
-        F: Fn(usize) -> Output + Send + Sync + 'static,
-    {
-        Self::Items(LazyItemsSlot {
-            count,
-            builder: RenderSlotWith::new(builder),
-            key_provider,
-        })
-    }
-
-    fn len(&self) -> usize {
-        match self {
-            Self::Items(slot) => slot.count,
-        }
-    }
-}
-
-#[derive(Clone, PartialEq)]
-struct LazyItemsSlot {
-    count: usize,
-    builder: RenderSlotWith<usize>,
-    key_provider: Option<CallbackWith<usize, u64>>,
-}
-
-#[derive(Clone, PartialEq)]
-struct LazySlotPlan {
-    entries: Vec<LazySlotEntry>,
-    total_count: usize,
-}
-
-impl LazySlotPlan {
-    fn new(slots: Vec<LazySlot>) -> Self {
-        let mut entries = Vec::with_capacity(slots.len());
-        let mut cursor = 0;
-        for slot in slots {
-            let len = slot.len();
-            entries.push(LazySlotEntry {
-                start: cursor,
-                len,
-                slot,
-            });
-            cursor += len;
-        }
-        Self {
-            entries,
-            total_count: cursor,
-        }
-    }
-
-    fn total_count(&self) -> usize {
-        self.total_count
-    }
-
-    fn resolve(&self, index: usize) -> Option<(&LazyItemsSlot, usize)> {
-        self.entries.iter().find_map(|entry| {
-            if index >= entry.start && index < entry.start + entry.len {
-                let local_index = index - entry.start;
-                match &entry.slot {
-                    LazySlot::Items(slot) => Some((slot, local_index)),
-                }
-            } else {
-                None
-            }
-        })
-    }
-}
-
-#[derive(Clone, PartialEq)]
-struct LazySlotEntry {
-    start: usize,
-    len: usize,
-    slot: LazySlot,
 }
 
 #[derive(Clone, PartialEq)]
@@ -1749,10 +1449,7 @@ fn sanitize_spacing(px: Px) -> Px {
 
 #[cfg(test)]
 mod tests {
-    use std::{
-        cell::Cell,
-        sync::atomic::{AtomicUsize, Ordering},
-    };
+    use tessera_ui::RenderSlotWith;
 
     use tessera_ui::{
         AxisConstraint, ComputedData, Dp, LayoutResult, MeasurementError, Modifier,
@@ -1774,17 +1471,13 @@ mod tests {
         lazy_vertical_grid,
     };
 
-    thread_local! {
-        static COLLAPSED_WIDTH: Cell<Option<State<Dp>>> = const { Cell::new(None) };
-        static COLLAPSED_GRID: Cell<Option<State<LazyGridController>>> = const { Cell::new(None) };
-    }
-
     #[tessera]
-    fn collapsed_viewport_fixture() {
+    fn collapsed_viewport_fixture(
+        observed: tessera_ui::testing::TestProbe<Option<(State<Dp>, State<LazyGridController>)>>,
+    ) {
         let width = remember(|| Dp(300.0));
         let controller = remember(LazyGridController::new);
-        COLLAPSED_WIDTH.set(Some(width));
-        COLLAPSED_GRID.set(Some(controller));
+        observed.set(Some((width, controller)));
         material_theme().child(move || {
             lazy_vertical_grid()
                 .columns(GridCells::fixed(2))
@@ -1802,19 +1495,21 @@ mod tests {
 
     #[test]
     fn collapsed_cells_preserve_measurements_even_with_nonzero_spacing() {
+        let observed = tessera_ui::testing::TestProbe::default();
+        let fixture_observed = observed.clone();
         let mut session = tessera_ui::testing::start_layout_test_session(
-            tessera_ui::testing::layout_test(|| {
-                collapsed_viewport_fixture();
+            tessera_ui::testing::layout_test(move || {
+                collapsed_viewport_fixture(fixture_observed.clone());
             })
             .viewport_px(300, 240),
         );
         for frame in 0..8 {
             let _ = tessera_ui::testing::pump_layout_test_session(&mut session, frame * 16_666_667);
         }
-        let controller = COLLAPSED_GRID.get().expect("grid controller");
+        let controller = observed.get().expect("grid handles").1;
         let before = controller.with(|state| state.cache.measured_line_main.clone());
         assert!(before.iter().all(Option::is_some));
-        let width = COLLAPSED_WIDTH.get().expect("viewport width");
+        let width = observed.get().expect("grid handles").0;
         width.set(Dp(0.0));
         for frame in 8..12 {
             let _ = tessera_ui::testing::pump_layout_test_session(&mut session, frame * 16_666_667);
@@ -1835,6 +1530,8 @@ mod tests {
 
     #[test]
     fn density_changes_rebase_unvisited_lines_without_round_trip_drift() {
+        let runtime = tessera_ui::RuntimeSession::new();
+        let _scope = runtime.enter();
         crate::test_utils::run_isolated_test(
             "lazy_grid::tests::density_changes_rebase_unvisited_lines_without_round_trip_drift",
             || {
@@ -1876,8 +1573,6 @@ mod tests {
         cache.configure(10, 3, Px(20));
         assert_eq!(cache.total_main_size(Px(20), Px(8)), Px(104));
     }
-
-    static LAZY_GRID_VISIBLE_ITEM_BUILD_COUNT: AtomicUsize = AtomicUsize::new(0);
 
     #[derive(Clone, PartialEq)]
     struct FixedTestLayout {
@@ -1933,7 +1628,7 @@ mod tests {
             .padding_cross(Px::new(4))
             .slots(vec![super::LazySlot::items(
                 4,
-                |index| match index {
+                RenderSlotWith::new(|index| match index {
                     0 => {
                         fixed_test_box()
                             .tag("lazy_grid_v_first".to_string())
@@ -1958,7 +1653,7 @@ mod tests {
                             .width(9)
                             .height(9);
                     }
-                },
+                }),
                 None,
             )])
             .controller(controller)
@@ -1989,7 +1684,7 @@ mod tests {
             .padding_cross(Px::new(4))
             .slots(vec![super::LazySlot::items(
                 4,
-                |index| match index {
+                RenderSlotWith::new(|index| match index {
                     0 => {
                         fixed_test_box()
                             .tag("lazy_grid_h_first".to_string())
@@ -2014,7 +1709,7 @@ mod tests {
                             .width(16)
                             .height(9);
                     }
-                },
+                }),
                 None,
             )])
             .controller(controller)
@@ -2058,7 +1753,7 @@ mod tests {
                     .padding_cross(Px::new(4))
                     .slots(vec![super::LazySlot::items(
                         4,
-                        |index| match index {
+                        RenderSlotWith::new(|index| match index {
                             0 => {
                                 fixed_test_box()
                                     .tag("lazy_grid_scroll_first".to_string())
@@ -2083,7 +1778,7 @@ mod tests {
                                     .width(9)
                                     .height(9);
                             }
-                        },
+                        }),
                         None,
                     )])
                     .controller(controller)
@@ -2131,13 +1826,12 @@ mod tests {
                     .padding_cross(Px::new(4))
                     .slots(vec![super::LazySlot::items(
                         20,
-                        |index| {
-                            LAZY_GRID_VISIBLE_ITEM_BUILD_COUNT.fetch_add(1, Ordering::Relaxed);
+                        RenderSlotWith::new(|index| {
                             fixed_test_box()
                                 .tag(format!("lazy_grid_stable_visible_{index}"))
                                 .width(20)
                                 .height(20);
-                        },
+                        }),
                         None,
                     )])
                     .controller(controller)
@@ -2195,8 +1889,6 @@ mod tests {
 
     #[test]
     fn lazy_vertical_grid_does_not_rebuild_visible_items_when_scroll_stays_in_same_window() {
-        LAZY_GRID_VISIBLE_ITEM_BUILD_COUNT.store(0, Ordering::Relaxed);
-
         let mut session = tessera_ui::testing::start_layout_test_session(
             tessera_ui::testing::layout_test(|| {
                 lazy_vertical_grid_stable_visible_items_case();
@@ -2205,15 +1897,21 @@ mod tests {
         );
 
         let _ = tessera_ui::testing::pump_layout_test_session(&mut session, 0);
-        let first_builds = LAZY_GRID_VISIBLE_ITEM_BUILD_COUNT.load(Ordering::Relaxed);
+        let first_builds = session
+            .work()
+            .count("fixed_test_box", tessera_ui::WorkPhase::Build);
         assert!(first_builds > 0);
 
         let _ = tessera_ui::testing::pump_layout_test_session(&mut session, 16_666_667);
-        let second_builds = LAZY_GRID_VISIBLE_ITEM_BUILD_COUNT.load(Ordering::Relaxed);
-        assert_eq!(second_builds, first_builds);
+        let second_builds = session
+            .work()
+            .count("fixed_test_box", tessera_ui::WorkPhase::Build);
+        assert_eq!(second_builds, 0);
 
         let _ = tessera_ui::testing::pump_layout_test_session(&mut session, 33_333_334);
-        let third_builds = LAZY_GRID_VISIBLE_ITEM_BUILD_COUNT.load(Ordering::Relaxed);
-        assert_eq!(third_builds, first_builds);
+        let third_builds = session
+            .work()
+            .count("fixed_test_box", tessera_ui::WorkPhase::Build);
+        assert_eq!(third_builds, 0);
     }
 }

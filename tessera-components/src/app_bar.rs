@@ -27,8 +27,6 @@ use crate::{
 
 pub use scroll::{AppBarScrollBehavior, AppBarScrollState, app_bar_scroll_provider};
 
-use scroll::AppBarScrollContext;
-
 mod scroll;
 
 /// Layout and typography of a top app bar.
@@ -283,8 +281,8 @@ impl TopAppBarBuilder {
 /// - `variant` — small, medium flexible, or large flexible layout.
 /// - `subtitle` — optional secondary text below the title.
 /// - `title_alignment` — leading or globally centered title placement.
-/// - `scroll_state` — optional shared height and overlap state; inherits the
-///   scroll provider by default.
+/// - `scroll_state` — shared height and overlap state also passed to the scroll
+///   provider.
 /// - `scrolled_container_color` — optional container color when content scrolls
 ///   under the bar.
 ///
@@ -349,11 +347,6 @@ pub fn top_app_bar(
         .get();
     let scheme = theme.color_scheme;
     let variant = variant.unwrap_or_default();
-    let scroll_state = if let Some(state) = scroll_state {
-        Some(state)
-    } else {
-        use_context::<AppBarScrollContext>().map(|context| context.get().0)
-    };
     let alignment = title_alignment.unwrap_or_default();
     let has_navigation = navigation_icon.is_some();
     let actions = actions.unwrap_or_default();

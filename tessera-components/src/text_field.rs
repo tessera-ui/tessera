@@ -226,31 +226,32 @@ struct TextFieldProps {
 }
 
 impl TextFieldBuilder {
-    /// Creates filled text field defaults.
-    pub fn filled() -> Self {
-        text_field()
+    /// Applies filled text field defaults.
+    pub fn filled(self) -> Self {
+        self.background_color_optional(None)
+            .border_width(Dp::ZERO)
+            .focus_border_width_optional(None)
+            .focus_background_color_optional(None)
     }
 
-    /// Creates outlined text field defaults.
-    pub fn outlined() -> Self {
-        text_field()
-            .background_color(Color::TRANSPARENT)
+    /// Applies outlined text field defaults.
+    pub fn outlined(self) -> Self {
+        self.background_color(Color::TRANSPARENT)
             .border_width(TextFieldDefaults::OUTLINED_BORDER_WIDTH)
             .focus_border_width(TextFieldDefaults::OUTLINED_FOCUS_BORDER_WIDTH)
             .focus_background_color(Color::TRANSPARENT)
     }
 
-    /// Creates secure text field defaults.
-    pub fn secure() -> Self {
-        text_field()
-            .obfuscation_char(TextFieldDefaults::OBFUSCATION_CHAR)
+    /// Applies secure text field defaults.
+    pub fn secure(self) -> Self {
+        self.obfuscation_char(TextFieldDefaults::OBFUSCATION_CHAR)
             .line_limit(TextFieldLineLimit::SingleLine)
             .context_menu(TextFieldContextMenu::secure_default())
     }
 
-    /// Creates outlined secure text field defaults.
-    pub fn outlined_secure() -> Self {
-        Self::outlined()
+    /// Applies outlined secure text field defaults.
+    pub fn outlined_secure(self) -> Self {
+        self.outlined()
             .obfuscation_char(TextFieldDefaults::OBFUSCATION_CHAR)
             .line_limit(TextFieldLineLimit::SingleLine)
             .context_menu(TextFieldContextMenu::secure_default())
@@ -957,7 +958,7 @@ fn text_field_body(
                             editor.padding = Dp::ZERO;
                             editor.border_width = Dp::ZERO;
                             editor.focus_border_width = Some(Dp::ZERO);
-                            text_input_core(&editor, controller);
+                            text_input_core(editor, controller);
                             let floating = args.label.is_some() && (focused || !empty);
                             if empty
                                 && (args.label.is_none() || floating)
@@ -1124,10 +1125,12 @@ fn apply_menu_action(
 
 #[tessera]
 fn text_field_menu_content(
+    scope: Option<crate::menus::MenuScope>,
     controller: Option<State<TextInputController>>,
     menu: Option<TextFieldContextMenu>,
     action_state: Option<State<Option<TextFieldMenuAction>>>,
 ) {
+    let scope = scope.expect("text field menu scope");
     let controller = controller.expect("text_field_menu_content requires controller to be set");
     let menu = menu.expect("text_field_menu_content requires menu policy to be set");
     let action_state =
@@ -1140,6 +1143,7 @@ fn text_field_menu_content(
 
     if menu.allow_cut {
         menu_item()
+            .menu(scope)
             .label("Cut")
             .enabled(selection_available)
             .on_click(move || {
@@ -1148,6 +1152,7 @@ fn text_field_menu_content(
     }
     if menu.allow_copy {
         menu_item()
+            .menu(scope)
             .label("Copy")
             .enabled(selection_available)
             .on_click(move || {
@@ -1155,12 +1160,17 @@ fn text_field_menu_content(
             });
     }
     if menu.allow_paste {
-        menu_item().label("Paste").enabled(true).on_click(move || {
-            action_state.set(Some(TextFieldMenuAction::Paste));
-        });
+        menu_item()
+            .menu(scope)
+            .label("Paste")
+            .enabled(true)
+            .on_click(move || {
+                action_state.set(Some(TextFieldMenuAction::Paste));
+            });
     }
     if menu.allow_select_all {
         menu_item()
+            .menu(scope)
             .label("Select All")
             .enabled(true)
             .on_click(move || {
@@ -1362,7 +1372,9 @@ pub fn text_field(
         display_transform,
         controller,
     };
-    let controller = args.controller.unwrap_or_else(|| {
+    let controller = if let Some(controller) = args.controller {
+        controller
+    } else {
         remember(|| {
             let mut controller = TextInputController::new(args.font_size, args.line_height);
             if let Some(text) = &args.initial_text {
@@ -1370,7 +1382,7 @@ pub fn text_field(
             }
             controller
         })
-    });
+    };
     let mut args = args.clone();
     args.controller = Some(controller);
     let geometry = remember(FieldGeometry::default);
@@ -1538,8 +1550,9 @@ pub fn text_field(
                         .editor(editor_args.clone())
                         .geometry(geometry);
                 })
-                .menu_content(move || {
+                .menu_content(move |menu| {
                     text_field_menu_content()
+                        .scope(menu)
                         .controller(controller)
                         .menu(menu_policy)
                         .action_state(action_state);
@@ -1638,22 +1651,24 @@ mod tests {
             )
         );
     }
-    thread_local! {
-        static FIELD_CONTROLLER: std::cell::Cell<Option<tessera_ui::State<crate::text_input::TextInputController>>> = const { std::cell::Cell::new(None) };
-    }
 
     #[tessera_ui::tessera]
-    fn pointer_focus_fixture() {
+    fn pointer_focus_fixture(
+        output: tessera_ui::testing::TestProbe<
+            Option<tessera_ui::State<crate::text_input::TextInputController>>,
+        >,
+    ) {
         let controller = tessera_ui::remember(|| {
             crate::text_input::TextInputController::new(
                 tessera_ui::Dp(16.0),
                 Some(tessera_ui::Dp(24.0)),
             )
         });
-        FIELD_CONTROLLER.set(Some(controller));
+        output.set(Some(controller));
         crate::theme::material_theme().child(move || {
             crate::column::column().children(move || {
-                super::TextFieldBuilder::outlined()
+                crate::text_field::text_field()
+                    .outlined()
                     .label("Date")
                     .controller(controller);
             });
@@ -1669,9 +1684,11 @@ mod tests {
                 start_layout_test_session,
             },
         };
+        let output = tessera_ui::testing::TestProbe::default();
+        let probe = output.clone();
         let mut session = start_layout_test_session(
-            layout_test(|| {
-                pointer_focus_fixture();
+            layout_test(move || {
+                pointer_focus_fixture(probe.clone());
             })
             .viewport_px(400, 200),
         );
@@ -1687,7 +1704,7 @@ mod tests {
                 &mut session,
                 (index as u64 + 1) * 16_666_667,
                 vec![PointerChange::new(
-                    tessera_ui::time::Instant::now(),
+                    tessera_ui::current_frame_time().unwrap(),
                     1,
                     content,
                     GestureState::TapCandidate,
@@ -1697,7 +1714,7 @@ mod tests {
         }
         pump_layout_test_session(&mut session, 50_000_001);
         assert!(
-            FIELD_CONTROLLER
+            output
                 .get()
                 .unwrap()
                 .with(|c| c.focus_handler().is_focused())
@@ -1707,10 +1724,7 @@ mod tests {
 
 #[cfg(all(test, not(target_family = "wasm")))]
 mod native_field_regressions {
-    use std::{
-        cell::{Cell, RefCell},
-        time::Duration,
-    };
+    use std::time::Duration;
 
     use tessera_ui::{
         HeadlessConfig, HeadlessRenderer, MOUSE_POINTER_ID, PressKeyEventType, accesskit::Role,
@@ -1719,7 +1733,7 @@ mod native_field_regressions {
 
     use super::*;
 
-    #[derive(Clone, Copy)]
+    #[derive(Clone, Copy, PartialEq)]
     enum Case {
         Filled,
         Outlined,
@@ -1729,20 +1743,25 @@ mod native_field_regressions {
         ExplicitHeight,
     }
 
-    thread_local! {
-        static NOTCH_CASE: Cell<(bool, bool)> = const { Cell::new((false, true)) };
-        static CASE: Cell<Case> = const {Cell::new(Case::Filled)};
-        static EDITOR: Cell<Option<State<TextInputController>>> = const {Cell::new(None)};
-        static BOUNDS: Cell<Option<PxRect>> = const {Cell::new(None)};
-        static CHANGES: RefCell<Vec<String>> = const {RefCell::new(Vec::new())};
+    #[derive(Clone, Default, PartialEq)]
+    struct Probe {
+        editor: tessera_ui::testing::TestProbe<Option<State<TextInputController>>>,
+        bounds: tessera_ui::testing::TestProbe<Option<PxRect>>,
+        changes: tessera_ui::testing::TestProbe<Vec<String>>,
     }
 
     #[tessera]
-    fn fixture() {
-        let case = CASE.get();
+    fn fixture(case: Case, probe: Probe) {
         let controller = remember(|| TextInputController::new(Dp(16.0), Some(Dp(24.0))));
         let changes = remember(|| 0_usize);
-        EDITOR.set(Some(controller));
+        probe.editor.set(Some(controller));
+        let bounds = probe.bounds.clone();
+        let observe_bounds = tessera_ui::CallbackWith::new(move |rect| bounds.set(Some(rect)));
+        let on_change = tessera_ui::CallbackWith::new(move |value: String| {
+            probe.changes.with_mut(|values| values.push(value.clone()));
+            changes.set(changes.get() + 1);
+            value
+        });
         crate::theme::material_theme().child(move || {
             boxed()
                 .alignment(Alignment::TopStart)
@@ -1752,13 +1771,13 @@ mod native_field_regressions {
                         .modifier(Modifier::new().width(Dp(180.0)))
                         .children(move || {
                             let field = if matches!(case, Case::Outlined) {
-                                TextFieldBuilder::outlined()
+                                crate::text_field::text_field().outlined()
                             } else {
-                                TextFieldBuilder::filled()
+                                crate::text_field::text_field().filled()
                             };
                             let mut field_modifier = Modifier::new()
                                 .fill_max_width()
-                                .on_globally_positioned(|rect| BOUNDS.set(Some(rect)));
+                                .on_globally_positioned(move |rect| observe_bounds.call(rect));
                             if matches!(case, Case::ExplicitHeight) {
                                 field_modifier = field_modifier.height(Dp(96.0));
                             }
@@ -1799,11 +1818,7 @@ mod native_field_regressions {
                                         .vector(crate::material_icons::filled::CANCEL_SVG)
                                         .size(Dp(24.0));
                                 })
-                                .on_change(move |value: String| {
-                                    CHANGES.with_borrow_mut(|values| values.push(value.clone()));
-                                    changes.set(changes.get() + 1);
-                                    value
-                                });
+                                .on_change_shared(on_change);
                             if matches!(case, Case::Affixes) {
                                 field
                                     .prefix(|| {
@@ -1825,8 +1840,11 @@ mod native_field_regressions {
     }
 
     #[tessera]
-    fn notch_fixture() {
-        let (dark, enabled) = NOTCH_CASE.get();
+    fn notch_fixture(dark: bool, enabled: bool, probe: Probe) {
+        let bounds = probe.bounds.clone();
+        let observe_bounds = tessera_ui::CallbackWith::new(move |rect| bounds.set(Some(rect)));
+        let observe_editor =
+            tessera_ui::CallbackWith::new(move |editor| probe.editor.set(Some(editor)));
         crate::theme::material_theme()
             .theme(move || MaterialTheme::from_seed(Color::from_rgb(0.4, 0.3, 0.6), dark))
             .child(move || {
@@ -1870,9 +1888,10 @@ mod native_field_regressions {
                                         controller
                                     });
                                     if label {
-                                        EDITOR.set(Some(controller));
+                                        observe_editor.call(controller);
                                     }
-                                    let field = TextFieldBuilder::outlined()
+                                    let field = crate::text_field::text_field()
+                                        .outlined()
                                         .shape(MaterialShapes::default().extra_small)
                                         .min_width(Dp::ZERO)
                                         .controller(controller)
@@ -1883,7 +1902,7 @@ mod native_field_regressions {
                                                 .width(Dp(180.0))
                                                 .on_globally_positioned(move |bounds| {
                                                     if label {
-                                                        BOUNDS.set(Some(bounds));
+                                                        observe_bounds.call(bounds);
                                                     }
                                                 }),
                                         );
@@ -1901,9 +1920,10 @@ mod native_field_regressions {
     fn outlined_label_notch_preserves_parent_pixels_and_fractional_stroke_opacity() {
         for dark in [false, true] {
             for enabled in [false, true] {
-                NOTCH_CASE.set((dark, enabled));
+                let probe = Probe::default();
+                let output = probe.clone();
                 let mut renderer = HeadlessRenderer::new(
-                    Box::new(notch_fixture),
+                    Box::new(move || notch_fixture(dark, enabled, output.clone())),
                     vec![Box::new(crate::TesseraComponents)],
                     HeadlessConfig {
                         width: 460,
@@ -1920,7 +1940,8 @@ mod native_field_regressions {
                         if !enabled {
                             break;
                         }
-                        EDITOR
+                        probe
+                            .editor
                             .get()
                             .unwrap()
                             .with(|editor| editor.focus_handler().request_focus());
@@ -1930,7 +1951,7 @@ mod native_field_regressions {
                     let pixel = |x: usize, y: usize| -> [u8; 4] {
                         pixels[(y * 460 + x) * 4..][..4].try_into().unwrap()
                     };
-                    let bounds = BOUNDS.get().unwrap();
+                    let bounds = probe.bounds.get().unwrap();
                     assert_eq!(bounds.height, Dp(56.0).to_px());
                     let x = bounds.x.0 as usize;
                     let y = bounds.y.0 as usize;
@@ -1993,13 +2014,11 @@ mod native_field_regressions {
         }
     }
 
-    fn renderer(case: Case) -> HeadlessRenderer {
-        CASE.set(case);
-        EDITOR.set(None);
-        BOUNDS.set(None);
-        CHANGES.with_borrow_mut(Vec::clear);
+    fn renderer(case: Case) -> (HeadlessRenderer, Probe) {
+        let probe = Probe::default();
+        let output = probe.clone();
         let mut renderer = HeadlessRenderer::new(
-            Box::new(fixture),
+            Box::new(move || fixture(case, output.clone())),
             vec![Box::new(crate::TesseraComponents)],
             HeadlessConfig {
                 width: 400,
@@ -2011,7 +2030,7 @@ mod native_field_regressions {
         )
         .expect("native field renderer");
         renderer.render_frames(5);
-        renderer
+        (renderer, probe)
     }
 
     fn click(renderer: &mut HeadlessRenderer, label: &str, role: Role) {
@@ -2039,16 +2058,16 @@ mod native_field_regressions {
     #[ignore = "Requires a native GPU adapter for actual text shaping and field rendering"]
     fn narrow_single_line_fields_keep_one_line_decorations_and_queued_commits() {
         for case in [Case::Filled, Case::Outlined] {
-            let mut renderer = renderer(case);
-            let editor = EDITOR.get().expect("editor");
+            let (mut renderer, probe) = renderer(case);
+            let editor = probe.editor.get().expect("editor");
             assert_eq!(
-                BOUNDS.get().expect("resting bounds").height,
+                probe.bounds.get().expect("resting bounds").height,
                 Dp(56.0).to_px()
             );
             editor.with(|editor| editor.focus_handler().request_focus());
             renderer.render_frames(4);
             assert_eq!(
-                BOUNDS.get().expect("focused bounds").height,
+                probe.bounds.get().expect("focused bounds").height,
                 Dp(56.0).to_px()
             );
             let tree = renderer.accessibility_snapshot().expect("placeholder tree");
@@ -2070,7 +2089,7 @@ mod native_field_regressions {
             renderer.render_frames(4);
             assert_eq!(editor.with(|editor| editor.text()), "alpha");
             assert_eq!(
-                CHANGES.with_borrow(|values| values.clone()),
+                probe.changes.with(|values| values.clone()),
                 ["a", "al", "alp", "alph", "alpha"]
             );
             renderer.inject_ime_event(Ime::Commit(" beta".into()));
@@ -2124,26 +2143,28 @@ mod native_field_regressions {
                 "horizontal editor scrolling must move the visible glyphs, not only its caret"
             );
         }
-        let mut tall = renderer(Case::ExplicitHeight);
-        assert_eq!(BOUNDS.get().unwrap().height, Dp(96.0).to_px());
-        EDITOR
+        let (mut tall, probe) = renderer(Case::ExplicitHeight);
+        assert_eq!(probe.bounds.get().unwrap().height, Dp(96.0).to_px());
+        probe
+            .editor
             .get()
             .unwrap()
             .with(|editor| editor.focus_handler().request_focus());
         tall.render_frames(4);
         assert_eq!(
-            BOUNDS.get().unwrap().height,
+            probe.bounds.get().unwrap().height,
             Dp(96.0).to_px(),
             "explicit caller height remains authoritative"
         );
         drop(tall);
-        let mut renderer = renderer(Case::Multiline);
-        EDITOR
+        let (mut renderer, probe) = renderer(Case::Multiline);
+        probe
+            .editor
             .get()
             .unwrap()
             .with(|editor| editor.focus_handler().request_focus());
         renderer.render_frames(4);
-        assert!(BOUNDS.get().expect("multiline bounds").height >= Dp(96.0).to_px());
+        assert!(probe.bounds.get().expect("multiline bounds").height >= Dp(96.0).to_px());
         let tree = renderer.accessibility_snapshot().unwrap();
         let placeholder = tree
             .nodes
@@ -2165,8 +2186,8 @@ mod native_field_regressions {
     #[test]
     #[ignore = "Requires a native GPU adapter for actual glyph caret placement"]
     fn decorated_field_fallback_clicks_use_the_measured_editor_origin() {
-        let mut renderer = renderer(Case::Affixes);
-        let editor = EDITOR.get().unwrap();
+        let (mut renderer, probe) = renderer(Case::Affixes);
+        let editor = probe.editor.get().unwrap();
         let text = "iii";
         editor.with_mut(|editor| {
             editor.set_text_and_selection(
@@ -2196,8 +2217,8 @@ mod native_field_regressions {
     #[test]
     #[ignore = "Requires a native GPU adapter for an actual protected text field"]
     fn obfuscated_field_uses_password_semantics_without_publishing_plaintext() {
-        let mut renderer = renderer(Case::Secure);
-        let editor = EDITOR.get().unwrap();
+        let (mut renderer, probe) = renderer(Case::Secure);
+        let editor = probe.editor.get().unwrap();
         editor.with(|editor| editor.focus_handler().request_focus());
         renderer.render_frames(3);
         renderer.inject_ime_event(Ime::Commit("secret".into()));
@@ -2224,20 +2245,17 @@ mod native_field_regressions {
                 .any(|(_, node)| node.value() == Some("secret"))
         );
     }
-    thread_local! {
-        static EMPTY_VIEWPORT_CASE: Cell<(bool, bool)> = const { Cell::new((false, false)) };
-    }
 
     #[tessera]
-    fn empty_viewport_fixture() {
-        let (label, leading) = EMPTY_VIEWPORT_CASE.get();
+    fn empty_viewport_fixture(label: bool, leading: bool, probe: Probe) {
         let editor = remember(|| TextInputController::new(Dp(16.0), Some(Dp(24.0))));
-        EDITOR.set(Some(editor));
+        probe.editor.set(Some(editor));
         crate::theme::material_theme().child(move || {
             boxed()
                 .modifier(Modifier::new().fill_max_size())
                 .children(move || {
-                    let field = TextFieldBuilder::outlined()
+                    let field = crate::text_field::text_field()
+                        .outlined()
                         .controller(editor)
                         .modifier(
                             Modifier::new()
@@ -2275,9 +2293,10 @@ mod native_field_regressions {
                     (true, false, 40.0, 295.0),
                     (true, true, 76.0, 259.0),
                 ] {
-                    EMPTY_VIEWPORT_CASE.set((label, leading));
+                    let probe = Probe::default();
+                    let output = probe.clone();
                     let mut renderer = HeadlessRenderer::new(
-                        Box::new(empty_viewport_fixture),
+                        Box::new(move || empty_viewport_fixture(label, leading, output.clone())),
                         vec![Box::new(crate::TesseraComponents)],
                         HeadlessConfig {
                             width: 400,
@@ -2289,7 +2308,7 @@ mod native_field_regressions {
                     )
                     .unwrap();
                     renderer.render_frames(6);
-                    let editor = EDITOR.get().unwrap();
+                    let editor = probe.editor.get().unwrap();
                     let check_bounds = |renderer: &HeadlessRenderer| {
                         let tree = renderer.accessibility_snapshot().unwrap();
                         let (id, node) = tree
@@ -2342,7 +2361,7 @@ mod native_field_regressions {
 
 #[cfg(all(test, not(target_family = "wasm")))]
 mod presentation_regressions {
-    use std::{cell::Cell, time::Duration};
+    use std::time::Duration;
 
     use tessera_ui::{HeadlessConfig, HeadlessRenderer, State};
 
@@ -2350,16 +2369,27 @@ mod presentation_regressions {
 
     type Presentation = (Option<InteractionVisualState>, bool);
 
-    thread_local! {
-        static PRESENTATION: Cell<Option<State<Presentation>>> = const { Cell::new(None) };
-        static EDITORS: Cell<[Option<State<TextInputController>>; 2]> = const { Cell::new([None; 2]) };
-        static CHANGES: Cell<usize> = const { Cell::new(0) };
+    #[derive(Clone, Default, PartialEq)]
+    struct Probe {
+        presentation: tessera_ui::testing::TestProbe<Option<State<Presentation>>>,
+        editors: tessera_ui::testing::TestProbe<[Option<State<TextInputController>>; 2]>,
+        changes: tessera_ui::testing::TestProbe<usize>,
     }
 
     #[tessera]
-    fn fixture() {
+    fn fixture(probe: Probe) {
         let presentation = remember(|| (Some(InteractionVisualState::Focus), true));
-        PRESENTATION.set(Some(presentation));
+        probe.presentation.set(Some(presentation));
+        let changes = probe.changes.clone();
+        let on_change = tessera_ui::CallbackWith::new(move |value: String| {
+            changes.with_mut(|count| *count += 1);
+            value
+        });
+        let observe_editor = tessera_ui::CallbackWith::new(move |(index, editor)| {
+            probe
+                .editors
+                .with_mut(|editors| editors[index] = Some(editor))
+        });
         crate::theme::material_theme().child(move || {
             boxed()
                 .modifier(Modifier::new().fill_max_size())
@@ -2367,13 +2397,10 @@ mod presentation_regressions {
                     for index in 0..2 {
                         let editor =
                             remember(|| TextInputController::new(Dp(16.0), Some(Dp(24.0))));
-                        EDITORS.with(|editors| {
-                            let mut values = editors.get();
-                            values[index] = Some(editor);
-                            editors.set(values);
-                        });
+                        observe_editor.call((index, editor));
                         let (visual, enabled) = presentation.get();
-                        TextFieldBuilder::outlined()
+                        crate::text_field::text_field()
+                            .outlined()
                             .controller(editor)
                             .presentation_state_optional(visual)
                             .enabled(enabled)
@@ -2384,10 +2411,7 @@ mod presentation_regressions {
                                     .offset(Dp(20.0 + index as f64 * 300.0), Dp(20.0))
                                     .width(Dp(280.0)),
                             )
-                            .on_change(|value: String| {
-                                CHANGES.set(CHANGES.get() + 1);
-                                value
-                            });
+                            .on_change_shared(on_change);
                     }
                 });
         });
@@ -2408,9 +2432,10 @@ mod presentation_regressions {
         crate::test_utils::run_isolated_test(
             "text_field::presentation_regressions::focus_presentation_draws_static_native_fields_without_taking_focus",
             || {
-                CHANGES.set(0);
+                let probe = Probe::default();
+                let output = probe.clone();
                 let mut renderer = HeadlessRenderer::new(
-                    Box::new(fixture),
+                    Box::new(move || fixture(output.clone())),
                     vec![Box::new(crate::TesseraComponents)],
                     HeadlessConfig {
                         width: 620,
@@ -2421,7 +2446,7 @@ mod presentation_regressions {
                 )
                 .unwrap();
                 renderer.render_frames(4);
-                let editors = EDITORS.get().map(Option::unwrap);
+                let editors = probe.editors.get().map(Option::unwrap);
                 assert!(
                     editors
                         .iter()
@@ -2444,8 +2469,11 @@ mod presentation_regressions {
                     preview,
                     "preview carets stay visible across blink phases"
                 );
-                assert_eq!(renderer.diagnostics().paint_nodes_recorded, 0);
-                let presentation = PRESENTATION.get().unwrap();
+                assert_eq!(
+                    renderer.work().phase(tessera_ui::WorkPhase::Paint).count(),
+                    0
+                );
+                let presentation = probe.presentation.get().unwrap();
                 presentation.set((None, true));
                 renderer.render_frames(3);
                 assert_ne!(
@@ -2503,9 +2531,15 @@ mod presentation_regressions {
                     crop(&blink_off, 1),
                     "only the actual focus caret blinks"
                 );
-                assert_eq!(renderer.diagnostics().measure_node_calls, 1);
+                assert_eq!(
+                    renderer
+                        .work()
+                        .phase(tessera_ui::WorkPhase::Measure)
+                        .count(),
+                    0
+                );
                 assert_eq!(renderer.diagnostics().geometry_nodes_updated, 0);
-                assert_eq!(CHANGES.get(), 0);
+                assert_eq!(probe.changes.get(), 0);
             },
         );
     }

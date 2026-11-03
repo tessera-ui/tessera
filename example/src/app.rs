@@ -17,8 +17,8 @@ use tessera_components::{
 };
 use tessera_shard::{RouterController, RouterDestination, shard_home};
 use tessera_ui::{
-    Color, Dp, FrameNanosControl, Modifier, RenderSlot, State, current_frame_nanos,
-    provide_context, receive_frame_nanos, remember, tessera, use_context,
+    Color, Dp, FrameNanosControl, Modifier, RenderSlotWith, State, current_frame_nanos,
+    receive_frame_nanos, remember, tessera, use_context,
 };
 
 use crate::pages::{
@@ -27,44 +27,47 @@ use crate::pages::{
     home::HomePageDestination, material_components::MaterialComponentsPageDestination,
 };
 
-#[derive(Clone, Copy)]
-pub(crate) struct MaterialNavigation(pub State<Option<usize>>);
+#[derive(Clone, Copy, PartialEq)]
+pub(crate) struct AppLiveSessions {
+    pub drawer: crate::pages::LiveDrawerSession,
+    pub rail: crate::pages::LiveRailSession,
+    pub side_sheet: crate::pages::LiveSideSheetSession,
+}
 
-#[cfg(test)]
-#[derive(Clone, Copy)]
-pub(crate) struct AppNavigationTestHandles {
+#[derive(Clone, Copy, PartialEq)]
+pub(crate) struct AppNavigationHandles {
     pub router: State<RouterController>,
     pub material: State<Option<usize>>,
     pub directory: State<SideSheetController>,
-}
-
-#[cfg(test)]
-thread_local! {
-    static TEST_NAVIGATION: std::cell::Cell<Option<AppNavigationTestHandles>> = const {
-        std::cell::Cell::new(None)
-    };
-}
-
-#[cfg(test)]
-pub(crate) fn test_navigation() -> AppNavigationTestHandles {
-    TEST_NAVIGATION
-        .get()
-        .expect("mounted example app navigation")
+    pub sessions: Option<AppLiveSessions>,
 }
 
 #[tessera]
-pub fn app() {
-    material_theme().child(|| {
-        let side_sheet_controller = remember(|| SideSheetController::new(true));
-        let nav_controller = remember(|| RouterController::with_root(HomePageDestination {}));
-        let selected = remember(|| None::<usize>);
-        #[cfg(test)]
-        TEST_NAVIGATION.set(Some(AppNavigationTestHandles {
-            router: nav_controller,
-            material: selected,
-            directory: side_sheet_controller,
-        }));
-        let content = RenderSlot::new(move || {
+pub(crate) fn app(
+    navigation: Option<AppNavigationHandles>,
+    on_navigation_ready: Option<tessera_ui::CallbackWith<AppNavigationHandles>>,
+) {
+    material_theme().child(move || {
+        let handles = if let Some(navigation) = navigation {
+            navigation
+        } else {
+            AppNavigationHandles {
+                directory: remember(|| SideSheetController::new(true)),
+                router: remember(|| RouterController::with_root(HomePageDestination {})),
+                material: remember(|| None::<usize>),
+                sessions: None,
+            }
+        };
+        let side_sheet_controller = handles.directory;
+        let nav_controller = handles.router;
+        let selected = handles.material;
+        let content = RenderSlotWith::new(move |sessions: AppLiveSessions| {
+            if let Some(on_ready) = on_navigation_ready {
+                on_ready.call(AppNavigationHandles {
+                    sessions: Some(sessions),
+                    ..handles
+                });
+            }
             scaffold()
                 .top_bar(move || {
                     #[cfg(not(target_arch = "wasm32"))]
@@ -150,7 +153,10 @@ pub fn app() {
 
                                             nav_item(
                                                 "Material Components",
-                                                MaterialComponentsPageDestination {},
+                                                MaterialComponentsPageDestination {
+                                                    selected: Some(selected),
+                                                    sessions: Some(sessions),
+                                                },
                                                 nav_controller,
                                                 side_sheet_controller,
                                             );
@@ -186,31 +192,32 @@ pub fn app() {
                         });
                 });
         });
-        let rail_shell = RenderSlot::new(move || {
-            crate::pages::live_rail_host(
-                side_sheet_controller,
-                nav_controller,
-                selected,
-                content.clone(),
-            );
-        });
-        let side_sheet_shell = RenderSlot::new(move || {
-            crate::pages::live_side_sheet_host(
-                side_sheet_controller,
-                nav_controller,
-                selected,
-                rail_shell.clone(),
-            );
-        });
-        let shell = RenderSlot::new(move || {
-            crate::pages::live_drawer_host(
-                side_sheet_controller,
-                nav_controller,
-                selected,
-                side_sheet_shell.clone(),
-            );
-        });
-        provide_context(|| MaterialNavigation(selected), move || shell.render());
+        crate::pages::live_drawer_host(
+            side_sheet_controller,
+            nav_controller,
+            selected,
+            RenderSlotWith::new(move |drawer| {
+                crate::pages::live_side_sheet_host(
+                    side_sheet_controller,
+                    nav_controller,
+                    selected,
+                    RenderSlotWith::new(move |side_sheet| {
+                        crate::pages::live_rail_host(
+                            side_sheet_controller,
+                            nav_controller,
+                            selected,
+                            RenderSlotWith::new(move |rail| {
+                                content.render(AppLiveSessions {
+                                    drawer,
+                                    rail,
+                                    side_sheet,
+                                });
+                            }),
+                        );
+                    }),
+                );
+            }),
+        );
     });
 }
 
@@ -327,4 +334,20 @@ pub(crate) fn navigation_button(
                 .vector(filled::ARROW_BACK_SVG)
                 .tint(color.with_alpha(fade.with(|fade| fade.value)));
         });
+}
+
+#[cfg(test)]
+#[tessera]
+pub(crate) fn app_fixture(
+    navigation: tessera_ui::testing::TestProbe<Option<AppNavigationHandles>>,
+) {
+    let handles = AppNavigationHandles {
+        directory: remember(|| SideSheetController::new(true)),
+        router: remember(|| RouterController::with_root(HomePageDestination {})),
+        material: remember(|| None::<usize>),
+        sessions: None,
+    };
+    app()
+        .navigation(handles)
+        .on_navigation_ready(move |handles| navigation.set(Some(handles)));
 }

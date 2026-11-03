@@ -185,30 +185,15 @@ fn mark_gradlew_executable_with_git(out_path: &Path) {
 
 #[cfg(test)]
 mod tests {
-    use std::{
-        fs,
-        path::PathBuf,
-        sync::atomic::{AtomicU64, Ordering},
-    };
+    use std::fs;
 
     use crate::commands::{new, plugin};
 
-    struct ProjectDirectory(PathBuf);
+    struct ProjectDirectory(tempfile::TempDir);
 
     impl ProjectDirectory {
         fn new() -> Self {
-            static NEXT_ID: AtomicU64 = AtomicU64::new(0);
-            let id = NEXT_ID.fetch_add(1, Ordering::Relaxed);
-            let root =
-                std::env::temp_dir().join(format!("tessera-scaffold-{}-{id}", std::process::id()));
-            fs::create_dir(&root).expect("create isolated scaffold directory");
-            Self(root)
-        }
-    }
-
-    impl Drop for ProjectDirectory {
-        fn drop(&mut self) {
-            let _ = fs::remove_dir_all(&self.0);
+            Self(tempfile::tempdir().expect("create isolated scaffold directory"))
         }
     }
 
@@ -224,7 +209,7 @@ mod tests {
             } else {
                 ["basic", "android"]
             } {
-                let project = root.0.join(format!("{kind}-{template}"));
+                let project = root.0.path().join(format!("{kind}-{template}"));
                 generate(project.to_str().expect("UTF-8 project path"), template)
                     .expect("generate scaffold");
 

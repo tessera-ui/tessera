@@ -4,8 +4,6 @@
 //!
 //! Preserve contact artwork when input chips change state or density.
 
-use std::cell::Cell;
-
 use tessera_ui::{Color, Dp, HeadlessConfig, HeadlessRenderer, Modifier, State, remember, tessera};
 
 use crate::{
@@ -30,12 +28,8 @@ struct Settings {
     assist: bool,
 }
 
-thread_local! {
-    static SETTINGS: Cell<Option<State<Settings>>> = const { Cell::new(None) };
-}
-
 #[tessera]
-fn fixture() {
+fn fixture(probe: tessera_ui::testing::TestProbe<Option<State<Settings>>>) {
     let settings = remember(Settings::default);
     let painters = remember(|| {
         let red = [255, 0, 0, 255];
@@ -50,7 +44,7 @@ fn fixture() {
                 .as_bytes().try_into_image_vector_data().expect("avatar vector")),
         ]
     });
-    SETTINGS.set(Some(settings));
+    probe.set(Some(settings));
     material_theme().child(move || {
         column()
             .modifier(
@@ -109,20 +103,13 @@ fn fixture() {
 }
 
 fn rect(renderer: &HeadlessRenderer, key: &str) -> [i64; 4] {
-    let snapshot = renderer.snapshot();
-    let mut pending = vec![&snapshot["root"]];
-    while let Some(node) = pending.pop() {
-        if node["accessibility"]["key"] == key || node["accessibility"]["label"] == key {
-            return ["x", "y", "width", "height"]
-                .map(|field| node["bounds"][field].as_i64().unwrap());
-        }
-        if let Some(children) = node["children"].as_array() {
-            pending.extend(children);
-        }
-    }
-    panic!("missing {key}");
+    let snapshot = renderer.inspect_components();
+    let node = snapshot
+        .find_tag(key)
+        .unwrap_or_else(|| snapshot.labeled(key));
+    let bounds = node.bounds().expect("placed test target");
+    [bounds.x, bounds.y, bounds.width, bounds.height].map(|value| value as i64)
 }
-
 fn pixel(renderer: &HeadlessRenderer, x: i64, y: i64, color: [u8; 3]) {
     let pixels = renderer.read_pixels().unwrap();
     let offset = ((y as u32 * renderer.physical_size().width + x as u32) * 4) as usize;
@@ -135,8 +122,10 @@ fn pixel(renderer: &HeadlessRenderer, x: i64, y: i64, color: [u8; 3]) {
 
 fn check_avatars(samples: u32) {
     for scale in [1.0, 1.25, 1.5, 2.0] {
+        let probe = tessera_ui::testing::TestProbe::default();
+        let observed = probe.clone();
         let mut renderer = HeadlessRenderer::new(
-            Box::new(fixture),
+            Box::new(move || fixture(observed.clone())),
             vec![Box::new(crate::TesseraComponents)],
             HeadlessConfig {
                 width: 440,
@@ -148,7 +137,7 @@ fn check_avatars(samples: u32) {
         )
         .unwrap();
         renderer.render_frames(5);
-        let settings = SETTINGS.get().unwrap();
+        let settings = probe.get().unwrap();
         let px = |dp: i64| (dp as f64 * scale) as i64;
         for source in 0..3 {
             for disabled in [false, true] {

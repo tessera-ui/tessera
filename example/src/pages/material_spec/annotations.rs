@@ -4,10 +4,7 @@
 //!
 //! Inspect anatomy and spacing around live components.
 
-use std::{
-    collections::BTreeMap,
-    sync::{Arc, Mutex},
-};
+use std::collections::BTreeMap;
 
 use tessera_components::{
     alignment::Alignment,
@@ -20,7 +17,7 @@ use tessera_components::{
 };
 use tessera_ui::{
     Dp, LayoutCoordinates, Modifier, PxRect, State, accesskit::Role,
-    modifier::FocusModifierExt as _, remember, remember_with_key, tessera,
+    modifier::FocusModifierExt as _, remember_with_key, tessera,
 };
 
 use super::{INK, srgb, type_style};
@@ -66,95 +63,12 @@ pub(super) fn space_geometry(geometry: &SpaceGeometry) -> BTreeMap<&'static str,
         .collect()
 }
 
-#[derive(Default)]
-struct Observations {
-    coordinates: PreciseGeometry,
-    changed: Option<State<u64>>,
-}
-
-#[derive(Clone, Default)]
-pub(super) struct ObservedGeometry {
-    observations: Arc<Mutex<Observations>>,
-    relative: BTreeMap<&'static str, Rect>,
-    precision: f64,
-}
-
-impl ObservedGeometry {
-    pub(super) fn new() -> Self {
-        Self::default()
-    }
-
-    #[cfg(all(test, not(target_family = "wasm")))]
-    pub(super) fn coordinates(&self) -> PreciseGeometry {
-        self.observations.lock().unwrap().coordinates.clone()
-    }
-}
-
-pub(super) fn watch_observed(geometry: State<ObservedGeometry>, name: &'static str) -> Modifier {
-    Modifier::new().on_layout_coordinates(move |coordinates| {
-        if !geometry.is_alive() {
-            return;
-        }
-        let changed = geometry.with(|geometry| {
-            let mut observations = geometry.observations.lock().unwrap();
-            if observations.coordinates.get(name) == Some(&coordinates) {
-                return None;
-            }
-            observations.coordinates.insert(name, coordinates);
-            observations.changed
-        });
-        if let Some(changed) = changed.filter(State::is_alive) {
-            changed.with_mut(|revision| *revision = revision.wrapping_add(1));
-        }
+pub(super) fn watch_observed(geometry: State<SpaceGeometry>, name: &'static str) -> Modifier {
+    watch_in_space(geometry, name).semantics(SemanticsArgs {
+        test_tag: Some(format!("observed-{name}")),
+        merge_descendants: true,
+        ..Default::default()
     })
-}
-
-pub(super) fn observed_relative_geometry(
-    geometry: &ObservedGeometry,
-) -> BTreeMap<&'static str, Rect> {
-    geometry.relative.clone()
-}
-
-#[tessera]
-pub(super) fn publish_observed_geometry(geometry: State<ObservedGeometry>) {
-    let changed = remember(|| 0_u64);
-    let _ = changed.get();
-    let (relative, precision) = geometry.with(|geometry| {
-        let mut observations = geometry.observations.lock().unwrap();
-        observations.changed = Some(changed);
-        let coordinates = &observations.coordinates;
-        let precision = coordinates.get("figure").map_or(0.0, |root| {
-            let ulp = coordinates
-                .values()
-                .flat_map(|coordinates| {
-                    let translation = coordinates.local_to_window.translation();
-                    [translation.x.abs(), translation.y.abs()]
-                })
-                .map(|value| f64::from(value.next_up() - value))
-                .fold(0.0, f64::max);
-            Dp::from_pixels_f32((ulp / f64::from(root.local_to_window.scale())) as f32).0
-        });
-        (relative_precise_geometry(coordinates), precision)
-    });
-    let unchanged = geometry.with(|geometry| {
-        // Common window translations can introduce a few f32 projection ULPs.
-        let tolerance = 2.0 * (geometry.precision + precision);
-        geometry.relative.len() == relative.len()
-            && relative.iter().all(|(name, rect)| {
-                geometry.relative.get(name).is_some_and(|previous| {
-                    previous.w == rect.w
-                        && previous.h == rect.h
-                        && (previous.x - rect.x).abs() <= tolerance
-                        && (previous.y - rect.y).abs() <= tolerance
-                })
-            })
-    });
-    if !unchanged {
-        geometry.with_mut(|geometry| {
-            geometry.relative = relative;
-            geometry.precision = precision;
-        });
-    }
 }
 
 pub(super) fn watch_precise(geometry: State<PreciseGeometry>, name: &'static str) -> Modifier {

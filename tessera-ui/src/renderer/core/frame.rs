@@ -85,6 +85,7 @@ struct BlitParams<'a> {
 }
 
 struct FrameResources<'a> {
+    graphics: &'a crate::GraphicsDevice,
     locals: Vec<LocalResourceState>,
     pool: &'a mut LocalTexturePool,
     device: &'a wgpu::Device,
@@ -95,6 +96,7 @@ struct FrameResources<'a> {
 }
 
 struct FrameResourcesParams<'a> {
+    graphics: &'a crate::GraphicsDevice,
     pool: &'a mut LocalTexturePool,
     device: &'a wgpu::Device,
     resources: &'a [RenderResource],
@@ -114,6 +116,7 @@ struct LocalResourceState {
 impl<'a> FrameResources<'a> {
     fn new(params: FrameResourcesParams<'a>) -> Self {
         let FrameResourcesParams {
+            graphics,
             pool,
             device,
             resources,
@@ -135,6 +138,7 @@ impl<'a> FrameResources<'a> {
             })
             .collect();
         Self {
+            graphics,
             locals,
             pool,
             device,
@@ -337,6 +341,7 @@ enum SceneSource {
 }
 
 struct SubmitContext<'a> {
+    graphics: &'a crate::GraphicsDevice,
     device: &'a wgpu::Device,
     queue: &'a wgpu::Queue,
     config: &'a wgpu::SurfaceConfiguration,
@@ -546,12 +551,13 @@ impl RenderCore {
         pipelines
             .drawer
             .pipeline_registry
-            .begin_all_frames(device, queue, config);
+            .begin_all_frames(device, queue, config, &self.graphics);
 
         let mut scene_texture_view = targets.offscreen.clone();
         let mut scene_source = SceneSource::Offscreen;
         let mut clip_stack: SmallVec<[PxRect; 16]> = SmallVec::new();
         let mut frame_resources = FrameResources::new(FrameResourcesParams {
+            graphics: &self.graphics,
             pool: local_textures,
             device,
             resources: &resources,
@@ -642,7 +648,7 @@ impl RenderCore {
             .pipelines
             .drawer
             .pipeline_registry
-            .end_all_frames(device, queue, config);
+            .end_all_frames(device, queue, config, &self.graphics);
         let encode = encode_start.elapsed();
 
         #[cfg(all(
@@ -1354,6 +1360,7 @@ fn render_current_pass(params: RenderPassParams<'_, '_>) {
                         SubmitBatchParams {
                             drawer,
                             resources: SubmitContext {
+                                graphics: resources.graphics,
                                 device,
                                 queue,
                                 config,
@@ -1411,6 +1418,7 @@ fn render_current_pass(params: RenderPassParams<'_, '_>) {
                 SubmitBatchParams {
                     drawer,
                     resources: SubmitContext {
+                        graphics: resources.graphics,
                         device,
                         queue,
                         config,
@@ -1449,6 +1457,7 @@ fn render_current_pass(params: RenderPassParams<'_, '_>) {
             SubmitBatchParams {
                 drawer,
                 resources: SubmitContext {
+                    graphics: resources.graphics,
                     device,
                     queue,
                     config,
@@ -1529,6 +1538,7 @@ fn submit_buffered_commands(
         set_scissor_rect_from_pxrect(rpass, rect);
         drawer.submit(
             ErasedDrawContext {
+                graphics: resources.graphics,
                 device: resources.device,
                 queue: resources.queue,
                 config: resources.config,
@@ -1652,6 +1662,8 @@ mod tests {
     #[test]
     #[ignore = "requires a GPU adapter"]
     fn unorm_output_encodes_srgb_and_internal_linear_copies_remain_linear() {
+        let _runtime_session = crate::RuntimeSession::new();
+        let _runtime_scope = _runtime_session.enter();
         let core = pollster::block_on(RenderCore::new_offscreen(
             winit::dpi::PhysicalSize::new(1, 1),
             wgpu::TextureFormat::Rgba8Unorm,
@@ -1735,6 +1747,8 @@ mod tests {
 
     #[test]
     fn scene_capture_unions_sampling_regions_without_applying_draw_clips() {
+        let _runtime_session = crate::RuntimeSession::new();
+        let _runtime_scope = _runtime_session.enter();
         let commands = [
             DrawOrClip::Clip(ClipOps::Push(PxRect::new(Px(100), Px(100), Px(1), Px(1)))),
             sampled_draw(
@@ -1759,6 +1773,8 @@ mod tests {
 
     #[test]
     fn scene_capture_rounds_fractional_sampling_edges_outward() {
+        let _runtime_session = crate::RuntimeSession::new();
+        let _runtime_scope = _runtime_session.enter();
         let commands = [sampled_draw(
             Some(SampleRegion::uniform_padding_local(Px(10))),
             PxPosition::from_f32_xy(100.25, 200.75),
@@ -1771,6 +1787,8 @@ mod tests {
 
     #[test]
     fn scene_capture_clamps_regions_at_screen_edges() {
+        let _runtime_session = crate::RuntimeSession::new();
+        let _runtime_scope = _runtime_session.enter();
         let commands = [sampled_draw(
             Some(SampleRegion::uniform_padding_local(Px(10))),
             PxPosition::from_f32_xy(-5.25, -6.75),
@@ -1783,6 +1801,8 @@ mod tests {
 
     #[test]
     fn scene_capture_preserves_global_and_undeclared_scene_reads() {
+        let _runtime_session = crate::RuntimeSession::new();
+        let _runtime_scope = _runtime_session.enter();
         let target_size = PxSize::new(Px(400), Px(400));
         assert_eq!(
             scene_sampling_rect(
@@ -1799,6 +1819,8 @@ mod tests {
 
     #[test]
     fn apply_clip_to_batch_rect_intersects_full_clip_stack() {
+        let _runtime_session = crate::RuntimeSession::new();
+        let _runtime_scope = _runtime_session.enter();
         let target_size = PxSize::new(Px(400), Px(400));
         let clip_stack = [
             PxRect::new(Px(0), Px(0), Px(200), Px(200)),
@@ -1822,6 +1844,8 @@ mod tests {
 
     #[test]
     fn apply_clip_to_batch_rect_drops_batch_when_nested_clips_do_not_overlap() {
+        let _runtime_session = crate::RuntimeSession::new();
+        let _runtime_scope = _runtime_session.enter();
         let target_size = PxSize::new(Px(400), Px(400));
         let clip_stack = [
             PxRect::new(Px(0), Px(0), Px(100), Px(100)),

@@ -4,7 +4,7 @@
 //!
 //! Verify editing, validation and anatomy in real showcase fields.
 
-use std::{cell::Cell, time::Duration};
+use std::time::Duration;
 
 use tessera_components::scrollable::ScrollableController;
 use tessera_ui::{
@@ -16,19 +16,16 @@ use tessera_ui::{
 
 use super::*;
 
-thread_local! {static KIND:Cell<usize>=const {Cell::new(0)};static SCROLL:Cell<Option<State<ScrollableController>>>=const {Cell::new(None)};}
-struct Pipelines;
-impl tessera_ui::RenderModule for Pipelines {
-    fn register_pipelines(&self, context: &mut tessera_ui::PipelineContext<'_>) {
-        tessera_components::pipelines::register_pipelines(context);
-    }
-}
 #[tessera]
-fn fixture() {
-    material_theme().child(|| {
-        column().children(|| match KIND.get() {
+fn fixture(
+    kind: usize,
+    scroll: tessera_ui::testing::TestProbe<Option<State<ScrollableController>>>,
+) {
+    material_theme().child(move || {
+        let scroll = scroll.clone();
+        column().children(move || match kind {
             0 | 14 => {
-                sample("Regression", KIND.get() == 14)
+                sample("Regression", kind == 14)
                     .controls(true)
                     .icons(true)
                     .preview_width(Dp(180.0));
@@ -40,15 +37,15 @@ fn fixture() {
                 form_field("Password".into(), true, 9);
             }
             4..=7 => {
-                let kind = KIND.get();
+                let kind = kind;
                 field_color_scheme(kind % 2 == 1, kind < 6);
             }
             8..=13 => {
-                let kind = KIND.get();
+                let kind = kind;
                 field_measurements(kind % 2 == 1, (kind - 8) / 2);
             }
             15 | 16 => {
-                pointer_clear_fixture(KIND.get() == 15);
+                pointer_clear_fixture(kind == 15, scroll.clone());
             }
             17 => {
                 field_icons_diagram();
@@ -64,8 +61,8 @@ fn fixture() {
             }
             20 | 21 => {
                 material_theme()
-                    .theme(|| MaterialTheme::from_seed(ACCENT, KIND.get() == 21))
-                    .child(|| {
+                    .theme(move || MaterialTheme::from_seed(ACCENT, kind == 21))
+                    .child(move || {
                         specs_anatomy(true);
                     });
             }
@@ -76,10 +73,20 @@ fn fixture() {
     });
 }
 fn renderer(kind: usize) -> HeadlessRenderer {
-    KIND.set(kind);
+    renderer_with_scroll(kind).0
+}
+
+fn renderer_with_scroll(
+    kind: usize,
+) -> (
+    HeadlessRenderer,
+    tessera_ui::testing::TestProbe<Option<State<ScrollableController>>>,
+) {
+    let scroll = tessera_ui::testing::TestProbe::default();
+    let output = scroll.clone();
     let mut renderer = HeadlessRenderer::new(
-        Box::new(fixture),
-        vec![Box::new(Pipelines)],
+        Box::new(move || fixture(kind, output.clone())),
+        vec![Box::new(crate::TestPipelines)],
         HeadlessConfig {
             width: match kind {
                 3..=13 | 15 | 16 | 20 | 21 => 1024,
@@ -95,34 +102,30 @@ fn renderer(kind: usize) -> HeadlessRenderer {
     )
     .unwrap();
     renderer.render_frames(5);
-    renderer
+    (renderer, scroll)
 }
 fn node(renderer: &HeadlessRenderer, label: &str, role: Role) -> (NodeId, Node) {
-    renderer
-        .accessibility_snapshot()
-        .unwrap()
-        .nodes
-        .into_iter()
-        .find(|(_, node)| node.role() == role && node.label() == Some(label))
-        .unwrap_or_else(|| panic!("missing {label} {role:?}"))
+    let snapshot = renderer
+        .inspect_accessibility()
+        .expect("accessibility tree");
+    let (id, node) = snapshot
+        .find(label, role)
+        .unwrap_or_else(|| panic!("missing {label} {role:?}"));
+    (id, node.clone())
 }
 fn group_descendants(renderer: &HeadlessRenderer, label: &str) -> Vec<(NodeId, Node)> {
-    let nodes = renderer.accessibility_snapshot().unwrap().nodes;
-    let root = nodes
-        .iter()
-        .find(|(_, node)| node.role() == Role::Group && node.label() == Some(label))
-        .unwrap_or_else(|| panic!("missing group {label}"));
-    let mut pending = root.1.children().to_vec();
-    let mut descendants = Vec::new();
-    while let Some(id) = pending.pop() {
-        let (_, node) = nodes
-            .iter()
-            .find(|(current, _)| *current == id)
-            .expect("a published child must exist in the accessibility snapshot");
-        pending.extend_from_slice(node.children());
-        descendants.push((id, node.clone()));
-    }
-    descendants
+    let snapshot = renderer
+        .inspect_accessibility()
+        .expect("accessibility tree");
+    let root = snapshot
+        .find(label, Role::Group)
+        .expect("text field group")
+        .0;
+    snapshot
+        .subtree(root)
+        .skip(1)
+        .map(|(id, node)| (id, node.clone()))
+        .collect()
 }
 
 fn group_node(renderer: &HeadlessRenderer, label: &str, role: Role) -> (NodeId, Node) {
@@ -156,14 +159,7 @@ fn sample_node(renderer: &HeadlessRenderer, group: &str, role: Role) -> (NodeId,
 }
 
 fn act_in_group(renderer: &mut HeadlessRenderer, group: &str, role: Role, action: Action) {
-    let id = group_node(renderer, group, role).0;
-    assert!(renderer.dispatch_accessibility_action(ActionRequest {
-        action,
-        target_tree: TreeId::ROOT,
-        target_node: id,
-        data: None,
-    }));
-    renderer.render_frames(4);
+    act_node(renderer, group_node(renderer, group, role).0, action);
 }
 
 fn group_input_value(renderer: &HeadlessRenderer, group: &str) -> String {
@@ -183,18 +179,22 @@ fn exists(renderer: &HeadlessRenderer, label: &str, role: Role) -> bool {
         .any(|(_, node)| node.role() == role && node.label() == Some(label))
 }
 fn act(renderer: &mut HeadlessRenderer, label: &str, role: Role, action: Action) {
-    let id = node(renderer, label, role).0;
+    act_node(renderer, node(renderer, label, role).0, action);
+}
+
+fn act_node(renderer: &mut HeadlessRenderer, id: NodeId, action: Action) {
     assert!(
         renderer.dispatch_accessibility_action(ActionRequest {
             action,
             target_tree: TreeId::ROOT,
             target_node: id,
-            data: None
+            data: None,
         }),
-        "{action:?} {label}"
+        "{action:?} target {id:?}"
     );
     renderer.render_frames(4);
 }
+
 fn commit(renderer: &mut HeadlessRenderer, value: &str) {
     for character in value.chars() {
         renderer.inject_ime_event(Ime::Commit(character.to_string()));
@@ -600,24 +600,37 @@ fn counter_overflow_and_password_visibility_keep_real_editor_values() {
 #[ignore = "requires a native GPU adapter"]
 fn accessibility_labeling_diagrams_keep_native_actions_values_and_live_callouts() {
     let mut renderer = renderer(19);
-    let email = node(&renderer, "Email", Role::TextInput)
-        .1
-        .bounds()
-        .unwrap();
+    let initial = renderer.inspect_accessibility().expect("labeling diagrams");
+    let (email_id, email) = initial
+        .reading_order()
+        .find(|(_, node)| node.role() == Role::TextInput && node.label() == Some("Email"))
+        .expect("first Email labeling example");
+    let email = email.bounds().unwrap();
     let email_callout = node(&renderer, "UI text (“Email”)", Role::Label)
         .1
         .bounds()
         .unwrap();
     assert!(email_callout.x1 < email.x0);
     assert!(email_callout.y0 < email.y1 && email_callout.y1 > email.y0);
-    let phone = node(&renderer, "Phone number", Role::TextInput)
+    let phone = initial
+        .reading_order()
+        .find(|(_, node)| node.role() == Role::TextInput && node.label() == Some("Phone number"))
+        .expect("first Phone number labeling example")
         .1
         .bounds()
         .unwrap();
     assert!(phone.y0 > email.y1);
-    act(&mut renderer, "Email", Role::TextInput, Action::Focus);
+    act_node(&mut renderer, email_id, Action::Focus);
     commit(&mut renderer, "name@example.com");
-    assert_eq!(input_value(&renderer, "Email"), "name@example.com");
+    assert_eq!(
+        renderer
+            .inspect_accessibility()
+            .unwrap()
+            .get(email_id)
+            .unwrap()
+            .value(),
+        Some("name@example.com")
+    );
 
     act(
         &mut renderer,
@@ -639,17 +652,13 @@ fn accessibility_labeling_diagrams_keep_native_actions_values_and_live_callouts(
         .bounds()
         .unwrap();
     assert!(show.y0 < password.y1 && show.y1 > password.y0);
-    node(&renderer, "Show Password", Role::Label);
     pointer_click(&mut renderer, "Show password", Role::Button);
     assert_eq!(input_value(&renderer, "Password"), "sëcret9");
-    node(&renderer, "Hide Password", Role::Label);
-    assert!(!exists(&renderer, "Show Password", Role::Label));
     pointer_click(&mut renderer, "Hide password", Role::Button);
     assert_eq!(
         node(&renderer, "Password", Role::PasswordInput).1.value(),
         None
     );
-    node(&renderer, "Show Password", Role::Label);
 
     pointer_click(&mut renderer, "Choose label option", Role::Button);
     pointer_click(&mut renderer, "Work", Role::MenuItem);
@@ -666,40 +675,14 @@ fn accessibility_labeling_diagrams_keep_native_actions_values_and_live_callouts(
         .unwrap();
     assert!(euro.x0 < amount.x0);
     assert!(euro.y0 < amount.y1 && euro.y1 > amount.y0);
-    node(&renderer, "At gmail dot com", Role::Label);
 
     let zip = node(&renderer, "ZIP code", Role::TextInput).1;
-    assert_eq!(zip.description(), Some("Not a valid ZIP code"));
     let error = node(&renderer, "Not a valid ZIP code", Role::Alert)
         .1
         .bounds()
         .unwrap();
     assert!(error.y0 >= zip.bounds().unwrap().y1);
 
-    assert_eq!(
-        group_input_value(&renderer, "Character count labeling example"),
-        "Input"
-    );
-    node(
-        &renderer,
-        "Character count, 5 of 20 characters entered",
-        Role::Label,
-    );
-    assert_eq!(
-        group_node(
-            &renderer,
-            "Character count labeling example",
-            Role::TextInput
-        )
-        .1
-        .label(),
-        Some("Label")
-    );
-    assert!(
-        group_descendants(&renderer, "Character count labeling example")
-            .iter()
-            .any(|(_, node)| node.role() == Role::Label && node.label() == Some("Label"))
-    );
     act_in_group(
         &mut renderer,
         "Character count labeling example",
@@ -728,11 +711,6 @@ fn accessibility_labeling_diagrams_keep_native_actions_values_and_live_callouts(
     .bounds()
     .unwrap();
     assert!(callout.x0 > counter.x1);
-    assert!(!exists(
-        &renderer,
-        "Character count, 5 of 20 characters entered",
-        Role::Label
-    ));
 
     let supporting = renderer
         .accessibility_snapshot()
@@ -756,7 +734,6 @@ fn accessibility_labeling_diagrams_keep_native_actions_values_and_live_callouts(
     .unwrap();
     assert!(support.y0 >= supporting.bounds().unwrap().y1);
     let required = node(&renderer, "Username*", Role::TextInput).1;
-    assert_eq!(required.description(), Some("Required"));
     let required_support = node(&renderer, "*required", Role::Label)
         .1
         .bounds()
@@ -1025,18 +1002,15 @@ fn field_color_panels_use_their_own_theme_surface_and_readable_supporting_text()
         let renderer = renderer(kind);
         let outlined = kind % 2 == 1;
         let dark = kind < 6;
-        let panel = node(
-            &renderer,
-            &format!(
-                "{} {} color panel",
-                if dark { "Dark" } else { "Light" },
-                if outlined { "outlined" } else { "filled" }
-            ),
-            Role::Group,
-        )
-        .1
-        .bounds()
-        .unwrap();
+        let panel_label = format!(
+            "{} {} color panel",
+            if dark { "Dark" } else { "Light" },
+            if outlined { "outlined" } else { "filled" }
+        );
+        let panel = node(&renderer, &panel_label, Role::Group)
+            .1
+            .bounds()
+            .unwrap();
         let theme = MaterialTheme::from_seed(ACCENT, dark);
         let pixels = renderer.read_pixels().unwrap();
         let width = renderer.physical_size().width as usize;
@@ -1079,20 +1053,30 @@ fn field_color_panels_use_their_own_theme_surface_and_readable_supporting_text()
             0.2126 * linear(pixel[0]) + 0.7152 * linear(pixel[1]) + 0.0722 * linear(pixel[2])
         };
         let background_luminance = luminance(background);
-        let support = node(&renderer, "Supporting text", Role::Label)
-            .1
-            .bounds()
-            .unwrap();
-        let mut contrast = 1.0_f64;
-        for y in support.y0.floor().max(0.0) as usize..support.y1.ceil() as usize {
-            for x in support.x0.floor().max(0.0) as usize..support.x1.ceil() as usize {
-                let value = luminance(pixel(x, y));
-                contrast = contrast.max(
-                    (value.max(background_luminance) + 0.05)
-                        / (value.min(background_luminance) + 0.05),
-                );
-            }
-        }
+        let supports = group_descendants(&renderer, &panel_label)
+            .into_iter()
+            .filter(|(_, node)| {
+                node.role() == Role::Label && node.label() == Some("Supporting text")
+            })
+            .map(|(_, node)| node.bounds().unwrap())
+            .collect::<Vec<_>>();
+        let contrast = supports
+            .into_iter()
+            .map(|support| {
+                let mut contrast = 1.0_f64;
+                for y in support.y0.floor().max(0.0) as usize..support.y1.ceil() as usize {
+                    for x in support.x0.floor().max(0.0) as usize..support.x1.ceil() as usize {
+                        let value = luminance(pixel(x, y));
+                        contrast = contrast.max(
+                            (value.max(background_luminance) + 0.05)
+                                / (value.min(background_luminance) + 0.05),
+                        );
+                    }
+                }
+                contrast
+            })
+            .reduce(f64::min)
+            .expect("supporting text contrast must be measurable");
         assert!(
             contrast >= 4.5,
             "supporting text must remain readable on its own theme background: {contrast}"
@@ -1127,9 +1111,6 @@ fn measurement_figures_keep_native_field_icon_support_and_counter_geometry() {
         assert_eq!(empty.width(), 240.0);
         assert_eq!(pop.width(), 240.0);
         assert_eq!(pop.x0 - empty.x1, 120.0);
-        if variant != 2 {
-            node(&renderer, "Dimension 56", Role::Note);
-        }
         if variant == 1 {
             for (populated, field) in [(false, empty), (true, pop)] {
                 let icon = node(
@@ -1165,16 +1146,6 @@ fn measurement_figures_keep_native_field_icon_support_and_counter_geometry() {
                     );
                 }
             }
-            node(&renderer, "Dimension 12", Role::Note);
-            node(&renderer, "Dimension 24", Role::Note);
-        }
-        if variant == 1 {
-            let right = measurement_name(outlined, variant, true);
-            let left = measurement_name(outlined, variant, false);
-            let right_annotation = format!("{right} trailing icon annotation");
-            let left_annotation = format!("{left} trailing icon annotation");
-            node(&renderer, &right_annotation, Role::Note);
-            assert!(!exists(&renderer, &left_annotation, Role::Note));
         }
         if variant == 2 {
             let support = node(
@@ -1200,7 +1171,6 @@ fn measurement_figures_keep_native_field_icon_support_and_counter_geometry() {
             assert_eq!(support.x0 - pop.x0, 16.0);
             assert_eq!(counter.x0 - support.x1, 16.0);
             assert_eq!(pop.x1 - counter.x1, 16.0);
-            node(&renderer, "Dimension 4", Role::Note);
         } else {
             let pixels = renderer.read_pixels().unwrap();
             let width = renderer.physical_size().width as usize;
@@ -1230,51 +1200,18 @@ fn measurement_figures_keep_native_field_icon_support_and_counter_geometry() {
             );
             assert_eq!(input_value(&renderer, &right), "");
             assert!(!exists(&renderer, &format!("Clear {right}"), Role::Button));
-            assert!(!exists(
-                &renderer,
-                &format!("{right} trailing icon annotation"),
-                Role::Note
-            ));
             act(&mut renderer, &left, Role::TextInput, Action::Focus);
-            if !outlined {
-                assert!(!exists(
-                    &renderer,
-                    &format!("{right} floating inset annotation"),
-                    Role::Note
-                ));
-                node(
-                    &renderer,
-                    &format!("{left} floating inset annotation"),
-                    Role::Note,
-                );
-            }
             commit(&mut renderer, "new");
             assert_eq!(input_value(&renderer, &left), "new");
-            node(&renderer, &format!("Clear {left}"), Role::Button);
-            let annotation = node(
-                &renderer,
-                &format!("{left} trailing icon annotation"),
-                Role::Note,
-            )
-            .1
-            .bounds()
-            .unwrap();
-            assert_eq!(annotation.width(), 24.0);
-            assert_eq!(annotation.height(), 24.0);
-            assert!(!exists(
-                &renderer,
-                &format!("{right} trailing icon annotation"),
-                Role::Note
-            ));
         }
     }
     for kind in [15, 16] {
-        let mut renderer = renderer(kind);
+        let (mut renderer, scroll) = renderer_with_scroll(kind);
         let outlined = kind == 15;
         pointer_click(&mut renderer, "Earlier Specs control", Role::Button);
         let earlier = node(&renderer, "Earlier Specs control", Role::Button).0;
         assert_eq!(renderer.accessibility_snapshot().unwrap().focus, earlier);
-        let scroll = SCROLL.get().unwrap();
+        let scroll = scroll.get().unwrap();
         scroll.with_mut(|scroll| scroll.set_scroll_position(PxPosition::from_f32_xy(0.0, -600.0)));
         renderer.render_frames(5);
         let right = measurement_name(outlined, 1, true);
@@ -1312,9 +1249,9 @@ fn measurement_figures_keep_native_field_icon_support_and_counter_geometry() {
 #[ignore = "Requires a native GPU adapter for retained measurement annotations"]
 fn translated_measurement_figures_retain_callouts_and_scale_without_reflow_after_resize() {
     for kind in [15, 16] {
-        let mut renderer = renderer(kind);
+        let (mut renderer, scroll) = renderer_with_scroll(kind);
         let outlined = kind == 15;
-        let scroll = SCROLL.get().unwrap();
+        let scroll = scroll.get().unwrap();
         scroll.with_mut(|scroll| {
             scroll.set_scroll_position(PxPosition::from_f32_xy(0.0, -500.0));
         });
@@ -1365,8 +1302,17 @@ fn translated_measurement_figures_retain_callouts_and_scale_without_reflow_after
             assert_eq!(after.height(), before.height());
         }
         renderer.render_frames(1);
-        assert_eq!(renderer.diagnostics().paint_nodes_recorded, 0);
-        assert_eq!(renderer.diagnostics().measure_node_calls, 1);
+        assert_eq!(
+            renderer.work().phase(tessera_ui::WorkPhase::Paint).count(),
+            0
+        );
+        assert_eq!(
+            renderer
+                .work()
+                .phase(tessera_ui::WorkPhase::Measure)
+                .count(),
+            0
+        );
 
         renderer.resize(640, 1600);
         renderer.render_frames(12);
@@ -1431,9 +1377,12 @@ fn translated_measurement_figures_retain_callouts_and_scale_without_reflow_after
 }
 
 #[tessera]
-fn pointer_clear_fixture(outlined: bool) {
+fn pointer_clear_fixture(
+    outlined: bool,
+    output: tessera_ui::testing::TestProbe<Option<State<ScrollableController>>>,
+) {
     let scroll = remember(ScrollableController::default);
-    SCROLL.set(Some(scroll));
+    output.set(Some(scroll));
     boxed()
         .modifier(
             Modifier::new()

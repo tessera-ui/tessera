@@ -4,23 +4,92 @@
 //!
 //! Preserve keyboard shortcuts during slow frames.
 
-use std::{
-    collections::VecDeque,
-    sync::atomic::{AtomicU64, Ordering},
-};
+use std::collections::VecDeque;
 
 use winit::keyboard::ModifiersState;
 
+/// An owned keyboard sample accepted from a window or synthetic input.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct KeyboardEvent {
+    /// Physical keyboard position when known.
+    pub physical_key: winit::keyboard::PhysicalKey,
+    /// Key meaning after the platform keyboard layout is applied.
+    pub logical_key: winit::keyboard::Key,
+    /// Text produced by this sample, if any.
+    pub text: Option<String>,
+    /// Standard, left, right, or numeric keypad location.
+    pub location: winit::keyboard::KeyLocation,
+    /// Whether the key was pressed or released.
+    pub state: winit::event::ElementState,
+    /// Whether this is a repeated press.
+    pub repeat: bool,
+}
+
+impl KeyboardEvent {
+    /// Creates a sample for a named navigation or command key.
+    pub fn named(key: winit::keyboard::NamedKey, state: winit::event::ElementState) -> Self {
+        use winit::keyboard::{KeyCode, NamedKey, NativeKeyCode, PhysicalKey};
+        let code = match key {
+            NamedKey::ArrowLeft => Some(KeyCode::ArrowLeft),
+            NamedKey::ArrowRight => Some(KeyCode::ArrowRight),
+            NamedKey::ArrowUp => Some(KeyCode::ArrowUp),
+            NamedKey::ArrowDown => Some(KeyCode::ArrowDown),
+            NamedKey::Tab => Some(KeyCode::Tab),
+            NamedKey::Enter => Some(KeyCode::Enter),
+            NamedKey::Escape => Some(KeyCode::Escape),
+            NamedKey::Space => Some(KeyCode::Space),
+            NamedKey::Backspace => Some(KeyCode::Backspace),
+            NamedKey::Delete => Some(KeyCode::Delete),
+            NamedKey::Home => Some(KeyCode::Home),
+            NamedKey::End => Some(KeyCode::End),
+            NamedKey::PageUp => Some(KeyCode::PageUp),
+            NamedKey::PageDown => Some(KeyCode::PageDown),
+            _ => None,
+        };
+        Self {
+            physical_key: code
+                .map(PhysicalKey::Code)
+                .unwrap_or(PhysicalKey::Unidentified(NativeKeyCode::Unidentified)),
+            logical_key: winit::keyboard::Key::Named(key),
+            text: None,
+            location: winit::keyboard::KeyLocation::Standard,
+            state,
+            repeat: false,
+        }
+    }
+}
+
+impl From<winit::event::KeyEvent> for KeyboardEvent {
+    fn from(event: winit::event::KeyEvent) -> Self {
+        Self {
+            physical_key: event.physical_key,
+            logical_key: event.logical_key,
+            text: event.text.map(|text| text.to_string()),
+            location: event.location,
+            state: event.state,
+            repeat: event.repeat,
+        }
+    }
+}
+
 #[derive(Debug)]
-pub(crate) struct QueuedKeyEvent<E = winit::event::KeyEvent> {
+pub(crate) struct QueuedKeyEvent<E = KeyboardEvent> {
     pub event: E,
     pub modifiers: ModifiersState,
     pub sequence: u64,
 }
 
 pub(crate) fn next_input_sequence() -> u64 {
-    static SEQUENCE: AtomicU64 = AtomicU64::new(0);
-    SEQUENCE.fetch_add(1, Ordering::Relaxed)
+    #[derive(Default)]
+    struct Sequence(std::cell::Cell<u64>);
+    let sequence = crate::local_runtime_resource::<Sequence>();
+    let next = sequence
+        .0
+        .get()
+        .checked_add(1)
+        .expect("input sequence exhausted");
+    sequence.0.set(next);
+    next
 }
 
 #[derive(Debug)]
@@ -29,7 +98,7 @@ pub(crate) struct KeyboardQueue<E> {
     modifiers: ModifiersState,
 }
 
-pub(crate) type KeyboardState = KeyboardQueue<winit::event::KeyEvent>;
+pub(crate) type KeyboardState = KeyboardQueue<KeyboardEvent>;
 
 impl<E> Default for KeyboardQueue<E> {
     fn default() -> Self {
@@ -68,6 +137,8 @@ mod tests {
 
     #[test]
     fn modifier_release_does_not_rewrite_queued_shortcuts() {
+        let _runtime_session = crate::RuntimeSession::new();
+        let _runtime_scope = _runtime_session.enter();
         let mut queue = KeyboardQueue::default();
         queue.update_modifiers(ModifiersState::SHIFT);
         queue.push_event("Tab pressed");
@@ -95,6 +166,8 @@ mod tests {
 
     #[test]
     fn long_frames_preserve_order_and_each_modifier_combination() {
+        let _runtime_session = crate::RuntimeSession::new();
+        let _runtime_scope = _runtime_session.enter();
         let mut queue = KeyboardQueue::default();
         for index in 0..512 {
             queue.update_modifiers(if index % 2 == 0 {

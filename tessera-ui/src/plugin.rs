@@ -4,7 +4,7 @@ use std::{
     any::{Any, TypeId},
     collections::HashMap,
     error::Error,
-    sync::{Arc, OnceLock},
+    sync::Arc,
 };
 
 use parking_lot::RwLock;
@@ -207,7 +207,7 @@ impl PluginContext {
     }
 }
 
-/// Registers a plugin instance for the current process.
+/// Registers a plugin instance for the active UI session.
 pub fn register_plugin<P: Plugin>(plugin: P) {
     register_plugin_arc(Arc::new(RwLock::new(plugin)));
 }
@@ -286,9 +286,8 @@ impl PluginHost {
     }
 }
 
-fn plugin_registry() -> &'static RwLock<Vec<Arc<dyn PluginEntry>>> {
-    static REGISTRY: OnceLock<RwLock<Vec<Arc<dyn PluginEntry>>>> = OnceLock::new();
-    REGISTRY.get_or_init(|| RwLock::new(Vec::new()))
+fn plugin_registry() -> Arc<RwLock<Vec<Arc<dyn PluginEntry>>>> {
+    crate::runtime_resource::<RwLock<Vec<Arc<dyn PluginEntry>>>>()
 }
 
 fn registered_plugins() -> Vec<Arc<dyn PluginEntry>> {
@@ -296,8 +295,13 @@ fn registered_plugins() -> Vec<Arc<dyn PluginEntry>> {
 }
 
 fn register_plugin_arc<P: Plugin>(plugin: Arc<RwLock<P>>) {
+    assert!(
+        crate::RuntimeSession::current().is_some(),
+        "register plugins through an EntryPoint or RuntimeSession"
+    );
     let plugin_entry = Arc::new(PluginSlot::new(plugin.clone())) as Arc<dyn PluginEntry>;
-    let mut instances = plugin_instance_registry().write();
+    let instance_registry = plugin_instance_registry();
+    let mut instances = instance_registry.write();
     let type_id = TypeId::of::<P>();
     if instances.contains_key(&type_id) {
         warn!(
@@ -309,18 +313,34 @@ fn register_plugin_arc<P: Plugin>(plugin: Arc<RwLock<P>>) {
     instances.insert(type_id, plugin as Arc<dyn Any + Send + Sync>);
     drop(instances);
 
-    let mut registry = plugin_registry().write();
+    let plugins = plugin_registry();
+    let mut registry = plugins.write();
     registry.push(plugin_entry);
 }
 
-fn plugin_instance_registry() -> &'static RwLock<HashMap<TypeId, Arc<dyn Any + Send + Sync>>> {
-    static REGISTRY: OnceLock<RwLock<HashMap<TypeId, Arc<dyn Any + Send + Sync>>>> =
-        OnceLock::new();
-    REGISTRY.get_or_init(|| RwLock::new(HashMap::new()))
+fn plugin_instance_registry() -> Arc<RwLock<HashMap<TypeId, Arc<dyn Any + Send + Sync>>>> {
+    crate::runtime_resource::<RwLock<HashMap<TypeId, Arc<dyn Any + Send + Sync>>>>()
+}
+
+/// Reads a plugin when it is available in the active session.
+pub fn try_with_plugin<T: Plugin, R>(read: impl FnOnce(&T) -> R) -> Option<R> {
+    let registry = plugin_instance_registry();
+    let plugin = registry.read().get(&TypeId::of::<T>()).cloned()?;
+    let plugin = Arc::downcast::<RwLock<T>>(plugin).ok()?;
+    Some(read(&plugin.read()))
+}
+
+/// Updates a plugin when it is available in the active session.
+pub fn try_with_plugin_mut<T: Plugin, R>(update: impl FnOnce(&mut T) -> R) -> Option<R> {
+    let registry = plugin_instance_registry();
+    let plugin = registry.read().get(&TypeId::of::<T>()).cloned()?;
+    let plugin = Arc::downcast::<RwLock<T>>(plugin).ok()?;
+    Some(update(&mut plugin.write()))
 }
 
 fn plugin_instance<T: Plugin>() -> Arc<RwLock<T>> {
-    let registry = plugin_instance_registry().read();
+    let instances = plugin_instance_registry();
+    let registry = instances.read();
     let type_id = TypeId::of::<T>();
     let Some(plugin) = registry.get(&type_id) else {
         panic!("Plugin '{}' is not registered", std::any::type_name::<T>());

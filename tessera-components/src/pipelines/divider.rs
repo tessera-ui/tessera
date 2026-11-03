@@ -30,10 +30,6 @@ impl DrawCommand for DividerCommand {
     }
 }
 
-#[cfg(test)]
-pub(crate) static ALLOCATIONS: std::sync::atomic::AtomicUsize =
-    std::sync::atomic::AtomicUsize::new(0);
-
 #[repr(C)]
 #[derive(Clone, Copy, Pod, Zeroable)]
 struct Instance {
@@ -43,7 +39,7 @@ struct Instance {
 }
 
 struct Page {
-    buffer: wgpu::Buffer,
+    buffer: tessera_ui::TrackedBuffer,
     bind_group: wgpu::BindGroup,
     capacity: usize,
 }
@@ -60,7 +56,7 @@ pub(crate) struct DividerPipeline {
 
 impl DividerPipeline {
     pub(crate) fn new(
-        device: &wgpu::Device,
+        device: &tessera_ui::GraphicsDevice,
         cache: Option<&wgpu::PipelineCache>,
         config: &wgpu::SurfaceConfiguration,
         sample_count: u32,
@@ -133,7 +129,7 @@ impl DividerPipeline {
         }
     }
 
-    fn reserve(&mut self, device: &wgpu::Device, count: usize) {
+    fn reserve(&mut self, device: &tessera_ui::GraphicsDevice, count: usize) {
         if self
             .pages
             .get(self.page)
@@ -150,12 +146,15 @@ impl DividerPipeline {
             return;
         }
         let capacity = count.max(1024).next_power_of_two().min(self.max_instances);
-        let buffer = device.create_buffer(&wgpu::BufferDescriptor {
-            label: Some("Divider Instance Page"),
-            size: (capacity * size_of::<Instance>()) as u64,
-            usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
-            mapped_at_creation: false,
-        });
+        let buffer = device.create_buffer(
+            "divider_instances",
+            &wgpu::BufferDescriptor {
+                label: Some("Divider Instance Page"),
+                size: (capacity * size_of::<Instance>()) as u64,
+                usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
+                mapped_at_creation: false,
+            },
+        );
         let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
             label: Some("Divider Instance Page"),
             layout: &self.layout,
@@ -169,8 +168,7 @@ impl DividerPipeline {
             bind_group,
             capacity,
         };
-        #[cfg(test)]
-        ALLOCATIONS.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+
         if self.page < self.pages.len() {
             self.pages[self.page] = page;
         } else {
@@ -187,7 +185,7 @@ impl DrawablePipeline<DividerCommand> for DividerPipeline {
 
     fn draw(&mut self, context: &mut DrawContext<DividerCommand>) {
         for commands in context.commands.chunks(self.max_instances) {
-            self.reserve(context.device, commands.len());
+            self.reserve(context.graphics, commands.len());
             self.staging.clear();
             self.staging
                 .extend(commands.iter().map(|(command, geometry)| {
@@ -223,7 +221,7 @@ impl DrawablePipeline<DividerCommand> for DividerPipeline {
             let page = &self.pages[self.page];
             // Later batches and scene passes must not overwrite earlier draws
             // before this frame is submitted.
-            context.queue.write_buffer(
+            context.graphics.write_buffer(
                 &page.buffer,
                 (self.offset * size_of::<Instance>()) as u64,
                 bytemuck::cast_slice(&self.staging),

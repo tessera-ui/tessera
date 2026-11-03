@@ -4,14 +4,14 @@
 //!
 //! Operate independent scrollbar tracks beside scaled scroll viewports.
 
-use std::{cell::Cell, time::Duration};
+use std::time::Duration;
 
 use tessera_ui::{
     CallbackWith, Color, CursorEventContent, Dp, GestureState, HeadlessConfig, HeadlessRenderer,
     MOUSE_POINTER_ID, Modifier, PointerChange, PressKeyEventType, Px, PxPosition, ScrollDeltaUnit,
     ScrollEventContent, ScrollEventSource, State,
     accesskit::{Action, ActionRequest, Node, NodeId, Role, TreeId},
-    current_frame_time, provide_context, remember, scaled_box, tessera,
+    current_frame_time, remember, scaled_box, tessera,
 };
 
 use crate::{
@@ -25,36 +25,46 @@ use crate::{
     theme::material_theme,
 };
 
-thread_local! {
-    static CASE: Cell<(bool, bool)> = const { Cell::new((false, false)) };
-    static BOTH_AXES: Cell<bool> = const { Cell::new(false) };
-    static CONTROLLER: Cell<Option<State<ScrollableController>>> = const { Cell::new(None) };
-    static ACTIVATIONS: Cell<usize> = const { Cell::new(0) };
-    static REMAINDER: Cell<(f32, f32)> = const { Cell::new((0.0, 0.0)) };
+#[derive(Clone, Copy, Default)]
+struct FixtureHandles {
+    controller: Option<State<ScrollableController>>,
+    activations: Option<State<usize>>,
+    remainder: (f32, f32),
 }
 
 #[tessera]
-fn fixture() {
-    material_theme().child(|| {
-        scrollbar_fixture();
+fn fixture(
+    custom: bool,
+    horizontal: bool,
+    both_axes: bool,
+    observed: tessera_ui::testing::TestProbe<FixtureHandles>,
+) {
+    material_theme().child(move || {
+        scrollbar_fixture(custom, horizontal, both_axes, observed.clone());
     });
 }
 
 #[tessera]
-fn scrollbar_fixture() {
+fn scrollbar_fixture(
+    custom: bool,
+    horizontal: bool,
+    both_axes: bool,
+    observed: tessera_ui::testing::TestProbe<FixtureHandles>,
+) {
+    let activations = remember(|| 0_usize);
+    observed.with_mut(|handles| handles.activations = Some(activations));
     let controller = remember(ScrollableController::new);
-    CONTROLLER.set(Some(controller));
-    let (custom, horizontal) = CASE.get();
-    let both_axes = BOTH_AXES.get();
-    let connection = NestedScrollConnection::new().with_post_scroll_handler(CallbackWith::new(
-        |input: PostScrollInput| {
-            REMAINDER.set((input.available.x, input.available.y));
+    observed.with_mut(|handles| handles.controller = Some(controller));
+    let connection = NestedScrollConnection::new().with_post_scroll_handler(CallbackWith::new({
+        let observed = observed.clone();
+        move |input: PostScrollInput| {
+            observed.with_mut(|handles| handles.remainder = (input.available.x, input.available.y));
             ScrollDelta::ZERO
-        },
-    ));
-    provide_context(
-        move || connection.clone(),
-        move || {
+        }
+    }));
+    tessera_ui::layout::layout()
+        .modifier(Modifier::new().nested_scroll(connection))
+        .child(move || {
             row().children(move || {
                 scaled_box(0.625).child(move || {
                     let modifier = Modifier::new().size(Dp(200.0), Dp(200.0));
@@ -89,10 +99,10 @@ fn scrollbar_fixture() {
                                         200.0
                                     }),
                                 ))
-                                .children(|| {
-                                    button()
-                                        .accessibility_label("Reveal target")
-                                        .on_click(|| ACTIVATIONS.set(ACTIVATIONS.get() + 1));
+                                .children(move || {
+                                    button().accessibility_label("Reveal target").on_click(
+                                        move || activations.with_mut(|count| *count += 1),
+                                    );
                                 });
                         });
                 });
@@ -116,8 +126,7 @@ fn scrollbar_fixture() {
                     }
                 }
             });
-        },
-    );
+        });
 }
 
 fn control(renderer: &HeadlessRenderer, role: Role, label: &str) -> (NodeId, Node) {
@@ -131,32 +140,37 @@ fn control(renderer: &HeadlessRenderer, role: Role, label: &str) -> (NodeId, Nod
 }
 
 #[tessera]
-fn unbound_fixture() {
-    material_theme().child(|| {
-        unbound_scrollbar_fixture();
+fn unbound_fixture(observed: tessera_ui::testing::TestProbe<FixtureHandles>) {
+    material_theme().child(move || {
+        unbound_scrollbar_fixture(observed.clone());
     });
 }
 
 #[tessera]
-fn unbound_scrollbar_fixture() {
+fn unbound_scrollbar_fixture(observed: tessera_ui::testing::TestProbe<FixtureHandles>) {
     let controller = remember(|| {
         let mut controller = ScrollableController::new();
         controller.set_scroll_position(PxPosition::from_f32_xy(-10.0, -20.0));
         controller
     });
-    CONTROLLER.set(Some(controller));
+    observed.with_mut(|handles| handles.controller = Some(controller));
     scrollbar_v()
         .state(controller)
         .total(Px(1000))
         .visible(Px(200));
 }
 
-fn renderer(custom: bool, horizontal: bool) -> HeadlessRenderer {
-    CASE.set((custom, horizontal));
-    ACTIVATIONS.set(0);
-    REMAINDER.set((0.0, 0.0));
+fn renderer(
+    custom: bool,
+    horizontal: bool,
+    both_axes: bool,
+    observed: &tessera_ui::testing::TestProbe<FixtureHandles>,
+) -> HeadlessRenderer {
     let mut renderer = HeadlessRenderer::new(
-        Box::new(fixture),
+        Box::new({
+            let observed = observed.clone();
+            move || fixture(custom, horizontal, both_axes, observed.clone())
+        }),
         vec![Box::new(crate::TesseraComponents)],
         HeadlessConfig {
             width: 500,
@@ -183,7 +197,6 @@ fn controller_metrics_overrides_scaled_track_wheel_drag_and_focus_reveal() {
     crate::test_utils::run_isolated_test(
         "scrollable::scrollbar::bindings_tests::controller_metrics_overrides_scaled_track_wheel_drag_and_focus_reveal",
         || {
-            tessera_ui::dp::set_scale_factor(1.0);
             for horizontal in [false, true] {
                 let label = if horizontal {
                     "Horizontal scrollbar"
@@ -191,7 +204,8 @@ fn controller_metrics_overrides_scaled_track_wheel_drag_and_focus_reveal() {
                     "Vertical scrollbar"
                 };
                 {
-                    let renderer = renderer(true, horizontal);
+                    let observed = tessera_ui::testing::TestProbe::default();
+                    let renderer = renderer(true, horizontal, false, &observed);
                     let (_, bar) = control(&renderer, Role::ScrollBar, label);
                     let bounds = bar.bounds().unwrap();
                     assert_eq!(
@@ -204,7 +218,8 @@ fn controller_metrics_overrides_scaled_track_wheel_drag_and_focus_reveal() {
                     );
                     assert!((bar.numeric_value().unwrap() - 0.025).abs() < 0.000001);
                 }
-                let mut renderer = renderer(false, horizontal);
+                let observed = tessera_ui::testing::TestProbe::default();
+                let mut renderer = renderer(false, horizontal, false, &observed);
                 let (bar_id, bar) = control(&renderer, Role::ScrollBar, label);
                 let bounds = bar.bounds().unwrap();
                 assert_eq!(
@@ -217,7 +232,7 @@ fn controller_metrics_overrides_scaled_track_wheel_drag_and_focus_reveal() {
                 );
                 let track =
                     PxPosition::from_f32_xy((bounds.x0 + 4.0) as f32, (bounds.y0 + 4.0) as f32);
-                let controller = CONTROLLER.get().unwrap();
+                let controller = observed.get().controller.unwrap();
                 assert_eq!(
                     controller.with(|controller| controller.viewport_scale),
                     0.625
@@ -364,7 +379,7 @@ fn controller_metrics_overrides_scaled_track_wheel_drag_and_focus_reveal() {
                     data: None
                 }));
                 renderer.render_frames(8);
-                assert_eq!(ACTIVATIONS.get(), 0);
+                assert_eq!(observed.get().activations.unwrap().get(), 0);
                 let (_, target) = control(&renderer, Role::Button, "Reveal target");
                 let target = target.bounds().unwrap();
                 assert!(
@@ -380,7 +395,7 @@ fn controller_metrics_overrides_scaled_track_wheel_drag_and_focus_reveal() {
                         ((target.y0 + target.y1) * 0.5) as f32,
                     ),
                 );
-                assert_eq!(ACTIVATIONS.get(), 1);
+                assert_eq!(observed.get().activations.unwrap().get(), 1);
                 renderer.pointer_scroll(
                     MOUSE_POINTER_ID,
                     track,
@@ -389,7 +404,7 @@ fn controller_metrics_overrides_scaled_track_wheel_drag_and_focus_reveal() {
                 );
                 renderer.render_frames(120);
                 assert_eq!(offset(), -400.0);
-                REMAINDER.set((0.0, 0.0));
+                observed.with_mut(|handles| handles.remainder = (0.0, 0.0));
                 renderer.pointer_scroll(
                     MOUSE_POINTER_ID,
                     track,
@@ -398,7 +413,7 @@ fn controller_metrics_overrides_scaled_track_wheel_drag_and_focus_reveal() {
                 );
                 renderer.render_frames(1);
                 assert_eq!(
-                    REMAINDER.get(),
+                    observed.get().remainder,
                     if horizontal {
                         (-10.0, 0.0)
                     } else {
@@ -408,9 +423,9 @@ fn controller_metrics_overrides_scaled_track_wheel_drag_and_focus_reveal() {
                 );
                 assert_eq!(offset(), -400.0);
             }
-            BOTH_AXES.set(true);
-            let mut renderer = renderer(false, false);
-            let controller = CONTROLLER.get().unwrap();
+            let observed = tessera_ui::testing::TestProbe::default();
+            let mut renderer = renderer(false, false, true, &observed);
+            let controller = observed.get().controller.unwrap();
             renderer.pointer_scroll(
                 MOUSE_POINTER_ID,
                 PxPosition::from_f32_xy(50.0, 50.0),
@@ -432,10 +447,12 @@ fn controller_metrics_overrides_scaled_track_wheel_drag_and_focus_reveal() {
                 PxPosition::from_f32_xy(-16.0, -32.0),
                 "Vertical track wheel must preserve the both-axis viewport's horizontal offset"
             );
-            BOTH_AXES.set(false);
             drop(renderer);
             let mut renderer = HeadlessRenderer::new(
-                Box::new(unbound_fixture),
+                Box::new({
+                    let observed = observed.clone();
+                    move || unbound_fixture(observed.clone())
+                }),
                 vec![Box::new(crate::TesseraComponents)],
                 HeadlessConfig {
                     width: 200,
@@ -455,8 +472,9 @@ fn controller_metrics_overrides_scaled_track_wheel_drag_and_focus_reveal() {
             );
             renderer.render_frames(2);
             assert_eq!(
-                CONTROLLER
+                observed
                     .get()
+                    .controller
                     .unwrap()
                     .with(|controller| controller.child_position()),
                 PxPosition::from_f32_xy(-10.0, -20.0),

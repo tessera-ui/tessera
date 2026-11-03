@@ -35,7 +35,7 @@ use super::{
 };
 
 #[tessera]
-pub(super) fn badges_spec() {
+pub(super) fn badges_spec(route: Option<crate::pages::material_spec::article::ArticleRoute>) {
     article(
         "Badges",
         "Badges show notifications, counts, or status information on navigation items and icons.",
@@ -57,7 +57,7 @@ pub(super) fn badges_spec() {
                 content: RenderSlot::new(configuration_article),
             },
         ],
-    )
+    ).route_optional(route.clone())
     .pages(vec![
         ArticlePage {title:"Overview",intro:Some(RenderSlot::new(overview_article)),sections:vec![]},
         ArticlePage {title:"Guidelines",intro:Some(RenderSlot::new(badge_navigation)),sections:vec![
@@ -146,11 +146,11 @@ fn navigation_examples(
                 boxed()
                     .modifier(Modifier::new().height(Dp(320.0)))
                     .children(move || {
-                        navigation_rail().content(move || {
+                        navigation_rail().content(move |rail_scope| {
                             for (index, name) in
                                 ["Home", "Inbox", "Updates"].into_iter().enumerate()
                             {
-                                navigation_rail_item()
+                                navigation_rail_item(rail_scope)
                                     .label(name)
                                     .selected(selected.get() == index)
                                     .on_click(move || selected.set(index))
@@ -166,9 +166,10 @@ fn navigation_examples(
             } else {
                 navigation_bar()
                     .icon_position(NavigationBarIconPosition::Top)
-                    .content(move || {
+                    .content(move |icon_position| {
                         for (index, name) in ["Home", "Inbox", "Updates"].into_iter().enumerate() {
                             navigation_bar_item()
+                                .icon_position(icon_position)
                                 .label(name)
                                 .selected(selected.get() == index)
                                 .on_click(move || selected.set(index))
@@ -823,9 +824,10 @@ fn readable_badge_navigation() {
     let counts = remember(|| [0_u32, 3, 7]);
     navigation_bar()
         .icon_position(NavigationBarIconPosition::Top)
-        .content(move || {
+        .content(move |icon_position| {
             for (index, name) in ["Home", "Inbox", "Updates"].into_iter().enumerate() {
                 navigation_bar_item()
+                    .icon_position(icon_position)
                     .label(name)
                     .selected(selected.get() == index)
                     .on_click(move || {
@@ -848,7 +850,7 @@ fn readable_badge_navigation() {
 
 #[cfg(all(test, not(target_family = "wasm")))]
 mod form_article_tests {
-    use std::{cell::Cell, collections::BTreeMap, time::Duration};
+    use std::{collections::BTreeMap, time::Duration};
 
     use tessera_ui::{
         HeadlessConfig, HeadlessRenderer,
@@ -857,16 +859,9 @@ mod form_article_tests {
 
     use super::*;
 
-    struct Pipelines;
-    impl tessera_ui::RenderModule for Pipelines {
-        fn register_pipelines(&self, context: &mut tessera_ui::PipelineContext<'_>) {
-            tessera_components::pipelines::register_pipelines(context);
-        }
-    }
-    thread_local! {static KIND:Cell<usize>=const {Cell::new(0)};}
     #[tessera]
-    fn fixture() {
-        material_theme().child(|| match KIND.get() {
+    fn fixture(kind: usize) {
+        material_theme().child(move || match kind {
             0 => {
                 badges_spec();
             }
@@ -954,10 +949,11 @@ mod form_article_tests {
                 ],
             ),
         ] {
-            KIND.set(kind);
             let mut renderer = HeadlessRenderer::new(
-                Box::new(fixture),
-                vec![Box::new(Pipelines)],
+                Box::new(move || {
+                    fixture(kind);
+                }),
+                vec![Box::new(crate::TestPipelines)],
                 HeadlessConfig {
                     width: 900,
                     height: 8000,

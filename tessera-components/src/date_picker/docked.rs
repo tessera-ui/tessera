@@ -86,6 +86,7 @@ pub fn docked_date_picker(
     today: Option<CalendarDate>,
     show_actions: Option<bool>,
     on_date_change: Option<CallbackWith<CalendarDate>>,
+    focus_requester: Option<tessera_ui::FocusRequester>,
     on_cancel: Option<Callback>,
     on_confirm: Option<Callback>,
 ) {
@@ -137,7 +138,8 @@ pub fn docked_date_picker(
                     show_actions.unwrap_or(true),
                     on_cancel.unwrap_or_default(),
                     on_confirm.unwrap_or_default(),
-                );
+                )
+                .focus_requester_optional(focus_requester);
             }
         });
 }
@@ -152,6 +154,7 @@ fn calendar_content(
     show_actions: bool,
     on_cancel: Callback,
     on_confirm: Callback,
+    focus_requester: Option<tessera_ui::FocusRequester>,
 ) {
     column()
         .modifier(Modifier::new().fill_max_width().padding_all(Dp(12.0)))
@@ -161,7 +164,7 @@ fn calendar_content(
                 .children(move || {
                     header(state, menu);
                 });
-            calendar(state, first_day, today, change);
+            calendar(state, first_day, today, change).focus_requester_optional(focus_requester);
             if show_actions {
                 spacer().modifier(Modifier::new().height(Dp(8.0)));
                 row()
@@ -407,12 +410,13 @@ fn calendar(
     first: Weekday,
     today: CalendarDate,
     change: CallbackWith<CalendarDate>,
+    focus_requester: Option<tessera_ui::FocusRequester>,
 ) {
     let snapshot = state.with(DatePickerState::snapshot);
     let theme = use_context::<MaterialTheme>().unwrap().get();
     let owner = CalendarOwner::Single(state);
     let initial_date = owner.initial_date(today);
-    let focus = remember(move || CalendarFocus::new(initial_date));
+    let focus = remember(move || CalendarFocus::new(initial_date, focus_requester));
     let keyboard = CalendarKeyboard {
         focus,
         owner,

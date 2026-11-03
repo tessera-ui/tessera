@@ -5,9 +5,7 @@
 //! Keep interactive figure dialogs above the complete article viewport.
 
 use tessera_components::dialog::dialog_provider;
-use tessera_ui::{
-    Callback, Dp, RenderSlot, State, provide_context, remember, tessera, use_context,
-};
+use tessera_ui::{Callback, Dp, RenderSlot, State, tessera};
 
 #[derive(Clone, PartialEq)]
 struct Request {
@@ -15,16 +13,19 @@ struct Request {
     full_screen: bool,
     accessibility_label: String,
     on_close_request: Callback,
-    content: RenderSlot,
+    content: tessera_ui::RenderSlotWith<tessera_components::dialog::DialogScope>,
 }
 
-#[derive(Clone, Copy)]
-struct ArticleModalHost(State<Option<Request>>);
+#[derive(Clone, Default, PartialEq)]
+pub(crate) struct ArticleModalState {
+    request: Option<Request>,
+}
+
+pub(crate) type ArticleModalController = State<ArticleModalState>;
 
 #[tessera]
-pub(crate) fn article_modal_host(content: RenderSlot) {
-    let active = remember(|| None::<Request>);
-    let request = active.get();
+pub(crate) fn article_modal_host(active: ArticleModalController, content: RenderSlot) {
+    let request = active.get().request;
     let open = request
         .as_ref()
         .is_some_and(|request| request.open.is_alive() && request.open.get());
@@ -36,20 +37,20 @@ pub(crate) fn article_modal_host(content: RenderSlot) {
             request.accessibility_label.as_str()
         }))
         .on_close_request(move || {
-            if let Some(request) = active.get()
+            if let Some(request) = active.get().request
                 && request.open.is_alive()
             {
                 request.on_close_request.call();
             }
         })
         .main_content(move || {
-            provide_context(|| ArticleModalHost(active), move || content.render());
+            content.render();
         })
-        .dialog_content(move || {
-            if let Some(request) = active.get()
+        .dialog_content(move |dialog_scope| {
+            if let Some(request) = active.get().request
                 && request.open.is_alive()
             {
-                request.content.render();
+                request.content.render(dialog_scope);
             }
         });
 }
@@ -61,29 +62,36 @@ pub(crate) fn hosted_dialog(
     #[prop(into)] accessibility_label: Option<String>,
     on_close_request: Option<Callback>,
     main_content: Option<RenderSlot>,
-    dialog_content: Option<RenderSlot>,
+    dialog_content: Option<tessera_ui::RenderSlotWith<tessera_components::dialog::DialogScope>>,
+    modal_controller: Option<ArticleModalController>,
 ) {
     let full_screen = full_screen.unwrap_or(false);
     let accessibility_label = accessibility_label.unwrap_or_else(|| "Article dialog".into());
     let on_close_request = on_close_request.unwrap_or_default();
     let main_content = main_content.unwrap_or_default();
-    let dialog_content = dialog_content.unwrap_or_default();
-    if let Some(host) = use_context::<ArticleModalHost>() {
-        let active = host.get().0;
+    let dialog_content = if let Some(content) = dialog_content {
+        content
+    } else {
+        tessera_ui::RenderSlotWith::new(|_| {})
+    };
+    if let Some(active) = modal_controller {
         if open.get()
             && active.with(|active| {
                 active
+                    .request
                     .as_ref()
                     .is_none_or(|request| !request.open.is_alive() || !request.open.get())
             })
         {
-            active.set(Some(Request {
-                open,
-                full_screen,
-                accessibility_label,
-                on_close_request,
-                content: dialog_content,
-            }));
+            active.set(ArticleModalState {
+                request: Some(Request {
+                    open,
+                    full_screen,
+                    accessibility_label,
+                    on_close_request,
+                    content: dialog_content,
+                }),
+            });
         }
         main_content.render();
     } else {

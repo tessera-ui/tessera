@@ -37,7 +37,9 @@ use render::{
     slider_handle, slider_tick, stop_indicator,
 };
 
-pub use indicator::{SliderValueIndicatorVisibility, slider_value_indicator_provider};
+pub use indicator::{
+    SliderValueIndicatorHost, SliderValueIndicatorVisibility, slider_value_indicator_provider,
+};
 pub use interaction::RangeSliderController;
 
 mod axis;
@@ -186,8 +188,6 @@ fn range_slider_thumb(
     let colors = colors.expect("range_slider_thumb requires colors to be set");
     let focus = focus.expect("range_slider_thumb requires focus to be set");
     let accessibility = accessibility.expect("range_slider_thumb requires accessibility to be set");
-    #[cfg(test)]
-    tests::record_thumb(accessibility.clone());
     let modifier = apply_range_thumb_pointer_modifier(
         Modifier::new()
             .focus_requester(focus)
@@ -740,6 +740,7 @@ pub enum SliderSize {
 struct SliderConfig {
     pub presentation_state: Option<InteractionVisualState>,
     pub value_indicator: SliderValueIndicatorVisibility,
+    pub value_indicator_host: Option<SliderValueIndicatorHost>,
     pub value_label: Option<String>,
     axis: SliderAxis,
     /// Modifier chain applied to the slider subtree.
@@ -790,6 +791,7 @@ impl Default for SliderConfig {
         Self {
             presentation_state: None,
             value_indicator: SliderValueIndicatorVisibility::Hidden,
+            value_indicator_host: None,
             value_label: None,
             axis: SliderAxis::default(),
             modifier: Modifier::new(),
@@ -816,6 +818,7 @@ impl Default for SliderConfig {
 #[derive(Clone, PartialEq)]
 struct RangeSliderConfig {
     pub value_indicator: SliderValueIndicatorVisibility,
+    pub value_indicator_host: Option<SliderValueIndicatorHost>,
     pub start_value_label: Option<String>,
     pub end_value_label: Option<String>,
     axis: SliderAxis,
@@ -875,6 +878,7 @@ impl Default for RangeSliderConfig {
     fn default() -> Self {
         Self {
             value_indicator: SliderValueIndicatorVisibility::Hidden,
+            value_indicator_host: None,
             start_value_label: None,
             end_value_label: None,
             axis: SliderAxis::default(),
@@ -906,6 +910,7 @@ type RangeSliderArgs = RangeSliderConfig;
 struct SliderParams {
     presentation_state: Option<InteractionVisualState>,
     value_indicator: Option<SliderValueIndicatorVisibility>,
+    value_indicator_host: Option<SliderValueIndicatorHost>,
     value_label: Option<String>,
     axis: SliderAxis,
     modifier: Option<Modifier>,
@@ -953,6 +958,7 @@ fn slider_config_from_params(params: SliderParams, theme: SliderThemeColors) -> 
     SliderConfig {
         presentation_state: params.presentation_state,
         value_indicator: params.value_indicator.unwrap_or_default(),
+        value_indicator_host: params.value_indicator_host,
         value_label: params.value_label,
         axis: params.axis,
         modifier: params.modifier.unwrap_or(defaults.modifier),
@@ -979,6 +985,7 @@ fn slider_config_from_params(params: SliderParams, theme: SliderThemeColors) -> 
 
 struct RangeSliderParams {
     value_indicator: Option<SliderValueIndicatorVisibility>,
+    value_indicator_host: Option<SliderValueIndicatorHost>,
     start_value_label: Option<String>,
     end_value_label: Option<String>,
     axis: SliderAxis,
@@ -1011,6 +1018,7 @@ fn range_slider_config_from_params(
     let end = snap_fraction(params.value.1, params.steps).max(start);
     RangeSliderConfig {
         value_indicator: params.value_indicator.unwrap_or_default(),
+        value_indicator_host: params.value_indicator_host,
         start_value_label: params.start_value_label,
         end_value_label: params.end_value_label,
         axis: params.axis,
@@ -1304,7 +1312,8 @@ fn range_slider_colors(args: &RangeSliderConfig, scheme: &MaterialColorScheme) -
 /// - `presentation_state` — optional visual interaction without changing focus
 ///   or gestures.
 /// - `value_indicator` — hidden by default; show while focused/dragging or
-///   always. Enable inside [`slider_value_indicator_provider`].
+///   always. Pass the host received from [`slider_value_indicator_provider`].
+/// - `value_indicator_host` — overlay target received from the provider slot.
 /// - `value_label` — optional formatted value for the floating label and screen
 ///   reader; defaults to a rounded percentage without a percent sign when
 ///   labels are enabled.
@@ -1354,6 +1363,7 @@ pub fn slider(
     show_stop_indicator: Option<bool>,
     steps: Option<usize>,
     value_indicator: Option<SliderValueIndicatorVisibility>,
+    value_indicator_host: Option<SliderValueIndicatorHost>,
     #[prop(into)] value_label: Option<String>,
     #[prop(into)] inset_icon: Option<Painter>,
     controller: Option<State<SliderController>>,
@@ -1389,6 +1399,7 @@ pub fn slider(
             show_stop_indicator,
             steps,
             value_indicator,
+            value_indicator_host,
             value_label,
             inset_icon,
             controller,
@@ -1461,6 +1472,7 @@ fn slider_content(
     let indicator_anchor = if args.value_indicator != SliderValueIndicatorVisibility::Hidden {
         let anchor = remember(tessera_ui::LayoutCoordinates::default);
         indicator::register_indicator()
+            .host_optional(args.value_indicator_host)
             .anchor(anchor)
             .label(
                 args.value_label
@@ -1784,7 +1796,8 @@ fn measure_centered_slider(
 /// - `presentation_state` — optional visual interaction without changing focus
 ///   or gestures.
 /// - `value_indicator` — hidden by default; show while focused/dragging or
-///   always. Enable inside [`slider_value_indicator_provider`].
+///   always. Pass the host received from [`slider_value_indicator_provider`].
+/// - `value_indicator_host` — overlay target received from the provider slot.
 /// - `value_label` — optional formatted value for the floating label and screen
 ///   reader; defaults to a rounded percentage without a percent sign when
 ///   labels are enabled.
@@ -1842,6 +1855,7 @@ pub fn centered_slider(
     show_stop_indicator: Option<bool>,
     steps: Option<usize>,
     value_indicator: Option<SliderValueIndicatorVisibility>,
+    value_indicator_host: Option<SliderValueIndicatorHost>,
     #[prop(into)] value_label: Option<String>,
     #[prop(into)] inset_icon: Option<Painter>,
     controller: Option<State<SliderController>>,
@@ -1877,6 +1891,7 @@ pub fn centered_slider(
             show_stop_indicator,
             steps,
             value_indicator,
+            value_indicator_host,
             value_label,
             inset_icon,
             controller,
@@ -1950,6 +1965,7 @@ fn centered_slider_content(
     let indicator_anchor = if args.value_indicator != SliderValueIndicatorVisibility::Hidden {
         let anchor = remember(tessera_ui::LayoutCoordinates::default);
         indicator::register_indicator()
+            .host_optional(args.value_indicator_host)
             .anchor(anchor)
             .label(
                 args.value_label
@@ -2259,7 +2275,8 @@ fn measure_range_slider(
 ///   for each handle.
 ///
 /// - `value_indicator` — hidden by default; show focused/dragged handles or all
-///   enabled handles. Enable inside [`slider_value_indicator_provider`].
+///   enabled handles. Pass the host received from [`slider_value_indicator_provider`].
+/// - `value_indicator_host` — overlay target received from the provider slot.
 /// - `start_value_label`, `end_value_label` — optional formatted labels and
 ///   screen-reader values; defaults are rounded percentages without percent
 ///   signs.
@@ -2312,6 +2329,7 @@ pub fn range_slider(
     show_stop_indicator: Option<bool>,
     steps: Option<usize>,
     value_indicator: Option<SliderValueIndicatorVisibility>,
+    value_indicator_host: Option<SliderValueIndicatorHost>,
     #[prop(into)] start_value_label: Option<String>,
     #[prop(into)] end_value_label: Option<String>,
     controller: Option<State<RangeSliderController>>,
@@ -2348,6 +2366,7 @@ pub fn range_slider(
             show_stop_indicator,
             steps,
             value_indicator,
+            value_indicator_host,
             start_value_label,
             end_value_label,
             controller,
@@ -2445,6 +2464,7 @@ fn range_slider_content(
         let start_anchor = remember(tessera_ui::LayoutCoordinates::default);
         let end_anchor = remember(tessera_ui::LayoutCoordinates::default);
         indicator::register_indicator()
+            .host_optional(args.value_indicator_host)
             .anchor(start_anchor)
             .label(
                 args.start_value_label
@@ -2458,6 +2478,7 @@ fn range_slider_content(
             .orientation(args.axis.orientation)
             .interacting(start_interacting);
         indicator::register_indicator()
+            .host_optional(args.value_indicator_host)
             .anchor(end_anchor)
             .label(
                 args.end_value_label
@@ -2610,8 +2631,6 @@ fn range_slider_content(
 
 #[cfg(test)]
 mod tests {
-    use std::cell::{Cell, RefCell};
-
     use tessera_ui::{
         HeadlessConfig, HeadlessRenderer,
         testing::{layout_test, pump_layout_test_session, start_layout_test_session},
@@ -2628,19 +2647,10 @@ mod tests {
         width: Option<f64>,
     }
 
-    thread_local! {
-        static RANGE: Cell<Option<State<(f32, f32)>>> = const { Cell::new(None) };
-        static SETTINGS: Cell<Option<State<Settings>>> = const { Cell::new(None) };
-        static THUMBS: RefCell<[Option<RangeThumbAccessibility>; 2]> = const { RefCell::new([None, None]) };
-    }
-
-    pub(super) fn record_thumb(thumb: RangeThumbAccessibility) {
-        let index = usize::from(thumb.key == "range_slider_end_thumb");
-        THUMBS.with(|thumbs| thumbs.borrow_mut()[index] = Some(thumb));
-    }
-
-    fn thumb(index: usize) -> RangeThumbAccessibility {
-        THUMBS.with(|thumbs| thumbs.borrow()[index].clone().expect("range handle"))
+    #[derive(Clone, Copy, Default)]
+    struct FixtureHandles {
+        range: Option<State<(f32, f32)>>,
+        settings: Option<State<Settings>>,
     }
 
     struct SliderTestTag(&'static str);
@@ -2656,13 +2666,13 @@ mod tests {
     }
 
     #[tessera]
-    fn fixture() {
+    fn fixture(observed: tessera_ui::testing::TestProbe<FixtureHandles>) {
         let settings = remember(Settings::default);
         let range = remember(|| (0.2_f32, 0.8_f32));
         let single = remember(|| 0.5_f32);
         let centered = remember(|| 0.5_f32);
-        SETTINGS.set(Some(settings));
-        RANGE.set(Some(range));
+        observed.with_mut(|handles| handles.settings = Some(settings));
+        observed.with_mut(|handles| handles.range = Some(range));
         material_theme().child(move || {
             column().children(move || {
                 slider()
@@ -2706,76 +2716,118 @@ mod tests {
 
     #[test]
     fn sliders_survive_zero_width_and_restore_their_values_and_bounds() {
-        let mut session = start_layout_test_session(layout_test(|| {
-            fixture();
+        let observed = tessera_ui::testing::TestProbe::default();
+        let mut session = start_layout_test_session(layout_test({
+            let observed = observed.clone();
+            move || {
+                fixture(observed.clone());
+            }
         }));
         pump_layout_test_session(&mut session, 0);
         for (frame, width) in [0.0, 1.0, 3.0, 5.0, 280.0].into_iter().enumerate() {
-            SETTINGS
+            observed
                 .get()
+                .settings
                 .unwrap()
                 .with_mut(|settings| settings.width = Some(width));
             let snapshot = pump_layout_test_session(&mut session, (frame as u64 + 1) * 16_666_667);
             for selector in ["slider", "centered_slider", "range_slider"] {
                 assert_eq!(snapshot.node(selector).bounds().width, Dp(width).to_px());
             }
-            assert_eq!(RANGE.get().unwrap().get(), (0.2, 0.8));
+            assert_eq!(observed.get().range.unwrap().get(), (0.2, 0.8));
         }
     }
 
     #[test]
-    fn retained_range_callbacks_preserve_the_latest_other_endpoint() {
-        let mut session = start_layout_test_session(layout_test(|| {
-            fixture();
+    fn range_thumb_actions_preserve_the_latest_other_endpoint() {
+        let observed = tessera_ui::testing::TestProbe::default();
+        let mut session = start_layout_test_session(layout_test({
+            let observed = observed.clone();
+            move || fixture(observed.clone())
         }));
         pump_layout_test_session(&mut session, 0);
-        let start = thumb(0).on_change;
-        let end = thumb(1).on_change;
-        RANGE.get().unwrap().set((0.3, 0.6));
+        let range = observed.get().range.expect("range state");
+        range.set((0.3, 0.6));
         pump_layout_test_session(&mut session, 16_666_667);
-        start.call(0.4);
-        assert_eq!(RANGE.get().unwrap().get(), (0.4, 0.6));
-        pump_layout_test_session(&mut session, 33_333_334);
-        end.call(0.9);
-        assert_eq!(RANGE.get().unwrap().get(), (0.4, 0.9));
-        pump_layout_test_session(&mut session, 50_000_001);
-        assert_eq!(thumb(0).max, 0.9);
-        assert_eq!(thumb(1).min, 0.4);
+        for (frame, label, expected) in [
+            (2, "Minimum price", (0.35_f32, 0.6_f32)),
+            (3, "Maximum price", (0.35_f32, 0.65_f32)),
+        ] {
+            let snapshot = session.inspect_accessibility().expect("slider tree");
+            let target = snapshot.find(label, Role::Slider).expect("range thumb").0;
+            assert!(
+                session.dispatch_accessibility_action(tessera_ui::accesskit::ActionRequest {
+                    action: Action::Increment,
+                    target_node: target,
+                    target_tree: tessera_ui::accesskit::TreeId::ROOT,
+                    data: None,
+                })
+            );
+            let actual = range.get();
+            assert!((actual.0 - expected.0).abs() < 1e-6 && (actual.1 - expected.1).abs() < 1e-6);
+            pump_layout_test_session(&mut session, frame * 16_666_667);
+        }
+        let snapshot = session.inspect_accessibility().expect("slider tree");
+        let start = snapshot.find("Minimum price", Role::Slider).unwrap().1;
+        let end = snapshot.find("Maximum price", Role::Slider).unwrap().1;
+        assert!((start.max_numeric_value().unwrap() - 0.65).abs() < 1e-6);
+        assert!((end.min_numeric_value().unwrap() - 0.35).abs() < 1e-6);
     }
 
     #[test]
-    fn changing_steps_rebuilds_ticks_and_disabling_removes_thumb_actions() {
-        let mut session = start_layout_test_session(layout_test(|| {
-            fixture();
+    fn changing_steps_updates_actual_actions_and_disabling_removes_them() {
+        let observed = tessera_ui::testing::TestProbe::default();
+        let mut session = start_layout_test_session(layout_test({
+            let observed = observed.clone();
+            move || fixture(observed.clone())
         }));
         pump_layout_test_session(&mut session, 0);
-        SETTINGS
-            .get()
-            .unwrap()
-            .with_mut(|settings| settings.steps = 3);
+        let settings = observed.get().settings.expect("slider settings");
+        settings.with_mut(|settings| settings.steps = 3);
         pump_layout_test_session(&mut session, 16_666_667);
-        assert_eq!(thumb(0).steps, 3);
-        assert_eq!(thumb(1).steps, 3);
-        SETTINGS.get().unwrap().with_mut(|settings| {
+        let snapshot = session.inspect_accessibility().expect("slider tree");
+        let target = snapshot.find("Minimum price", Role::Slider).unwrap().0;
+        assert!(
+            session.dispatch_accessibility_action(tessera_ui::accesskit::ActionRequest {
+                action: Action::Increment,
+                target_node: target,
+                target_tree: tessera_ui::accesskit::TreeId::ROOT,
+                data: None,
+            })
+        );
+        assert_eq!(observed.get().range.unwrap().get(), (0.5, 0.75));
+        settings.with_mut(|settings| {
             settings.steps = 0;
             settings.disabled = true;
         });
         pump_layout_test_session(&mut session, 33_333_334);
-        for index in 0..2 {
-            let mut semantics = AccessibilityNode::default();
-            let mut handler = None;
-            apply_range_thumb_semantics(&mut semantics, &mut handler, &thumb(index));
-            assert!(semantics.disabled);
-            assert!(!semantics.focusable);
-            assert!(semantics.actions.is_empty());
-            assert!(handler.is_none());
+        let snapshot = session.inspect_accessibility().expect("slider tree");
+        for label in ["Minimum price", "Maximum price"] {
+            let (target, node) = snapshot.find(label, Role::Slider).expect("disabled thumb");
+            assert!(node.is_disabled());
+            assert!(!node.supports_action(Action::Focus));
+            assert!(!node.supports_action(Action::Increment));
+            assert!(!node.supports_action(Action::Decrement));
+            assert!(
+                !session.dispatch_accessibility_action(tessera_ui::accesskit::ActionRequest {
+                    action: Action::Increment,
+                    target_node: target,
+                    target_tree: tessera_ui::accesskit::TreeId::ROOT,
+                    data: None,
+                })
+            );
         }
+        assert_eq!(observed.get().range.unwrap().get(), (0.5, 0.75));
     }
 
     fn check_centered_slider_gaps(samples: u32) {
+        let observed = tessera_ui::testing::TestProbe::default();
         let mut renderer = HeadlessRenderer::new(
-            Box::new(|| {
-                fixture();
+            Box::new({
+                let observed = observed.clone();
+                move || {
+                    fixture(observed.clone());
+                }
             }),
             vec![Box::new(crate::TesseraComponents)],
             HeadlessConfig {
@@ -2838,9 +2890,13 @@ mod tests {
                 .expect("named control");
             (*id, node)
         }
+        let observed = tessera_ui::testing::TestProbe::default();
         let mut renderer = HeadlessRenderer::new(
-            Box::new(|| {
-                fixture();
+            Box::new({
+                let observed = observed.clone();
+                move || {
+                    fixture(observed.clone());
+                }
             }),
             vec![Box::new(crate::TesseraComponents)],
             HeadlessConfig {
@@ -2868,7 +2924,7 @@ mod tests {
         assert_eq!(group.role(), Role::Group);
         assert!(!group.is_hidden());
         assert!(group.children().contains(&start_id) && group.children().contains(&end_id));
-        RANGE.get().unwrap().set((0.3, 0.6));
+        observed.get().range.unwrap().set((0.3, 0.6));
         renderer.render_frames(2);
         let after = renderer.accessibility_snapshot().unwrap();
         let (id, start) = control(&after, "Minimum price");
@@ -2877,8 +2933,9 @@ mod tests {
         let (id, end) = control(&after, "Maximum price");
         assert_eq!(id, end_id);
         assert_eq!(end.min_numeric_value(), Some(0.3_f32 as f64));
-        SETTINGS
+        observed
             .get()
+            .settings
             .unwrap()
             .with_mut(|settings| settings.steps = 3);
         renderer.render_frames(2);
@@ -2889,8 +2946,9 @@ mod tests {
             control(&stepped, "Price interval").1.children(),
             &[start_id, end_id]
         );
-        SETTINGS
+        observed
             .get()
+            .settings
             .unwrap()
             .with_mut(|settings| settings.disabled = true);
         renderer.render_frames(2);

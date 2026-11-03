@@ -1,5 +1,3 @@
-use std::cell::Cell;
-
 use tessera_ui::{
     Color, Dp, FocusDirection, FocusManager, HeadlessConfig, HeadlessRenderer, MOUSE_POINTER_ID,
     Modifier, PressKeyEventType, PxPosition, State,
@@ -16,23 +14,24 @@ use crate::{
 
 use super::{MenuAnchor, MenuController, MenuPosition, menu_group, menu_item, menu_provider};
 
-thread_local! {
-    static ROOT: Cell<Option<State<MenuController>>> = const { Cell::new(None) };
-    static ACTIONS: Cell<Option<State<u32>>> = const { Cell::new(None) };
-    static FIXED: Cell<Option<State<Option<Shape>>>> = const { Cell::new(None) };
-    static ENABLED: Cell<Option<State<bool>>> = const { Cell::new(None) };
+#[derive(Clone, Copy, Default)]
+struct FixtureHandles {
+    root: Option<State<MenuController>>,
+    actions: Option<State<u32>>,
+    fixed: Option<State<Option<Shape>>>,
+    enabled: Option<State<bool>>,
 }
 
 #[tessera]
-fn fixture() {
+fn fixture(observed: tessera_ui::testing::TestProbe<FixtureHandles>) {
     let root = remember(MenuController::new);
     let actions = remember(|| 0);
     let fixed = remember(|| None);
     let enabled = remember(|| true);
-    ROOT.set(Some(root));
-    ACTIONS.set(Some(actions));
-    FIXED.set(Some(fixed));
-    ENABLED.set(Some(enabled));
+    observed.with_mut(|handles| handles.root = Some(root));
+    observed.with_mut(|handles| handles.actions = Some(actions));
+    observed.with_mut(|handles| handles.fixed = Some(fixed));
+    observed.with_mut(|handles| handles.enabled = Some(enabled));
     material_theme()
         .theme(|| {
             let mut theme = MaterialTheme::default();
@@ -52,31 +51,39 @@ fn fixture() {
                         .modifier(Modifier::new().fill_max_size())
                         .child(|| {});
                 })
-                .menu_content(move || {
+                .menu_content(move |menu| {
                     menu_group()
+                        .menu(menu)
                         .position(MenuPosition::First)
                         .shape_optional(fixed.get())
                         .accessibility_label("First group")
                         .children(move || {
                             menu_item()
+                                .menu(menu)
                                 .label("Share")
                                 .enabled(enabled.get())
-                                .submenu_content(move || {
+                                .submenu_content(move |menu| {
                                     menu_item()
+                                        .menu(menu)
                                         .label("Copy")
                                         .on_click(move || actions.set(actions.get() + 1));
-                                    menu_item().label("More").submenu_content(move || {
-                                        menu_item()
-                                            .label("Export")
-                                            .on_click(move || actions.set(actions.get() + 10));
-                                    });
+                                    menu_item().menu(menu).label("More").submenu_content(
+                                        move |menu| {
+                                            menu_item()
+                                                .menu(menu)
+                                                .label("Export")
+                                                .on_click(move || actions.set(actions.get() + 10));
+                                        },
+                                    );
                                 });
                         });
                     menu_group()
+                        .menu(menu)
                         .position(MenuPosition::Last)
                         .accessibility_label("Last group")
                         .children(move || {
                             menu_item()
+                                .menu(menu)
                                 .label("Other")
                                 .on_click(move || actions.set(actions.get() + 100));
                         });
@@ -128,8 +135,12 @@ fn corner(renderer: &mut HeadlessRenderer, bounds: Rect) -> u8 {
 }
 
 fn check_motion(samples: u32) {
+    let observed = tessera_ui::testing::TestProbe::default();
     let mut renderer = HeadlessRenderer::new(
-        Box::new(|| fixture()),
+        Box::new({
+            let observed = observed.clone();
+            move || fixture(observed.clone())
+        }),
         vec![Box::new(crate::TesseraComponents)],
         HeadlessConfig {
             width: 1500,
@@ -142,7 +153,7 @@ fn check_motion(samples: u32) {
     .expect("renderer");
     renderer.render_frames(4);
     let background = renderer.read_pixels().expect("background");
-    ROOT.get().expect("root").with_mut(|root| {
+    observed.get().root.expect("root").with_mut(|root| {
         root.open_at(MenuAnchor::from_dp(
             (Dp(80.0), Dp(80.0)),
             (Dp(20.0), Dp(20.0)),
@@ -191,10 +202,10 @@ fn check_motion(samples: u32) {
     );
     hover(&mut renderer, "Share");
     renderer.render_frames(3);
-    ENABLED.get().expect("enabled").set(false);
+    observed.get().enabled.expect("enabled").set(false);
     renderer.render_frames(20);
     assert!(bounds(&renderer, "Copy").is_none());
-    ENABLED.get().expect("enabled").set(true);
+    observed.get().enabled.expect("enabled").set(true);
     renderer.render_frames(20);
     assert!(
         bounds(&renderer, "Copy").is_none(),
@@ -271,8 +282,9 @@ fn check_motion(samples: u32) {
         "touch motion does not create hover intent"
     );
 
-    FIXED
+    observed
         .get()
+        .fixed
         .expect("fixed")
         .set(Some(Shape::rounded_rectangle(Dp(24.0))));
     renderer.render_frames(60);
@@ -284,11 +296,11 @@ fn check_motion(samples: u32) {
         corner(&mut renderer, first) > 200,
         "an explicit shape remains fixed after leaving the group"
     );
-    FIXED.get().expect("fixed").set(None);
+    observed.get().fixed.expect("fixed").set(None);
     renderer.render_frames(60);
     assert!(corner(&mut renderer, first) < 150);
     assert_eq!(
-        ACTIONS.get().expect("actions").get(),
+        observed.get().actions.expect("actions").get(),
         0,
         "hover never invokes an action"
     );
@@ -300,7 +312,7 @@ fn check_motion(samples: u32) {
     renderer.step_frame();
     renderer.pointer_release(MOUSE_POINTER_ID, copy, PressKeyEventType::Left);
     renderer.render_frames(90);
-    assert_eq!(ACTIONS.get().expect("actions").get(), 1);
+    assert_eq!(observed.get().actions.expect("actions").get(), 1);
     assert!(renderer.read_pixels().expect("dismissed") == background);
 }
 

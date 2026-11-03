@@ -178,109 +178,37 @@ impl JniReturn for bool {
     }
 }
 
-impl JniArg for i32 {
-    fn signature() -> Cow<'static, str> {
-        Cow::Borrowed("I")
-    }
-
-    fn to_jvalue<'a>(
-        &self,
-        _env: &mut internal::JNIEnv<'a>,
-    ) -> Result<internal::JValueOwned<'a>, AndroidJniError> {
-        Ok(internal::JValueOwned::Int(*self))
-    }
+macro_rules! primitive_jni {
+    ($ty:ty, $signature:literal, $variant:ident, $accessor:ident) => {
+        impl JniArg for $ty {
+            fn signature() -> Cow<'static, str> {
+                Cow::Borrowed($signature)
+            }
+            fn to_jvalue<'a>(
+                &self,
+                _env: &mut internal::JNIEnv<'a>,
+            ) -> Result<internal::JValueOwned<'a>, AndroidJniError> {
+                Ok(internal::JValueOwned::$variant(*self))
+            }
+        }
+        impl JniReturn for $ty {
+            fn signature() -> Cow<'static, str> {
+                Cow::Borrowed($signature)
+            }
+            fn from_jvalue<'a>(
+                _env: &mut internal::JNIEnv<'a>,
+                value: internal::JValueOwned<'a>,
+            ) -> Result<Self, AndroidJniError> {
+                value.$accessor().map_err(AndroidJniError::from)
+            }
+        }
+    };
 }
 
-impl JniReturn for i32 {
-    fn signature() -> Cow<'static, str> {
-        Cow::Borrowed("I")
-    }
-
-    fn from_jvalue<'a>(
-        _env: &mut internal::JNIEnv<'a>,
-        value: internal::JValueOwned<'a>,
-    ) -> Result<Self, AndroidJniError> {
-        Ok(value.i().map_err(AndroidJniError::from)?)
-    }
-}
-
-impl JniArg for i64 {
-    fn signature() -> Cow<'static, str> {
-        Cow::Borrowed("J")
-    }
-
-    fn to_jvalue<'a>(
-        &self,
-        _env: &mut internal::JNIEnv<'a>,
-    ) -> Result<internal::JValueOwned<'a>, AndroidJniError> {
-        Ok(internal::JValueOwned::Long(*self))
-    }
-}
-
-impl JniReturn for i64 {
-    fn signature() -> Cow<'static, str> {
-        Cow::Borrowed("J")
-    }
-
-    fn from_jvalue<'a>(
-        _env: &mut internal::JNIEnv<'a>,
-        value: internal::JValueOwned<'a>,
-    ) -> Result<Self, AndroidJniError> {
-        Ok(value.j().map_err(AndroidJniError::from)?)
-    }
-}
-
-impl JniArg for f32 {
-    fn signature() -> Cow<'static, str> {
-        Cow::Borrowed("F")
-    }
-
-    fn to_jvalue<'a>(
-        &self,
-        _env: &mut internal::JNIEnv<'a>,
-    ) -> Result<internal::JValueOwned<'a>, AndroidJniError> {
-        Ok(internal::JValueOwned::Float(*self))
-    }
-}
-
-impl JniReturn for f32 {
-    fn signature() -> Cow<'static, str> {
-        Cow::Borrowed("F")
-    }
-
-    fn from_jvalue<'a>(
-        _env: &mut internal::JNIEnv<'a>,
-        value: internal::JValueOwned<'a>,
-    ) -> Result<Self, AndroidJniError> {
-        Ok(value.f().map_err(AndroidJniError::from)?)
-    }
-}
-
-impl JniArg for f64 {
-    fn signature() -> Cow<'static, str> {
-        Cow::Borrowed("D")
-    }
-
-    fn to_jvalue<'a>(
-        &self,
-        _env: &mut internal::JNIEnv<'a>,
-    ) -> Result<internal::JValueOwned<'a>, AndroidJniError> {
-        Ok(internal::JValueOwned::Double(*self))
-    }
-}
-
-impl JniReturn for f64 {
-    fn signature() -> Cow<'static, str> {
-        Cow::Borrowed("D")
-    }
-
-    fn from_jvalue<'a>(
-        _env: &mut internal::JNIEnv<'a>,
-        value: internal::JValueOwned<'a>,
-    ) -> Result<Self, AndroidJniError> {
-        Ok(value.d().map_err(AndroidJniError::from)?)
-    }
-}
+primitive_jni!(i32, "I", Int, i);
+primitive_jni!(i64, "J", Long, j);
+primitive_jni!(f32, "F", Float, f);
+primitive_jni!(f64, "D", Double, d);
 
 impl JniArg for String {
     fn signature() -> Cow<'static, str> {
@@ -291,10 +219,7 @@ impl JniArg for String {
         &self,
         env: &mut internal::JNIEnv<'a>,
     ) -> Result<internal::JValueOwned<'a>, AndroidJniError> {
-        let value = env
-            .new_string(self)
-            .map_err(|err| map_jni_error(env, err))?;
-        Ok(internal::JValueOwned::from(value))
+        self.as_str().to_jvalue(env)
     }
 }
 

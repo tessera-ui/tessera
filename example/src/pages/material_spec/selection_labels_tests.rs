@@ -10,14 +10,6 @@ use tessera_ui::{
     tessera,
 };
 
-struct Pipelines;
-
-impl tessera_ui::RenderModule for Pipelines {
-    fn register_pipelines(&self, context: &mut tessera_ui::PipelineContext<'_>) {
-        tessera_components::pipelines::register_pipelines(context);
-    }
-}
-
 #[tessera]
 fn checkbox_fixture() {
     super::super::super::media::load_fonts();
@@ -39,14 +31,14 @@ fn switch_fixture() {
 }
 
 fn node(renderer: &HeadlessRenderer, label: &str, role: Role) -> Node {
-    renderer
-        .accessibility_snapshot()
-        .unwrap()
-        .nodes
-        .into_iter()
-        .find(|(_, node)| node.label() == Some(label) && node.role() == role)
-        .unwrap_or_else(|| panic!("missing native {role:?} {label}"))
+    let snapshot = renderer
+        .inspect_accessibility()
+        .expect("accessibility tree");
+    snapshot
+        .find(label, role)
+        .unwrap_or_else(|| panic!("missing {label} {role:?}"))
         .1
+        .clone()
 }
 
 fn click(renderer: &mut HeadlessRenderer, x: f32, y: f32) {
@@ -84,7 +76,7 @@ fn adjacent_labels_activate_their_native_control_and_preserve_canonical_scaled_g
                     checkbox_fixture();
                 })
             },
-            vec![Box::new(Pipelines)],
+            vec![Box::new(crate::TestPipelines)],
             HeadlessConfig {
                 width: 676,
                 height: 400,

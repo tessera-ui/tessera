@@ -1,7 +1,4 @@
-use std::{
-    cell::{Cell, RefCell},
-    collections::BTreeMap,
-};
+use std::collections::BTreeMap;
 
 use crate::{
     AccessibilityActionHandler, AccessibilityNode, ComputedData, Constraint, CursorEventContent,
@@ -14,21 +11,21 @@ use crate::{
     runtime::TesseraRuntime,
     tessera,
     testing::{
-        last_layout_frame_diagnostics, layout_test, pump_layout_test_session,
-        pump_layout_test_session_with_input, start_layout_test_session,
+        layout_test, pump_layout_test_session, pump_layout_test_session_with_input,
+        start_layout_test_session,
     },
     time::Instant,
 };
 
-thread_local! {
-    static VERSION: Cell<Option<State<u32>>> = const { Cell::new(None) };
-    static LEAF_VERSION: Cell<Option<State<u32>>> = const { Cell::new(None) };
-    static PARENT_BUILDS: Cell<usize> = const { Cell::new(0) };
-    static REQUESTERS: RefCell<BTreeMap<usize, FocusRequester>> = const { RefCell::new(BTreeMap::new()) };
-    static SCOPES: Cell<Option<(FocusScopeNode, FocusScopeNode)>> = const { Cell::new(None) };
-    static REVERSE: Cell<Option<State<bool>>> = const { Cell::new(None) };
-    static HITS: RefCell<Vec<usize>> = const { RefCell::new(Vec::new()) };
-    static RETAINED_BUILDS: Cell<usize> = const { Cell::new(0) };
+#[derive(Clone, Default, PartialEq)]
+struct ReplayProbe {
+    version: crate::testing::TestProbe<Option<State<u32>>>,
+    leaf_version: crate::testing::TestProbe<Option<State<u32>>>,
+    requesters: crate::testing::TestProbe<BTreeMap<usize, FocusRequester>>,
+    scopes: crate::testing::TestProbe<Option<(FocusScopeNode, FocusScopeNode)>>,
+    reverse: crate::testing::TestProbe<Option<State<bool>>>,
+    hits: crate::testing::TestProbe<Vec<usize>>,
+    armed: crate::testing::TestProbe<Option<State<bool>>>,
 }
 
 #[derive(Clone, PartialEq)]
@@ -66,7 +63,7 @@ impl SemanticsModifierNode for Tag {
     }
 }
 
-struct Pointer(Option<usize>);
+struct Pointer(Option<usize>, crate::testing::TestProbe<Vec<usize>>);
 impl PointerInputModifierNode for Pointer {
     fn on_pointer_input(&self, input: PointerInput<'_>) {
         if input.pass != PointerEventPass::Main {
@@ -75,7 +72,7 @@ impl PointerInputModifierNode for Pointer {
         for change in input.pointer_changes.iter_mut() {
             if !change.is_consumed() && matches!(change.content, CursorEventContent::Pressed(_)) {
                 if let Some(index) = self.0 {
-                    HITS.with_borrow_mut(|hits| hits.push(index));
+                    self.1.with_mut(|hits| hits.push(index));
                 }
                 change.consume();
             }
@@ -84,21 +81,21 @@ impl PointerInputModifierNode for Pointer {
 }
 
 #[tessera(crate)]
-fn edited_leaf(version: u32) {
+fn edited_leaf(version: u32, probe: ReplayProbe) {
     layout().policy(Overlap).modifier(
         Modifier::new()
             .push_semantics(Tag {
                 key: "edited".to_owned(),
                 label: format!("Version {version}"),
             })
-            .push_pointer_input(Pointer(None)),
+            .push_pointer_input(Pointer(None, probe.hits.clone())),
     );
 }
 
 #[tessera(crate)]
-fn retained_leaf(index: usize) {
+fn retained_leaf(index: usize, probe: ReplayProbe) {
     let requester = remember(FocusRequester::new).get();
-    REQUESTERS.with_borrow_mut(|requesters| {
+    probe.requesters.with_mut(|requesters| {
         requesters.insert(index, requester);
     });
     layout().policy(Overlap).modifier(
@@ -107,77 +104,83 @@ fn retained_leaf(index: usize) {
                 key: format!("retained-{index}"),
                 label: format!("Retained {index}"),
             })
-            .push_pointer_input(Pointer(Some(index)))
+            .push_pointer_input(Pointer(Some(index), probe.hits.clone()))
             .focusable()
             .focus_requester(requester),
     );
 }
 
 #[tessera(crate)]
-fn retained_branch(count: usize) {
-    RETAINED_BUILDS.set(RETAINED_BUILDS.get() + 1);
+fn retained_branch(count: usize, probe: ReplayProbe) {
     layout().policy(Overlap).child(move || {
+        let probe = probe.clone();
         for index in 0..count {
+            let probe = probe.clone();
             crate::key(index, move || {
-                retained_leaf(index);
+                retained_leaf(index, probe.clone());
             });
         }
     });
 }
 
 #[tessera(crate)]
-fn replay_fixture(count: usize) {
+fn replay_fixture(count: usize, probe: ReplayProbe) {
     let version = remember(|| 0_u32);
-    VERSION.set(Some(version));
+    probe.version.set(Some(version));
     let version = version.get();
     layout().policy(Overlap).child(move || {
-        edited_leaf(version);
-        retained_branch(count);
+        let probe = probe.clone();
+        edited_leaf(version, probe.clone());
+        retained_branch(count, probe.clone());
     });
 }
 
-fn retained_node_ids() -> BTreeMap<String, crate::NodeId> {
-    TesseraRuntime::with(|runtime| {
-        let mut result = BTreeMap::new();
-        runtime.component_tree.metadatas().with_entries(|entries| {
-            for (&id, metadata) in entries {
-                if let Some(key) = metadata
-                    .accessibility
-                    .as_ref()
-                    .and_then(|node| node.key.as_ref())
-                    .filter(|key| key.starts_with("retained-"))
-                {
-                    result.insert(key.clone(), id);
-                }
-            }
-        });
-        result
-    })
+fn retained_node_ids(
+    session: &crate::testing::LayoutTestSession<impl Fn()>,
+) -> BTreeMap<String, crate::NodeId> {
+    session
+        .inspect_components()
+        .nodes()
+        .iter()
+        .filter_map(|node| {
+            let key = node.semantics()?.key.as_ref()?.clone();
+            key.starts_with("retained-").then(|| (key, node.node_id()))
+        })
+        .collect()
 }
 
 fn update_one_leaf(count: usize) -> (super::LayoutFrameDiagnostics, super::LayoutFrameDiagnostics) {
-    RETAINED_BUILDS.set(0);
+    let probe = ReplayProbe::default();
+
     let mut session = start_layout_test_session(
-        layout_test(move || {
-            replay_fixture(count);
+        layout_test({
+            let probe = probe.clone();
+            move || replay_fixture(count, probe.clone())
         })
         .viewport_px(100, 100),
     );
     pump_layout_test_session(&mut session, 0);
-    let initial = last_layout_frame_diagnostics().expect("Initial frame diagnostics");
-    let retained = retained_node_ids();
+    let initial = session.diagnostics().expect("Initial frame diagnostics");
+    let retained = retained_node_ids(&session);
     assert_eq!(retained.len(), count);
-    assert_eq!(RETAINED_BUILDS.get(), 1);
-    VERSION.get().expect("Version state").set(1);
-    pump_layout_test_session(&mut session, 16_000_000);
-    let updated = last_layout_frame_diagnostics().expect("Updated frame diagnostics");
     assert_eq!(
-        RETAINED_BUILDS.get(),
+        session
+            .work_totals()
+            .count("retained_branch", crate::WorkPhase::Build),
+        1
+    );
+    probe.version.get().expect("Version state").set(1);
+    pump_layout_test_session(&mut session, 16_000_000);
+    let updated = session.diagnostics().expect("Updated frame diagnostics");
+    assert_eq!(
+        session
+            .work_totals()
+            .count("retained_branch", crate::WorkPhase::Build),
         1,
         "The equal-prop sibling must really reuse its component subtree"
     );
     assert_eq!(
-        retained_node_ids(),
+        retained_node_ids(&session),
         retained,
         "Retained control identities must survive the production replay"
     );
@@ -232,7 +235,12 @@ fn replay_consumer_work_does_not_grow_with_an_unchanged_retained_sibling() {
 }
 
 #[tessera(crate)]
-fn independently_dirty_leaf(version: State<u32>, parent: State<u32>, backwards_write: bool) {
+fn independently_dirty_leaf(
+    version: State<u32>,
+    parent: State<u32>,
+    backwards_write: bool,
+    probe: ReplayProbe,
+) {
     let version = version.get();
     if backwards_write && version == 1 {
         parent.set(2);
@@ -243,42 +251,48 @@ fn independently_dirty_leaf(version: State<u32>, parent: State<u32>, backwards_w
                 key: "retained-dirty-leaf".to_owned(),
                 label: format!("Leaf {version}"),
             })
-            .push_pointer_input(Pointer(Some(42))),
+            .push_pointer_input(Pointer(Some(42), probe.hits.clone())),
     );
 }
 
 #[tessera(crate)]
-fn retained_dirty_branch(version: State<u32>, parent: State<u32>, backwards_write: bool) {
-    RETAINED_BUILDS.set(RETAINED_BUILDS.get() + 1);
+fn retained_dirty_branch(
+    version: State<u32>,
+    parent: State<u32>,
+    backwards_write: bool,
+    probe: ReplayProbe,
+) {
     layout().policy(Overlap).child(move || {
-        independently_dirty_leaf(version, parent, backwards_write);
+        let probe = probe.clone();
+        independently_dirty_leaf(version, parent, backwards_write, probe.clone());
     });
 }
 
 #[tessera(crate)]
-fn nested_dirty_fixture(write_during_replay: bool, backwards_write: bool) {
-    PARENT_BUILDS.set(PARENT_BUILDS.get() + 1);
+fn nested_dirty_fixture(write_during_replay: bool, backwards_write: bool, probe: ReplayProbe) {
     let parent = remember(|| 0_u32);
     let leaf = remember(|| 0_u32);
-    VERSION.set(Some(parent));
-    LEAF_VERSION.set(Some(leaf));
+    probe.version.set(Some(parent));
+    probe.leaf_version.set(Some(leaf));
     let version = parent.get();
     if write_during_replay && version > 0 {
         leaf.set(version);
     }
     layout().policy(Overlap).child(move || {
-        edited_leaf(version);
-        retained_dirty_branch(leaf, parent, backwards_write);
+        let probe = probe.clone();
+        edited_leaf(version, probe.clone());
+        retained_dirty_branch(leaf, parent, backwards_write, probe.clone());
     });
 }
 
 fn check_independent_nested_replay(write_during_replay: bool, backwards_write: bool) {
-    RETAINED_BUILDS.set(0);
-    PARENT_BUILDS.set(0);
-    HITS.with_borrow_mut(Vec::clear);
+    let probe = ReplayProbe::default();
+
+    probe.hits.with_mut(Vec::clear);
     let mut session = start_layout_test_session(
-        layout_test(move || {
-            nested_dirty_fixture(write_during_replay, backwards_write);
+        layout_test({
+            let probe = probe.clone();
+            move || nested_dirty_fixture(write_during_replay, backwards_write, probe.clone())
         })
         .viewport_px(100, 100),
     );
@@ -300,14 +314,21 @@ fn check_independent_nested_replay(write_during_replay: bool, backwards_write: b
                 .unwrap(),
         )
     });
-    assert_eq!(RETAINED_BUILDS.get(), 1);
-    VERSION.get().unwrap().set(1);
+    assert_eq!(
+        session
+            .work_totals()
+            .count("retained_dirty_branch", crate::WorkPhase::Build),
+        1
+    );
+    probe.version.get().unwrap().set(1);
     if !write_during_replay {
-        LEAF_VERSION.get().unwrap().set(1);
+        probe.leaf_version.get().unwrap().set(1);
     }
     pump_layout_test_session(&mut session, 16_000_000);
     assert_eq!(
-        RETAINED_BUILDS.get(),
+        session
+            .work_totals()
+            .count("retained_dirty_branch", crate::WorkPhase::Build),
         1,
         "A dirty descendant must replay independently of its equal-prop ancestor"
     );
@@ -319,10 +340,15 @@ fn check_independent_nested_replay(write_during_replay: bool, backwards_write: b
         }),
         Some(retained.1)
     );
-    let labels = semantic_reading_order();
+    let labels = semantic_reading_order(&session);
     assert!(labels.iter().any(|label| label == "Version 1"));
     assert!(labels.iter().any(|label| label == "Leaf 1"));
-    assert_eq!(PARENT_BUILDS.get(), 2);
+    assert_eq!(
+        session
+            .work_totals()
+            .count("nested_dirty_fixture", crate::WorkPhase::Build),
+        2
+    );
     let position = PxPosition::from_f32_xy(10.0, 10.0);
     let press = PointerChange::new(
         Instant::now(),
@@ -332,13 +358,23 @@ fn check_independent_nested_replay(write_during_replay: bool, backwards_write: b
     )
     .with_position(position);
     pump_layout_test_session_with_input(&mut session, 32_000_000, vec![press], Some(position));
-    assert_eq!(HITS.with_borrow(Clone::clone), [42]);
+    assert_eq!(probe.hits.with(Clone::clone), [42]);
     if backwards_write {
-        let labels = semantic_reading_order();
+        let labels = semantic_reading_order(&session);
         assert!(labels.iter().any(|label| label == "Version 2"));
         assert!(labels.iter().any(|label| label == "Leaf 2"));
-        assert_eq!(PARENT_BUILDS.get(), 3);
-        assert_eq!(RETAINED_BUILDS.get(), 1);
+        assert_eq!(
+            session
+                .work_totals()
+                .count("nested_dirty_fixture", crate::WorkPhase::Build),
+            3
+        );
+        assert_eq!(
+            session
+                .work_totals()
+                .count("retained_dirty_branch", crate::WorkPhase::Build),
+            1
+        );
     }
 }
 
@@ -357,16 +393,8 @@ fn a_later_replay_round_defers_writes_to_an_already_executed_boundary() {
     check_independent_nested_replay(true, true);
 }
 
-thread_local! {
-    static CYCLIC_REPLAY_ARMED: Cell<Option<State<bool>>> = const { Cell::new(None) };
-    static CYCLIC_REPLAY_BUILDS: Cell<[usize; 2]> = const { Cell::new([0; 2]) };
-}
-
 #[tessera(crate)]
 fn cyclic_replay_peer(index: usize, own: State<u32>, other: State<u32>, armed: State<bool>) {
-    let mut builds = CYCLIC_REPLAY_BUILDS.get();
-    builds[index] += 1;
-    CYCLIC_REPLAY_BUILDS.set(builds);
     let value = own.get();
     if armed.get() {
         other.set(value + 1);
@@ -380,11 +408,11 @@ fn cyclic_replay_peer(index: usize, own: State<u32>, other: State<u32>, armed: S
 }
 
 #[tessera(crate)]
-fn cyclic_replay_fixture() {
+fn cyclic_replay_fixture(probe: ReplayProbe) {
     let left = remember(|| 0_u32);
     let right = remember(|| 0_u32);
     let armed = remember(|| false);
-    CYCLIC_REPLAY_ARMED.set(Some(armed));
+    probe.armed.set(Some(armed));
     layout().policy(Overlap).child(move || {
         cyclic_replay_peer(0, left, right, armed);
         cyclic_replay_peer(1, right, left, armed);
@@ -393,39 +421,63 @@ fn cyclic_replay_fixture() {
 
 #[test]
 fn cyclic_writers_execute_once_per_frame_and_keep_their_next_frame_work() {
-    CYCLIC_REPLAY_BUILDS.set([0; 2]);
-    let mut session =
-        start_layout_test_session(layout_test(|| cyclic_replay_fixture()).viewport_px(100, 100));
+    let probe = ReplayProbe::default();
+    let mut session = start_layout_test_session(
+        layout_test(|| cyclic_replay_fixture(probe.clone())).viewport_px(100, 100),
+    );
     pump_layout_test_session(&mut session, 0);
-    assert_eq!(CYCLIC_REPLAY_BUILDS.get(), [1, 1]);
-    CYCLIC_REPLAY_ARMED.get().unwrap().set(true);
+    let peers: Vec<_> = session
+        .work()
+        .executions()
+        .iter()
+        .filter(|entry| {
+            entry.phase == crate::WorkPhase::Build && entry.target == "cyclic_replay_peer"
+        })
+        .map(|entry| entry.instance)
+        .collect();
+    assert_eq!(peers.len(), 2);
+    assert_ne!(peers[0], peers[1]);
+    probe.armed.get().unwrap().set(true);
     for frame in 1..=3 {
         pump_layout_test_session(&mut session, frame * 16_666_667);
-        assert_eq!(CYCLIC_REPLAY_BUILDS.get(), [frame as usize + 1; 2]);
+        assert_eq!(
+            session
+                .work()
+                .count("cyclic_replay_peer", crate::WorkPhase::Build),
+            2
+        );
+        for &peer in &peers {
+            assert_eq!(
+                session.work().for_instance(peer, crate::WorkPhase::Build),
+                1
+            );
+        }
         assert!(crate::runtime::has_pending_build_invalidations());
-        let labels = semantic_reading_order();
+        let labels = semantic_reading_order(&session);
         assert!(labels.iter().any(|label| label == "Cycle 0"));
         assert!(labels.iter().any(|label| label == "Cycle 1"));
     }
 }
 
 #[tessera(crate)]
-fn ordered_branch(index: usize) {
-    RETAINED_BUILDS.set(RETAINED_BUILDS.get() + 1);
+fn ordered_branch(index: usize, probe: ReplayProbe) {
     layout().policy(Overlap).child(move || {
-        retained_leaf(index);
+        let probe = probe.clone();
+        retained_leaf(index, probe.clone());
     });
 }
 
 #[tessera(crate)]
-fn ordered_fixture() {
+fn ordered_fixture(probe: ReplayProbe) {
     let reverse = remember(|| false);
-    REVERSE.set(Some(reverse));
+    probe.reverse.set(Some(reverse));
     let reverse = reverse.get();
     layout().policy(Overlap).child(move || {
+        let probe = probe.clone();
         for index in if reverse { [1_usize, 0] } else { [0_usize, 1] } {
+            let probe = probe.clone();
             crate::key(index, move || {
-                ordered_branch(index);
+                ordered_branch(index, probe.clone());
             });
         }
     });
@@ -455,100 +507,101 @@ impl LayoutModifierNode for PlacementOrder {
 }
 
 #[tessera(crate)]
-fn placement_order_fixture() {
+fn placement_order_fixture(probe: ReplayProbe) {
     let reverse = remember(|| false);
-    REVERSE.set(Some(reverse));
-    layout().policy(PlacementOrder(reverse)).child(|| {
-        ordered_branch(0);
-        ordered_branch(1);
+    probe.reverse.set(Some(reverse));
+    layout().policy(PlacementOrder(reverse)).child(move || {
+        let probe = probe.clone();
+        ordered_branch(0, probe.clone());
+        ordered_branch(1, probe.clone());
     });
 }
 
 #[test]
 fn placement_order_changes_update_retained_descendant_focus_traversal_without_recomposition() {
-    RETAINED_BUILDS.set(0);
-    REQUESTERS.with_borrow_mut(BTreeMap::clear);
-    let mut session =
-        start_layout_test_session(layout_test(placement_order_fixture).viewport_px(100, 100));
+    let probe = ReplayProbe::default();
+
+    probe.requesters.with_mut(BTreeMap::clear);
+    let mut session = start_layout_test_session(
+        layout_test(|| placement_order_fixture(probe.clone())).viewport_px(100, 100),
+    );
     pump_layout_test_session(&mut session, 0);
-    let (first, second) = REQUESTERS.with_borrow(|items| (items[&0], items[&1]));
+    let (first, second) = probe.requesters.with(|items| (items[&0], items[&1]));
     assert!(FocusManager::current().move_focus(FocusDirection::Next));
     assert!(first.is_focused());
     pump_layout_test_session(&mut session, 8_000_000);
-    let before = RETAINED_BUILDS.get();
-    REVERSE.get().unwrap().set(true);
+    let before = session
+        .work_totals()
+        .count("ordered_branch", crate::WorkPhase::Build);
+    probe.reverse.get().unwrap().set(true);
     pump_layout_test_session(&mut session, 16_000_000);
-    assert_eq!(RETAINED_BUILDS.get(), before);
+    assert_eq!(
+        session
+            .work_totals()
+            .count("ordered_branch", crate::WorkPhase::Build),
+        before
+    );
     FocusManager::current().clear_focus(true);
     assert!(FocusManager::current().move_focus(FocusDirection::Next));
     assert!(second.is_focused());
 }
 
-fn semantic_reading_order() -> Vec<String> {
-    let update = TesseraRuntime::with_mut(|runtime| {
-        runtime
-            .component_tree
-            .accessibility_update(None, true)
-            .expect("Accessibility snapshot")
-    });
-    let nodes = update
-        .nodes
-        .iter()
-        .map(|(id, node)| (*id, node))
-        .collect::<BTreeMap<_, _>>();
-    fn collect(
-        id: crate::accesskit::NodeId,
-        nodes: &BTreeMap<crate::accesskit::NodeId, &crate::accesskit::Node>,
-        labels: &mut Vec<String>,
-    ) {
-        let node = nodes[&id];
-        if let Some(label) = node.label() {
-            labels.push(label.to_owned());
-        }
-        for &child in node.children() {
-            collect(child, nodes, labels);
-        }
-    }
-    let mut labels = Vec::new();
-    collect(
-        update.tree.expect("Published root").root,
-        &nodes,
-        &mut labels,
-    );
-    labels
+fn semantic_reading_order(session: &crate::testing::LayoutTestSession<impl Fn()>) -> Vec<String> {
+    session
+        .inspect_accessibility()
+        .expect("Accessibility snapshot")
+        .reading_order()
+        .filter_map(|(_, node)| node.label().map(str::to_owned))
+        .collect()
 }
 
 #[test]
 fn replay_reorders_retained_pointer_targets_semantics_and_focus_traversal() {
-    RETAINED_BUILDS.set(0);
-    REQUESTERS.with_borrow_mut(BTreeMap::clear);
-    HITS.with_borrow_mut(Vec::clear);
+    let probe = ReplayProbe::default();
+
+    probe.requesters.with_mut(BTreeMap::clear);
+    probe.hits.with_mut(Vec::clear);
     let mut session = start_layout_test_session(
         layout_test(|| {
-            ordered_fixture();
+            ordered_fixture(probe.clone());
         })
         .viewport_px(100, 100),
     );
     pump_layout_test_session(&mut session, 0);
-    assert_eq!(RETAINED_BUILDS.get(), 2);
-    assert_eq!(semantic_reading_order(), ["Retained 0", "Retained 1"]);
-    let (first, second) = REQUESTERS.with_borrow(|items| (items[&0], items[&1]));
+    assert_eq!(
+        session
+            .work_totals()
+            .count("ordered_branch", crate::WorkPhase::Build),
+        2
+    );
+    assert_eq!(
+        semantic_reading_order(&session),
+        ["Retained 0", "Retained 1"]
+    );
+    let (first, second) = probe.requesters.with(|items| (items[&0], items[&1]));
     assert!(FocusManager::current().move_focus(FocusDirection::Next));
     assert!(first.is_focused());
     // Focus changes invalidate their host replay boundary independently of
     // reorder.
     pump_layout_test_session(&mut session, 8_000_000);
-    let retained = retained_node_ids();
-    let stabilized_builds = RETAINED_BUILDS.get();
-    REVERSE.get().expect("Reverse state").set(true);
+    let retained = retained_node_ids(&session);
+    let stabilized_builds = session
+        .work_totals()
+        .count("ordered_branch", crate::WorkPhase::Build);
+    probe.reverse.get().expect("Reverse state").set(true);
     pump_layout_test_session(&mut session, 16_000_000);
     assert_eq!(
-        RETAINED_BUILDS.get(),
+        session
+            .work_totals()
+            .count("ordered_branch", crate::WorkPhase::Build),
         stabilized_builds,
         "Both branch bodies must really be retained during reorder"
     );
-    assert_eq!(retained_node_ids(), retained);
-    assert_eq!(semantic_reading_order(), ["Retained 1", "Retained 0"]);
+    assert_eq!(retained_node_ids(&session), retained);
+    assert_eq!(
+        semantic_reading_order(&session),
+        ["Retained 1", "Retained 0"]
+    );
     FocusManager::current().clear_focus(true);
     assert!(FocusManager::current().move_focus(FocusDirection::Next));
     assert!(
@@ -565,7 +618,7 @@ fn replay_reorders_retained_pointer_targets_semantics_and_focus_traversal() {
     .with_position(position);
     pump_layout_test_session_with_input(&mut session, 32_000_000, vec![press], Some(position));
     assert_eq!(
-        HITS.with_borrow(Clone::clone),
+        probe.hits.with(Clone::clone),
         [0],
         "The new last sibling must be the topmost pointer consumer"
     );
@@ -582,12 +635,12 @@ impl SemanticsModifierNode for Hint {
 }
 
 #[tessera(crate)]
-fn scoped_fixture() {
+fn scoped_fixture(probe: ReplayProbe) {
     let changed = remember(|| false);
-    REVERSE.set(Some(changed));
+    probe.reverse.set(Some(changed));
     let changed = changed.get();
     let scopes = remember(|| (FocusScopeNode::new(), FocusScopeNode::new())).get();
-    SCOPES.set(Some(scopes));
+    probe.scopes.set(Some(scopes));
     layout()
         .policy(Overlap)
         .modifier(
@@ -602,39 +655,45 @@ fn scoped_fixture() {
                     .to_owned(),
                 )),
         )
-        .child(|| {
-            ordered_branch(0);
+        .child(move || {
+            let probe = probe.clone();
+            ordered_branch(0, probe.clone());
         });
 }
 
 #[test]
 fn replay_refreshes_retained_descendants_when_semantic_and_focus_ancestry_changes() {
-    RETAINED_BUILDS.set(0);
-    REQUESTERS.with_borrow_mut(BTreeMap::clear);
+    let probe = ReplayProbe::default();
+
+    probe.requesters.with_mut(BTreeMap::clear);
     let mut session = start_layout_test_session(
         layout_test(|| {
-            scoped_fixture();
+            scoped_fixture(probe.clone());
         })
         .viewport_px(100, 100),
     );
     pump_layout_test_session(&mut session, 0);
-    let requester = REQUESTERS.with_borrow(|items| items[&0]);
-    let (old_scope, new_scope) = SCOPES.get().expect("Remembered focus scopes");
+    let requester = probe.requesters.with(|items| items[&0]);
+    let (old_scope, new_scope) = probe.scopes.get().expect("Remembered focus scopes");
     requester.request_focus();
     assert!(old_scope.has_focus());
     assert!(!new_scope.has_focus());
     // Drain the focus host invalidation before changing its ancestor context.
     pump_layout_test_session(&mut session, 8_000_000);
-    let retained = retained_node_ids();
-    let stabilized_builds = RETAINED_BUILDS.get();
-    REVERSE.get().expect("Changed state").set(true);
+    let retained = retained_node_ids(&session);
+    let stabilized_builds = session
+        .work_totals()
+        .count("ordered_branch", crate::WorkPhase::Build);
+    probe.reverse.get().expect("Changed state").set(true);
     pump_layout_test_session(&mut session, 16_000_000);
     assert_eq!(
-        RETAINED_BUILDS.get(),
+        session
+            .work_totals()
+            .count("ordered_branch", crate::WorkPhase::Build),
         stabilized_builds,
         "The descendant must really reuse its component subtree during ancestry change"
     );
-    assert_eq!(retained_node_ids(), retained);
+    assert_eq!(retained_node_ids(&session), retained);
     requester.request_focus();
     assert!(requester.is_focused());
     assert!(

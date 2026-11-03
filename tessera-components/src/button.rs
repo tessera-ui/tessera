@@ -922,8 +922,6 @@ impl ButtonBuilder {
 
 #[cfg(test)]
 mod tests {
-    use std::cell::{Cell, RefCell};
-
     use tessera_ui::{
         HeadlessConfig, HeadlessRenderer, MOUSE_POINTER_ID, PressKeyEventType, PxPosition, State,
         modifier::FocusModifierExt as _, remember,
@@ -959,22 +957,23 @@ mod tests {
         custom_shape: Option<Shape>,
     }
 
-    thread_local! {
-        static FOCUS_REFERENCE: Cell<Option<tessera_ui::PxRect>> = const { Cell::new(None) };
-        static SETTINGS: Cell<Option<State<Settings>>> = const { Cell::new(None) };
-        static INTERACTIONS: RefCell<[Option<State<InteractionState>>; 5]> = const { RefCell::new([None; 5]) };
-        static ACTIVATED: Cell<Option<State<Vec<usize>>>> = const { Cell::new(None) };
-        static CLICKS: Cell<Option<State<usize>>> = const { Cell::new(None) };
-        static STYLES: RefCell<[Option<TextStyle>; 5]> = const { RefCell::new([None; 5]) };
-        static COLORS: RefCell<[Option<Color>; 5]> = const { RefCell::new([None; 5]) };
+    #[derive(Clone, Default, PartialEq)]
+    struct FixtureProbes {
+        focus_reference: tessera_ui::testing::TestProbe<Option<tessera_ui::PxRect>>,
+        settings: tessera_ui::testing::TestProbe<Option<State<Settings>>>,
+        interactions: tessera_ui::testing::TestProbe<[Option<State<InteractionState>>; 5]>,
+        activated: tessera_ui::testing::TestProbe<Option<State<Vec<usize>>>>,
+        clicks: tessera_ui::testing::TestProbe<Option<State<usize>>>,
+        styles: tessera_ui::testing::TestProbe<[Option<TextStyle>; 5]>,
+        colors: tessera_ui::testing::TestProbe<[Option<Color>; 5]>,
     }
 
     #[tessera]
-    fn label(index: usize) {
+    fn label(index: usize, probe: FixtureProbes) {
         let style = use_context::<TextStyle>().expect("button text style").get();
-        STYLES.with(|styles| styles.borrow_mut()[index] = Some(style));
+        probe.styles.with_mut(|styles| styles[index] = Some(style));
         let color = use_context::<ContentColor>().unwrap().get().current;
-        COLORS.with(|colors| colors.borrow_mut()[index] = Some(color));
+        probe.colors.with_mut(|colors| colors[index] = Some(color));
         text().content("Go");
     }
 
@@ -992,17 +991,19 @@ mod tests {
     }
 
     #[tessera]
-    fn fixture() {
+    fn fixture(probe: FixtureProbes) {
         let settings = remember(Settings::default);
         let clicks = remember(|| 0usize);
         let activated = remember(Vec::<usize>::new);
-        ACTIVATED.set(Some(activated));
-        SETTINGS.set(Some(settings));
-        CLICKS.set(Some(clicks));
+        probe.activated.set(Some(activated));
+        probe.settings.set(Some(settings));
+        probe.clicks.set(Some(clicks));
         material_theme().child(move || {
+            let probe = probe.clone();
             boxed()
                 .modifier(Modifier::new().fill_max_size().background(Color::WHITE))
                 .children(move || {
+                    let probe = probe.clone();
                     column()
                         .modifier(Modifier::new().offset(
                             Dp(if settings.with(|settings| settings.focus_reference) {
@@ -1013,11 +1014,13 @@ mod tests {
                             Dp(0.0),
                         ))
                         .children(move || {
+                            let probe = probe.clone();
                             for (index, size) in SIZES.into_iter().enumerate() {
                                 let value = settings.get();
                                 let interaction = remember(InteractionState::new);
-                                INTERACTIONS
-                                    .with(|states| states.borrow_mut()[index] = Some(interaction));
+                                probe
+                                    .interactions
+                                    .with_mut(|states| states[index] = Some(interaction));
                                 button()
                                     .size(if index == 2 {
                                         value.size.unwrap_or(size)
@@ -1059,16 +1062,18 @@ mod tests {
                                     .trailing_icon(move || {
                                         icon_probe(index + 5);
                                     })
-                                    .child(move || {
-                                        label(index);
+                                    .child({
+                                        let probe = probe.clone();
+                                        move || label(index, probe.clone())
                                     });
                                 spacer().modifier(Modifier::new().height(Dp(8.0)));
                             }
                             if settings.with(|settings| settings.focus_reference) {
                                 let reference_modifier = Modifier::new()
                                     .size(Dp(270.0), Dp(66.0))
-                                    .on_globally_positioned(|bounds| {
-                                        FOCUS_REFERENCE.set(Some(bounds))
+                                    .on_globally_positioned({
+                                        let probe = probe.clone();
+                                        move |bounds| probe.focus_reference.set(Some(bounds))
                                     });
                                 surface()
                                     .shape(Shape::CAPSULE)
@@ -1115,10 +1120,10 @@ mod tests {
     }
 
     fn check_sizes(samples: u32) {
+        let probe = FixtureProbes::default();
+        let observed = probe.clone();
         let mut renderer = HeadlessRenderer::new(
-            Box::new(|| {
-                fixture();
-            }),
+            Box::new(move || fixture(observed.clone())),
             vec![Box::new(crate::TesseraComponents)],
             HeadlessConfig {
                 width: 400,
@@ -1164,7 +1169,7 @@ mod tests {
                 ink.last().unwrap() - ink.first().unwrap() + 1,
                 height,
                 "visual height of size {index}; style {:?}",
-                STYLES.with(|styles| styles.borrow()[index])
+                probe.styles.with(|styles| styles[index])
             );
             for icon in [index, index + 5] {
                 let icon_bounds = tree
@@ -1178,7 +1183,7 @@ mod tests {
                 assert_eq!(icon_bounds.width(), [20.0, 20.0, 24.0, 32.0, 40.0][index]);
                 assert_eq!(icon_bounds.height(), icon_bounds.width());
             }
-            let style = STYLES.with(|styles| styles.borrow()[index].unwrap());
+            let style = probe.styles.with(|styles| styles[index].unwrap());
             let label = tree
                 .nodes
                 .iter()
@@ -1205,13 +1210,13 @@ mod tests {
                 Some(Dp([20.0, 20.0, 24.0, 32.0, 40.0][index]))
             );
         }
-        let settings = SETTINGS.get().unwrap();
+        let settings = probe.settings.get().unwrap();
         settings.with_mut(|settings| settings.variant = ButtonVariant::Elevated);
         renderer.render_frames(8);
         let scheme = MaterialTheme::default().color_scheme;
-        COLORS.with(|colors| {
+        probe.colors.with(|colors| {
             assert_eq!(
-                *colors.borrow(),
+                *colors,
                 [Some(scheme.primary); 5],
                 "elevated labels retain their primary color"
             )
@@ -1230,18 +1235,18 @@ mod tests {
         );
         settings.with_mut(|settings| settings.color = Some(scheme.secondary_container));
         renderer.render_frames(8);
-        COLORS.with(|colors| {
+        probe.colors.with(|colors| {
             assert_eq!(
-                *colors.borrow(),
+                *colors,
                 [Some(scheme.on_secondary_container); 5],
                 "custom containers infer a matching content color"
             )
         });
         settings.with_mut(|settings| settings.content = Some(Color::RED));
         renderer.render_frames(8);
-        COLORS.with(|colors| {
+        probe.colors.with(|colors| {
             assert_eq!(
-                *colors.borrow(),
+                *colors,
                 [Some(Color::RED); 5],
                 "explicit content color wins"
             )
@@ -1252,7 +1257,7 @@ mod tests {
             settings.content = None;
         });
         renderer.render_frames(8);
-        let clicks = CLICKS.get().unwrap();
+        let clicks = probe.clicks.get().unwrap();
         click(&mut renderer, bounds(&tree, 0));
         assert_eq!(clicks.get(), 1);
         settings.with_mut(|settings| settings.disabled = true);
@@ -1273,9 +1278,9 @@ mod tests {
         });
         renderer.pointer_move(MOUSE_POINTER_ID, PxPosition::from_f32_xy(390.0, 600.0));
         renderer.render_frames(120);
-        COLORS.with(|colors| {
+        probe.colors.with(|colors| {
             assert_eq!(
-                *colors.borrow(),
+                *colors,
                 [Some(scheme.on_surface_variant); 5],
                 "outlined labels use on-surface-variant"
             )
@@ -1304,7 +1309,7 @@ mod tests {
             176.0
         );
         assert_eq!(
-            STYLES.with(|styles| styles.borrow()[2].unwrap().font_size),
+            probe.styles.with(|styles| styles[2].unwrap().font_size),
             Dp(32.0)
         );
         let changed = renderer.accessibility_snapshot().unwrap();
@@ -1396,10 +1401,10 @@ mod tests {
     }
 
     fn check_shape_and_toggle_input(samples: u32) {
+        let probe = FixtureProbes::default();
+        let observed = probe.clone();
         let mut renderer = HeadlessRenderer::new(
-            Box::new(|| {
-                fixture();
-            }),
+            Box::new(move || fixture(observed.clone())),
             vec![Box::new(crate::TesseraComponents)],
             HeadlessConfig {
                 width: 400,
@@ -1412,7 +1417,7 @@ mod tests {
         renderer.render_frames(8);
         let initial = renderer.accessibility_snapshot().unwrap();
         let round = renderer.read_pixels().unwrap();
-        let settings = SETTINGS.get().unwrap();
+        let settings = probe.settings.get().unwrap();
         settings.with_mut(|settings| {
             settings.shape = ButtonShape::Square;
             settings.selected = Some(false);
@@ -1441,18 +1446,19 @@ mod tests {
         renderer.pointer_press(MOUSE_POINTER_ID, point, PressKeyEventType::Left);
         renderer.render_frames(20);
         assert!(
-            INTERACTIONS
-                .with(|states| states.borrow()[2].unwrap())
+            probe
+                .interactions
+                .with(|states| states[2].unwrap())
                 .with(InteractionState::is_pressed)
         );
-        assert_eq!(CLICKS.get().unwrap().get(), 0);
+        assert_eq!(probe.clicks.get().unwrap().get(), 0);
         assert_ne!(square, renderer.read_pixels().unwrap());
         renderer.pointer_release(MOUSE_POINTER_ID, point, PressKeyEventType::Left);
         renderer.step_frame();
         renderer.pointer_move(MOUSE_POINTER_ID, PxPosition::from_f32_xy(390.0, 630.0));
         renderer.render_frames(120);
         assert_eq!(settings.get().selected, Some(true));
-        assert_eq!(CLICKS.get().unwrap().get(), 1);
+        assert_eq!(probe.clicks.get().unwrap().get(), 1);
         let selected = renderer.accessibility_snapshot().unwrap();
         let (selected_identity, node) = find(&selected);
         assert_eq!(identity, selected_identity);
@@ -1461,7 +1467,9 @@ mod tests {
             assert_eq!(bounds(&initial, index), bounds(&selected, index));
         }
         let scheme = MaterialTheme::default().color_scheme;
-        COLORS.with(|colors| assert_eq!(*colors.borrow(), [Some(scheme.on_primary); 5]));
+        probe
+            .colors
+            .with(|colors| assert_eq!(*colors, [Some(scheme.on_primary); 5]));
         settings.with_mut(|settings| settings.disabled = true);
         renderer.render_frames(120);
         let disabled = renderer.accessibility_snapshot().unwrap();
@@ -1471,7 +1479,7 @@ mod tests {
         assert!(node.is_disabled());
         assert!(!node.supports_action(tessera_ui::accesskit::Action::Click));
         click(&mut renderer, rect);
-        assert_eq!(CLICKS.get().unwrap().get(), 1);
+        assert_eq!(probe.clicks.get().unwrap().get(), 1);
         settings.with_mut(|settings| {
             settings.disabled = false;
             settings.selected = None;
@@ -1501,7 +1509,7 @@ mod tests {
         ));
         renderer.step_frame();
         assert_eq!(
-            CLICKS.get().unwrap().get(),
+            probe.clicks.get().unwrap().get(),
             2,
             "an ordinary button still activates after a long hold"
         );
@@ -1512,7 +1520,7 @@ mod tests {
         renderer.pointer_move(MOUSE_POINTER_ID, outside);
         renderer.step_frame();
         assert_eq!(
-            CLICKS.get().unwrap().get(),
+            probe.clicks.get().unwrap().get(),
             3,
             "release inside survives later movement in the same frame"
         );
@@ -1532,7 +1540,7 @@ mod tests {
         renderer.pointer_move(MOUSE_POINTER_ID, outside);
         renderer.render_frames(2);
         assert_eq!(
-            ACTIVATED.get().unwrap().get(),
+            probe.activated.get().unwrap().get(),
             [2, 2, 2, 0, 4],
             "rapid queued clicks target each button in order"
         );
@@ -1541,8 +1549,9 @@ mod tests {
         renderer.render_frames(2);
         for index in [0, 4] {
             assert!(
-                INTERACTIONS
-                    .with(|states| states.borrow()[index].unwrap())
+                probe
+                    .interactions
+                    .with(|states| states[index].unwrap())
                     .with(InteractionState::is_pressed),
                 "independent held pointer on button {index}"
             );
@@ -1551,7 +1560,7 @@ mod tests {
         renderer.pointer_release(22, button_point(4), PressKeyEventType::Left);
         renderer.pointer_move(MOUSE_POINTER_ID, outside);
         renderer.render_frames(2);
-        assert_eq!(ACTIVATED.get().unwrap().get(), [2, 2, 2, 0, 4, 0, 4]);
+        assert_eq!(probe.activated.get().unwrap().get(), [2, 2, 2, 0, 4, 0, 4]);
         if let Some(directory) = std::env::var_os("TESSERA_BUTTON_QA_DIR") {
             let directory = std::path::PathBuf::from(directory);
             std::fs::create_dir_all(&directory).unwrap();
@@ -1596,8 +1605,10 @@ mod tests {
             || {
                 use tessera_ui::accesskit::{Action, ActionRequest, TreeId};
 
+                let probe = FixtureProbes::default();
+                let observed = probe.clone();
                 let mut renderer = HeadlessRenderer::new(
-                    Box::new(fixture),
+                    Box::new(move || fixture(observed.clone())),
                     vec![Box::new(crate::TesseraComponents)],
                     HeadlessConfig {
                         width: 400,
@@ -1608,7 +1619,7 @@ mod tests {
                 )
                 .unwrap();
                 renderer.render_frames(20);
-                let settings = SETTINGS.get().unwrap();
+                let settings = probe.settings.get().unwrap();
                 settings.with_mut(|settings| settings.focus_reference = true);
                 renderer.render_frames(20);
                 let tree = renderer.accessibility_snapshot().unwrap();
@@ -1658,12 +1669,10 @@ mod tests {
                         preview, rest,
                         "presentation changes native appearance: {presentation:?}"
                     );
-                    let live = INTERACTIONS
-                        .with(|states| states.borrow()[2].unwrap())
-                        .get();
+                    let live = probe.interactions.with(|states| states[2].unwrap()).get();
                     assert_eq!(live, InteractionState::new());
                     assert_ne!(renderer.accessibility_snapshot().unwrap().focus, id);
-                    assert_eq!(CLICKS.get().unwrap().get(), 0);
+                    assert_eq!(probe.clicks.get().unwrap().get(), 0);
 
                     if presentation == InteractionVisualState::Focus {
                         let pixels = renderer.read_pixels().unwrap();
@@ -1714,7 +1723,7 @@ mod tests {
                 renderer.render_frames(20);
                 let sampled = crop(&renderer.read_pixels().unwrap());
                 let pixels = renderer.read_pixels().unwrap();
-                let reference = FOCUS_REFERENCE.get().unwrap();
+                let reference = probe.focus_reference.get().unwrap();
                 let x = (reference.x.0 as f32 + reference.width.0 as f32 * 0.7) as usize;
                 let y = (reference.y.0 as f32 + reference.height.0 as f32 * 0.9) as usize;
                 assert!(
@@ -1734,7 +1743,10 @@ mod tests {
                     sampled,
                     "presentation ripple remains static across frame timestamps"
                 );
-                assert_eq!(renderer.diagnostics().paint_nodes_recorded, 0);
+                assert_eq!(
+                    renderer.work().phase(tessera_ui::WorkPhase::Paint).count(),
+                    0
+                );
                 settings.with_mut(|settings| settings.presentation_ripple = None);
                 renderer.render_frames(20);
                 assert_eq!(crop(&renderer.read_pixels().unwrap()), previews[2]);
@@ -1844,15 +1856,14 @@ mod tests {
                 renderer.pointer_press(MOUSE_POINTER_ID, point, PressKeyEventType::Left);
                 renderer.render_frames(20);
                 assert!(
-                    INTERACTIONS
-                        .with(|states| states.borrow()[2].unwrap())
+                    probe
+                        .interactions
+                        .with(|states| states[2].unwrap())
                         .with(InteractionState::is_pressed)
                 );
                 tessera_ui::FocusManager::current().clear_focus(true);
                 renderer.render_frames(20);
-                let held = INTERACTIONS
-                    .with(|states| states.borrow()[2].unwrap())
-                    .get();
+                let held = probe.interactions.with(|states| states[2].unwrap()).get();
                 assert!(
                     held.is_pressed(),
                     "clearing keyboard focus preserves the actual held pointer press"
@@ -1873,7 +1884,7 @@ mod tests {
                 renderer.pointer_move(MOUSE_POINTER_ID, outside);
                 tessera_ui::FocusManager::current().clear_focus(true);
                 renderer.render_frames(20);
-                assert_eq!(CLICKS.get().unwrap().get(), 0);
+                assert_eq!(probe.clicks.get().unwrap().get(), 0);
                 settings.with_mut(|settings| {
                     settings.disabled = true;
                     settings.presentation_state = Some(InteractionVisualState::Pressed);

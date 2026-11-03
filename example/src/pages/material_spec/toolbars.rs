@@ -30,7 +30,7 @@ use tessera_components::{
 };
 use tessera_ui::{
     Color, Dp, LayoutCoordinates, Modifier, RenderSlot, State, accesskit::Role,
-    modifier::FocusModifierExt as _, provide_context, remember, tessera, use_context,
+    modifier::FocusModifierExt as _, remember, tessera, use_context,
 };
 
 use super::{
@@ -54,7 +54,7 @@ enum Variant {
 }
 
 #[tessera]
-pub(super) fn toolbars_spec() {
+pub(super) fn toolbars_spec(route: Option<crate::pages::material_spec::article::ArticleRoute>) {
     article(
         "Toolbars",
         "Toolbars display frequently used actions relevant to the current page",
@@ -89,6 +89,7 @@ pub(super) fn toolbars_spec() {
             },
         ],
     )
+    .route_optional(route.clone())
     .pages(vec![
         ArticlePage {
             title: "Overview",
@@ -964,11 +965,6 @@ fn sample_label(sample: Sample) -> &'static str {
     }
 }
 
-/// Identifies the gallery item that renders a sample so its controls can be
-/// located.
-#[derive(Clone)]
-struct GalleryTag(usize);
-
 fn tagged(tag: Option<String>) -> Modifier {
     match tag {
         Some(tag) => Modifier::new().semantics(SemanticsArgs {
@@ -1051,6 +1047,7 @@ fn sample_toolbar(
     elevation: Option<Dp>,
     limit: Option<usize>,
     notice: Option<State<String>>,
+    gallery_tag: Option<usize>,
 ) {
     let local = remember(String::new);
     let notice = notice.unwrap_or(local);
@@ -1060,7 +1057,6 @@ fn sample_toolbar(
     let vertical = vertical.unwrap_or(false);
     let dividers = dividers.unwrap_or(false);
     let actions = visible_actions(sample_actions(sample), limit.unwrap_or(usize::MAX));
-    let gallery_tag = use_context::<GalleryTag>().map(|tag| tag.get().0);
     let color = if vibrant {
         ToolbarColorStyle::Vibrant
     } else {
@@ -1121,14 +1117,13 @@ fn fab_pair(
     vibrant: Option<bool>,
     limit: Option<usize>,
     notice: Option<State<String>>,
+    gallery_tag: Option<usize>,
 ) {
     let scheme = use_context::<MaterialTheme>().unwrap().get().color_scheme;
     let vibrant = vibrant.unwrap_or(false);
     let local = remember(String::new);
     let notice = notice.unwrap_or(local);
-    let fab_tag = use_context::<GalleryTag>()
-        .map(|tag| tag.get().0)
-        .map(|item| format!("toolbar-gallery-{item}-fab"));
+    let fab_tag = gallery_tag.map(|item| format!("toolbar-gallery-{item}-fab"));
     let (label, container, content) = match fab {
         FabKind::EndCall => (
             "End call",
@@ -1160,6 +1155,7 @@ fn fab_pair(
         .cross_axis_alignment(CrossAxisAlignment::Center)
         .children(move || {
             sample_toolbar(sample)
+                .gallery_tag_optional(gallery_tag)
                 .vibrant(vibrant)
                 .limit_optional(limit)
                 .notice(notice);
@@ -1236,7 +1232,7 @@ fn gallery_item(
     index: usize,
     legend: Option<usize>,
     fill: Option<bool>,
-    content: Option<RenderSlot>,
+    content: Option<tessera_ui::RenderSlotWith<usize>>,
 ) {
     let fill = fill.unwrap_or(false);
     let modifier = Modifier::new().semantics(SemanticsArgs {
@@ -1252,7 +1248,7 @@ fn gallery_item(
         .cross_axis_alignment(CrossAxisAlignment::Center)
         .children(move || {
             if let Some(content) = content {
-                provide_context(move || GalleryTag(index), move || content.render());
+                content.render(index);
             }
             if let Some(number) = legend {
                 gap(Dp(12.0));
@@ -1304,41 +1300,51 @@ fn gallery(kind: GalleryKind) {
         RenderSlot::new(move || match kind {
             GalleryKind::Overview => {
                 floating_group(RenderSlot::new(move || {
-                    gallery_item(0).content(move || {
+                    gallery_item(0).content(move |gallery_tag| {
                         sample_toolbar(Sample::Vertical)
+                            .gallery_tag(gallery_tag)
                             .vertical(true)
                             .notice(notice);
                     });
-                    gallery_item(1).content(move || {
+                    gallery_item(1).content(move |gallery_tag| {
                         fab_pair(Sample::Edit, FabKind::EndCall)
+                            .gallery_tag(gallery_tag)
                             .limit(fab_limit)
                             .notice(notice);
                     });
-                    gallery_item(2).content(move || {
+                    gallery_item(2).content(move |gallery_tag| {
                         sample_toolbar(Sample::FormatTonal)
+                            .gallery_tag(gallery_tag)
                             .vibrant(true)
                             .limit(limit)
                             .notice(notice);
                     });
-                    gallery_item(3).content(move || {
-                        sample_toolbar(Sample::Navigate).limit(limit).notice(notice);
+                    gallery_item(3).content(move |gallery_tag| {
+                        sample_toolbar(Sample::Navigate)
+                            .gallery_tag(gallery_tag)
+                            .limit(limit)
+                            .notice(notice);
                     });
                 }));
                 gap(Dp(24.0));
-                gallery_item(4).fill(true).content(move || {
+                gallery_item(4).fill(true).content(move |gallery_tag| {
                     sample_toolbar(Sample::Navigate)
+                        .gallery_tag(gallery_tag)
                         .docked(true)
                         .vibrant(true)
                         .limit(docked_limit)
                         .notice(notice);
                 });
                 gap(Dp(16.0));
-                gallery_item(5).fill(true).content(move || {
-                    text_nav_toolbar(false).notice(notice);
+                gallery_item(5).fill(true).content(move |gallery_tag| {
+                    text_nav_toolbar(false)
+                        .gallery_tag(gallery_tag)
+                        .notice(notice);
                 });
                 gap(Dp(16.0));
-                gallery_item(6).fill(true).content(move || {
+                gallery_item(6).fill(true).content(move |gallery_tag| {
                     sample_toolbar(Sample::Mail)
+                        .gallery_tag(gallery_tag)
                         .docked(true)
                         .vibrant(true)
                         .limit(docked_limit)
@@ -1346,53 +1352,71 @@ fn gallery(kind: GalleryKind) {
                 });
             }
             GalleryKind::Variants => {
-                gallery_item(0).fill(true).legend(1).content(move || {
-                    sample_toolbar(Sample::Mail)
-                        .docked(true)
-                        .limit(docked_limit)
-                        .notice(notice);
-                });
+                gallery_item(0)
+                    .fill(true)
+                    .legend(1)
+                    .content(move |gallery_tag| {
+                        sample_toolbar(Sample::Mail)
+                            .gallery_tag(gallery_tag)
+                            .docked(true)
+                            .limit(docked_limit)
+                            .notice(notice);
+                    });
                 gap(Dp(32.0));
-                gallery_item(1).legend(2).content(move || {
-                    sample_toolbar(Sample::Format).limit(limit).notice(notice);
+                gallery_item(1).legend(2).content(move |gallery_tag| {
+                    sample_toolbar(Sample::Format)
+                        .gallery_tag(gallery_tag)
+                        .limit(limit)
+                        .notice(notice);
                 });
             }
             GalleryKind::Configurations => {
-                gallery_item(0).content(move || {
-                    sample_toolbar(Sample::Format).limit(limit).notice(notice);
+                gallery_item(0).content(move |gallery_tag| {
+                    sample_toolbar(Sample::Format)
+                        .gallery_tag(gallery_tag)
+                        .limit(limit)
+                        .notice(notice);
                 });
                 gap(Dp(16.0));
-                gallery_item(1).content(move || {
+                gallery_item(1).content(move |gallery_tag| {
                     sample_toolbar(Sample::Format)
+                        .gallery_tag(gallery_tag)
                         .vibrant(true)
                         .limit(limit)
                         .notice(notice);
                 });
                 gap(Dp(16.0));
-                gallery_item(2).fill(true).content(move || {
+                gallery_item(2).fill(true).content(move |gallery_tag| {
                     sample_toolbar(Sample::Mail)
+                        .gallery_tag(gallery_tag)
                         .docked(true)
                         .limit(docked_limit)
                         .notice(notice);
                 });
                 gap(Dp(16.0));
-                gallery_item(3).fill(true).legend(1).content(move || {
-                    sample_toolbar(Sample::Mail)
-                        .docked(true)
-                        .vibrant(true)
-                        .limit(docked_limit)
-                        .notice(notice);
-                });
+                gallery_item(3)
+                    .fill(true)
+                    .legend(1)
+                    .content(move |gallery_tag| {
+                        sample_toolbar(Sample::Mail)
+                            .gallery_tag(gallery_tag)
+                            .docked(true)
+                            .vibrant(true)
+                            .limit(docked_limit)
+                            .notice(notice);
+                    });
                 gap(Dp(32.0));
                 floating_group(RenderSlot::new(move || {
-                    gallery_item(4).legend(2).content(move || {
+                    gallery_item(4).legend(2).content(move |gallery_tag| {
                         sample_toolbar(Sample::Format)
+                            .gallery_tag(gallery_tag)
                             .vertical(true)
                             .limit(5)
                             .notice(notice);
                     });
-                    gallery_item(5).legend(3).content(move || {
+                    gallery_item(5).legend(3).content(move |gallery_tag| {
                         fab_pair(Sample::Mail, FabKind::Reply)
+                            .gallery_tag(gallery_tag)
                             .vibrant(true)
                             .limit(fab_limit)
                             .notice(notice);
@@ -1400,51 +1424,65 @@ fn gallery(kind: GalleryKind) {
                 }));
             }
             GalleryKind::Expressive => {
-                gallery_item(0).legend(1).content(move || {
+                gallery_item(0).legend(1).content(move |gallery_tag| {
                     fab_pair(Sample::Mail, FabKind::Reply)
+                        .gallery_tag(gallery_tag)
                         .vibrant(true)
                         .limit(fab_limit)
                         .notice(notice);
                 });
                 gap(Dp(32.0));
-                gallery_item(1).fill(true).legend(2).content(move || {
-                    sample_toolbar(Sample::Navigate)
-                        .docked(true)
-                        .limit(docked_limit)
-                        .notice(notice);
-                });
+                gallery_item(1)
+                    .fill(true)
+                    .legend(2)
+                    .content(move |gallery_tag| {
+                        sample_toolbar(Sample::Navigate)
+                            .gallery_tag(gallery_tag)
+                            .docked(true)
+                            .limit(docked_limit)
+                            .notice(notice);
+                    });
             }
             GalleryKind::UseCases => {
                 floating_group(RenderSlot::new(move || {
-                    gallery_item(0).content(move || {
+                    gallery_item(0).content(move |gallery_tag| {
                         sample_toolbar(Sample::Mail)
+                            .gallery_tag(gallery_tag)
                             .vibrant(true)
                             .limit(limit)
                             .notice(notice);
                     });
-                    gallery_item(1).content(move || {
-                        sample_toolbar(Sample::Format).limit(limit).notice(notice);
+                    gallery_item(1).content(move |gallery_tag| {
+                        sample_toolbar(Sample::Format)
+                            .gallery_tag(gallery_tag)
+                            .limit(limit)
+                            .notice(notice);
                     });
-                    gallery_item(2).content(move || {
+                    gallery_item(2).content(move |gallery_tag| {
                         fab_pair(Sample::Edit, FabKind::EndCall)
+                            .gallery_tag(gallery_tag)
                             .limit(fab_limit)
                             .notice(notice);
                     });
-                    gallery_item(3).content(move || {
+                    gallery_item(3).content(move |gallery_tag| {
                         sample_toolbar(Sample::Navigate)
+                            .gallery_tag(gallery_tag)
                             .vibrant(true)
                             .limit(limit)
                             .notice(notice);
                     });
                 }));
                 gap(Dp(24.0));
-                gallery_item(4).fill(true).content(move || {
-                    text_nav_toolbar(false).notice(notice);
+                gallery_item(4).fill(true).content(move |gallery_tag| {
+                    text_nav_toolbar(false)
+                        .gallery_tag(gallery_tag)
+                        .notice(notice);
                 });
             }
             GalleryKind::DockedVsFloating => {
-                gallery_item(0).fill(true).content(move || {
+                gallery_item(0).fill(true).content(move |gallery_tag| {
                     sample_toolbar(Sample::Mail)
+                        .gallery_tag(gallery_tag)
                         .docked(true)
                         .limit(docked_limit)
                         .notice(notice);
@@ -1452,23 +1490,30 @@ fn gallery(kind: GalleryKind) {
                 gap(Dp(12.0));
                 caption("Docked toolbar shows global controls");
                 gap(Dp(32.0));
-                gallery_item(1).content(move || {
-                    sample_toolbar(Sample::Format).limit(limit).notice(notice);
+                gallery_item(1).content(move |gallery_tag| {
+                    sample_toolbar(Sample::Format)
+                        .gallery_tag(gallery_tag)
+                        .limit(limit)
+                        .notice(notice);
                 });
                 gap(Dp(12.0));
                 caption("Floating toolbar shows controls relevant to the current page");
             }
             GalleryKind::ColorEmphasis => {
-                gallery_item(0).content(move || {
-                    sample_toolbar(Sample::Format).limit(limit).notice(notice);
+                gallery_item(0).content(move |gallery_tag| {
+                    sample_toolbar(Sample::Format)
+                        .gallery_tag(gallery_tag)
+                        .limit(limit)
+                        .notice(notice);
                 });
                 gap(Dp(12.0));
                 caption(
                     "Use the standard color scheme to draw focus to content outside the toolbar",
                 );
                 gap(Dp(32.0));
-                gallery_item(1).content(move || {
+                gallery_item(1).content(move |gallery_tag| {
                     sample_toolbar(Sample::Format)
+                        .gallery_tag(gallery_tag)
                         .vibrant(true)
                         .limit(limit)
                         .notice(notice);
@@ -1477,8 +1522,9 @@ fn gallery(kind: GalleryKind) {
                 caption("Use the vibrant color scheme to emphasize controls or actions");
             }
             GalleryKind::Corners => {
-                gallery_item(0).fill(true).content(move || {
+                gallery_item(0).fill(true).content(move |gallery_tag| {
                     sample_toolbar(Sample::Mail)
+                        .gallery_tag(gallery_tag)
                         .docked(true)
                         .limit(docked_limit)
                         .notice(notice);
@@ -1486,8 +1532,9 @@ fn gallery(kind: GalleryKind) {
                 gap(Dp(12.0));
                 do_note("Use straight corners for docked toolbars");
                 gap(Dp(32.0));
-                gallery_item(1).fill(true).content(move || {
+                gallery_item(1).fill(true).content(move |gallery_tag| {
                     sample_toolbar(Sample::Mail)
+                        .gallery_tag(gallery_tag)
                         .docked(true)
                         .rounded(true)
                         .limit(docked_limit)
@@ -1497,8 +1544,9 @@ fn gallery(kind: GalleryKind) {
                 dont_note("Avoid modifying the container shape");
             }
             GalleryKind::Elevation => {
-                gallery_item(0).content(move || {
+                gallery_item(0).content(move |gallery_tag| {
                     sample_toolbar(Sample::Format)
+                        .gallery_tag(gallery_tag)
                         .vibrant(true)
                         .elevation(Dp::ZERO)
                         .limit(limit)
@@ -1507,37 +1555,48 @@ fn gallery(kind: GalleryKind) {
             }
             GalleryKind::Slots => {
                 floating_group(RenderSlot::new(move || {
-                    gallery_item(0).content(move || {
+                    gallery_item(0).content(move |gallery_tag| {
                         sample_toolbar(Sample::FormatTonal)
+                            .gallery_tag(gallery_tag)
                             .limit(limit)
                             .notice(notice);
                     });
-                    gallery_item(1).content(move || {
+                    gallery_item(1).content(move |gallery_tag| {
                         sample_toolbar(Sample::Navigate)
+                            .gallery_tag(gallery_tag)
                             .vibrant(true)
                             .limit(limit)
                             .notice(notice);
                     });
-                    gallery_item(2).content(move || {
-                        sample_toolbar(Sample::Edit).limit(limit).notice(notice);
+                    gallery_item(2).content(move |gallery_tag| {
+                        sample_toolbar(Sample::Edit)
+                            .gallery_tag(gallery_tag)
+                            .limit(limit)
+                            .notice(notice);
                     });
                 }));
                 gap(Dp(24.0));
-                gallery_item(3).fill(true).content(move || {
-                    text_nav_toolbar(false).notice(notice);
+                gallery_item(3).fill(true).content(move |gallery_tag| {
+                    text_nav_toolbar(false)
+                        .gallery_tag(gallery_tag)
+                        .notice(notice);
                 });
                 gap(Dp(16.0));
-                gallery_item(4).fill(true).content(move || {
-                    search_toolbar(notice);
+                gallery_item(4).fill(true).content(move |gallery_tag| {
+                    search_toolbar(notice).gallery_tag(gallery_tag);
                 });
             }
             GalleryKind::Emphasis => {
                 floating_group(RenderSlot::new(move || {
-                    gallery_item(0).content(move || {
-                        sample_toolbar(Sample::Navigate).limit(limit).notice(notice);
+                    gallery_item(0).content(move |gallery_tag| {
+                        sample_toolbar(Sample::Navigate)
+                            .gallery_tag(gallery_tag)
+                            .limit(limit)
+                            .notice(notice);
                     });
-                    gallery_item(1).content(move || {
+                    gallery_item(1).content(move |gallery_tag| {
                         fab_pair(Sample::Mail, FabKind::Reply)
+                            .gallery_tag(gallery_tag)
                             .vibrant(true)
                             .limit(fab_limit)
                             .notice(notice);
@@ -1545,8 +1604,9 @@ fn gallery(kind: GalleryKind) {
                 }));
             }
             GalleryKind::EmphasisDont => {
-                gallery_item(0).content(move || {
+                gallery_item(0).content(move |gallery_tag| {
                     fab_pair(Sample::Navigate, FabKind::Add)
+                        .gallery_tag(gallery_tag)
                         .vibrant(true)
                         .limit(fab_limit)
                         .notice(notice);
@@ -1554,11 +1614,14 @@ fn gallery(kind: GalleryKind) {
             }
             GalleryKind::Presentation => {
                 floating_group(RenderSlot::new(move || {
-                    gallery_item(0).content(move || {
-                        sample_toolbar(Sample::History).notice(notice);
+                    gallery_item(0).content(move |gallery_tag| {
+                        sample_toolbar(Sample::History)
+                            .gallery_tag(gallery_tag)
+                            .notice(notice);
                     });
-                    gallery_item(1).content(move || {
+                    gallery_item(1).content(move |gallery_tag| {
                         sample_toolbar(Sample::Format)
+                            .gallery_tag(gallery_tag)
                             .vibrant(true)
                             .limit(limit.saturating_sub(2).max(2))
                             .notice(notice);
@@ -1566,8 +1629,9 @@ fn gallery(kind: GalleryKind) {
                 }));
             }
             GalleryKind::RoundedDocked => {
-                gallery_item(0).fill(true).content(move || {
+                gallery_item(0).fill(true).content(move |gallery_tag| {
                     sample_toolbar(Sample::Format)
+                        .gallery_tag(gallery_tag)
                         .docked(true)
                         .rounded(true)
                         .dividers(true)
@@ -1584,10 +1648,9 @@ fn gallery(kind: GalleryKind) {
 }
 
 #[tessera]
-fn text_nav_toolbar(rtl: bool, notice: Option<State<String>>) {
+fn text_nav_toolbar(rtl: bool, notice: Option<State<String>>, gallery_tag: Option<usize>) {
     let local = remember(String::new);
     let notice = notice.unwrap_or(local);
-    let gallery_tag = use_context::<GalleryTag>().map(|tag| tag.get().0);
     docked_toolbar()
         .accessibility_label(if rtl {
             "Mirrored page navigation"
@@ -2138,11 +2201,11 @@ fn baseline_layouts() {
         width,
         RenderSlot::new(move || {
             let icons = if compact(width.get()) { 2 } else { 4 };
-            gallery_item(0).fill(true).legend(1).content(move || {
+            gallery_item(0).fill(true).legend(1).content(move |_| {
                 bottom_bar(icons, true, notice);
             });
             gap(Dp(24.0));
-            gallery_item(1).fill(true).legend(2).content(move || {
+            gallery_item(1).fill(true).legend(2).content(move |_| {
                 bottom_bar(4, false, notice);
             });
         }),
@@ -3115,10 +3178,10 @@ fn slots() {
 }
 
 #[tessera]
-fn search_toolbar(notice: State<String>) {
+fn search_toolbar(notice: State<String>, gallery_tag: Option<usize>) {
     let query = remember(String::new);
     let selected = remember(|| false);
-    let tag = use_context::<GalleryTag>().map(|tag| tag.get().0);
+    let tag = gallery_tag;
     docked_toolbar()
         .accessibility_label("Search actions")
         .content(move || {
@@ -3499,11 +3562,11 @@ fn m2_comparison() {
         width,
         RenderSlot::new(move || {
             let icons = if compact(width.get()) { 2 } else { 4 };
-            gallery_item(0).fill(true).legend(1).content(move || {
+            gallery_item(0).fill(true).legend(1).content(move |_| {
                 m2_bar(icons);
             });
             gap(Dp(24.0));
-            gallery_item(1).fill(true).legend(2).content(move || {
+            gallery_item(1).fill(true).legend(2).content(move |_| {
                 bottom_bar(icons, true, notice);
             });
         }),
@@ -3582,7 +3645,6 @@ fn collapsing_example() {
 
 #[cfg(all(test, not(target_family = "wasm")))]
 mod tests {
-    use std::cell::Cell;
 
     use tessera_components::theme::material_theme;
     use tessera_ui::{
@@ -3593,13 +3655,8 @@ mod tests {
 
     use super::*;
 
-    thread_local! {
-        static CONFIGURATION: Cell<(Variant, bool)> = const { Cell::new((Variant::Floating, true)) };
-    }
-
     #[tessera]
-    fn fixture() {
-        let (variant, expanded) = CONFIGURATION.get();
+    fn fixture(variant: Variant, expanded: bool) {
         material_theme().child(move || {
             let notice = remember(String::new);
             column()
@@ -3611,8 +3668,7 @@ mod tests {
     }
 
     #[tessera]
-    fn compact_figure_fixture() {
-        let (variant, _) = CONFIGURATION.get();
+    fn compact_figure_fixture(variant: Variant) {
         material_theme().child(move || {
             column()
                 .modifier(Modifier::new().fill_max_width())
@@ -3630,8 +3686,7 @@ mod tests {
             Variant::Vertical,
             Variant::WithFab,
         ] {
-            CONFIGURATION.set((variant, true));
-            let snapshot = layout_test(compact_figure_fixture)
+            let snapshot = layout_test(move || compact_figure_fixture(variant))
                 .viewport_px(320, 600)
                 .run();
             let figure = snapshot.node("spec-toolbar-figure").bounds();
@@ -3696,14 +3751,6 @@ mod tests {
         }
     }
 
-    struct Pipelines;
-
-    impl tessera_ui::RenderModule for Pipelines {
-        fn register_pipelines(&self, context: &mut tessera_ui::PipelineContext<'_>) {
-            tessera_components::pipelines::register_pipelines(context);
-        }
-    }
-
     #[tessera]
     fn collapse_fixture() {
         material_theme().child(|| {
@@ -3737,7 +3784,7 @@ mod tests {
     fn collapsing_toolbar_preserves_toggle_state_without_activating_on_focus() {
         let mut renderer = HeadlessRenderer::new(
             Box::new(collapse_fixture),
-            vec![Box::new(Pipelines)],
+            vec![Box::new(crate::TestPipelines)],
             HeadlessConfig {
                 width: 600,
                 height: 360,
@@ -3786,8 +3833,9 @@ mod tests {
             (Variant::Vertical, true, 64, 220, 4),
             (Variant::Docked, true, 600, 64, 4),
         ] {
-            CONFIGURATION.set((variant, expanded));
-            let snapshot = layout_test(fixture).viewport_px(600, 400).run();
+            let snapshot = layout_test(move || fixture(variant, expanded))
+                .viewport_px(600, 400)
+                .run();
             snapshot
                 .node("spec-toolbar-container")
                 .size(expected_width, expected_height);
@@ -3828,36 +3876,38 @@ mod tests {
         }
     }
 
-    thread_local! {
-        static GALLERY: Cell<GalleryKind> = const { Cell::new(GalleryKind::Overview) };
-        static PLACEMENT: Cell<Placement> = const { Cell::new(Placement::Docked) };
-        static DOCKED_LAYOUT: Cell<DockedLayout> = const { Cell::new(DockedLayout::Edges) };
+    #[derive(Clone, Copy)]
+    enum Scene {
+        Gallery(GalleryKind),
+        Placement(Placement),
+        Docked(DockedLayout),
     }
 
-    fn settled<Output: 'static>(
-        content: fn() -> Output,
-        width: u32,
-        height: u32,
-    ) -> tessera_ui::testing::LayoutSnapshot {
+    fn settled(scene: Scene, width: u32, height: u32) -> tessera_ui::testing::LayoutSnapshot {
         let mut session = tessera_ui::testing::start_layout_test_session(
-            layout_test(content).viewport_px(width, height),
+            layout_test(move || {
+                material_theme().child(move || {
+                    column()
+                        .modifier(Modifier::new().fill_max_width())
+                        .children(move || match scene {
+                            Scene::Gallery(kind) => {
+                                gallery(kind);
+                            }
+                            Scene::Placement(placement) => {
+                                placement_figure(placement);
+                            }
+                            Scene::Docked(layout) => {
+                                docked_layout_figure(layout);
+                            }
+                        });
+                });
+            })
+            .viewport_px(width, height),
         );
         for frame in 0..3 {
             tessera_ui::testing::pump_layout_test_session(&mut session, frame * 16_000_000);
         }
         tessera_ui::testing::pump_layout_test_session(&mut session, 48_000_000)
-    }
-
-    #[tessera]
-    fn gallery_fixture() {
-        let kind = GALLERY.get();
-        material_theme().child(move || {
-            column()
-                .modifier(Modifier::new().fill_max_width())
-                .children(move || {
-                    gallery(kind);
-                });
-        });
     }
 
     #[test]
@@ -3874,9 +3924,8 @@ mod tests {
             (GalleryKind::Presentation, 2, &[][..]),
             (GalleryKind::RoundedDocked, 1, &[][..]),
         ] {
-            GALLERY.set(kind);
             for width in [320, 600] {
-                let snapshot = settled(gallery_fixture, width, 1600);
+                let snapshot = settled(Scene::Gallery(kind), width, 1600);
                 let stage = snapshot.node("toolbar-stage").bounds();
                 for item in 0..items {
                     let mut tags = vec![
@@ -3905,18 +3954,6 @@ mod tests {
         }
     }
 
-    #[tessera]
-    fn placement_fixture() {
-        let placement = PLACEMENT.get();
-        material_theme().child(move || {
-            column()
-                .modifier(Modifier::new().fill_max_width())
-                .children(move || {
-                    placement_figure(placement);
-                });
-        });
-    }
-
     #[test]
     fn placement_figures_keep_docked_flush_and_floating_margins_from_the_window() {
         for width in [320, 720] {
@@ -3925,8 +3962,7 @@ mod tests {
                 Placement::Horizontal,
                 Placement::Vertical,
             ] {
-                PLACEMENT.set(placement);
-                let snapshot = settled(placement_fixture, width, 600);
+                let snapshot = settled(Scene::Placement(placement), width, 600);
                 let window = snapshot.node("placement-window").bounds();
                 let toolbar = snapshot.node("placement-toolbar").bounds();
                 assert!(
@@ -3960,24 +3996,11 @@ mod tests {
         }
     }
 
-    #[tessera]
-    fn docked_layout_fixture() {
-        let layout = DOCKED_LAYOUT.get();
-        material_theme().child(move || {
-            column()
-                .modifier(Modifier::new().fill_max_width())
-                .children(move || {
-                    docked_layout_figure(layout);
-                });
-        });
-    }
-
     #[test]
     fn docked_alignment_figures_center_with_8dp_gaps_or_pin_actions_to_16dp_edges() {
         for width in [320, 720] {
             let count = if width < 400 { 3 } else { 5 };
-            DOCKED_LAYOUT.set(DockedLayout::Centered);
-            let snapshot = settled(docked_layout_fixture, width, 400);
+            let snapshot = settled(Scene::Docked(DockedLayout::Centered), width, 400);
             let container = snapshot.node("docked-layout").bounds();
             let first = snapshot.node("layout-action-0").bounds();
             let last = snapshot
@@ -3993,8 +4016,7 @@ mod tests {
             );
             assert!(leading >= Dp(16.0).to_px());
 
-            DOCKED_LAYOUT.set(DockedLayout::Edges);
-            let snapshot = settled(docked_layout_fixture, width, 400);
+            let snapshot = settled(Scene::Docked(DockedLayout::Edges), width, 400);
             let container = snapshot.node("docked-layout").bounds();
             let first = snapshot.node("layout-action-0").bounds();
             let last = snapshot

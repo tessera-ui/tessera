@@ -202,8 +202,16 @@ pub fn fluid_glass(
     let mut modifier = modifier.unwrap_or_default();
     let interactive = on_click.is_some();
     let focus_requester = remember(FocusRequester::new).get();
-    let interaction_state = interactive.then(|| remember(InteractionState::new));
-    let ripple_state = interactive.then(|| remember(RippleState::new));
+    let interaction_state = if interactive {
+        Some(remember(InteractionState::new))
+    } else {
+        None
+    };
+    let ripple_state = if interactive {
+        Some(remember(RippleState::new))
+    } else {
+        None
+    };
     let has_semantics = accessibility_role.is_some()
         || accessibility_label.is_some()
         || accessibility_description.is_some()

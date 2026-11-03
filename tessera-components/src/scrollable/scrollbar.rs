@@ -4,9 +4,6 @@
 //!
 //! Show and drag scroll thumbs beside overflowing content.
 
-use std::sync::Arc;
-
-use parking_lot::RwLock;
 use tessera_foundation::gesture::{DragRecognizer, ScrollRecognizer, TapRecognizer};
 use tessera_ui::{
     AccessibilityActionHandler, AccessibilityNode, AxisConstraint, Color, ComputedData, Constraint,
@@ -188,7 +185,7 @@ struct ScrollBarConfig {
     scrollbar_state: Option<ScrollBarState>,
 }
 
-#[derive(PartialEq, Default)]
+#[derive(Clone, Copy, PartialEq, Default)]
 /// Mutable state shared by a scrollbar and its viewport.
 pub struct ScrollBarStateInner {
     /// Whether the scrollbar's thumb is currently being dragged.
@@ -206,54 +203,73 @@ pub struct ScrollBarStateInner {
     pub should_be_visible: bool,
 }
 
-/// Public wrapper for ScrollBarStateInner that stores the internal
-/// Arc<RwLock<..>>.
-#[derive(Clone)]
+/// An explicit owner of the interaction state shared by a scrollbar and viewport.
+#[derive(Clone, Copy, PartialEq)]
 pub struct ScrollBarState {
-    inner: Arc<RwLock<ScrollBarStateInner>>,
+    owner: ScrollBarOwner,
 }
 
-impl PartialEq for ScrollBarState {
-    fn eq(&self, other: &Self) -> bool {
-        Arc::ptr_eq(&self.inner, &other.inner)
-    }
+#[derive(Clone, Copy, PartialEq)]
+enum ScrollBarOwner {
+    External(State<ScrollBarStateInner>),
+    Viewport {
+        controller: State<ScrollableController>,
+        vertical: bool,
+    },
 }
 
 impl ScrollBarState {
-    /// Creates a new scrollbar state.
-    pub fn new() -> Self {
+    /// Shares a component-owned scrollbar interaction state.
+    pub fn new(state: State<ScrollBarStateInner>) -> Self {
         Self {
-            inner: Arc::new(RwLock::new(ScrollBarStateInner::default())),
+            owner: ScrollBarOwner::External(state),
         }
     }
 
-    /// Returns a read guard over the scrollbar state.
-    pub fn read(&self) -> parking_lot::RwLockReadGuard<'_, ScrollBarStateInner> {
-        self.inner.read()
+    pub(crate) fn viewport(controller: State<ScrollableController>, vertical: bool) -> Self {
+        Self {
+            owner: ScrollBarOwner::Viewport {
+                controller,
+                vertical,
+            },
+        }
     }
 
-    /// Returns a write guard over the scrollbar state.
-    pub fn write(&self) -> parking_lot::RwLockWriteGuard<'_, ScrollBarStateInner> {
-        self.inner.write()
+    /// Reads the current interaction state.
+    pub fn read(&self) -> ScrollBarStateInner {
+        match self.owner {
+            ScrollBarOwner::External(state) => state.get(),
+            ScrollBarOwner::Viewport {
+                controller,
+                vertical,
+            } => controller.with(|controller| {
+                if vertical {
+                    controller.scrollbar_state_v
+                } else {
+                    controller.scrollbar_state_h
+                }
+            }),
+        }
+    }
+
+    /// Updates the owning state and invalidates its readers.
+    pub fn with_mut<R>(&self, update: impl FnOnce(&mut ScrollBarStateInner) -> R) -> R {
+        match self.owner {
+            ScrollBarOwner::External(state) => state.with_mut(update),
+            ScrollBarOwner::Viewport {
+                controller,
+                vertical,
+            } => controller.with_mut(|controller| {
+                update(if vertical {
+                    &mut controller.scrollbar_state_v
+                } else {
+                    &mut controller.scrollbar_state_h
+                })
+            }),
+        }
     }
 }
 
-impl Default for ScrollBarState {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
-/// Calculate the target content position for a vertical scrollbar given a
-/// cursor Y.
-///
-/// This extracts the logic previously embedded in the pointer input closure
-/// so the closure becomes smaller and easier to reason about during static
-/// analysis.
-/// - `cursor_y`: cursor Y within the scrollbar track (in Px).
-/// - `track_height`: visible track height (in Px).
-/// - `thumb_height`: thumb size (in Px).
-/// - `args`: scrollbar args (contains total / visible / state).
 fn calculate_target_pos_v(
     cursor_y: Px,
     track_height: Px,
@@ -281,8 +297,6 @@ fn calculate_target_pos_v(
     PxPosition::new(Px::ZERO, new_target_y)
 }
 
-/// Calculate the target content position for a horizontal scrollbar given a
-/// cursor X. Mirrors `calculate_target_pos_v` for horizontal axis.
 fn calculate_target_pos_h(
     cursor_x: Px,
     track_width: Px,
@@ -310,17 +324,12 @@ fn calculate_target_pos_h(
     PxPosition::new(new_target_x, Px::ZERO)
 }
 
-/// Compute the thumb color with hover interpolation.
-///
-/// Extracted to reduce duplication between vertical and horizontal scrollbar
-/// implementations.
 fn compute_thumb_color(
-    state_lock: &ScrollBarState,
+    state: &ScrollBarStateInner,
     thumb_color: Color,
     thumb_hover_color: Color,
     frame_nanos: u64,
 ) -> Color {
-    let state = state_lock.read();
     // Before the first hover there is no previous color to fade from, so the
     // thumb starts at its resting color.
     let Some(hover_start_frame_nanos) = state.hover_start_frame_nanos else {
@@ -335,8 +344,6 @@ fn compute_thumb_color(
         thumb_hover_color.lerp(&thumb_color, progress)
     }
 }
-/// Decide whether the scrollbar should be shown according to behavior and
-/// state.
 fn should_show_scrollbar(args: &ScrollBarConfig, state: &ScrollBarState) -> bool {
     match args.scrollbar_behavior {
         ScrollBarBehavior::AlwaysVisible => true,
@@ -348,18 +355,17 @@ fn should_show_scrollbar(args: &ScrollBarConfig, state: &ScrollBarState) -> bool
     }
 }
 
-/// Handle AutoHide behavior: hide the scrollbar after a timeout if no activity.
 fn handle_autohide_if_needed(args: &ScrollBarConfig, state: &ScrollBarState, frame_nanos: u64) {
     if matches!(args.scrollbar_behavior, ScrollBarBehavior::AutoHide) {
-        let mut state_guard = state.write();
-        if let Some(last_scroll_activity_frame_nanos) = state_guard.last_scroll_activity_frame_nanos
+        let current = state.read();
+        if current.should_be_visible
+            && current
+                .last_scroll_activity_frame_nanos
+                .is_some_and(|last| {
+                    elapsed_secs_from_frame_nanos(frame_nanos, last) > AUTO_HIDE_TIMEOUT_SECS
+                })
         {
-            // Hide scrollbar after 2 seconds of inactivity
-            if elapsed_secs_from_frame_nanos(frame_nanos, last_scroll_activity_frame_nanos)
-                > AUTO_HIDE_TIMEOUT_SECS
-            {
-                state_guard.should_be_visible = false;
-            }
+            state.with_mut(|state| state.should_be_visible = false);
         }
     }
 }
@@ -396,19 +402,15 @@ fn needs_scrollbar_frame_tick(
         )
 }
 
-/// Mark recent scroll activity and make the scrollbar visible (used by AutoHide
-/// behavior).
 fn mark_scroll_activity(state: &ScrollBarState, behavior: &ScrollBarBehavior, frame_nanos: u64) {
     if matches!(*behavior, ScrollBarBehavior::AutoHide) {
-        let mut state_guard = state.write();
-        state_guard.last_scroll_activity_frame_nanos = Some(frame_nanos);
-        state_guard.should_be_visible = true;
+        state.with_mut(|state_guard| {
+            state_guard.last_scroll_activity_frame_nanos = Some(frame_nanos);
+            state_guard.should_be_visible = true;
+        });
     }
 }
 
-/// Compute normalized thumb progress (0.0..1.0) from offset/total.
-///
-/// Returns 0.0 if total is zero or non-positive to avoid division by zero.
 fn compute_thumb_progress(offset: Px, total: Px) -> f32 {
     if total <= Px::ZERO {
         0.0
@@ -417,10 +419,6 @@ fn compute_thumb_progress(offset: Px, total: Px) -> f32 {
     }
 }
 
-/// Compute the thumb size (Px) from visible and total content sizes using the
-/// proportional formula: thumb = visible * visible / total. When `total` is
-/// zero or non-positive, fall back to using `visible` to avoid division by
-/// zero.
 fn compute_thumb_size(visible: Px, total: Px) -> Px {
     if total <= Px::ZERO {
         return visible.max(Px::ZERO);
@@ -435,7 +433,6 @@ fn compute_thumb_size(visible: Px, total: Px) -> Px {
     Px::saturating_from_f32(thumb.max(min_thumb))
 }
 
-/// Helper to check whether a cursor position overlaps the vertical thumb.
 fn cursor_on_thumb_v(cursor_pos: PxPosition, width: Px, thumb_y: f32, thumb_height: Px) -> bool {
     cursor_pos.x >= 0.0
         && cursor_pos.x <= width.0 as f32
@@ -443,7 +440,6 @@ fn cursor_on_thumb_v(cursor_pos: PxPosition, width: Px, thumb_y: f32, thumb_heig
         && cursor_pos.y <= thumb_y + thumb_height.0 as f32
 }
 
-/// Helper to check whether a cursor position overlaps the horizontal thumb.
 fn cursor_on_thumb_h(cursor_pos: PxPosition, height: Px, thumb_x: f32, thumb_width: Px) -> bool {
     cursor_pos.y >= 0.0
         && cursor_pos.y <= height.0 as f32
@@ -451,7 +447,6 @@ fn cursor_on_thumb_h(cursor_pos: PxPosition, height: Px, thumb_x: f32, thumb_wid
         && cursor_pos.x <= thumb_x + thumb_width.0 as f32
 }
 
-/// Return true if the cursor press position is on vertical track area.
 fn is_on_track_v(cursor_pos: PxPosition, thickness: Px, track_height: Px) -> bool {
     cursor_pos.x >= 0.0
         && cursor_pos.x <= thickness.0 as f32
@@ -459,7 +454,6 @@ fn is_on_track_v(cursor_pos: PxPosition, thickness: Px, track_height: Px) -> boo
         && cursor_pos.y <= track_height.0 as f32
 }
 
-/// Return true if the cursor press position is on horizontal track area.
 fn is_on_track_h(cursor_pos: PxPosition, thickness: Px, track_width: Px) -> bool {
     cursor_pos.y >= 0.0
         && cursor_pos.y <= thickness.0 as f32
@@ -493,7 +487,7 @@ fn apply_scrollbar_semantics(
     accessibility.actions.push(Action::Decrement);
 
     let args_clone = args.clone();
-    let state_clone = state.clone();
+    let state_clone = *state;
     *action_handler = Some(Box::new(move |action| match action {
         Action::Increment => {
             scroll_accessibility_step(&args_clone, &state_clone, orientation, true)
@@ -555,7 +549,6 @@ fn scroll_accessibility_step(
     mark_scroll_activity(state, &args.scrollbar_behavior, current_frame_nanos());
 }
 
-/// Update dragging behavior for vertical axis.
 fn update_drag_vertical(
     input: &tessera_ui::PointerInput,
     calculate_target: &dyn Fn(Px) -> PxPosition,
@@ -572,20 +565,21 @@ fn update_drag_vertical(
         mark_scroll_activity(state, &args.scrollbar_behavior, frame_nanos);
     } else {
         // Cursor left window: stop dragging.
-        state.write().is_dragging = false;
+        state.with_mut(|state| state.is_dragging = false);
     }
 }
 
-/// Update hovered state uniformly.
 fn update_hover_state(is_on_thumb: bool, state: &ScrollBarState, frame_nanos: u64) {
     if is_on_thumb && !state.read().is_hovered {
-        let mut state_guard = state.write();
-        state_guard.is_hovered = true;
-        state_guard.hover_start_frame_nanos = Some(frame_nanos);
+        state.with_mut(|state_guard| {
+            state_guard.is_hovered = true;
+            state_guard.hover_start_frame_nanos = Some(frame_nanos);
+        });
     } else if !is_on_thumb && state.read().is_hovered {
-        let mut state_guard = state.write();
-        state_guard.is_hovered = false;
-        state_guard.hover_start_frame_nanos = Some(frame_nanos);
+        state.with_mut(|state_guard| {
+            state_guard.is_hovered = false;
+            state_guard.hover_start_frame_nanos = Some(frame_nanos);
+        });
     }
 }
 
@@ -647,7 +641,7 @@ fn handle_state_v(
 
     if tap_result.pressed {
         if is_on_thumb {
-            state.write().pressed_on_thumb = true;
+            state.with_mut(|state| state.pressed_on_thumb = true);
         } else if within_track && let Some(cursor_pos) = cursor_pos {
             let new_target_pos = calculate_target_pos(cursor_pos.y_px());
             args.state
@@ -657,26 +651,26 @@ fn handle_state_v(
     }
 
     if drag_result.started && state.read().pressed_on_thumb {
-        state.write().is_dragging = true;
+        state.with_mut(|state| state.is_dragging = true);
     }
 
     if state.read().is_dragging && drag_result.updated {
         update_drag_vertical(input, &calculate_target_pos, args, state, frame_nanos);
     } else if state.read().is_dragging && cursor_pos.is_none() {
-        let mut state_guard = state.write();
-        state_guard.is_dragging = false;
-        state_guard.pressed_on_thumb = false;
+        state.with_mut(|state_guard| {
+            state_guard.is_dragging = false;
+            state_guard.pressed_on_thumb = false;
+        });
     }
 
     if tap_result.released || drag_result.ended {
-        let mut state_guard = state.write();
-        state_guard.is_dragging = false;
-        state_guard.pressed_on_thumb = false;
+        state.with_mut(|state_guard| {
+            state_guard.is_dragging = false;
+            state_guard.pressed_on_thumb = false;
+        });
     }
 }
 
-/// Handle the pointer input logic for the horizontal scrollbar.
-/// Extracted from the inline closure to reduce function/closure complexity.
 fn update_drag_horizontal(
     input: &tessera_ui::PointerInput,
     calculate_target: &dyn Fn(Px) -> PxPosition,
@@ -693,7 +687,7 @@ fn update_drag_horizontal(
         mark_scroll_activity(state, &args.scrollbar_behavior, frame_nanos);
     } else {
         // Cursor left window: stop dragging.
-        state.write().is_dragging = false;
+        state.with_mut(|state| state.is_dragging = false);
     }
 }
 
@@ -749,7 +743,7 @@ fn handle_state_h(
 
     if tap_result.pressed {
         if is_on_thumb {
-            state.write().pressed_on_thumb = true;
+            state.with_mut(|state| state.pressed_on_thumb = true);
         } else if within_track && let Some(cursor_pos) = cursor_pos {
             let new_target_pos = calculate_target_pos(cursor_pos.x_px());
             args.state
@@ -759,21 +753,23 @@ fn handle_state_h(
     }
 
     if drag_result.started && state.read().pressed_on_thumb {
-        state.write().is_dragging = true;
+        state.with_mut(|state| state.is_dragging = true);
     }
 
     if state.read().is_dragging && drag_result.updated {
         update_drag_horizontal(input, &calculate_target_pos, args, state, frame_nanos);
     } else if state.read().is_dragging && cursor_pos.is_none() {
-        let mut state_guard = state.write();
-        state_guard.is_dragging = false;
-        state_guard.pressed_on_thumb = false;
+        state.with_mut(|state_guard| {
+            state_guard.is_dragging = false;
+            state_guard.pressed_on_thumb = false;
+        });
     }
 
     if tap_result.released || drag_result.ended {
-        let mut state_guard = state.write();
-        state_guard.is_dragging = false;
-        state_guard.pressed_on_thumb = false;
+        state.with_mut(|state_guard| {
+            state_guard.is_dragging = false;
+            state_guard.pressed_on_thumb = false;
+        });
     }
 }
 
@@ -867,25 +863,25 @@ pub fn scrollbar_v(
         thumb_hover_color,
         scrollbar_state,
     };
-    let state = args.scrollbar_state.clone().unwrap_or_else(|| {
-        let remembered = remember(ScrollBarState::new);
-        remembered.with(|s| s.clone())
-    });
-    let frame_tick = remember(|| 0_u64);
-    let _ = frame_tick.with(|tick| *tick);
+    let state = if let Some(state) = args.scrollbar_state {
+        state
+    } else {
+        ScrollBarState::new(remember(ScrollBarStateInner::default))
+    };
+    let frame_time = remember(current_frame_nanos);
+    let _ = frame_time.get();
     let tap_recognizer = remember(TapRecognizer::default);
     let drag_recognizer = remember(DragRecognizer::default);
     let scroll_recognizer = remember(ScrollRecognizer::default);
-    let nested_scroll_connection =
-        use_context::<NestedScrollConnection>().map(|context| context.get());
+    let nested_scroll_connection = NestedScrollConnection::nearest();
     let frame_nanos = current_frame_nanos();
 
     handle_autohide_if_needed(&args, &state, frame_nanos);
     if needs_scrollbar_frame_tick(&args, &state, frame_nanos) {
         let args = args.clone();
-        let state = state.clone();
+        let state = state;
         receive_frame_nanos(move |frame_nanos| {
-            frame_tick.with_mut(|tick| *tick = tick.wrapping_add(1));
+            frame_time.set(frame_nanos);
             if needs_scrollbar_frame_tick(&args, &state, frame_nanos) {
                 tessera_ui::FrameNanosControl::Continue
             } else {
@@ -920,7 +916,7 @@ pub fn scrollbar_v(
     };
 
     let handler_args = args.clone();
-    let handler_state = state.clone();
+    let handler_state = state;
     let modifier = with_pointer_input(Modifier::new(), move |mut input| {
         let frame_nanos = current_frame_nanos();
         handle_state_v(
@@ -940,18 +936,18 @@ pub fn scrollbar_v(
         controller: args.state,
         recognizer: scroll_recognizer,
         connection: nested_scroll_connection,
-        scrollbar_state: state.clone(),
+        scrollbar_state: state,
         behavior: args.scrollbar_behavior.clone(),
     })
     .push_semantics(ScrollbarSemanticsModifierNode {
         args: args.clone(),
-        state: state.clone(),
+        state: state,
         orientation: ScrollOrientation::Vertical,
     });
 
     let thumb_color = if has_vertical_overflow {
         compute_thumb_color(
-            &state,
+            &state.read(),
             args.thumb_color,
             args.thumb_hover_color,
             frame_nanos,
@@ -1077,25 +1073,25 @@ pub fn scrollbar_h(
         thumb_hover_color,
         scrollbar_state,
     };
-    let state = args.scrollbar_state.clone().unwrap_or_else(|| {
-        let remembered = remember(ScrollBarState::new);
-        remembered.with(|s| s.clone())
-    });
-    let frame_tick = remember(|| 0_u64);
-    let _ = frame_tick.with(|tick| *tick);
+    let state = if let Some(state) = args.scrollbar_state {
+        state
+    } else {
+        ScrollBarState::new(remember(ScrollBarStateInner::default))
+    };
+    let frame_time = remember(current_frame_nanos);
+    let _ = frame_time.get();
     let tap_recognizer = remember(TapRecognizer::default);
     let drag_recognizer = remember(DragRecognizer::default);
     let scroll_recognizer = remember(ScrollRecognizer::default);
-    let nested_scroll_connection =
-        use_context::<NestedScrollConnection>().map(|context| context.get());
+    let nested_scroll_connection = NestedScrollConnection::nearest();
     let frame_nanos = current_frame_nanos();
 
     handle_autohide_if_needed(&args, &state, frame_nanos);
     if needs_scrollbar_frame_tick(&args, &state, frame_nanos) {
         let args = args.clone();
-        let state = state.clone();
+        let state = state;
         receive_frame_nanos(move |frame_nanos| {
-            frame_tick.with_mut(|tick| *tick = tick.wrapping_add(1));
+            frame_time.set(frame_nanos);
             if needs_scrollbar_frame_tick(&args, &state, frame_nanos) {
                 tessera_ui::FrameNanosControl::Continue
             } else {
@@ -1130,7 +1126,7 @@ pub fn scrollbar_h(
     };
 
     let handler_args = args.clone();
-    let handler_state = state.clone();
+    let handler_state = state;
     let modifier = with_pointer_input(Modifier::new(), move |mut input| {
         let frame_nanos = current_frame_nanos();
         handle_state_h(
@@ -1150,18 +1146,18 @@ pub fn scrollbar_h(
         controller: args.state,
         recognizer: scroll_recognizer,
         connection: nested_scroll_connection,
-        scrollbar_state: state.clone(),
+        scrollbar_state: state,
         behavior: args.scrollbar_behavior.clone(),
     })
     .push_semantics(ScrollbarSemanticsModifierNode {
         args: args.clone(),
-        state: state.clone(),
+        state: state,
         orientation: ScrollOrientation::Horizontal,
     });
 
     let thumb_color = if has_horizontal_overflow {
         compute_thumb_color(
-            &state,
+            &state.read(),
             args.thumb_color,
             args.thumb_hover_color,
             frame_nanos,
@@ -1203,7 +1199,9 @@ mod tests {
 
     use crate::theme::MaterialColorScheme;
 
-    use super::{HOVER_FADE_DURATION_SECS, ScrollBarState, ScrollbarDefaults, compute_thumb_color};
+    use super::{
+        HOVER_FADE_DURATION_SECS, ScrollBarStateInner, ScrollbarDefaults, compute_thumb_color,
+    };
 
     #[test]
     fn default_thumb_colors_follow_the_scheme() {
@@ -1223,14 +1221,13 @@ mod tests {
     fn thumb_color_interpolates_towards_the_hover_color() {
         let thumb = Color::new(1.0, 0.0, 0.0, 0.4);
         let hovered = Color::new(1.0, 0.0, 0.0, 0.6);
-        let state = ScrollBarState::new();
+        let mut state = ScrollBarStateInner::default();
 
         assert_eq!(compute_thumb_color(&state, thumb, hovered, 0), thumb);
 
         {
-            let mut state_guard = state.write();
-            state_guard.is_hovered = true;
-            state_guard.hover_start_frame_nanos = Some(0);
+            state.is_hovered = true;
+            state.hover_start_frame_nanos = Some(0);
         }
         let fade_nanos = (HOVER_FADE_DURATION_SECS * 1_000_000_000.0) as u64;
 

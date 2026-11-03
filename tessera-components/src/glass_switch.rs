@@ -182,14 +182,21 @@ pub fn glass_switch(
     let thumb_on_alpha = thumb_on_alpha.unwrap_or(0.5);
     let thumb_off_alpha = thumb_off_alpha.unwrap_or(1.0);
     let thumb_padding = thumb_padding.unwrap_or(Dp(3.0));
-    let controller = controller.unwrap_or_else(|| remember(|| GlassSwitchController::new(checked)));
+    let controller = match controller {
+        Some(value) => value,
+        None => remember(|| GlassSwitchController::new(checked)),
+    };
     if controller.with(|c| c.is_checked()) != checked {
         controller.with_mut(|c| c.set_checked(checked));
     }
     let mut modifier = modifier.unwrap_or_default();
 
     let enabled = on_toggle.is_some();
-    let interaction_state = enabled.then(|| remember(InteractionState::new));
+    let interaction_state = if enabled {
+        Some(remember(InteractionState::new))
+    } else {
+        None
+    };
     let checked = controller.with(|c| c.is_checked());
     if enabled {
         modifier = modifier.minimum_interactive_component_size();

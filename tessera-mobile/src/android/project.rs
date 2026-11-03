@@ -130,15 +130,20 @@ pub fn generate(
             map.insert(
                 "abi_list",
                 Target::all()
-                    .values()
+                    .iter()
+                    .map(|(_, target)| target)
                     .map(|target| target.abi)
                     .collect::<Vec<_>>(),
             );
-            map.insert("target_list", Target::all().keys().collect::<Vec<_>>());
+            map.insert(
+                "target_list",
+                Target::all().iter().map(|(key, _)| key).collect::<Vec<_>>(),
+            );
             map.insert(
                 "arch_list",
                 Target::all()
-                    .values()
+                    .iter()
+                    .map(|(_, target)| target)
                     .map(|target| target.arch)
                     .collect::<Vec<_>>(),
             );
@@ -234,7 +239,7 @@ pub fn generate(
         .map_err(Error::AssetDirSymlinkFailed)?;
 
     {
-        for target in Target::all().values() {
+        for target in Target::all().iter().map(|(_, target)| target) {
             dot_cargo.insert_target(
                 target.triple.to_owned(),
                 target

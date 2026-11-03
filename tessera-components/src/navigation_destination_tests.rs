@@ -1,5 +1,3 @@
-use std::cell::Cell;
-
 use tessera_ui::{
     Dp, Modifier, State, remember, tessera,
     testing::{layout_test, pump_layout_test_session, start_layout_test_session},
@@ -36,8 +34,6 @@ impl Default for Options {
     }
 }
 
-thread_local! { static OPTIONS: Cell<Option<State<Options>>> = const { Cell::new(None) }; }
-
 fn tagged(name: &str) -> Modifier {
     Modifier::new().semantics(SemanticsArgs {
         test_tag: Some(name.into()),
@@ -47,9 +43,9 @@ fn tagged(name: &str) -> Modifier {
 }
 
 #[tessera]
-fn rail_fixture() {
+fn rail_fixture(options_probe: tessera_ui::testing::TestProbe<Option<State<Options>>>) {
     let options = remember(Options::default);
-    OPTIONS.set(Some(options));
+    options_probe.set(Some(options));
     material_theme()
         .theme(move || {
             let scale = options.with(|options| options.scale);
@@ -78,8 +74,8 @@ fn rail_fixture() {
                         .children(move || {
                             navigation_rail()
                                 .expanded(options.with(|options| options.expanded))
-                                .content(move || {
-                                    navigation_rail_item()
+                                .content(move |rail_scope| {
+                                    navigation_rail_item(rail_scope)
                                         .label(options.with(|options| options.label.clone()))
                                         .selected(true)
                                         .accessibility_description("3 unread messages")
@@ -105,9 +101,9 @@ fn rail_fixture() {
 }
 
 #[tessera]
-fn bar_fixture() {
+fn bar_fixture(options_probe: tessera_ui::testing::TestProbe<Option<State<Options>>>) {
     let options = remember(Options::default);
-    OPTIONS.set(Some(options));
+    options_probe.set(Some(options));
     material_theme()
         .theme(move || {
             let scale = options.with(|options| options.scale);
@@ -134,11 +130,12 @@ fn bar_fixture() {
                                 } else {
                                     NavigationBarIconPosition::Top
                                 })
-                                .content(|| {
+                                .content(move |icon_position| {
                                     for (index, label) in
                                         ["Home", "Inbox", "Saved"].into_iter().enumerate()
                                     {
                                         navigation_bar_item()
+                                            .icon_position(icon_position)
                                             .label(label)
                                             .selected(index == 0)
                                             .icon(move || {
@@ -159,14 +156,21 @@ fn bar_fixture() {
 
 #[test]
 fn rail_badge_moves_from_icon_overlap_to_trailing_label_without_changing_target_width() {
-    let mut session = start_layout_test_session(layout_test(rail_fixture).viewport_px(320, 400));
+    let options_probe = tessera_ui::testing::TestProbe::default();
+    let observed = options_probe.clone();
+    let mut session = start_layout_test_session(
+        layout_test(move || {
+            rail_fixture(observed.clone());
+        })
+        .viewport_px(320, 400),
+    );
     let collapsed = pump_layout_test_session(&mut session, 0);
     collapsed.node("rail").size(96, 300);
     let icon = collapsed.node("rail-icon").bounds();
     let badge = collapsed.node("rail-badge").bounds();
     assert_eq!(badge.x.0, icon.x.0 + 12);
     assert_eq!(badge.y.0, icon.y.0 - 2);
-    let options = OPTIONS.get().unwrap();
+    let options = options_probe.get().expect("mounted destination options");
     options.with_mut(|options| options.expanded = true);
     pump_layout_test_session(&mut session, 16_666_667);
     let expanded = pump_layout_test_session(&mut session, 400_000_000);
@@ -183,10 +187,17 @@ fn rail_badge_moves_from_icon_overlap_to_trailing_label_without_changing_target_
 
 #[test]
 fn navigation_bar_grows_for_twice_sized_labels_and_keeps_icons_inside_one_shared_height() {
-    let mut session = start_layout_test_session(layout_test(bar_fixture).viewport_px(600, 400));
+    let options_probe = tessera_ui::testing::TestProbe::default();
+    let observed = options_probe.clone();
+    let mut session = start_layout_test_session(
+        layout_test(move || {
+            bar_fixture(observed.clone());
+        })
+        .viewport_px(600, 400),
+    );
     let normal = pump_layout_test_session(&mut session, 0);
     normal.node("bar").size(600, 64);
-    let options = OPTIONS.get().unwrap();
+    let options = options_probe.get().expect("mounted destination options");
     options.with_mut(|options| options.scale = 2.0);
     let large = pump_layout_test_session(&mut session, 16_666_667);
     let bar = large.node("bar").bounds();
@@ -210,9 +221,16 @@ fn navigation_bar_grows_for_twice_sized_labels_and_keeps_icons_inside_one_shared
 
 #[test]
 fn expanded_rail_wraps_large_labels_before_the_badge_and_grows_the_item() {
-    let mut session = start_layout_test_session(layout_test(rail_fixture).viewport_px(320, 600));
+    let options_probe = tessera_ui::testing::TestProbe::default();
+    let observed = options_probe.clone();
+    let mut session = start_layout_test_session(
+        layout_test(move || {
+            rail_fixture(observed.clone());
+        })
+        .viewport_px(320, 600),
+    );
     pump_layout_test_session(&mut session, 0);
-    let options = OPTIONS.get().unwrap();
+    let options = options_probe.get().expect("mounted destination options");
     options.with_mut(|options| {
         options.expanded = true;
         options.scale = 2.0;
@@ -231,27 +249,21 @@ fn expanded_rail_wraps_large_labels_before_the_badge_and_grows_the_item() {
 }
 
 #[cfg(not(target_family = "wasm"))]
-struct Pipelines;
-
-#[cfg(not(target_family = "wasm"))]
-impl tessera_ui::RenderModule for Pipelines {
-    fn register_pipelines(&self, context: &mut tessera_ui::PipelineContext<'_>) {
-        crate::pipelines::register_pipelines(context);
-    }
-}
-
-#[cfg(not(target_family = "wasm"))]
 #[test]
 #[ignore = "requires a native GPU adapter"]
 fn expanded_indicator_hugs_badged_content_while_the_full_target_activates_and_announces_count() {
+    let options_probe = tessera_ui::testing::TestProbe::default();
+    let observed = options_probe.clone();
     use tessera_ui::{
         HeadlessConfig, HeadlessRenderer, MOUSE_POINTER_ID, PressKeyEventType, PxPosition,
         accesskit::Role,
     };
 
     let mut renderer = HeadlessRenderer::new(
-        Box::new(rail_fixture),
-        vec![Box::new(Pipelines)],
+        Box::new(move || {
+            rail_fixture(observed.clone());
+        }),
+        vec![Box::new(crate::TesseraComponents)],
         HeadlessConfig {
             width: 320,
             height: 400,
@@ -261,7 +273,7 @@ fn expanded_indicator_hugs_badged_content_while_the_full_target_activates_and_an
     )
     .unwrap();
     renderer.render_frames(2);
-    let options = OPTIONS.get().unwrap();
+    let options = options_probe.get().expect("mounted destination options");
     options.with_mut(|options| options.expanded = true);
     renderer.render_frames(30);
     let snapshot = renderer

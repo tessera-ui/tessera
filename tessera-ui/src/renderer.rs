@@ -133,7 +133,7 @@ struct RuntimePendingWork {
     frame_receiver_pending: bool,
 }
 
-pub(crate) const MAX_FOCUS_SETTLING_RETRIES: usize = 8;
+pub(crate) const MAX_FRAME_SETTLING_RETRIES: usize = 8;
 
 pub(crate) fn focus_settling_can_progress(pending_keyboard_retry: bool) -> bool {
     pending_keyboard_retry
@@ -145,6 +145,7 @@ impl RuntimePendingWork {
     fn capture(pending_keyboard_retry: bool) -> Self {
         Self {
             invalidation_pending: has_pending_build_invalidations()
+                || crate::dispatcher::has_pending()
                 || crate::clipboard::has_pending_requests()
                 || pending_keyboard_retry
                 || has_pending_persistent_focus_prune()
@@ -229,50 +230,10 @@ impl WebConfig {
     }
 }
 
-/// Configuration for the Tessera runtime and renderer.
-///
-/// This struct allows you to customize various aspects of the renderer's
-/// behavior, including anti-aliasing settings and other rendering parameters.
-///
-/// # Examples
-///
-/// ```
-/// use tessera_ui::renderer::TesseraConfig;
-///
-/// // Default configuration (4x MSAA)
-/// let config = TesseraConfig::default();
-///
-/// // Custom configuration with 8x MSAA
-/// let config = TesseraConfig {
-///     sample_count: 8,
-///     ..Default::default()
-/// };
-///
-/// // Disable MSAA for better performance
-/// let config = TesseraConfig {
-///     sample_count: 1,
-///     ..Default::default()
-/// };
-/// ```
+/// Configuration for the UI runtime, window, and renderer.
 #[derive(Debug, Clone)]
 pub struct TesseraConfig {
-    /// The number of samples to use for Multi-Sample Anti-Aliasing (MSAA).
-    ///
-    /// MSAA helps reduce aliasing artifacts (jagged edges) in rendered graphics
-    /// by sampling multiple points per pixel and averaging the results.
-    ///
-    /// ## Supported Values
-    /// - `1`: Disables MSAA (best performance, lower quality)
-    /// - `4`: 4x MSAA (balanced quality/performance)
-    /// - `8`: 8x MSAA (high quality, higher performance cost)
-    ///
-    /// ## Notes
-    /// - Higher sample counts provide better visual quality but consume more
-    ///   GPU resources
-    /// - The GPU must support the chosen sample count; unsupported values may
-    ///   cause errors
-    /// - Mobile devices may have limited support for higher sample counts
-    /// - Consider using lower values on resource-constrained devices
+    /// MSAA sample count; defaults to `1` (disabled). The GPU must support the chosen count.
     pub sample_count: u32,
     /// The title of the application window.
     /// Defaults to "Tessera" if not specified.
@@ -301,167 +262,39 @@ impl Default for TesseraConfig {
     }
 }
 
-/// # Renderer
+/// Owns a UI window, rendering resources, and event processing.
 ///
-/// The main renderer struct that manages the application lifecycle and
-/// rendering.
-///
-/// The `Renderer` is the core component of the Tessera UI framework,
-/// responsible for:
-///
-/// - Managing the application window and WGPU context
-/// - Handling input events (mouse, touch, keyboard, IME)
-/// - Coordinating the component tree building and rendering process
-/// - Managing rendering pipelines and resources
-///
-/// ## Type Parameters
-///
-/// - `F`: The entry point function type that defines your UI. Must implement
-///   `Fn() -> Output`; its return value is discarded after declaration.
-///
-/// ## Lifecycle
-///
-/// The renderer follows this lifecycle:
-/// 1. **Initialization**: Create window, initialize WGPU context, register
-///    pipelines
-/// 2. **Event Loop**: Handle window events, input events, and render requests
-/// 3. **Frame Rendering**: Build component tree → Compute draw commands →
-///    Render to surface
-/// 4. **Cleanup**: Automatic cleanup when the application exits
-///
-/// ## Thread Safety
-///
-/// The renderer runs on the main thread and coordinates frame building,
-/// resource management, and event processing from a single UI-thread
-/// execution flow.
-///
-/// ## Usage
-///
-/// ## Basic Usage
-///
-/// It's suggested to use `cargo-tessera` to create your project from templates
-/// which include all necessary setup. However, here's a minimal example of how
-/// to use the renderer through the [`Renderer::run`] method:
-///
-/// ```no_run
-/// use tessera_ui::{PipelineContext, RenderModule, Renderer};
-///
-/// #[derive(Debug)]
-/// struct DemoModule;
-///
-/// impl RenderModule for DemoModule {
-///     fn register_pipelines(&self, _context: &mut PipelineContext<'_>) {}
-/// }
-///
-/// // Define your UI entry point
-/// #[tessera_ui::tessera]
-/// fn my_app() {
-///     // Your UI components go here
-/// }
-///
-/// // Run the application
-/// Renderer::run(my_app, vec![Box::new(DemoModule)]).unwrap();
-/// ```
-///
-/// ### Android Usage
-///
-/// On android, [`Renderer::run`] requires an additional `AndroidApp` parameter
-/// from app context or `android_main` function.
-///
-/// ## Configuration
-///
-/// You can customize the renderer behavior by passing [`TesseraConfig`] when
-/// using [`Renderer::run_with_config`]. instead of [`Renderer::run`].
-///
-/// ```no_run
-/// use tessera_ui::{PipelineContext, RenderModule, Renderer, renderer::TesseraConfig};
-///
-/// # fn foo() -> Result<(), Box<dyn std::error::Error>> {
-/// #[derive(Debug)]
-/// struct DemoModule;
-///
-/// impl RenderModule for DemoModule {
-///     fn register_pipelines(&self, _context: &mut PipelineContext<'_>) {}
-/// }
-///
-/// let config = TesseraConfig {
-///     sample_count: 8,                            // 8x MSAA
-///     window_title: "My Tessera App".to_string(), // Custom window title
-///     ..Default::default()
-/// };
-///
-/// Renderer::run_with_config(|| { /* my_app */ }, vec![Box::new(DemoModule)], config)?;
-/// # Ok(())
-/// # }
-/// ```
-///
-/// ## Performance Monitoring
-///
-/// The renderer includes built-in performance monitoring that logs frame
-/// statistics when performance drops below 30 FPS.
+/// Use [`crate::EntryPoint`] for shared desktop, Android, and web startup.
+/// The renderer and its component builds run on the UI thread.
 pub struct Renderer<F> {
-    /// The WGPU application context, initialized after window creation
+    session: crate::RuntimeSession,
     app: Option<RenderCore>,
-    /// The entry point function that defines the root of your UI component tree
     entry_point: F,
-    /// Tracks cursor/mouse position and button states
     cursor_state: CursorState,
-    /// Tracks keyboard key states and events
     keyboard_state: KeyboardState,
-    /// Tracks Input Method Editor (IME) state for international text input
     ime_state: ImeState,
-    /// Tracks the renderer-side IME bridge snapshot and platform lifecycle.
     ime_bridge_state: RendererImeBridgeState,
-    /// Render modules providing pipelines.
     modules: Vec<Box<dyn RenderModule>>,
-    /// Lifecycle hooks for registered plugins.
     plugins: PluginHost,
-    /// Configuration settings for the renderer
     config: TesseraConfig,
-    /// AccessKit adapter for accessibility support
     accessibility_adapter: Option<AccessKitAdapter>,
     accessibility_active: bool,
-    /// Event loop proxy for posting user events (accessibility/runtime wakeups)
     event_loop_proxy: Option<winit::event_loop::EventLoopProxy<RendererUserEvent>>,
-    /// Pending programmatic desktop window action requested through plugin
-    /// APIs.
     pending_desktop_window_action: Arc<RwLock<Option<DesktopWindowAction>>>,
-    /// Incrementing frame index for profiling and debugging.
     frame_index: u64,
-    /// Global redraw gate. While `true`, redraw requests are coalesced until
-    /// the pending `RedrawRequested` event is consumed.
     redraw_request_pending: Arc<AtomicBool>,
-    /// Whether a window close was requested during the last frame.
     pending_close_requested: bool,
-    /// Tracks whether a native border resize drag is currently in progress.
-    /// While active, cursor input is withheld from the component tree to avoid
-    /// accidental UI interaction during system resize.
     resize_in_progress: bool,
-    /// Most recent window size observed before the render core existed.
-    ///
-    /// Resize events can arrive while the core is still being created - notably
-    /// on the web, where core creation is asynchronous. Remembering the size
-    /// lets the surface be reconfigured as soon as the core is installed.
     pending_window_size: Option<winit::dpi::PhysicalSize<u32>>,
     #[cfg(target_family = "wasm")]
-    /// Render cores that completed asynchronous initialization on the web
-    /// event loop thread and are waiting to be installed into the renderer.
     pending_web_inits: Rc<RefCell<Vec<(u64, RenderCore)>>>,
     #[cfg(target_family = "wasm")]
-    /// Monotonic token used to discard stale async initialization completions
-    /// after suspend/resume cycles.
     web_init_epoch: u64,
     #[cfg(target_family = "wasm")]
-    /// Whether a web-side render core initialization task is currently
-    /// running.
     web_init_in_progress: bool,
     #[cfg(feature = "profiling")]
-    /// Aggregated redraw reasons that will be attached to the next rendered
-    /// frame.
     pending_redraw_reasons: BTreeSet<RedrawReason>,
     #[cfg(target_os = "android")]
-    /// Android-specific state tracking whether the soft keyboard is currently
-    /// open
     android_ime_opened: bool,
 }
 
@@ -478,94 +311,18 @@ where
         element.dyn_into::<HtmlCanvasElement>().ok()
     }
 
-    /// Runs the Tessera application with default configuration on desktop
-    /// platforms.
+    /// Runs the desktop application with default configuration.
     ///
-    /// This is the most convenient way to start a Tessera application on
-    /// Windows, Linux, or macOS. It uses the default [`TesseraConfig`]
-    /// settings (4x MSAA).
-    ///
-    /// # Parameters
-    ///
-    /// - `entry_point`: A function that defines your UI. This function will be
-    ///   called every frame to build the component tree. It should contain your
-    ///   root UI components.
-    /// - `modules`: Render modules that register pipelines.
-    ///
-    /// # Returns
-    ///
-    /// Returns `Ok(())` when the application exits normally, or an
-    /// `EventLoopError` if the event loop fails to start or encounters a
-    /// critical error.
-    ///
-    /// # Examples
-    ///
-    /// ```no_run
-    /// use tessera_ui::{PipelineContext, RenderModule, Renderer};
-    ///
-    /// #[derive(Debug)]
-    /// struct DemoModule;
-    ///
-    /// impl RenderModule for DemoModule {
-    ///     fn register_pipelines(&self, _context: &mut PipelineContext<'_>) {}
-    /// }
-    ///
-    /// #[tessera_ui::tessera]
-    /// fn my_ui() {
-    ///     // Your UI components go here
-    /// }
-    ///
-    /// fn main() -> Result<(), Box<dyn std::error::Error>> {
-    ///     Renderer::run(my_ui, vec![Box::new(DemoModule)])?;
-    ///     Ok(())
-    /// }
-    /// ```
+    /// Returns an error if the event loop cannot start or fails.
     #[cfg(all(not(target_os = "android"), not(target_family = "wasm")))]
     #[tracing::instrument(level = "info", skip(entry_point, modules))]
     pub fn run(entry_point: F, modules: Vec<Box<dyn RenderModule>>) -> Result<(), EventLoopError> {
         Self::run_with_config(entry_point, modules, Default::default())
     }
 
-    /// Runs the Tessera application with custom configuration on desktop
-    /// platforms.
+    /// Runs the desktop application with the supplied configuration.
     ///
-    /// This method allows you to customize the renderer behavior through
-    /// [`TesseraConfig`]. Use this when you need to adjust settings like
-    /// MSAA sample count or other rendering parameters.
-    ///
-    /// # Parameters
-    ///
-    /// - `entry_point`: A function that defines your UI
-    /// - `modules`: Render modules that register pipelines
-    /// - `config`: Custom configuration for the renderer
-    ///
-    /// # Returns
-    ///
-    /// Returns `Ok(())` when the application exits normally, or an
-    /// `EventLoopError` if the event loop fails to start.
-    ///
-    /// # Examples
-    ///
-    /// ```no_run
-    /// use tessera_ui::{PipelineContext, RenderModule, Renderer, renderer::TesseraConfig};
-    ///
-    /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
-    /// #[derive(Debug)]
-    /// struct DemoModule;
-    ///
-    /// impl RenderModule for DemoModule {
-    ///     fn register_pipelines(&self, _context: &mut PipelineContext<'_>) {}
-    /// }
-    ///
-    /// let config = TesseraConfig {
-    ///     sample_count: 8, // 8x MSAA for higher quality
-    ///     ..Default::default()
-    /// };
-    ///
-    /// Renderer::run_with_config(|| { /* my_ui */ }, vec![Box::new(DemoModule)], config)?;
-    /// # Ok(())
-    /// # }
-    /// ```
+    /// Returns an error if the event loop cannot start or fails.
     #[tracing::instrument(level = "info", skip(entry_point, modules))]
     #[cfg(all(not(target_os = "android"), not(target_family = "wasm")))]
     pub fn run_with_config(
@@ -573,6 +330,8 @@ where
         modules: Vec<Box<dyn RenderModule>>,
         config: TesseraConfig,
     ) -> Result<(), EventLoopError> {
+        let session = crate::RuntimeSession::for_root();
+        session.activate();
         let event_loop = EventLoop::<RendererUserEvent>::with_user_event().build()?;
         let event_loop_proxy = event_loop.create_proxy();
         let app = None;
@@ -583,6 +342,7 @@ where
         #[cfg(feature = "profiling")]
         crate::profiler::set_output_path(resolve_profiler_output_path(&config));
         let mut renderer = Self {
+            session,
             app,
             entry_point,
             cursor_state,
@@ -637,6 +397,8 @@ where
     where
         F: 'static,
     {
+        let session = crate::RuntimeSession::for_root();
+        session.activate();
         let event_loop = EventLoop::<RendererUserEvent>::with_user_event().build()?;
         let event_loop_proxy = event_loop.create_proxy();
         let app = None;
@@ -647,6 +409,7 @@ where
         #[cfg(feature = "profiling")]
         crate::profiler::set_output_path(resolve_profiler_output_path(&config));
         let renderer = Self {
+            session,
             app,
             entry_point,
             cursor_state,
@@ -676,44 +439,9 @@ where
         Ok(())
     }
 
-    /// Runs the Tessera application with default configuration on Android.
+    /// Runs the Android application with default configuration and its activity.
     ///
-    /// This method is specifically for Android applications and requires an
-    /// `AndroidApp` instance that is typically provided by the
-    /// `android_main` function.
-    ///
-    /// # Parameters
-    ///
-    /// - `entry_point`: A function that defines your UI
-    /// - `modules`: Render modules that register pipelines
-    /// - `android_app`: The Android application context
-    ///
-    /// # Returns
-    ///
-    /// Returns `Ok(())` when the application exits normally, or an
-    /// `EventLoopError` if the event loop fails to start.
-    ///
-    /// # Examples
-    ///
-    /// ```no_run
-    /// use tessera_ui::Renderer;
-    /// use winit::platform::android::activity::AndroidApp;
-    ///
-    /// #[tessera_ui::tessera]
-    /// fn my_ui() {}
-    ///
-    /// #[derive(Debug)]
-    /// struct DemoModule;
-    ///
-    /// impl tessera_ui::RenderModule for DemoModule {
-    ///     fn register_pipelines(&self, _context: &mut tessera_ui::PipelineContext<'_>) {}
-    /// }
-    ///
-    /// #[unsafe(no_mangle)]
-    /// fn android_main(android_app: AndroidApp) {
-    ///     Renderer::run(my_ui, vec![Box::new(DemoModule)], android_app).unwrap();
-    /// }
-    /// ```
+    /// Returns an error if the event loop cannot start or fails.
     #[cfg(target_os = "android")]
     #[tracing::instrument(level = "info", skip(entry_point, modules, android_app))]
     pub fn run(
@@ -724,48 +452,9 @@ where
         Self::run_with_config(entry_point, modules, android_app, Default::default())
     }
 
-    /// Runs the Tessera application with custom configuration on Android.
+    /// Runs the Android application with its activity and supplied configuration.
     ///
-    /// This method allows you to customize the renderer behavior on Android
-    /// through [`TesseraConfig`].
-    ///
-    /// # Parameters
-    ///
-    /// - `entry_point`: A function that defines your UI
-    /// - `modules`: Render modules that register pipelines
-    /// - `android_app`: The Android application context
-    /// - `config`: Custom configuration for the renderer
-    ///
-    /// # Returns
-    ///
-    /// Returns `Ok(())` when the application exits normally, or an
-    /// `EventLoopError` if the event loop fails to start.
-    ///
-    /// # Examples
-    ///
-    /// ```no_run
-    /// use tessera_ui::{Renderer, renderer::TesseraConfig};
-    /// use winit::platform::android::activity::AndroidApp;
-    ///
-    /// #[tessera_ui::tessera]
-    /// fn my_ui() {}
-    ///
-    /// #[derive(Debug)]
-    /// struct DemoModule;
-    ///
-    /// impl tessera_ui::RenderModule for DemoModule {
-    ///     fn register_pipelines(&self, _context: &mut tessera_ui::PipelineContext<'_>) {}
-    /// }
-    ///
-    /// #[unsafe(no_mangle)]
-    /// fn android_main(android_app: AndroidApp) {
-    ///     let config = TesseraConfig {
-    ///         sample_count: 2, // Lower MSAA for mobile performance
-    ///     };
-    ///
-    ///     Renderer::run_with_config(my_ui, vec![Box::new(DemoModule)], android_app, config).unwrap();
-    /// }
-    /// ```
+    /// Returns an error if the event loop cannot start or fails.
     #[cfg(target_os = "android")]
     #[tracing::instrument(level = "info", skip(entry_point, modules, android_app))]
     pub fn run_with_config(
@@ -774,6 +463,8 @@ where
         android_app: AndroidApp,
         config: TesseraConfig,
     ) -> Result<(), EventLoopError> {
+        let session = crate::RuntimeSession::for_root();
+        session.activate();
         let event_loop = EventLoop::<RendererUserEvent>::with_user_event()
             .with_android_app(android_app.clone())
             .build()
@@ -787,6 +478,7 @@ where
         #[cfg(feature = "profiling")]
         crate::profiler::set_output_path(resolve_profiler_output_path(&config));
         let mut renderer = Self {
+            session,
             app,
             entry_point,
             cursor_state,
@@ -916,6 +608,7 @@ where
 
     #[cfg(target_os = "windows")]
     fn update_native_window_shape(&self, window: &Window) {
+        let _session = self.session.enter();
         use winit::platform::windows::{CornerPreference, WindowExtWindows};
 
         if self.config.window.decorations {
@@ -933,6 +626,7 @@ where
 
     #[cfg(target_os = "macos")]
     fn update_native_window_shape(&self, window: &Window) {
+        let _session = self.session.enter();
         use objc2::rc::Retained;
         use objc2_app_kit::NSView;
         use winit::raw_window_handle::{HasWindowHandle, RawWindowHandle};
@@ -978,7 +672,9 @@ where
     }
 
     #[cfg(not(any(target_os = "windows", target_os = "macos")))]
-    fn update_native_window_shape(&self, _window: &Window) {}
+    fn update_native_window_shape(&self, _window: &Window) {
+        let _session = self.session.enter();
+    }
 
     fn should_set_cursor_pos(
         cursor_position: Option<crate::PxPosition>,
@@ -1040,46 +736,6 @@ where
         }
     }
 
-    /// Executes a single frame rendering cycle.
-    ///
-    /// This is the core rendering method that orchestrates the entire frame
-    /// rendering process. It follows a three-phase approach:
-    ///
-    /// 1. **Component Tree Building**: Calls the entry point function to build
-    ///    the UI component tree
-    /// 2. **Draw Command Computation**: Processes the component tree to
-    ///    generate rendering commands
-    /// 3. **Surface Rendering**: Executes the commands to render the final
-    ///    frame
-    ///
-    /// ## Performance Monitoring
-    ///
-    /// This method includes built-in performance monitoring that logs detailed
-    /// timing information when frame rates drop below 30 FPS, helping
-    /// identify performance bottlenecks.
-    ///
-    /// ## Parameters
-    ///
-    /// - `entry_point`: The UI entry point function to build the component tree
-    /// - `cursor_state`: Mutable reference to cursor/mouse state for event
-    ///   processing
-    /// - `keyboard_state`: Mutable reference to keyboard state for event
-    ///   processing
-    /// - `ime_state`: Mutable reference to IME state for text input processing
-    /// - `android_ime_opened`: (Android only) Tracks soft keyboard state
-    /// - `app`: Mutable reference to the WGPU application context
-    /// - `event_loop`: (Android only) Event loop for IME management
-    ///
-    /// ## Frame Timing Breakdown
-    ///
-    /// - **Build Tree Cost**: Time spent building the component tree
-    /// - **Draw Commands Cost**: Time spent computing rendering commands
-    /// - **Render Cost**: Time spent executing GPU rendering commands
-    ///
-    /// ## Thread Safety
-    ///
-    /// This method runs on the main thread but coordinates with other threads
-    /// for component tree processing and resource management.
     fn log_frame_stats(
         build_tree_cost: std::time::Duration,
         draw_cost: std::time::Duration,
@@ -1143,12 +799,11 @@ Fps: {:.2}
         frame_idx: u64,
         retry_focus_move: Option<FocusDirection>,
         retry_focus_reveal: bool,
-        retry_keyboard: bool,
+        is_retry: bool,
     ) -> RenderComputationOutput {
         let draw_timer = Instant::now();
         debug!("Computing draw commands...");
         let cursor_position = args.cursor_state.position();
-        let is_retry = retry_focus_move.is_some() || retry_focus_reveal || retry_keyboard;
         let pointer_changes = if is_retry {
             Vec::new()
         } else {
@@ -1354,7 +1009,10 @@ Fps: {:.2}
         // its internal state
         args.app.window().pre_present_notify();
         // and tell runtime the new size
-        TesseraRuntime::with_mut(|rt: &mut TesseraRuntime| rt.window_size = args.app.size().into());
+        TesseraRuntime::with_mut(|rt| {
+            rt.component_tree.begin_frame_diagnostics();
+            rt.window_size = args.app.size().into();
+        });
         // Build the component tree and measure time
         let mut build_tree_result = build_component_tree(entry_point);
         debug!("Component tree build mode: {:?}", build_tree_result.mode());
@@ -1375,16 +1033,21 @@ Fps: {:.2}
         while pending_focus_move_retry.is_some()
             || pending_focus_reveal_retry
             || pending_keyboard_retry
+            || has_pending_layout_invalidations()
         {
-            if beyond_bounds_retry_count >= MAX_FOCUS_SETTLING_RETRIES
-                || !focus_settling_can_progress(pending_keyboard_retry)
+            let focus_retry = pending_focus_move_retry.is_some()
+                || pending_focus_reveal_retry
+                || pending_keyboard_retry;
+            if beyond_bounds_retry_count >= MAX_FRAME_SETTLING_RETRIES
+                || (focus_retry && !focus_settling_can_progress(pending_keyboard_retry))
             {
                 break;
             }
 
             beyond_bounds_retry_count += 1;
-            let retry_build = build_component_tree(entry_point);
-            build_tree_result.absorb_retry(retry_build);
+            if focus_retry {
+                build_tree_result.absorb_retry(build_component_tree(entry_point));
+            }
 
             let (
                 retry_graph,
@@ -1401,7 +1064,7 @@ Fps: {:.2}
                 frame_idx,
                 pending_focus_move_retry,
                 pending_focus_reveal_retry,
-                pending_keyboard_retry,
+                true,
             );
             new_graph = retry_graph;
             let request_window_drag =
@@ -1409,7 +1072,7 @@ Fps: {:.2}
             window_requests = retry_window_requests;
             window_requests.request_window_drag = request_window_drag;
             draw_cost += retry_draw_cost;
-            layout_diagnostics = retry_layout_diagnostics;
+            layout_diagnostics.accumulate_pass(retry_layout_diagnostics);
             record_cost += retry_record_cost;
             pending_focus_move_retry = next_focus_move_retry;
             pending_focus_reveal_retry = next_focus_reveal_retry;
@@ -1600,6 +1263,7 @@ where
     F: Fn() -> Output,
 {
     fn desktop_platform_context(&self) -> Option<DesktopPlatformContext> {
+        let _session = self.session.enter();
         let app = self.app.as_ref()?;
         let redraw_pending = self.redraw_request_pending.clone();
         let window = app.window_arc();
@@ -1614,11 +1278,13 @@ where
     }
 
     fn take_pending_desktop_window_action(&self) -> Option<DesktopWindowAction> {
+        let _session = self.session.enter();
         self.pending_desktop_window_action.write().take()
     }
 
     #[cfg(target_os = "android")]
     fn plugin_context(&self, event_loop: &ActiveEventLoop) -> Option<PluginContext> {
+        let _session = self.session.enter();
         let desktop = self.desktop_platform_context()?;
         Some(PluginContext::new(
             desktop,
@@ -1628,6 +1294,7 @@ where
 
     #[cfg(not(target_os = "android"))]
     fn plugin_context(&self, _event_loop: &ActiveEventLoop) -> Option<PluginContext> {
+        let _session = self.session.enter();
         let desktop = self.desktop_platform_context()?;
         Some(PluginContext::new(desktop))
     }
@@ -1642,12 +1309,14 @@ where
     }
 
     fn request_redraw_now(&self) {
+        let _session = self.session.enter();
         if let Some(app) = self.app.as_ref() {
             Self::try_request_redraw(app.window(), self.redraw_request_pending.as_ref());
         }
     }
 
     fn install_runtime_redraw_waker(&self) {
+        let _session = self.session.enter();
         let Some(proxy) = self.event_loop_proxy.clone() else {
             clear_redraw_waker();
             return;
@@ -1659,6 +1328,7 @@ where
 
     #[cfg(target_family = "wasm")]
     fn begin_web_initialization(&mut self, window: Arc<Window>) {
+        let _session = self.session.enter();
         let Some(proxy) = self.event_loop_proxy.clone() else {
             error!("Missing event loop proxy for web renderer initialization");
             return;
@@ -1678,6 +1348,7 @@ where
 
     #[cfg(target_family = "wasm")]
     fn finish_web_initialization(&mut self, event_loop: &ActiveEventLoop, epoch: u64) -> bool {
+        let _session = self.session.enter();
         let pending_render_core = {
             let mut pending_web_inits = self.pending_web_inits.borrow_mut();
             pending_web_inits
@@ -1715,6 +1386,7 @@ where
 
     #[cfg(feature = "profiling")]
     fn request_redraw_with_reasons(&mut self, source: WakeSource, mut reasons: Vec<RedrawReason>) {
+        let _session = self.session.enter();
         reasons.sort_unstable();
         reasons.dedup();
         if reasons.is_empty() {
@@ -1734,6 +1406,7 @@ where
 
     #[cfg(feature = "profiling")]
     fn take_pending_redraw_reasons(&mut self) -> Vec<RedrawReason> {
+        let _session = self.session.enter();
         std::mem::take(&mut self.pending_redraw_reasons)
             .into_iter()
             .collect()
@@ -1741,6 +1414,7 @@ where
 
     // These keep behavior identical but reduce per-function complexity.
     fn handle_close_requested(&mut self, event_loop: &ActiveEventLoop) {
+        let _session = self.session.enter();
         if let Some(context) = self.plugin_context(event_loop) {
             self.plugins.shutdown(&context);
         }
@@ -1753,6 +1427,7 @@ where
     }
 
     fn apply_window_drag(&mut self, window: &Window) {
+        let _session = self.session.enter();
         if !Self::supports_native_window_frame_controls() {
             return;
         }
@@ -1763,6 +1438,7 @@ where
     }
 
     fn apply_desktop_window_action(&mut self, window: &Window, action: DesktopWindowAction) {
+        let _session = self.session.enter();
         match action {
             DesktopWindowAction::Minimize => {
                 window.set_minimized(true);
@@ -1784,6 +1460,7 @@ where
     /// installed so the surface matches the real canvas size on the first
     /// frame.
     fn apply_pending_window_size(&mut self) {
+        let _session = self.session.enter();
         let live_size = self.app.as_ref().map(|app| app.window().inner_size());
         let size = resolve_startup_window_size(self.pending_window_size.take(), live_size);
         let Some(size) = size else {
@@ -1793,6 +1470,7 @@ where
     }
 
     fn handle_resized(&mut self, size: winit::dpi::PhysicalSize<u32>) {
+        let _session = self.session.enter();
         // Obtain the app inside the method to avoid holding a mutable borrow
         // across other borrows of `self`.
         let app = match self.app.as_mut() {
@@ -1832,6 +1510,7 @@ where
     }
 
     fn handle_cursor_moved(&mut self, position: winit::dpi::PhysicalPosition<f64>) {
+        let _session = self.session.enter();
         if self.resize_in_progress {
             return;
         }
@@ -1851,6 +1530,7 @@ where
     }
 
     fn handle_cursor_left(&mut self) {
+        let _session = self.session.enter();
         // Clear cursor position when it leaves the window
         // This also set the position to None
         self.cursor_state.clear();
@@ -1858,12 +1538,14 @@ where
     }
 
     fn push_accessibility_update(&mut self, tree_update: TreeUpdate) {
+        let _session = self.session.enter();
         if let Some(adapter) = self.accessibility_adapter.as_mut() {
             adapter.update_if_active(|| tree_update);
         }
     }
 
     fn send_accessibility_update(&mut self) {
+        let _session = self.session.enter();
         if let Some(tree_update) = Self::build_accessibility_update(&self.config.window_title, true)
         {
             self.push_accessibility_update(tree_update);
@@ -1883,6 +1565,7 @@ where
         state: winit::event::ElementState,
         button: winit::event::MouseButton,
     ) {
+        let _session = self.session.enter();
         let Some(event_content) = CursorEventContent::from_press_event(state, button) else {
             return; // Ignore unsupported buttons
         };
@@ -1943,6 +1626,7 @@ where
     }
 
     fn handle_mouse_wheel(&mut self, delta: winit::event::MouseScrollDelta) {
+        let _session = self.session.enter();
         if self.resize_in_progress {
             return;
         }
@@ -1961,6 +1645,7 @@ where
     }
 
     fn handle_touch(&mut self, touch_event: winit::event::Touch) {
+        let _session = self.session.enter();
         if self.resize_in_progress {
             return;
         }
@@ -1999,6 +1684,7 @@ where
     }
 
     fn handle_keyboard_input(&mut self, event: winit::event::KeyEvent) {
+        let _session = self.session.enter();
         debug!("Keyboard input: {event:?}");
         TesseraRuntime::with_mut(|runtime| {
             runtime
@@ -2006,13 +1692,14 @@ where
                 .focus_owner_mut()
                 .record_keyboard_input(event.state, Instant::now());
         });
-        self.keyboard_state.push_event(event);
+        self.keyboard_state.push_event(event.into());
     }
 
     fn handle_redraw_requested(
         &mut self,
         #[cfg(target_os = "android")] event_loop: &ActiveEventLoop,
     ) {
+        let _session = self.session.enter();
         self.redraw_request_pending.store(false, Ordering::Release);
         let mut app = match self.app.take() {
             Some(app) => app,
@@ -2168,32 +1855,9 @@ impl<F, Output> ApplicationHandler<RendererUserEvent> for Renderer<F>
 where
     F: Fn() -> Output,
 {
-    /// Called when the application is resumed or started.
-    ///
-    /// This method is responsible for:
-    /// - Creating the application window with appropriate attributes
-    /// - Initializing the WGPU context and surface
-    /// - Registering rendering pipelines
-    /// - Setting up the initial application state
-    ///
-    /// On desktop platforms, this is typically called once at startup.
-    /// On mobile platforms (especially Android), this may be called multiple
-    /// times as the app is suspended and resumed.
-    ///
-    /// ## Window Configuration
-    ///
-    /// The window is created with:
-    /// - Title: "Tessera"
-    /// - Transparency: Enabled (allows for transparent backgrounds)
-    /// - Default size and position (platform-dependent)
-    ///
-    /// ## Pipeline Registration
-    ///
-    /// After WGPU initialization, render modules register pipelines through
-    /// [`PipelineContext`]. This typically includes basic component pipelines
-    /// and any custom shaders your application requires.
     #[tracing::instrument(level = "debug", skip(self, event_loop))]
     fn resumed(&mut self, event_loop: &ActiveEventLoop) {
+        let _session = self.session.enter();
         event_loop.set_control_flow(ControlFlow::Wait);
         #[cfg(feature = "profiling")]
         submit_runtime_meta(RuntimeMeta {
@@ -2288,18 +1952,8 @@ where
         }
     }
 
-    /// Called when the application is suspended.
-    ///
-    /// This method should handle cleanup and state preservation when the
-    /// application is being suspended (e.g., on mobile platforms when the
-    /// app goes to background).
-    ///
-    /// ## Platform Considerations
-    ///
-    /// - **Desktop**: Rarely called, mainly during shutdown
-    /// - **Android**: Called when app goes to background
-    /// - **iOS**: Called during app lifecycle transitions
     fn suspended(&mut self, event_loop: &ActiveEventLoop) {
+        let _session = self.session.enter();
         debug!("Suspending renderer; tearing down WGPU resources.");
         #[cfg(feature = "profiling")]
         submit_runtime_meta(RuntimeMeta {
@@ -2353,7 +2007,7 @@ where
         reset_frame_clock();
         clear_redraw_waker();
         clear_persistent_focus_handles();
-        crate::runtime::reset_slots();
+        crate::runtime::reset_component_slots();
         #[cfg(feature = "profiling")]
         self.pending_redraw_reasons.clear();
     }
@@ -2365,6 +2019,7 @@ where
         _window_id: WindowId,
         event: WindowEvent,
     ) {
+        let _session = self.session.enter();
         if self.pending_close_requested {
             self.pending_close_requested = false;
             self.handle_close_requested(event_loop);
@@ -2498,6 +2153,7 @@ where
     }
 
     fn user_event(&mut self, event_loop: &ActiveEventLoop, event: RendererUserEvent) {
+        let _session = self.session.enter();
         use accesskit_winit::WindowEvent as AccessKitWindowEvent;
         #[cfg(not(target_family = "wasm"))]
         let _ = event_loop;
@@ -2555,7 +2211,6 @@ where
 
 #[cfg(test)]
 mod tests {
-    use std::cell::{Cell, RefCell};
 
     use winit::dpi::PhysicalSize;
 
@@ -2575,10 +2230,11 @@ mod tests {
         resolve_startup_window_size,
     };
 
-    thread_local! {
-        static FRAME_END_FOCUS: Cell<Option<(State<bool>, FocusRequester, FocusRequester)>> = const { Cell::new(None) };
-        static FRAME_END_FALLBACK_EVENTS: Cell<usize> = const { Cell::new(0) };
-        static FRAME_END_REVEALS: RefCell<Vec<PxRect>> = const { RefCell::new(Vec::new()) };
+    #[derive(Clone, Default, PartialEq)]
+    struct FrameEndProbe {
+        focus: crate::testing::TestProbe<Option<(State<bool>, FocusRequester, FocusRequester)>>,
+        events: crate::testing::TestProbe<usize>,
+        reveals: crate::testing::TestProbe<Vec<PxRect>>,
     }
 
     #[derive(Clone, PartialEq)]
@@ -2604,21 +2260,24 @@ mod tests {
     }
 
     #[crate::tessera(crate)]
-    fn frame_end_focus_fixture() {
+    fn frame_end_focus_fixture(probe: FrameEndProbe) {
         let visible = remember(|| true);
         let removed = remember(FocusRequester::new).get();
         let fallback = remember(FocusRequester::new).get();
-        FRAME_END_FOCUS.set(Some((visible, removed, fallback)));
+        probe.focus.set(Some((visible, removed, fallback)));
+        let reveals = probe.reveals.clone();
+        let events = probe.events.clone();
         layout()
             .modifier(
                 Modifier::new()
                     .focus_restorer(Some(fallback))
-                    .focus_reveal_handler(|request: crate::focus::FocusRevealRequest| {
-                        FRAME_END_REVEALS.with_borrow_mut(|rects| rects.push(request.target_rect));
+                    .focus_reveal_handler(move |request: crate::focus::FocusRevealRequest| {
+                        reveals.with_mut(|rects| rects.push(request.target_rect));
                         false
                     }),
             )
             .child(move || {
+                let events = events.clone();
                 if visible.get() {
                     frame_end_removable_target(removed);
                 }
@@ -2626,40 +2285,46 @@ mod tests {
                     Modifier::new()
                         .focusable()
                         .focus_requester(fallback)
-                        .on_focus_changed(|state: crate::focus::FocusState| {
+                        .on_focus_changed(move |state: crate::focus::FocusState| {
                             if state.is_focused() {
-                                FRAME_END_FALLBACK_EVENTS.set(FRAME_END_FALLBACK_EVENTS.get() + 1);
+                                events.with_mut(|events| *events += 1);
                             }
                         }),
                 );
             });
     }
 
-    thread_local! {
-        static VISIBLE_FOCUS: Cell<Option<(FocusRequester, FocusRequester)>> = const { Cell::new(None) };
-        static VISIBLE_READS: RefCell<Vec<bool>> = const { RefCell::new(Vec::new()) };
+    #[derive(Clone, Default, PartialEq)]
+    struct VisibilityProbe {
+        focus: crate::testing::TestProbe<Option<(FocusRequester, FocusRequester)>>,
+        reads: crate::testing::TestProbe<Vec<bool>>,
     }
 
     #[crate::tessera(crate)]
-    fn focus_visibility_observer(requester: FocusRequester) {
-        VISIBLE_READS.with_borrow_mut(|reads| reads.push(requester.is_focus_visible()));
+    fn focus_visibility_observer(
+        requester: FocusRequester,
+        reads: crate::testing::TestProbe<Vec<bool>>,
+    ) {
+        reads.with_mut(|reads| reads.push(requester.is_focus_visible()));
         layout().policy(FocusLeafLayout);
     }
 
     #[crate::tessera(crate)]
-    fn focus_visibility_fixture() {
+    fn focus_visibility_fixture(probe: VisibilityProbe) {
         let first = remember(FocusRequester::new).get();
         let second = remember(FocusRequester::new).get();
-        VISIBLE_FOCUS.set(Some((first, second)));
+        probe.focus.set(Some((first, second)));
         layout().child(move || {
             frame_end_removable_target(first);
             frame_end_removable_target(second);
-            focus_visibility_observer(first);
+            focus_visibility_observer(first, probe.reads.clone());
         });
     }
 
     #[test]
     fn focus_visibility_replays_subscribers_without_changing_same_target_ownership() {
+        let _runtime_session = crate::RuntimeSession::new();
+        let _runtime_scope = _runtime_session.enter();
         use std::time::Duration;
 
         use winit::event::ElementState;
@@ -2669,10 +2334,11 @@ mod tests {
             cursor::PressKeyEventType, testing::pump_layout_test_session_with_input, time::Instant,
         };
 
-        VISIBLE_READS.with_borrow_mut(Vec::clear);
-        let mut session = start_layout_test_session(layout_test(focus_visibility_fixture));
+        let probe = VisibilityProbe::default();
+        let mut session =
+            start_layout_test_session(layout_test(|| focus_visibility_fixture(probe.clone())));
         pump_layout_test_session(&mut session, 0);
-        let (first, second) = VISIBLE_FOCUS.get().unwrap();
+        let (first, second) = probe.focus.get().unwrap();
         first.request_focus();
         first.capture_focus();
         pump_layout_test_session(&mut session, 1);
@@ -2692,10 +2358,7 @@ mod tests {
         key(keyboard);
         pump_layout_test_session(&mut session, 2);
         assert!(first.is_captured());
-        assert_eq!(
-            VISIBLE_READS.with_borrow(|reads| reads.last().copied()),
-            Some(true)
-        );
+        assert_eq!(probe.reads.with(|reads| reads.last().copied()), Some(true));
         let pointer = |timestamp| PointerChange {
             timestamp,
             pointer_id: MOUSE_POINTER_ID,
@@ -2713,10 +2376,7 @@ mod tests {
         );
         pump_layout_test_session(&mut session, 4);
         assert!(first.is_captured());
-        assert_eq!(
-            VISIBLE_READS.with_borrow(|reads| reads.last().copied()),
-            Some(false)
-        );
+        assert_eq!(probe.reads.with(|reads| reads.last().copied()), Some(false));
         key(keyboard);
         first.request_focus();
         pump_layout_test_session(&mut session, 5);
@@ -2730,10 +2390,7 @@ mod tests {
         );
         pump_layout_test_session(&mut session, 7);
         assert!(first.is_captured());
-        assert_eq!(
-            VISIBLE_READS.with_borrow(|reads| reads.last().copied()),
-            Some(true)
-        );
+        assert_eq!(probe.reads.with(|reads| reads.last().copied()), Some(true));
         let mut hover = pointer(origin + Duration::from_millis(40));
         hover.content = CursorEventContent::Moved(PxPosition::ZERO);
         let mut wheel = pointer(origin + Duration::from_millis(50));
@@ -2776,11 +2433,13 @@ mod tests {
 
     #[test]
     fn pruned_focus_restoration_keeps_a_frame_scheduled_until_its_reveal_is_dispatched() {
-        FRAME_END_FALLBACK_EVENTS.set(0);
-        FRAME_END_REVEALS.with_borrow_mut(Vec::clear);
-        let mut session = start_layout_test_session(layout_test(frame_end_focus_fixture));
+        let _runtime_session = crate::RuntimeSession::new();
+        let _runtime_scope = _runtime_session.enter();
+        let probe = FrameEndProbe::default();
+        let mut session =
+            start_layout_test_session(layout_test(|| frame_end_focus_fixture(probe.clone())));
         pump_layout_test_session(&mut session, 0);
-        let (visible, removed, fallback) = FRAME_END_FOCUS.get().unwrap();
+        let (visible, removed, fallback) = probe.focus.get().unwrap();
         removed.request_focus();
         assert!(removed.is_focused());
         dispatch_frame_end_reveal();
@@ -2797,7 +2456,7 @@ mod tests {
         prune_persistent_focus_handles();
         flush_pending_focus_callbacks();
         assert!(fallback.is_focused());
-        assert_eq!(FRAME_END_FALLBACK_EVENTS.get(), 1);
+        assert_eq!(probe.events.get(), 1);
 
         pump_layout_test_session(&mut session, 4);
         assert!(!crate::runtime::has_pending_build_invalidations());
@@ -2812,11 +2471,11 @@ mod tests {
                 .has_pending_navigation()
         }));
         assert!(RuntimePendingWork::capture(false).requires_redraw());
-        assert_eq!(FRAME_END_REVEALS.with_borrow(Vec::len), 1);
+        assert_eq!(probe.reveals.with(Vec::len), 1);
 
         dispatch_frame_end_reveal();
         assert_eq!(
-            FRAME_END_REVEALS.with_borrow(|rects| rects.clone()),
+            probe.reveals.with(|rects| rects.clone()),
             vec![
                 PxRect::new(crate::Px(0), crate::Px(0), crate::Px(64), crate::Px(24)),
                 PxRect::new(crate::Px(0), crate::Px(0), crate::Px(64), crate::Px(24)),
@@ -2826,42 +2485,46 @@ mod tests {
         assert!(!RuntimePendingWork::capture(false).requires_redraw());
     }
 
-    thread_local! {
-        static COLD_CHILD_RECT: Cell<Option<PxRect>> = const { Cell::new(None) };
-        static COLD_OBSERVER_WRITES: Cell<usize> = const { Cell::new(0) };
-        static COLD_REDRAW_WAKES: Cell<usize> = const { Cell::new(0) };
-        static COLD_WRITE_WAKE_COUNTS: Cell<(usize, usize)> = const { Cell::new((0, 0)) };
+    #[derive(Clone, Default, PartialEq)]
+    struct ColdProbe {
+        child: crate::testing::TestProbe<Option<PxRect>>,
+        writes: crate::testing::TestProbe<usize>,
+        wakes: crate::testing::TestProbe<usize>,
+        counts: crate::testing::TestProbe<(usize, usize)>,
     }
 
     #[crate::tessera(crate)]
-    fn cold_geometry_child() {
-        layout().policy(FocusLeafLayout).modifier(
-            Modifier::new().on_globally_positioned(|rect| COLD_CHILD_RECT.set(Some(rect))),
-        );
+    fn cold_geometry_child(probe: crate::testing::TestProbe<Option<PxRect>>) {
+        layout()
+            .policy(FocusLeafLayout)
+            .modifier(Modifier::new().on_globally_positioned(move |rect| probe.set(Some(rect))));
     }
 
     #[crate::tessera(crate)]
-    fn cold_geometry_fixture() {
+    fn cold_geometry_fixture(probe: ColdProbe) {
         let observed = remember(|| None::<PxRect>);
+        let output = probe.clone();
         layout()
             .modifier(Modifier::new().on_globally_positioned(move |rect| {
                 if observed.get() != Some(rect) {
-                    let before = COLD_REDRAW_WAKES.get();
+                    let before = output.wakes.get();
                     observed.set(Some(rect));
-                    COLD_WRITE_WAKE_COUNTS.set((before, COLD_REDRAW_WAKES.get()));
-                    COLD_OBSERVER_WRITES.set(COLD_OBSERVER_WRITES.get() + 1);
+                    output.counts.set((before, output.wakes.get()));
+                    output.writes.set(output.writes.get() + 1);
                 }
             }))
             .child(move || {
                 layout().policy(FocusLeafLayout);
                 if observed.get().is_some() {
-                    cold_geometry_child();
+                    cold_geometry_child(probe.child.clone());
                 }
             });
     }
 
     #[test]
     fn first_geometry_publication_wakes_the_runtime_until_its_conditional_child_is_placed() {
+        let _runtime_session = crate::RuntimeSession::new();
+        let _runtime_scope = _runtime_session.enter();
         struct WakerGuard;
         impl Drop for WakerGuard {
             fn drop(&mut self) {
@@ -2869,19 +2532,18 @@ mod tests {
             }
         }
 
-        COLD_CHILD_RECT.set(None);
-        COLD_OBSERVER_WRITES.set(0);
-        COLD_REDRAW_WAKES.set(0);
-        COLD_WRITE_WAKE_COUNTS.set((0, 0));
-        let mut session = start_layout_test_session(layout_test(cold_geometry_fixture));
+        let probe = ColdProbe::default();
+        let mut session =
+            start_layout_test_session(layout_test(|| cold_geometry_fixture(probe.clone())));
         let _guard = WakerGuard;
-        crate::runtime::install_redraw_waker(std::sync::Arc::new(|| {
-            COLD_REDRAW_WAKES.set(COLD_REDRAW_WAKES.get() + 1);
+        crate::runtime::install_redraw_waker(std::sync::Arc::new({
+            let wakes = probe.wakes.clone();
+            move || wakes.with_mut(|wakes| *wakes += 1)
         }));
         pump_layout_test_session(&mut session, 0);
-        assert_eq!(COLD_CHILD_RECT.get(), None);
-        assert_eq!(COLD_OBSERVER_WRITES.get(), 1);
-        let (before, after) = COLD_WRITE_WAKE_COUNTS.get();
+        assert_eq!(probe.child.get(), None);
+        assert_eq!(probe.writes.get(), 1);
+        let (before, after) = probe.counts.get();
         assert!(
             after > before,
             "the observer's state write must request a new frame"
@@ -2900,7 +2562,7 @@ mod tests {
             pump_layout_test_session(&mut session, frame * 16_666_667);
         }
         assert_eq!(
-            COLD_CHILD_RECT.get(),
+            probe.child.get(),
             Some(PxRect::new(
                 crate::Px(0),
                 crate::Px(0),
@@ -2909,13 +2571,13 @@ mod tests {
             )),
             "a frame requested by the geometry update must place the newly inserted child"
         );
-        assert_eq!(COLD_OBSERVER_WRITES.get(), 1);
+        assert_eq!(probe.writes.get(), 1);
         assert!(!RuntimePendingWork::capture(false).requires_redraw());
-        let wakes = COLD_REDRAW_WAKES.get();
+        let wakes = probe.wakes.get();
         pump_layout_test_session(&mut session, (frame + 1) * 16_666_667);
-        assert_eq!(COLD_OBSERVER_WRITES.get(), 1);
+        assert_eq!(probe.writes.get(), 1);
         assert_eq!(
-            COLD_REDRAW_WAKES.get(),
+            probe.wakes.get(),
             wakes,
             "an unchanged idle layout must not wake again"
         );
@@ -2924,6 +2586,8 @@ mod tests {
 
     #[test]
     fn web_canvas_size_tracks_css_density_and_fractional_dimensions() {
+        let _runtime_session = crate::RuntimeSession::new();
+        let _runtime_scope = _runtime_session.enter();
         assert_eq!(
             canvas_physical_size([390.0, 780.0], 1.0000000298023224),
             Some(PhysicalSize::new(390, 780))
@@ -2942,6 +2606,8 @@ mod tests {
 
     #[test]
     fn startup_window_size_prefers_recorded_size_over_live_size() {
+        let _runtime_session = crate::RuntimeSession::new();
+        let _runtime_scope = _runtime_session.enter();
         let recorded = PhysicalSize::new(800, 600);
         let live = PhysicalSize::new(1024, 768);
         assert_eq!(
@@ -2952,6 +2618,8 @@ mod tests {
 
     #[test]
     fn startup_window_size_falls_back_to_live_size_for_empty_recordings() {
+        let _runtime_session = crate::RuntimeSession::new();
+        let _runtime_scope = _runtime_session.enter();
         let live = PhysicalSize::new(1024, 768);
         assert_eq!(
             resolve_startup_window_size(Some(PhysicalSize::new(0, 0)), Some(live)),
@@ -2965,12 +2633,16 @@ mod tests {
 
     #[test]
     fn startup_window_size_uses_live_size_without_recorded_events() {
+        let _runtime_session = crate::RuntimeSession::new();
+        let _runtime_scope = _runtime_session.enter();
         let live = PhysicalSize::new(1024, 768);
         assert_eq!(resolve_startup_window_size(None, Some(live)), Some(live));
     }
 
     #[test]
     fn startup_window_size_is_none_when_every_reading_is_empty() {
+        let _runtime_session = crate::RuntimeSession::new();
+        let _runtime_scope = _runtime_session.enter();
         assert_eq!(
             resolve_startup_window_size(Some(PhysicalSize::new(0, 0)), None),
             None
@@ -2999,6 +2671,8 @@ mod tests {
 
     #[test]
     fn ime_bridge_enables_and_updates_cursor_area_for_first_request() {
+        let _runtime_session = crate::RuntimeSession::new();
+        let _runtime_scope = _runtime_session.enter();
         let mut bridge = RendererImeBridgeState::default();
         let request = positioned_request(
             PxPosition::new(Px(12), Px(18)),
@@ -3023,6 +2697,8 @@ mod tests {
 
     #[test]
     fn ime_bridge_reuses_identical_request_without_window_updates() {
+        let _runtime_session = crate::RuntimeSession::new();
+        let _runtime_scope = _runtime_session.enter();
         let request = positioned_request(
             PxPosition::new(Px(12), Px(18)),
             PxSize::new(Px(7), Px(13)),
@@ -3048,6 +2724,8 @@ mod tests {
 
     #[test]
     fn ime_bridge_preserves_selection_and_composition_changes_without_cursor_reapply() {
+        let _runtime_session = crate::RuntimeSession::new();
+        let _runtime_scope = _runtime_session.enter();
         let size = PxSize::new(Px(7), Px(13));
         let mut bridge = RendererImeBridgeState::default();
         bridge.update_request(Some(positioned_request(
@@ -3073,6 +2751,8 @@ mod tests {
 
     #[test]
     fn ime_bridge_disables_and_clears_snapshot_when_request_is_removed() {
+        let _runtime_session = crate::RuntimeSession::new();
+        let _runtime_scope = _runtime_session.enter();
         let request = positioned_request(
             PxPosition::new(Px(12), Px(18)),
             PxSize::new(Px(7), Px(13)),
@@ -3097,46 +2777,7 @@ mod tests {
     }
 }
 
-/// Shows the Android soft keyboard (virtual keyboard).
-///
-/// This function uses JNI to interact with the Android system to display the
-/// soft keyboard. It's specifically designed for Android applications and
-/// handles the complex JNI calls required to show the input method.
-///
-/// ## Parameters
-///
-/// - `show_implicit`: Whether to show the keyboard implicitly (without explicit
-///   user action)
-/// - `android_app`: Reference to the Android application context
-///
-/// ## Platform Support
-///
-/// This function is only available on Android (`target_os = "android"`). It
-/// will not be compiled on other platforms.
-///
-/// ## Error Handling
-///
-/// The function includes comprehensive error handling for JNI operations. If
-/// any JNI call fails, the function will return early without crashing the
-/// application. Exception handling is also included to clear any Java
-/// exceptions that might occur.
-///
-/// ## Implementation Notes
-///
-/// This implementation is based on the android-activity crate and follows the
-/// pattern established in: https://github.com/rust-mobile/android-activity/pull/178
-///
-/// The function performs these steps:
-/// 1. Get the Java VM and activity context
-/// 2. Find the InputMethodManager system service
-/// 3. Get the current window's decor view
-/// 4. Call `showSoftInput` on the InputMethodManager
-///
-/// ## Usage
-///
-/// This function is typically called internally by the renderer when IME input
-/// is requested. You generally don't need to call this directly in application
-/// code.
+/// Shows the Android soft keyboard.
 // https://github.com/rust-mobile/android-activity/pull/178
 #[cfg(target_os = "android")]
 pub fn show_soft_input(show_implicit: bool, android_app: &AndroidApp) {
@@ -3211,47 +2852,7 @@ pub fn show_soft_input(show_implicit: bool, android_app: &AndroidApp) {
     }
 }
 
-/// Hides the Android soft keyboard (virtual keyboard).
-///
-/// This function uses JNI to interact with the Android system to hide the soft
-/// keyboard. It's the counterpart to [`show_soft_input`] and handles the
-/// complex JNI calls required to dismiss the input method.
-///
-/// ## Parameters
-///
-/// - `android_app`: Reference to the Android application context
-///
-/// ## Platform Support
-///
-/// This function is only available on Android (`target_os = "android"`). It
-/// will not be compiled on other platforms.
-///
-/// ## Error Handling
-///
-/// Like [`show_soft_input`], this function includes comprehensive error
-/// handling for JNI operations. If any step fails, the function returns early
-/// without crashing. Java exceptions are also properly handled and cleared.
-///
-/// ## Implementation Details
-///
-/// The function performs these steps:
-/// 1. Get the Java VM and activity context
-/// 2. Find the InputMethodManager system service
-/// 3. Get the current window and its decor view
-/// 4. Get the window token from the decor view
-/// 5. Call `hideSoftInputFromWindow` on the InputMethodManager
-///
-/// ## Usage
-///
-/// This function is typically called internally by the renderer when IME input
-/// is no longer needed. You generally don't need to call this directly in
-/// application code.
-///
-/// ## Relationship to show_soft_input
-///
-/// This function is designed to work in tandem with [`show_soft_input`]. The
-/// renderer automatically manages the keyboard visibility based on IME requests
-/// from components.
+/// Hides the Android soft keyboard.
 #[cfg(target_os = "android")]
 pub fn hide_soft_input(android_app: &AndroidApp) {
     use jni::objects::JValue;

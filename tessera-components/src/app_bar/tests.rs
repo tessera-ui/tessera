@@ -1,5 +1,3 @@
-use std::cell::Cell;
-
 use tessera_ui::{
     FocusManager, HeadlessConfig, HeadlessRenderer, MOUSE_POINTER_ID, PressKeyEventType, State,
     accesskit::{Rect, Role},
@@ -37,27 +35,28 @@ impl Default for Settings {
     }
 }
 
-thread_local! {
-    static SETTINGS: Cell<Option<State<Settings>>> = const { Cell::new(None) };
-    static CLICKS: Cell<Option<State<usize>>> = const { Cell::new(None) };
+#[derive(Clone, Copy, Default)]
+struct FixtureHandles {
+    settings: Option<State<Settings>>,
+    clicks: Option<State<usize>>,
 }
 
 #[tessera]
-fn fixture() {
+fn fixture(observed: tessera_ui::testing::TestProbe<FixtureHandles>) {
     let settings = remember(Settings::default);
     let clicks = remember(|| 0usize);
     let painter = remember(|| {
         try_painter(br##"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M0 0H24V24H0Z" fill="#000"/></svg>"##.as_slice()).expect("icon")
     });
-    SETTINGS.set(Some(settings));
-    CLICKS.set(Some(clicks));
+    observed.with_mut(|handles| handles.settings = Some(settings));
+    observed.with_mut(|handles| handles.clicks = Some(clicks));
     material_theme().child(move || {
         surface()
             .style(Color::WHITE.into())
             .modifier(Modifier::new().fill_max_size())
             .child(move || {
                 let values = settings.get();
-                let mut bar = top_app_bar()
+                let bar = top_app_bar()
                     .variant(values.variant)
                     .title_alignment(values.alignment)
                     .title(values.title)
@@ -75,7 +74,7 @@ fn fixture() {
                         Color::GREEN
                     });
                 if values.navigation {
-                    bar = bar.navigation_icon(move || {
+                    bar.navigation_icon(move || {
                         icon_button()
                             .standard()
                             .color_style(IconButtonColorStyle::Inherited)
@@ -85,7 +84,7 @@ fn fixture() {
                     });
                 }
                 if values.custom_title {
-                    bar = bar.title_content(|| {
+                    bar.title_content(|| {
                         surface().style(Color::BLACK.into()).modifier(
                             Modifier::new().width(Dp(80.0)).height(Dp(24.0)).semantics(
                                 SemanticsArgs {
@@ -98,7 +97,7 @@ fn fixture() {
                     });
                 }
                 for index in 0..values.actions {
-                    bar = bar.action(move || {
+                    bar.action(move || {
                         icon_button()
                             .standard()
                             .color_style(IconButtonColorStyle::Inherited)
@@ -170,8 +169,10 @@ fn click(renderer: &mut HeadlessRenderer, label: &str) {
 }
 
 fn check_bar(samples: u32) {
+    let observed = tessera_ui::testing::TestProbe::default();
+    let fixture_observed = observed.clone();
     let mut renderer = HeadlessRenderer::new(
-        Box::new(|| fixture()),
+        Box::new(move || fixture(fixture_observed.clone())),
         vec![Box::new(crate::TesseraComponents)],
         HeadlessConfig {
             width: 540,
@@ -183,8 +184,8 @@ fn check_bar(samples: u32) {
     )
     .expect("renderer");
     renderer.render_frames(8);
-    let settings = SETTINGS.get().expect("settings");
-    let clicks = CLICKS.get().expect("clicks");
+    let settings = observed.get().settings.expect("settings");
+    let clicks = observed.get().clicks.expect("clicks");
     let published = renderer.accessibility_snapshot().expect("tree");
     let toolbar_node = &published
         .nodes

@@ -6,8 +6,7 @@
 
 use tessera_ui::{
     CallbackWith, Dp, FocusModifierExt, Modifier, RenderSlot, ScrollEventSource, State,
-    current_frame_nanos, layout::layout, provide_context, receive_frame_nanos, remember, tessera,
-    use_context,
+    current_frame_nanos, layout::layout, receive_frame_nanos, remember, tessera,
 };
 
 use crate::{
@@ -45,8 +44,6 @@ pub struct AppBarScrollState {
     last_input: Option<u64>,
     touch_active: bool,
     pending_snap: bool,
-    #[cfg(test)]
-    pub(super) frame_ticks: u64,
 }
 
 impl Default for AppBarScrollState {
@@ -63,8 +60,6 @@ impl Default for AppBarScrollState {
             last_input: None,
             touch_active: false,
             pending_snap: false,
-            #[cfg(test)]
-            frame_ticks: 0,
         }
     }
 }
@@ -235,10 +230,6 @@ impl AppBarScrollState {
     }
 
     fn tick(&mut self, frame: u64) {
-        #[cfg(test)]
-        {
-            self.frame_ticks += 1;
-        }
         let previous = self.last_frame.replace(frame).unwrap_or(frame);
         if self.pending_snap
             && !self.touch_active
@@ -253,9 +244,6 @@ impl AppBarScrollState {
         self.color.tick(dt);
     }
 }
-
-#[derive(Clone, Copy, PartialEq)]
-pub(super) struct AppBarScrollContext(pub State<AppBarScrollState>);
 
 /// # app_bar_scroll_provider
 ///
@@ -299,8 +287,9 @@ pub(super) struct AppBarScrollContext(pub State<AppBarScrollState>);
 ///         .scroll_controller(scroll)
 ///         .child(move || {
 ///             scaffold()
-///                 .top_bar(|| {
+///                 .top_bar(move || {
 ///                     top_app_bar()
+///                         .scroll_state(state)
 ///                         .variant(TopAppBarVariant::MediumFlexible)
 ///                         .title("Inbox");
 ///                 })
@@ -387,7 +376,7 @@ pub fn app_bar_scroll_provider(
             }
         });
     }
-    let parent = use_context::<NestedScrollConnection>().map(|context| context.get());
+    let parent = NestedScrollConnection::nearest();
     let coordinate_scale = remember(|| 1.0_f32);
     let connection = NestedScrollConnection::new()
         .with_coordinate_scale(coordinate_scale)
@@ -412,32 +401,6 @@ pub fn app_bar_scroll_provider(
                 }
             },
         ))
-        .child(move || {
-            let connection = connection.clone();
-            provide_context(
-                || AppBarScrollContext(state),
-                move || {
-                    let context =
-                        use_context::<AppBarScrollContext>().expect("app bar scroll context");
-                    if context.get().0 != state {
-                        context.set(AppBarScrollContext(state));
-                    }
-                    let connection = connection.clone();
-                    provide_context(
-                        {
-                            let connection = connection.clone();
-                            move || connection
-                        },
-                        move || {
-                            let context = use_context::<NestedScrollConnection>()
-                                .expect("nested scroll context");
-                            if context.get() != connection {
-                                context.set(connection.clone());
-                            }
-                            child.render();
-                        },
-                    );
-                },
-            );
-        });
+        .modifier(Modifier::new().nested_scroll(connection))
+        .child(move || child.render());
 }

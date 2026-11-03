@@ -109,7 +109,11 @@ pub fn device_list(env: &Env) -> Result<BTreeSet<Device<'static>>, Error> {
                         serial_no,
                         name,
                         "unknown".into(),
-                        Target::all().values().next().unwrap(),
+                        Target::all()
+                            .iter()
+                            .map(|(_, target)| target)
+                            .next()
+                            .unwrap(),
                         status,
                     ))
                 }

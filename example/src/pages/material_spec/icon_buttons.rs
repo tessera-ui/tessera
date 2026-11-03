@@ -75,7 +75,7 @@ fn name(style: IconButtonVariant) -> &'static str {
 }
 
 #[tessera]
-pub(super) fn icon_buttons_spec() {
+pub(super) fn icon_buttons_spec(route: Option<crate::pages::material_spec::article::ArticleRoute>) {
     action_article(
         Kind::Icons,
         vec![
@@ -124,6 +124,7 @@ pub(super) fn icon_buttons_spec() {
             shape_morph();
         }),
     )
+    .route_optional(route.clone())
     .overview(|| {
         articles::overview();
     });
@@ -284,12 +285,12 @@ fn hover_preview() {
                 tooltip_provider("Add to favorites")
                     .controller(controller)
                     .placement(TooltipPlacement::Above)
-                    .child(move || {
+                    .child(move |_| {
                         boxed()
                             .alignment(Alignment::Center)
                             .modifier(Modifier::new().fill_max_width().height(Dp(180.0)))
                             .children(move || {
-                                tooltip_anchor().controller(controller).child(move || {
+                                tooltip_anchor(controller).child(move || {
                                     icon_button()
                                         .standard()
                                         .icon(filled::FAVORITE_SVG)

@@ -664,6 +664,8 @@ mod tests {
 
     #[test]
     fn fluid_switch_state_ignores_redundant_animate_target() {
+        let runtime = tessera_ui::RuntimeSession::new();
+        let _scope = runtime.enter();
         let mut state = FluidSwitchState::new(false);
 
         state.animate_to_checked(false);

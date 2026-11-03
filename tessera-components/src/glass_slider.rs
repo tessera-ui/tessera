@@ -364,9 +364,10 @@ pub fn glass_slider(
         accessibility_description,
         controller,
     });
-    let controller = slider_args
-        .controller
-        .unwrap_or_else(|| remember(GlassSliderController::new));
+    let controller = match slider_args.controller {
+        Some(value) => value,
+        None => remember(GlassSliderController::new),
+    };
     slider_args.controller = Some(controller);
     let tap_recognizer = remember(TapRecognizer::default);
     let drag_recognizer = remember(DragRecognizer::default);
@@ -429,6 +430,7 @@ impl tessera_ui::LayoutModifierNode for GlassSliderFillLayout {
     }
 }
 
+#[tessera]
 fn render_glass_slider(
     args: GlassSliderConfig,
     tap_recognizer: State<TapRecognizer>,

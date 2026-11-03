@@ -12,7 +12,7 @@ use tessera_components::{
     column::column,
     flow_row::flow_row,
     material_icons::filled,
-    modifier::{MinimumInteractiveComponentEnforcement, ModifierExt as _, Padding},
+    modifier::{ModifierExt as _, Padding},
     row::row,
     shape_def::Shape,
     spacer::spacer,
@@ -20,9 +20,7 @@ use tessera_components::{
     text::text,
     theme::{MaterialTheme, material_theme},
 };
-use tessera_ui::{
-    Color, Dp, Modifier, RenderSlot, State, provide_context, remember, tessera, use_context,
-};
+use tessera_ui::{Color, Dp, Modifier, RenderSlot, State, remember, tessera, use_context};
 
 use super::{
     ACCENT, INK,
@@ -64,7 +62,7 @@ fn selectable(variant: ChipVariant) -> bool {
 }
 
 #[tessera]
-pub(super) fn chips_spec() {
+pub(super) fn chips_spec(route: Option<crate::pages::material_spec::article::ArticleRoute>) {
     article(
         "Chips",
         "Chips help people enter information, make selections, filter content, or trigger actions",
@@ -99,6 +97,7 @@ pub(super) fn chips_spec() {
             },
         ],
     )
+    .route_optional(route.clone())
     .hero(|| {
         panel(RenderSlot::new(|| {
             flow_row()
@@ -855,10 +854,7 @@ fn chip_diagram(variant: ChipVariant, measurements: bool) {
                         .on_click(move || selected.set(!selected.get()));
                 }
             });
-            provide_context(
-                || MinimumInteractiveComponentEnforcement { enabled: false },
-                move || content.render(),
-            );
+            content.render();
             if !removed.get() {
                 boxed()
                     .modifier(Modifier::new().fill_max_size())

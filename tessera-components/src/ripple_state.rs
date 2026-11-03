@@ -167,6 +167,8 @@ impl RippleState {
     /// # Example
     /// ```
     /// use tessera_components::ripple_state::RippleState;
+    /// let session = tessera_ui::RuntimeSession::new();
+    /// let _scope = session.enter();
     /// let mut state = RippleState::new();
     /// state.start_animation([0.5, 0.5]);
     /// ```
@@ -276,11 +278,13 @@ impl RippleState {
     ///
     /// ```
     /// use tessera_components::ripple_state::RippleState;
+    /// let session = tessera_ui::RuntimeSession::new();
+    /// let _scope = session.enter();
     /// let mut state = RippleState::new();
     /// state.start_animation([0.5, 0.5]);
-    /// if let Some((progress, center)) = state.get_animation_progress() {
-    ///     // Use progress and center for rendering
-    /// }
+    /// let (progress, center) = state.get_animation_progress().expect("active ripple");
+    /// assert_eq!(progress, 0.0);
+    /// assert_eq!(center, [0.5, 0.5]);
     /// ```
     pub fn get_animation_progress(&mut self) -> Option<(f32, [f32; 2])> {
         self.animation()

@@ -14,7 +14,7 @@ use tessera_components::{
     shape_def::Shape,
     spacer::spacer,
     text::text,
-    text_field::{TextFieldBuilder, TextFieldLineLimit},
+    text_field::{TextFieldLineLimit, text_field},
     theme::MaterialTheme,
 };
 use tessera_ui::{Color, Dp, Modifier, RenderSlot, tessera, use_context};
@@ -101,9 +101,9 @@ fn field(
     outline: Option<Color>,
 ) {
     let base = if outlined {
-        TextFieldBuilder::outlined()
+        text_field().outlined()
     } else {
-        TextFieldBuilder::filled()
+        text_field().filled()
     };
     base.label(label.clone())
         .accessibility_label(label.clone())
@@ -328,7 +328,8 @@ fn input_mode(mode: u8) {
         .modifier(Modifier::new().fill_max_width())
         .children(move || {
             panel(RenderSlot::new(move || {
-                let base = TextFieldBuilder::outlined()
+                let base = text_field()
+                    .outlined()
                     .label(label)
                     .accessibility_label(label)
                     .initial_text(value)

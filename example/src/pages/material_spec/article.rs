@@ -93,8 +93,9 @@ pub(super) fn article(
     compact_content_inset: Option<Dp>,
     pages: Option<Vec<ArticlePage>>,
     page_heading_levels: Option<BTreeMap<&'static str, u8>>,
+    route: Option<ArticleRoute>,
+    modal_controller: Option<modal_host::ArticleModalController>,
 ) {
-    let route = use_context::<ArticleRoute>().map(|route| route.get());
     let initial_page = route.as_ref().map_or("Specs", |route| route.initial_page);
     let initial_page = if initial_page == "Specs"
         || pages
@@ -137,7 +138,7 @@ pub(super) fn article(
         }
         data.set(current);
     }
-    modal_host::article_modal_host(RenderSlot::new(move || {
+    let content = RenderSlot::new(move || {
         let pages = pages.clone();
         let route = route.clone();
         surface()
@@ -150,7 +151,12 @@ pub(super) fn article(
                     .pages_optional(pages.clone())
                     .route_optional(route.clone());
             });
-    }));
+    });
+    if let Some(controller) = modal_controller {
+        modal_host::article_modal_host(controller, content);
+    } else {
+        content.render();
+    }
 }
 
 #[tessera]
@@ -700,6 +706,7 @@ fn article_tab_strip(
     progress: [f32; 4],
     viewport_width: Px,
 ) {
+    let vectors = remember(article_tab_visual::vectors);
     let minimums = article_tab_minimums(contents);
     let reveal = ArticleTabReveal {
         selected: selected.get(),
@@ -800,18 +807,20 @@ fn article_tab_strip(
                                         }
                                     },
                                 );
-                                #[cfg(all(test, not(target_family = "wasm")))]
-                                let modifier = modifier.on_globally_positioned(move |bounds| {
-                                    visual_tests::record_content(index, bounds)
-                                });
-                                modifier
+                                modifier.semantics(SemanticsArgs {
+                                    test_tag: Some(format!("article-tab-content-{index}")),
+                                    merge_descendants: true,
+                                    ..Default::default()
+                                })
                             })
                             .cross_axis_alignment(CrossAxisAlignment::Center)
                             .children(move || {
                                 icon()
-                                    .vector(article_tab_visual::vector(
-                                        index, active, hovered, pressed,
-                                    ))
+                                    .vector(vectors.with(|vectors| {
+                                        article_tab_visual::vector(
+                                            vectors, index, active, hovered, pressed,
+                                        )
+                                    }))
                                     .size(Dp(24.0))
                                     .tint(article_tab_visual::foreground(active, hovered, pressed));
                                 spacer().modifier(Modifier::new().width(Dp(8.0)));

@@ -14,14 +14,6 @@ use tessera_ui::{
 
 use super::*;
 
-struct Pipelines;
-
-impl tessera_ui::RenderModule for Pipelines {
-    fn register_pipelines(&self, context: &mut tessera_ui::PipelineContext<'_>) {
-        tessera_components::pipelines::register_pipelines(context);
-    }
-}
-
 #[tessera]
 fn music_fixture() {
     material_theme().child(|| {
@@ -52,7 +44,7 @@ fn tokens_fixture() {
 fn renderer<Output: 'static>(fixture: fn() -> Output) -> HeadlessRenderer {
     let mut renderer = HeadlessRenderer::new(
         Box::new(fixture),
-        vec![Box::new(Pipelines)],
+        vec![Box::new(crate::TestPipelines)],
         HeadlessConfig {
             width: 676,
             height: 700,
@@ -67,14 +59,14 @@ fn renderer<Output: 'static>(fixture: fn() -> Output) -> HeadlessRenderer {
 }
 
 fn node(renderer: &HeadlessRenderer, label: &str, role: Role) -> Node {
-    renderer
-        .accessibility_snapshot()
-        .unwrap()
-        .nodes
-        .into_iter()
-        .find(|(_, node)| node.role() == role && node.label() == Some(label))
+    let snapshot = renderer
+        .inspect_accessibility()
+        .expect("accessibility tree");
+    snapshot
+        .find(label, role)
         .unwrap_or_else(|| panic!("missing {label} {role:?}"))
         .1
+        .clone()
 }
 
 fn click(renderer: &mut HeadlessRenderer, label: &str, role: Role) {

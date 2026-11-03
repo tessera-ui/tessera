@@ -835,6 +835,8 @@ mod tests {
 
     #[test]
     fn layout_preserves_the_trailing_segment_under_mixed_sizes() {
+        let runtime = tessera_ui::RuntimeSession::new();
+        let _scope = runtime.enter();
         tessera_ui::dp::set_scale_factor(1.0);
         tessera_ui::assert_layout! {
             viewport: (400, 200),

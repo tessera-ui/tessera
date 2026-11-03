@@ -181,12 +181,11 @@ impl DrawModifierNode for BorderModifierNode {
 
 #[cfg(all(test, not(target_family = "wasm")))]
 mod tests {
-    use std::cell::Cell;
-
     use tessera_ui::{
         Modifier, State,
         headless::{HeadlessConfig, HeadlessRenderer},
         remember, tessera,
+        testing::TestProbe,
     };
 
     use crate::{
@@ -195,19 +194,23 @@ mod tests {
 
     use super::*;
 
-    thread_local! {
-        static OPACITY: Cell<Option<State<f32>>> = const { Cell::new(None) };
-        static CLIPPED: Cell<Option<State<bool>>> = const { Cell::new(None) };
-        static SHAPE_STAGE: Cell<Option<State<u8>>> = const { Cell::new(None) };
-        static SHAPE_CLICKS: Cell<Option<State<usize>>> = const { Cell::new(None) };
+    #[derive(Clone, Copy, Default, PartialEq)]
+    struct FixtureHandles {
+        opacity: Option<State<f32>>,
+        clipped: Option<State<bool>>,
+        stage: Option<State<u8>>,
+        clicks: Option<State<usize>>,
     }
 
     #[tessera]
-    fn visual_fixture() {
+    fn visual_fixture(probe: TestProbe<FixtureHandles>) {
         let opacity = remember(|| 0.5f32);
         let clipped = remember(|| false);
-        OPACITY.set(Some(opacity));
-        CLIPPED.set(Some(clipped));
+        probe.set(FixtureHandles {
+            opacity: Some(opacity),
+            clipped: Some(clipped),
+            ..Default::default()
+        });
         material_theme().child(move || {
             boxed()
                 .modifier(Modifier::new().fill_max_size().background(Color::WHITE))
@@ -235,9 +238,11 @@ mod tests {
     #[test]
     #[ignore = "Requires a native GPU adapter"]
     fn cached_layout_rebuilds_opacity_and_clipping_for_each_record_pass() {
+        let probe = TestProbe::default();
+        let observed = probe.clone();
         let mut renderer = HeadlessRenderer::new(
-            Box::new(|| {
-                visual_fixture();
+            Box::new(move || {
+                visual_fixture(probe.clone());
             }),
             vec![Box::new(crate::TesseraComponents)],
             HeadlessConfig {
@@ -256,11 +261,11 @@ mod tests {
             "constant alpha must not accumulate across cached frames"
         );
 
-        OPACITY.get().expect("fixture state").set(0.0);
+        observed.get().opacity.expect("fixture state").set(0.0);
         renderer.render_frames(3);
         let invisible = renderer.read_pixels().expect("invisible pixels");
         assert!(invisible != half_opacity);
-        OPACITY.get().expect("fixture state").set(1.0);
+        observed.get().opacity.expect("fixture state").set(1.0);
         renderer.render_frames(3);
         let visible = renderer.read_pixels().expect("visible pixels");
         assert!(
@@ -269,14 +274,14 @@ mod tests {
         );
         assert!(visible != half_opacity);
 
-        CLIPPED.get().expect("fixture state").set(true);
+        observed.get().clipped.expect("fixture state").set(true);
         renderer.render_frames(3);
         let clipped = renderer.read_pixels().expect("clipped pixels");
         assert!(
             clipped == invisible,
             "the offset child must be clipped outside the container"
         );
-        CLIPPED.get().expect("fixture state").set(false);
+        observed.get().clipped.expect("fixture state").set(false);
         renderer.render_frames(3);
         let unclipped = renderer.read_pixels().expect("unclipped pixels");
         assert!(
@@ -286,12 +291,15 @@ mod tests {
     }
 
     #[tessera]
-    fn shape_fixture() {
+    fn shape_fixture(probe: TestProbe<FixtureHandles>) {
         let stage = remember(|| 0u8);
         let clicks = remember(|| 0usize);
         let raster = remember(|| crate::image::ImageData::from_rgba(vec![0, 0, 255, 255], 1, 1));
-        SHAPE_STAGE.set(Some(stage));
-        SHAPE_CLICKS.set(Some(clicks));
+        probe.set(FixtureHandles {
+            stage: Some(stage),
+            clicks: Some(clicks),
+            ..Default::default()
+        });
         material_theme().child(move || {
             boxed()
                 .modifier(Modifier::new().fill_max_size().background(Color::WHITE))
@@ -371,9 +379,13 @@ mod tests {
     fn check_shape_clipping(samples: u32) {
         use tessera_ui::{MOUSE_POINTER_ID, PressKeyEventType, PxPosition};
 
+        let probe = TestProbe::default();
+
+        let observed = probe.clone();
+
         let mut renderer = HeadlessRenderer::new(
-            Box::new(|| {
-                shape_fixture();
+            Box::new(move || {
+                shape_fixture(probe.clone());
             }),
             vec![Box::new(crate::TesseraComponents)],
             HeadlessConfig {
@@ -415,12 +427,12 @@ mod tests {
                 "multisample shape edges must retain partial coverage"
             );
         }
-        SHAPE_STAGE.get().expect("stage").set(1);
+        observed.get().stage.expect("stage").set(1);
         renderer.render_frames(6);
         let raster = renderer.read_pixels().expect("masked raster pixels");
         assert_eq!(pixel(&raster, 95, 30), [0, 0, 255, 255]);
         assert_eq!(pixel(&raster, 130, 30), [255, 255, 255, 255]);
-        SHAPE_STAGE.get().expect("stage").set(3);
+        observed.get().stage.expect("stage").set(3);
         renderer.render_frames(6);
         let sampled = renderer.read_pixels().expect("masked scene sampling");
         assert_eq!(pixel(&sampled, 11, 11), [255, 255, 255, 255]);
@@ -439,20 +451,20 @@ mod tests {
                 .expect("shape QA image");
             }
         }
-        SHAPE_STAGE.get().expect("stage").set(2);
+        observed.get().stage.expect("stage").set(2);
         renderer.render_frames(6);
         assert_eq!(
             pixel(&renderer.read_pixels().expect("unmasked pixels"), 11, 11),
             [255, 0, 0, 255]
         );
-        SHAPE_STAGE.get().expect("stage").set(0);
+        observed.get().stage.expect("stage").set(0);
         renderer.render_frames(6);
         assert!(
             renderer.read_pixels().expect("restored mask") == first,
             "cached masks must restore exactly"
         );
 
-        let clicks = SHAPE_CLICKS.get().expect("click state");
+        let clicks = observed.get().clicks.expect("click state");
         for (x, y, expected) in [(11.0, 111.0, 0), (60.0, 150.0, 1)] {
             let point = PxPosition::from_f32_xy(x, y);
             renderer.pointer_move(MOUSE_POINTER_ID, point);

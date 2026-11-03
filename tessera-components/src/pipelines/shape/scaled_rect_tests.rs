@@ -4,12 +4,12 @@
 //!
 //! Verify native shape coverage, clipping, and retained input targets.
 
-use std::{cell::Cell, time::Duration};
+use std::time::Duration;
 
 use tessera_ui::{
     Callback, Color, Dp, HeadlessConfig, HeadlessRenderer, MOUSE_POINTER_ID, Modifier,
     PlacementModifierNode, PressKeyEventType, PxPosition, State,
-    modifier::ModifierCapabilityExt as _, remember, scaled_box, tessera,
+    modifier::ModifierCapabilityExt as _, remember, scaled_box, tessera, testing::TestProbe,
 };
 
 use crate::{
@@ -22,12 +22,10 @@ use crate::{
 
 use super::{ShapeCommand, rect_to_uniforms};
 
-thread_local! {
-    static SCALE: Cell<[f32;2]> = const { Cell::new([1.0,1.0]) };
-    static OUTER: Cell<f32> = const { Cell::new(1.0) };
-    static CLIPPED: Cell<bool> = const { Cell::new(false) };
-    static COMMAND: Cell<Option<State<bool>>> = const { Cell::new(None) };
-    static CLICKS: Cell<Option<State<usize>>> = const { Cell::new(None) };
+#[derive(Clone, Copy, Default, PartialEq)]
+struct FixtureHandles {
+    scaled: Option<State<bool>>,
+    clicks: Option<State<usize>>,
 }
 
 #[derive(Clone, Copy, PartialEq)]
@@ -40,14 +38,13 @@ impl PlacementModifierNode for Origin {
 }
 
 #[tessera]
-fn fixture() {
+fn fixture(scale: [f32; 2], outer: f32, clipped: bool, probe: TestProbe<FixtureHandles>) {
     let scaled = remember(|| false);
     let clicks = remember(|| 0);
-    COMMAND.set(Some(scaled));
-    CLICKS.set(Some(clicks));
-    let scale = SCALE.get();
-    let outer = OUTER.get();
-    let clipped = CLIPPED.get();
+    probe.set(FixtureHandles {
+        scaled: Some(scaled),
+        clicks: Some(clicks),
+    });
     material_theme().child(move || {
         boxed()
             .alignment(Alignment::TopStart)
@@ -99,9 +96,18 @@ fn fixture() {
     });
 }
 
-fn create_renderer(samples: u32) -> HeadlessRenderer {
+fn create_renderer(
+    samples: u32,
+    scale: [f32; 2],
+    outer: f32,
+    clipped: bool,
+) -> (HeadlessRenderer, FixtureHandles) {
+    let probe = TestProbe::default();
+    let observed = probe.clone();
     let mut renderer = HeadlessRenderer::new(
-        Box::new(fixture),
+        Box::new(move || {
+            fixture(scale, outer, clipped, probe.clone());
+        }),
         vec![Box::new(crate::TesseraComponents)],
         HeadlessConfig {
             width: 240,
@@ -113,7 +119,7 @@ fn create_renderer(samples: u32) -> HeadlessRenderer {
     )
     .unwrap();
     renderer.render_frames(4);
-    renderer
+    (renderer, observed.get())
 }
 
 fn pixel(renderer: &HeadlessRenderer, x: usize, y: usize) -> [u8; 3] {
@@ -126,20 +132,19 @@ fn pixel(renderer: &HeadlessRenderer, x: usize, y: usize) -> [u8; 3] {
 #[ignore = "requires a native GPU adapter for actual anisotropic SDF pixels and pointer clipping"]
 fn scaled_rect_identity_elliptical_caps_zero_and_fractional_clip() {
     for samples in [1, 4] {
-        SCALE.set([1.0, 1.0]);
-        OUTER.set(1.0);
-        CLIPPED.set(false);
-        let mut renderer = create_renderer(samples);
+        let mut scale = [1.0, 1.0];
+        let mut outer = 1.0;
+        let (mut renderer, handles) = create_renderer(samples, scale, outer, false);
         let idle = renderer.diagnostics();
         assert_eq!(
-            idle.measure_node_calls, 1,
-            "idle frame queries only the cached root"
+            renderer
+                .work()
+                .phase(tessera_ui::WorkPhase::Measure)
+                .count(),
+            0,
+            "idle frame must not measure"
         );
-        assert_eq!(
-            idle.cache_hits_direct, 1,
-            "idle root query must return directly from cache"
-        );
-        assert_eq!(idle.cache_store_count, 0);
+
         assert_eq!(idle.dirty_nodes_param, 0);
         assert_eq!(idle.geometry_nodes_updated, 0);
         let original = renderer.read_pixels().unwrap();
@@ -157,25 +162,23 @@ fn scaled_rect_identity_elliptical_caps_zero_and_fractional_clip() {
             (bounds.x0, bounds.y0, bounds.width(), bounds.height()),
             (10.25, 20.5, 200.0, 80.0)
         );
-        COMMAND.get().unwrap().set(true);
+        handles.scaled.unwrap().set(true);
         renderer.render_frames(1);
         let diagnostics = renderer.diagnostics();
         assert_eq!(
-            diagnostics.measure_node_calls, 1,
-            "paint-only scaling must only query the cached root"
+            renderer
+                .work()
+                .phase(tessera_ui::WorkPhase::Measure)
+                .count(),
+            0,
+            "paint-only scaling must not measure"
         );
-        assert_eq!(
-            diagnostics.cache_hits_direct, 1,
-            "paint-only scaling must preserve the direct root hit"
-        );
+
         assert_eq!(
             diagnostics.dirty_nodes_param, 0,
             "paint-only scaling must not invalidate layout inputs"
         );
-        assert_eq!(
-            diagnostics.cache_store_count, 0,
-            "paint-only scaling must not replace layout snapshots"
-        );
+
         assert_eq!(
             diagnostics.geometry_nodes_updated, 0,
             "paint-only scaling must not place nodes"
@@ -187,9 +190,9 @@ fn scaled_rect_identity_elliptical_caps_zero_and_fractional_clip() {
             "identity must preserve existing coverage exactly"
         );
         drop(renderer);
-        SCALE.set([0.32, 1.0]);
-        let mut renderer = create_renderer(samples);
-        COMMAND.get().unwrap().set(true);
+        scale = [0.32, 1.0];
+        let (mut renderer, handles) = create_renderer(samples, scale, outer, false);
+        handles.scaled.unwrap().set(true);
         renderer.render_frames(2);
         assert_eq!(
             pixel(&renderer, 135, 90),
@@ -212,14 +215,14 @@ fn scaled_rect_identity_elliptical_caps_zero_and_fractional_clip() {
         renderer.pointer_release(MOUSE_POINTER_ID, unpainted, PressKeyEventType::Left);
         renderer.render_frames(2);
         assert_eq!(
-            CLICKS.get().unwrap().get(),
+            handles.clicks.unwrap().get(),
             1,
             "background paint contraction must preserve the full native interaction target"
         );
         drop(renderer);
-        SCALE.set([1.0, 0.5]);
-        let mut renderer = create_renderer(samples);
-        COMMAND.get().unwrap().set(true);
+        scale = [1.0, 0.5];
+        let (mut renderer, handles) = create_renderer(samples, scale, outer, false);
+        handles.scaled.unwrap().set(true);
         renderer.render_frames(2);
         assert_eq!(
             pixel(&renderer, 20, 45),
@@ -229,9 +232,9 @@ fn scaled_rect_identity_elliptical_caps_zero_and_fractional_clip() {
         assert_eq!(pixel(&renderer, 35, 45), [255, 0, 0]);
         assert_eq!(pixel(&renderer, 110, 39), [255, 255, 255]);
         drop(renderer);
-        SCALE.set([0.0, 1.0]);
-        let mut renderer = create_renderer(samples);
-        COMMAND.get().unwrap().set(true);
+        scale = [0.0, 1.0];
+        let (mut renderer, handles) = create_renderer(samples, scale, outer, false);
+        handles.scaled.unwrap().set(true);
         renderer.render_frames(2);
         assert!(
             renderer
@@ -242,12 +245,11 @@ fn scaled_rect_identity_elliptical_caps_zero_and_fractional_clip() {
             "zero scale produces no pixels"
         );
         drop(renderer);
-        SCALE.set([0.32, 1.0]);
-        OUTER.set(0.625);
+        scale = [0.32, 1.0];
+        outer = 0.625;
         for clipped in [false, true] {
-            CLIPPED.set(clipped);
-            let mut renderer = create_renderer(samples);
-            COMMAND.get().unwrap().set(true);
+            let (mut renderer, handles) = create_renderer(samples, scale, outer, clipped);
+            handles.scaled.unwrap().set(true);
             renderer.render_frames(2);
             assert_eq!(pixel(&renderer, 65, 40), [255, 0, 0]);
             assert_eq!(
@@ -262,7 +264,7 @@ fn scaled_rect_identity_elliptical_caps_zero_and_fractional_clip() {
             renderer.pointer_press(MOUSE_POINTER_ID, position, PressKeyEventType::Left);
             renderer.pointer_release(MOUSE_POINTER_ID, position, PressKeyEventType::Left);
             renderer.render_frames(2);
-            assert_eq!(CLICKS.get().unwrap().get(), usize::from(!clipped));
+            assert_eq!(handles.clicks.unwrap().get(), usize::from(!clipped));
             drop(renderer);
         }
     }

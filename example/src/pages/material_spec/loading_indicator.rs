@@ -26,7 +26,9 @@ use super::{
 };
 
 #[tessera]
-pub(super) fn loading_indicator_spec() {
+pub(super) fn loading_indicator_spec(
+    route: Option<crate::pages::material_spec::article::ArticleRoute>,
+) {
     article(
         "Loading indicator",
         "Loading indicators show the progress of a process for a short wait time",
@@ -61,6 +63,7 @@ pub(super) fn loading_indicator_spec() {
             },
         ],
     )
+    .route_optional(route.clone())
     .pages(vec![
         ArticlePage {
             title: "Overview",

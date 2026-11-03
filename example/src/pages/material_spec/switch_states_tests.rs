@@ -11,14 +11,6 @@ use tessera_ui::{
     tessera,
 };
 
-struct Pipelines;
-
-impl tessera_ui::RenderModule for Pipelines {
-    fn register_pipelines(&self, context: &mut tessera_ui::PipelineContext<'_>) {
-        tessera_components::pipelines::register_pipelines(context);
-    }
-}
-
 #[tessera]
 fn fixture() {
     tessera_components::theme::material_theme().child(|| {
@@ -69,7 +61,7 @@ fn click(renderer: &mut HeadlessRenderer, label: &str) {
 fn switch_states_keep_twenty_independent_native_controls_and_scaled_pointer_targets() {
     let mut renderer = HeadlessRenderer::new(
         Box::new(fixture),
-        vec![Box::new(Pipelines)],
+        vec![Box::new(crate::TestPipelines)],
         HeadlessConfig {
             width: 1024,
             height: 760,

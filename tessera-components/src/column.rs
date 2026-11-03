@@ -4,8 +4,8 @@
 //!
 //! Use to stack children vertically.
 use tessera_ui::{
-    AxisConstraint, ComputedData, Constraint, LayoutResult, MeasurementError, Modifier,
-    ParentConstraint, Px, PxPosition, RenderSlot,
+    AxisConstraint, ComputedData, Constraint, LayoutResult, MeasurementError, Modifier, Px,
+    PxPosition, RenderSlot,
     layout::{
         LayoutChild, LayoutPlacementTarget, MeasureScope, PlacementResult, PlacementScope, layout,
     },
@@ -14,7 +14,7 @@ use tessera_ui::{
 
 use crate::{
     alignment::{CrossAxisAlignment, MainAxisAlignment},
-    layout_flex::cross_axis_child_constraint,
+    layout_flex::{classify_children, cross_axis_child_constraint},
 };
 
 /// # column
@@ -180,7 +180,6 @@ impl tessera_ui::LayoutModifierNode for ColumnLayout {
     }
 }
 
-/// Helper struct used to place children with alignment. Local to this module.
 struct PlaceChildrenArgs<'a, T> {
     children_sizes: &'a [Option<ComputedData>],
     children: &'a [T],
@@ -192,14 +191,6 @@ struct PlaceChildrenArgs<'a, T> {
     child_count: usize,
 }
 
-/// Helper: classify children into weighted / unweighted and compute total
-/// weight.
-fn classify_children(child_weights: &[f32]) -> (Vec<usize>, Vec<usize>, f32) {
-    crate::layout_flex::classify_children(child_weights)
-}
-
-/// Measure all non-weighted children (vertical variant).
-/// Returns the accumulated total height of those children.
 fn measure_unweighted_children_for_column(
     children: &[LayoutChild],
     input: &mut MeasureScope<'_>,
@@ -227,8 +218,6 @@ fn measure_unweighted_children_for_column(
     Ok(total)
 }
 
-/// Measure weighted children by distributing the remaining height
-/// proportionally.
 struct WeightedColumnMeasureContext<'a> {
     children_sizes: &'a mut [Option<ComputedData>],
     max_child_width: &'a mut Px,
@@ -269,26 +258,6 @@ fn measure_weighted_children_for_column(
     Ok(())
 }
 
-fn calculate_final_column_height(
-    column_parent_constraint: &Constraint,
-    measured_children_height: Px,
-) -> Px {
-    column_parent_constraint
-        .height
-        .clamp(measured_children_height)
-}
-
-fn calculate_final_column_width(
-    column_parent_constraint: &Constraint,
-    max_child_width: Px,
-    parent_constraint: ParentConstraint<'_>,
-) -> Px {
-    let _ = parent_constraint;
-    column_parent_constraint.width.clamp(max_child_width)
-}
-
-/// Measure column when height uses weighted allocation.
-/// Returns (final_width, final_height, total_measured_children_height)
 fn measure_weighted_column(
     children: &[LayoutChild],
     input: &mut MeasureScope<'_>,
@@ -339,13 +308,10 @@ fn measure_weighted_column(
         .filter_map(|s| s.as_ref().map(|s| s.height))
         .fold(Px(0), |acc, h| acc + h);
 
-    let final_column_height =
-        calculate_final_column_height(column_parent_constraint, total_measured_children_height);
-    let final_column_width = calculate_final_column_width(
-        column_parent_constraint,
-        *max_child_width,
-        input.parent_constraint(),
-    );
+    let final_column_height = column_parent_constraint
+        .height
+        .clamp(total_measured_children_height);
+    let final_column_width = column_parent_constraint.width.clamp(*max_child_width);
 
     Ok((
         final_column_width,
@@ -389,13 +355,10 @@ fn measure_unweighted_column(
         *max_child_width = (*max_child_width).max(child_result.width);
     }
 
-    let final_column_height =
-        calculate_final_column_height(column_parent_constraint, total_children_measured_height);
-    let final_column_width = calculate_final_column_width(
-        column_parent_constraint,
-        *max_child_width,
-        input.parent_constraint(),
-    );
+    let final_column_height = column_parent_constraint
+        .height
+        .clamp(total_children_measured_height);
+    let final_column_width = column_parent_constraint.width.clamp(*max_child_width);
     Ok((
         final_column_width,
         final_column_height,
@@ -403,22 +366,11 @@ fn measure_unweighted_column(
     ))
 }
 
-/// Place measured children into the column according to main and cross axis
-/// alignment.
-///
-/// This helper computes the starting y position and spacing between children
-/// based on `MainAxisAlignment` variants (Start, Center, End, SpaceEvenly,
-/// SpaceBetween, SpaceAround) and aligns each child horizontally using
-/// `CrossAxisAlignment`. It calls `place_node` to record each child's layout
-/// position.
-///
-/// `args` contains measured child sizes, node ids, component metadata and final
-/// column size.
 fn place_children_with_alignment<T: LayoutPlacementTarget>(
     args: &PlaceChildrenArgs<'_, T>,
     result: &mut LayoutResult,
 ) {
-    let (mut current_y, spacing_between_children) = calculate_main_axis_layout_for_column(
+    let (mut current_y, spacing_between_children) = crate::layout_flex::main_axis_offsets(
         args.final_column_height,
         args.total_children_height,
         args.main_axis_alignment,
@@ -428,8 +380,8 @@ fn place_children_with_alignment<T: LayoutPlacementTarget>(
     for (i, child_size_opt) in args.children_sizes.iter().enumerate() {
         if let Some(child_actual_size) = child_size_opt {
             let child_id = args.children[i];
-            let x_offset = calculate_cross_axis_offset_for_column(
-                child_actual_size,
+            let x_offset = crate::layout_flex::cross_axis_offset(
+                child_actual_size.width,
                 args.final_column_width,
                 args.cross_axis_alignment,
             );
@@ -440,32 +392,6 @@ fn place_children_with_alignment<T: LayoutPlacementTarget>(
             }
         }
     }
-}
-
-fn calculate_main_axis_layout_for_column(
-    final_column_height: Px,
-    total_children_height: Px,
-    main_axis_alignment: MainAxisAlignment,
-    child_count: usize,
-) -> (f32, f32) {
-    crate::layout_flex::main_axis_offsets(
-        final_column_height,
-        total_children_height,
-        main_axis_alignment,
-        child_count,
-    )
-}
-
-fn calculate_cross_axis_offset_for_column(
-    child_actual_size: &ComputedData,
-    final_column_width: Px,
-    cross_axis_alignment: CrossAxisAlignment,
-) -> f32 {
-    crate::layout_flex::cross_axis_offset(
-        child_actual_size.width,
-        final_column_width,
-        cross_axis_alignment,
-    )
 }
 
 #[cfg(test)]

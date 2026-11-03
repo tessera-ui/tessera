@@ -4,11 +4,9 @@
 //!
 //! Keep expanded list rows clickable at their visible scrolled positions.
 
-use std::cell::Cell;
-
 use tessera_ui::{
     Color, Dp, HeadlessConfig, HeadlessRenderer, MOUSE_POINTER_ID, Modifier, PressKeyEventType,
-    PxPosition, RenderSlot, State, accesskit::Node, remember, tessera,
+    PxPosition, RenderSlot, State, accesskit::Node, remember, tessera, testing::TestProbe,
 };
 
 use crate::{
@@ -29,21 +27,24 @@ struct Settings {
     calls: usize,
 }
 
-thread_local! {
-    static SETTINGS: Cell<Option<State<Settings>>> = const { Cell::new(None) };
-    static SCROLL: Cell<Option<State<LazyListController>>> = const { Cell::new(None) };
+#[derive(Clone, Copy, Default, PartialEq)]
+struct FixtureHandles {
+    settings: Option<State<Settings>>,
+    scroll: Option<State<LazyListController>>,
 }
 
 #[tessera]
-fn fixture() {
+fn fixture(probe: TestProbe<FixtureHandles>) {
     let settings = remember(|| Settings {
         expanded: false,
         selected: false,
         calls: 0,
     });
     let controller = remember(LazyListController::new);
-    SETTINGS.set(Some(settings));
-    SCROLL.set(Some(controller));
+    probe.set(FixtureHandles {
+        settings: Some(settings),
+        scroll: Some(controller),
+    });
     material_theme()
         .theme(move || {
             let mut theme = MaterialTheme::default();
@@ -138,8 +139,12 @@ fn tap(renderer: &mut HeadlessRenderer, point: PxPosition) {
 
 fn check(samples: u32) {
     for scale in [1.0, 1.5] {
+        let probe = TestProbe::default();
+        let observed = probe.clone();
         let mut renderer = HeadlessRenderer::new(
-            Box::new(fixture),
+            Box::new(move || {
+                fixture(probe.clone());
+            }),
             vec![Box::new(crate::TesseraComponents)],
             HeadlessConfig {
                 width: (400.0 * scale) as u32,
@@ -151,8 +156,8 @@ fn check(samples: u32) {
         )
         .unwrap();
         renderer.render_frames(8);
-        let settings = SETTINGS.get().unwrap();
-        let controller = SCROLL.get().unwrap();
+        let settings = observed.get().settings.unwrap();
+        let controller = observed.get().scroll.unwrap();
         controller.with_mut(|c| c.scroll_to(Dp::ZERO, Dp(400.0)));
         renderer.render_frames(12);
         let initial = entry(&renderer).bounds().unwrap();

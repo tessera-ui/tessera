@@ -3,9 +3,6 @@
 //! ## Usage
 //!
 //! Use as a base for buttons, cards, or any styled and interactive region.
-use std::sync::Arc;
-
-use parking_lot::Mutex;
 use tessera_foundation::gesture::{LongPressRecognizer, LongPressSettings, TapRecognizer};
 use tessera_ui::{
     AccessibilityActionHandler, AccessibilityNode, Callback, Color, ComputedData, Constraint, Dp,
@@ -263,12 +260,11 @@ impl SurfaceInputOwner {
     }
 }
 
-struct SurfaceInputLease(Mutex<SurfaceInputOwner>);
+struct SurfaceInputLease(SurfaceInputOwner);
 
 impl Drop for SurfaceInputLease {
     fn drop(&mut self) {
-        let input = *self.0.get_mut();
-        input.release();
+        self.0.release();
     }
 }
 
@@ -1188,6 +1184,13 @@ pub fn surface(
         .expect("MaterialTheme must be provided")
         .get()
         .color_scheme;
+    let ripple_color = if let Some(color) = ripple_color {
+        color
+    } else {
+        use_context::<ContentColor>()
+            .map(|color| color.get().current)
+            .unwrap_or(scheme.on_surface)
+    };
     let mut resolved = SurfaceResolvedArgs {
         modifier: modifier.unwrap_or_default(),
         style: style.unwrap_or(SurfaceStyle::Filled {
@@ -1202,9 +1205,7 @@ pub fn surface(
         enabled: enabled.unwrap_or(true),
         on_click,
         on_long_click,
-        ripple_color: ripple_color
-            .or_else(|| use_context::<ContentColor>().map(|c| c.get().current))
-            .unwrap_or(scheme.on_surface),
+        ripple_color,
         ripple_bounded: ripple_bounded.unwrap_or(true),
         ripple_radius,
         interaction_state,
@@ -1229,14 +1230,26 @@ pub fn surface(
     let internal_focus_requester = remember(FocusRequester::new).get();
     let bound_focus_requester = resolved.focus_requester.unwrap_or(internal_focus_requester);
     resolved.focus_requester = Some(bound_focus_requester);
-    let interaction_state = resolved
-        .interaction_state
-        .or_else(|| interactive.then(|| remember(InteractionState::new)));
-    let tap_recognizer = interactive.then(|| remember(TapRecognizer::default));
+    let interaction_state = if let Some(state) = resolved.interaction_state {
+        Some(state)
+    } else if interactive {
+        Some(remember(InteractionState::new))
+    } else {
+        None
+    };
+    let tap_recognizer = if interactive {
+        Some(remember(TapRecognizer::default))
+    } else {
+        None
+    };
     let ripple_state = if resolved.show_ripple {
-        resolved
-            .ripple_state
-            .or_else(|| interactive.then(|| remember(RippleState::new)))
+        if let Some(state) = resolved.ripple_state {
+            Some(state)
+        } else if interactive {
+            Some(remember(RippleState::new))
+        } else {
+            None
+        }
     } else {
         None
     };
@@ -1278,11 +1291,11 @@ pub fn surface(
             tap: tap_recognizer,
             long_press: long_press_recognizer,
         };
-        let owner = remember(|| Arc::new(SurfaceInputLease(Mutex::new(input)))).get();
-        let previous = *owner.0.lock();
+        let owner = remember(|| SurfaceInputLease(input));
+        let previous = owner.with(|lease| lease.0);
         if previous != input {
             previous.release();
-            *owner.0.lock() = input;
+            owner.with_mut(|lease| lease.0 = input);
         }
         Some(owner)
     } else {
@@ -1339,7 +1352,10 @@ pub fn surface(
             let owner = owner.expect("interactive surface input owner");
             modifier = modifier.on_focus_changed(move |focus: tessera_ui::FocusState| {
                 if !focus.has_focus() {
-                    let input = *owner.0.lock();
+                    if !owner.is_alive() {
+                        return;
+                    }
+                    let input = owner.with(|lease| lease.0);
                     if input.long_press.is_some_and(|state| {
                         state.is_alive() && state.with(LongPressRecognizer::is_active)
                     }) {
@@ -1428,8 +1444,6 @@ impl SemanticsModifierNode for SurfaceToggleSemantics {
 
 #[cfg(test)]
 mod tests {
-    use std::cell::Cell;
-
     use tessera_ui::{Color, Dp, Modifier, State, remember, tessera, use_context};
 
     use crate::{
@@ -1486,23 +1500,26 @@ mod tests {
         );
     }
 
-    thread_local! {
-        static ENABLED: Cell<Option<State<bool>>> = const { Cell::new(None) };
-        static CONTENT_COLOR: Cell<Color> = const { Cell::new(Color::BLACK) };
+    #[derive(Clone, Default)]
+    struct ColorFixture {
+        enabled: Option<State<bool>>,
+        content: Color,
     }
 
     #[tessera]
-    fn content_color_probe() {
-        CONTENT_COLOR.set(use_context::<ContentColor>().unwrap().get().current);
+    fn content_color_probe(probe: tessera_ui::testing::TestProbe<ColorFixture>) {
+        let color = use_context::<ContentColor>().unwrap().get().current;
+        probe.with_mut(|observed| observed.content = color);
     }
 
     #[tessera]
-    fn changing_button_fixture() {
+    fn changing_button_fixture(probe: tessera_ui::testing::TestProbe<ColorFixture>) {
         let enabled = remember(|| false);
-        ENABLED.set(Some(enabled));
+        probe.with_mut(|observed| observed.enabled = Some(enabled));
         material_theme().child(move || {
-            button().text().enabled(enabled.get()).child(|| {
-                content_color_probe();
+            let probe = probe.clone();
+            button().text().enabled(enabled.get()).child(move || {
+                content_color_probe(probe.clone());
             });
         });
     }
@@ -1513,17 +1530,19 @@ mod tests {
             layout_test, pump_layout_test_session, start_layout_test_session,
         };
 
-        let mut session = start_layout_test_session(layout_test(|| {
-            changing_button_fixture();
+        let probe = tessera_ui::testing::TestProbe::default();
+        let observed = probe.clone();
+        let mut session = start_layout_test_session(layout_test(move || {
+            changing_button_fixture(observed.clone());
         }));
         pump_layout_test_session(&mut session, 0);
-        let disabled = CONTENT_COLOR.get();
-        ENABLED.get().unwrap().set(true);
+        let disabled = probe.get().content;
+        probe.get().enabled.unwrap().set(true);
         for frame in 1..4 {
             pump_layout_test_session(&mut session, frame * 16_666_667);
         }
-        assert_ne!(CONTENT_COLOR.get(), disabled);
-        assert_eq!(CONTENT_COLOR.get(), MaterialColorScheme::default().primary);
+        assert_ne!(probe.get().content, disabled);
+        assert_eq!(probe.get().content, MaterialColorScheme::default().primary);
     }
 
     fn layout_with_style(style: SurfaceStyle) -> SurfaceLayout {

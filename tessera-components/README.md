@@ -142,8 +142,8 @@ screen readers receive the percent unit. Keep room around sliders for floating
 labels and place their provider outside the page's scrolling/clipping container.
 
 `tooltip_provider("Help text")` hosts a plain tooltip above page content; put
-its trigger inside `tooltip_anchor().child(...)`. Share `TooltipController`
-explicitly when nesting providers. Hover waits 500ms, keyboard focus shows the
+its trigger inside `.child(|controller| { tooltip_anchor(controller).child(...); })`.
+Share `.group(...)` between providers that should coordinate their visibility. Hover waits 500ms, keyboard focus shows the
 description, and a 500ms touch hold prevents trigger activation on release. Escape and
 outside presses dismiss without blocking unrelated controls. Use
 `TooltipVariant::Rich`, `.headline(...)`, and `.action_label(...).on_action(...)`

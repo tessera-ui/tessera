@@ -3,8 +3,6 @@
 //! ## Usage
 //!
 //! Separate sections in lists, menus, and settings screens.
-use std::sync::OnceLock;
-
 use tessera_ui::{
     Color, ComputedData, Dp, LayoutResult, MeasurementError, Modifier, Px,
     layout::{MeasureScope, layout},
@@ -40,8 +38,7 @@ impl DividerDefaults {
     ///
     /// Omit the component color to inherit the active Material theme.
     pub fn color() -> Color {
-        static COLOR: OnceLock<Color> = OnceLock::new();
-        *COLOR.get_or_init(|| MaterialColorScheme::default().outline_variant)
+        MaterialColorScheme::default().outline_variant
     }
 }
 

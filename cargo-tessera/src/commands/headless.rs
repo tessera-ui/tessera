@@ -216,9 +216,85 @@ struct Session {
     height: u32,
     frame_time_ms: u32,
     profiling_output: Option<PathBuf>,
-    child: Child,
+    child: WorkerProcess,
     stdin: ChildStdin,
     stdout: BufReader<ChildStdout>,
+}
+
+struct WorkerProcess(Child);
+
+impl std::ops::Deref for WorkerProcess {
+    type Target = Child;
+
+    fn deref(&self) -> &Child {
+        &self.0
+    }
+}
+
+impl std::ops::DerefMut for WorkerProcess {
+    fn deref_mut(&mut self) -> &mut Child {
+        &mut self.0
+    }
+}
+
+impl Drop for WorkerProcess {
+    fn drop(&mut self) {
+        if !matches!(self.0.try_wait(), Ok(Some(_))) {
+            let _ = self.0.kill();
+            let _ = self.0.wait();
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn dropping_worker_owner_terminates_the_process_before_closing_its_input() {
+        const CHILD_MODE: &str = "TESSERA_TEST_WORKER_OWNER";
+        if std::env::var_os(CHILD_MODE).is_some() {
+            println!("worker-ready");
+            std::io::stdout().flush().unwrap();
+            let mut input = String::new();
+            std::io::stdin().read_line(&mut input).unwrap();
+            println!("worker-eof");
+            return;
+        }
+
+        let mut worker = WorkerProcess(
+            Command::new(std::env::current_exe().unwrap())
+                .args([
+                    "--exact",
+                    "commands::headless::tests::dropping_worker_owner_terminates_the_process_before_closing_its_input",
+                    "--nocapture",
+                ])
+                .env(CHILD_MODE, "1")
+                .stdin(Stdio::piped())
+                .stdout(Stdio::piped())
+                .spawn()
+                .unwrap(),
+        );
+        let mut output = BufReader::new(worker.stdout.take().unwrap());
+        loop {
+            let mut line = String::new();
+            assert_ne!(
+                output.read_line(&mut line).unwrap(),
+                0,
+                "worker failed before ready"
+            );
+            if line.contains("worker-ready") {
+                break;
+            }
+        }
+        drop(worker);
+        let mut remaining = String::new();
+        std::io::Read::read_to_string(&mut output, &mut remaining).unwrap();
+        assert!(
+            !remaining.contains("worker-eof"),
+            "worker outlived its owner"
+        );
+    }
 }
 
 impl Session {
@@ -381,9 +457,11 @@ fn launch_worker(
     if let Some(path) = profiling_output {
         child_command.env("TESSERA_PROFILING_OUTPUT", path);
     }
-    let mut child = child_command
-        .spawn()
-        .map_err(|err| anyhow!("failed to spawn `{}`: {err}", binary.display()))?;
+    let mut child = WorkerProcess(
+        child_command
+            .spawn()
+            .map_err(|err| anyhow!("failed to spawn `{}`: {err}", binary.display()))?,
+    );
 
     let stdin = child
         .stdin

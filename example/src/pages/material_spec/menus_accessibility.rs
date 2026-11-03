@@ -141,9 +141,10 @@ pub(super) fn state_selection() {
                                 });
                         });
                 })
-                .menu_content(move || {
+                .menu_content(move |menu| {
                     for code in ["AL", "AK", "AZ", "AR", "CA", "CO"] {
                         menu_item()
+                            .menu(menu)
                             .label(code)
                             .selected(selected.get() == code)
                             .selection_mode(MenuItemSelectionMode::Radio)
@@ -297,14 +298,6 @@ mod tests {
 
     use super::*;
 
-    struct Pipelines;
-
-    impl tessera_ui::RenderModule for Pipelines {
-        fn register_pipelines(&self, context: &mut tessera_ui::PipelineContext<'_>) {
-            tessera_components::pipelines::register_pipelines(context);
-        }
-    }
-
     #[tessera]
     fn fixture() {
         material_theme().child(state_selection);
@@ -333,7 +326,7 @@ mod tests {
     fn state_dropdown_updates_trigger_and_retains_selected_state_after_reopening() {
         let mut renderer = HeadlessRenderer::new(
             Box::new(fixture),
-            vec![Box::new(Pipelines)],
+            vec![Box::new(crate::TestPipelines)],
             HeadlessConfig {
                 width: 650,
                 height: 440,

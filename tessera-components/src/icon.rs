@@ -3,7 +3,7 @@
 //! ## Usage
 //!
 //! Use to display a tintable symbol in buttons, tabs, and status indicators.
-use std::sync::{Arc, OnceLock};
+use std::sync::Arc;
 
 use tessera_ui::{
     AssetExt, AxisConstraint, Color, ComputedData, Dp, LayoutResult, MeasurementError, Px,
@@ -28,11 +28,16 @@ pub(crate) struct IconSize(pub Dp);
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub(crate) struct IconRotation(pub f32);
 
+struct PlaceholderRaster(Arc<ImageData>);
+
+impl Default for PlaceholderRaster {
+    fn default() -> Self {
+        Self(Arc::new(ImageData::from_rgba(vec![0, 0, 0, 0], 1, 1)))
+    }
+}
+
 fn placeholder_raster_data() -> Arc<ImageData> {
-    static PLACEHOLDER: OnceLock<Arc<ImageData>> = OnceLock::new();
-    PLACEHOLDER
-        .get_or_init(|| Arc::new(ImageData::from_rgba(vec![0, 0, 0, 0], 1, 1)))
-        .clone()
+    Arc::clone(&tessera_ui::__private::runtime_resource::<PlaceholderRaster>().0)
 }
 
 impl IconBuilder {
@@ -252,13 +257,15 @@ pub fn icon(
         .map(|size| size.get().0)
         .unwrap_or(Dp(24.0));
     let size = size.unwrap_or(default_size);
-    let tint = tint.unwrap_or_else(|| {
+    let tint = if let Some(tint) = tint {
+        tint
+    } else {
         let theme = use_context::<MaterialTheme>();
         use_context::<ContentColor>()
             .map(|c| c.get().current)
             .or_else(|| theme.map(|t| t.get().color_scheme.on_surface))
             .unwrap_or_else(|| ContentColor::default().current)
-    });
+    };
     let tint_mode = tint_mode.unwrap_or(TintMode::Solid);
     let inherited_rotation = use_context::<IconRotation>()
         .map(|value| value.get().0)

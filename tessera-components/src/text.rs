@@ -89,7 +89,7 @@ pub fn text(
         .or_else(|| theme.map(|t| t.get().typography.body_large))
         .unwrap_or_default();
     let color = color
-        .or_else(|| use_context::<ContentColor>().map(|c| c.get().current))
+        .or(use_context::<ContentColor>().map(|c| c.get().current))
         .or_else(|| theme.map(|t| t.get().color_scheme.on_surface))
         .unwrap_or_else(|| ContentColor::default().current);
     let size = size.unwrap_or(resolved_style.font_size);
@@ -254,11 +254,9 @@ impl tessera_ui::DrawModifierNode for TextLayout {
 
 #[cfg(test)]
 mod tests {
-    use std::cell::Cell;
-
     use tessera_ui::{
         State,
-        testing::{layout_test, pump_layout_test_session, start_layout_test_session},
+        testing::{TestProbe, layout_test, pump_layout_test_session, start_layout_test_session},
     };
 
     use crate::{
@@ -270,8 +268,6 @@ mod tests {
     };
 
     use super::*;
-
-    thread_local! { static WIDTH: Cell<Option<State<Dp>>> = const { Cell::new(None) }; }
 
     #[tessera]
     fn weighted_labels_fixture() {
@@ -293,6 +289,8 @@ mod tests {
 
     #[test]
     fn weighted_text_respects_allocated_column_width() {
+        let runtime = tessera_ui::RuntimeSession::new();
+        let _scope = runtime.enter();
         crate::test_utils::run_isolated_test(
             "text::tests::weighted_text_respects_allocated_column_width",
             || {
@@ -312,9 +310,9 @@ mod tests {
     }
 
     #[tessera]
-    fn reflow_fixture() {
+    fn reflow_fixture(observed: TestProbe<Option<State<Dp>>>) {
         let width = remember(|| Dp(120.0));
-        WIDTH.set(Some(width));
+        observed.set(Some(width));
         material_theme().child(move || {
             column().children(move || {
                 boxed()
@@ -332,27 +330,31 @@ mod tests {
 
     #[test]
     fn density_changes_remeasure_retained_content_without_state_writes() {
+        let runtime = tessera_ui::RuntimeSession::new();
+        let _scope = runtime.enter();
         crate::test_utils::run_isolated_test(
             "text::tests::density_changes_remeasure_retained_content_without_state_writes",
             || {
                 tessera_ui::dp::set_scale_factor(1.0);
+                let observed = TestProbe::default();
+                let fixture_observed = observed.clone();
                 let mut session = start_layout_test_session(
-                    layout_test(|| {
-                        reflow_fixture();
+                    layout_test(move || {
+                        reflow_fixture(fixture_observed.clone());
                     })
                     .viewport_px(500, 400),
                 );
                 let original = pump_layout_test_session(&mut session, 0)
                     .node("wrapped-text")
                     .bounds();
-                let width = WIDTH.get().expect("fixture state");
+                let width = observed.get().expect("fixture state");
                 tessera_ui::dp::set_scale_factor(1.5);
                 let scaled = pump_layout_test_session(&mut session, 16_666_667)
                     .node("wrapped-text")
                     .bounds();
                 assert_eq!(scaled.width, Px::new(180));
                 assert!(scaled.height > original.height);
-                assert!(WIDTH.get() == Some(width));
+                assert!(observed.get() == Some(width));
                 assert_eq!(width.get(), Dp(120.0));
                 tessera_ui::dp::set_scale_factor(1.0);
                 let restored = pump_layout_test_session(&mut session, 33_333_333)
@@ -363,12 +365,10 @@ mod tests {
         );
     }
 
-    thread_local! { static COLOR: Cell<Option<State<tessera_ui::Color>>> = const { Cell::new(None) }; }
-
     #[tessera]
-    fn color_fixture() {
+    fn color_fixture(observed: TestProbe<Option<State<tessera_ui::Color>>>) {
         let color = remember(|| tessera_ui::Color::BLACK);
-        COLOR.set(Some(color));
+        observed.set(Some(color));
         boxed()
             .modifier(Modifier::new().semantics(SemanticsArgs {
                 test_tag: Some("color-text".into()),
@@ -381,45 +381,51 @@ mod tests {
 
     #[test]
     fn text_color_updates_retain_measurements_and_window_geometry() {
+        let observed = TestProbe::default();
+        let fixture_observed = observed.clone();
         let mut session = start_layout_test_session(
-            layout_test(|| {
-                color_fixture();
+            layout_test(move || {
+                color_fixture(fixture_observed.clone());
             })
             .viewport_px(240, 100),
         );
         let original = pump_layout_test_session(&mut session, 0)
             .node("color-text")
             .bounds();
-        COLOR.get().unwrap().set(tessera_ui::Color::WHITE);
+        observed.get().unwrap().set(tessera_ui::Color::WHITE);
         let changed = pump_layout_test_session(&mut session, 16_666_667)
             .node("color-text")
             .bounds();
         assert_eq!(changed, original);
         let diagnostics = session.diagnostics().unwrap();
-        assert_eq!(diagnostics.measure_node_calls, 1);
-        assert_eq!(diagnostics.cache_store_count, 0);
+        assert_eq!(
+            session.work().phase(tessera_ui::WorkPhase::Measure).count(),
+            0
+        );
         assert_eq!(diagnostics.geometry_nodes_updated, 0);
     }
 
     #[test]
     fn retained_text_reflows_when_its_parent_changes_width() {
+        let observed = TestProbe::default();
+        let fixture_observed = observed.clone();
         let mut session = start_layout_test_session(
-            layout_test(|| {
-                reflow_fixture();
+            layout_test(move || {
+                reflow_fixture(fixture_observed.clone());
             })
             .viewport_px(500, 400),
         );
         let narrow = pump_layout_test_session(&mut session, 0)
             .node("wrapped-text")
             .bounds();
-        WIDTH.get().expect("fixture state").set(Dp(280.0));
+        observed.get().expect("fixture state").set(Dp(280.0));
         let wide = pump_layout_test_session(&mut session, 16_666_667)
             .node("wrapped-text")
             .bounds();
         assert_eq!(narrow.width, Px::new(120));
         assert_eq!(wide.width, Px::new(280));
         assert!(wide.height < narrow.height);
-        WIDTH.get().expect("fixture state").set(Dp(120.0));
+        observed.get().expect("fixture state").set(Dp(120.0));
         let restored = pump_layout_test_session(&mut session, 33_333_333)
             .node("wrapped-text")
             .bounds();

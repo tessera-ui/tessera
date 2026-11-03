@@ -956,6 +956,8 @@ mod tests {
 
     #[test]
     fn fragment_maps_scene_overrides_once_and_keeps_texture_generation_unscaled() {
+        let _runtime_session = crate::RuntimeSession::new();
+        let _runtime_scope = _runtime_session.enter();
         let mut fragment = RenderFragment::default();
         let local = fragment.add_local_texture(RenderTextureDesc {
             size: PxSize::new(Px(64), Px(32)),
@@ -1144,6 +1146,8 @@ mod tests {
 
     #[test]
     fn disjoint_clip_siblings_drop_cross_edges_but_keep_overlap_order() {
+        let _runtime_session = crate::RuntimeSession::new();
+        let _runtime_scope = _runtime_session.enter();
         let mut ops = Vec::new();
         let mut sequence = 0usize;
         for clip in 0..8 {
@@ -1176,6 +1180,8 @@ mod tests {
 
     #[test]
     fn padded_local_sampling_keeps_padding_overlap() {
+        let _runtime_session = crate::RuntimeSession::new();
+        let _runtime_scope = _runtime_session.enter();
         let left = padded_sample_op(1, 0, 0, 0, 10, 10, 8);
         let right = draw_op(2, 1, 14, 0, 10, 10);
         let infos = [OpInfo::new(&left), OpInfo::new(&right)];
@@ -1194,6 +1200,8 @@ mod tests {
 
     #[test]
     fn unclosed_clip_falls_back_to_sequence() {
+        let _runtime_session = crate::RuntimeSession::new();
+        let _runtime_scope = _runtime_session.enter();
         let ops = vec![
             clip_push(0),
             draw_op(7, 1, 0, 0, 10, 10),

@@ -4,7 +4,7 @@
 //!
 //! Keep modal and standard supporting panels usable inside scrolling content.
 
-use std::{cell::Cell, time::Duration};
+use std::time::Duration;
 
 use tessera_ui::{
     CursorEventContent, Dp, GestureState, MOUSE_POINTER_ID, Modifier, PointerChange,
@@ -13,7 +13,6 @@ use tessera_ui::{
         layout_test, pump_layout_test_session, pump_layout_test_session_with_input,
         start_layout_test_session,
     },
-    time::Instant,
 };
 
 use crate::{
@@ -27,10 +26,10 @@ use crate::{
 
 use super::{SideSheetPosition, modal_side_sheet_provider, standard_side_sheet_provider};
 
-thread_local! {
-    static CASE: Cell<(bool, SideSheetPosition, i32)> = const { Cell::new((true, SideSheetPosition::Start, 600)) };
-    static OPEN: Cell<Option<State<bool>>> = const { Cell::new(None) };
-    static DIMENSIONS: Cell<Option<State<(Dp, Dp)>>> = const { Cell::new(None) };
+#[derive(Clone, Default)]
+struct FixtureOutput {
+    open: Option<State<bool>>,
+    dimensions: Option<State<(Dp, Dp)>>,
 }
 
 fn tag(name: &str) -> Modifier {
@@ -42,10 +41,13 @@ fn tag(name: &str) -> Modifier {
 }
 
 #[tessera]
-fn fixture() {
-    let (modal, position, width) = CASE.get();
+fn fixture(
+    case: (bool, SideSheetPosition, i32),
+    output: tessera_ui::testing::TestProbe<FixtureOutput>,
+) {
+    let (modal, position, width) = case;
     let open = remember(|| true);
-    OPEN.set(Some(open));
+    output.with_mut(|output| output.open = Some(open));
     material_theme().child(move || {
         column()
             .modifier(Modifier::new().width(Dp(700.0)))
@@ -57,12 +59,12 @@ fn fixture() {
                 });
                 let sheet = RenderSlot::new(|| {
                     boxed().modifier(tag("sheet").fill_max_size()).children(|| {
-                        navigation_rail().expanded(true).content(|| {
+                        navigation_rail().expanded(true).content(move |rail_scope| {
                             for index in 0..3 {
                                 boxed()
                                     .modifier(tag(&format!("destination-{index}")))
                                     .children(move || {
-                                        navigation_rail_item()
+                                        navigation_rail_item(rail_scope)
                                             .label(format!("Destination {index}"));
                                     });
                             }
@@ -96,9 +98,15 @@ fn intrinsic_hosts_bound_side_sheets_and_keep_destinations_separate_and_scrims_c
             for modal in [true, false] {
                 for position in [SideSheetPosition::Start, SideSheetPosition::End] {
                     for width in [320, 600] {
-                        CASE.set((modal, position, width));
-                        let mut session =
-                            start_layout_test_session(layout_test(fixture).viewport_px(800, 600));
+                        let case = (modal, position, width);
+                        let output = tessera_ui::testing::TestProbe::default();
+                        let observed = output.clone();
+                        let mut session = start_layout_test_session(
+                            layout_test(move || {
+                                fixture(case, observed.clone());
+                            })
+                            .viewport_px(800, 600),
+                        );
                         pump_layout_test_session(&mut session, 0);
                         let snapshot = pump_layout_test_session(&mut session, 1_000_000_000);
                         snapshot.node("host").size(width, 480);
@@ -131,7 +139,8 @@ fn intrinsic_hosts_bound_side_sheets_and_keep_destinations_separate_and_scrims_c
                                 50.0
                             };
                             let point = PxPosition::from_f32_xy(x, 300.0);
-                            let origin = Instant::now();
+                            let origin =
+                                tessera_ui::current_frame_time().expect("pumped frame clock");
                             for (index, content) in [
                                 CursorEventContent::Pressed(PressKeyEventType::Left),
                                 CursorEventContent::Released(PressKeyEventType::Left),
@@ -155,7 +164,7 @@ fn intrinsic_hosts_bound_side_sheets_and_keep_destinations_separate_and_scrims_c
                                 );
                             }
                             assert!(
-                                !OPEN.get().unwrap().get(),
+                                !output.get().open.expect("mounted sheet visibility").get(),
                                 "the full measured host must have a dismissible scrim"
                             );
                         }
@@ -167,12 +176,15 @@ fn intrinsic_hosts_bound_side_sheets_and_keep_destinations_separate_and_scrims_c
 }
 
 #[tessera]
-fn configured_fixture() {
-    let (_, _, width) = CASE.get();
+fn configured_fixture(
+    case: (bool, SideSheetPosition, i32),
+    output: tessera_ui::testing::TestProbe<FixtureOutput>,
+) {
+    let (_, _, width) = case;
     let open = remember(|| true);
     let dimensions = remember(|| (Dp(360.0), Dp::ZERO));
-    OPEN.set(Some(open));
-    DIMENSIONS.set(Some(dimensions));
+    output.with_mut(|output| output.open = Some(open));
+    output.with_mut(|output| output.dimensions = Some(dimensions));
     material_theme().child(move || {
         column()
             .modifier(Modifier::new().fill_max_size())
@@ -212,7 +224,7 @@ fn tap_configured(
     point: PxPosition,
     frame: &mut u64,
 ) {
-    let origin = Instant::now();
+    let origin = tessera_ui::current_frame_time().expect("pumped frame clock");
     for content in [
         CursorEventContent::Pressed(PressKeyEventType::Left),
         CursorEventContent::Released(PressKeyEventType::Left),
@@ -241,9 +253,14 @@ fn configured_modal_width_and_padding_remeasure_the_actual_sheet_and_preserve_sc
         "side_sheet::host_tests::configured_modal_width_and_padding_remeasure_the_actual_sheet_and_preserve_scrim_boundary",
         || {
             for width in [600, 320] {
-                CASE.set((true, SideSheetPosition::Start, width));
+                let case = (true, SideSheetPosition::Start, width);
+                let output = tessera_ui::testing::TestProbe::default();
+                let observed = output.clone();
                 let mut session = start_layout_test_session(
-                    layout_test(configured_fixture).viewport_px(800, 600),
+                    layout_test(move || {
+                        configured_fixture(case, observed.clone());
+                    })
+                    .viewport_px(800, 600),
                 );
                 pump_layout_test_session(&mut session, 0);
                 let mut frame = 1_000_000_000;
@@ -257,7 +274,7 @@ fn configured_modal_width_and_padding_remeasure_the_actual_sheet_and_preserve_sc
                     .node("configured-destination")
                     .size(width.min(360) - 24, 56)
                     .position(12, 12);
-                let dimensions = DIMENSIONS.get().unwrap();
+                let dimensions = output.get().dimensions.expect("mounted sheet dimensions");
                 dimensions.with_mut(|value| value.0 = Dp(300.0));
                 frame += 16_666_667;
                 let resized = pump_layout_test_session(&mut session, frame);
@@ -284,7 +301,7 @@ fn configured_modal_width_and_padding_remeasure_the_actual_sheet_and_preserve_sc
                         &mut frame,
                     );
                     assert!(
-                        OPEN.get().unwrap().get(),
+                        output.get().open.expect("mounted sheet visibility").get(),
                         "the sheet's blank ending inset must still block scrim activation"
                     );
                     tap_configured(
@@ -293,7 +310,7 @@ fn configured_modal_width_and_padding_remeasure_the_actual_sheet_and_preserve_sc
                         &mut frame,
                     );
                     assert!(
-                        !OPEN.get().unwrap().get(),
+                        !output.get().open.expect("mounted sheet visibility").get(),
                         "the old 360–400dp sheet band must now belong to the scrim"
                     );
                 }
@@ -307,12 +324,18 @@ fn configured_modal_dimensions_keep_nonfinite_and_negative_inputs_out_of_constra
     crate::test_utils::run_isolated_test(
         "side_sheet::host_tests::configured_modal_dimensions_keep_nonfinite_and_negative_inputs_out_of_constraints",
         || {
-            CASE.set((true, SideSheetPosition::Start, 600));
-            let mut session =
-                start_layout_test_session(layout_test(configured_fixture).viewport_px(800, 600));
+            let case = (true, SideSheetPosition::Start, 600);
+            let output = tessera_ui::testing::TestProbe::default();
+            let observed = output.clone();
+            let mut session = start_layout_test_session(
+                layout_test(move || {
+                    configured_fixture(case, observed.clone());
+                })
+                .viewport_px(800, 600),
+            );
             pump_layout_test_session(&mut session, 0);
             pump_layout_test_session(&mut session, 1_000_000_000);
-            let dimensions = DIMENSIONS.get().unwrap();
+            let dimensions = output.get().dimensions.expect("mounted sheet dimensions");
             for (index, value) in [f64::NAN, f64::INFINITY, f64::NEG_INFINITY]
                 .into_iter()
                 .enumerate()

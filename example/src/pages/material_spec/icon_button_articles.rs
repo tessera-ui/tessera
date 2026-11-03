@@ -406,10 +406,10 @@ fn mail_scene() {
                             paragraph(format!("Folder: {} · {} · {}", if deleted.get() { "Trash" } else if archived.get() { "Archive" } else { "Inbox" }, if read.get() { "Read" } else { "Unread" }, if favorite.get() { "Favorite" } else { "Not favorited" }));
                         });
                 })
-                .menu_content(move || {
-                    menu_item().label("Move to inbox").leading_icon(filled::INBOX_SVG).on_click(move || { archived.set(false); deleted.set(false); });
-                    menu_item().label("Mark as unread").leading_icon(filled::EMAIL_SVG).on_click(move || read.set(false));
-                    menu_item().label("Delete message").leading_icon(filled::DELETE_SVG).on_click(move || deleted.set(true));
+                .menu_content(move |menu| {
+                    menu_item().menu(menu).label("Move to inbox").leading_icon(filled::INBOX_SVG).on_click(move || { archived.set(false); deleted.set(false); });
+                    menu_item().menu(menu).label("Mark as unread").leading_icon(filled::EMAIL_SVG).on_click(move || read.set(false));
+                    menu_item().menu(menu).label("Delete message").leading_icon(filled::DELETE_SVG).on_click(move || deleted.set(true));
                 });
         });
 }

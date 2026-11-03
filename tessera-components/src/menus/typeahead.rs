@@ -4,13 +4,12 @@
 //!
 //! Move focus between labeled menu actions without activating them.
 
-use parking_lot::Mutex;
 use tessera_ui::{FloatRect, FocusRequester, State};
 
 const PREFIX_TIMEOUT: u64 = 1_000_000_000;
 
 #[derive(Clone, Copy, PartialEq)]
-pub(super) struct MenuTypeahead(pub State<Mutex<Registry>>);
+pub(super) struct MenuTypeahead(pub State<Registry>);
 
 struct Item {
     requester: FocusRequester,
@@ -72,12 +71,12 @@ impl Registry {
 }
 
 pub(super) struct ItemLease {
-    registry: State<Mutex<Registry>>,
+    registry: State<Registry>,
     requester: FocusRequester,
 }
 
 impl ItemLease {
-    pub(super) fn new(registry: State<Mutex<Registry>>, requester: FocusRequester) -> Self {
+    pub(super) fn new(registry: State<Registry>, requester: FocusRequester) -> Self {
         Self {
             registry,
             requester,
@@ -88,9 +87,8 @@ impl ItemLease {
 impl Drop for ItemLease {
     fn drop(&mut self) {
         if self.registry.is_alive() {
-            self.registry.with(|registry| {
+            self.registry.with_mut(|registry| {
                 registry
-                    .lock()
                     .items
                     .retain(|item| item.requester != self.requester);
             });
@@ -99,13 +97,12 @@ impl Drop for ItemLease {
 }
 
 pub(super) fn update(
-    registry: State<Mutex<Registry>>,
+    registry: State<Registry>,
     requester: FocusRequester,
     label: &str,
     enabled: bool,
 ) {
-    registry.with(|registry| {
-        let mut registry = registry.lock();
+    registry.with_mut(|registry| {
         if let Some(item) = registry
             .items
             .iter_mut()
@@ -124,13 +121,8 @@ pub(super) fn update(
     });
 }
 
-pub(super) fn position(
-    registry: State<Mutex<Registry>>,
-    requester: FocusRequester,
-    bounds: FloatRect,
-) {
-    registry.with(|registry| {
-        let mut registry = registry.lock();
+pub(super) fn position(registry: State<Registry>, requester: FocusRequester, bounds: FloatRect) {
+    registry.with_mut(|registry| {
         if let Some(item) = registry
             .items
             .iter_mut()
@@ -141,12 +133,12 @@ pub(super) fn position(
     });
 }
 
-pub(super) fn type_text(registry: State<Mutex<Registry>>, text: &str, now: u64) -> bool {
+pub(super) fn type_text(registry: State<Registry>, text: &str, now: u64) -> bool {
     if text.trim().is_empty() || text.chars().any(char::is_control) {
         return false;
     }
     let text = text.to_lowercase();
-    let targets = registry.with(|registry| registry.lock().candidates(&text, now));
+    let targets = registry.with_mut(|registry| registry.candidates(&text, now));
     for target in targets {
         target.request_focus();
         if target.is_focused() {

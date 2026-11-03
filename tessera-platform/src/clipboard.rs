@@ -3,10 +3,7 @@
 //! ## Usage
 //!
 //! Enable copy and paste in text inputs and editors.
-use std::sync::{Arc, OnceLock};
-
-use parking_lot::RwLock;
-use tessera_ui::{Plugin, PluginContext, PluginResult};
+use tessera_ui::{Plugin, PluginContext, PluginResult, try_with_plugin_mut};
 
 #[cfg(target_family = "wasm")]
 mod web;
@@ -34,19 +31,24 @@ tessera_ui::android::jni_bind! {
 }
 
 /// Clipboard plugin that wires platform clipboard services.
-#[derive(Clone, Debug)]
-pub struct ClipboardPlugin;
+#[derive(Default)]
+pub struct ClipboardPlugin {
+    clipboard: Option<Clipboard>,
+}
+
+impl std::fmt::Debug for ClipboardPlugin {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter
+            .debug_struct("ClipboardPlugin")
+            .field("available", &self.clipboard.is_some())
+            .finish()
+    }
+}
 
 impl ClipboardPlugin {
     /// Creates a clipboard plugin.
     pub fn new() -> Self {
-        Self
-    }
-}
-
-impl Default for ClipboardPlugin {
-    fn default() -> Self {
-        Self::new()
+        Self::default()
     }
 }
 
@@ -55,22 +57,21 @@ impl Plugin for ClipboardPlugin {
         #[cfg(target_family = "wasm")]
         web::install(context.window_handle())
             .map_err(|_| "Failed to install browser clipboard events")?;
-        let mut state = clipboard_state().write();
-        state.clipboard = Clipboard::new(context);
+        self.clipboard = Clipboard::new(context);
         Ok(())
     }
 
     fn on_suspended(&mut self, _context: &PluginContext) -> PluginResult {
         #[cfg(target_family = "wasm")]
         web::clear();
-        clipboard_state().write().clipboard = None;
+        self.clipboard = None;
         Ok(())
     }
 
     fn on_shutdown(&mut self, _context: &PluginContext) -> PluginResult {
         #[cfg(target_family = "wasm")]
         web::clear();
-        clipboard_state().write().clipboard = None;
+        self.clipboard = None;
         Ok(())
     }
 }
@@ -181,21 +182,9 @@ impl Clipboard {
     }
 }
 
-#[derive(Default)]
-struct ClipboardState {
-    clipboard: Option<Clipboard>,
-}
-
-fn clipboard_state() -> &'static Arc<RwLock<ClipboardState>> {
-    static STATE: OnceLock<Arc<RwLock<ClipboardState>>> = OnceLock::new();
-    STATE.get_or_init(|| Arc::new(RwLock::new(ClipboardState::default())))
-}
-
 /// Runs a closure with mutable clipboard access when available.
 pub fn with_clipboard_mut<R>(f: impl FnOnce(&mut Clipboard) -> R) -> Option<R> {
-    let mut state = clipboard_state().write();
-    let clipboard = state.clipboard.as_mut()?;
-    Some(f(clipboard))
+    try_with_plugin_mut::<ClipboardPlugin, _>(|plugin| plugin.clipboard.as_mut().map(f)).flatten()
 }
 
 /// Sets the clipboard text when clipboard access is available.

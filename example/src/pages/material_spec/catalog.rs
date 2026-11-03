@@ -15,8 +15,7 @@ use tessera_components::{
     text::text,
 };
 use tessera_ui::{
-    Callback, Dp, Modifier, State, modifier::FocusModifierExt as _, provide_context, remember,
-    tessera,
+    Callback, Dp, Modifier, State, modifier::FocusModifierExt as _, remember, tessera,
 };
 
 use super::{
@@ -253,17 +252,19 @@ const COMPONENTS: &[Component] = &[
 ];
 
 #[tessera]
-pub(super) fn component_pages() {
+pub(super) fn component_pages(
+    selected: Option<State<Option<usize>>>,
+    sessions: Option<crate::app::AppLiveSessions>,
+) {
     super::media::load_fonts();
-    let fallback = remember(|| None::<usize>);
-    let selected = tessera_ui::use_context::<crate::app::MaterialNavigation>()
-        .map(|navigation| navigation.get().0)
-        .unwrap_or(fallback);
+    let selected = if let Some(selected) = selected {
+        selected
+    } else {
+        remember(|| None::<usize>)
+    };
     let directory_scroll = remember(ScrollableController::new);
-    let overview_request = remember(|| None::<usize>);
     let previous_article = Callback::new(move || {
         if let Some(index) = selected.get().and_then(|index| index.checked_sub(1)) {
-            overview_request.set(Some(index));
             selected.set(Some(index));
         }
     });
@@ -273,13 +274,9 @@ pub(super) fn component_pages() {
             .and_then(|index| index.checked_add(1))
             .filter(|index| *index < COMPONENTS.len())
         {
-            overview_request.set(Some(index));
             selected.set(Some(index));
         }
     });
-    if selected.get().is_none() && overview_request.get().is_some() {
-        overview_request.set(None);
-    }
     let width = remember(|| Dp(900.0));
     if let Some(index) = selected.get() {
         let component = COMPONENTS[index];
@@ -298,15 +295,12 @@ pub(super) fn component_pages() {
                     on_open: next_article,
                 }),
         };
-        let initial_route = route.clone();
         let content = tessera_ui::RenderSlot::new(move || {
-            let current = tessera_ui::use_context::<ArticleRoute>().expect("article route context");
-            if current.with(|current| current != &route) {
-                current.set(route.clone());
-            }
+            let route = route.clone();
             column()
                 .modifier(Modifier::new().fill_max_size())
                 .children(move || {
+                    let route = route.clone();
                     boxed()
                         .modifier(Modifier::new().fill_max_width().weight(1.0).semantics(
                             SemanticsArgs {
@@ -319,87 +313,101 @@ pub(super) fn component_pages() {
                         ))
                         .children(move || {
                             if component.demo == 13 {
-                                super::dialogs::dialogs_spec();
+                                super::dialogs::dialogs_spec().route(route.clone());
                             } else if component.demo == 25 {
-                                super::snackbars::snackbars_spec();
+                                super::snackbars::snackbars_spec().route(route.clone());
                             } else if component.demo == 1 {
-                                super::app_bars::app_bars_spec();
+                                super::app_bars::app_bars_spec().route(route.clone());
                             } else if component.demo == 20 {
                                 super::segmented::segmented_spec(Callback::new(move || {
-                                    overview_request.set(Some(0));
                                     selected.set(Some(0));
-                                }));
+                                }))
+                                .route(route.clone());
                             } else if component.demo == 24 {
-                                super::text_fields::text_fields_spec();
+                                super::text_fields::text_fields_spec().route(route.clone());
                             } else if component.demo == 4 {
-                                super::tooltips::tooltips_spec();
+                                super::tooltips::tooltips_spec().route(route.clone());
                             } else if component.demo == 31 {
-                                super::navigation_bar::navigation_bar_spec();
+                                super::navigation_bar::navigation_bar_spec().route(route.clone());
                             } else if component.demo == 32 {
-                                super::navigation_rail::navigation_rail_spec();
+                                super::navigation_rail::navigation_rail_spec()
+                                    .session_optional(sessions.map(|sessions| sessions.rail))
+                                    .route(route.clone());
                             } else if component.demo == 21 {
-                                super::tabs::tabs_spec();
+                                super::tabs::tabs_spec().route(route.clone());
                             } else if component.demo == 6 {
-                                super::loading_indicator::loading_indicator_spec();
+                                super::loading_indicator::loading_indicator_spec()
+                                    .route(route.clone());
                             } else if component.demo == 7 {
-                                super::progress_indicators::progress_indicators_spec();
+                                super::progress_indicators::progress_indicators_spec()
+                                    .route(route.clone());
                             } else if component.demo == 12 {
-                                super::badges::badges_spec();
+                                super::badges::badges_spec().route(route.clone());
                             } else if component.demo == 18 {
-                                super::button_groups::button_groups_spec();
+                                super::button_groups::button_groups_spec().route(route.clone());
                             } else if component.demo == 22 {
-                                super::split_buttons::split_buttons_spec();
+                                super::split_buttons::split_buttons_spec().route(route.clone());
                             } else if component.demo == 8 {
-                                super::fab_menus::fab_menu_spec();
+                                super::fab_menus::fab_menu_spec().route(route.clone());
                             } else if component.demo == 9 {
-                                super::extended_fabs::extended_fabs_spec();
+                                super::extended_fabs::extended_fabs_spec().route(route.clone());
                             } else if component.demo == 19 {
-                                super::floating_actions::floating_actions_spec();
+                                super::floating_actions::floating_actions_spec()
+                                    .route(route.clone());
                             } else if component.demo == 28 {
-                                super::date_pickers::date_pickers_spec();
+                                super::date_pickers::date_pickers_spec().route(route.clone());
                             } else if component.demo == 30 {
-                                super::time_pickers::time_pickers_spec();
+                                super::time_pickers::time_pickers_spec().route(route.clone());
                             } else if component.demo == 16 {
-                                super::cards::cards_spec();
+                                super::cards::cards_spec().route(route.clone());
                             } else if component.demo == 15 {
-                                super::lists::lists_spec();
+                                super::lists::lists_spec().route(route.clone());
                             } else if component.demo == 14 {
-                                super::dividers::divider_spec();
+                                super::dividers::divider_spec().route(route.clone());
                             } else if component.demo == 3 {
-                                super::icon_buttons::icon_buttons_spec();
+                                super::icon_buttons::icon_buttons_spec().route(route.clone());
                             } else if component.demo == 17 {
-                                super::chips::chips_spec();
+                                super::chips::chips_spec().route(route.clone());
                             } else if component.demo == 23 {
-                                super::radio_buttons::radio_buttons_spec();
+                                super::radio_buttons::radio_buttons_spec().route(route.clone());
                             } else if component.demo == 5 {
-                                slider_spec();
+                                slider_spec().route(route.clone());
                             } else if component.demo == 36 {
-                                super::buttons::buttons_spec();
+                                super::buttons::buttons_spec().route(route.clone());
                             } else if component.demo == 37 {
-                                super::selection_controls::checkbox_spec();
+                                super::selection_controls::checkbox_spec().route(route.clone());
                             } else if component.demo == 38 {
-                                super::selection_controls::switch_spec();
+                                super::selection_controls::switch_spec().route(route.clone());
                             } else if component.demo == 26 {
-                                super::menus::menus_spec();
+                                super::menus::menus_spec().route(route.clone());
                             } else if component.demo == 27 {
-                                super::search::search_spec();
+                                super::search::search_spec().route(route.clone());
                             } else if component.demo == 2 {
-                                super::carousel::carousel_spec();
+                                super::carousel::carousel_spec().route(route.clone());
                             } else if component.demo == 10 {
-                                super::toolbars::toolbars_spec();
+                                super::toolbars::toolbars_spec().route(route.clone());
                             } else if component.demo == 11 {
-                                super::drawers::drawers_spec();
+                                super::drawers::drawers_spec()
+                                    .session_optional(sessions.map(|sessions| sessions.drawer))
+                                    .route(route.clone())
+                                    .on_recommended(move || {
+                                        if let Some(index) = component_index(32) {
+                                            selected.set(Some(index));
+                                        }
+                                    });
                             } else if component.demo == 33 {
-                                super::sheets::sheets_spec(false);
+                                super::sheets::sheets_spec(false).route(route.clone());
                             } else if component.demo == 34 {
-                                super::side_sheets::side_sheets_spec();
+                                super::side_sheets::side_sheets_spec()
+                                    .session_optional(sessions.map(|sessions| sessions.side_sheet))
+                                    .route(route.clone());
                             } else {
                                 unreachable!("unregistered component article");
                             }
                         });
                 });
         });
-        provide_context(move || initial_route.clone(), move || content.render());
+        content.render();
         return;
     }
     surface()
@@ -516,7 +524,7 @@ fn component_card(component: Component, index: usize, selected: State<Option<usi
 
 #[cfg(all(test, not(target_family = "wasm")))]
 mod tests {
-    use std::{cell::Cell, time::Duration};
+    use std::time::Duration;
 
     use tessera_components::theme::material_theme;
     use tessera_ui::{
@@ -526,43 +534,28 @@ mod tests {
 
     use super::*;
 
-    thread_local! {
-        static INITIAL_COMPONENT: Cell<Option<usize>> = const { Cell::new(None) };
-    }
-
-    struct ComponentPipelines;
-
-    impl tessera_ui::RenderModule for ComponentPipelines {
-        fn register_pipelines(&self, context: &mut tessera_ui::PipelineContext<'_>) {
-            tessera_components::pipelines::register_pipelines(context);
-        }
-    }
-
     #[tessera]
-    fn fixture() {
-        material_theme().child(|| {
-            let selected = remember(|| INITIAL_COMPONENT.get());
+    fn fixture(initial_component: Option<usize>) {
+        material_theme().child(move || {
+            let selected = remember(|| initial_component);
             let drawer =
                 remember(|| tessera_components::side_sheet::SideSheetController::new(false));
-            tessera_ui::provide_context(
-                || crate::app::MaterialNavigation(selected),
-                || {
-                    column()
-                        .modifier(Modifier::new().fill_max_size())
-                        .children(move || {
-                            tessera_components::app_bar::top_app_bar()
-                                .title("Material Design 3")
-                                .navigation_icon(move || {
-                                    crate::app::navigation_button(selected, drawer, true);
-                                });
-                            boxed()
-                                .modifier(Modifier::new().fill_max_width().weight(1.0))
-                                .children(move || {
-                                    component_pages();
-                                });
-                        });
-                },
-            );
+            {
+                column()
+                    .modifier(Modifier::new().fill_max_size())
+                    .children(move || {
+                        tessera_components::app_bar::top_app_bar()
+                            .title("Material Design 3")
+                            .navigation_icon(move || {
+                                crate::app::navigation_button(selected, drawer, true);
+                            });
+                        boxed()
+                            .modifier(Modifier::new().fill_max_width().weight(1.0))
+                            .children(move || {
+                                component_pages().selected(selected);
+                            });
+                    });
+            }
         });
     }
 
@@ -680,98 +673,26 @@ mod tests {
         label: &str,
         role: Role,
     ) -> Option<Node> {
-        let nodes = renderer.accessibility_snapshot().unwrap().nodes;
-        let root = nodes
-            .iter()
+        let tree = renderer
+            .inspect_accessibility()
+            .expect("published accessibility");
+        let root = tree
+            .reading_order()
             .find(|(_, node)| {
                 matches!(node.role(), Role::Group | Role::Navigation) && node.label() == Some(group)
             })
             .unwrap_or_else(|| panic!("missing group {group}"));
-        let mut descendants = root.1.children().to_vec();
-        while let Some(id) = descendants.pop() {
-            let (_, node) = nodes
-                .iter()
-                .find(|(node_id, _)| *node_id == id)
-                .expect("published child");
-            let mut content = node.children().to_vec();
-            let mut named = node.label() == Some(label);
-            while !named && node.label().is_none() && !content.is_empty() {
-                let id = content.pop().unwrap();
-                let (_, child) = nodes.iter().find(|(key, _)| *key == id).unwrap();
-                named = child.label() == Some(label);
-                content.extend_from_slice(child.children());
-            }
-            if named && node.role() == role {
-                return Some(node.clone());
-            }
-            descendants.extend_from_slice(node.children());
-        }
-        None
-    }
-
-    fn settle_time_geometry(renderer: &mut HeadlessRenderer) {
-        let geometry = |renderer: &HeadlessRenderer| {
-            (
-                control(renderer, "Anatomy horizontal layout")
-                    .bounds()
-                    .unwrap(),
-                bounds(renderer, "Anatomy time preview"),
-            )
-        };
-        let mut previous = geometry(renderer);
-        let mut stable_frames = 0;
-        let mut observed = vec![previous];
-        for _ in 0..12 {
-            renderer.render_frames(1);
-            let current = geometry(renderer);
-            observed.push(current);
-            if current == previous {
-                stable_frames += 1;
-                if stable_frames == 2 {
-                    return;
-                }
-            } else {
-                stable_frames = 0;
-            }
-            previous = current;
-        }
-        panic!("Time preview and control geometry did not settle: {observed:?}");
-    }
-
-    fn settle_loading_geometry(renderer: &mut HeadlessRenderer) {
-        let geometry = |renderer: &HeadlessRenderer| {
-            (
-                bounds(renderer, "Loading indicator illustration"),
-                scoped_node(
-                    renderer,
-                    "Loading indicator specifications",
-                    "Configured loading",
-                    Role::ProgressIndicator,
-                )
-                .expect("configured loading indicator")
-                .bounds()
-                .unwrap(),
-                control(renderer, "Contained loading").bounds().unwrap(),
-            )
-        };
-        let mut previous = geometry(renderer);
-        let mut stable_frames = 0;
-        let mut observed = vec![previous];
-        for _ in 0..12 {
-            renderer.render_frames(1);
-            let current = geometry(renderer);
-            observed.push(current);
-            if current == previous {
-                stable_frames += 1;
-                if stable_frames == 2 {
-                    return;
-                }
-            } else {
-                stable_frames = 0;
-            }
-            previous = current;
-        }
-        panic!("Loading illustration and controls did not settle: {observed:?}");
+        tree.subtree(root.0)
+            .skip(1)
+            .find(|(id, node)| {
+                node.role() == role
+                    && (node.label() == Some(label)
+                        || node.label().is_none()
+                            && tree
+                                .subtree(*id)
+                                .any(|(_, child)| child.label() == Some(label)))
+            })
+            .map(|(_, node)| node.clone())
     }
 
     fn toggle(renderer: &mut HeadlessRenderer, label: &str, before: Toggled, after: Toggled) {
@@ -783,36 +704,6 @@ mod tests {
             Some(after),
             "updated {label}"
         );
-    }
-
-    fn following_control(renderer: &mut HeadlessRenderer, anchor: &str, label: &str) -> Node {
-        let id = renderer
-            .accessibility_snapshot()
-            .unwrap()
-            .nodes
-            .into_iter()
-            .find(|(_, node)| node.role() == Role::Button && node.label() == Some(anchor))
-            .expect("focus anchor")
-            .0;
-        assert!(renderer.dispatch_accessibility_action(ActionRequest {
-            action: Action::Focus,
-            target_tree: TreeId::ROOT,
-            target_node: id,
-            data: None,
-        }));
-        renderer.render_frames(4);
-        tessera_ui::FocusManager::current().request_move_focus(tessera_ui::FocusDirection::Next);
-        renderer.render_frames(8);
-        let snapshot = renderer.accessibility_snapshot().unwrap();
-        let node = snapshot
-            .nodes
-            .into_iter()
-            .find(|(id, _)| *id == snapshot.focus)
-            .expect("next native focus target")
-            .1;
-        assert_eq!(node.role(), Role::Button);
-        assert_eq!(node.label(), Some(label));
-        node
     }
 
     fn tab(renderer: &HeadlessRenderer, label: &str) -> Node {
@@ -887,66 +778,6 @@ mod tests {
         panic!("scrolling did not compose actual navigation target {label} {role:?}: {visible:?}");
     }
 
-    fn article_contents_links(renderer: &mut HeadlessRenderer, article: &str) -> Vec<String> {
-        compose_navigation_target(renderer, article, Role::Heading);
-        for _ in 0..48 {
-            let snapshot = renderer.accessibility_snapshot().unwrap();
-            if let Some(contents) = snapshot
-                .nodes
-                .iter()
-                .find(|(_, node)| {
-                    node.role() == Role::Label && node.label() == Some("On this page")
-                })
-                .and_then(|(_, node)| node.bounds())
-            {
-                let first_heading = snapshot
-                    .nodes
-                    .iter()
-                    .filter(|(_, node)| node.role() == Role::Heading && node.level() == Some(2))
-                    .filter_map(|(_, node)| node.bounds())
-                    .filter(|bounds| bounds.y0 >= contents.y1)
-                    .map(|bounds| bounds.y0)
-                    .min_by(f64::total_cmp);
-                let mut links = snapshot
-                    .nodes
-                    .iter()
-                    .filter(|(_, node)| node.role() == Role::Link && !node.is_hidden())
-                    .filter_map(|(_, node)| {
-                        let bounds = node.bounds()?;
-                        let label = node.label()?;
-                        (bounds.y0 >= contents.y1
-                            && first_heading.is_none_or(|heading| bounds.y1 <= heading)
-                            && !label.starts_with("Previous ")
-                            && !label.starts_with("Up next "))
-                        .then(|| (bounds.y0, label.to_owned()))
-                    })
-                    .collect::<Vec<_>>();
-                links.sort_by(|left, right| left.0.total_cmp(&right.0));
-                if !links.is_empty() {
-                    return links.into_iter().map(|(_, label)| label).collect();
-                }
-            }
-            renderer.pointer_scroll(
-                MOUSE_POINTER_ID,
-                PxPosition::from_f32_xy(
-                    renderer.physical_size().width as f32 - 22.0,
-                    renderer.physical_size().height as f32 * 0.5,
-                ),
-                0.0,
-                -600.0,
-            );
-            renderer.render_frames(12);
-        }
-        let snapshot = renderer.accessibility_snapshot().unwrap();
-        let published = snapshot
-            .nodes
-            .iter()
-            .filter(|(_, node)| matches!(node.role(), Role::Tab | Role::Link | Role::Heading))
-            .map(|(_, node)| (node.role(), node.label(), node.bounds()))
-            .collect::<Vec<_>>();
-        panic!("{article}: real scrolling did not compose the Specs contents: {published:?}");
-    }
-
     fn activate_navigation(renderer: &mut HeadlessRenderer, label: &str, role: Role) {
         compose_navigation_target(renderer, label, role);
         for action in [Action::Focus, Action::Click] {
@@ -972,14 +803,14 @@ mod tests {
     #[ignore = "requires a native GPU adapter"]
     fn article_measurement_clear_keeps_scrolled_geometry_through_pointer_press_and_release() {
         for same_frame in [false, true] {
-            INITIAL_COMPONENT.set(
-                COMPONENTS
-                    .iter()
-                    .position(|component| component.title == "Text fields"),
-            );
+            let initial_component = COMPONENTS
+                .iter()
+                .position(|component| component.title == "Text fields");
             let mut renderer = HeadlessRenderer::new(
-                Box::new(fixture),
-                vec![Box::new(ComponentPipelines)],
+                Box::new(move || {
+                    fixture().initial_component_optional(initial_component);
+                }),
+                vec![Box::new(crate::TestPipelines)],
                 HeadlessConfig {
                     width: 900,
                     height: 900,
@@ -990,7 +821,6 @@ mod tests {
             )
             .unwrap();
             renderer.render_frames(5);
-            INITIAL_COMPONENT.set(None);
             let specs = tab(&renderer, "Specs").bounds().unwrap();
             click(&mut renderer, specs);
             let focused_label = |renderer: &HeadlessRenderer| {
@@ -1106,14 +936,14 @@ mod tests {
     #[test]
     #[ignore = "requires a native GPU adapter"]
     fn article_footer_routes_between_pages_and_components_and_resets_directory_entry() {
-        INITIAL_COMPONENT.set(
-            COMPONENTS
-                .iter()
-                .position(|component| component.title == "Text fields"),
-        );
+        let initial_component = COMPONENTS
+            .iter()
+            .position(|component| component.title == "Text fields");
         let mut renderer = HeadlessRenderer::new(
-            Box::new(fixture),
-            vec![Box::new(ComponentPipelines)],
+            Box::new(move || {
+                fixture().initial_component_optional(initial_component);
+            }),
+            vec![Box::new(crate::TestPipelines)],
             HeadlessConfig {
                 width: 900,
                 height: 1500,
@@ -1124,7 +954,6 @@ mod tests {
         )
         .unwrap();
         renderer.render_frames(5);
-        INITIAL_COMPONENT.set(None);
         enter_specs(&mut renderer);
         compose_navigation_target(&mut renderer, "Previous and up next articles", Role::Group);
         let footer_tree = renderer.accessibility_snapshot().unwrap();
@@ -1234,7 +1063,7 @@ mod tests {
     fn app_bar_crossfades_to_back_and_restores_directory_navigation() {
         let mut renderer = HeadlessRenderer::new(
             Box::new(fixture),
-            vec![Box::new(ComponentPipelines)],
+            vec![Box::new(crate::TestPipelines)],
             HeadlessConfig {
                 width: 900,
                 height: 1800,
@@ -1329,7 +1158,7 @@ mod tests {
     fn dialog_article_switches_tabs_and_annotates_live_component_bounds() {
         let mut renderer = HeadlessRenderer::new(
             Box::new(fixture),
-            vec![Box::new(ComponentPipelines)],
+            vec![Box::new(crate::TestPipelines)],
             HeadlessConfig {
                 width: 900,
                 height: 8000,
@@ -1460,7 +1289,7 @@ mod tests {
     fn selection_articles_keep_four_pages_and_labels_operate_their_controls() {
         let mut renderer = HeadlessRenderer::new(
             Box::new(fixture),
-            vec![Box::new(ComponentPipelines)],
+            vec![Box::new(crate::TestPipelines)],
             HeadlessConfig {
                 width: 900,
                 height: 8000,
@@ -1642,265 +1471,10 @@ mod tests {
 
     #[test]
     #[ignore = "requires a native GPU adapter"]
-    fn action_articles_switch_pages_and_preserve_live_actions() {
-        let mut renderer = HeadlessRenderer::new(
-            Box::new(fixture),
-            vec![Box::new(ComponentPipelines)],
-            HeadlessConfig {
-                width: 900,
-                height: 1800,
-                sample_count: 1,
-                ..Default::default()
-            },
-        )
-        .unwrap();
-        renderer.render_frames(4);
-        for demo in [18, 36, 9, 8, 19, 3, 20, 22] {
-            let component = COMPONENTS[component_index(demo).unwrap()];
-            let card = bounds(
-                &renderer,
-                &format!("Open {} specifications", component.title),
-            );
-            click(&mut renderer, card);
-            renderer.render_frames(4);
-            enter_specs(&mut renderer);
-            let tab = |renderer: &HeadlessRenderer, label: &str| {
-                let nodes = renderer.accessibility_snapshot().unwrap().nodes;
-                nodes
-                    .iter()
-                    .find(|(_, node)| node.role() == Role::Tab && node.label() == Some(label))
-                    .unwrap_or_else(|| {
-                        panic!(
-                            "Missing {label} tab in {}: {:?}",
-                            component.title,
-                            nodes
-                                .iter()
-                                .filter_map(|(_, node)| node
-                                    .label()
-                                    .map(|label| (node.role(), label)))
-                                .collect::<Vec<_>>()
-                        )
-                    })
-                    .1
-                    .clone()
-            };
-            for label in ["Overview", "Specs", "Guidelines", "Accessibility"] {
-                assert_eq!(
-                    tab(&renderer, label).is_selected(),
-                    Some(label == "Specs"),
-                    "selected Specs page of {}",
-                    component.title
-                );
-            }
-            let overview = tab(&renderer, "Overview").bounds().unwrap();
-            click(&mut renderer, overview);
-            match demo {
-                18 => {
-                    select_article_page(&mut renderer, "Guidelines");
-                    activate_navigation(&mut renderer, "Usage", Role::Link);
-                    let one =
-                        scoped_node(&renderer, "Standard group", "One", Role::CheckBox).unwrap();
-                    click(&mut renderer, one.bounds().unwrap());
-                    bounds(&renderer, "Standard group selection: 1");
-                }
-                36 => {
-                    let action = control(&renderer, "Overview Filled button");
-                    assert_eq!(action.description(), Some("Activations: 0"));
-                    click(&mut renderer, action.bounds().unwrap());
-                    assert_eq!(
-                        control(&renderer, "Overview Filled button").description(),
-                        Some("Activations: 1")
-                    );
-                    let specs = tab(&renderer, "Specs").bounds().unwrap();
-                    click(&mut renderer, specs);
-                    toggle(
-                        &mut renderer,
-                        "Toggle button",
-                        Toggled::False,
-                        Toggled::True,
-                    );
-                }
-                9 => {
-                    let small = control(&renderer, "Small");
-                    click(&mut renderer, small.bounds().unwrap());
-                    select_article_page(&mut renderer, "Accessibility");
-                    activate_navigation(&mut renderer, "Use cases", Role::Link);
-                    bounds(&renderer, "Activations: 0");
-                    let compose = control(&renderer, "Compose");
-                    click(&mut renderer, compose.bounds().unwrap());
-                    bounds(&renderer, "Activations: 1");
-                }
-                19 => {
-                    let target = control(&renderer, "FAB");
-                    click(&mut renderer, target.bounds().unwrap());
-                    select_article_page(&mut renderer, "Accessibility");
-                    activate_navigation(&mut renderer, "Use cases", Role::Link);
-                    bounds(&renderer, "Activations: 0");
-                    let add = control(&renderer, "Add");
-                    click(&mut renderer, add.bounds().unwrap());
-                    bounds(&renderer, "Activations: 1");
-                }
-                8 => {
-                    let close = control(&renderer, "Close Overview menu");
-                    click(&mut renderer, close.bounds().unwrap());
-                    renderer.render_frames(30);
-                    let open = control(&renderer, "Open Overview menu");
-                    click(&mut renderer, open.bounds().unwrap());
-                    renderer.render_frames(30);
-                    let item = renderer
-                        .accessibility_snapshot()
-                        .unwrap()
-                        .nodes
-                        .into_iter()
-                        .find(|(_, node)| {
-                            node.role() == Role::MenuItem && node.label() == Some("New document")
-                        })
-                        .unwrap()
-                        .1;
-                    click(&mut renderer, item.bounds().unwrap());
-                    renderer.render_frames(30);
-                    bounds(&renderer, "Overview · last action: Document");
-                    control(&renderer, "Open Overview menu");
-                }
-                3 => {
-                    let action = control(&renderer, "Overview More options 1");
-                    assert_eq!(action.description(), Some("Activations: 0"));
-                    click(&mut renderer, action.bounds().unwrap());
-                    assert_eq!(
-                        control(&renderer, "Overview More options 1").description(),
-                        Some("Activations: 1")
-                    );
-                    let specs = tab(&renderer, "Specs").bounds().unwrap();
-                    click(&mut renderer, specs);
-                    let target = control(&renderer, "Toggle favorite").bounds().unwrap();
-                    renderer.render_frames(30);
-                    let icon_is_filled = |renderer: &mut HeadlessRenderer| {
-                        let pixels = renderer.read_pixels().unwrap();
-                        let x = ((target.x0 + target.x1) * 0.5) as usize;
-                        let y = ((target.y0 + target.y1) * 0.5) as usize;
-                        let center = &pixels[(y * 900 + x) * 4..(y * 900 + x) * 4 + 3];
-                        let empty = &pixels[((y - 20) * 900 + x) * 4..((y - 20) * 900 + x) * 4 + 3];
-                        center.iter().zip(empty).any(|(a, b)| a.abs_diff(*b) > 20)
-                    };
-                    assert!(
-                        !icon_is_filled(&mut renderer),
-                        "unselected favorite must have an outlined icon"
-                    );
-                    click(&mut renderer, target);
-                    renderer.render_frames(30);
-                    assert!(
-                        icon_is_filled(&mut renderer),
-                        "selected favorite must have a filled icon"
-                    );
-                }
-                20 => {
-                    select_article_page(&mut renderer, "Specs");
-                    activate_navigation(&mut renderer, "Tokens and specs", Role::Link);
-                    toggle(
-                        &mut renderer,
-                        "Multi-select Month",
-                        Toggled::True,
-                        Toggled::False,
-                    );
-                    assert_eq!(
-                        control(&renderer, "Multi-select Day").toggled(),
-                        Some(Toggled::True)
-                    );
-                    toggle(
-                        &mut renderer,
-                        "Multi-select Month",
-                        Toggled::False,
-                        Toggled::True,
-                    );
-                    bounds(&renderer, "Multi-select selection: Day, Month");
-                }
-                22 => {
-                    let send = control(&renderer, "Overview main action");
-                    click(&mut renderer, send.bounds().unwrap());
-                    bounds(&renderer, "Overview: 1 main actions");
-                    let more = control(&renderer, "Overview menu actions");
-                    click(&mut renderer, more.bounds().unwrap());
-                    renderer.render_frames(30);
-                    let item = renderer
-                        .accessibility_snapshot()
-                        .unwrap()
-                        .nodes
-                        .into_iter()
-                        .find(|(_, node)| {
-                            node.role() == Role::MenuItem && node.label() == Some("Schedule send")
-                        })
-                        .unwrap()
-                        .1;
-                    click(&mut renderer, item.bounds().unwrap());
-                    renderer.render_frames(30);
-                    bounds(&renderer, "Menu choice: Schedule send");
-                }
-                _ => {}
-            }
-            let guide = tab(&renderer, "Guidelines").bounds().unwrap();
-            click(&mut renderer, guide);
-            bounds(&renderer, "Usage");
-            let access = tab(&renderer, "Accessibility").bounds().unwrap();
-            click(&mut renderer, access);
-            assert!(
-                renderer
-                    .accessibility_snapshot()
-                    .unwrap()
-                    .nodes
-                    .iter()
-                    .any(|(_, node)| node.label() == Some("Keyboard navigation")),
-                "missing keyboard chapter for {}: {:?}",
-                component.title,
-                renderer
-                    .accessibility_snapshot()
-                    .unwrap()
-                    .nodes
-                    .iter()
-                    .filter_map(|(_, node)| node.label().map(|label| (node.role(), label)))
-                    .collect::<Vec<_>>()
-            );
-            if demo == 3 {
-                activate_navigation(&mut renderer, "Hover", Role::Link);
-                let trigger = control(&renderer, "Hover favorite action");
-                click(&mut renderer, trigger.bounds().unwrap());
-                renderer.render_frames(40);
-                bounds(&renderer, "Hover example actions: 1");
-                assert!(
-                    renderer
-                        .accessibility_snapshot()
-                        .unwrap()
-                        .nodes
-                        .iter()
-                        .any(|(_, node)| node.role() == Role::Tooltip
-                            && node.label() == Some("Add to favorites"))
-                );
-            }
-            assert!(
-                !renderer
-                    .accessibility_snapshot()
-                    .unwrap()
-                    .nodes
-                    .iter()
-                    .any(|(_, node)| node.role() == Role::Heading && node.label() == Some("Usage"))
-            );
-            if demo == 20 {
-                select_article_page(&mut renderer, "Overview");
-                activate_navigation(&mut renderer, "M3 Expressive update", Role::Link);
-                let recommended = control(&renderer, "Open recommended button groups");
-                click(&mut renderer, recommended.bounds().unwrap());
-                bounds(&renderer, "Button groups specifications");
-            }
-            let back = bounds(&renderer, "Back to components");
-            click(&mut renderer, back);
-        }
-    }
-
-    #[test]
-    #[ignore = "requires a native GPU adapter"]
     fn new_articles_keep_four_pages_and_route_live_collection_and_modal_actions() {
         let mut renderer = HeadlessRenderer::new(
             Box::new(fixture),
-            vec![Box::new(ComponentPipelines)],
+            vec![Box::new(crate::TestPipelines)],
             HeadlessConfig {
                 width: 900,
                 height: 1800,
@@ -2146,14 +1720,14 @@ mod tests {
     #[test]
     #[ignore = "requires a native GPU adapter"]
     fn time_modal_commits_only_on_confirmation_and_reopens_from_saved_time() {
-        INITIAL_COMPONENT.set(
-            COMPONENTS
-                .iter()
-                .position(|component| component.title == "Time pickers"),
-        );
+        let initial_component = COMPONENTS
+            .iter()
+            .position(|component| component.title == "Time pickers");
         let mut renderer = HeadlessRenderer::new(
-            Box::new(fixture),
-            vec![Box::new(ComponentPipelines)],
+            Box::new(move || {
+                fixture().initial_component_optional(initial_component);
+            }),
+            vec![Box::new(crate::TestPipelines)],
             HeadlessConfig {
                 width: 900,
                 height: 1200,
@@ -2164,7 +1738,6 @@ mod tests {
         )
         .unwrap();
         renderer.render_frames(8);
-        INITIAL_COMPONENT.set(None);
         enter_specs(&mut renderer);
         activate_navigation(&mut renderer, "Anatomy", Role::Link);
         renderer.render_frames(8);
@@ -2279,14 +1852,14 @@ mod tests {
     #[test]
     #[ignore = "requires a native GPU adapter"]
     fn initial_app_bar_article_updates_its_variant_after_compact_resize() {
-        INITIAL_COMPONENT.set(
-            COMPONENTS
-                .iter()
-                .position(|component| component.title == "App bars"),
-        );
+        let initial_component = COMPONENTS
+            .iter()
+            .position(|component| component.title == "App bars");
         let mut renderer = HeadlessRenderer::new(
-            Box::new(fixture),
-            vec![Box::new(ComponentPipelines)],
+            Box::new(move || {
+                fixture().initial_component_optional(initial_component);
+            }),
+            vec![Box::new(crate::TestPipelines)],
             HeadlessConfig {
                 width: 900,
                 height: 8000,
@@ -2297,7 +1870,6 @@ mod tests {
         )
         .unwrap();
         renderer.render_frames(8);
-        INITIAL_COMPONENT.set(None);
         enter_specs(&mut renderer);
         activate_navigation(&mut renderer, "Configurations", Role::Link);
         let configured_bar = renderer
@@ -2344,7 +1916,7 @@ mod tests {
     fn split_button_xl_configuration_keeps_both_segments_visible_and_live_at_compact_width() {
         let mut renderer = HeadlessRenderer::new(
             Box::new(fixture),
-            vec![Box::new(ComponentPipelines)],
+            vec![Box::new(crate::TestPipelines)],
             HeadlessConfig {
                 width: 900,
                 height: 8000,
@@ -2398,1611 +1970,11 @@ mod tests {
     }
 
     #[test]
-    #[ignore = "requires a native GPU adapter"]
-    fn every_directory_card_opens_its_article_and_returns_to_the_directory() {
-        let mut renderer = HeadlessRenderer::new(
-            Box::new(fixture),
-            vec![Box::new(ComponentPipelines)],
-            HeadlessConfig {
-                width: 900,
-                height: 8000,
-                sample_count: 1,
-                frame_time: Duration::from_nanos(16_666_667),
-                ..Default::default()
-            },
-        )
-        .unwrap();
-        renderer.render_frames(8);
-        for component in COMPONENTS {
-            eprintln!("Checking {} specifications", component.title);
-            let card = bounds(
-                &renderer,
-                &format!("Open {} specifications", component.title),
-            );
-            click(&mut renderer, card);
-            renderer.render_frames(8);
-            enter_specs(&mut renderer);
-            let snapshot = renderer.accessibility_snapshot().unwrap();
-            assert!(
-                snapshot
-                    .nodes
-                    .iter()
-                    .any(|(_, node)| node.role() == Role::Group
-                        && node.label()
-                            == Some(format!("{} specifications", component.title).as_str())),
-                "wrong article for {}",
-                component.title
-            );
-            for page in ["Overview", "Specs", "Guidelines", "Accessibility"] {
-                assert!(
-                    snapshot.nodes.iter().any(|(_, node)| {
-                        node.role() == Role::Tab && node.label() == Some(page)
-                    }),
-                    "missing {page} page in {}",
-                    component.title
-                );
-            }
-            renderer.resize(390, 900);
-            renderer.render_frames(8);
-            let article_title = match component.demo {
-                22 => "Split button",
-                _ => component.title,
-            };
-            compose_navigation_target(&mut renderer, article_title, Role::Heading);
-            let title = renderer
-                .accessibility_snapshot()
-                .unwrap()
-                .nodes
-                .into_iter()
-                .find(|(_, node)| {
-                    node.role() == Role::Heading
-                        && node.level() == Some(1)
-                        && node.label() == Some(article_title)
-                })
-                .expect("article title")
-                .1
-                .bounds()
-                .unwrap();
-            assert!(
-                title.x0 >= 0.0 && title.x1 <= 390.0,
-                "compact title must stay within the viewport: {title:?}"
-            );
-            renderer.resize(900, 8000);
-            renderer.render_frames(8);
-            let section = match component.demo {
-                20 => Some("Tokens and specs"),
-                25 | 1 | 31 | 32 | 6 | 7 | 38 => Some("Configurations"),
-                24 => Some("Filled text field"),
-                4 => Some("Plain tooltip"),
-                21 => Some("Primary tabs"),
-                12 => Some("Configuration"),
-                22 | 8 | 9 | 19 | 15 | 3 | 36 => Some("Variants"),
-                28 => Some("Modal date picker"),
-                30 => Some("Anatomy"),
-                14 => Some("Measurements"),
-                16 => Some("Elevated card"),
-                17 | 37 => Some("Tokens & specs"),
-                _ => None,
-            };
-            if let Some(section) = section {
-                activate_navigation(&mut renderer, section, Role::Link);
-            }
-            match component.demo {
-                20 => {
-                    renderer.render_frames(5);
-                    let day = control(&renderer, "Single-select Day");
-                    assert_eq!(day.toggled(), Some(Toggled::True));
-                    assert_eq!(day.bounds().unwrap().height(), 48.0);
-                    let multi = control(&renderer, "Multi-select Day");
-                    assert!(
-                        multi.bounds().unwrap().y0 >= day.bounds().unwrap().y1 + 32.0,
-                        "a shared panel must arrange examples vertically without overlapping hit targets"
-                    );
-                    let month = control(&renderer, "Single-select Month");
-                    assert!(
-                        month.bounds().unwrap().x0 > day.bounds().unwrap().x0,
-                        "day {:?}, month {:?}",
-                        day.bounds(),
-                        month.bounds()
-                    );
-                    assert!(!month.is_disabled(), "month disabled");
-                    click(&mut renderer, month.bounds().unwrap());
-                    assert_eq!(
-                        control(&renderer, "Single-select Day").toggled(),
-                        Some(Toggled::False)
-                    );
-                    assert_eq!(
-                        control(&renderer, "Single-select Month").toggled(),
-                        Some(Toggled::True)
-                    );
-                    bounds(&renderer, "Single-select selection: Month");
-                    toggle(
-                        &mut renderer,
-                        "Multi-select Month",
-                        Toggled::True,
-                        Toggled::False,
-                    );
-                    bounds(&renderer, "Multi-select selection: Day");
-                    let month = control(&renderer, "Multi-select Month");
-                    click(&mut renderer, month.bounds().unwrap());
-                    bounds(&renderer, "Multi-select selection: Day, Month");
-                    let day = control(&renderer, "Multi-select Day");
-                    click(&mut renderer, day.bounds().unwrap());
-                    bounds(&renderer, "Multi-select selection: Month");
-                    toggle(
-                        &mut renderer,
-                        "Segmented configuration icons",
-                        Toggled::False,
-                        Toggled::True,
-                    );
-                    toggle(
-                        &mut renderer,
-                        "Segmented configuration checkmark",
-                        Toggled::True,
-                        Toggled::False,
-                    );
-                    let target = renderer
-                        .accessibility_snapshot()
-                        .unwrap()
-                        .nodes
-                        .into_iter()
-                        .find(|(_, node)| {
-                            node.role() == Role::RadioButton
-                                && node.label() == Some("Configuration Day")
-                        })
-                        .expect("configured segment")
-                        .0;
-                    assert_eq!(
-                        control(&renderer, "Configuration Day")
-                            .bounds()
-                            .unwrap()
-                            .height(),
-                        48.0
-                    );
-                    for (before, after) in [
-                        (Toggled::False, Toggled::True),
-                        (Toggled::True, Toggled::False),
-                    ] {
-                        toggle(
-                            &mut renderer,
-                            "Segmented configuration compact",
-                            before,
-                            after,
-                        );
-                        let snapshot = renderer.accessibility_snapshot().unwrap();
-                        let day = snapshot
-                            .nodes
-                            .iter()
-                            .find(|(id, _)| *id == target)
-                            .expect("compact input must retain its segment identity");
-                        assert_eq!(day.1.label(), Some("Configuration Day"));
-                        assert_eq!(day.1.bounds().unwrap().height(), 48.0);
-                    }
-                }
-                25 => {
-                    for (name, height) in [
-                        ("Single line", 48.0),
-                        ("Single line with action", 48.0),
-                        ("Two lines", 68.0),
-                        ("Two lines with action", 68.0),
-                        ("Two lines with longer action", 120.0),
-                    ] {
-                        assert_eq!(
-                            bounds(&renderer, name).height(),
-                            height,
-                            "snackbar configuration {name}"
-                        );
-                    }
-                    let tokens = renderer
-                        .accessibility_snapshot()
-                        .unwrap()
-                        .nodes
-                        .into_iter()
-                        .find(|(_, node)| {
-                            node.role() == Role::Heading && node.label() == Some("Tokens and specs")
-                        })
-                        .unwrap()
-                        .1
-                        .bounds()
-                        .unwrap();
-                    assert!(
-                        bounds(&renderer, "Snackbar anatomy").y1 < tokens.y0,
-                        "the unheaded anatomy figure precedes the first Specs chapter"
-                    );
-                    let undo =
-                        scoped_node(&renderer, "Queued snackbar surface", "Undo", Role::Button)
-                            .unwrap();
-                    click(&mut renderer, undo.bounds().unwrap());
-                    renderer.render_frames(30);
-                    bounds(&renderer, "Snackbar result: Action performed");
-                    bounds(&renderer, "Snackbar visible: false");
-                    let enqueue = control(&renderer, "Enqueue snackbar");
-                    click(&mut renderer, enqueue.bounds().unwrap());
-                    renderer.render_frames(30);
-                    assert_eq!(bounds(&renderer, "Queued snackbar surface").height(), 48.0);
-                    toggle(
-                        &mut renderer,
-                        "Next snackbar two lines",
-                        Toggled::False,
-                        Toggled::True,
-                    );
-                    let enqueue = control(&renderer, "Enqueue snackbar");
-                    click(&mut renderer, enqueue.bounds().unwrap());
-                    assert_eq!(
-                        bounds(&renderer, "Queued snackbar surface").height(),
-                        48.0,
-                        "queued settings must not replace the active message"
-                    );
-                    let dismiss = control(&renderer, "Dismiss queued snackbar");
-                    click(&mut renderer, dismiss.bounds().unwrap());
-                    renderer.render_frames(30);
-                    assert_eq!(bounds(&renderer, "Queued snackbar surface").height(), 68.0);
-                    bounds(&renderer, "Snackbar result: Dismissed");
-                    toggle(
-                        &mut renderer,
-                        "Stack snackbar action",
-                        Toggled::False,
-                        Toggled::True,
-                    );
-                    assert_eq!(bounds(&renderer, "Queued snackbar surface").height(), 120.0);
-                    let undo =
-                        scoped_node(&renderer, "Queued snackbar surface", "Undo", Role::Button)
-                            .unwrap();
-                    click(&mut renderer, undo.bounds().unwrap());
-                    renderer.render_frames(30);
-                    bounds(&renderer, "Snackbar visible: false");
-                    let undo =
-                        scoped_node(&renderer, "Single line with action", "Undo", Role::Button)
-                            .unwrap();
-                    click(&mut renderer, undo.bounds().unwrap());
-                    let restore = control(&renderer, "Restore Single line with action");
-                    click(&mut renderer, restore.bounds().unwrap());
-                    scoped_node(&renderer, "Single line with action", "Undo", Role::Button)
-                        .unwrap();
-                }
-                1 => {
-                    for (name, height) in [
-                        ("Small", 64.0),
-                        ("Medium flexible", 112.0),
-                        ("Large flexible", 120.0),
-                    ] {
-                        assert_eq!(
-                            bounds(&renderer, &format!("Variant {name} bar")).height(),
-                            height
-                        );
-                    }
-                    assert_eq!(bounds(&renderer, "Configured app bar bar").height(), 136.0);
-                    let small = control(&renderer, "Configured app bar Small");
-                    click(&mut renderer, small.bounds().unwrap());
-                    assert_eq!(
-                        bounds(&renderer, "Configured app bar bar").height(),
-                        64.0,
-                        "small control bounds: {:?}, selected: {:?}, article tab bounds: {:?}, diagnostics: {:?}",
-                        small.bounds(),
-                        control(&renderer, "Configured app bar Small").toggled(),
-                        bounds(&renderer, "Article sections"),
-                        renderer.diagnostics()
-                    );
-                    let large = control(&renderer, "Configured app bar Large flexible");
-                    click(&mut renderer, large.bounds().unwrap());
-                    assert_eq!(bounds(&renderer, "Configured app bar bar").height(), 152.0);
-                    toggle(
-                        &mut renderer,
-                        "Configured app bar subtitle",
-                        Toggled::True,
-                        Toggled::False,
-                    );
-                    assert_eq!(bounds(&renderer, "Configured app bar bar").height(), 120.0);
-                    toggle(
-                        &mut renderer,
-                        "Configured app bar centered",
-                        Toggled::False,
-                        Toggled::True,
-                    );
-                    toggle(
-                        &mut renderer,
-                        "Configured app bar logo",
-                        Toggled::False,
-                        Toggled::True,
-                    );
-                    let brand = scoped_node(
-                        &renderer,
-                        "Configured app bar bar",
-                        "Tessera brand",
-                        Role::Image,
-                    )
-                    .expect("custom brand")
-                    .bounds()
-                    .unwrap();
-                    assert_eq!(brand.width(), 32.0);
-                    let bar = bounds(&renderer, "Configured app bar bar");
-                    assert_eq!(bar.width(), 725.0);
-                    assert_eq!((brand.x0 - bar.x0, brand.x1 - bar.x0), (346.0, 378.0));
-                    toggle(
-                        &mut renderer,
-                        "Configured app bar logo",
-                        Toggled::True,
-                        Toggled::False,
-                    );
-                    toggle(
-                        &mut renderer,
-                        "Configured app bar filled action",
-                        Toggled::False,
-                        Toggled::True,
-                    );
-                    let search = control(&renderer, "Configured app bar search");
-                    click(&mut renderer, search.bounds().unwrap());
-                    bounds(&renderer, "Configured app bar action: Search selected");
-                    let content = bounds(&renderer, "Configured app bar scroll content");
-                    renderer.pointer_scroll(
-                        MOUSE_POINTER_ID,
-                        PxPosition::from_f32_xy(
-                            ((content.x0 + content.x1) * 0.5) as f32,
-                            (content.y0 + 32.0) as f32,
-                        ),
-                        0.0,
-                        -200.0,
-                    );
-                    renderer.render_frames(60);
-                    assert_eq!(bounds(&renderer, "Configured app bar bar").height(), 64.0);
-                    let reset = control(&renderer, "Reset Configured app bar scroll");
-                    click(&mut renderer, reset.bounds().unwrap());
-                    renderer.render_frames(60);
-                    assert_eq!(bounds(&renderer, "Configured app bar bar").height(), 120.0);
-                }
-                24 => {
-                    let container = bounds(&renderer, "Configured Filled container");
-                    assert_eq!(container.height(), 56.0);
-                    let label = scoped_node(
-                        &renderer,
-                        "Configured Filled field preview",
-                        "Label",
-                        Role::Label,
-                    )
-                    .unwrap()
-                    .bounds()
-                    .unwrap();
-                    assert_eq!(
-                        label.y0 - container.y0,
-                        8.0,
-                        "the filled floating label starts 8dp below the container top"
-                    );
-                    let clear = control(&renderer, "Clear Configured Filled");
-                    click(&mut renderer, clear.bounds().unwrap());
-                    let input = scoped_node(
-                        &renderer,
-                        "Configured Filled field preview",
-                        "Label",
-                        Role::TextInput,
-                    )
-                    .expect("configured editable field")
-                    .bounds()
-                    .unwrap();
-                    click(&mut renderer, input);
-                    renderer.inject_text("Ada");
-                    renderer.render_frames(8);
-                    bounds(&renderer, "Configured Filled value: Ada");
-                    toggle(
-                        &mut renderer,
-                        "Configured Filled read only",
-                        Toggled::False,
-                        Toggled::True,
-                    );
-                    let input = scoped_node(
-                        &renderer,
-                        "Configured Filled field preview",
-                        "Label",
-                        Role::TextInput,
-                    )
-                    .expect("configured editable field")
-                    .bounds()
-                    .unwrap();
-                    click(&mut renderer, input);
-                    renderer.inject_text("ignored");
-                    renderer.render_frames(8);
-                    bounds(&renderer, "Configured Filled value: Ada");
-                    toggle(
-                        &mut renderer,
-                        "Configured Filled read only",
-                        Toggled::True,
-                        Toggled::False,
-                    );
-                    toggle(
-                        &mut renderer,
-                        "Configured Filled icons",
-                        Toggled::False,
-                        Toggled::True,
-                    );
-                    let clear = control(&renderer, "Clear Configured Filled icon");
-                    let container = bounds(&renderer, "Configured Filled container");
-                    let leading = bounds(&renderer, "Configured Filled leading icon");
-                    assert_eq!(leading.x0 - container.x0, 12.0);
-                    assert_eq!(leading.y0 - container.y0, 16.0);
-                    assert_eq!(leading.width(), 24.0);
-                    assert_eq!(clear.bounds().unwrap().height(), 48.0);
-                    assert_eq!(
-                        (clear.bounds().unwrap().y0 + clear.bounds().unwrap().y1) * 0.5
-                            - container.y0,
-                        28.0,
-                    );
-                    click(&mut renderer, clear.bounds().unwrap());
-                    bounds(&renderer, "Configured Filled value: ");
-                    activate_navigation(&mut renderer, "Outlined text field", Role::Link);
-                    toggle(
-                        &mut renderer,
-                        "Configured Outlined error",
-                        Toggled::False,
-                        Toggled::True,
-                    );
-                    let clear = control(&renderer, "Clear Configured Outlined");
-                    click(&mut renderer, clear.bounds().unwrap());
-                    let input = scoped_node(
-                        &renderer,
-                        "Configured Outlined field preview",
-                        "Label",
-                        Role::TextInput,
-                    )
-                    .expect("configured editable field")
-                    .bounds()
-                    .unwrap();
-                    click(&mut renderer, input);
-                    renderer.inject_text("Paris");
-                    renderer.render_frames(8);
-                    bounds(&renderer, "Configured Outlined value: Paris");
-                    toggle(
-                        &mut renderer,
-                        "Configured Outlined secure",
-                        Toggled::False,
-                        Toggled::True,
-                    );
-                    bounds(&renderer, "Configured Outlined value: •••••");
-                    toggle(
-                        &mut renderer,
-                        "Configured Outlined multiline",
-                        Toggled::False,
-                        Toggled::True,
-                    );
-                    assert_eq!(
-                        bounds(&renderer, "Configured Outlined container").height(),
-                        96.0
-                    );
-                }
-                4 => {
-                    select_article_page(&mut renderer, "Guidelines");
-                    activate_navigation(&mut renderer, "Behavior", Role::Link);
-                    let favorite = control(&renderer, "Add to favorites");
-                    click(&mut renderer, favorite.bounds().unwrap());
-                    control(&renderer, "Remove from favorites");
-                    let about = control(&renderer, "About collections");
-                    click(&mut renderer, about.bounds().unwrap());
-                    let snapshot = renderer.accessibility_snapshot().unwrap();
-                    assert!(
-                        snapshot
-                            .nodes
-                            .iter()
-                            .any(|(_, node)| node.role() == Role::Dialog
-                                && node.label() == Some("Collections"))
-                    );
-                    let action = control(&renderer, "Got it");
-                    click(&mut renderer, action.bounds().unwrap());
-                    bounds(&renderer, "Collection guidance acknowledged.");
-                }
-                31 => {
-                    let group = "Configured navigation bar example";
-                    let saved = scoped_node(&renderer, group, "Saved", Role::Tab)
-                        .expect("configured Saved destination");
-                    assert_eq!(saved.bounds().unwrap().height(), 72.0);
-                    click(&mut renderer, saved.bounds().unwrap());
-                    bounds(&renderer, "Configured destination: Saved");
-                    let count = control(&renderer, "Cycle destination count");
-                    click(&mut renderer, count.bounds().unwrap());
-                    let settings = scoped_node(&renderer, group, "Settings", Role::Tab)
-                        .expect("fifth destination");
-                    assert_eq!(settings.bounds().unwrap().height(), 72.0);
-                    let count = control(&renderer, "Cycle destination count");
-                    click(&mut renderer, count.bounds().unwrap());
-                    assert!(scoped_node(&renderer, group, "Settings", Role::Tab).is_none());
-                    bounds(&renderer, "Configured destination: Saved");
-                    let labels = control(&renderer, "Toggle selected-only labels");
-                    click(&mut renderer, labels.bounds().unwrap());
-                    assert!(scoped_node(&renderer, group, "Saved", Role::Tab).is_some());
-                    let badge = control(&renderer, "Toggle Inbox badge");
-                    click(&mut renderer, badge.bounds().unwrap());
-                    assert!(scoped_node(&renderer, group, "Inbox", Role::Tab).is_some());
-                }
-                32 => {
-                    select_article_page(&mut renderer, "Guidelines");
-                    activate_navigation(&mut renderer, "Behavior", Role::Link);
-                    let group = "Interactive mail navigation";
-                    let inbox = scoped_node(&renderer, group, "Inbox", Role::Tab)
-                        .expect("interactive Inbox destination");
-                    click(&mut renderer, inbox.bounds().unwrap());
-                    bounds(&renderer, "Collapsed destination: Inbox");
-                    let expand = control(&renderer, "Expand navigation rail");
-                    click(&mut renderer, expand.bounds().unwrap());
-                    renderer.render_frames(30);
-                    bounds(&renderer, "Expanded destination: Inbox");
-                    let selected = scoped_node(&renderer, group, "Inbox", Role::Tab).unwrap();
-                    assert_eq!(selected.is_selected(), Some(true));
-                    let collapse = control(&renderer, "Collapse navigation rail");
-                    click(&mut renderer, collapse.bounds().unwrap());
-                    renderer.render_frames(30);
-                    bounds(&renderer, "Collapsed destination: Inbox");
-                    assert_eq!(
-                        scoped_node(&renderer, group, "Inbox", Role::Tab)
-                            .unwrap()
-                            .is_selected(),
-                        Some(true)
-                    );
-                }
-                21 => {
-                    let flights =
-                        scoped_node(&renderer, "Primary tabs preview", "Flights", Role::Tab)
-                            .unwrap();
-                    assert_eq!(flights.bounds().unwrap().height(), 48.0);
-                    let hotels =
-                        scoped_node(&renderer, "Primary tabs preview", "Hotels", Role::Tab)
-                            .unwrap();
-                    click(&mut renderer, hotels.bounds().unwrap());
-                    bounds(&renderer, "Primary content: Hotels");
-                    bounds(&renderer, "Primary activations: 1");
-                    toggle(
-                        &mut renderer,
-                        "Show primary tab icons",
-                        Toggled::False,
-                        Toggled::True,
-                    );
-                    assert_eq!(
-                        scoped_node(&renderer, "Primary tabs preview", "Hotels", Role::Tab)
-                            .unwrap()
-                            .bounds()
-                            .unwrap()
-                            .height(),
-                        64.0
-                    );
-                    toggle(
-                        &mut renderer,
-                        "Primary tab badge",
-                        Toggled::False,
-                        Toggled::True,
-                    );
-                    toggle(
-                        &mut renderer,
-                        "Primary disable Hotels",
-                        Toggled::False,
-                        Toggled::True,
-                    );
-                    let disabled = scoped_node(
-                        &renderer,
-                        "Primary tabs preview",
-                        "Hotels, 3 new items",
-                        Role::Tab,
-                    )
-                    .unwrap();
-                    assert!(disabled.is_disabled());
-                    click(&mut renderer, disabled.bounds().unwrap());
-                    bounds(&renderer, "Primary activations: 1");
-                    toggle(
-                        &mut renderer,
-                        "Primary disable Hotels",
-                        Toggled::True,
-                        Toggled::False,
-                    );
-                    toggle(
-                        &mut renderer,
-                        "Primary scrollable tabs",
-                        Toggled::False,
-                        Toggled::True,
-                    );
-                    let last = control(&renderer, "Primary select final tab");
-                    click(&mut renderer, last.bounds().unwrap());
-                    bounds(&renderer, "Primary content: Ferries");
-                    renderer.resize(390, 8000);
-                    renderer.render_frames(10);
-                    let ferries =
-                        scoped_node(&renderer, "Primary tabs preview", "Ferries", Role::Tab)
-                            .unwrap()
-                            .bounds()
-                            .unwrap();
-                    assert!(ferries.x0 >= 0.0 && ferries.x1 <= 390.0);
-                    renderer.resize(900, 8000);
-                    renderer.render_frames(8);
-                    activate_navigation(&mut renderer, "Secondary tabs", Role::Link);
-                    let trains =
-                        scoped_node(&renderer, "Secondary tabs preview", "Trains", Role::Tab)
-                            .unwrap();
-                    click(&mut renderer, trains.bounds().unwrap());
-                    bounds(&renderer, "Secondary content: Trains");
-                }
-                6 => {
-                    settle_loading_geometry(&mut renderer);
-                    let indicator = scoped_node(
-                        &renderer,
-                        "Loading indicator specifications",
-                        "Configured loading",
-                        Role::ProgressIndicator,
-                    )
-                    .expect("configured loading indicator");
-                    assert_eq!(indicator.bounds().unwrap().width(), 48.0);
-                    assert_eq!(indicator.bounds().unwrap().height(), 48.0);
-                    assert_eq!(indicator.numeric_value(), None);
-                    toggle(
-                        &mut renderer,
-                        "Contained loading",
-                        Toggled::False,
-                        Toggled::True,
-                    );
-                    toggle(
-                        &mut renderer,
-                        "Pause loading animation",
-                        Toggled::False,
-                        Toggled::True,
-                    );
-                    let contained = scoped_node(
-                        &renderer,
-                        "Loading indicator specifications",
-                        "Configured loading",
-                        Role::ProgressIndicator,
-                    )
-                    .unwrap();
-                    assert_eq!(contained.bounds(), indicator.bounds());
-                }
-                7 => {
-                    let labels = [
-                        "Configuration linear linear progress",
-                        "Configuration circular circular progress",
-                    ];
-                    let indicator = |renderer: &HeadlessRenderer, label: &str| {
-                        scoped_node(
-                            renderer,
-                            "Progress indicators specifications",
-                            label,
-                            Role::ProgressIndicator,
-                        )
-                        .expect("configured progress indicator")
-                    };
-                    for label in labels {
-                        assert_eq!(indicator(&renderer, label).numeric_value(), Some(0.5));
-                    }
-                    assert_eq!(
-                        indicator(&renderer, labels[1]).bounds().unwrap().height(),
-                        40.0
-                    );
-                    let wavy = control(&renderer, "Progress configuration wavy");
-                    click(&mut renderer, wavy.bounds().unwrap());
-                    assert_eq!(
-                        indicator(&renderer, labels[1]).bounds().unwrap().height(),
-                        48.0
-                    );
-                    let thick = control(&renderer, "Progress configuration thick");
-                    click(&mut renderer, thick.bounds().unwrap());
-                    assert_eq!(
-                        indicator(&renderer, labels[1]).bounds().unwrap().height(),
-                        56.0
-                    );
-                    for label in labels {
-                        assert_eq!(indicator(&renderer, label).numeric_value(), Some(0.5));
-                    }
-                    let determinate = control(&renderer, "Progress configuration determinate");
-                    click(&mut renderer, determinate.bounds().unwrap());
-                    for label in labels {
-                        assert_eq!(indicator(&renderer, label).numeric_value(), None);
-                    }
-                    let determinate = control(&renderer, "Progress configuration determinate");
-                    click(&mut renderer, determinate.bounds().unwrap());
-                    for label in labels {
-                        assert_eq!(indicator(&renderer, label).numeric_value(), Some(0.5));
-                    }
-                }
-                12 => {
-                    assert_eq!(bounds(&renderer, "Small badge specimen").width(), 6.0);
-                    assert_eq!(bounds(&renderer, "Small badge specimen").height(), 6.0);
-                    assert_eq!(bounds(&renderer, "Large badge specimen").width(), 16.0);
-                    assert_eq!(bounds(&renderer, "Large badge specimen").height(), 16.0);
-                    assert_eq!(bounds(&renderer, "Maximum badge specimen").height(), 16.0);
-                    let inbox =
-                        scoped_node(&renderer, "Configured badge navigation", "Inbox", Role::Tab)
-                            .expect("badged destination");
-                    click(&mut renderer, inbox.bounds().unwrap());
-                    bounds(&renderer, "Configured destination: Inbox");
-                    let add = control(&renderer, "Add unread item");
-                    click(&mut renderer, add.bounds().unwrap());
-                    bounds(&renderer, "Unread count: 8");
-                    toggle(
-                        &mut renderer,
-                        "Use badge navigation rail",
-                        Toggled::False,
-                        Toggled::True,
-                    );
-                    let home =
-                        scoped_node(&renderer, "Configured badge navigation", "Home", Role::Tab)
-                            .expect("badged rail destination");
-                    click(&mut renderer, home.bounds().unwrap());
-                    bounds(&renderer, "Configured destination: Home");
-                    let clear = control(&renderer, "Clear unread items");
-                    click(&mut renderer, clear.bounds().unwrap());
-                    bounds(&renderer, "Unread count: 0");
-                }
-                18 => {
-                    select_article_page(&mut renderer, "Guidelines");
-                    activate_navigation(&mut renderer, "Usage", Role::Link);
-                    let one = scoped_node(&renderer, "Standard group", "One", Role::CheckBox)
-                        .expect("standard choice");
-                    click(&mut renderer, one.bounds().unwrap());
-                    bounds(&renderer, "Standard group selection: 1");
-                    let two = scoped_node(&renderer, "Standard group", "Two", Role::CheckBox)
-                        .expect("standard second choice");
-                    click(&mut renderer, two.bounds().unwrap());
-                    bounds(&renderer, "Standard group selection: 2");
-                    select_article_page(&mut renderer, "Specs");
-                    activate_navigation(&mut renderer, "Configurations", Role::Link);
-                    toggle(
-                        &mut renderer,
-                        "Multiple selection",
-                        Toggled::False,
-                        Toggled::True,
-                    );
-                    for name in ["One", "Two"] {
-                        let item = scoped_node(&renderer, "Configured group", name, Role::CheckBox)
-                            .expect("configured choice");
-                        click(&mut renderer, item.bounds().unwrap());
-                    }
-                    bounds(&renderer, "Standard · Medium · multiple · selection: 1, 2");
-                    toggle(
-                        &mut renderer,
-                        "Selection required",
-                        Toggled::False,
-                        Toggled::True,
-                    );
-                    for name in ["Two", "One"] {
-                        let item = scoped_node(&renderer, "Configured group", name, Role::CheckBox)
-                            .expect("required choice");
-                        click(&mut renderer, item.bounds().unwrap());
-                    }
-                    bounds(&renderer, "Standard · Medium · multiple · selection: 1");
-                    toggle(
-                        &mut renderer,
-                        "Disabled group",
-                        Toggled::False,
-                        Toggled::True,
-                    );
-                    let item = scoped_node(&renderer, "Configured group", "Two", Role::CheckBox)
-                        .expect("disabled choice");
-                    assert!(item.is_disabled());
-                    click(&mut renderer, item.bounds().unwrap());
-                    bounds(&renderer, "Standard · Medium · multiple · selection: 1");
-                }
-                22 => {
-                    let send = control(&renderer, "Variant main action");
-                    click(&mut renderer, send.bounds().unwrap());
-                    bounds(&renderer, "Variant: 1 main actions");
-                    let more = control(&renderer, "Variant menu actions");
-                    click(&mut renderer, more.bounds().unwrap());
-                    renderer.render_frames(30);
-                    assert_eq!(
-                        control(&renderer, "Variant menu actions").is_expanded(),
-                        Some(true)
-                    );
-                    let item = renderer
-                        .accessibility_snapshot()
-                        .unwrap()
-                        .nodes
-                        .into_iter()
-                        .find(|(_, node)| {
-                            node.role() == Role::MenuItem && node.label() == Some("Schedule send")
-                        })
-                        .expect("anchored send option")
-                        .1;
-                    let popup = item.bounds().unwrap();
-                    assert!(popup.width() <= 280.0 && popup.height() <= 64.0);
-                    click(&mut renderer, item.bounds().unwrap());
-                    renderer.render_frames(30);
-                    bounds(&renderer, "Menu choice: Schedule send");
-                    assert_eq!(
-                        control(&renderer, "Variant menu actions").is_expanded(),
-                        Some(false)
-                    );
-                    activate_navigation(&mut renderer, "States", Role::Link);
-                    toggle(
-                        &mut renderer,
-                        "Disable split button",
-                        Toggled::False,
-                        Toggled::True,
-                    );
-                    let disabled = control(&renderer, "States main action");
-                    assert!(disabled.is_disabled());
-                    click(&mut renderer, disabled.bounds().unwrap());
-                    bounds(&renderer, "States: 0 main actions");
-                }
-                8 => {
-                    let close = control(&renderer, "Close Variant menu");
-                    click(&mut renderer, close.bounds().unwrap());
-                    renderer.render_frames(60);
-                    let open = control(&renderer, "Open Variant menu");
-                    click(&mut renderer, open.bounds().unwrap());
-                    renderer.render_frames(60);
-                    let item = scoped_node(
-                        &renderer,
-                        "Variant FAB menu example",
-                        "New folder",
-                        Role::MenuItem,
-                    )
-                    .expect("creation action");
-                    click(&mut renderer, item.bounds().unwrap());
-                    renderer.render_frames(60);
-                    bounds(&renderer, "Variant · last action: Folder");
-                    let open = control(&renderer, "Open Variant menu");
-                    click(&mut renderer, open.bounds().unwrap());
-                    renderer.render_frames(60);
-                    let close = control(&renderer, "Close Variant menu");
-                    click(&mut renderer, close.bounds().unwrap());
-                    renderer.render_frames(60);
-                    control(&renderer, "Open Variant menu");
-                }
-                9 | 19 => {
-                    activate_navigation(&mut renderer, "Variants", Role::Link);
-                    for (label, height) in if component.demo == 9 {
-                        [("Small", 56.0), ("Medium", 80.0), ("Large", 96.0)]
-                    } else {
-                        [("FAB", 56.0), ("Medium", 80.0), ("Large", 96.0)]
-                    } {
-                        let action = control(&renderer, label);
-                        assert_eq!(action.bounds().unwrap().height(), height);
-                        if component.demo == 19 {
-                            assert_eq!(action.bounds().unwrap().width(), height);
-                        }
-                        click(&mut renderer, action.bounds().unwrap());
-                    }
-                    select_article_page(&mut renderer, "Accessibility");
-                    activate_navigation(&mut renderer, "Use cases", Role::Link);
-                    let label = if component.demo == 9 {
-                        "Compose"
-                    } else {
-                        "Add"
-                    };
-                    bounds(&renderer, "Activations: 0");
-                    for count in 1..=3 {
-                        let action = control(&renderer, label);
-                        click(&mut renderer, action.bounds().unwrap());
-                        bounds(&renderer, &format!("Activations: {count}"));
-                    }
-                    select_article_page(&mut renderer, "Specs");
-                    if component.demo == 9 {
-                        activate_navigation(&mut renderer, "Configurations", Role::Link);
-                        let toggle_label = "Collapse or expand the extended FAB label";
-                        let expanded = following_control(&mut renderer, toggle_label, "Compose")
-                            .bounds()
-                            .unwrap();
-                        bounds(&renderer, "Expanded · activations: 0");
-                        let action = following_control(&mut renderer, toggle_label, "Compose");
-                        click(&mut renderer, action.bounds().unwrap());
-                        bounds(&renderer, "Expanded · activations: 1");
-                        toggle(&mut renderer, toggle_label, Toggled::False, Toggled::True);
-                        renderer.render_frames(90);
-                        let collapsed = following_control(&mut renderer, toggle_label, "Compose")
-                            .bounds()
-                            .unwrap();
-                        assert_eq!(collapsed.width(), 56.0);
-                        assert!(expanded.width() > collapsed.width());
-                        bounds(&renderer, "Collapsed · activations: 1");
-                        toggle(&mut renderer, toggle_label, Toggled::True, Toggled::False);
-                        renderer.render_frames(90);
-                        let restored = following_control(&mut renderer, toggle_label, "Compose")
-                            .bounds()
-                            .unwrap();
-                        assert_eq!(restored.width(), expanded.width());
-                        bounds(&renderer, "Expanded · activations: 1");
-                    }
-                }
-                28 => {
-                    activate_navigation(&mut renderer, "Modal date picker", Role::Link);
-                    let day = scoped_node(
-                        &renderer,
-                        "Calendar date preview",
-                        "July 20, 2026",
-                        Role::Button,
-                    )
-                    .expect("calendar day");
-                    click(&mut renderer, day.bounds().unwrap());
-                    bounds(&renderer, "Calendar date: 2026-07-20");
-                    let confirm = control(&renderer, "Calendar confirm date");
-                    click(&mut renderer, confirm.bounds().unwrap());
-                    bounds(&renderer, "Confirmed date: 2026-07-20");
-                    toggle(
-                        &mut renderer,
-                        "Calendar range selection",
-                        Toggled::False,
-                        Toggled::True,
-                    );
-                    for day in ["July 18, 2026", "July 22, 2026"] {
-                        let day =
-                            scoped_node(&renderer, "Calendar date preview", day, Role::Button)
-                                .expect("range day");
-                        click(&mut renderer, day.bounds().unwrap());
-                    }
-                    bounds(&renderer, "Calendar range: 2026-07-18 – 2026-07-22");
-                    let confirm = control(&renderer, "Calendar confirm date");
-                    click(&mut renderer, confirm.bounds().unwrap());
-                    bounds(&renderer, "Confirmed range: 2026-07-18 – 2026-07-22");
-                    activate_navigation(&mut renderer, "Modal date input", Role::Link);
-                    toggle(
-                        &mut renderer,
-                        "Input range selection",
-                        Toggled::False,
-                        Toggled::True,
-                    );
-                    for (label, value) in [("Start date", "07/10/2026"), ("End date", "07/16/2026")]
-                    {
-                        let input =
-                            scoped_node(&renderer, "Input date preview", label, Role::TextInput)
-                                .expect("range input field");
-                        assert_eq!(input.value(), Some(value));
-                    }
-                    activate_navigation(&mut renderer, "Element states", Role::Link);
-                    let state_day = "August 17, 2025";
-                    let light_day = "Light Enabled date state";
-                    let disabled_day = "Light Disabled date state";
-                    let dark_day = "Dark Enabled date state";
-                    let allowed = scoped_node(&renderer, light_day, state_day, Role::Button)
-                        .expect("native enabled date state");
-                    assert!(!allowed.is_disabled());
-                    assert_eq!(allowed.is_selected(), Some(false));
-                    click(&mut renderer, allowed.bounds().unwrap());
-                    assert_eq!(
-                        scoped_node(&renderer, light_day, state_day, Role::Button)
-                            .unwrap()
-                            .is_selected(),
-                        Some(true),
-                    );
-                    let forbidden = scoped_node(&renderer, disabled_day, state_day, Role::Button)
-                        .expect("native disabled date state");
-                    assert!(forbidden.is_disabled());
-                    assert_eq!(forbidden.is_selected(), Some(false));
-                    click(&mut renderer, forbidden.bounds().unwrap());
-                    assert_eq!(
-                        scoped_node(&renderer, disabled_day, state_day, Role::Button)
-                            .unwrap()
-                            .is_selected(),
-                        Some(false),
-                    );
-                    assert_eq!(
-                        scoped_node(&renderer, dark_day, state_day, Role::Button)
-                            .expect("independent dark date state")
-                            .is_selected(),
-                        Some(false),
-                    );
-                    let dark_year = "Dark Enabled year state";
-                    let disabled_year = "Light Disabled year state";
-                    let year = scoped_node(&renderer, dark_year, "2025", Role::Button)
-                        .expect("native enabled year state");
-                    assert!(!year.is_disabled());
-                    assert_eq!(year.is_selected(), Some(false));
-                    click(&mut renderer, year.bounds().unwrap());
-                    assert_eq!(
-                        scoped_node(&renderer, dark_year, "2025", Role::Button)
-                            .unwrap()
-                            .is_selected(),
-                        Some(true),
-                    );
-                    let forbidden = scoped_node(&renderer, disabled_year, "2025", Role::Button)
-                        .expect("native disabled year state");
-                    assert!(forbidden.is_disabled());
-                    assert_eq!(forbidden.is_selected(), Some(false));
-                    click(&mut renderer, forbidden.bounds().unwrap());
-                    assert_eq!(
-                        scoped_node(&renderer, disabled_year, "2025", Role::Button)
-                            .unwrap()
-                            .is_selected(),
-                        Some(false),
-                    );
-                    assert_eq!(
-                        scoped_node(&renderer, "Light Enabled year state", "2025", Role::Button)
-                            .expect("independent light year state")
-                            .is_selected(),
-                        Some(false),
-                    );
-                    assert_eq!(
-                        scoped_node(&renderer, light_day, state_day, Role::Button)
-                            .unwrap()
-                            .is_selected(),
-                        Some(true),
-                        "disabled and independent year clicks must retain the selected date",
-                    );
-                    assert_eq!(
-                        scoped_node(&renderer, dark_year, "2025", Role::Button)
-                            .unwrap()
-                            .is_selected(),
-                        Some(true),
-                        "disabled year clicks must retain the independently selected year",
-                    );
-                    activate_navigation(&mut renderer, "Modal date picker", Role::Link);
-                    let open = control(&renderer, "Open Calendar date dialog");
-                    click(&mut renderer, open.bounds().unwrap());
-                    renderer.render_frames(24);
-                    renderer.resize(900, 1200);
-                    renderer.render_frames(8);
-                    let mode = scoped_node(
-                        &renderer,
-                        "Modal date preview",
-                        "Switch to date range input",
-                        Role::Button,
-                    )
-                    .expect("modal input mode toggle");
-                    click(&mut renderer, mode.bounds().unwrap());
-                    for label in ["Start date", "End date"] {
-                        let input =
-                            scoped_node(&renderer, "Modal date preview", label, Role::TextInput)
-                                .expect("modal date input");
-                        assert!(input.bounds().unwrap().height() <= 56.0);
-                    }
-                    let dialog = renderer
-                        .accessibility_snapshot()
-                        .unwrap()
-                        .nodes
-                        .iter()
-                        .find(|(_, node)| node.role() == Role::Dialog)
-                        .and_then(|(_, node)| node.bounds())
-                        .expect("date dialog bounds");
-                    assert!(dialog.height() < 400.0);
-                    let cancel = control(&renderer, "Modal cancel date");
-                    let cancel_bounds = cancel.bounds().unwrap();
-                    assert!(cancel_bounds.y0 >= dialog.y0 && cancel_bounds.y1 <= dialog.y1);
-                    click(&mut renderer, cancel.bounds().unwrap());
-                    renderer.render_frames(24);
-                    assert!(
-                        !renderer
-                            .accessibility_snapshot()
-                            .unwrap()
-                            .nodes
-                            .iter()
-                            .any(|(_, node)| node.role() == Role::Dialog)
-                    );
-                    renderer.resize(900, 8000);
-                    renderer.render_frames(8);
-                }
-                30 => {
-                    activate_navigation(&mut renderer, "Anatomy", Role::Link);
-                    settle_time_geometry(&mut renderer);
-                    let vertical = bounds(&renderer, "Anatomy time preview");
-                    toggle(
-                        &mut renderer,
-                        "Anatomy horizontal layout",
-                        Toggled::False,
-                        Toggled::True,
-                    );
-                    settle_time_geometry(&mut renderer);
-                    let horizontal = bounds(&renderer, "Anatomy time preview");
-                    assert!(horizontal.width() > vertical.width());
-                    assert!(horizontal.height() < vertical.height());
-                    renderer.resize(390, 8000);
-                    renderer.render_frames(8);
-                    settle_time_geometry(&mut renderer);
-                    let compact = bounds(&renderer, "Anatomy time preview");
-                    assert!(compact.width() < 400.0 && compact.height() > horizontal.height());
-                    renderer.resize(900, 8000);
-                    renderer.render_frames(8);
-                    settle_time_geometry(&mut renderer);
-                    toggle(
-                        &mut renderer,
-                        "Anatomy 24-hour format",
-                        Toggled::False,
-                        Toggled::True,
-                    );
-                    assert!(
-                        scoped_node(&renderer, "Anatomy time preview", "AM/PM", Role::RadioGroup)
-                            .is_none()
-                    );
-                    let hour = scoped_node(
-                        &renderer,
-                        "Anatomy time preview",
-                        "Hour 10 of 24",
-                        Role::Button,
-                    )
-                    .expect("24-hour dial value");
-                    click(&mut renderer, hour.bounds().unwrap());
-                    bounds(&renderer, "Anatomy time: 10:41");
-                    let confirm = control(&renderer, "Anatomy confirm time");
-                    click(&mut renderer, confirm.bounds().unwrap());
-                    bounds(&renderer, "Confirmed 10:41");
-                    toggle(
-                        &mut renderer,
-                        "Anatomy keyboard input",
-                        Toggled::False,
-                        Toggled::True,
-                    );
-                    assert!(
-                        scoped_node(
-                            &renderer,
-                            "Anatomy time preview",
-                            "Hour 10 of 24",
-                            Role::Button
-                        )
-                        .is_none()
-                    );
-                    for label in ["Hour", "Minute"] {
-                        scoped_node(&renderer, "Anatomy time preview", label, Role::TextInput)
-                            .expect("time input field");
-                    }
-                    let open = control(&renderer, "Open time picker dialog");
-                    click(&mut renderer, open.bounds().unwrap());
-                    renderer.render_frames(24);
-                    let cancel = control(&renderer, "Modal cancel time");
-                    click(&mut renderer, cancel.bounds().unwrap());
-                    renderer.render_frames(24);
-                    assert!(
-                        !renderer
-                            .accessibility_snapshot()
-                            .unwrap()
-                            .nodes
-                            .iter()
-                            .any(|(_, node)| node.role() == Role::Dialog)
-                    );
-                }
-                14 => {
-                    let thickness = bounds(&renderer, "Dimension 1dp thickness");
-                    let width = bounds(&renderer, "Dimension available width");
-                    assert_eq!(thickness.width(), 24.0);
-                    assert_eq!(width.width(), 236.0);
-                    let snapshot = renderer.accessibility_snapshot().unwrap();
-                    for label in [
-                        "Divider full-width",
-                        "Divider inset left margin",
-                        "Divider middle-inset right margin",
-                        "100%",
-                        "16dp",
-                    ] {
-                        assert!(
-                            snapshot
-                                .nodes
-                                .iter()
-                                .any(|(_, node)| node.role() == Role::Cell
-                                    && node.label() == Some(label)),
-                            "missing divider measurement {label}"
-                        );
-                    }
-                }
-                15 => {
-                    toggle(
-                        &mut renderer,
-                        "Expressive list: Notes",
-                        Toggled::False,
-                        Toggled::True,
-                    );
-                    activate_navigation(&mut renderer, "Configurations", Role::Link);
-                    toggle(
-                        &mut renderer,
-                        "Single select: Projects",
-                        Toggled::False,
-                        Toggled::True,
-                    );
-                    assert_eq!(
-                        control(&renderer, "Single select: Notes").toggled(),
-                        Some(Toggled::False)
-                    );
-                    toggle(
-                        &mut renderer,
-                        "Multi select: Notes",
-                        Toggled::False,
-                        Toggled::True,
-                    );
-                    toggle(
-                        &mut renderer,
-                        "Multi select: Projects",
-                        Toggled::False,
-                        Toggled::True,
-                    );
-                    assert_eq!(
-                        control(&renderer, "Multi select: Notes").toggled(),
-                        Some(Toggled::True)
-                    );
-                    let secondary = control(&renderer, "Multi action: Notes more actions");
-                    click(&mut renderer, secondary.bounds().unwrap());
-                    bounds(&renderer, "Multi action secondary actions: 1");
-                    bounds(&renderer, "Multi action primary actions: 0");
-                    let primary = control(&renderer, "Multi action: Notes");
-                    click(&mut renderer, primary.bounds().unwrap());
-                    bounds(&renderer, "Multi action secondary actions: 1");
-                    bounds(&renderer, "Multi action primary actions: 1");
-                    assert!(
-                        !renderer
-                            .accessibility_snapshot()
-                            .unwrap()
-                            .nodes
-                            .iter()
-                            .any(|(_, node)| node.label() == Some("Expanded archive folder"))
-                    );
-                    let expand = control(&renderer, "Expand related folders");
-                    click(&mut renderer, expand.bounds().unwrap());
-                    bounds(&renderer, "Expanded archive folder");
-                    let expand = control(&renderer, "Expand related folders");
-                    click(&mut renderer, expand.bounds().unwrap());
-                    assert!(
-                        !renderer
-                            .accessibility_snapshot()
-                            .unwrap()
-                            .nodes
-                            .iter()
-                            .any(|(_, node)| node.label() == Some("Expanded archive folder"))
-                    );
-                    activate_navigation(&mut renderer, "Measurements", Role::Link);
-                    for (label, height) in [
-                        ("One-line list measurement", 56.0),
-                        ("Two-line list measurement", 72.0),
-                        ("Three-line list measurement", 88.0),
-                    ] {
-                        assert_eq!(bounds(&renderer, label).height(), height, "{label}");
-                    }
-                }
-                16 => {
-                    let card = control(&renderer, "Elevated card");
-                    bounds(&renderer, "Elevated card activations: 0");
-                    click(&mut renderer, card.bounds().unwrap());
-                    bounds(&renderer, "Elevated card activations: 1");
-                    let disabled = control(&renderer, "Elevated disabled");
-                    click(&mut renderer, disabled.bounds().unwrap());
-                    bounds(&renderer, "Elevated disabled activations: 0");
-                    activate_navigation(&mut renderer, "Measurements", Role::Link);
-                    let first = control(&renderer, "First card").bounds().unwrap();
-                    let second = control(&renderer, "Second card").bounds().unwrap();
-                    assert_eq!(second.x0 - first.x1, 8.0);
-                }
-                3 => {
-                    toggle(
-                        &mut renderer,
-                        "Toggle favorite",
-                        Toggled::False,
-                        Toggled::True,
-                    );
-                    toggle(
-                        &mut renderer,
-                        "Toggle favorite",
-                        Toggled::True,
-                        Toggled::False,
-                    );
-                    let action = control(&renderer, "Default icon action");
-                    assert_eq!(action.description(), Some("Activations: 0"));
-                    click(&mut renderer, action.bounds().unwrap());
-                    assert_eq!(
-                        control(&renderer, "Default icon action").description(),
-                        Some("Activations: 1")
-                    );
-                }
-                17 => {
-                    toggle(
-                        &mut renderer,
-                        "Filter example",
-                        Toggled::False,
-                        Toggled::True,
-                    );
-                    toggle(
-                        &mut renderer,
-                        "Input example",
-                        Toggled::False,
-                        Toggled::True,
-                    );
-                    activate_navigation(&mut renderer, "Tokens & specs", Role::Link);
-                    let selector = control(&renderer, "Filter chip tokens");
-                    click(&mut renderer, selector.bounds().unwrap());
-                    assert!(
-                        renderer
-                            .accessibility_snapshot()
-                            .unwrap()
-                            .nodes
-                            .iter()
-                            .any(|(_, node)| node.role() == Role::Cell
-                                && node.label() == Some("Secondary container"))
-                    );
-                }
-                23 => {
-                    let guidelines = bounds(&renderer, "Guidelines");
-                    click(&mut renderer, guidelines);
-                    activate_navigation(&mut renderer, "Usage", Role::Link);
-                    toggle(
-                        &mut renderer,
-                        "Turn off notifications",
-                        Toggled::False,
-                        Toggled::True,
-                    );
-                    assert_eq!(
-                        control(&renderer, "Allow notifications").toggled(),
-                        Some(Toggled::False)
-                    );
-                    let specs = bounds(&renderer, "Specs");
-                    click(&mut renderer, specs);
-                }
-                36 => {
-                    toggle(
-                        &mut renderer,
-                        "Toggle button",
-                        Toggled::False,
-                        Toggled::True,
-                    );
-                    toggle(
-                        &mut renderer,
-                        "Toggle button",
-                        Toggled::True,
-                        Toggled::False,
-                    );
-                    activate_navigation(&mut renderer, "Tokens & specs", Role::Link);
-                    let initial = renderer.accessibility_snapshot().unwrap();
-                    assert!(
-                        initial
-                            .nodes
-                            .iter()
-                            .any(|(_, node)| node.role() == Role::Cell
-                                && node.label() == Some("On primary"))
-                    );
-                    let selector = control(&renderer, "Outlined color tokens")
-                        .bounds()
-                        .unwrap();
-                    click(&mut renderer, selector);
-                    let changed = renderer.accessibility_snapshot().unwrap();
-                    assert!(
-                        changed
-                            .nodes
-                            .iter()
-                            .any(|(_, node)| node.role() == Role::Cell
-                                && node.label() == Some("On surface variant"))
-                    );
-                    assert!(
-                        !changed
-                            .nodes
-                            .iter()
-                            .any(|(_, node)| node.role() == Role::Cell
-                                && node.label() == Some("On primary"))
-                    );
-                }
-                37 => {
-                    toggle(
-                        &mut renderer,
-                        "Microphone access",
-                        Toggled::True,
-                        Toggled::False,
-                    );
-                    activate_navigation(&mut renderer, "Checkbox", Role::Link);
-                    toggle(
-                        &mut renderer,
-                        "Indeterminate checkbox",
-                        Toggled::Mixed,
-                        Toggled::True,
-                    );
-                    toggle(
-                        &mut renderer,
-                        "Indeterminate checkbox",
-                        Toggled::True,
-                        Toggled::False,
-                    );
-                }
-                38 => {
-                    toggle(&mut renderer, "Wi-Fi", Toggled::True, Toggled::False);
-                    toggle(
-                        &mut renderer,
-                        "Icons in both states: unselected",
-                        Toggled::False,
-                        Toggled::True,
-                    );
-                }
-                _ => {}
-            }
-            if matches!(
-                component.demo,
-                1 | 3
-                    | 4
-                    | 25
-                    | 20
-                    | 24
-                    | 5
-                    | 6
-                    | 7
-                    | 8
-                    | 9
-                    | 12
-                    | 14
-                    | 15
-                    | 16
-                    | 17
-                    | 18
-                    | 19
-                    | 21
-                    | 22
-                    | 23
-                    | 28
-                    | 30
-                    | 31
-                    | 32
-                    | 36
-                    | 37
-                    | 38
-            ) {
-                renderer.resize(900, 1200);
-                renderer.render_frames(8);
-                for last in [false, true] {
-                    {
-                        let back = bounds(&renderer, "Back to components");
-                        click(&mut renderer, back);
-                        renderer.resize(900, 8000);
-                        renderer.render_frames(8);
-                        let card = bounds(
-                            &renderer,
-                            &format!("Open {} specifications", component.title),
-                        );
-                        click(&mut renderer, card);
-                        enter_specs(&mut renderer);
-                        renderer.resize(900, 1200);
-                        renderer.render_frames(8);
-                    }
-                    let links = article_contents_links(&mut renderer, article_title);
-                    let section = if last { links.last() } else { links.first() }
-                        .expect("composed contents must expose a navigation target")
-                        .as_str();
-                    let phase = if last {
-                        "last contents link"
-                    } else {
-                        "first contents link"
-                    };
-                    let link = renderer
-                        .accessibility_snapshot()
-                        .unwrap()
-                        .nodes
-                        .into_iter()
-                        .find(|(_, node)| {
-                            node.role() == Role::Link && node.label() == Some(section)
-                        })
-                        .unwrap_or_else(|| {
-                            panic!(
-                                "{} {phase}: missing {section}; actual contents: {links:?}",
-                                component.title
-                            )
-                        })
-                        .1
-                        .bounds()
-                        .unwrap();
-                    click(&mut renderer, link);
-                    renderer.render_frames(8);
-                    let heading = renderer
-                        .accessibility_snapshot()
-                        .unwrap()
-                        .nodes
-                        .into_iter()
-                        .find(|(_, node)| {
-                            node.role() == Role::Heading
-                                && node.level() == Some(2)
-                                && node.label() == Some(section)
-                        })
-                        .unwrap_or_else(|| {
-                            let snapshot = renderer.accessibility_snapshot().unwrap();
-                            let headings = snapshot
-                                .nodes
-                                .iter()
-                                .filter(|(_, node)| node.role() == Role::Heading)
-                                .map(|(_, node)| (node.label(), node.level(), node.bounds()))
-                                .collect::<Vec<_>>();
-                            panic!("{} {phase}: clicking {section} did not reveal its heading; contents: {links:?}; headings: {headings:?}", component.title)
-                        })
-                        .1
-                        .bounds()
-                        .unwrap();
-                    let back = bounds(&renderer, "Back to components");
-                    assert!(
-                        heading.y0 >= back.y1 && heading.y1 <= 1200.0,
-                        "{phase} must reveal {section} below the back button for {}: {heading:?}; back: {back:?}",
-                        component.title
-                    );
-                    if component.demo == 12 && section == "Configuration" {
-                        let add = control(&renderer, "Add unread item");
-                        let add_bounds = add.bounds().unwrap();
-                        if add_bounds.y0 < 0.0 || add_bounds.y1 > 1200.0 {
-                            renderer.pointer_scroll(
-                                MOUSE_POINTER_ID,
-                                PxPosition::from_f32_xy(896.0, 600.0),
-                                0.0,
-                                (600.0 - (add_bounds.y0 + add_bounds.y1) * 0.5) as f32,
-                            );
-                            renderer.render_frames(40);
-                        }
-                        let before = renderer
-                            .accessibility_snapshot()
-                            .unwrap()
-                            .nodes
-                            .into_iter()
-                            .find(|(_, node)| {
-                                node.role() == Role::Heading && node.label() == Some(section)
-                            })
-                            .unwrap()
-                            .1
-                            .bounds()
-                            .unwrap();
-                        let add = control(&renderer, "Add unread item");
-                        click(&mut renderer, add.bounds().unwrap());
-                        bounds(&renderer, "Unread count: 8");
-                        renderer.render_frames(5);
-                        let after = renderer
-                            .accessibility_snapshot()
-                            .unwrap()
-                            .nodes
-                            .into_iter()
-                            .find(|(_, node)| {
-                                node.role() == Role::Heading && node.label() == Some(section)
-                            })
-                            .unwrap()
-                            .1
-                            .bounds()
-                            .unwrap();
-                        assert_eq!(
-                            after, before,
-                            "activating a control must not reclamp a section jump"
-                        );
-                    }
-                }
-                if matches!(component.demo, 9 | 18 | 19 | 22) {
-                    activate_navigation(&mut renderer, "Variants", Role::Link);
-                    if component.demo == 18 {
-                        select_article_page(&mut renderer, "Guidelines");
-                        activate_navigation(&mut renderer, "Usage", Role::Link);
-                    } else if component.demo == 22 {
-                        activate_navigation(&mut renderer, "Configurations", Role::Link);
-                    }
-                } else if component.demo == 28 {
-                    activate_navigation(&mut renderer, "Modal date picker", Role::Link);
-                } else if component.demo == 30 {
-                    activate_navigation(&mut renderer, "Anatomy", Role::Link);
-                }
-                renderer.resize(390, 900);
-                renderer.render_frames(8);
-                if component.demo == 28 {
-                    let preview = bounds(&renderer, "Calendar date preview");
-                    assert_eq!(preview.width(), 359.0);
-                    assert!(preview.x0 >= 8.0 && preview.x1 <= 375.0);
-                } else if component.demo == 30 {
-                    let preview = bounds(&renderer, "Anatomy time preview");
-                    assert!(preview.width() >= 304.0 && preview.width() < 400.0);
-                    assert!(preview.x0 >= 0.0 && preview.x1 <= 390.0);
-                } else if component.demo == 9 || component.demo == 19 {
-                    for name in if component.demo == 9 {
-                        ["Small", "Medium", "Large"]
-                    } else {
-                        ["FAB", "Medium", "Large"]
-                    } {
-                        let preview = control(&renderer, name).bounds().unwrap();
-                        assert!(preview.x0 >= 0.0 && preview.x1 <= 390.0);
-                    }
-                } else if component.demo == 18 {
-                    for label in ["One", "Two", "Three"] {
-                        let preview =
-                            scoped_node(&renderer, "Connected group", label, Role::CheckBox)
-                                .unwrap()
-                                .bounds()
-                                .unwrap();
-                        assert!(preview.x0 >= 0.0 && preview.x1 <= 390.0);
-                    }
-                }
-                renderer.resize(900, 8000);
-                renderer.render_frames(8);
-            }
-            let back = bounds(&renderer, "Back to components");
-            click(&mut renderer, back);
-            bounds(
-                &renderer,
-                &format!("Open {} specifications", component.title),
-            );
-        }
-        renderer.resize(390, 900);
-        renderer.render_frames(8);
-        let first = bounds(&renderer, "Open Button groups specifications");
-        let second = bounds(&renderer, "Open Buttons specifications");
-        assert!(first.x0 >= 0.0 && first.x1 <= 390.0);
-        assert!(
-            second.y0 >= first.y1,
-            "compact directory must use one column"
-        );
-    }
-
-    #[test]
     #[ignore = "requires a native GPU adapter for real directory and article tracks"]
     fn reserved_track_preserves_directory_groups_wheel_and_article_routes() {
         let mut renderer = HeadlessRenderer::new(
             Box::new(fixture),
-            vec![Box::new(ComponentPipelines)],
+            vec![Box::new(crate::TestPipelines)],
             HeadlessConfig {
                 width: 907,
                 height: 1800,
@@ -4149,7 +2121,7 @@ mod tests {
         // default window, where the directory shows two columns.
         let mut renderer = HeadlessRenderer::new(
             Box::new(fixture),
-            vec![Box::new(ComponentPipelines)],
+            vec![Box::new(crate::TestPipelines)],
             HeadlessConfig {
                 width: 1650,
                 height: 1200,

@@ -573,7 +573,7 @@ fn guide_scene(kind: u8, selected: State<usize>) {
                         .clip_to_bounds(),
                 )
                 .children(move || {
-                    navigation_bar().content(move || {
+                    navigation_bar().content(move |icon_position| {
                         for (index, (label, asset)) in [
                             ("Inbox", outlined::INBOX_SVG),
                             ("Favorites", outlined::FAVORITE_BORDER_SVG),
@@ -583,6 +583,7 @@ fn guide_scene(kind: u8, selected: State<usize>) {
                         .enumerate()
                         {
                             navigation_bar_item()
+                                .icon_position(icon_position)
                                 .label(label)
                                 .selected(index == 0)
                                 .icon(move || {

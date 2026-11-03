@@ -4,7 +4,7 @@
 //!
 //! Keep diagram annotations and native sheet actions aligned at narrow widths.
 
-use std::{cell::Cell, time::Duration};
+use std::time::Duration;
 
 use tessera_components::{
     alignment::Alignment, boxed::boxed, column::column, scrollable::ScrollableController,
@@ -17,16 +17,10 @@ use tessera_ui::{
     accesskit::{Node, Role, Toggled},
     current_frame_time,
     modifier::ModifierCapabilityExt as _,
+    testing::TestProbe,
 };
 
 use super::*;
-
-thread_local! {
-    static SCENE: Cell<usize> = const { Cell::new(0) };
-    pub(super) static GEOMETRY: Cell<Option<State<Geometry>>> = const { Cell::new(None) };
-    pub(super) static NOTICE: Cell<Option<State<String>>> = const { Cell::new(None) };
-    static SCROLL: Cell<Option<State<ScrollableController>>> = const { Cell::new(None) };
-}
 
 #[derive(Clone, Copy, PartialEq)]
 struct FractionalOrigin;
@@ -37,9 +31,9 @@ impl PlacementModifierNode for FractionalOrigin {
 }
 
 #[tessera]
-fn fixture() {
+fn fixture(scene: usize, probe: TestProbe<Option<State<ScrollableController>>>) {
     let scroll = remember(ScrollableController::new);
-    SCROLL.set(Some(scroll));
+    probe.set(Some(scroll));
     material_theme().child(move || {
         boxed()
             .alignment(Alignment::TopStart)
@@ -56,9 +50,9 @@ fn fixture() {
                             .height(Dp(600.0))
                             .vertical_scroll(scroll),
                     )
-                    .children(|| {
+                    .children(move || {
                         spacer().modifier(Modifier::new().height(Dp(160.0)));
-                        match SCENE.get() {
+                        match scene {
                             0 => {
                                 figures::anatomy_figure(false);
                             }
@@ -78,22 +72,15 @@ fn fixture() {
     });
 }
 
-struct Pipelines;
-impl tessera_ui::RenderModule for Pipelines {
-    fn register_pipelines(&self, context: &mut tessera_ui::PipelineContext<'_>) {
-        tessera_components::pipelines::register_pipelines(context);
-    }
-}
-
 fn node(renderer: &HeadlessRenderer, label: &str, role: Role) -> Node {
-    renderer
-        .accessibility_snapshot()
-        .unwrap()
-        .nodes
-        .into_iter()
-        .find(|(_, node)| node.role() == role && node.label() == Some(label))
+    let snapshot = renderer
+        .inspect_accessibility()
+        .expect("accessibility tree");
+    snapshot
+        .find(label, role)
         .unwrap_or_else(|| panic!("missing {label} {role:?}"))
         .1
+        .clone()
 }
 
 fn click(renderer: &mut HeadlessRenderer, label: &str, role: Role) {
@@ -110,12 +97,13 @@ fn click(renderer: &mut HeadlessRenderer, label: &str, role: Role) {
 }
 
 fn renderer(scene: usize, samples: u32) -> HeadlessRenderer {
-    SCENE.set(scene);
-    GEOMETRY.set(None);
-    NOTICE.set(None);
+    let probe = TestProbe::default();
+    let observed = probe.clone();
     let mut renderer = HeadlessRenderer::new(
-        Box::new(fixture),
-        vec![Box::new(Pipelines)],
+        Box::new(move || {
+            fixture(scene, probe.clone());
+        }),
+        vec![Box::new(crate::TestPipelines)],
         HeadlessConfig {
             width: 640,
             height: 800,
@@ -142,7 +130,7 @@ fn renderer(scene: usize, samples: u32) -> HeadlessRenderer {
     );
     renderer.render_frames(120);
     assert_eq!(
-        SCROLL
+        observed
             .get()
             .unwrap()
             .with(|scroll| scroll.child_position().y),
@@ -152,7 +140,16 @@ fn renderer(scene: usize, samples: u32) -> HeadlessRenderer {
 }
 
 fn assert_figure(renderer: &HeadlessRenderer, scene: usize, width: f32) {
-    let geometry = GEOMETRY.get().unwrap().get();
+    let snapshot = renderer.inspect_components();
+    let geometry: Geometry = ["figure", "screen", "scrim", "container", "handle"]
+        .into_iter()
+        .filter_map(|name| {
+            snapshot
+                .find_tag(&format!("sheet-figure-{name}"))
+                .and_then(|node| node.layout_coordinates())
+                .map(|value| (name, value))
+        })
+        .collect();
     let root = geometry["figure"];
     assert_eq!(root.local_to_window.scale(), width / 1024.0);
     assert_eq!(

@@ -14,6 +14,9 @@ use std::{
     sync::Arc,
 };
 
+use rustc_hash::FxHasher;
+use smallvec::SmallVec;
+
 use crate::{
     AccessibilityActionHandler, AccessibilityNode, ComputedData, Constraint, FocusGroupNode,
     FocusProperties, FocusRequester, FocusScopeNode, FocusState, FocusTraversalPolicy, ImeInput,
@@ -133,12 +136,21 @@ pub trait LayoutModifierNode: Send + Sync + 'static {
 /// A node-local placement modifier that transforms the current node position
 /// without affecting measured size.
 pub trait PlacementModifierNode: Send + Sync + 'static {
+    /// Returns the concrete modifier name used by layout inspection.
+    fn diagnostic_name(&self) -> &'static str {
+        std::any::type_name::<Self>()
+    }
     /// Returns the transformed node position relative to the parent.
     fn transform_position(&self, position: PxPosition) -> PxPosition;
 }
 
 /// A node-local draw modifier.
 pub trait DrawModifierNode: Send + Sync + 'static {
+    /// Returns the concrete modifier name used by paint inspection.
+    fn diagnostic_name(&self) -> &'static str {
+        std::any::type_name::<Self>()
+    }
+
     /// Records drawing behavior around the wrapped content.
     ///
     /// Drawing uses the content bounds at this position in the modifier chain.
@@ -162,9 +174,87 @@ pub trait ParentDataModifierNode: Any + Send + Sync + 'static {
 }
 
 /// A node-local build modifier.
-pub trait BuildModifierNode: Send + Sync + 'static {
+pub trait BuildModifierNode: Any + Send + Sync {
     /// Applies build-time effects to the current component node.
-    fn apply(&self, runtime: &mut TesseraRuntime);
+    fn apply(&self, _runtime: &mut TesseraRuntime) {}
+
+    /// Expands a stateful modifier at attachment time.
+    ///
+    /// Construct ordinary modifier data here. The context binds node state and
+    /// frame subscriptions to this capability in its owning node.
+    fn materialize(&self, _context: &mut ModifierBuildContext) -> Option<Modifier> {
+        None
+    }
+
+    /// Returns this node's nested scroll attachment, when present.
+    fn nested_scroll_connection(&self) -> Option<crate::nested_scroll::NestedScrollConnection> {
+        None
+    }
+}
+
+/// Node-owned services available while attaching a stateful modifier.
+///
+/// Modifier constructors remain reusable values. Their state is allocated when
+/// the chain attaches. State survives rebuilds of the same node and capability;
+/// inserting unrelated modifier types does not change that ownership.
+pub struct ModifierBuildContext {
+    instance: u64,
+    owner: u64,
+    path: Vec<u64>,
+    state_positions: SmallVec<[(TypeId, usize); 4]>,
+    clock_positions: SmallVec<[(TypeId, usize); 4]>,
+}
+
+fn next_type_position(positions: &mut SmallVec<[(TypeId, usize); 4]>, id: TypeId) -> usize {
+    if let Some((_, next)) = positions.iter_mut().find(|(kind, _)| *kind == id) {
+        let position = *next;
+        *next = next.checked_add(1).expect("modifier position exhausted");
+        position
+    } else {
+        positions.push((id, 1));
+        0
+    }
+}
+
+fn modifier_type_key(id: TypeId) -> u64 {
+    let mut hasher = FxHasher::default();
+    id.hash(&mut hasher);
+    hasher.finish()
+}
+
+impl ModifierBuildContext {
+    /// Gets persistent state by value type and occurrence within this capability.
+    ///
+    /// Calls of a different value type do not shift existing state. Multiple
+    /// values of the same type follow their declaration order.
+    pub fn state<T: Send + Sync + 'static>(&mut self, init: impl FnOnce() -> T) -> crate::State<T> {
+        let ordinal = next_type_position(&mut self.state_positions, TypeId::of::<T>());
+        crate::runtime::modifier_state(self.instance, &self.path, ordinal, init)
+    }
+
+    /// Registers a callback on this node's frame clock.
+    pub fn receive_frame_nanos<F>(&mut self, callback: F)
+    where
+        F: FnMut(u64) -> crate::FrameNanosControl + Send + 'static,
+    {
+        let callback_type = TypeId::of::<F>();
+        let ordinal = next_type_position(&mut self.clock_positions, callback_type);
+        let mut path = self.path.clone();
+        path.push(u64::MAX);
+        path.push(modifier_type_key(callback_type));
+        crate::runtime::modifier_frame_receiver(
+            self.instance,
+            self.owner,
+            &path,
+            ordinal,
+            callback,
+        );
+    }
+
+    /// Gets the nearest nested scroll connection above the attached node.
+    pub fn nested_scroll_parent(&self) -> Option<crate::nested_scroll::NestedScrollConnection> {
+        crate::nested_scroll::NestedScrollConnection::nearest()
+    }
 }
 
 /// A node-local semantics modifier.
@@ -668,12 +758,10 @@ impl Modifier {
 
     /// Creates an empty modifier chain.
     pub fn new() -> Self {
-        ensure_build_phase();
         Self::default()
     }
 
     fn push_action(self, action: ModifierAction) -> Self {
-        ensure_build_phase();
         Self {
             element: self.element.then(ModifierElement::Action(action)),
         }
@@ -681,7 +769,6 @@ impl Modifier {
 
     /// Appends another modifier chain after this one without flattening it.
     pub fn then(self, other: Modifier) -> Self {
-        ensure_build_phase();
         Self {
             element: self.element.then(other.element),
         }
@@ -884,17 +971,99 @@ impl Modifier {
         self.push_action(ModifierAction::Focus(op))
     }
 
+    /// Attaches a nested scroll connection to this node.
+    pub fn nested_scroll(self, connection: crate::nested_scroll::NestedScrollConnection) -> Self {
+        self.push_build(connection)
+    }
+
+    pub(crate) fn nested_scroll_connection(
+        &self,
+    ) -> Option<crate::nested_scroll::NestedScrollConnection> {
+        let mut connection = None;
+        self.element.for_each_action_outer_first(&mut |action| {
+            if let ModifierAction::Build(node) = action {
+                if let Some(attached) = node.nested_scroll_connection() {
+                    connection = Some(attached);
+                }
+            }
+        });
+        connection
+    }
+
+    fn materialize(self, instance: u64, owner: u64, path: &[u64]) -> Self {
+        fn expand(
+            element: &ModifierElement,
+            instance: u64,
+            owner: u64,
+            path: &[u64],
+            positions: &mut SmallVec<[(TypeId, usize); 4]>,
+        ) -> Option<ModifierElement> {
+            match element {
+                ModifierElement::Empty => None,
+                ModifierElement::Action(action) => {
+                    let ModifierAction::Build(node) = action else {
+                        return None;
+                    };
+                    let kind = node.as_ref().type_id();
+                    let position = next_type_position(positions, kind);
+                    let mut path = path.to_vec();
+                    path.push(modifier_type_key(kind));
+                    path.push(position as u64);
+                    let mut context = ModifierBuildContext {
+                        instance,
+                        owner,
+                        path: path.clone(),
+                        state_positions: SmallVec::new(),
+                        clock_positions: SmallVec::new(),
+                    };
+                    node.materialize(&mut context)
+                        .map(|modifier| modifier.materialize(instance, owner, &path).element)
+                }
+                ModifierElement::Combined { outer, inner } => {
+                    let first = expand(outer, instance, owner, path, positions);
+                    let second = expand(inner, instance, owner, path, positions);
+                    if first.is_none() && second.is_none() {
+                        return None;
+                    }
+                    Some(
+                        first
+                            .unwrap_or_else(|| outer.as_ref().clone())
+                            .then(second.unwrap_or_else(|| inner.as_ref().clone())),
+                    )
+                }
+            }
+        }
+        assert!(path.len() < 64, "recursive modifier materialization");
+        match expand(&self.element, instance, owner, path, &mut SmallVec::new()) {
+            Some(element) => Self { element },
+            None => self,
+        }
+    }
+
     /// Attaches this modifier chain to the current component node.
     pub fn attach(self) {
         ensure_build_phase();
 
+        let (instance, owner) = TesseraRuntime::with(|runtime| {
+            let node = runtime
+                .component_tree
+                .current_node()
+                .expect("modifier attachment requires a node");
+            (node.instance_logic_id, node.instance_key)
+        });
+        let materialized =
+            self.materialize(instance, owner, &crate::runtime::modifier_attachment_path());
+
         let mut actions = Vec::new();
-        self.element.for_each_action_outer_first(&mut |action| {
-            actions.push(action);
-        });
+        materialized
+            .element
+            .for_each_action_outer_first(&mut |action| {
+                actions.push(action);
+            });
         TesseraRuntime::with_mut(|runtime| {
-            runtime.append_current_modifier(self.clone());
+            runtime.append_current_modifier(materialized.clone());
         });
+        crate::nested_scroll::attachment_changed();
 
         let mut accessibility = AccessibilityNode::new();
         let mut action_handler = None;
@@ -1049,11 +1218,17 @@ impl Modifier {
     pub(crate) fn resolve_placement(
         &self,
         mut position: PxPosition,
+        instance: u64,
     ) -> (PxPosition, Vec<PxPosition>) {
         let pointer = self.has_pointer_input();
         let mut positions = Vec::new();
         self.element.fold_actions(&mut |action| {
             if let ModifierAction::Placement(node) = action {
+                crate::work::record(
+                    instance,
+                    crate::WorkPhase::Transform,
+                    node.node().diagnostic_name(),
+                );
                 position = node.node().transform_position(position);
             }
             if pointer

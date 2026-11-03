@@ -55,15 +55,11 @@ impl<F: ?Sized> Eq for Slot<F> {}
 
 /// Stable, comparable callback handle for `Fn()`.
 ///
-/// `Callback` is a stable handle to the latest callback closure created at the
-/// same build call site.
+/// Callback identity remains stable across recomposition. Capture [`State`](crate::State)
+/// handles and read their values when the callback runs to observe ongoing
+/// changes. Pass the handle through component props or attach it to an action.
 ///
-/// Callback identity does not change when the captured closure changes during
-/// recomposition. As a result, callback updates do not force prop mismatches or
-/// replay invalidation. Event handlers always invoke the latest closure stored
-/// behind the handle.
-///
-/// Create callbacks only during a Tessera component build.
+/// Create callbacks during a Tessera component build.
 #[derive(Clone, Copy)]
 pub struct Callback {
     repr: CallbackRepr,
@@ -130,8 +126,8 @@ impl Eq for Callback {}
 
 /// Stable, comparable callback handle for `Fn(T) -> R`.
 ///
-/// This follows the same stability rules as [`Callback`]: the handle remains
-/// stable across recomposition, while calls always observe the latest closure.
+/// The handle remains stable across recomposition. Capture [`State`](crate::State) handles
+/// and read their values when the callback runs to observe ongoing changes.
 ///
 /// This is useful for value-change handlers and similar one-argument callbacks.
 pub struct CallbackWith<T, R = ()> {
@@ -247,16 +243,43 @@ where
     }
 }
 
-/// Stable, comparable render slot handle.
+/// Owned UI content expanded by its parent during a Tessera build.
 ///
-/// `RenderSlot` is a stable handle to deferred UI content.
+/// The parent decides whether, when, and where content expands. Captures must
+/// be owned, Send, Sync, and static; capture stable State handles for changing data.
 ///
-/// Like [`Callback`], the handle stays stable across recomposition. Unlike
-/// callbacks, updating a render slot's closure invalidates component instances
-/// that rendered the slot, so slot content changes can trigger replayed
-/// components to rebuild with the latest UI.
+/// Stored content owns its captures. Move local values into its closure:
 ///
-/// Create render slots only during a Tessera component build.
+/// ```compile_fail
+/// use tessera_ui::{RenderSlot, tessera};
+///
+/// #[tessera]
+/// fn host(child: Option<RenderSlot>) {}
+///
+/// #[tessera]
+/// fn app() {
+///     let label = String::from("Title");
+///     host().child(|| { let _ = label.len(); });
+/// }
+/// ```
+///
+/// A configuration handle cannot be used in place of deferred child content:
+///
+/// ```compile_fail
+/// use tessera_ui::{RenderSlot, tessera};
+///
+/// #[tessera]
+/// fn host(child: Option<RenderSlot>) {}
+///
+/// #[tessera]
+/// fn leaf() {}
+///
+/// #[tessera]
+/// fn app() {
+///     host().child(leaf());
+/// }
+/// ```
+///
 #[derive(Clone, Copy)]
 pub struct RenderSlot {
     repr: RenderSlotRepr,
@@ -291,7 +314,9 @@ impl RenderSlot {
         }
     }
 
-    /// Execute the render closure.
+    /// Expands the content at the current build position.
+    ///
+    /// Call this only from a component or recognized build closure.
     pub fn render(&self) {
         match self.repr {
             RenderSlotRepr::Empty => {}
@@ -368,7 +393,9 @@ impl<T> RenderSlotWith<T> {
         }
     }
 
-    /// Execute the render closure with an input value.
+    /// Expands the content with an input at the current build position.
+    ///
+    /// Call this only from a component or recognized build closure.
     pub fn render(&self, value: T)
     where
         T: Clone + PartialEq + Send + Sync + 'static,

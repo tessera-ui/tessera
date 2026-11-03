@@ -77,6 +77,8 @@ mod tests {
 
     #[test]
     fn wheel_line_delta_is_scaled_by_platform_step() {
+        let _runtime_session = crate::RuntimeSession::new();
+        let _runtime_scope = _runtime_session.enter();
         let config = PlatformScrollConfig {
             wheel_line_step: Dp(24.0),
         };
@@ -91,6 +93,8 @@ mod tests {
 
     #[test]
     fn wheel_pixel_delta_is_left_untouched() {
+        let _runtime_session = crate::RuntimeSession::new();
+        let _runtime_scope = _runtime_session.enter();
         let config = PlatformScrollConfig {
             wheel_line_step: Dp(24.0),
         };

@@ -1,4 +1,4 @@
-use std::{cell::Cell, time::Duration};
+use std::time::Duration;
 
 use tessera_components::{
     alignment::Alignment, boxed::boxed, column::column, modifier::ModifierExt as _,
@@ -12,46 +12,34 @@ use tessera_ui::{
 
 use super::{baseline_figure, color_figure};
 
-thread_local! {
-    static RAIL: Cell<bool> = const { Cell::new(false) };
-}
-
-struct Pipelines;
-
-impl tessera_ui::RenderModule for Pipelines {
-    fn register_pipelines(&self, context: &mut tessera_ui::PipelineContext<'_>) {
-        tessera_components::pipelines::register_pipelines(context);
-    }
-}
-
 #[tessera]
-fn baseline_fixture() {
-    material_theme().child(|| {
+fn baseline_fixture(rail: bool) {
+    material_theme().child(move || {
         boxed()
             .alignment(Alignment::TopStart)
             .modifier(Modifier::new().fill_max_size())
-            .children(|| {
+            .children(move || {
                 column()
                     .modifier(Modifier::new().width(Dp(1024.0)))
-                    .children(|| {
-                        baseline_figure(RAIL.get(), false);
+                    .children(move || {
+                        baseline_figure(rail, false);
                     });
             });
     });
 }
 
 #[tessera]
-fn color_fixture() {
-    material_theme().child(|| {
+fn color_fixture(rail: bool) {
+    material_theme().child(move || {
         boxed()
             .alignment(Alignment::TopStart)
             .modifier(Modifier::new().fill_max_size())
-            .children(|| {
+            .children(move || {
                 column()
                     .modifier(Modifier::new().width(Dp(1024.0)))
-                    .children(|| {
-                        color_figure(RAIL.get(), false);
-                        color_figure(RAIL.get(), true);
+                    .children(move || {
+                        color_figure(rail, false);
+                        color_figure(rail, true);
                     });
             });
     });
@@ -128,10 +116,9 @@ fn active_icon_marker(renderer: &HeadlessRenderer, prefix: &str) -> tessera_ui::
 #[ignore = "Requires a native GPU adapter for actual baseline navigation geometry and focus"]
 fn baseline_figures_keep_native_destination_dimensions_and_focus_without_selecting() {
     for rail in [false, true] {
-        RAIL.set(rail);
         let mut renderer = HeadlessRenderer::new(
-            Box::new(baseline_fixture),
-            vec![Box::new(Pipelines)],
+            Box::new(move || baseline_fixture(rail)),
+            vec![Box::new(crate::TestPipelines)],
             HeadlessConfig {
                 width: 1100,
                 height: 700,
@@ -198,10 +185,9 @@ fn baseline_figures_keep_native_destination_dimensions_and_focus_without_selecti
 #[ignore = "Requires a native GPU adapter for actual navigation color figures and role annotations"]
 fn color_figures_publish_official_role_markers_and_independent_live_destination_selections() {
     for rail in [false, true] {
-        RAIL.set(rail);
         let mut renderer = HeadlessRenderer::new(
-            Box::new(color_fixture),
-            vec![Box::new(Pipelines)],
+            Box::new(move || color_fixture(rail)),
+            vec![Box::new(crate::TestPipelines)],
             HeadlessConfig {
                 width: 1100,
                 height: 1300,

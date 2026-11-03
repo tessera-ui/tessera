@@ -4,7 +4,7 @@
 //!
 //! Preserve separate selection and removal targets in compact chips.
 
-use std::{cell::Cell, time::Duration};
+use std::time::Duration;
 
 use tessera_ui::{
     HeadlessConfig, HeadlessRenderer, MOUSE_POINTER_ID, Modifier, PressKeyEventType, PxPosition,
@@ -28,13 +28,11 @@ struct Counts {
     selected: bool,
 }
 
-thread_local! {static COUNTS: Cell<Option<State<Counts>>> = const { Cell::new(None) };}
-
 #[tessera]
-fn fixture() {
-    material_theme().child(|| {
+fn fixture(probe: tessera_ui::testing::TestProbe<Option<State<Counts>>>) {
+    material_theme().child(move || {
         let counts = remember(Counts::default);
-        COUNTS.set(Some(counts));
+        probe.set(Some(counts));
         chip()
             .input("Alice")
             .selected(counts.get().selected)
@@ -72,8 +70,10 @@ fn click(renderer: &mut HeadlessRenderer, x: f64, y: f64) {
 }
 
 fn check_removal() {
+    let probe = tessera_ui::testing::TestProbe::default();
+    let observed = probe.clone();
     let mut renderer = HeadlessRenderer::new(
-        Box::new(fixture),
+        Box::new(move || fixture(observed.clone())),
         vec![Box::new(crate::TesseraComponents)],
         HeadlessConfig {
             width: 360,
@@ -85,7 +85,7 @@ fn check_removal() {
     )
     .unwrap();
     renderer.render_frames(4);
-    let counts = COUNTS.get().unwrap();
+    let counts = probe.get().unwrap();
     let remove = node(&renderer, "Remove Alice");
     assert_eq!(remove.1.role(), Role::Button);
     let target = remove.1.bounds().unwrap();

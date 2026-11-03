@@ -10,7 +10,7 @@ use ra_ap_base_db::SourceDatabase;
 use ra_ap_ide::FileId;
 use serde_json::{Value, json};
 
-use super::types::{ColorAnalyzer, Diagnostic, MessageFormat};
+use super::types::{CallAnalyzer, Diagnostic, MessageFormat};
 
 pub(super) struct Reporter {
     files: SimpleFiles<String, String>,
@@ -19,7 +19,7 @@ pub(super) struct Reporter {
 }
 
 impl Reporter {
-    pub(super) fn new(analyzer: &ColorAnalyzer<'_>, diagnostics: &[Diagnostic]) -> Self {
+    pub(super) fn new(analyzer: &CallAnalyzer<'_>, diagnostics: &[Diagnostic]) -> Self {
         let mut files = SimpleFiles::new();
         let mut ids = HashMap::new();
         for diagnostic in diagnostics {

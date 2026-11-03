@@ -232,7 +232,7 @@ fn measure_weighted_row(
     )?;
 
     let final_row_width = available_width_for_children;
-    let final_row_height = calculate_final_row_height(row_parent_constraint, max_child_height);
+    let final_row_height = row_parent_constraint.height.clamp(max_child_height);
 
     let total_measured_children_width: Px = children_sizes
         .iter()
@@ -289,9 +289,10 @@ fn measure_unweighted_row(
         max_child_height = max_child_height.max(child_result.height);
     }
 
-    let final_row_width =
-        calculate_final_row_width(row_parent_constraint, total_children_measured_width);
-    let final_row_height = calculate_final_row_height(row_parent_constraint, max_child_height);
+    let final_row_width = row_parent_constraint
+        .width
+        .clamp(total_children_measured_width);
+    let final_row_height = row_parent_constraint.height.clamp(max_child_height);
 
     place_children_with_alignment(
         &PlaceChildrenArgs {
@@ -391,35 +392,22 @@ fn collect_child_weights(input: &MeasureScope<'_>, children: &[LayoutChild]) -> 
         .collect()
 }
 
-fn calculate_final_row_width(
-    row_parent_constraint: &Constraint,
-    total_children_measured_width: Px,
-) -> Px {
-    row_parent_constraint
-        .width
-        .clamp(total_children_measured_width)
-}
-
-fn calculate_final_row_height(row_parent_constraint: &Constraint, max_child_height: Px) -> Px {
-    row_parent_constraint.height.clamp(max_child_height)
-}
-
 fn place_children_with_alignment<T: LayoutPlacementTarget>(
     args: &PlaceChildrenArgs<'_, T>,
     result: &mut LayoutResult,
 ) {
-    // Compute the initial x and spacing between children according to the main
-    // axis (horizontal), then iterate measured children:
-    // - use calculate_cross_axis_offset to compute each child's offset on the
-    //   cross axis (vertical)
-    // - place each child with place_node at the computed coordinates
-    let (mut current_x, spacing) = calculate_main_axis_layout(args);
+    let (mut current_x, spacing) = crate::layout_flex::main_axis_offsets(
+        args.final_row_width,
+        args.total_children_width,
+        args.main_axis_alignment,
+        args.child_count,
+    );
 
     for (i, child_size_opt) in args.children_sizes.iter().enumerate() {
         if let Some(child_actual_size) = child_size_opt {
             let child_id = args.children[i];
-            let y_offset = calculate_cross_axis_offset(
-                child_actual_size,
+            let y_offset = crate::layout_flex::cross_axis_offset(
+                child_actual_size.height,
                 args.final_row_height,
                 args.cross_axis_alignment,
             );
@@ -431,27 +419,6 @@ fn place_children_with_alignment<T: LayoutPlacementTarget>(
             }
         }
     }
-}
-
-fn calculate_main_axis_layout<T>(args: &PlaceChildrenArgs<'_, T>) -> (f32, f32) {
-    crate::layout_flex::main_axis_offsets(
-        args.final_row_width,
-        args.total_children_width,
-        args.main_axis_alignment,
-        args.child_count,
-    )
-}
-
-fn calculate_cross_axis_offset(
-    child_actual_size: &ComputedData,
-    final_row_height: Px,
-    cross_axis_alignment: CrossAxisAlignment,
-) -> f32 {
-    crate::layout_flex::cross_axis_offset(
-        child_actual_size.height,
-        final_row_height,
-        cross_axis_alignment,
-    )
 }
 
 #[cfg(test)]

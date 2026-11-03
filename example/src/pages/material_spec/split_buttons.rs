@@ -82,7 +82,9 @@ struct Menu {
 }
 
 #[tessera]
-pub(super) fn split_buttons_spec() {
+pub(super) fn split_buttons_spec(
+    route: Option<crate::pages::material_spec::article::ArticleRoute>,
+) {
     let menu = Menu {
         controller: remember(MenuController::new),
         anchor: remember(PxRect::default),
@@ -102,6 +104,7 @@ pub(super) fn split_buttons_spec() {
                 }),
         )
         .children(move || {
+            let route = route.clone();
             let anchor = menu.anchor.get();
             let origin = menu.origin.get();
             menu_provider()
@@ -156,6 +159,7 @@ pub(super) fn split_buttons_spec() {
                             },
                         ],
                     )
+                    .route_optional(route.clone())
                     .pages(vec![
                         ArticlePage {
                             title: "Overview",
@@ -239,17 +243,19 @@ pub(super) fn split_buttons_spec() {
                         },
                     ]);
                 })
-                .menu_content(move || {
+                .menu_content(move |scope| {
                     material_theme()
                         .theme(move || menu.theme.get())
                         .child(move || {
                             menu_item()
+                                .menu(scope)
                                 .label("Schedule send")
                                 .leading_icon(filled::SCHEDULE_SVG)
                                 .on_click(move || {
                                     menu.result.set("Schedule send".into());
                                 });
                             menu_item()
+                                .menu(scope)
                                 .label("Save draft")
                                 .leading_icon(filled::EDIT_SVG)
                                 .on_click(move || {

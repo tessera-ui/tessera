@@ -25,7 +25,7 @@ use tessera_components::{
     shape_def::Shape,
     surface::surface,
     text::text,
-    text_field::TextFieldBuilder,
+    text_field::text_field,
     text_input::TextInputController,
     theme::{MaterialTheme, material_theme},
 };
@@ -36,7 +36,7 @@ use tessera_ui::{
 
 use super::{
     ACCENT,
-    annotations::{self, ObservedGeometry, Rect, dotted, watch_observed},
+    annotations::{self, Rect, SpaceGeometry, dotted, watch_observed},
     article::{ArticlePage, SpecSection, article},
     gap, spec_table, subheading, type_style,
 };
@@ -84,7 +84,10 @@ fn formatted(value: Option<CalendarDate>) -> String {
 }
 
 #[tessera]
-pub(super) fn date_pickers_spec() {
+pub(super) fn date_pickers_spec(route: Option<crate::pages::material_spec::article::ArticleRoute>) {
+    let modal_controller = Some(remember(
+        crate::pages::material_spec::article::modal_host::ArticleModalState::default,
+    ));
     let calendar = Sample {
         single: remember(|| single(DatePickerDisplayMode::Picker)),
         range: remember(|| range(DatePickerDisplayMode::Picker)),
@@ -115,7 +118,7 @@ pub(super) fn date_pickers_spec() {
             sections.push(SpecSection {
                 title: chapter.title,
                 content: RenderSlot::new(move || {
-                    date_chapter(chapter.clone());
+                    date_chapter(chapter.clone()).modal_controller_optional(modal_controller);
                 }),
             });
         }
@@ -197,15 +200,20 @@ pub(super) fn date_pickers_spec() {
                     },
                     SpecSection {
                         title: "Element states",
-                        content: RenderSlot::new(states),
+                        content: RenderSlot::new(move || {
+                            states();
+                        }),
                     },
                 ],
             )
+            .modal_controller_optional(modal_controller)
+            .route_optional(route.clone())
             .compact_content_inset(Dp(8.0))
             .pages(pages.clone());
         })
-        .dialog_content(move || {
+        .dialog_content(move |dialog_scope| {
             themed_picker(draft, "Modal")
+                .dialog(dialog_scope)
                 .modal(modal)
                 .commit_target(if modal_input.get() { input } else { calendar });
         });
@@ -349,11 +357,14 @@ fn themed_picker(
     #[prop(into)] label: String,
     modal: Option<State<bool>>,
     commit_target: Option<Sample>,
+
+    dialog: Option<tessera_components::dialog::DialogScope>,
 ) {
     material_theme()
         .theme(move || MaterialTheme::from_seed(ACCENT, sample.dark.get()))
         .child(move || {
             picker_surface(sample, label.clone())
+                .dialog_optional(dialog)
                 .modal_optional(modal)
                 .commit_target_optional(commit_target);
         });
@@ -365,6 +376,8 @@ fn picker_surface(
     #[prop(into)] label: String,
     modal: Option<State<bool>>,
     commit_target: Option<Sample>,
+
+    dialog: Option<tessera_components::dialog::DialogScope>,
 ) {
     let scheme = use_context::<MaterialTheme>()
         .expect("MaterialTheme must be provided")
@@ -408,6 +421,7 @@ fn picker_surface(
                 let confirm_label = confirm_label.clone();
                 let cancel_label = cancel_label.clone();
                 date_picker_dialog()
+                    .dialog_optional(dialog)
                     .picker_today(illustration_today())
                     .state(sample.single)
                     .picker_first_day_of_week(Weekday::Sunday)
@@ -779,7 +793,12 @@ fn date_chapters() -> Vec<(&'static str, Vec<DateChapter>)> {
 }
 
 #[tessera]
-fn date_chapter(chapter: DateChapter) {
+fn date_chapter(
+    chapter: DateChapter,
+    modal_controller: Option<
+        crate::pages::material_spec::article::modal_host::ArticleModalController,
+    >,
+) {
     text().content(chapter.text).style(type_style(16.0, 24.0));
     if chapter.figure != Figure::None {
         gap(Dp(24.0));
@@ -787,7 +806,8 @@ fn date_chapter(chapter: DateChapter) {
             chapter.figure,
             chapter.title.to_owned(),
             chapter.title == "Anatomy",
-        );
+        )
+        .modal_controller_optional(modal_controller);
     }
     if chapter.title == "Availability & resources" {
         gap(Dp(24.0));
@@ -838,13 +858,21 @@ fn date_chapter(chapter: DateChapter) {
                 child.figure,
                 child.title.to_owned(),
                 chapter.title == "Anatomy",
-            );
+            )
+            .modal_controller_optional(modal_controller);
         }
     }
 }
 
 #[tessera]
-fn chapter_figure(figure: Figure, title: String, anatomy: bool) {
+fn chapter_figure(
+    figure: Figure,
+    title: String,
+    anatomy: bool,
+    modal_controller: Option<
+        crate::pages::material_spec::article::modal_host::ArticleModalController,
+    >,
+) {
     let instructional = match title.as_str() {
         "Date entry methods" => Some(instructional_figures::Illustration::EntryMethods),
         "Accessible date input" => Some(instructional_figures::Illustration::Formatting),
@@ -853,7 +881,7 @@ fn chapter_figure(figure: Figure, title: String, anatomy: bool) {
         _ => None,
     };
     if let Some(kind) = instructional {
-        instructional_figures::illustration(kind);
+        instructional_figures::illustration(kind).modal_controller_optional(modal_controller);
     } else {
         let view = remember(|| match title.as_str() {
             "Month selection" => DockedDatePickerView::Month,
@@ -934,8 +962,7 @@ fn date_overview() {
         gap(Dp(12.0));
     }
     gap(Dp(12.0));
-    let geometry = remember(ObservedGeometry::new);
-    annotations::publish_observed_geometry(geometry);
+    let geometry = remember(SpaceGeometry::new);
     let scheme = use_context::<MaterialTheme>().unwrap().get().color_scheme;
     let scale = 1.0;
     date_canvas(
@@ -1050,7 +1077,8 @@ fn overview_docked_picker() {
         controller
     });
     let scheme = use_context::<MaterialTheme>().unwrap().get().color_scheme;
-    TextFieldBuilder::outlined()
+    text_field()
+        .outlined()
         .controller(controller)
         .label("Date")
         .accessibility_label("Overview docked date")
@@ -1427,15 +1455,12 @@ fn date_figure(
     color_roles: Option<bool>,
 ) {
     let color_roles = color_roles.unwrap_or(false);
-    let geometry = remember(ObservedGeometry::new);
-    annotations::publish_observed_geometry(geometry);
+    let geometry = remember(SpaceGeometry::new);
     let internal_view = remember(DockedDatePickerView::default);
     let view = view.unwrap_or(internal_view);
     let internal_modal_view = remember(DatePickerView::default);
     let modal_view = modal_view.unwrap_or(internal_modal_view);
     let initial_year_view = modal_view.get() == DatePickerView::Year;
-    #[cfg(test)]
-    tests::GEOMETRY.set(Some(geometry));
     let state = remember(|| {
         if initial_year_view {
             DatePickerState::new(
@@ -1512,7 +1537,7 @@ fn date_figure(
             boxed().modifier(if figure == Figure::Docked {watch_observed(geometry,"container").size(Dp(360.0), Dp(544.0))} else {watch_observed(geometry,"container").width(Dp(360.0))}).children(move || {
                 if figure==Figure::Docked {
                     column().modifier(Modifier::new().width(Dp(312.0))).children(move || {
-                        TextFieldBuilder::outlined().controller(controller).label("Date").accessibility_label("Event date").accessibility_description(if error.with(String::is_empty) {"MM/DD/YYYY".to_owned()} else {error.get()}).is_error(!error.with(String::is_empty))
+                        text_field().outlined().controller(controller).label("Date").accessibility_label("Event date").accessibility_description(if error.with(String::is_empty) {"MM/DD/YYYY".to_owned()} else {error.get()}).is_error(!error.with(String::is_empty))
                             .modifier(watch_observed(geometry,"field").width(Dp(312.0)).height(Dp(56.0)).semantics(SemanticsArgs {test_tag:Some("docked-date-field".into()), merge_descendants:true,..Default::default()})).min_width(Dp::ZERO)
                             .on_change(move |raw: String| {draft.set(raw.clone());raw})
                             .on_submit(move || {submit_docked_date(state,controller,draft,committed,committed_draft,error);})
@@ -1577,15 +1602,13 @@ fn date_figure(
 #[tessera]
 fn date_color_annotations(
     figure: Figure,
-    geometry: State<ObservedGeometry>,
+    geometry: State<SpaceGeometry>,
     single: State<DatePickerState>,
     range: State<DateRangePickerState>,
     view: DockedDatePickerView,
     modal_view: DatePickerView,
 ) {
-    #[cfg(all(test, not(target_family = "wasm")))]
-    tests::ANNOTATION_BUILDS.set(tests::ANNOTATION_BUILDS.get() + 1);
-    let values = geometry.with(annotations::observed_relative_geometry);
+    let values = geometry.with(annotations::space_geometry);
     date_color_annotation_content(figure, values, single, range, view, modal_view);
 }
 
@@ -2041,14 +2064,12 @@ fn restore_docked_date(
 fn date_annotations(
     figure: Figure,
     measurements: bool,
-    geometry: State<ObservedGeometry>,
+    geometry: State<SpaceGeometry>,
     single: State<DatePickerState>,
     range: State<DateRangePickerState>,
     view: DockedDatePickerView,
 ) {
-    #[cfg(all(test, not(target_family = "wasm")))]
-    tests::ANNOTATION_BUILDS.set(tests::ANNOTATION_BUILDS.get() + 1);
-    let values = geometry.with(annotations::observed_relative_geometry);
+    let values = geometry.with(annotations::space_geometry);
     date_annotation_content(figure, measurements, values, single, range, view);
 }
 
@@ -3186,7 +3207,8 @@ fn docked_configuration(number: usize, initial_view: DockedDatePickerView) {
                         });
                 });
             gap(Dp(38.0));
-            TextFieldBuilder::outlined()
+            text_field()
+                .outlined()
                 .modifier(Modifier::new().width(Dp(312.0)).height(Dp(56.0)))
                 .min_width(Dp::ZERO)
                 .controller(controller)

@@ -76,6 +76,8 @@ pub enum SideSheetPosition {
 /// ```
 /// use tessera_components::side_sheet::SideSheetController;
 ///
+/// let session = tessera_ui::RuntimeSession::new();
+/// let _scope = session.enter();
 /// let mut controller = SideSheetController::new(false);
 /// assert!(!controller.is_open());
 /// controller.open();
@@ -535,8 +537,10 @@ fn side_sheet_provider_inner(
     let main_content = main_content.unwrap_or_else(RenderSlot::empty);
     let side_sheet_content = side_sheet_content.unwrap_or_else(RenderSlot::empty);
     let external_controller = controller;
-    let controller =
-        external_controller.unwrap_or_else(|| remember(|| SideSheetController::new(is_open)));
+    let controller = match external_controller {
+        Some(value) => value,
+        None => remember(|| SideSheetController::new(is_open)),
+    };
 
     // In controlled mode (external controller provided), do not override
     // controller state from `is_open`.
@@ -585,7 +589,7 @@ fn side_sheet_provider_render(
     if current_position.get() != position {
         current_position.set(position);
     }
-    let parent_nested_scroll = use_context::<NestedScrollConnection>().map(|context| context.get());
+    let parent_nested_scroll = NestedScrollConnection::nearest();
     let coordinate_scale = remember(|| 1.0_f32);
     let nested_scroll_connection = build_side_sheet_nested_scroll_connection(
         controller,

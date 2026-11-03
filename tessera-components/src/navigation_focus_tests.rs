@@ -4,7 +4,7 @@
 //!
 //! Verify that focus is visible without selecting or activating a destination.
 
-use std::{cell::Cell, time::Duration};
+use std::time::Duration;
 
 use tessera_ui::{
     Color, Dp, FocusDirection, FocusManager, HeadlessConfig, HeadlessRenderer, Modifier, State,
@@ -22,16 +22,11 @@ use crate::{
     theme::{MaterialTheme, material_theme},
 };
 
-thread_local! {
-    static MODE: Cell<u8> = const { Cell::new(0) };
-    static OWNER: Cell<Option<(State<usize>, State<usize>)>> = const { Cell::new(None) };
-}
-
 #[tessera]
-fn fixture() {
+fn fixture(mode: u8, owner: tessera_ui::testing::TestProbe<Option<(State<usize>, State<usize>)>>) {
     let selected = remember(|| 0_usize);
     let activations = remember(|| 0_usize);
-    OWNER.set(Some((selected, activations)));
+    owner.set(Some((selected, activations)));
     material_theme()
         .theme(|| {
             let mut theme = MaterialTheme::default();
@@ -42,7 +37,7 @@ fn fixture() {
             column()
                 .modifier(Modifier::new().fill_max_size().padding_all(Dp(24.0)))
                 .children(move || {
-                    if MODE.get() == 0 {
+                    if mode == 0 {
                         navigation_drawer().content(move || {
                             for (index, label) in ["Inbox", "Saved"].into_iter().enumerate() {
                                 navigation_drawer_item()
@@ -54,12 +49,12 @@ fn fixture() {
                                     });
                             }
                         });
-                    } else if MODE.get() <= 2 {
+                    } else if mode <= 2 {
                         navigation_rail()
-                            .expanded(MODE.get() == 2)
-                            .content(move || {
+                            .expanded(mode == 2)
+                            .content(move |rail_scope| {
                                 for (index, label) in ["Inbox", "Saved"].into_iter().enumerate() {
-                                    navigation_rail_item()
+                                    navigation_rail_item(rail_scope)
                                         .label(label)
                                         .selected(selected.get() == index)
                                         .on_click(move || {
@@ -74,14 +69,15 @@ fn fixture() {
                             });
                     } else {
                         navigation_bar()
-                            .icon_position(if MODE.get() == 3 {
+                            .icon_position(if mode == 3 {
                                 NavigationBarIconPosition::Top
                             } else {
                                 NavigationBarIconPosition::Start
                             })
-                            .content(move || {
+                            .content(move |icon_position| {
                                 for (index, label) in ["Inbox", "Saved"].into_iter().enumerate() {
                                     navigation_bar_item()
+                                        .icon_position(icon_position)
                                         .label(label)
                                         .selected(selected.get() == index)
                                         .on_click(move || {
@@ -97,13 +93,6 @@ fn fixture() {
                     }
                 });
         });
-}
-
-struct Pipelines;
-impl tessera_ui::RenderModule for Pipelines {
-    fn register_pipelines(&self, context: &mut tessera_ui::PipelineContext<'_>) {
-        crate::pipelines::register_pipelines(context);
-    }
 }
 
 fn indicator_pixels(renderer: &HeadlessRenderer, bounds: Rect) -> usize {
@@ -126,10 +115,13 @@ fn indicator_pixels(renderer: &HeadlessRenderer, bounds: Rect) -> usize {
 #[ignore = "requires a native GPU adapter"]
 fn navigation_initial_traversal_and_accessibility_focus_do_not_activate_destinations() {
     for mode in 0..5 {
-        MODE.set(mode);
+        let owner = tessera_ui::testing::TestProbe::default();
+        let observed = owner.clone();
         let mut renderer = HeadlessRenderer::new(
-            Box::new(fixture),
-            vec![Box::new(Pipelines)],
+            Box::new(move || {
+                fixture(mode, observed.clone());
+            }),
+            vec![Box::new(crate::TesseraComponents)],
             HeadlessConfig {
                 width: 600,
                 height: 800,
@@ -167,7 +159,7 @@ fn navigation_initial_traversal_and_accessibility_focus_do_not_activate_destinat
             inbox_id,
             "mode {mode}: initial traversal must enter the first actual destination"
         );
-        let (selected, activations) = OWNER.get().unwrap();
+        let (selected, activations) = owner.get().expect("mounted navigation state");
         assert_eq!(selected.get(), 0, "mode {mode}: entering must not select");
         assert_eq!(
             activations.get(),
@@ -193,7 +185,7 @@ fn navigation_initial_traversal_and_accessibility_focus_do_not_activate_destinat
             data: None
         }));
         renderer.render_frames(4);
-        let (selected, activations) = OWNER.get().unwrap();
+        let (selected, activations) = owner.get().expect("mounted navigation state");
         assert_eq!(selected.get(), 0, "mode {mode}: focus must not select");
         assert_eq!(activations.get(), 0, "mode {mode}: focus must not activate");
         assert_eq!(renderer.accessibility_snapshot().unwrap().focus, id);

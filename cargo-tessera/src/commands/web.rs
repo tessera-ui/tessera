@@ -4,7 +4,7 @@ use std::{
     net::{TcpListener, TcpStream},
     path::{Path, PathBuf},
     process::Command,
-    sync::mpsc::channel,
+    sync::mpsc::{Sender, channel},
     thread,
     time::{Duration, Instant},
 };
@@ -17,7 +17,7 @@ use serde_json::json;
 use tessera_build::{AssetBackend, load_tessera_config_from_dir, resolve_assets_dir};
 use wasm_bindgen_cli_support::Bindgen;
 
-use crate::{color_check, output};
+use crate::{call_guard, output};
 
 use super::find_package_dir;
 
@@ -129,7 +129,7 @@ pub fn dev(release: bool, package: Option<&str>, port: u16) -> Result<()> {
         .set_nonblocking(true)
         .context("Failed to configure non-blocking development server socket")?;
     let web_host_dir = project_dir.join(WEB_HOST_DIR);
-    spawn_static_file_server(listener, web_host_dir.clone());
+    let _server = StaticFileServer::new(listener, web_host_dir.clone())?;
     open_browser(format!("http://127.0.0.1:{port}"));
 
     let (tx, rx) = channel();
@@ -232,12 +232,13 @@ fn build_project(
     features: &[String],
 ) -> Result<()> {
     let mut options =
-        color_check::CheckOptions::new(Some(&metadata.package_name), Some(WASM_TARGET));
-    options.features = color_check::FeatureSelection::Selected {
+        call_guard::CheckOptions::new(Some(&metadata.package_name), Some(WASM_TARGET));
+    options.features = call_guard::FeatureSelection::Selected {
         features,
         no_default_features: false,
     };
-    color_check::run(options)?;
+    options.release = release;
+    call_guard::run(options)?;
 
     let mut cmd = web_build_command(project_dir, release, features);
     let status = cmd
@@ -586,25 +587,60 @@ fn open_browser(url: String) {
     }
 }
 
-fn spawn_static_file_server(listener: TcpListener, project_dir: PathBuf) {
-    thread::spawn(move || {
-        loop {
-            match listener.accept() {
-                Ok((stream, _)) => {
-                    if let Err(err) = handle_http_request(stream, &project_dir) {
-                        output::warn(format!("web server request failed: {err:#}"));
+struct StaticFileServer {
+    shutdown: Sender<()>,
+    worker: Option<thread::JoinHandle<()>>,
+}
+
+impl StaticFileServer {
+    fn new(listener: TcpListener, project_dir: PathBuf) -> Result<Self> {
+        let (shutdown, stopped) = channel();
+        let worker = thread::Builder::new()
+            .name("tessera-web-server".into())
+            .spawn(move || {
+                loop {
+                    if stopped.try_recv().is_ok() {
+                        return;
+                    }
+                    match listener.accept() {
+                        Ok((stream, _)) => {
+                            if stream
+                                .set_read_timeout(Some(Duration::from_millis(250)))
+                                .is_err()
+                                || stream
+                                    .set_write_timeout(Some(Duration::from_millis(250)))
+                                    .is_err()
+                            {
+                                continue;
+                            }
+                            if let Err(err) = handle_http_request(stream, &project_dir) {
+                                output::warn(format!("web server request failed: {err:#}"));
+                            }
+                        }
+                        Err(err) if err.kind() == std::io::ErrorKind::WouldBlock => {
+                            thread::sleep(Duration::from_millis(25));
+                        }
+                        Err(err) => {
+                            output::error(format!("web server failed: {err}"));
+                            break;
+                        }
                     }
                 }
-                Err(err) if err.kind() == std::io::ErrorKind::WouldBlock => {
-                    thread::sleep(Duration::from_millis(25));
-                }
-                Err(err) => {
-                    output::error(format!("web server failed: {err}"));
-                    break;
-                }
-            }
+            })?;
+        Ok(Self {
+            shutdown,
+            worker: Some(worker),
+        })
+    }
+}
+
+impl Drop for StaticFileServer {
+    fn drop(&mut self) {
+        let _ = self.shutdown.send(());
+        if let Some(worker) = self.worker.take() {
+            let _ = worker.join();
         }
-    });
+    }
 }
 
 fn handle_http_request(mut stream: TcpStream, project_dir: &Path) -> Result<()> {
@@ -728,11 +764,7 @@ fn write_headers(
 
 #[cfg(test)]
 mod tests {
-    use std::sync::atomic::{AtomicU64, Ordering};
-
     use super::*;
-
-    static NEXT_FIXTURE_ID: AtomicU64 = AtomicU64::new(0);
 
     #[test]
     fn web_build_forwards_selected_features_without_changing_default_builds() {
@@ -771,49 +803,53 @@ mod tests {
         }
     }
 
-    struct Fixture(PathBuf);
+    struct Fixture(tempfile::TempDir);
 
     impl Fixture {
         fn new() -> Self {
-            let id = NEXT_FIXTURE_ID.fetch_add(1, Ordering::Relaxed);
-            let root =
-                std::env::temp_dir().join(format!("tessera-web-{}-{id}", std::process::id()));
+            let directory = tempfile::tempdir().expect("isolated web fixture");
+            let root = directory.path();
             fs::create_dir_all(root.join("web/nested")).expect("create fixture");
             fs::write(root.join("web/index.html"), "home").expect("write index");
             fs::write(root.join("web/nested/index.html"), "nested").expect("write nested index");
             fs::write(root.join("secret.txt"), "outside web root").expect("write outside file");
-            Self(root)
+            Self(directory)
         }
     }
 
-    impl Drop for Fixture {
-        fn drop(&mut self) {
-            let _ = fs::remove_dir_all(&self.0);
-        }
+    #[test]
+    fn static_server_releases_its_listener_when_the_owner_is_dropped() {
+        let listener = TcpListener::bind(("127.0.0.1", 0)).unwrap();
+        listener.set_nonblocking(true).unwrap();
+        let address = listener.local_addr().unwrap();
+        let fixture = Fixture::new();
+        let server = StaticFileServer::new(listener, fixture.0.path().to_path_buf()).unwrap();
+        drop(server);
+        assert!(TcpStream::connect(address).is_err());
     }
 
     #[test]
     fn main_guards_migrate_legacy_templates_and_stay_idempotent() {
         let fixture = Fixture::new();
-        fs::create_dir(fixture.0.join("src")).expect("create src");
-        let main = fixture.0.join("src/main.rs");
+        fs::create_dir(fixture.0.path().join("src")).expect("create src");
+        let main = fixture.0.path().join("src/main.rs");
         fs::write(
             &main,
             format!("{LEGACY_DESKTOP_MAIN_GUARD}\nfn main() {{ run(); }}\n{WASM_MAIN_STUB}"),
         )
         .expect("write legacy main");
-        assert!(ensure_main_has_wasm_cfg(&fixture.0).expect("migrate main"));
+        assert!(ensure_main_has_wasm_cfg(fixture.0.path()).expect("migrate main"));
         let content = fs::read_to_string(&main).expect("read main");
         assert!(content.contains(DESKTOP_MAIN_GUARD));
         assert!(content.contains(NON_DESKTOP_MAIN_STUB.trim()));
-        assert!(!ensure_main_has_wasm_cfg(&fixture.0).expect("idempotent migration"));
+        assert!(!ensure_main_has_wasm_cfg(fixture.0.path()).expect("idempotent migration"));
         assert_eq!(fs::read_to_string(main).expect("read main again"), content);
     }
 
     #[test]
     fn static_files_stay_inside_web_root() {
         let fixture = Fixture::new();
-        let root = fixture.0.join("web");
+        let root = fixture.0.path().join("web");
         assert_eq!(
             resolve_served_file(&root, "/"),
             root.join("index.html").canonicalize().ok()
@@ -833,8 +869,8 @@ mod tests {
     #[test]
     fn static_files_reject_symlinks_outside_web_root() {
         let fixture = Fixture::new();
-        let root = fixture.0.join("web");
-        std::os::unix::fs::symlink(fixture.0.join("secret.txt"), root.join("secret.txt"))
+        let root = fixture.0.path().join("web");
+        std::os::unix::fs::symlink(fixture.0.path().join("secret.txt"), root.join("secret.txt"))
             .expect("create symlink");
         assert!(resolve_served_file(&root, "/secret.txt").is_none());
     }
@@ -843,8 +879,8 @@ mod tests {
     #[test]
     fn static_files_reject_junctions_outside_web_root() {
         let fixture = Fixture::new();
-        let root = fixture.0.join("web");
-        let outside = fixture.0.join("outside");
+        let root = fixture.0.path().join("web");
+        let outside = fixture.0.path().join("outside");
         fs::create_dir(&outside).expect("create outside directory");
         fs::write(outside.join("index.html"), "private").expect("write outside index");
         let junction = root.join("escape");

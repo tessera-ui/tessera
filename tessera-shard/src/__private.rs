@@ -4,8 +4,6 @@ use tessera_ui::State;
 
 use crate::{ShardState, ShardStateLifeCycle, router::RouterController};
 
-pub use crate::__resolve_router_controller as current_router_controller;
-
 pub fn with_current_router_shard_state<T, F, R>(
     shard_id: &str,
     life_cycle: ShardStateLifeCycle,

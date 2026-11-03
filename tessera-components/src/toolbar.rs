@@ -332,7 +332,6 @@ pub fn docked_toolbar(
 
 #[cfg(test)]
 mod tests {
-    use std::cell::Cell;
 
     use tessera_ui::{
         Modifier, State, remember, tessera,
@@ -343,15 +342,17 @@ mod tests {
 
     use super::*;
 
-    thread_local! {
-        static EXPANDED: Cell<Option<State<bool>>> = const { Cell::new(None) };
-        static CONTENT_SIZE: Cell<Option<State<Dp>>> = const { Cell::new(None) };
-    }
-
     #[tessera]
-    fn fixture(orientation: ToolbarOrientation, expanded: bool) {
+    fn fixture(
+        orientation: ToolbarOrientation,
+        expanded: bool,
+        output: tessera_ui::testing::TestProbe<Option<State<bool>>>,
+        content_output: tessera_ui::testing::TestProbe<Option<State<Dp>>>,
+    ) {
         let expanded = remember(|| expanded);
-        EXPANDED.set(Some(expanded));
+        output.set(Some(expanded));
+        let observe_content =
+            tessera_ui::CallbackWith::new(move |size| content_output.set(Some(size)));
         material_theme().child(move || {
             crate::column::column().children(move || {
                 crate::boxed::boxed()
@@ -373,9 +374,9 @@ mod tests {
                                     ),
                                 );
                             })
-                            .content(|| {
+                            .content(move || {
                                 let size = remember(|| Dp(48.0));
-                                CONTENT_SIZE.set(Some(size));
+                                observe_content.call(size);
                                 spacer().modifier(
                                     Modifier::new().size(size.get(), size.get()).semantics(
                                         crate::modifier::SemanticsArgs {
@@ -408,9 +409,13 @@ mod tests {
             (ToolbarOrientation::Horizontal, false, 64, 64),
             (ToolbarOrientation::Vertical, false, 64, 64),
         ] {
+            let output = tessera_ui::testing::TestProbe::default();
+            let content_output = tessera_ui::testing::TestProbe::default();
+            let probe = output.clone();
+            let content_probe = content_output.clone();
             let mut session = start_layout_test_session(
                 layout_test(move || {
-                    fixture(orientation, expanded);
+                    fixture(orientation, expanded, probe.clone(), content_probe.clone());
                 })
                 .viewport_px(400, 400),
             );
@@ -449,9 +454,13 @@ mod tests {
     fn floating_toolbar_collapse_and_reexpand_preserve_live_content_state() {
         for orientation in [ToolbarOrientation::Horizontal, ToolbarOrientation::Vertical] {
             let horizontal = orientation == ToolbarOrientation::Horizontal;
+            let output = tessera_ui::testing::TestProbe::default();
+            let content_output = tessera_ui::testing::TestProbe::default();
+            let probe = output.clone();
+            let content_probe = content_output.clone();
             let mut session = start_layout_test_session(
                 layout_test(move || {
-                    fixture(orientation, true);
+                    fixture(orientation, true, probe.clone(), content_probe.clone());
                 })
                 .viewport_px(400, 400),
             );
@@ -460,12 +469,12 @@ mod tests {
                 if horizontal { 168 } else { 64 },
                 if horizontal { 64 } else { 168 },
             );
-            EXPANDED.get().expect("fixture state").set(false);
+            output.get().expect("fixture state").set(false);
             let collapsed = pump_layout_test_session(&mut session, 16_666_667);
             collapsed.node("toolbar").size(64, 64);
             collapsed.node("content-action").size(48, 48).position(8, 8);
 
-            CONTENT_SIZE
+            content_output
                 .get()
                 .expect("persistent content state")
                 .set(Dp(40.0));
@@ -479,7 +488,7 @@ mod tests {
                 if horizontal { 12 } else { 8 },
             );
 
-            EXPANDED.get().expect("fixture state").set(true);
+            output.get().expect("fixture state").set(true);
             let expanded = pump_layout_test_session(&mut session, 50_000_001);
             expanded.node("toolbar").size(
                 if horizontal { 160 } else { 64 },
@@ -495,22 +504,20 @@ mod tests {
                 if horizontal { 8 } else { 104 },
             );
             assert_eq!(
-                CONTENT_SIZE.get().expect("persistent content state").get(),
+                content_output
+                    .get()
+                    .expect("persistent content state")
+                    .get(),
                 Dp(40.0)
             );
         }
     }
 
     #[cfg(not(target_family = "wasm"))]
-    thread_local! {
-        static ELEVATION: Cell<Option<State<Option<Dp>>>> = const { Cell::new(None) };
-    }
-
-    #[cfg(not(target_family = "wasm"))]
     #[tessera]
-    fn elevation_fixture() {
+    fn elevation_fixture(output: tessera_ui::testing::TestProbe<Option<State<Option<Dp>>>>) {
         let elevation = remember(|| None::<Dp>);
-        ELEVATION.set(Some(elevation));
+        output.set(Some(elevation));
         material_theme().child(move || {
             surface()
                 .modifier(Modifier::new().fill_max_size())
@@ -546,8 +553,10 @@ mod tests {
     fn check_default_shadow() {
         use tessera_ui::headless::{HeadlessConfig, HeadlessRenderer};
 
+        let output = tessera_ui::testing::TestProbe::default();
+        let probe = output.clone();
         let mut renderer = HeadlessRenderer::new(
-            Box::new(|| elevation_fixture()),
+            Box::new(move || elevation_fixture(probe.clone())),
             vec![Box::new(crate::TesseraComponents)],
             HeadlessConfig {
                 width: 160,
@@ -558,7 +567,7 @@ mod tests {
         .expect("native GPU renderer");
         renderer.render_frames(4);
         let default = renderer.read_pixels().expect("default elevation pixels");
-        let elevation = ELEVATION.get().expect("fixture elevation state");
+        let elevation = output.get().expect("fixture elevation state");
         elevation.set(Some(Dp(6.0)));
         renderer.render_frames(4);
         assert_eq!(

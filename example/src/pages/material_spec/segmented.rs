@@ -55,7 +55,10 @@ fn selection_summary(mask: u8) -> String {
 }
 
 #[tessera]
-pub(super) fn segmented_spec(on_recommended: Callback) {
+pub(super) fn segmented_spec(
+    on_recommended: Callback,
+    route: Option<crate::pages::material_spec::article::ArticleRoute>,
+) {
     article(
         "Segmented buttons",
         "Segmented buttons help people select options, switch views, or sort elements.",
@@ -78,6 +81,7 @@ pub(super) fn segmented_spec(on_recommended: Callback) {
             },
         ],
     )
+    .route_optional(route.clone())
     .pages(vec![
         ArticlePage {
             title: "Overview",
@@ -177,10 +181,12 @@ fn segments(
     show_icons: bool,
     show_checks: bool,
     height: Dp,
+    selection_mode: tessera_components::segmented_buttons::SegmentedButtonSelectionMode,
 ) {
     for (index, name) in LABELS.into_iter().enumerate() {
         let painter = show_icons.then(|| segment_icon(index));
         segmented_button()
+            .selection_mode(selection_mode)
             .label(name)
             .selected(selected.get() & (1 << index) != 0)
             .enabled(enabled)
@@ -231,7 +237,7 @@ fn segmented_row(
                     .modifier(Modifier::new().fill_max_width())
                     .content_shared({
                         let segment_caption = caption.clone();
-                        RenderSlot::new(move || {
+                        tessera_ui::RenderSlotWith::new(move |selection_mode| {
                             segments(
                                 segment_caption.clone(),
                                 selected,
@@ -240,6 +246,7 @@ fn segmented_row(
                                 show_icons,
                                 show_checks,
                                 height,
+                                selection_mode,
                             );
                         })
                     });
@@ -248,7 +255,7 @@ fn segmented_row(
                     .modifier(Modifier::new().fill_max_width())
                     .content_shared({
                         let segment_caption = caption.clone();
-                        RenderSlot::new(move || {
+                        tessera_ui::RenderSlotWith::new(move |selection_mode| {
                             segments(
                                 segment_caption.clone(),
                                 selected,
@@ -257,6 +264,7 @@ fn segmented_row(
                                 show_icons,
                                 show_checks,
                                 height,
+                                selection_mode,
                             );
                         })
                     });

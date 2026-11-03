@@ -4,16 +4,12 @@
 //!
 //! Keep popup placement and actions aligned across scaling boundaries.
 
-use std::{
-    cell::{Cell, RefCell},
-    collections::BTreeMap,
-    time::Duration,
-};
+use std::time::Duration;
 
 use tessera_ui::{
-    CursorEventContent, Dp, FocusModifierExt as _, GestureState, HeadlessConfig, HeadlessRenderer,
-    LayoutCoordinates, MOUSE_POINTER_ID, Modifier, PlacementModifierNode, PointerChange,
-    PressKeyEventType, PxPosition, State,
+    CursorEventContent, Dp, GestureState, HeadlessConfig, HeadlessRenderer, MOUSE_POINTER_ID,
+    Modifier, PlacementModifierNode, PointerChange, PressKeyEventType, PxPosition, State,
+    WorkPhase,
     accesskit::{Node, NodeId, Rect, Role},
     modifier::ModifierCapabilityExt as _,
     remember, scaled_box, tessera,
@@ -27,7 +23,7 @@ use crate::{
     modifier::ModifierExt as _,
     spacer::spacer,
     surface::surface,
-    text_field::TextFieldBuilder,
+    text_field::text_field,
     text_input::TextInputController,
     theme::material_theme,
     tooltip::{
@@ -35,13 +31,13 @@ use crate::{
     },
 };
 
-thread_local! {
-    static GEOMETRY: RefCell<BTreeMap<&'static str, LayoutCoordinates>> = const { RefCell::new(BTreeMap::new()) };
-    static EDITOR: Cell<Option<State<TextInputController>>> = const { Cell::new(None) };
-    static SHIFT: Cell<Option<State<f32>>> = const { Cell::new(None) };
-    static TOOLTIP: Cell<Option<State<TooltipController>>> = const { Cell::new(None) };
-    static MENU: Cell<Option<State<MenuController>>> = const { Cell::new(None) };
-    static ACTIONS: Cell<Option<State<u32>>> = const { Cell::new(None) };
+#[derive(Clone, Copy, Default)]
+struct FixtureHandles {
+    editor: Option<State<TextInputController>>,
+    shift: Option<State<f32>>,
+    tooltip: Option<State<TooltipController>>,
+    menu: Option<State<MenuController>>,
+    actions: Option<State<u32>>,
 }
 
 #[derive(Clone, Copy, PartialEq)]
@@ -52,22 +48,14 @@ impl PlacementModifierNode for FractionalOrigin {
     }
 }
 
-fn observe(name: &'static str) -> Modifier {
-    Modifier::new().on_layout_coordinates(move |coordinates| {
-        GEOMETRY.with_borrow_mut(|values| {
-            values.insert(name, coordinates);
-        });
-    })
-}
-
 #[tessera]
-fn tooltip_fixture() {
+fn tooltip_fixture(observed: tessera_ui::testing::TestProbe<FixtureHandles>) {
     let tooltip = remember(TooltipController::new);
     let shift = remember(|| 0.0_f32);
-    SHIFT.set(Some(shift));
+    observed.with_mut(|handles| handles.shift = Some(shift));
     let actions = remember(|| 0_u32);
-    TOOLTIP.set(Some(tooltip));
-    ACTIONS.set(Some(actions));
+    observed.with_mut(|handles| handles.tooltip = Some(tooltip));
+    observed.with_mut(|handles| handles.actions = Some(actions));
     material_theme().child(move || {
         tooltip_provider("A precise contextual explanation.")
             .controller(tooltip)
@@ -76,8 +64,8 @@ fn tooltip_fixture() {
             .headline("Precise tooltip")
             .action_label("Accept precise tooltip")
             .on_action(move || actions.set(actions.get() + 1))
-            .popup_modifier(observe("popup").width(Dp(240.0)))
-            .child(move || {
+            .popup_modifier(Modifier::new().width(Dp(240.0)))
+            .child(move |_| {
                 boxed()
                     .alignment(Alignment::TopStart)
                     .modifier(Modifier::new().fill_max_size())
@@ -90,13 +78,14 @@ fn tooltip_fixture() {
                                     boxed()
                                         .modifier(Modifier::new().offset(Dp(240.0), Dp(160.0)))
                                         .children(move || {
-                                            tooltip_anchor().controller(tooltip).child(|| {
+                                            tooltip_anchor(tooltip).child(|| {
                                                 surface()
                                                     .modifier(
-                                                        observe("anchor")
+                                                        Modifier::new()
                                                             .width(Dp(241.0))
                                                             .height(Dp(57.0)),
                                                     )
+                                                    .accessibility_label("Precise anchor")
                                                     .on_click(|| {})
                                                     .child(|| {});
                                             });
@@ -109,11 +98,13 @@ fn tooltip_fixture() {
 }
 
 #[tessera]
-fn submenu_fixture() {
+fn submenu_fixture(observed: tessera_ui::testing::TestProbe<FixtureHandles>) {
+    let shift = remember(|| 0.0_f32);
+    observed.with_mut(|handles| handles.shift = Some(shift));
     let menu = remember(MenuController::new);
     let actions = remember(|| 0_u32);
-    MENU.set(Some(menu));
-    ACTIONS.set(Some(actions));
+    observed.with_mut(|handles| handles.menu = Some(menu));
+    observed.with_mut(|handles| handles.actions = Some(actions));
     material_theme().child(move || {
         menu_provider()
             .controller(menu)
@@ -122,15 +113,21 @@ fn submenu_fixture() {
             .main_content(|| {
                 spacer().modifier(Modifier::new().fill_max_size());
             })
-            .menu_content(move || {
+            .menu_content(move |menu| {
                 scaled_box(0.625).child(move || {
                     boxed()
-                        .modifier(Modifier::new().width(Dp(241.0)))
+                        .modifier(
+                            Modifier::new()
+                                .width(Dp(241.0))
+                                .push_placement(FractionalOrigin(shift)),
+                        )
                         .children(move || {
                             menu_item()
+                                .menu(menu)
                                 .label("Share precise link")
-                                .submenu_content(move || {
+                                .submenu_content(move |menu| {
                                     menu_item()
+                                        .menu(menu)
                                         .label("Copy precise link")
                                         .on_click(move || actions.set(actions.get() + 1));
                                 });
@@ -140,10 +137,18 @@ fn submenu_fixture() {
     });
 }
 
-fn renderer<Output: 'static>(entry: fn() -> Output, samples: u32) -> HeadlessRenderer {
-    GEOMETRY.with_borrow_mut(BTreeMap::clear);
+fn renderer<Output: 'static>(
+    entry: fn(tessera_ui::testing::TestProbe<FixtureHandles>) -> Output,
+    samples: u32,
+    observed: &tessera_ui::testing::TestProbe<FixtureHandles>,
+) -> HeadlessRenderer {
     let mut renderer = HeadlessRenderer::new(
-        Box::new(entry),
+        Box::new({
+            let observed = observed.clone();
+            move || {
+                entry(observed.clone());
+            }
+        }),
         vec![Box::new(crate::TesseraComponents)],
         HeadlessConfig {
             width: 600,
@@ -207,18 +212,18 @@ fn scaled_tooltip_keeps_fractional_anchor_reflows_and_accepts_real_action_click(
         "overlay_precision_tests::scaled_tooltip_keeps_fractional_anchor_reflows_and_accepts_real_action_click",
         || {
             for samples in [1, 4] {
-                let mut renderer = renderer(tooltip_fixture, samples);
-                TOOLTIP
+                let observed = tessera_ui::testing::TestProbe::default();
+                let mut renderer = renderer(tooltip_fixture, samples, &observed);
+                observed
                     .get()
+                    .tooltip
                     .expect("Tooltip controller")
                     .with_mut(TooltipController::show);
                 renderer.render_frames(8);
-                let (anchor, popup) = GEOMETRY.with_borrow(|values| {
-                    (
-                        values["anchor"].window_bounds(),
-                        values["popup"].window_bounds(),
-                    )
-                });
+                let (anchor, popup) = (
+                    window_bounds(&renderer, "Precise anchor", Role::Button),
+                    window_bounds(&renderer, "Precise tooltip", Role::Dialog),
+                );
                 assert_eq!(
                     anchor,
                     tessera_ui::FloatRect {
@@ -237,9 +242,16 @@ fn scaled_tooltip_keeps_fractional_anchor_reflows_and_accepts_real_action_click(
                     "Below placement includes the precise anchor bottom and 4px gap"
                 );
                 assert_eq!(popup.width, 240.0);
+                observed.get().shift.expect("anchor translation").set(12.0);
+                renderer.step_frame();
+                let moved = window_bounds(&renderer, "Precise tooltip", Role::Dialog);
+                assert_eq!(moved.x, popup.x + 12.0);
+                assert_eq!(moved.y, popup.y);
+                assert_placement_only(&renderer);
+
                 renderer.resize(200, 400);
                 renderer.render_frames(8);
-                let popup = GEOMETRY.with_borrow(|values| values["popup"].window_bounds());
+                let popup = window_bounds(&renderer, "Precise tooltip", Role::Dialog);
                 assert!(popup.x >= 8.0 && popup.x + popup.width <= 192.0);
                 let action = node(&renderer, "Accept precise tooltip", Role::Button)
                     .1
@@ -247,10 +259,11 @@ fn scaled_tooltip_keeps_fractional_anchor_reflows_and_accepts_real_action_click(
                     .expect("Action bounds");
                 assert!(action.x0 >= 0.0 && action.x1 <= 200.0);
                 click(&mut renderer, action);
-                assert_eq!(ACTIONS.get().expect("Action state").get(), 1);
+                assert_eq!(observed.get().actions.expect("Action state").get(), 1);
                 assert!(
-                    !TOOLTIP
+                    !observed
                         .get()
+                        .tooltip
                         .expect("Tooltip controller")
                         .with(TooltipController::is_open)
                 );
@@ -266,8 +279,11 @@ fn scaled_submenu_uses_exact_anchor_edge_reflows_and_accepts_real_action_click()
         "overlay_precision_tests::scaled_submenu_uses_exact_anchor_edge_reflows_and_accepts_real_action_click",
         || {
             for samples in [1, 4] {
-                let mut renderer = renderer(submenu_fixture, samples);
-                MENU.get()
+                let observed = tessera_ui::testing::TestProbe::default();
+                let mut renderer = renderer(submenu_fixture, samples, &observed);
+                observed
+                    .get()
+                    .menu
                     .expect("Menu controller")
                     .with_mut(MenuController::open);
                 renderer.render_frames(8);
@@ -282,6 +298,17 @@ fn scaled_submenu_uses_exact_anchor_edge_reflows_and_accepts_real_action_click()
                     popup.x0, parent.x1,
                     "Submenu begins at the exact physical parent edge"
                 );
+                renderer.render_frames(20);
+                observed
+                    .get()
+                    .shift
+                    .expect("submenu anchor translation")
+                    .set(12.0);
+                renderer.step_frame();
+                let moved = menu_bounds(&renderer, "Copy precise link");
+                assert_eq!(moved.x0, popup.x0 + 7.5);
+                assert_eq!(moved.y0, popup.y0);
+                assert_placement_only(&renderer);
                 renderer.resize(200, 400);
                 renderer.render_frames(8);
                 let popup = menu_bounds(&renderer, "Copy precise link");
@@ -291,10 +318,11 @@ fn scaled_submenu_uses_exact_anchor_edge_reflows_and_accepts_real_action_click()
                     .bounds()
                     .expect("Submenu action bounds");
                 click(&mut renderer, action);
-                assert_eq!(ACTIONS.get().expect("Action state").get(), 1);
+                assert_eq!(observed.get().actions.expect("Action state").get(), 1);
                 assert!(
-                    !MENU
+                    !observed
                         .get()
+                        .menu
                         .expect("Menu controller")
                         .with(MenuController::is_open)
                 );
@@ -310,8 +338,9 @@ fn scaled_tooltip_touch_slop_uses_window_samples_after_ancestor_translation() {
         "overlay_precision_tests::scaled_tooltip_touch_slop_uses_window_samples_after_ancestor_translation",
         || {
             for (movement, translation) in [(6.0_f32, 0.0_f32), (0.0, 12.0)] {
-                let mut renderer = renderer(tooltip_fixture, 1);
-                let anchor = GEOMETRY.with_borrow(|values| values["anchor"].window_bounds());
+                let observed = tessera_ui::testing::TestProbe::default();
+                let mut renderer = renderer(tooltip_fixture, 1, &observed);
+                let anchor = window_bounds(&renderer, "Precise anchor", Role::Button);
                 let press = PxPosition::from_f32_xy(
                     anchor.x + anchor.width * 0.5,
                     anchor.y + anchor.height * 0.5,
@@ -319,14 +348,16 @@ fn scaled_tooltip_touch_slop_uses_window_samples_after_ancestor_translation() {
                 renderer.pointer_press(7, press, PressKeyEventType::Left);
                 renderer.step_frame();
                 assert!(
-                    !TOOLTIP
+                    !observed
                         .get()
+                        .tooltip
                         .expect("Tooltip controller")
                         .with(TooltipController::is_open)
                 );
                 if translation != 0.0 {
-                    SHIFT
+                    observed
                         .get()
+                        .shift
                         .expect("Ancestor placement state")
                         .set(translation);
                     renderer.render_frames(4);
@@ -335,8 +366,9 @@ fn scaled_tooltip_touch_slop_uses_window_samples_after_ancestor_translation() {
                 renderer.pointer_move(7, moved);
                 renderer.render_frames(40);
                 assert!(
-                    TOOLTIP
+                    observed
                         .get()
+                        .tooltip
                         .expect("Tooltip controller")
                         .with(TooltipController::is_open),
                     "A physical move below 8px or an ancestor translation must preserve held touch: movement={movement}, translation={translation}"
@@ -349,15 +381,15 @@ fn scaled_tooltip_touch_slop_uses_window_samples_after_ancestor_translation() {
 }
 
 #[tessera]
-fn text_fixture() {
+fn text_fixture(observed: tessera_ui::testing::TestProbe<FixtureHandles>) {
     let editor = remember(|| {
         let mut editor = TextInputController::new(Dp(16.0), Some(Dp(24.0)));
         editor.set_text("tessera framework");
         editor
     });
     let shift = remember(|| 0.0_f32);
-    EDITOR.set(Some(editor));
-    SHIFT.set(Some(shift));
+    observed.with_mut(|handles| handles.editor = Some(editor));
+    observed.with_mut(|handles| handles.shift = Some(shift));
     material_theme().child(move || {
         boxed()
             .alignment(Alignment::TopStart)
@@ -368,7 +400,8 @@ fn text_fixture() {
                     .modifier(Modifier::new().push_placement(FractionalOrigin(shift)))
                     .children(move || {
                         scaled_box(0.625).child(move || {
-                            TextFieldBuilder::filled()
+                            text_field()
+                                .filled()
                                 .controller(editor)
                                 .label("Message")
                                 .accessibility_label("Precise editor")
@@ -411,7 +444,8 @@ fn scaled_editor_multi_click_uses_window_history_and_keeps_local_selection_geome
             for (first_offset, movement, translation) in
                 [(4.0_f32, 4.0_f32, 0.0_f32), (24.0, 0.0, 12.0)]
             {
-                let mut renderer = renderer(text_fixture, 1);
+                let observed = tessera_ui::testing::TestProbe::default();
+                let mut renderer = renderer(text_fixture, 1, &observed);
                 let bounds = node(&renderer, "Precise editor", Role::TextInput)
                     .1
                     .bounds()
@@ -422,7 +456,7 @@ fn scaled_editor_multi_click_uses_window_history_and_keeps_local_selection_geome
                 );
                 let timestamp = Instant::now();
                 timed_click(&mut renderer, first, timestamp);
-                let editor = EDITOR.get().expect("Native editor controller");
+                let editor = observed.get().editor.expect("Native editor controller");
                 let cursor = editor.with(|editor| editor.cursor_offset());
                 assert!(
                     cursor > 0 && cursor < 7,
@@ -430,8 +464,9 @@ fn scaled_editor_multi_click_uses_window_history_and_keeps_local_selection_geome
                 );
                 assert!(editor.with(|editor| editor.selection().is_collapsed()));
                 if translation != 0.0 {
-                    SHIFT
+                    observed
                         .get()
+                        .shift
                         .expect("Ancestor placement state")
                         .set(translation);
                     renderer.render_frames(4);
@@ -448,5 +483,38 @@ fn scaled_editor_multi_click_uses_window_history_and_keeps_local_selection_geome
                 );
             }
         },
+    );
+}
+
+fn window_bounds(renderer: &HeadlessRenderer, label: &str, role: Role) -> tessera_ui::FloatRect {
+    let snapshot = renderer
+        .inspect_accessibility()
+        .expect("accessibility tree");
+    let bounds = snapshot
+        .find(label, role)
+        .expect("overlay control")
+        .1
+        .bounds()
+        .expect("overlay geometry");
+    tessera_ui::FloatRect {
+        x: bounds.x0 as f32,
+        y: bounds.y0 as f32,
+        width: bounds.width() as f32,
+        height: bounds.height() as f32,
+    }
+}
+
+fn assert_placement_only(renderer: &HeadlessRenderer) {
+    let phases = renderer.work().executions();
+    assert!(phases.iter().any(|entry| entry.phase == WorkPhase::Place));
+    assert!(phases.iter().all(
+        |entry| entry.phase != WorkPhase::Measure && entry.phase != WorkPhase::IntrinsicMeasure
+    ));
+    assert!(
+        renderer
+            .work()
+            .phase(tessera_ui::WorkPhase::Paint)
+            .next()
+            .is_none()
     );
 }

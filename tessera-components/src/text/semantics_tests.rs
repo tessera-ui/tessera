@@ -4,12 +4,11 @@
 //!
 //! Preserve caller semantics while text and explicit labels change.
 
-use std::cell::Cell;
-
 use tessera_ui::{
     HeadlessConfig, HeadlessRenderer, Modifier, State,
     accesskit::{Node, NodeId, Role},
     remember, tessera,
+    testing::TestProbe,
 };
 
 use crate::{
@@ -18,14 +17,12 @@ use crate::{
     text::text,
 };
 
-thread_local! {
-    static CHANGED: Cell<Option<State<bool>>> = const { Cell::new(None) };
-}
-
 #[tessera]
-fn fixture() {
+fn fixture(probe: Option<TestProbe<Option<State<bool>>>>) {
     let changed = remember(|| false);
-    CHANGED.set(Some(changed));
+    if let Some(probe) = probe {
+        probe.set(Some(changed));
+    }
     column().children(move || {
         text()
             .modifier(Modifier::new().semantics(SemanticsArgs {
@@ -92,8 +89,12 @@ fn named(renderer: &HeadlessRenderer, label: &str) -> (NodeId, Node) {
 }
 
 fn check(samples: u32) {
+    let probe = TestProbe::<Option<State<bool>>>::default();
+    let observed = probe.clone();
     let mut renderer = HeadlessRenderer::new(
-        Box::new(fixture),
+        Box::new(move || {
+            fixture().probe(probe.clone());
+        }),
         vec![Box::new(crate::TesseraComponents)],
         HeadlessConfig {
             width: 480,
@@ -108,7 +109,7 @@ fn check(samples: u32) {
     let plain_id = named(&renderer, "Plain text").0;
     let initial_pixels = renderer.read_pixels().unwrap();
     for changed in [false, true, false] {
-        CHANGED.get().unwrap().set(changed);
+        observed.get().unwrap().set(changed);
         renderer.render_frames(3);
         let (id, heading) = named(
             &renderer,

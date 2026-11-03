@@ -655,7 +655,10 @@ pub fn snackbar_host(
     snackbar: Option<RenderSlotWith<SnackbarData>>,
 ) {
     let modifier = modifier.unwrap_or_default();
-    let state = state.unwrap_or_else(|| remember(SnackbarHostState::default));
+    let state = match state {
+        Some(value) => value,
+        None => remember(SnackbarHostState::default),
+    };
     let snackbar_slot = snackbar;
     let frame_nanos = current_frame_nanos();
     let should_poll = state.with(|host| host.should_poll(frame_nanos));

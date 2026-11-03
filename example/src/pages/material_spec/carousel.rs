@@ -62,7 +62,10 @@ fn name(variant: CarouselVariant) -> &'static str {
 }
 
 #[tessera]
-pub(super) fn carousel_spec() {
+pub(super) fn carousel_spec(route: Option<crate::pages::material_spec::article::ArticleRoute>) {
+    let modal_controller = Some(remember(
+        crate::pages::material_spec::article::modal_host::ArticleModalState::default,
+    ));
     let mut sections = vec![
         SpecSection {
             title: "Tokens & specs",
@@ -74,7 +77,9 @@ pub(super) fn carousel_spec() {
         },
         SpecSection {
             title: "States",
-            content: RenderSlot::new(states),
+            content: RenderSlot::new(move || {
+                states().modal_controller_optional(modal_controller);
+            }),
         },
         SpecSection {
             title: "Carousel item dynamic widths",
@@ -94,13 +99,17 @@ pub(super) fn carousel_spec() {
         "Carousels show a collection of items that can be scrolled on and off the screen",
         sections,
     )
+    .modal_controller_optional(modal_controller)
+    .route_optional(route.clone())
     .intro(|| {
         layout_figure(CarouselVariant::MultiBrowse, false);
     })
     .pages(vec![
         ArticlePage {
             title: "Overview",
-            intro: Some(RenderSlot::new(overview_intro)),
+            intro: Some(RenderSlot::new(move || {
+                overview_intro().modal_controller_optional(modal_controller);
+            })),
             sections: vec![
                 SpecSection {
                     title: "Availability & resources",
@@ -108,11 +117,15 @@ pub(super) fn carousel_spec() {
                 },
                 SpecSection {
                     title: "Updates",
-                    content: RenderSlot::new(updates),
+                    content: RenderSlot::new(move || {
+                        updates().modal_controller_optional(modal_controller);
+                    }),
                 },
                 SpecSection {
                     title: "Differences from M2",
-                    content: RenderSlot::new(differences),
+                    content: RenderSlot::new(move || {
+                        differences().modal_controller_optional(modal_controller);
+                    }),
                 },
                 SpecSection {
                     title: "Research",
@@ -122,11 +135,15 @@ pub(super) fn carousel_spec() {
         },
         ArticlePage {
             title: "Guidelines",
-            intro: Some(RenderSlot::new(guidelines_intro)),
+            intro: Some(RenderSlot::new(move || {
+                guidelines_intro().modal_controller_optional(modal_controller);
+            })),
             sections: vec![
                 SpecSection {
                     title: "Usage",
-                    content: RenderSlot::new(usage),
+                    content: RenderSlot::new(move || {
+                        usage().modal_controller_optional(modal_controller);
+                    }),
                 },
                 SpecSection {
                     title: "Anatomy",
@@ -134,11 +151,15 @@ pub(super) fn carousel_spec() {
                 },
                 SpecSection {
                     title: "Adaptive design",
-                    content: RenderSlot::new(adaptive_design),
+                    content: RenderSlot::new(move || {
+                        adaptive_design().modal_controller_optional(modal_controller);
+                    }),
                 },
                 SpecSection {
                     title: "Behavior",
-                    content: RenderSlot::new(behavior),
+                    content: RenderSlot::new(move || {
+                        behavior().modal_controller_optional(modal_controller);
+                    }),
                 },
             ],
         },
@@ -152,11 +173,15 @@ pub(super) fn carousel_spec() {
                 },
                 SpecSection {
                     title: "Requirements on scrolling pages",
-                    content: RenderSlot::new(scrolling_requirements),
+                    content: RenderSlot::new(move || {
+                        scrolling_requirements().modal_controller_optional(modal_controller);
+                    }),
                 },
                 SpecSection {
                     title: "Interaction & style",
-                    content: RenderSlot::new(interaction_style),
+                    content: RenderSlot::new(move || {
+                        interaction_style().modal_controller_optional(modal_controller);
+                    }),
                 },
                 SpecSection {
                     title: "Keyboard navigation",
@@ -389,12 +414,20 @@ fn initial_item(variant: CarouselVariant) -> usize {
 }
 
 #[tessera]
-fn collection(variant: CarouselVariant, allow_all: bool, #[prop(into)] header: Option<String>) {
+fn collection(
+    variant: CarouselVariant,
+    allow_all: bool,
+    #[prop(into)] header: Option<String>,
+    modal_controller: Option<
+        crate::pages::material_spec::article::modal_host::ArticleModalController,
+    >,
+) {
     let controller = remember(|| CarouselController::new(initial_item(variant)));
     let all = remember(|| false);
     let selected = remember(|| 0_usize);
     let title = header.clone().unwrap_or_else(|| "All collections".into());
     hosted_dialog(all)
+        .modal_controller_optional(modal_controller)
         .full_screen(true)
         .accessibility_label("All carousel collections")
         .on_close_request(move || all.set(false))
@@ -439,7 +472,7 @@ fn collection(variant: CarouselVariant, allow_all: bool, #[prop(into)] header: O
                     }
                 });
         })
-        .dialog_content(move || {
+        .dialog_content(move |_| {
             all_items_page(all, selected, title.clone());
         });
 }
@@ -718,15 +751,21 @@ fn media_item(
 }
 
 #[tessera]
-fn layout_figure(variant: CarouselVariant, measurements: bool) {
-    let geometry = remember(Geometry::new);
-    let controller = remember(|| CarouselController::new(initial_item(variant)));
+fn layout_figure(
+    variant: CarouselVariant,
+    measurements: bool,
+    geometry: Option<State<Geometry>>,
+    controller: Option<State<CarouselController>>,
+) {
+    let geometry = match geometry {
+        Some(geometry) => geometry,
+        None => remember(Geometry::new),
+    };
+    let controller = match controller {
+        Some(controller) => controller,
+        None => remember(|| CarouselController::new(initial_item(variant))),
+    };
     let selected = remember(|| 0_usize);
-    #[cfg(all(test, not(target_family = "wasm")))]
-    {
-        tests::GEOMETRY.set(Some(geometry));
-        tests::CONTROLLER.set(Some(controller));
-    }
     let scheme = use_context::<MaterialTheme>().unwrap().get().color_scheme;
     boxed()
         .alignment(Alignment::TopStart)
@@ -1008,7 +1047,11 @@ fn measurement_table(variant: CarouselVariant) {
 }
 
 #[tessera]
-fn overview_intro() {
+fn overview_intro(
+    modal_controller: Option<
+        crate::pages::material_spec::article::modal_host::ArticleModalController,
+    >,
+) {
     bullets(vec![
         "Contain visual items like images or video, along with optional label text".into(),
         "Six layouts: Multi-browse, uncontained, uncontained multi-aspect ratio, hero, center-aligned hero and full-screen".into(),
@@ -1017,7 +1060,7 @@ fn overview_intro() {
         "Items change size as they move through the carousel".into(),
     ]);
     gap(Dp(32.0));
-    collection(CarouselVariant::MultiBrowse, true);
+    collection(CarouselVariant::MultiBrowse, true).modal_controller_optional(modal_controller);
     gap(Dp(16.0));
     caption("Carousels can show items of various sizes");
 }
@@ -1053,7 +1096,11 @@ fn availability() {
 }
 
 #[tessera]
-fn updates() {
+fn updates(
+    modal_controller: Option<
+        crate::pages::material_spec::article::modal_host::ArticleModalController,
+    >,
+) {
     subheading("November 2025".into());
     gap(Dp(8.0));
     paragraph("New carousel layout:".into());
@@ -1061,7 +1108,8 @@ fn updates() {
         "Uncontained multi-aspect ratio: shows carousel items of various widths".into(),
     ]);
     gap(Dp(24.0));
-    collection(CarouselVariant::UncontainedMultiAspectRatio, false);
+    collection(CarouselVariant::UncontainedMultiAspectRatio, false)
+        .modal_controller_optional(modal_controller);
     gap(Dp(16.0));
     caption("New carousel layout: uncontained multi-aspect ratio");
     gap(Dp(32.0));
@@ -1078,7 +1126,11 @@ fn updates() {
 }
 
 #[tessera]
-fn differences() {
+fn differences(
+    modal_controller: Option<
+        crate::pages::material_spec::article::modal_host::ArticleModalController,
+    >,
+) {
     paragraph("This component is new in Material 3.".into());
     gap(Dp(16.0));
     bullets(vec![
@@ -1087,7 +1139,7 @@ fn differences() {
         "Interaction: When scrolled, carousel items snap into place to maintain the same layout. Hero carousels swipe through one item at a time. Multi-browse carousels scroll through many items at once.".into(),
     ]);
     gap(Dp(24.0));
-    collection(CarouselVariant::Hero, false);
+    collection(CarouselVariant::Hero, false).modal_controller_optional(modal_controller);
     gap(Dp(16.0));
     caption("Hero carousels scroll through one large item at a time");
 }
@@ -1267,7 +1319,11 @@ fn color_half(dark: bool) {
 const STATES: [&str; 5] = ["Enabled", "Hovered", "Focused", "Pressed", "Disabled"];
 
 #[tessera]
-fn states() {
+fn states(
+    modal_controller: Option<
+        crate::pages::material_spec::article::modal_host::ArticleModalController,
+    >,
+) {
     paragraph("States are visual representations used to communicate the status of a component or interactive element.".into());
     gap(Dp(32.0));
     column()
@@ -1298,7 +1354,7 @@ fn states() {
     gap(Dp(32.0));
     paragraph("The live collection below uses the real state treatment of its interactive items. Hover, focus with Tab or activate an enabled item to inspect its state layer and ripple.".into());
     gap(Dp(16.0));
-    collection(CarouselVariant::MultiBrowse, true);
+    collection(CarouselVariant::MultiBrowse, true).modal_controller_optional(modal_controller);
     gap(Dp(24.0));
     caption("A disabled collection blocks activation and scrolling:");
     gap(Dp(16.0));
@@ -1456,14 +1512,22 @@ fn dynamic_widths() {
 }
 
 #[tessera]
-fn guidelines_intro() {
-    collection(CarouselVariant::MultiBrowse, false);
+fn guidelines_intro(
+    modal_controller: Option<
+        crate::pages::material_spec::article::modal_host::ArticleModalController,
+    >,
+) {
+    collection(CarouselVariant::MultiBrowse, false).modal_controller_optional(modal_controller);
     gap(Dp(16.0));
     caption("Carousel items adapt dynamically based on breakpoint");
 }
 
 #[tessera]
-fn usage() {
+fn usage(
+    modal_controller: Option<
+        crate::pages::material_spec::article::modal_host::ArticleModalController,
+    >,
+) {
     paragraph("Carousels display a scrollable list of items. Carousel items emphasize visuals, but can also contain brief text that adapts to the item size.".into());
     gap(Dp(16.0));
     paragraph("There are four carousel layouts:".into());
@@ -1481,7 +1545,7 @@ fn usage() {
         "Snap-scrolling: Scrolled items snap to the carousel's layout. Recommended for multi-browse, hero, and full-screen layouts".into(),
     ]);
     gap(Dp(24.0));
-    collection(CarouselVariant::MultiBrowse, false);
+    collection(CarouselVariant::MultiBrowse, false).modal_controller_optional(modal_controller);
     gap(Dp(16.0));
     caption("A carousel can contain different sized items");
     gap(Dp(32.0));
@@ -1534,16 +1598,21 @@ fn usage() {
     gap(Dp(16.0));
     paragraph("View the accessibility tab for more details and alternate solutions.".into());
     gap(Dp(24.0));
-    collection(CarouselVariant::MultiBrowse, true);
+    collection(CarouselVariant::MultiBrowse, true).modal_controller_optional(modal_controller);
     gap(Dp(16.0));
     caption("Make sure users can scroll vertically through all carousel items");
     for variant in VARIANTS {
-        layout_usage(variant);
+        layout_usage(variant).modal_controller_optional(modal_controller);
     }
 }
 
 #[tessera]
-fn layout_usage(variant: CarouselVariant) {
+fn layout_usage(
+    variant: CarouselVariant,
+    modal_controller: Option<
+        crate::pages::material_spec::article::modal_host::ArticleModalController,
+    >,
+) {
     gap(Dp(48.0));
     subheading(name(variant).into());
     gap(Dp(16.0));
@@ -1552,7 +1621,7 @@ fn layout_usage(variant: CarouselVariant) {
         gap(Dp(16.0));
     }
     gap(Dp(8.0));
-    collection(variant, false);
+    collection(variant, false).modal_controller_optional(modal_controller);
     gap(Dp(16.0));
     caption(usage_caption(variant));
     if variant == CarouselVariant::MultiBrowse {
@@ -1622,7 +1691,11 @@ fn anatomy() {
 }
 
 #[tessera]
-fn adaptive_design() {
+fn adaptive_design(
+    modal_controller: Option<
+        crate::pages::material_spec::article::modal_host::ArticleModalController,
+    >,
+) {
     paragraph("As the carousel container size increases, so do the number of carousel items visible at a time.".into());
     gap(Dp(16.0));
     bullets(vec![
@@ -1631,7 +1704,7 @@ fn adaptive_design() {
         "Full-screen carousels only ever show one item at once.".into(),
     ]);
     gap(Dp(24.0));
-    collection(CarouselVariant::MultiBrowse, false);
+    collection(CarouselVariant::MultiBrowse, false).modal_controller_optional(modal_controller);
     gap(Dp(16.0));
     caption(
         "Carousels can show more items at once on larger screens. Resize the window to change how many items fit.",
@@ -1639,7 +1712,11 @@ fn adaptive_design() {
 }
 
 #[tessera]
-fn behavior() {
+fn behavior(
+    modal_controller: Option<
+        crate::pages::material_spec::article::modal_host::ArticleModalController,
+    >,
+) {
     subheading("Scrolling".into());
     gap(Dp(16.0));
     paragraph("Carousel items have a parallax effect when they're scrolled.".into());
@@ -1648,7 +1725,7 @@ fn behavior() {
     gap(Dp(16.0));
     paragraph("The snap-scrolling behavior aligns carousel items to the layout grid after they're scrolled. Items snap to the grid when released. Use this for multi-browse, hero, and full-screen layouts.".into());
     gap(Dp(24.0));
-    collection(CarouselVariant::Hero, false);
+    collection(CarouselVariant::Hero, false).modal_controller_optional(modal_controller);
     gap(Dp(16.0));
     caption("Carousel items with snap-scrolling maintain the same layout when released");
     gap(Dp(32.0));
@@ -1656,7 +1733,7 @@ fn behavior() {
     gap(Dp(16.0));
     paragraph("Full-screen layouts must use snap-scrolling.".into());
     gap(Dp(24.0));
-    collection(CarouselVariant::FullScreen, false);
+    collection(CarouselVariant::FullScreen, false).modal_controller_optional(modal_controller);
     gap(Dp(16.0));
     advice(
         "Don't",
@@ -1677,12 +1754,16 @@ fn use_cases() {
 }
 
 #[tessera]
-fn scrolling_requirements() {
+fn scrolling_requirements(
+    modal_controller: Option<
+        crate::pages::material_spec::article::modal_host::ArticleModalController,
+    >,
+) {
     paragraph("On vertically-scrolling pages, carousels require an accessible way to view all the items without horizontally scrolling. (This requirement doesn't apply to full-screen carousels.)".into());
     gap(Dp(16.0));
     paragraph("Material recommends adding a Show all button below the carousel, which opens a dedicated vertically-scrolling page of all carousel items.".into());
     gap(Dp(24.0));
-    collection(CarouselVariant::MultiBrowse, true);
+    collection(CarouselVariant::MultiBrowse, true).modal_controller_optional(modal_controller);
     gap(Dp(16.0));
     caption(
         "Carousels without headers should use a Show all button to view all carousel items. The Show all button should have a padding of 4dp.",
@@ -1692,7 +1773,9 @@ fn scrolling_requirements() {
     gap(Dp(16.0));
     paragraph("Make sure the header is also displayed on the page of all carousel items.".into());
     gap(Dp(24.0));
-    collection(CarouselVariant::MultiBrowse, true).header("Recent collections");
+    collection(CarouselVariant::MultiBrowse, true)
+        .modal_controller_optional(modal_controller)
+        .header("Recent collections");
     gap(Dp(16.0));
     caption(
         "Carousels with headers should use an arrow to view all carousel items. Headers should align with the leading edge, and the arrow icon should have a size of 48dp.",
@@ -1719,7 +1802,11 @@ fn scrolling_requirements() {
 }
 
 #[tessera]
-fn interaction_style() {
+fn interaction_style(
+    modal_controller: Option<
+        crate::pages::material_spec::article::modal_host::ArticleModalController,
+    >,
+) {
     subheading("Touch".into());
     gap(Dp(16.0));
     paragraph("Tapping on a carousel item changes the shape slightly, and creates a touch ripple for interaction feedback.".into());
@@ -1742,7 +1829,7 @@ fn interaction_style() {
     gap(Dp(16.0));
     paragraph("Use the up and down arrow keys to leave the carousel and focus on the next element on the page, like the Show all button.".into());
     gap(Dp(24.0));
-    collection(CarouselVariant::MultiBrowse, true);
+    collection(CarouselVariant::MultiBrowse, true).modal_controller_optional(modal_controller);
     gap(Dp(16.0));
     advice(
         "Do",
@@ -1789,7 +1876,6 @@ fn labeling() {
 
 #[cfg(all(test, not(target_family = "wasm")))]
 mod tests {
-    use std::cell::Cell;
 
     use tessera_components::theme::material_theme;
     use tessera_ui::{
@@ -1799,32 +1885,19 @@ mod tests {
 
     use super::*;
 
-    thread_local! {
-        static VARIANT: Cell<CarouselVariant> = const { Cell::new(CarouselVariant::MultiBrowse) };
-        pub(super) static GEOMETRY: Cell<Option<State<Geometry>>> = const { Cell::new(None) };
-        pub(super) static CONTROLLER: Cell<Option<State<CarouselController>>> = const { Cell::new(None) };
-        static ENABLED: Cell<bool> = const { Cell::new(true) };
-        static SELECTED: Cell<Option<State<usize>>> = const { Cell::new(None) };
-    }
-
-    struct ComponentPipelines;
-
-    impl tessera_ui::RenderModule for ComponentPipelines {
-        fn register_pipelines(&self, context: &mut tessera_ui::PipelineContext<'_>) {
-            tessera_components::pipelines::register_pipelines(context);
-        }
-    }
+    type Observed = (State<Geometry>, State<CarouselController>, State<usize>);
 
     #[tessera]
-    fn fixture() {
-        let variant = VARIANT.get();
+    fn fixture(
+        variant: CarouselVariant,
+        enabled: bool,
+        output: tessera_ui::testing::TestProbe<Option<Observed>>,
+    ) {
         material_theme().child(move || {
             let controller = remember(|| CarouselController::new(initial_item(variant)));
             let selected = remember(|| 0_usize);
             let geometry = remember(Geometry::new);
-            GEOMETRY.set(Some(geometry));
-            CONTROLLER.set(Some(controller));
-            SELECTED.set(Some(selected));
+            output.set(Some((geometry, controller, selected)));
             boxed()
                 .alignment(Alignment::TopStart)
                 .modifier(Modifier::new().fill_max_size())
@@ -1843,7 +1916,7 @@ mod tests {
                         .children(move || {
                             carousel_content(variant, controller, selected)
                                 .geometry(geometry)
-                                .enabled(ENABLED.get());
+                                .enabled(enabled);
                         });
                 });
         });
@@ -1852,12 +1925,12 @@ mod tests {
     #[test]
     #[ignore = "Requires a GPU adapter for the real component pipelines"]
     fn disabled_carousel_preview_blocks_activation_and_scrolling() {
-        VARIANT.set(CarouselVariant::MultiBrowse);
         for enabled in [false, true] {
-            ENABLED.set(enabled);
+            let output = tessera_ui::testing::TestProbe::default();
+            let probe = output.clone();
             let mut renderer = HeadlessRenderer::new(
-                Box::new(fixture),
-                vec![Box::new(ComponentPipelines)],
+                Box::new(move || fixture(CarouselVariant::MultiBrowse, enabled, probe.clone())),
+                vec![Box::new(crate::TestPipelines)],
                 HeadlessConfig {
                     width: 800,
                     height: 600,
@@ -1886,12 +1959,13 @@ mod tests {
             renderer.step_frame();
             renderer.pointer_release(MOUSE_POINTER_ID, point, PressKeyEventType::Left);
             renderer.render_frames(4);
-            assert_eq!(SELECTED.get().unwrap().get(), usize::from(enabled));
+            assert_eq!(output.get().unwrap().2.get(), usize::from(enabled));
             renderer.pointer_scroll(MOUSE_POINTER_ID, point, -120.0, 0.0);
             renderer.render_frames(120);
-            let offset = CONTROLLER
+            let offset = output
                 .get()
                 .unwrap()
+                .1
                 .with(CarouselController::scroll_offset);
             if enabled {
                 assert!(offset.0 > 0.0, "enabled preview must respond to scrolling");
@@ -1899,16 +1973,21 @@ mod tests {
                 assert_eq!(offset, Dp(0.0), "disabled preview must not scroll");
             }
         }
-        ENABLED.set(true);
     }
 
     #[tessera]
-    fn measurement_fixture() {
-        material_theme().child(|| {
+    fn measurement_fixture(output: tessera_ui::testing::TestProbe<Option<Observed>>) {
+        let geometry = remember(Geometry::new);
+        let controller = remember(|| CarouselController::new(0));
+        let selected = remember(|| 0usize);
+        output.set(Some((geometry, controller, selected)));
+        material_theme().child(move || {
             column()
                 .modifier(Modifier::new().width(Dp(496.0)))
-                .children(|| {
-                    layout_figure(CarouselVariant::MultiBrowse, true);
+                .children(move || {
+                    layout_figure(CarouselVariant::MultiBrowse, true)
+                        .geometry(geometry)
+                        .controller(controller);
                 });
         });
     }
@@ -1916,9 +1995,11 @@ mod tests {
     #[test]
     #[ignore = "Requires a GPU adapter for real carousel measurement annotations and actions"]
     fn measurement_annotations_follow_collection_edges_and_end_inspection_action() {
+        let output = tessera_ui::testing::TestProbe::default();
+        let probe = output.clone();
         let mut renderer = HeadlessRenderer::new(
-            Box::new(measurement_fixture),
-            vec![Box::new(ComponentPipelines)],
+            Box::new(move || measurement_fixture(probe.clone())),
+            vec![Box::new(crate::TestPipelines)],
             HeadlessConfig {
                 width: 800,
                 height: 700,
@@ -1928,7 +2009,7 @@ mod tests {
         )
         .expect("measurement renderer");
         renderer.render_frames(8);
-        let geometry = GEOMETRY.get().unwrap();
+        let geometry = output.get().unwrap().0;
         assert_eq!(collection_edge_padding(&geometry.get()), [16.0, 0.0]);
         let tree = renderer.accessibility_snapshot().unwrap();
         assert!(
@@ -1956,9 +2037,10 @@ mod tests {
         }));
         renderer.render_frames(8);
         assert_eq!(
-            CONTROLLER
+            output
                 .get()
                 .unwrap()
+                .1
                 .with(CarouselController::current_item),
             5
         );
@@ -2019,12 +2101,12 @@ mod tests {
     #[test]
     #[ignore = "Requires a GPU adapter for the real component pipelines"]
     fn live_carousel_figures_keep_horizontal_and_portrait_viewports() {
-        ENABLED.set(true);
         for variant in VARIANTS {
-            VARIANT.set(variant);
+            let output = tessera_ui::testing::TestProbe::default();
+            let probe = output.clone();
             let mut renderer = HeadlessRenderer::new(
-                Box::new(fixture),
-                vec![Box::new(ComponentPipelines)],
+                Box::new(move || fixture(variant, true, probe.clone())),
+                vec![Box::new(crate::TestPipelines)],
                 HeadlessConfig {
                     width: 800,
                     height: 600,
@@ -2073,8 +2155,8 @@ mod tests {
                 "{} viewport height",
                 name(variant)
             );
-            let geometry = GEOMETRY.get().expect("observed figure geometry");
-            let controller = CONTROLLER.get().expect("figure controller");
+            let geometry = output.get().unwrap().0;
+            let controller = output.get().unwrap().1;
             if matches!(
                 variant,
                 CarouselVariant::Hero | CarouselVariant::CenteredHero
@@ -2171,7 +2253,7 @@ mod tests {
     fn header_arrow_replaces_show_all_and_opens_a_page_with_the_same_header() {
         let mut renderer = HeadlessRenderer::new(
             Box::new(header_fixture),
-            vec![Box::new(ComponentPipelines)],
+            vec![Box::new(crate::TestPipelines)],
             HeadlessConfig {
                 width: 800,
                 height: 700,

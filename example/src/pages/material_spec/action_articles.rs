@@ -12,7 +12,7 @@ use tessera_components::{
     text::text,
     theme::MaterialTheme,
 };
-use tessera_ui::{Dp, Modifier, RenderSlot, accesskit::Role, tessera, use_context};
+use tessera_ui::{Callback, Dp, Modifier, RenderSlot, accesskit::Role, tessera, use_context};
 
 use super::{
     INK,
@@ -467,6 +467,9 @@ pub(super) fn action_article(
     anatomy: RenderSlot,
     behavior: RenderSlot,
     overview: Option<RenderSlot>,
+    on_recommended: Option<Callback>,
+
+    route: Option<crate::pages::material_spec::article::ArticleRoute>,
 ) {
     let overview = overview.unwrap_or(example);
     let title = title(kind);
@@ -512,43 +515,45 @@ pub(super) fn action_article(
             });
         }
     }
-    let article = article(title, description, sections).pages(vec![
-        ArticlePage {
-            title: "Overview",
-            intro: Some(RenderSlot::new(move || {
-                recommendation(kind);
-                paragraph(summary(kind));
-                gap(Dp(32.0));
-                overview.render();
-            })),
-            sections: vec![],
-        },
-        ArticlePage {
-            title: "Guidelines",
-            intro: if kind == Kind::Segmented {
-                Some(RenderSlot::new(move || {
-                    recommendation(kind);
-                }))
-            } else {
-                None
+    let article = article(title, description, sections)
+        .route_optional(route.clone())
+        .pages(vec![
+            ArticlePage {
+                title: "Overview",
+                intro: Some(RenderSlot::new(move || {
+                    recommendation(kind).on_recommended_optional(on_recommended);
+                    paragraph(summary(kind));
+                    gap(Dp(32.0));
+                    overview.render();
+                })),
+                sections: vec![],
             },
-            sections: guide,
-        },
-        ArticlePage {
-            title: "Accessibility",
-            intro: if kind == Kind::Segmented {
-                Some(RenderSlot::new(move || {
-                    recommendation(kind);
-                }))
-            } else {
-                None
+            ArticlePage {
+                title: "Guidelines",
+                intro: if kind == Kind::Segmented {
+                    Some(RenderSlot::new(move || {
+                        recommendation(kind).on_recommended_optional(on_recommended);
+                    }))
+                } else {
+                    None
+                },
+                sections: guide,
             },
-            sections: access,
-        },
-    ]);
+            ArticlePage {
+                title: "Accessibility",
+                intro: if kind == Kind::Segmented {
+                    Some(RenderSlot::new(move || {
+                        recommendation(kind).on_recommended_optional(on_recommended);
+                    }))
+                } else {
+                    None
+                },
+                sections: access,
+            },
+        ]);
     if kind == Kind::Segmented {
         article.intro_shared(RenderSlot::new(move || {
-            recommendation(kind);
+            recommendation(kind).on_recommended_optional(on_recommended);
         }));
     }
 }
@@ -643,18 +648,15 @@ fn chapter_content(
 }
 
 #[tessera]
-fn recommendation(kind: Kind) {
+fn recommendation(kind: Kind, on_recommended: Option<Callback>) {
     if kind != Kind::Segmented {
         return;
     }
-    let navigation = use_context::<crate::app::MaterialNavigation>().map(|context| context.get().0);
     let scheme = use_context::<MaterialTheme>().unwrap().get().color_scheme;
     column().modifier(Modifier::new().fill_max_width().background_with_shape(scheme.secondary_container,Shape::rounded_rectangle(Dp(16.0))).padding_all(Dp(24.0)).semantics(SemanticsArgs {role:Some(Role::Note),label:Some("M3 Expressive recommendation".into()),merge_descendants:true,..Default::default()})).children(move || {
         paragraph("Segmented buttons are no longer recommended for M3 Expressive. Use a connected button group for new interfaces.");
-        if let Some(navigation)=navigation {
-            gap(Dp(16.0)); button().text().accessibility_label("Open recommended button groups").on_click(move || {
-                if let Some(index)=super::catalog::component_index(18) { navigation.set(Some(index)); }
-            }).child(|| { text().content("Explore button groups"); });
+        if let Some(on_recommended)=on_recommended {
+            gap(Dp(16.0)); button().text().accessibility_label("Open recommended button groups").on_click_shared(on_recommended).child(|| { text().content("Explore button groups"); });
         }
     });
     gap(Dp(32.0));

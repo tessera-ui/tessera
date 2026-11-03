@@ -4,29 +4,28 @@
 //!
 //! Keep threshold, reversal and custom indicator behavior on real scroll input.
 
-use std::cell::Cell;
-
 use tessera_ui::{HeadlessConfig, HeadlessRenderer, PxPosition};
 
 use crate::{scrollable::ScrollableController, text::text, theme::material_theme};
 
 use super::*;
 
-thread_local! {
-    static REFRESHING: Cell<Option<State<bool>>> = const { Cell::new(None) };
-    static REQUESTS: Cell<Option<State<usize>>> = const { Cell::new(None) };
-    static CONTROLLER: Cell<Option<State<PullRefreshController>>> = const { Cell::new(None) };
+#[derive(Clone, Copy, Default)]
+struct FixtureHandles {
+    refreshing: Option<State<bool>>,
+    requests: Option<State<usize>>,
+    controller: Option<State<PullRefreshController>>,
 }
 
 #[tessera]
-fn fixture() {
+fn fixture(observed: tessera_ui::testing::TestProbe<FixtureHandles>) {
     let refreshing = remember(|| false);
     let requests = remember(|| 0_usize);
     let controller = remember(PullRefreshController::new);
     let scroll = remember(ScrollableController::new);
-    REFRESHING.set(Some(refreshing));
-    REQUESTS.set(Some(requests));
-    CONTROLLER.set(Some(controller));
+    observed.with_mut(|handles| handles.refreshing = Some(refreshing));
+    observed.with_mut(|handles| handles.requests = Some(requests));
+    observed.with_mut(|handles| handles.controller = Some(controller));
     material_theme().child(move || {
         boxed()
             .modifier(Modifier::new().fill_max_size())
@@ -74,8 +73,12 @@ fn drag(renderer: &mut HeadlessRenderer, positions: &[f32]) {
 #[test]
 #[ignore = "Requires a native GPU adapter"]
 fn native_pull_refresh_uses_scroll_threshold_and_reversal_with_custom_indicator() {
+    let observed = tessera_ui::testing::TestProbe::default();
     let mut renderer = HeadlessRenderer::new(
-        Box::new(fixture),
+        Box::new({
+            let observed = observed.clone();
+            move || fixture(observed.clone())
+        }),
         vec![Box::new(crate::TesseraComponents)],
         HeadlessConfig {
             width: 400,
@@ -86,9 +89,9 @@ fn native_pull_refresh_uses_scroll_threshold_and_reversal_with_custom_indicator(
     )
     .unwrap();
     renderer.render_frames(8);
-    let requests = REQUESTS.get().unwrap();
-    let refreshing = REFRESHING.get().unwrap();
-    let controller = CONTROLLER.get().unwrap();
+    let requests = observed.get().requests.unwrap();
+    let refreshing = observed.get().refreshing.unwrap();
+    let controller = observed.get().controller.unwrap();
     renderer.touch_start(2, PxPosition::from_f32_xy(150.0, 30.0));
     renderer.step_frame();
     renderer.touch_move(2, PxPosition::from_f32_xy(150.0, 260.0));

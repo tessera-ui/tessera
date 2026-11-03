@@ -10,30 +10,22 @@ use tessera_ui::{
     accesskit::{Action, ActionRequest, Node, NodeId, Rect, Role, Toggled, TreeId},
 };
 
-struct Pipelines;
-
-impl tessera_ui::RenderModule for Pipelines {
-    fn register_pipelines(&self, context: &mut tessera_ui::PipelineContext<'_>) {
-        tessera_components::pipelines::register_pipelines(context);
-    }
-}
-
 fn find(
     renderer: &HeadlessRenderer,
     label: &str,
     role: Option<Role>,
 ) -> Option<(tessera_ui::accesskit::NodeId, Node)> {
     renderer
-        .accessibility_snapshot()
-        .unwrap()
-        .nodes
-        .into_iter()
+        .inspect_accessibility()
+        .expect("published accessibility")
+        .reading_order()
         .find(|(_, node)| {
             node.label() == Some(label)
                 && role.is_none_or(|role| node.role() == role)
                 && !node.is_hidden()
                 && node.bounds().is_some()
         })
+        .map(|(id, node)| (id, node.clone()))
 }
 
 fn reveal(
@@ -128,7 +120,7 @@ fn click(
 fn text_field_route_compacts_navigation_and_reveals_retained_outlined_callouts_and_border() {
     let mut renderer = HeadlessRenderer::new(
         Box::new(crate::app::app),
-        vec![Box::new(Pipelines)],
+        vec![Box::new(crate::TestPipelines)],
         HeadlessConfig {
             width: 907,
             height: 871,
@@ -304,7 +296,7 @@ fn real_buttons_route_retains_visited_native_state_reveals_cold_sections_and_pre
  {
     let mut renderer = HeadlessRenderer::new(
         Box::new(crate::app::app),
-        vec![Box::new(Pipelines)],
+        vec![Box::new(crate::TestPipelines)],
         HeadlessConfig {
             width: 907,
             height: 871,
@@ -410,14 +402,14 @@ fn real_buttons_route_retains_visited_native_state_reveals_cold_sections_and_pre
         "Unseen article sections must not be placed before navigation"
     );
     assert!(
-        find(&renderer, "Select", Some(Role::Button)).is_none(),
+        find(&renderer, "Play", Some(Role::Button)).is_none(),
         "Unvisited native examples must not be constructed eagerly"
     );
     click(&mut renderer, "Shape morph", Some(Role::Link), 800.0, None);
-    let select = reveal(&mut renderer, "Select", Some(Role::Button), -600.0);
+    let select = reveal(&mut renderer, "Play", Some(Role::Button), -600.0);
     assert_eq!(select.1.toggled(), Some(Toggled::False));
-    click(&mut renderer, "Select", Some(Role::Button), -600.0, None);
-    let selected = find(&renderer, "Select", Some(Role::Button)).unwrap();
+    click(&mut renderer, "Play", Some(Role::Button), -600.0, None);
+    let selected = find(&renderer, "Play", Some(Role::Button)).unwrap();
     assert_eq!(selected.1.toggled(), Some(Toggled::True));
     assert_eq!(selected.1.description(), Some("Activations: 1"));
     let selected_id = selected.0;
@@ -473,7 +465,25 @@ fn real_buttons_route_retains_visited_native_state_reveals_cold_sections_and_pre
         "The pinned tab must receive clicks above the overlapping chapter content: {header:?}"
     );
     click(&mut renderer, "Measurements", Some(Role::Link), 800.0, None);
-    let label = reveal(&mut renderer, "Label", Some(Role::Button), -600.0)
+    let heading = find(&renderer, "Measurements", Some(Role::Heading))
+        .unwrap()
+        .1
+        .bounds()
+        .unwrap();
+    let semantics = renderer
+        .inspect_accessibility()
+        .expect("published accessibility");
+    let label = semantics
+        .reading_order()
+        .find(|(_, node)| {
+            node.label() == Some("Label")
+                && node.role() == Role::Button
+                && node.bounds().is_some_and(|bounds| {
+                    bounds.y0 >= heading.y1
+                        && bounds.y1 < f64::from(renderer.physical_size().height)
+                })
+        })
+        .expect("the first measurement row is visible below its chapter heading")
         .1
         .bounds()
         .unwrap();
@@ -483,7 +493,7 @@ fn real_buttons_route_retains_visited_native_state_reveals_cold_sections_and_pre
         "real extra-small button keeps its 48dp interaction target"
     );
     click(&mut renderer, "Shape morph", Some(Role::Link), 800.0, None);
-    let restored = reveal(&mut renderer, "Select", Some(Role::Button), -600.0);
+    let restored = reveal(&mut renderer, "Play", Some(Role::Button), -600.0);
     assert_eq!(
         restored.0, selected_id,
         "visited composition must retain the original actual control identity"
@@ -508,7 +518,7 @@ fn real_buttons_route_retains_visited_native_state_reveals_cold_sections_and_pre
         renderer.accessibility_snapshot().unwrap().focus,
         selected_id
     );
-    let offscreen = find(&renderer, "Select", Some(Role::Button)).unwrap();
+    let offscreen = find(&renderer, "Play", Some(Role::Button)).unwrap();
     let offscreen_bounds = offscreen.1.bounds().unwrap();
     assert!(
         offscreen_bounds.y1 < 64.0 || offscreen_bounds.y0 > 871.0,
@@ -516,15 +526,15 @@ fn real_buttons_route_retains_visited_native_state_reveals_cold_sections_and_pre
     );
     renderer.render_frames(12);
     assert_eq!(
-        find(&renderer, "Select", Some(Role::Button))
+        find(&renderer, "Play", Some(Role::Button))
             .unwrap()
             .1
             .bounds(),
         Some(offscreen_bounds),
         "Idle frames must not undo manual scrolling to reveal an already focused item"
     );
-    reveal(&mut renderer, "Select", Some(Role::Button), 800.0);
-    let selected = find(&renderer, "Select", Some(Role::Button)).unwrap();
+    reveal(&mut renderer, "Play", Some(Role::Button), 800.0);
+    let selected = find(&renderer, "Play", Some(Role::Button)).unwrap();
     assert_eq!(
         renderer.accessibility_snapshot().unwrap().focus,
         selected_id
@@ -543,7 +553,7 @@ fn real_buttons_route_retains_visited_native_state_reveals_cold_sections_and_pre
 fn saving_date_range_configuration_preserves_article_position() {
     let mut renderer = HeadlessRenderer::new(
         Box::new(crate::app::app),
-        vec![Box::new(Pipelines)],
+        vec![Box::new(crate::TestPipelines)],
         HeadlessConfig {
             width: 1280,
             height: 800,
@@ -634,7 +644,7 @@ fn carousel_collection_page_keeps_return_visible_and_restores_article_position()
     for width in [1280, 390] {
         let mut renderer = HeadlessRenderer::new(
             Box::new(crate::app::app),
-            vec![Box::new(Pipelines)],
+            vec![Box::new(crate::TestPipelines)],
             HeadlessConfig {
                 width,
                 height: 800,
@@ -783,7 +793,7 @@ fn responsive_article_fixture() {
 fn article_body_and_contents_share_responsive_gutters_and_bounded_desktop_width() {
     let mut renderer = HeadlessRenderer::new(
         Box::new(responsive_article_fixture),
-        vec![Box::new(Pipelines)],
+        vec![Box::new(crate::TestPipelines)],
         HeadlessConfig {
             width: 390,
             height: 3000,
@@ -832,7 +842,7 @@ fn article_body_and_contents_share_responsive_gutters_and_bounded_desktop_width(
 fn required_field_remains_pointer_editable_after_article_tab_and_scrolled_reveal() {
     let mut renderer = HeadlessRenderer::new(
         Box::new(crate::app::app),
-        vec![Box::new(Pipelines)],
+        vec![Box::new(crate::TestPipelines)],
         HeadlessConfig {
             width: 1650,
             height: 1200,
@@ -958,41 +968,29 @@ fn node_is_exposed(nodes: &[(NodeId, Node)], mut id: NodeId) -> bool {
     panic!("accessibility ancestry must not contain a cycle");
 }
 
-fn node_descends_from(nodes: &[(NodeId, Node)], mut id: NodeId, ancestor: NodeId) -> bool {
-    for _ in 0..=nodes.len() {
-        if id == ancestor {
-            return true;
-        }
-        if let Some((parent, _)) = nodes.iter().find(|(_, node)| node.children().contains(&id)) {
-            id = *parent;
-        } else {
-            return false;
-        }
-    }
-    panic!("accessibility ancestry must not contain a cycle");
-}
-
 fn app_mail_destination(renderer: &HeadlessRenderer, label: &str) -> (NodeId, Node) {
     let dialog = find(renderer, "Mail navigation", Some(Role::Dialog))
         .expect("actual root mail dialog")
         .0;
-    let tree = renderer.accessibility_snapshot().unwrap();
-    tree.nodes
-        .iter()
+    let tree = renderer.inspect_accessibility().unwrap();
+    tree.subtree(dialog)
         .find(|(id, node)| {
             node.role() == Role::Tab
                 && node.label() == Some(label)
-                && node_descends_from(&tree.nodes, *id, dialog)
-                && node_is_exposed(&tree.nodes, *id)
+                && node_is_exposed(tree.nodes(), *id)
         })
-        .map(|(id, node)| (*id, node.clone()))
+        .map(|(id, node)| (id, node.clone()))
         .expect("actual destination inside the live dialog, not an instructional figure")
 }
 
-fn actual_app_drawer_article() -> HeadlessRenderer {
+fn actual_app_drawer_article() -> (HeadlessRenderer, crate::app::AppNavigationHandles) {
+    let navigation = tessera_ui::testing::TestProbe::default();
+    let observed = navigation.clone();
     let mut renderer = HeadlessRenderer::new(
-        Box::new(crate::app::app),
-        vec![Box::new(Pipelines)],
+        Box::new(move || {
+            crate::app::app_fixture(observed.clone());
+        }),
+        vec![Box::new(crate::TestPipelines)],
         HeadlessConfig {
             width: 907,
             height: 871,
@@ -1013,11 +1011,13 @@ fn actual_app_drawer_article() -> HeadlessRenderer {
         None,
     );
     assert!(
-        crate::app::test_navigation()
+        navigation
+            .get()
+            .expect("mounted app navigation")
             .directory
             .with(|directory| !directory.is_open() && !directory.is_animating())
     );
-    renderer
+    (renderer, navigation.get().expect("mounted app navigation"))
 }
 
 fn launch_app_mail(renderer: &mut HeadlessRenderer) -> NodeId {
@@ -1081,7 +1081,7 @@ fn initial_mail_focus_outline_pixels(renderer: &HeadlessRenderer, bounds: Rect) 
 #[test]
 #[ignore = "requires a native GPU adapter for actual modal initial focus and painting"]
 fn live_drawer_initial_focus_paints_the_first_destination_and_traverses_without_selection() {
-    let mut renderer = actual_app_drawer_article();
+    let (mut renderer, _navigation) = actual_app_drawer_article();
     let (opener, _) = reveal(
         &mut renderer,
         "Open modal navigation drawer",
@@ -1151,14 +1151,13 @@ fn live_drawer_initial_focus_paints_the_first_destination_and_traverses_without_
 #[test]
 #[ignore = "requires a native GPU adapter for the actual app shell and modal focus"]
 fn live_drawer_covers_the_real_app_bar_blocks_background_and_restores_its_launch_button() {
-    let mut renderer = actual_app_drawer_article();
+    let (mut renderer, navigation) = actual_app_drawer_article();
     reveal(
         &mut renderer,
         "Open modal navigation drawer",
         Some(Role::Button),
         -600.0,
     );
-    let navigation = crate::app::test_navigation();
     let selected_article = navigation.material.get();
     let (back_id, back) = find(&renderer, "Back to components", Some(Role::Button))
         .expect("real app bar navigation button");
@@ -1220,7 +1219,7 @@ fn live_drawer_covers_the_real_app_bar_blocks_background_and_restores_its_launch
 #[ignore = "requires a native GPU adapter for actual article and router exit animations"]
 fn live_drawer_route_exit_closes_without_unmounting_the_host_or_losing_session_state() {
     for leave_material_route in [false, true] {
-        let mut renderer = actual_app_drawer_article();
+        let (mut renderer, navigation) = actual_app_drawer_article();
         launch_app_mail(&mut renderer);
         let outbox = app_mail_destination(&renderer, "Outbox");
         tap_app_bounds(&mut renderer, outbox.1.bounds().unwrap());
@@ -1228,7 +1227,6 @@ fn live_drawer_route_exit_closes_without_unmounting_the_host_or_losing_session_s
         let opener = launch_app_mail(&mut renderer);
         let (dialog_id, _) = find(&renderer, "Mail navigation", Some(Role::Dialog)).unwrap();
         let inbox_id = app_mail_destination(&renderer, "Inbox").0;
-        let navigation = crate::app::test_navigation();
         if leave_material_route {
             navigation
                 .router
@@ -1290,10 +1288,14 @@ fn live_drawer_route_exit_closes_without_unmounting_the_host_or_losing_session_s
     }
 }
 
-fn actual_app_rail_article() -> HeadlessRenderer {
+fn actual_app_rail_article() -> (HeadlessRenderer, crate::app::AppNavigationHandles) {
+    let navigation = tessera_ui::testing::TestProbe::default();
+    let observed = navigation.clone();
     let mut renderer = HeadlessRenderer::new(
-        Box::new(crate::app::app),
-        vec![Box::new(Pipelines)],
+        Box::new(move || {
+            crate::app::app_fixture(observed.clone());
+        }),
+        vec![Box::new(crate::TestPipelines)],
         HeadlessConfig {
             width: 907,
             height: 871,
@@ -1315,23 +1317,21 @@ fn actual_app_rail_article() -> HeadlessRenderer {
     );
     click(&mut renderer, "Guidelines", Some(Role::Tab), 800.0, None);
     click(&mut renderer, "Behavior", Some(Role::Link), -600.0, None);
-    renderer
+    (renderer, navigation.get().expect("mounted app navigation"))
 }
 
 fn app_rail_destination(renderer: &HeadlessRenderer, label: &str) -> (NodeId, Node) {
     let dialog = find(renderer, "Mail rail navigation", Some(Role::Dialog))
         .expect("actual root rail dialog")
         .0;
-    let tree = renderer.accessibility_snapshot().unwrap();
-    tree.nodes
-        .iter()
+    let tree = renderer.inspect_accessibility().unwrap();
+    tree.subtree(dialog)
         .find(|(id, node)| {
             node.role() == Role::Tab
                 && node.label() == Some(label)
-                && node_descends_from(&tree.nodes, *id, dialog)
-                && node_is_exposed(&tree.nodes, *id)
+                && node_is_exposed(tree.nodes(), *id)
         })
-        .map(|(id, node)| (*id, node.clone()))
+        .map(|(id, node)| (id, node.clone()))
         .expect("actual destination inside the live rail")
 }
 
@@ -1375,14 +1375,13 @@ fn assert_app_rail_closed(renderer: &HeadlessRenderer, opener: NodeId) {
 #[test]
 #[ignore = "requires a native GPU adapter for actual app rail modality and initial focus"]
 fn live_rail_covers_the_real_app_bar_and_initial_focus_traverses_without_selection() {
-    let mut renderer = actual_app_rail_article();
+    let (mut renderer, navigation) = actual_app_rail_article();
     reveal(
         &mut renderer,
         "Open modal navigation rail",
         Some(Role::Button),
         -600.0,
     );
-    let navigation = crate::app::test_navigation();
     let article = navigation.material.get();
     let (back_id, back) = find(&renderer, "Back to components", Some(Role::Button)).unwrap();
     let before = renderer.read_pixels().unwrap();
@@ -1465,7 +1464,7 @@ fn live_rail_covers_the_real_app_bar_and_initial_focus_traverses_without_selecti
 #[ignore = "requires a native GPU adapter for real rail route-exit focus cleanup"]
 fn live_rail_route_exit_clears_modal_focus_and_preserves_selection_on_return() {
     for leave_material_route in [false, true] {
-        let mut renderer = actual_app_rail_article();
+        let (mut renderer, navigation) = actual_app_rail_article();
         launch_app_rail(&mut renderer);
         let inbox = app_rail_destination(&renderer, "Inbox").0;
         assert!(renderer.dispatch_accessibility_action(ActionRequest {
@@ -1480,7 +1479,6 @@ fn live_rail_route_exit_clears_modal_focus_and_preserves_selection_on_return() {
             .unwrap()
             .0;
         let home = app_rail_destination(&renderer, "Home").0;
-        let navigation = crate::app::test_navigation();
         if leave_material_route {
             navigation
                 .router

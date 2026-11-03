@@ -23,8 +23,7 @@ use tessera_components::{
 };
 use tessera_shard::RouterController;
 use tessera_ui::{
-    Dp, Modifier, RenderSlot, State, accesskit::Role, provide_context, remember, tessera,
-    use_context,
+    Dp, Modifier, RenderSlot, State, accesskit::Role, remember, tessera, use_context,
 };
 
 use super::{
@@ -37,8 +36,8 @@ use super::{
 
 mod figures;
 
-#[derive(Clone, Copy)]
-struct LiveRailSession {
+#[derive(Clone, Copy, PartialEq)]
+pub(crate) struct LiveRailSession {
     open: State<bool>,
     selected: State<usize>,
     directory: State<SideSheetController>,
@@ -68,7 +67,7 @@ pub(crate) fn live_rail_host(
     directory: State<SideSheetController>,
     router: State<RouterController>,
     material: State<Option<usize>>,
-    main_content: RenderSlot,
+    main_content: tessera_ui::RenderSlotWith<LiveRailSession>,
 ) {
     let open = remember(|| false);
     let selected = remember(|| 0usize);
@@ -83,9 +82,15 @@ pub(crate) fn live_rail_host(
         open.set(false);
     }
     let modal = RenderSlot::new(move || {
-        live_rail_modal(open, selected, main_content.clone());
+        live_rail_modal(
+            open,
+            selected,
+            RenderSlot::new(move || {
+                main_content.render(session);
+            }),
+        );
     });
-    provide_context(move || session, move || modal.render());
+    modal.render();
 }
 
 #[tessera]
@@ -106,9 +111,9 @@ fn live_rail_modal(
                 .accessibility_label("Close modal navigation rail")
                 .on_click(move || modal_open.set(false));
         })
-        .content(move || {
+        .content(move |rail_scope| {
             for (index, name) in NAMES.into_iter().enumerate() {
-                navigation_rail_item()
+                navigation_rail_item(rail_scope)
                     .label(name)
                     .selected(modal_selected.get() == index)
                     .on_click(move || {
@@ -123,8 +128,12 @@ fn live_rail_modal(
 }
 
 #[tessera]
-pub(super) fn navigation_rail_spec() {
-    let root = use_context::<LiveRailSession>().map(|context| context.get());
+pub(super) fn navigation_rail_spec(
+    route: Option<crate::pages::material_spec::article::ArticleRoute>,
+
+    session: Option<LiveRailSession>,
+) {
+    let root = session;
     let local_open = remember(|| false);
     let local_selected = remember(|| 0usize);
     let (modal_open, modal_selected) = if let Some(session) = root {
@@ -175,6 +184,7 @@ pub(super) fn navigation_rail_spec() {
                 },
             ],
         )
+        .route_optional(route.clone())
         .pages(vec![
             ArticlePage {
                 title: "Overview",
@@ -217,7 +227,7 @@ pub(super) fn navigation_rail_spec() {
                     SpecSection {
                         title: "Behavior",
                         content: RenderSlot::new(move || {
-                            behavior(modal_open, modal_selected);
+                            behavior(modal_open, modal_selected).session_optional(session);
                         }),
                     },
                 ],
@@ -1315,11 +1325,12 @@ fn baseline_rail(callouts: Vec<figures::Callout>, marks: usize, filled: bool) {
     figures::annotated_mock(
         Dp(240.0),
         Dp(420.0),
-        RenderSlot::new(|| {
+        tessera_ui::RenderSlotWith::new(move |geometry| {
             boxed()
                 .modifier(Modifier::new().size(Dp(80.0), Dp(400.0)))
-                .children(|| {
+                .children(move || {
                     figures::mock_rail()
+                        .geometry(geometry)
                         .baseline(true)
                         .set(0)
                         .count(4)
@@ -2241,8 +2252,11 @@ fn adaptive_design() {
 }
 
 #[tessera]
-fn behavior(modal_open: State<bool>, modal_selected: State<usize>) {
-    let session = use_context::<LiveRailSession>().map(|context| context.get());
+fn behavior(
+    modal_open: State<bool>,
+    modal_selected: State<usize>,
+    session: Option<LiveRailSession>,
+) {
     subheading("Modal expanded rail".into());
     prose(
         "A modal expanded rail opens from the menu and closes by selecting its scrim or a destination, or by pressing Escape. It returns focus to the control that opened it.",
@@ -2285,12 +2299,12 @@ fn behavior(modal_open: State<bool>, modal_selected: State<usize>) {
     );
     gap(Dp(24.0));
     figures::pair(
-        RenderSlot::new(|| {
+        RenderSlot::new(move || {
             card(
                 "Rail with a divider over horizontal content",
                 0,
                 "A divider and color fill change create visual distinction between the rail and horizontally scrolling content",
-                RenderSlot::new(|| {
+                RenderSlot::new(move || {
                     figures::mock_rail()
                         .count(3)
                         .selected(1)
@@ -2300,12 +2314,12 @@ fn behavior(modal_open: State<bool>, modal_selected: State<usize>) {
             )
             .content_kind(2);
         }),
-        RenderSlot::new(|| {
+        RenderSlot::new(move || {
             card(
                 "Elevated rail over horizontal content",
                 0,
                 "Elevating the rail to level 1 creates visual distinction between the rail and horizontally scrolling content",
-                RenderSlot::new(|| {
+                RenderSlot::new(move || {
                     figures::mock_rail()
                         .count(3)
                         .selected(1)
@@ -2345,7 +2359,7 @@ fn behavior(modal_open: State<bool>, modal_selected: State<usize>) {
     figures::scene(
         "Modal navigation rail during the predictive back gesture",
         Dp(460.0),
-        RenderSlot::new(|| {
+        RenderSlot::new(move || {
             figures::screen(
                 "Predictive back on a modal navigation rail",
                 Dp(560.0),
@@ -2399,7 +2413,7 @@ fn behavior_rail() {
                                     expanded.with_mut(|expanded| *expanded = !*expanded)
                                 });
                         })
-                        .content(move || {
+                        .content(move |rail_scope| {
                             for (index, name) in NAMES.into_iter().take(4).enumerate() {
                                 boxed()
                                     .modifier(Modifier::new().semantics(SemanticsArgs {
@@ -2408,7 +2422,7 @@ fn behavior_rail() {
                                         ..Default::default()
                                     }))
                                     .children(move || {
-                                        navigation_rail_item()
+                                        navigation_rail_item(rail_scope)
                                             .label(name)
                                             .selected(selected.get() == index)
                                             .on_click(move || selected.set(index))
@@ -2484,7 +2498,7 @@ fn scrolling_rail_view(
                                         ..Default::default()
                                     }));
                             })
-                            .content(move || {
+                            .content(move |rail_scope| {
                                 for (index, name) in NAMES.into_iter().take(4).enumerate() {
                                     boxed()
                                         .modifier(Modifier::new().semantics(SemanticsArgs {
@@ -2493,7 +2507,7 @@ fn scrolling_rail_view(
                                             ..Default::default()
                                         }))
                                         .children(move || {
-                                            navigation_rail_item()
+                                            navigation_rail_item(rail_scope)
                                                 .label(name)
                                                 .selected(selected.get() == index)
                                                 .on_click(move || selected.set(index))
@@ -3016,18 +3030,14 @@ mod tests {
         snapshot.node("behavior-rail-destination-1").exists();
     }
 
-    thread_local! {
-        static SCROLL: std::cell::Cell<Option<State<ScrollableController>>> = const { std::cell::Cell::new(None) };
-        static EXPANDED: std::cell::Cell<Option<State<bool>>> = const { std::cell::Cell::new(None) };
-    }
-
     #[tessera]
-    fn scrolling_fixture() {
+    fn scrolling_fixture(
+        output: tessera_ui::testing::TestProbe<Option<(State<ScrollableController>, State<bool>)>>,
+    ) {
         let expanded = remember(|| false);
         let selected = remember(|| 0usize);
         let scroll = remember(ScrollableController::new);
-        SCROLL.set(Some(scroll));
-        EXPANDED.set(Some(expanded));
+        output.set(Some((scroll, expanded)));
         material_theme().child(move || {
             scrolling_rail_view(expanded, selected, scroll);
         });
@@ -3035,16 +3045,17 @@ mod tests {
 
     #[test]
     fn scrolling_body_keeps_menu_and_destinations_fixed_and_selectable_in_both_variants() {
-        let mut session =
-            start_layout_test_session(layout_test(scrolling_fixture).viewport_px(600, 600));
+        let output = tessera_ui::testing::TestProbe::default();
+        let probe = output.clone();
+        let mut session = start_layout_test_session(
+            layout_test(move || scrolling_fixture(probe.clone())).viewport_px(600, 600),
+        );
         let mut frame = 0;
         pump_layout_test_session(&mut session, frame);
+        let (scroll, expanded_state) = output.get().unwrap();
         for expanded in [false, true] {
-            EXPANDED.get().unwrap().set(expanded);
-            SCROLL
-                .get()
-                .unwrap()
-                .with_mut(|scroll| scroll.set_scroll_position(PxPosition::ZERO));
+            expanded_state.set(expanded);
+            scroll.with_mut(|scroll| scroll.set_scroll_position(PxPosition::ZERO));
             frame += 16_666_667;
             pump_layout_test_session(&mut session, frame);
             frame += 400_000_000;
@@ -3056,7 +3067,7 @@ mod tests {
             let destination = before.node("scrolling-rail-item-3").bounds();
             let message = before.node("scrolling-message-0").bounds();
             assert!(destination.y.0 + destination.height.0 <= 480);
-            SCROLL.get().unwrap().with_mut(|scroll| {
+            scroll.with_mut(|scroll| {
                 scroll.set_scroll_position(PxPosition::from_f32_xy(0.0, -200.0));
             });
             frame += 16_666_667;
@@ -3072,14 +3083,6 @@ mod tests {
             pump_layout_test_session(&mut session, frame)
                 .node("scrolling-rail-destination-3")
                 .exists();
-        }
-    }
-
-    struct Pipelines;
-
-    impl tessera_ui::RenderModule for Pipelines {
-        fn register_pipelines(&self, context: &mut tessera_ui::PipelineContext<'_>) {
-            tessera_components::pipelines::register_pipelines(context);
         }
     }
 
@@ -3122,14 +3125,14 @@ mod tests {
             ),
             (
                 (|| {
-                    scrolling_fixture();
+                    scrolling_fixture(tessera_ui::testing::TestProbe::default());
                 }) as fn(),
                 Some("Expand fixed rail"),
             ),
         ] {
             let mut renderer = HeadlessRenderer::new(
                 Box::new(component),
-                vec![Box::new(Pipelines)],
+                vec![Box::new(crate::TestPipelines)],
                 HeadlessConfig {
                     width: 600,
                     height: 600,

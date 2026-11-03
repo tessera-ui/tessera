@@ -4,7 +4,7 @@
 //!
 //! Keep native control bounds and target annotations aligned when resized.
 
-use std::{cell::Cell, time::Duration};
+use std::time::Duration;
 
 use tessera_components::theme::material_theme;
 use tessera_ui::{
@@ -13,18 +13,9 @@ use tessera_ui::{
     tessera,
 };
 
-thread_local! {static SCENE: Cell<usize> = const {Cell::new(0)};}
-
-struct Pipelines;
-impl tessera_ui::RenderModule for Pipelines {
-    fn register_pipelines(&self, context: &mut tessera_ui::PipelineContext<'_>) {
-        tessera_components::pipelines::register_pipelines(context);
-    }
-}
-
 #[tessera]
-fn fixture() {
-    material_theme().child(|| match SCENE.get() {
+fn fixture(scene: usize) {
+    material_theme().child(move || match scene {
         0 => {
             super::sizes();
         }
@@ -52,10 +43,11 @@ fn control(renderer: &HeadlessRenderer, label: &str) -> Node {
 #[ignore = "requires a native GPU adapter for actual measurement diagrams"]
 fn measurement_diagrams_preserve_native_sizes_expanded_targets_and_clicks_after_resize() {
     for scene in 0..3 {
-        SCENE.set(scene);
         let mut renderer = HeadlessRenderer::new(
-            Box::new(fixture),
-            vec![Box::new(Pipelines)],
+            Box::new(move || {
+                fixture(scene);
+            }),
+            vec![Box::new(crate::TestPipelines)],
             HeadlessConfig {
                 width: 1024,
                 height: 1400,

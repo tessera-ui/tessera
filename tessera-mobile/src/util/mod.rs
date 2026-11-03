@@ -6,7 +6,6 @@ mod path;
 pub mod prompt;
 
 use std::{
-    error::Error as StdError,
     ffi::OsStr,
     fmt::{self, Debug, Display},
     io,
@@ -575,48 +574,6 @@ pub fn unwrap_either<T>(result: Result<T, T>) -> T {
     }
 }
 
-#[derive(Debug, Error)]
-pub enum WithWorkingDirError<E>
-where
-    E: StdError,
-{
-    #[error("Failed to get current directory: {0}")]
-    CurrentDirGetFailed(#[source] std::io::Error),
-    #[error("Failed to set working directory {path:?}: {source}")]
-    CurrentDirSetFailed {
-        path: PathBuf,
-        source: std::io::Error,
-    },
-    #[error(transparent)]
-    CallbackFailed(#[from] E),
-}
-
-pub fn with_working_dir<T, E, IE>(
-    working_dir: impl AsRef<Path>,
-    f: impl FnOnce() -> Result<T, IE>,
-) -> Result<T, WithWorkingDirError<E>>
-where
-    E: StdError,
-    E: From<IE>,
-{
-    let working_dir = working_dir.as_ref();
-    let current_dir = std::env::current_dir().map_err(WithWorkingDirError::CurrentDirGetFailed)?;
-    std::env::set_current_dir(working_dir).map_err(|source| {
-        WithWorkingDirError::CurrentDirSetFailed {
-            path: working_dir.to_owned(),
-            source,
-        }
-    })?;
-    let result = f().map_err(E::from)?;
-    std::env::set_current_dir(&current_dir).map_err(|source| {
-        WithWorkingDirError::CurrentDirSetFailed {
-            path: current_dir,
-            source,
-        }
-    })?;
-    Ok(result)
-}
-
 #[derive(Clone, Debug, Deserialize, PartialEq)]
 #[serde(untagged)]
 pub enum OneOrMany<T: Debug> {
@@ -657,26 +614,21 @@ pub fn gradlew(
     let (gradlew, gradle) = ("gradlew", "gradle");
 
     let project_dir = dunce::simplified(&project_dir);
-    let gradlew_p = project_dir.join(gradlew);
-    if gradlew_p.exists() {
+    let gradlew_path = project_dir.join(gradlew);
+    let command = if gradlew_path.exists() {
         duct::cmd(
-            gradlew_p,
+            gradlew_path,
             [OsStr::new("--project-dir"), project_dir.as_ref()],
         )
-        .vars(env.explicit_env())
-        .dup_stdio()
-    } else if duct::cmd(gradlew, ["-v"])
+    } else if env
+        .configure_command(duct::cmd(gradlew, ["-v"]))
         .dup_stdio()
         .run()
-        .map(|o| o.status.success())
-        .unwrap_or(false)
+        .is_ok_and(|output| output.status.success())
     {
         duct::cmd(gradlew, [OsStr::new("--project-dir"), project_dir.as_ref()])
-            .vars(env.explicit_env())
-            .dup_stdio()
     } else {
         duct::cmd(gradle, [OsStr::new("--project-dir"), project_dir.as_ref()])
-            .vars(env.explicit_env())
-            .dup_stdio()
-    }
+    };
+    env.configure_command(command).dup_stdio()
 }

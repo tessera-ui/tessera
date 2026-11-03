@@ -4,20 +4,17 @@
 //!
 //! Explain controls on hover, keyboard focus, or touch long press.
 
-use std::sync::Arc;
-
-use parking_lot::RwLock;
 use tessera_ui::{
     AxisConstraint, Callback, ComputedData, CursorEventContent, Dp, FocusDirection, FocusGroupNode,
     FocusRequester, FocusState, FrameNanosControl, GestureState, KeyboardInput,
     KeyboardInputModifierNode, LayoutResult, MOUSE_POINTER_ID, MeasurementError, Modifier,
     PointerInput, PointerInputModifierNode, PressKeyEventType, Px, PxPosition, PxRect, RenderSlot,
-    State,
+    RenderSlotWith, State,
     accesskit::{Live, Role},
     current_frame_nanos,
-    layout::{MeasureScope, layout},
+    layout::{LayoutPlacementTarget, MeasureScope, PlacementResult, PlacementScope, layout},
     modifier::{FocusModifierExt as _, ModifierCapabilityExt as _},
-    provide_context, receive_frame_nanos, remember, tessera, use_context,
+    receive_frame_nanos, remember, tessera, use_context,
     winit::{
         event::ElementState,
         keyboard::{Key, NamedKey},
@@ -71,7 +68,7 @@ struct TouchPress {
 }
 
 /// Shared tooltip visibility, trigger bounds, and input state.
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, PartialEq)]
 pub struct TooltipController {
     open: bool,
     suppressed: bool,
@@ -89,10 +86,24 @@ pub struct TooltipController {
     pending_show: Option<u64>,
     pending_hide: Option<u64>,
     touch: Option<TouchPress>,
-    anchor: tessera_ui::FloatRect,
+    anchor: Option<State<tessera_ui::FloatRect>>,
     focus: FocusRequester,
     popup_focus: FocusRequester,
     popup_group: FocusGroupNode,
+}
+
+impl std::fmt::Debug for TooltipController {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter
+            .debug_struct("TooltipController")
+            .field("open", &self.open)
+            .field("suppressed", &self.suppressed)
+            .field("description", &self.description)
+            .field("persistent", &self.persistent)
+            .field("interactive", &self.interactive)
+            .field("anchor_attached", &self.anchor.is_some())
+            .finish_non_exhaustive()
+    }
 }
 
 impl Default for TooltipController {
@@ -114,7 +125,7 @@ impl Default for TooltipController {
             pending_show: None,
             pending_hide: None,
             touch: None,
-            anchor: tessera_ui::FloatRect::ZERO,
+            anchor: None,
             focus: FocusRequester::new(),
             popup_focus: FocusRequester::new(),
             popup_group: FocusGroupNode::new(),
@@ -123,6 +134,12 @@ impl Default for TooltipController {
 }
 
 impl TooltipController {
+    fn anchor(&self) -> tessera_ui::FloatRect {
+        self.anchor
+            .filter(|anchor| anchor.is_alive())
+            .map_or(tessera_ui::FloatRect::ZERO, |anchor| anchor.get())
+    }
+
     /// Creates a hidden tooltip.
     pub fn new() -> Self {
         Self::default()
@@ -259,12 +276,6 @@ impl TooltipController {
     }
 }
 
-#[derive(Clone, PartialEq)]
-struct TooltipContext {
-    controller: State<TooltipController>,
-    active: State<Option<State<TooltipController>>>,
-}
-
 #[derive(Clone, Copy)]
 struct TooltipPointer {
     controller: State<TooltipController>,
@@ -381,7 +392,7 @@ impl PointerInputModifierNode for TooltipPointer {
 
 struct TooltipDismissInput {
     controller: State<TooltipController>,
-    popup: Arc<RwLock<tessera_ui::FloatRect>>,
+    popup: State<tessera_ui::FloatRect>,
 }
 
 impl TooltipDismissInput {
@@ -482,14 +493,14 @@ impl PointerInputModifierNode for TooltipDismissInput {
         if !self.controller.with(TooltipController::is_open) {
             return;
         }
-        let anchor = self.controller.with(|controller| controller.anchor);
+        let anchor = self.controller.with(TooltipController::anchor);
         let pressed = input
             .pointer_changes
             .iter()
             .any(|event| matches!(event.content, CursorEventContent::Pressed(_)));
         if pressed
             && !within(input.cursor_position_abs(), anchor)
-            && !within(input.cursor_position_abs(), *self.popup.read())
+            && !within(input.cursor_position_abs(), self.popup.get())
         {
             self.controller.with_mut(TooltipController::dismiss);
         }
@@ -548,19 +559,30 @@ impl PointerInputModifierNode for TooltipRestoreInput {
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, PartialEq)]
 struct TooltipLayout {
     open: bool,
-    anchor: tessera_ui::FloatRect,
-    origin: Arc<RwLock<tessera_ui::LayoutCoordinates>>,
+    anchor: State<tessera_ui::FloatRect>,
+    origin: State<tessera_ui::LayoutCoordinates>,
     visible: State<Option<tessera_ui::FloatRect>>,
+    visible_size: State<Option<ComputedData>>,
     placement: TooltipPlacement,
 }
 
-impl PartialEq for TooltipLayout {
-    fn eq(&self, other: &Self) -> bool {
-        self.open == other.open && self.anchor == other.anchor && self.placement == other.placement
-    }
+fn publish_tooltip_viewport_size(
+    origin: State<tessera_ui::LayoutCoordinates>,
+    visible: State<Option<tessera_ui::FloatRect>>,
+    size: State<Option<ComputedData>>,
+) {
+    let transform = origin.get().local_to_window;
+    let next = visible.get().map(|bounds| {
+        let local = transform.inverse_rect(bounds);
+        ComputedData {
+            width: Px(local.width.floor() as i32),
+            height: Px(local.height.floor() as i32),
+        }
+    });
+    size.set_if_changed(next);
 }
 
 fn popup_position(
@@ -620,34 +642,63 @@ fn popup_position(
     )
 }
 
-impl tessera_ui::LayoutModifierNode for TooltipLayout {
-    fn measure(&self, input: &mut MeasureScope<'_>) -> Result<LayoutResult, MeasurementError> {
-        let children = input.children();
-        let mut result = LayoutResult::default();
-        let constraint = input.parent_constraint().without_min();
-        let main = children[0].measure(input, &constraint)?;
+impl TooltipLayout {
+    fn place<T: LayoutPlacementTarget>(
+        &self,
+        children: &[T],
+        sizes: &[ComputedData],
+    ) -> LayoutResult {
+        let mut result = LayoutResult::new(sizes[0]);
         result.place_child(children[0], PxPosition::ZERO);
         if self.open
+            && children.len() > 1
             && let Some(visible) = self.visible.get()
         {
-            let origin = *self.origin.read();
-            let visible = origin.local_to_window.inverse_rect(visible);
-            let constraint = tessera_ui::Constraint::new(
-                AxisConstraint::new(
-                    Px::ZERO,
-                    Some((Px(visible.width.floor() as i32) - Dp(16.0).to_px()).max(Px::ZERO)),
-                ),
-                AxisConstraint::new(
-                    Px::ZERO,
-                    Some((Px(visible.height.floor() as i32) - Dp(16.0).to_px()).max(Px::ZERO)),
-                ),
+            let transform = self.origin.get().local_to_window;
+            let visible = transform.inverse_rect(visible);
+            let anchor = transform.inverse_rect(self.anchor.get());
+            result.place_child(
+                children[1],
+                popup_position(anchor, sizes[1], visible, self.placement),
             );
-            let popup = children[1].measure(input, &constraint)?;
-            let anchor = origin.local_to_window.inverse_rect(self.anchor);
-            let position = popup_position(anchor, popup.size(), visible, self.placement);
-            result.place_child(children[1], position);
         }
-        Ok(result.with_size(main.size()))
+        result
+    }
+}
+
+impl tessera_ui::LayoutModifierNode for TooltipLayout {
+    fn measure_eq(&self, other: &Self) -> bool {
+        self.open == other.open && self.visible_size == other.visible_size
+    }
+
+    fn measure(&self, input: &mut MeasureScope<'_>) -> Result<LayoutResult, MeasurementError> {
+        let children = input.children();
+        let constraint = input.parent_constraint().without_min();
+        let main = children[0].measure(input, &constraint)?.size();
+        let mut sizes = vec![main];
+        if self.open && children.len() > 1 {
+            let visible = self.visible_size.get().unwrap_or(main);
+            let margin = Dp(16.0).to_px();
+            let constraint = tessera_ui::Constraint::new(
+                AxisConstraint::at_most((visible.width - margin).max(Px::ZERO)),
+                AxisConstraint::at_most((visible.height - margin).max(Px::ZERO)),
+            );
+            sizes.push(children[1].measure(input, &constraint)?.size());
+        }
+        Ok(input.placement(|| self.place(&children, &sizes)))
+    }
+
+    fn place_children(
+        &self,
+        scope: &PlacementScope<'_>,
+        _inner: &PlacementResult,
+    ) -> Option<PlacementResult> {
+        let children = scope.children();
+        let sizes = children
+            .iter()
+            .map(|child| child.size())
+            .collect::<Vec<_>>();
+        Some(self.place(&children, &sizes).into_placement_result())
     }
 }
 
@@ -695,14 +746,15 @@ pub fn tooltip_provider(
     on_action: Option<Callback>,
     actions: Option<RenderSlot>,
     controller: Option<State<TooltipController>>,
+    group: Option<State<Option<State<TooltipController>>>>,
     placement: Option<TooltipPlacement>,
     persistent: Option<bool>,
     modifier: Option<Modifier>,
     popup_modifier: Option<Modifier>,
-    child: Option<RenderSlot>,
+    child: Option<RenderSlotWith<State<TooltipController>>>,
 ) {
-    let active = if let Some(context) = use_context::<TooltipContext>() {
-        context.get().active
+    let active = if let Some(group) = group {
+        group
     } else {
         remember(|| None::<State<TooltipController>>)
     };
@@ -717,20 +769,22 @@ pub fn tooltip_provider(
     );
     let interactive =
         variant == TooltipVariant::Rich && (action_label.is_some() || actions.is_some());
+    let anchor = remember(|| tessera_ui::FloatRect::ZERO);
     if controller.with(|controller| {
-        controller.description != message
+        controller.anchor != Some(anchor)
+            || controller.description != message
             || controller.persistent != persistent
             || controller.interactive != interactive
     }) {
         controller.with_mut(|controller| {
+            controller.anchor = Some(anchor);
             controller.description = message.clone();
             controller.persistent = persistent;
             controller.interactive = interactive;
         });
     }
-    let child = child.unwrap_or_else(RenderSlot::empty);
-    let origin = remember(|| Arc::new(RwLock::new(tessera_ui::LayoutCoordinates::default()))).get();
-    let popup = remember(|| Arc::new(RwLock::new(tessera_ui::FloatRect::ZERO))).get();
+    let origin = remember(tessera_ui::LayoutCoordinates::default);
+    let popup = remember(|| tessera_ui::FloatRect::ZERO);
     if controller.with(TooltipController::needs_frame) {
         receive_frame_nanos(move |now| {
             controller.with_mut(|controller| controller.advance(now));
@@ -741,7 +795,7 @@ pub fn tooltip_provider(
             }
         });
     }
-    let (open, anchor) = controller.with(|controller| (controller.is_open(), controller.anchor));
+    let open = controller.with(TooltipController::is_open);
     if open && active.get() != Some(controller) {
         if let Some(previous) = active.get()
             && previous.is_alive()
@@ -782,66 +836,66 @@ pub fn tooltip_provider(
     modifier = modifier
         .push_keyboard_preview_input(TooltipDismissInput {
             controller,
-            popup: Arc::clone(&popup),
+            popup: popup,
         })
         .push_pointer_preview_input(TooltipDismissInput {
             controller,
-            popup: Arc::clone(&popup),
+            popup: popup,
         })
         .push_keyboard_input(TooltipRestoreInput { controller })
         .push_pointer_final_input(TooltipRestoreInput { controller });
-    let bounds = Arc::clone(&origin);
     let visible = remember(|| None::<tessera_ui::FloatRect>);
+    let visible_size = remember(|| None::<ComputedData>);
     modifier = modifier
-        .on_layout_coordinates(move |coordinates| *bounds.write() = coordinates)
+        .on_layout_coordinates(move |coordinates| {
+            origin.set_if_changed(coordinates);
+            publish_tooltip_viewport_size(origin, visible, visible_size);
+        })
         .on_visible_window_bounds(move |bounds| {
-            if visible.get() != bounds {
-                visible.set(bounds);
+            visible.set_if_changed(bounds);
+            publish_tooltip_viewport_size(origin, visible, visible_size);
+        });
+    layout()
+        .modifier(modifier)
+        .policy(TooltipLayout {
+            open,
+            anchor,
+            origin,
+            visible,
+            visible_size,
+            placement: placement.unwrap_or_default(),
+        })
+        .child(move || {
+            let (
+                open,
+                message,
+                headline,
+                action_label,
+                on_action,
+                child,
+                variant,
+                persistent,
+                actions,
+                popup_modifier,
+            ) = render_data.get();
+            if let Some(child) = child {
+                child.render(controller);
+            }
+            if open {
+                let has_actions = actions.is_some();
+                tooltip_panel(message.clone())
+                    .modifier_optional(popup_modifier)
+                    .variant(variant)
+                    .headline(headline.clone().unwrap_or_default())
+                    .action_label(action_label.clone().unwrap_or_default())
+                    .on_action_shared(on_action.unwrap_or_default())
+                    .controller(controller)
+                    .popup(popup)
+                    .persistent(persistent)
+                    .actions_shared(actions.unwrap_or_else(RenderSlot::empty))
+                    .has_actions(has_actions);
             }
         });
-    provide_context(
-        || TooltipContext { controller, active },
-        || {
-            layout()
-                .modifier(modifier)
-                .policy(TooltipLayout {
-                    open,
-                    anchor,
-                    origin,
-                    visible,
-                    placement: placement.unwrap_or_default(),
-                })
-                .child(move || {
-                    let (
-                        open,
-                        message,
-                        headline,
-                        action_label,
-                        on_action,
-                        child,
-                        variant,
-                        persistent,
-                        actions,
-                        popup_modifier,
-                    ) = render_data.get();
-                    child.render();
-                    if open {
-                        let has_actions = actions.is_some();
-                        tooltip_panel(message.clone())
-                            .modifier_optional(popup_modifier)
-                            .variant(variant)
-                            .headline(headline.clone().unwrap_or_default())
-                            .action_label(action_label.clone().unwrap_or_default())
-                            .on_action_shared(on_action.unwrap_or_default())
-                            .controller(controller)
-                            .popup(Arc::clone(&popup))
-                            .persistent(persistent)
-                            .actions_shared(actions.unwrap_or_else(RenderSlot::empty))
-                            .has_actions(has_actions);
-                    }
-                });
-        },
-    );
 }
 
 /// # tooltip_anchor
@@ -855,8 +909,7 @@ pub fn tooltip_provider(
 ///
 /// ## Parameters
 ///
-/// - `controller` — optional shared controller; otherwise use the nearest
-///   provider
+/// - `controller` — controller received from the tooltip provider content slot
 /// - `modifier` — modifiers for the trigger wrapper
 /// - `child` — the control that receives focus and normal activation
 ///
@@ -868,16 +921,15 @@ pub fn tooltip_provider(
 /// ```
 #[tessera]
 pub fn tooltip_anchor(
-    controller: Option<State<TooltipController>>,
+    controller: State<TooltipController>,
     modifier: Option<Modifier>,
     child: Option<RenderSlot>,
 ) {
-    let context = use_context::<TooltipContext>()
-        .expect("tooltip_anchor requires tooltip_provider")
-        .get();
-    let controller = controller.unwrap_or(context.controller);
     let child = child.unwrap_or_else(RenderSlot::empty);
     let focus = controller.with(|controller| controller.focus);
+    let anchor = controller
+        .with(|controller| controller.anchor)
+        .expect("tooltip anchor requires a provider");
     let modifier = modifier
         .unwrap_or_default()
         .semantics(SemanticsArgs {
@@ -890,9 +942,7 @@ pub fn tooltip_anchor(
         .focus_requester(focus)
         .on_focus_changed(move |_: FocusState| sync_tooltip_focus(controller, false))
         .on_globally_positioned_precise(move |rect| {
-            if controller.with(|controller| controller.anchor) != rect {
-                controller.with_mut(|controller| controller.anchor = rect);
-            }
+            anchor.set_if_changed(rect);
         })
         .push_pointer_preview_input(TooltipPointer {
             controller,
@@ -912,7 +962,7 @@ fn tooltip_panel(
     actions: Option<RenderSlot>,
     has_actions: Option<bool>,
     controller: Option<State<TooltipController>>,
-    popup: Option<Arc<RwLock<tessera_ui::FloatRect>>>,
+    popup: Option<State<tessera_ui::FloatRect>>,
     persistent: Option<bool>,
     modifier: Option<Modifier>,
 ) {
@@ -949,7 +999,9 @@ fn tooltip_panel(
         .on_focus_changed(move |_: FocusState| sync_tooltip_focus(controller, true))
         .push_keyboard_input(TooltipRestoreInput { controller })
         .push_pointer_final_input(TooltipRestoreInput { controller })
-        .on_globally_positioned_precise(move |rect| *popup.write() = rect)
+        .on_globally_positioned_precise(move |rect| {
+            popup.set_if_changed(rect);
+        })
         .push_pointer_preview_input(TooltipPointer {
             controller,
             popup: true,
@@ -1061,7 +1113,6 @@ fn tooltip_panel(
 
 #[cfg(test)]
 mod tests {
-    use std::cell::Cell;
 
     use tessera_ui::{
         accesskit::{Action, ActionRequest, TreeId},
@@ -1162,14 +1213,16 @@ mod tests {
             layout_test, pump_layout_test_session, start_layout_test_session,
         };
 
+        let observed = tessera_ui::testing::TestProbe::default();
+        let fixture_observed = observed.clone();
         let mut session = start_layout_test_session(
-            layout_test(|| {
-                fixture();
+            layout_test(move || {
+                fixture(fixture_observed.clone());
             })
             .viewport_px(400, 320),
         );
         pump_layout_test_session(&mut session, 0);
-        let controller = CONTROLLER.get().expect("controller");
+        let controller = observed.get().controller.expect("controller");
         let anchor = controller.with(|controller| controller.focus);
         controller.with_mut(|controller| {
             controller.touch_focus_suppressed = true;
@@ -1248,35 +1301,40 @@ mod tests {
         popup_width: Option<Dp>,
     }
 
-    thread_local! {
-        static VISIBLE_HOST: Cell<Option<tessera_ui::FloatRect>> = const { Cell::new(None) };
-        static CLIP_GEOMETRY: Cell<Option<tessera_ui::LayoutCoordinates>> = const { Cell::new(None) };
-        static HOST_GEOMETRY: Cell<Option<tessera_ui::LayoutCoordinates>> = const { Cell::new(None) };
-        static POPUP_BOUNDS: Cell<Option<tessera_ui::FloatRect>> = const { Cell::new(None) };
-        static CONTROLLER: Cell<Option<State<TooltipController>>> = const { Cell::new(None) };
-        static SETTINGS: Cell<Option<State<Settings>>> = const { Cell::new(None) };
-        static CLICKS: Cell<Option<State<u32>>> = const { Cell::new(None) };
-        static ACTIONS: Cell<Option<State<u32>>> = const { Cell::new(None) };
+    #[derive(Clone, Copy, Default)]
+    struct FixtureHandles {
+        visible_host: Option<tessera_ui::FloatRect>,
+        clip_geometry: Option<tessera_ui::LayoutCoordinates>,
+        host_geometry: Option<tessera_ui::LayoutCoordinates>,
+        popup_bounds: Option<tessera_ui::FloatRect>,
+        scratch_popup: Option<State<tessera_ui::FloatRect>>,
+        controller: Option<State<TooltipController>>,
+        settings: Option<State<Settings>>,
+        clicks: Option<State<u32>>,
+        actions: Option<State<u32>>,
     }
 
     #[tessera]
-    fn fixture() {
+    fn fixture(observed: tessera_ui::testing::TestProbe<FixtureHandles>) {
+        let scratch_popup = remember(|| tessera_ui::FloatRect::ZERO);
+        observed.with_mut(|handles| handles.scratch_popup = Some(scratch_popup));
         let controller = remember(TooltipController::new);
         let settings = remember(Settings::default);
         let clicks = remember(|| 0_u32);
         let actions = remember(|| 0_u32);
         let other_tooltip = remember(TooltipController::new);
+        let group = remember(|| None::<State<TooltipController>>);
         // Rebuild the parent boundary when an action also updates sibling
         // content.
         let _ = actions.get();
-        CONTROLLER.set(Some(controller));
-        SETTINGS.set(Some(settings));
-        CLICKS.set(Some(clicks));
-        ACTIONS.set(Some(actions));
+        observed.with_mut(|handles| handles.controller = Some(controller));
+        observed.with_mut(|handles| handles.settings = Some(settings));
+        observed.with_mut(|handles| handles.clicks = Some(clicks));
+        observed.with_mut(|handles| handles.actions = Some(actions));
         material_theme().child(move || {
             let config = settings.get();
             let popup_modifier = Modifier::new()
-                .on_globally_positioned_precise(|bounds| POPUP_BOUNDS.set(Some(bounds)));
+                .on_globally_positioned_precise({ let observed = observed.clone(); move |bounds| observed.with_mut(|handles| handles.popup_bounds = Some(bounds)) });
             let popup_modifier = if let Some(width) = config.popup_width {
                 popup_modifier.width(width)
             } else {
@@ -1285,6 +1343,7 @@ mod tests {
             let tooltip = tooltip_provider(if config.changed { "Updated help text with multiple words that wraps within the tooltip's maximum width." } else { "Helpful description" })
                 .popup_modifier(popup_modifier)
                 .controller(controller)
+                .group(group)
                 .variant(if config.rich { TooltipVariant::Rich } else { TooltipVariant::Plain })
                 .headline(if config.without_headline { "" } else { "More information" })
                 .action_label(if config.rich { "Got it" } else { "" })
@@ -1302,10 +1361,10 @@ mod tests {
             } else {
                 tooltip
             };
-            tooltip.child(move || {
-                tooltip_provider("Other help").controller(other_tooltip).child(move || {
+            tooltip.child(move |_| {
+                tooltip_provider("Other help").controller(other_tooltip).group(group).child(move |_| {
                     boxed().modifier(Modifier::new().fill_max_size().padding_all(Dp(80.0))).children(move || {
-                        tooltip_anchor().controller(controller).child(move || {
+                        tooltip_anchor(controller).child(move || {
                             button().modifier(Modifier::new().width(Dp(120.0))).accessibility_label("Trigger").on_click(move || {
                                 clicks.set(clicks.get() + 1);
                                 if settings.with(|settings| settings.focus_stress) {
@@ -1324,10 +1383,16 @@ mod tests {
         });
     }
 
-    fn renderer() -> HeadlessRenderer {
-        POPUP_BOUNDS.set(None);
+    fn renderer() -> (
+        HeadlessRenderer,
+        tessera_ui::testing::TestProbe<FixtureHandles>,
+    ) {
+        let observed = tessera_ui::testing::TestProbe::default();
+        let fixture_observed = observed.clone();
         let mut renderer = HeadlessRenderer::new(
-            Box::new(fixture),
+            Box::new(move || {
+                fixture(fixture_observed.clone());
+            }),
             vec![Box::new(crate::TesseraComponents)],
             HeadlessConfig {
                 width: 400,
@@ -1337,34 +1402,42 @@ mod tests {
         )
         .expect("headless renderer");
         renderer.render_frames(3);
-        renderer
+        (renderer, observed)
     }
 
-    fn anchor_center() -> PxPosition {
-        let rect = CONTROLLER
+    fn anchor_center(observed: &tessera_ui::testing::TestProbe<FixtureHandles>) -> PxPosition {
+        let rect = observed
             .get()
+            .controller
             .expect("controller")
-            .with(|controller| controller.anchor);
+            .with(TooltipController::anchor);
         PxPosition::from_f32_xy(rect.x + rect.width * 0.5, rect.y + rect.height * 0.5)
     }
 
     #[tessera]
-    fn clipped_host_fixture(scale: f32) {
+    fn clipped_host_fixture(scale: f32, observed: tessera_ui::testing::TestProbe<FixtureHandles>) {
         let controller = remember(|| {
             let mut controller = TooltipController::new();
             controller.show();
             controller
         });
-        CONTROLLER.set(Some(controller));
+        observed.with_mut(|handles| handles.controller = Some(controller));
         tessera_ui::scaled_box(scale).child(move || {
+            let observed = observed.clone();
             material_theme().child(move || {
+                let observed = observed.clone();
                 boxed()
                     .modifier(
                         Modifier::new()
                             .clip_to_bounds()
                             .required_size(Dp(400.0), Dp(300.0))
-                            .on_layout_coordinates(|coordinates| {
-                                CLIP_GEOMETRY.set(Some(coordinates))
+                            .on_layout_coordinates({
+                                let observed = observed.clone();
+                                move |coordinates| {
+                                    observed.with_mut(|handles| {
+                                        handles.clip_geometry = Some(coordinates)
+                                    });
+                                }
                             }),
                     )
                     .children(move || {
@@ -1376,17 +1449,27 @@ mod tests {
                             .modifier(
                                 Modifier::new()
                                     .required_size(Dp(400.0), Dp(1000.0))
-                                    .on_visible_window_bounds(|bounds| VISIBLE_HOST.set(bounds))
-                                    .on_layout_coordinates(|coordinates| {
-                                        HOST_GEOMETRY.set(Some(coordinates))
+                                    .on_visible_window_bounds({
+                                        let observed = observed.clone();
+                                        move |bounds| {
+                                            observed
+                                                .with_mut(|handles| handles.visible_host = bounds)
+                                        }
+                                    })
+                                    .on_layout_coordinates({
+                                        let observed = observed.clone();
+                                        move |coordinates| {
+                                            observed.with_mut(|handles| {
+                                                handles.host_geometry = Some(coordinates)
+                                            });
+                                        }
                                     }),
                             )
-                            .child(move || {
+                            .child(move |_| {
                                 boxed()
                                     .modifier(Modifier::new().required_size(Dp(400.0), Dp(1000.0)))
                                     .children(move || {
-                                        tooltip_anchor()
-                                            .controller(controller)
+                                        tooltip_anchor(controller)
                                             .modifier(Modifier::new().offset(Dp(120.0), Dp(240.0)))
                                             .child(|| {
                                                 button().child(|| {
@@ -1404,9 +1487,11 @@ mod tests {
     #[ignore = "requires a native GPU adapter"]
     fn gpu_rich_tooltip_flips_inside_clipped_scaled_hosts_and_its_action_remains_available() {
         for scale in [1.0, 0.75] {
+            let observed = tessera_ui::testing::TestProbe::default();
+            let fixture_observed = observed.clone();
             let mut renderer = HeadlessRenderer::new(
                 Box::new(move || {
-                    clipped_host_fixture(scale);
+                    clipped_host_fixture(scale, fixture_observed.clone());
                 }),
                 vec![Box::new(crate::TesseraComponents)],
                 HeadlessConfig {
@@ -1426,12 +1511,13 @@ mod tests {
                 .1
                 .bounds()
                 .unwrap();
-            let anchor = CONTROLLER
+            let anchor = observed
                 .get()
+                .controller
                 .unwrap()
-                .with(|controller| controller.anchor);
+                .with(TooltipController::anchor);
             assert_eq!(
-                VISIBLE_HOST.get(),
+                observed.get().visible_host,
                 Some(tessera_ui::FloatRect {
                     x: 0.0,
                     y: 0.0,
@@ -1445,9 +1531,9 @@ mod tests {
             assert!(
                 popup.y1 <= f64::from(anchor.y) - 4.0 * f64::from(scale) + 1.0,
                 "a preferred-below popup must flip above the bottom-edge trigger: {popup:?}, {anchor:?}, visible {:?}, host {:?}, clip {:?}",
-                VISIBLE_HOST.get(),
-                HOST_GEOMETRY.get(),
-                CLIP_GEOMETRY.get()
+                observed.get().visible_host,
+                observed.get().host_geometry,
+                observed.get().clip_geometry
             );
             assert!(popup.y1 <= 300.0 * f64::from(scale), "{popup:?}");
             renderer.resize(400, 200);
@@ -1478,7 +1564,13 @@ mod tests {
                 target_tree: TreeId::ROOT,
             }));
             renderer.render_frames(4);
-            assert!(!CONTROLLER.get().unwrap().with(TooltipController::is_open));
+            assert!(
+                !observed
+                    .get()
+                    .controller
+                    .unwrap()
+                    .with(TooltipController::is_open)
+            );
         }
     }
 
@@ -1501,14 +1593,15 @@ mod tests {
     #[test]
     #[ignore = "requires a native GPU adapter"]
     fn gpu_popup_modifier_preserves_requested_width_and_restores_natural_bounds() {
-        let mut renderer = renderer();
-        let settings = SETTINGS.get().expect("settings");
+        let (mut renderer, observed) = renderer();
+        let settings = observed.get().settings.expect("settings");
         settings.with_mut(|settings| {
             settings.rich = true;
             settings.popup_width = Some(Dp(312.0));
         });
-        CONTROLLER
+        observed
             .get()
+            .controller
             .expect("controller")
             .with_mut(TooltipController::show);
         renderer.render_frames(4);
@@ -1522,7 +1615,10 @@ mod tests {
             .bounds()
             .expect("popup bounds");
         assert_eq!(requested.width(), 312.0);
-        assert_eq!(POPUP_BOUNDS.get().expect("observed popup").width, 312.0);
+        assert_eq!(
+            observed.get().popup_bounds.expect("observed popup").width,
+            312.0
+        );
 
         settings.with_mut(|settings| settings.popup_width = None);
         renderer.render_frames(4);
@@ -1538,7 +1634,7 @@ mod tests {
         assert!(natural.width() >= 40.0 && natural.width() <= 320.0);
         assert!(natural.width() < requested.width());
         assert_eq!(
-            POPUP_BOUNDS.get().expect("observed popup").width as f64,
+            observed.get().popup_bounds.expect("observed popup").width as f64,
             natural.width()
         );
     }
@@ -1612,23 +1708,28 @@ mod tests {
     }
 
     fn check_tooltip_interactions(custom_actions: bool, without_headline: bool) {
-        let mut renderer = renderer();
-        SETTINGS.get().expect("settings").with_mut(|settings| {
-            settings.custom_actions = custom_actions;
-            settings.without_headline = without_headline;
-        });
+        let (mut renderer, observed) = renderer();
+        observed
+            .get()
+            .settings
+            .expect("settings")
+            .with_mut(|settings| {
+                settings.custom_actions = custom_actions;
+                settings.without_headline = without_headline;
+            });
         renderer.render_frames(2);
         let before = renderer.read_pixels().expect("pixels");
         let focus = renderer.accessibility_snapshot().expect("tree").focus;
-        renderer.pointer_move(MOUSE_POINTER_ID, anchor_center());
+        renderer.pointer_move(MOUSE_POINTER_ID, anchor_center(&observed));
         renderer.render_frames(35);
         assert!(
-            CONTROLLER
+            observed
                 .get()
+                .controller
                 .expect("controller")
                 .with(TooltipController::is_open),
             "{:?}",
-            CONTROLLER.get().expect("controller").get()
+            observed.get().controller.expect("controller").get()
         );
         let tree = renderer.accessibility_snapshot().expect("tree");
         assert_eq!(tree.focus, focus);
@@ -1639,13 +1740,14 @@ mod tests {
             .expect("tooltip");
         assert_eq!(tooltip.1.label(), Some("Helpful description"));
         let bounds = tooltip.1.bounds().expect("bounds");
-        let observed = POPUP_BOUNDS
+        let popup_bounds = observed
             .get()
+            .popup_bounds
             .expect("popup modifier observes the actual container");
-        assert_eq!(observed.x as f64, bounds.x0);
-        assert_eq!(observed.y as f64, bounds.y0);
-        assert_eq!(observed.width as f64, bounds.width());
-        assert_eq!(observed.height as f64, bounds.height());
+        assert_eq!(popup_bounds.x as f64, bounds.x0);
+        assert_eq!(popup_bounds.y as f64, bounds.y0);
+        assert_eq!(popup_bounds.width as f64, bounds.width());
+        assert_eq!(popup_bounds.height as f64, bounds.height());
         assert!(bounds.x1 - bounds.x0 <= 200.0);
         assert!(bounds.y1 - bounds.y0 >= 24.0);
         let trigger = tree
@@ -1654,8 +1756,9 @@ mod tests {
             .find(|(_, node)| node.label() == Some("Trigger") && node.role() == Role::Button)
             .expect("trigger");
         assert_eq!(trigger.1.description(), Some("Helpful description"));
-        SETTINGS
+        observed
             .get()
+            .settings
             .expect("settings")
             .with_mut(|settings| settings.changed = true);
         renderer.render_frames(3);
@@ -1669,10 +1772,14 @@ mod tests {
                     .label()
                     .is_some_and(|label| label.starts_with("Updated help text")))
         );
-        SETTINGS.get().expect("settings").with_mut(|settings| {
-            settings.rich = true;
-            settings.changed = false;
-        });
+        observed
+            .get()
+            .settings
+            .expect("settings")
+            .with_mut(|settings| {
+                settings.rich = true;
+                settings.changed = false;
+            });
         renderer.render_frames(3);
         let tree = renderer.accessibility_snapshot().expect("tree");
         assert!(
@@ -1704,13 +1811,13 @@ mod tests {
             "rich tooltip separates supporting text from actual actions by 12dp"
         );
         assert_rich_action_insets(&renderer, custom_actions, without_headline);
-        let controller = CONTROLLER.get().expect("controller");
+        let controller = observed.get().controller.expect("controller");
         let trigger = controller.with(|controller| controller.focus);
         trigger.request_focus();
         renderer.render_frames(2);
         let navigation = TooltipDismissInput {
             controller,
-            popup: Arc::new(RwLock::new(tessera_ui::FloatRect::ZERO)),
+            popup: observed.get().scratch_popup.expect("test popup state"),
         };
         for _ in 0..2 {
             assert!(navigation.handle_tab(ElementState::Pressed, false));
@@ -1758,19 +1865,29 @@ mod tests {
         renderer.render_frames(2);
         assert!(!controller.with(TooltipController::is_open));
         controller.with_mut(TooltipController::show);
-        SETTINGS
+        observed
             .get()
+            .settings
             .expect("settings")
             .with_mut(|settings| settings.focus_stress = true);
         renderer.render_frames(2);
-        renderer.pointer_press(MOUSE_POINTER_ID, anchor_center(), PressKeyEventType::Left);
+        renderer.pointer_press(
+            MOUSE_POINTER_ID,
+            anchor_center(&observed),
+            PressKeyEventType::Left,
+        );
         renderer.step_frame();
-        renderer.pointer_release(MOUSE_POINTER_ID, anchor_center(), PressKeyEventType::Left);
+        renderer.pointer_release(
+            MOUSE_POINTER_ID,
+            anchor_center(&observed),
+            PressKeyEventType::Left,
+        );
         renderer.render_frames(3);
         assert!(!controller.with(TooltipController::is_open));
         assert!(trigger.has_focus());
-        SETTINGS
+        observed
             .get()
+            .settings
             .expect("settings")
             .with_mut(|settings| settings.focus_stress = false);
         controller.with_mut(TooltipController::show);
@@ -1791,16 +1908,18 @@ mod tests {
         renderer.step_frame();
         renderer.pointer_release(MOUSE_POINTER_ID, position, PressKeyEventType::Left);
         renderer.render_frames(3);
-        assert_eq!(ACTIONS.get().expect("actions").get(), 1);
+        assert_eq!(observed.get().actions.expect("actions").get(), 1);
         assert!(
-            !CONTROLLER
+            !observed
                 .get()
+                .controller
                 .expect("controller")
                 .with(TooltipController::is_open)
         );
         renderer.pointer_move(MOUSE_POINTER_ID, PxPosition::new(Px(390), Px(310)));
-        let focus = CONTROLLER
+        let focus = observed
             .get()
+            .controller
             .expect("controller")
             .with(|controller| controller.focus);
         focus.clear_focus();
@@ -1808,7 +1927,7 @@ mod tests {
             !focus.has_focus(),
             "clear must remove focus from the trigger subtree"
         );
-        SETTINGS.get().expect("settings").set(Settings {
+        observed.get().settings.expect("settings").set(Settings {
             custom_actions,
             ..Settings::default()
         });
@@ -1848,29 +1967,32 @@ mod tests {
     #[test]
     #[ignore = "requires a native GPU adapter"]
     fn gpu_long_press_consumes_release_and_scrolling_cancels_pending_help() {
-        let mut renderer = renderer();
-        let position = anchor_center();
+        let (mut renderer, observed) = renderer();
+        let position = anchor_center(&observed);
         renderer.pointer_press(1, position, PressKeyEventType::Left);
         renderer.render_frames(35);
         assert!(
-            CONTROLLER
+            observed
                 .get()
+                .controller
                 .expect("controller")
                 .with(TooltipController::is_open)
         );
         renderer.pointer_release(1, position, PressKeyEventType::Left);
         renderer.render_frames(3);
-        assert_eq!(CLICKS.get().expect("clicks").get(), 0);
+        assert_eq!(observed.get().clicks.expect("clicks").get(), 0);
         renderer.render_frames(100);
         assert!(
-            !CONTROLLER
+            !observed
                 .get()
+                .controller
                 .expect("controller")
                 .with(TooltipController::is_open)
         );
         assert!(
-            !CONTROLLER
+            !observed
                 .get()
+                .controller
                 .expect("controller")
                 .with(TooltipController::needs_frame)
         );
@@ -1878,8 +2000,8 @@ mod tests {
         renderer.step_frame();
         renderer.pointer_release(MOUSE_POINTER_ID, position, PressKeyEventType::Left);
         renderer.step_frame();
-        assert_eq!(CLICKS.get().expect("clicks").get(), 1);
-        let controller = CONTROLLER.get().expect("controller");
+        assert_eq!(observed.get().clicks.expect("clicks").get(), 1);
+        let controller = observed.get().controller.expect("controller");
         let focus = controller.with(|controller| controller.focus);
         focus.clear_focus();
         controller.with_mut(TooltipController::dismiss);

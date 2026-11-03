@@ -1,5 +1,4 @@
 use std::{
-    collections::BTreeMap,
     fmt::{self, Debug, Display},
     process::ExitStatus,
 };
@@ -9,22 +8,26 @@ use crate::util;
 pub trait TargetTrait<'a>: Debug + Sized {
     const DEFAULT_KEY: &'static str;
 
-    fn all() -> &'a BTreeMap<&'a str, Self>;
+    fn all() -> &'a [(&'a str, Self)];
 
     fn name_list() -> Vec<&'a str>;
 
     fn default_ref() -> &'a Self {
-        Self::all()
-            .get(Self::DEFAULT_KEY)
-            .expect("developer error: no target matched `DEFAULT_KEY`")
+        Self::for_name(Self::DEFAULT_KEY).expect("developer error: no target matched `DEFAULT_KEY`")
     }
 
     fn for_name(name: &str) -> Option<&'a Self> {
-        Self::all().get(name)
+        Self::all()
+            .iter()
+            .find(|(key, _)| *key == name)
+            .map(|(_, target)| target)
     }
 
     fn for_arch(arch: &str) -> Option<&'a Self> {
-        Self::all().values().find(|target| target.arch() == arch)
+        Self::all()
+            .iter()
+            .map(|(_, target)| target)
+            .find(|target| target.arch() == arch)
     }
 
     fn triple(&'a self) -> &'a str;
@@ -39,7 +42,7 @@ pub trait TargetTrait<'a>: Debug + Sized {
     where
         Self: 'a,
     {
-        for target in Self::all().values() {
+        for target in Self::all().iter().map(|(_, target)| target) {
             target.install()?;
         }
         Ok(())
@@ -79,7 +82,11 @@ where
             .map(|name| {
                 T::for_name(name.as_ref()).ok_or_else(|| TargetInvalid {
                     name: name.as_ref().to_owned(),
-                    possible: T::all().keys().map(|key| key.to_string()).collect(),
+                    possible: T::all()
+                        .iter()
+                        .map(|(key, _)| key)
+                        .map(|key| key.to_string())
+                        .collect(),
                 })
             })
             .collect::<Result<_, _>>()?

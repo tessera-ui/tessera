@@ -38,7 +38,7 @@ use super::{
 mod layout_tests;
 
 #[tessera]
-pub(super) fn search_spec() {
+pub(super) fn search_spec(route: Option<crate::pages::material_spec::article::ArticleRoute>) {
     article("Search", "Search helps people find information quickly", vec![
         SpecSection { title: "Variants", content: RenderSlot::new(variants) },
         SpecSection { title: "Configurations", content: RenderSlot::new(configurations) },
@@ -47,7 +47,7 @@ pub(super) fn search_spec() {
         SpecSection { title: "Color", content: RenderSlot::new(colors) },
         SpecSection { title: "States", content: RenderSlot::new(states) },
         SpecSection { title: "Measurements", content: RenderSlot::new(measurements) },
-    ]).pages(vec![
+    ]).route_optional(route.clone()).pages(vec![
         ArticlePage { title: "Overview", intro: Some(RenderSlot::new(overview_intro)), sections: vec![
             SpecSection { title: "Availability & resources", content: RenderSlot::new(availability) },
             SpecSection { title: "M3 Expressive update", content: RenderSlot::new(expressive_update) },
@@ -1312,22 +1312,12 @@ fn keyboard() {
 mod tests {
     use std::time::Duration;
 
-    use tessera_components::{
-        modifier::MinimumInteractiveComponentEnforcement, theme::material_theme,
-    };
+    use tessera_components::theme::material_theme;
     use tessera_ui::{
         HeadlessConfig, HeadlessRenderer, MOUSE_POINTER_ID, PressKeyEventType, PxPosition,
-        provide_context,
     };
 
     use super::*;
-
-    struct Pipelines;
-    impl tessera_ui::RenderModule for Pipelines {
-        fn register_pipelines(&self, context: &mut tessera_ui::PipelineContext<'_>) {
-            tessera_components::pipelines::register_pipelines(context);
-        }
-    }
 
     #[tessera]
     fn fixture() {
@@ -1365,12 +1355,9 @@ mod tests {
     #[tessera]
     fn trailing_targets_fixture() {
         material_theme().child(|| {
-            provide_context(
-                || MinimumInteractiveComponentEnforcement { enabled: false },
-                || {
-                    bar_example(2);
-                },
-            );
+            {
+                bar_example(2);
+            };
         });
     }
 
@@ -1379,7 +1366,7 @@ mod tests {
     fn search_anatomy_keeps_two_full_trailing_targets_and_centered_input() {
         let mut renderer = HeadlessRenderer::new(
             Box::new(trailing_targets_fixture),
-            vec![Box::new(Pipelines)],
+            vec![Box::new(crate::TestPipelines)],
             HeadlessConfig {
                 width: 400,
                 height: 100,
@@ -1421,7 +1408,7 @@ mod tests {
     fn live_search_filters_real_input_and_result_activation_preserves_query() {
         let mut renderer = HeadlessRenderer::new(
             Box::new(fixture),
-            vec![Box::new(Pipelines)],
+            vec![Box::new(crate::TestPipelines)],
             HeadlessConfig {
                 width: 600,
                 height: 500,
@@ -1520,7 +1507,7 @@ mod tests {
     fn search_anatomy_keeps_six_callouts_and_adapts_phone_geometry() {
         let mut renderer = HeadlessRenderer::new(
             Box::new(anatomy_fixture),
-            vec![Box::new(Pipelines)],
+            vec![Box::new(crate::TestPipelines)],
             HeadlessConfig {
                 width: 900,
                 height: 800,

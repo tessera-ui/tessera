@@ -4,10 +4,7 @@
 //!
 //! Use to let users choose a time for alarms, reminders, or schedules.
 
-use std::{
-    f32::consts::TAU,
-    sync::{Arc, OnceLock},
-};
+use std::{f32::consts::TAU, sync::Arc};
 
 use tessera_ui::{
     AxisConstraint, Color, ComputedData, Constraint, CursorEventContent, Dp, FocusManager,
@@ -916,28 +913,27 @@ impl KeyboardInputModifierNode for PeriodNavigation {
 }
 
 fn clock_track(inner: bool) -> ImageVectorData {
-    static TRACKS: OnceLock<[ImageVectorData; 2]> = OnceLock::new();
-    TRACKS.get_or_init(|| {
-        [CLOCK_OUTER_RADIUS, CLOCK_INNER_RADIUS].map(|radius| {
-            let vertices = [
-                [127.0, 128.0 - radius],
-                [129.0, 128.0 - radius],
-                [129.0, 128.0],
-                [127.0, 128.0],
-            ]
-            .map(|position| ImageVectorVertex {
-                position: [position[0] / 256.0, position[1] / 256.0],
-                color: Color::WHITE,
-            });
-            ImageVectorData::new(
-                256.0,
-                256.0,
-                Arc::new(vertices.to_vec()),
-                Arc::new(vec![0, 1, 2, 0, 2, 3]),
-            )
-        })
-    })[usize::from(inner)]
-    .clone()
+    let radius = if inner {
+        CLOCK_INNER_RADIUS
+    } else {
+        CLOCK_OUTER_RADIUS
+    };
+    let vertices = [
+        [127.0, 128.0 - radius],
+        [129.0, 128.0 - radius],
+        [129.0, 128.0],
+        [127.0, 128.0],
+    ]
+    .map(|position| ImageVectorVertex {
+        position: [position[0] / 256.0, position[1] / 256.0],
+        color: Color::WHITE,
+    });
+    ImageVectorData::new(
+        256.0,
+        256.0,
+        Arc::new(vertices.to_vec()),
+        Arc::new(vec![0, 1, 2, 0, 2, 3]),
+    )
 }
 
 #[derive(Clone, PartialEq)]
@@ -1276,8 +1272,10 @@ fn time_clock(state: State<TimePickerState>, hour_step: u8, minute_step: u8) {
                 .style(scheme.surface_container_highest.into())
                 .shape(Shape::Ellipse)
                 .child(|| {});
+            let inner = policy.inner();
+            let track = tessera_ui::remember_with_key(inner, move || clock_track(inner)).get();
             icon()
-                .vector(clock_track(policy.inner()))
+                .vector(track)
                 .size(CLOCK_SIZE)
                 .rotation(policy.angle().to_degrees())
                 .tint(scheme.primary)
@@ -1385,6 +1383,7 @@ fn clock_value(
 ///
 /// ## Parameters
 ///
+/// - `dialog` — registration scope received from the provider content slot.
 /// - `state` — state handle used by the embedded time picker.
 /// - `title` — optional override for the dialog title.
 /// - `confirm_button` — optional confirm button content.
@@ -1422,6 +1421,7 @@ fn clock_value(
 /// ```
 #[tessera]
 pub fn time_picker_dialog(
+    dialog: Option<crate::dialog::DialogScope>,
     state: Option<State<TimePickerState>>,
     #[prop(into)] title: Option<String>,
     confirm_button: Option<RenderSlot>,
@@ -1436,6 +1436,9 @@ pub fn time_picker_dialog(
     picker_minute_step: Option<u8>,
     picker_layout: Option<TimePickerLayout>,
 ) {
+    crate::dialog::register_dialog_accessibility()
+        .dialog_optional(dialog)
+        .label(title.clone().unwrap_or_else(|| "Select time".to_owned()));
     let show_mode_toggle = show_mode_toggle.unwrap_or(true);
     let picker_modifier = picker_modifier.unwrap_or_default();
     let picker_initial_hour = picker_initial_hour.unwrap_or(0);
@@ -1646,7 +1649,6 @@ fn current_time_utc() -> (u8, u8) {
 
 #[cfg(test)]
 mod tests {
-    use std::cell::Cell;
 
     use tessera_ui::{
         CursorEventContent, Dp, GestureState, Modifier, PointerChange, PressKeyEventType,
@@ -1663,14 +1665,13 @@ mod tests {
         TimePickerLayout, TimePickerSelection, TimePickerState, time_picker, time_picker_dialog,
     };
 
-    thread_local! {
-        static STATE: Cell<Option<State<TimePickerState>>> = const { Cell::new(None) };
-    }
-
     #[tessera]
-    fn clock_fixture(is_24_hour: bool) {
+    fn clock_fixture(
+        is_24_hour: bool,
+        output: tessera_ui::testing::TestProbe<Option<State<TimePickerState>>>,
+    ) {
         let state = remember(|| TimePickerState::new(10, 8, is_24_hour, Default::default()));
-        STATE.set(Some(state));
+        output.set(Some(state));
         material_theme().child(move || {
             time_picker().state(state);
         });
@@ -1802,9 +1803,11 @@ mod tests {
     #[test]
     fn dial_pointer_selection_distinguishes_inner_hours_and_advances_to_minutes() {
         for (is_24_hour, radius, expected_hour) in [(false, 101.0, 3), (true, 69.0, 15)] {
+            let output = tessera_ui::testing::TestProbe::default();
+            let probe = output.clone();
             let mut session = start_layout_test_session(
                 layout_test(move || {
-                    clock_fixture(is_24_hour);
+                    clock_fixture(is_24_hour, probe.clone());
                 })
                 .viewport_px(400, 500),
             );
@@ -1826,7 +1829,7 @@ mod tests {
                     &mut session,
                     (index as u64 + 1) * 16_666_667,
                     vec![PointerChange::new(
-                        tessera_ui::time::Instant::now(),
+                        tessera_ui::current_frame_time().unwrap(),
                         1,
                         content,
                         GestureState::TapCandidate,
@@ -1834,7 +1837,7 @@ mod tests {
                     cursor,
                 );
             }
-            let state = STATE.get().unwrap();
+            let state = output.get().unwrap();
             assert_eq!(state.with(TimePickerState::hour), expected_hour);
             assert_eq!(state.with(|s| s.selection), TimePickerSelection::Minute);
             for (index, content) in [
@@ -1848,7 +1851,7 @@ mod tests {
                     &mut session,
                     (index as u64 + 3) * 16_666_667,
                     vec![PointerChange::new(
-                        tessera_ui::time::Instant::now(),
+                        tessera_ui::current_frame_time().unwrap(),
                         1,
                         content,
                         GestureState::TapCandidate,
@@ -1860,13 +1863,13 @@ mod tests {
         }
     }
     #[tessera]
-    fn time_input_fixture() {
+    fn time_input_fixture(output: tessera_ui::testing::TestProbe<Option<State<TimePickerState>>>) {
         let state = remember(|| {
             let mut state = TimePickerState::new(10, 8, false, super::TimePickerDisplayMode::Input);
             state.selection = TimePickerSelection::Minute;
             state
         });
-        STATE.set(Some(state));
+        output.set(Some(state));
         material_theme().child(move || {
             crate::column::column().children(move || {
                 time_picker().state(state);
@@ -1876,9 +1879,11 @@ mod tests {
 
     #[test]
     fn focusing_an_input_updates_the_active_clock_field() {
+        let output = tessera_ui::testing::TestProbe::default();
+        let probe = output.clone();
         let mut session = start_layout_test_session(
-            layout_test(|| {
-                time_input_fixture();
+            layout_test(move || {
+                time_input_fixture(probe.clone());
             })
             .viewport_px(400, 500),
         );
@@ -1894,7 +1899,7 @@ mod tests {
                 &mut session,
                 (index as u64 + 1) * 16_666_667,
                 vec![PointerChange::new(
-                    tessera_ui::time::Instant::now(),
+                    tessera_ui::current_frame_time().unwrap(),
                     1,
                     content,
                     GestureState::TapCandidate,
@@ -1906,7 +1911,7 @@ mod tests {
             pump_layout_test_session(&mut session, frame * 16_666_667);
         }
         assert_eq!(
-            STATE.get().unwrap().with(|s| s.selection),
+            output.get().unwrap().with(|s| s.selection),
             TimePickerSelection::Hour
         );
     }

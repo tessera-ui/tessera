@@ -14,7 +14,7 @@ use tessera_ui::{
     Callback, CursorEventContent, Dp, Modifier, PointerEventPass, PointerInput,
     PointerInputModifierNode, PressKeyEventType, PxPosition, RenderSlot, State,
     current_frame_nanos, current_frame_time, layout::layout, modifier::ModifierCapabilityExt as _,
-    provide_context, remember, tessera, time::Instant,
+    remember, tessera, time::Instant,
 };
 
 use crate::{
@@ -213,14 +213,13 @@ pub(super) fn side_sheet_body(
     boxed().modifier(modifier).children(move || {
         let nested_scroll_connection = nested_scroll_connection.clone();
         layout()
-            .modifier(Modifier::new().padding_all(content_padding))
+            .modifier(
+                Modifier::new()
+                    .padding_all(content_padding)
+                    .nested_scroll(nested_scroll_connection.clone()),
+            )
             .child(move || {
-                provide_context(
-                    || nested_scroll_connection.clone(),
-                    move || {
-                        content.render();
-                    },
-                );
+                content.render();
             });
     });
 }

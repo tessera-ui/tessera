@@ -4,16 +4,13 @@
 //!
 //! Keep nested action menus above scrolling and clipped menu content.
 
-use std::sync::Arc;
-
-use parking_lot::RwLock;
 use tessera_ui::{
     Callback, ComputedData, CursorEventContent, FocusManager, FocusRequester, FocusScopeNode,
     LayoutResult, MeasurementError, Modifier, PointerInput, PointerInputModifierNode, PxPosition,
-    RenderSlot, State, key,
+    RenderSlot, RenderSlotWith, State, key,
     layout::{MeasureScope, layout},
     modifier::{FocusModifierExt as _, ModifierCapabilityExt as _},
-    provide_context, remember, tessera, use_context,
+    remember, tessera, use_context,
 };
 
 use crate::{modifier::ModifierExt as _, spacer::spacer};
@@ -23,15 +20,15 @@ use super::{
     MenuProviderConfig, is_click_outside_menu, menu_provider_content,
 };
 
-#[derive(Clone)]
+#[derive(Clone, Copy)]
 pub(super) struct MenuHost {
     pub root: State<MenuController>,
     entries: State<Vec<State<MenuPopupRequest>>>,
     restore_root: State<bool>,
     root_scope: FocusScopeNode,
     restore_parent: State<Option<FocusScopeNode>>,
-    origin: State<tessera_ui::LayoutCoordinates>,
-    bounds: Arc<RwLock<Option<MenuBounds>>>,
+    pub(super) origin: State<tessera_ui::LayoutCoordinates>,
+    bounds: State<Option<MenuBounds>>,
     on_dismiss: Option<Callback>,
 }
 
@@ -43,7 +40,7 @@ impl PartialEq for MenuHost {
             && self.root_scope == other.root_scope
             && self.restore_parent == other.restore_parent
             && self.origin == other.origin
-            && Arc::ptr_eq(&self.bounds, &other.bounds)
+            && self.bounds == other.bounds
             && self.on_dismiss == other.on_dismiss
     }
 }
@@ -82,7 +79,7 @@ impl MenuHost {
         let point = point.map(|point| origin.local_to_window.inverse_point(point));
         let mut hit = self
             .bounds
-            .read()
+            .get()
             .filter(|bounds| {
                 self.root.with(MenuController::is_open)
                     && !is_click_outside_menu(point, Some(*bounds))
@@ -92,8 +89,8 @@ impl MenuHost {
             if request.is_alive() {
                 let request = request.get();
                 if request.controller.with(MenuController::is_open)
-                    && request.bounds.read().is_some()
-                    && !is_click_outside_menu(point, *request.bounds.read())
+                    && request.bounds.get().is_some()
+                    && !is_click_outside_menu(point, request.bounds.get())
                 {
                     hit = Some(request.controller);
                 }
@@ -134,9 +131,6 @@ impl MenuHost {
     }
 
     pub fn close_all(&self) {
-        if self.popup_has_focus() {
-            self.restore_root.set(true);
-        }
         self.close_descendants();
         if self.root.is_alive() {
             self.root.with_mut(MenuController::close);
@@ -160,6 +154,9 @@ impl MenuHost {
         let entries = self.entries.get();
         if entries.is_empty() {
             return;
+        }
+        if self.popup_has_focus() {
+            self.restore_root.set(true);
         }
         self.entries.set(Vec::new());
         for request in entries {
@@ -234,15 +231,18 @@ impl PointerInputModifierNode for MenuHierarchyPointer {
         }
         let entries = self.0.entries.get();
         let point = input.cursor_position_rel;
-        let mut keep = if !is_click_outside_menu(point, *self.0.bounds.read()) {
+        let mut keep = if !is_click_outside_menu(point, self.0.bounds.get()) {
             Some(0)
         } else {
             None
         };
         for (index, request) in entries.iter().enumerate() {
-            if request.is_alive() && !is_click_outside_menu(point, *request.get().bounds.read()) {
+            if request.is_alive() && !is_click_outside_menu(point, request.get().bounds.get()) {
                 keep = Some(index + 1);
             }
+        }
+        if keep.is_none() && (self.0.root_scope.has_focus() || self.0.popup_has_focus()) {
+            self.0.restore_root.set(true);
         }
         if let Some(keep) = keep
             && let Some(request) = entries.get(keep)
@@ -265,11 +265,11 @@ pub(super) struct MenuPopupRequest {
     pub anchor: State<tessera_ui::LayoutCoordinates>,
     pub scope: FocusScopeNode,
     pub fallback: FocusRequester,
-    pub content: RenderSlot,
+    pub content: RenderSlotWith<super::MenuScope>,
     pub placement: MenuPlacement,
     pub color_style: MenuColorStyle,
     pub enabled: bool,
-    pub bounds: Arc<RwLock<Option<MenuBounds>>>,
+    pub bounds: State<Option<MenuBounds>>,
 }
 
 impl PartialEq for MenuPopupRequest {
@@ -284,7 +284,7 @@ impl PartialEq for MenuPopupRequest {
             && self.placement == other.placement
             && self.color_style == other.color_style
             && self.enabled == other.enabled
-            && Arc::ptr_eq(&self.bounds, &other.bounds)
+            && self.bounds == other.bounds
     }
 }
 
@@ -348,10 +348,11 @@ pub(super) fn menu_host(provider: Option<MenuProviderConfig>) {
         root_scope: remember(FocusScopeNode::new).get(),
         restore_parent: remember(|| None),
         origin: remember(tessera_ui::LayoutCoordinates::default),
-        bounds: remember(|| Arc::new(RwLock::new(None))).get(),
+        bounds: remember(|| None),
         on_dismiss: provider.on_dismiss,
     };
-    provider.bounds = Some(MenuBoundsHandle(host.bounds.clone()));
+    provider.host = Some(host);
+    provider.bounds = Some(MenuBoundsHandle(host.bounds));
     provider.focus_scope = Some(host.root_scope);
     let pending = host.restore_parent;
     let mut modifier = Modifier::new();
@@ -367,47 +368,32 @@ pub(super) fn menu_host(provider: Option<MenuProviderConfig>) {
         });
     }
     modifier = modifier.push_pointer_preview_input(MenuHierarchyPointer(host.clone()));
-    let initial = host.clone();
-    provide_context(
-        move || initial,
-        move || {
-            let inherited = use_context::<MenuHost>().expect("menu host");
-            if inherited.get() != host {
-                inherited.set(host.clone());
+    let origin = host.origin;
+    layout()
+        .policy(MenuHostLayout)
+        .modifier(modifier.on_layout_coordinates(move |bounds| {
+            origin.set_if_changed(bounds);
+        }))
+        .child(move || {
+            menu_provider_content().provider(provider.clone());
+            if host.root.with(MenuController::is_open) {
+                for request in host.entries.get() {
+                    if request.is_alive() {
+                        key(request, || {
+                            menu_popup_layer().request(request);
+                        });
+                    }
+                }
+            } else {
+                host.close_descendants();
             }
-            let origin = host.origin;
-            layout()
-                .policy(MenuHostLayout)
-                .modifier(modifier.clone().on_layout_coordinates(move |bounds| {
-                    if origin.get() != bounds {
-                        origin.set(bounds);
-                    }
-                }))
-                .child(move || {
-                    menu_provider_content().provider(provider.clone());
-                    if host.root.with(MenuController::is_open) {
-                        for request in host.entries.get() {
-                            if request.is_alive() {
-                                key(request, || {
-                                    menu_popup_layer().request(request);
-                                });
-                            }
-                        }
-                    } else {
-                        host.close_descendants();
-                    }
-                });
-        },
-    );
+        });
 }
 
 #[tessera]
 fn menu_popup_layer(request: Option<State<MenuPopupRequest>>) {
     let request = request.expect("popup request");
     let value = request.get();
-    let anchor = value.anchor.get();
-    let origin = value.host.origin.get();
-    let anchor = origin.local_to_window.inverse_rect(anchor.window_bounds());
     let mut modifier = Modifier::new();
     if !value.controller.with(MenuController::is_open) {
         let host = value.host.clone();
@@ -416,14 +402,15 @@ fn menu_popup_layer(request: Option<State<MenuPopupRequest>>) {
         });
     }
     let provider = MenuProviderConfig {
+        host: Some(value.host),
         controller: Some(value.controller),
         placement: value.placement,
         offset: [tessera_ui::Dp::ZERO; 2],
-        precise_anchor: Some(anchor),
+        window_anchor: Some(value.anchor),
         focus_restorer_fallback: Some(value.fallback),
         focus_scope: Some(value.scope),
         parent_request: Some(request),
-        bounds: Some(MenuBoundsHandle(value.bounds.clone())),
+        bounds: Some(MenuBoundsHandle(value.bounds)),
         color_style: value.color_style,
         container_color: value.color_style.container(
             &use_context::<crate::theme::MaterialTheme>()

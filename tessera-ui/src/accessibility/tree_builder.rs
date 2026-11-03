@@ -806,10 +806,6 @@ pub fn dispatch_action(
 
 #[cfg(test)]
 mod tests {
-    use std::sync::{
-        Arc,
-        atomic::{AtomicUsize, Ordering},
-    };
 
     use accesskit::{Action, Role};
 
@@ -877,6 +873,8 @@ mod tests {
 
     #[test]
     fn deferred_semantic_publication_coalesces_removed_instances_and_publishes_current_geometry() {
+        let _runtime_session = crate::RuntimeSession::new();
+        let _runtime_scope = _runtime_session.enter();
         let mut tree = ComponentNodeTree::new();
         let mut metadatas = ComponentNodeMetaDatas::new();
         let root = append_node(&mut tree, &mut metadatas, None, None);
@@ -968,6 +966,8 @@ mod tests {
 
     #[test]
     fn semantic_deltas_preserve_siblings_and_refresh_inherited_tooltips() {
+        let _runtime_session = crate::RuntimeSession::new();
+        let _runtime_scope = _runtime_session.enter();
         let mut tree = ComponentNodeTree::new();
         let mut metadatas = ComponentNodeMetaDatas::new();
         let root = append_node(&mut tree, &mut metadatas, None, None);
@@ -1114,6 +1114,8 @@ mod tests {
 
     #[test]
     fn semantic_value_replacement_keeps_parent_children_and_stable_identity() {
+        let _runtime_session = crate::RuntimeSession::new();
+        let _runtime_scope = _runtime_session.enter();
         let mut tree = ComponentNodeTree::new();
         let mut metadatas = ComponentNodeMetaDatas::new();
         let root = append_node(&mut tree, &mut metadatas, None, None);
@@ -1173,6 +1175,8 @@ mod tests {
 
     #[test]
     fn fractional_shape_masks_clip_semantic_bounds_without_removing_controls() {
+        let _runtime_session = crate::RuntimeSession::new();
+        let _runtime_scope = _runtime_session.enter();
         let mut tree = ComponentNodeTree::new();
         let mut metadatas = ComponentNodeMetaDatas::new();
         let root = append_node(&mut tree, &mut metadatas, None, None);
@@ -1275,6 +1279,8 @@ mod tests {
 
     #[test]
     fn placement_order_relinks_semantic_children_across_composition_wrappers() {
+        let _runtime_session = crate::RuntimeSession::new();
+        let _runtime_scope = _runtime_session.enter();
         let mut tree = ComponentNodeTree::new();
         let mut metadatas = ComponentNodeMetaDatas::new();
         let root = append_node(&mut tree, &mut metadatas, None, None);
@@ -1333,6 +1339,8 @@ mod tests {
 
     #[test]
     fn wrappers_preserve_semantic_groups_order_bounds_and_focus() {
+        let _runtime_session = crate::RuntimeSession::new();
+        let _runtime_scope = _runtime_session.enter();
         let mut tree = ComponentNodeTree::new();
         let mut metadatas = ComponentNodeMetaDatas::new();
         let root = append_node(&mut tree, &mut metadatas, None, None);
@@ -1404,6 +1412,8 @@ mod tests {
 
     #[test]
     fn cleared_semantics_still_suppress_descendants_and_their_focus() {
+        let _runtime_session = crate::RuntimeSession::new();
+        let _runtime_scope = _runtime_session.enter();
         let mut tree = ComponentNodeTree::new();
         let mut metadatas = ComponentNodeMetaDatas::new();
         let root = append_node(&mut tree, &mut metadatas, None, None);
@@ -1428,6 +1438,8 @@ mod tests {
 
     #[test]
     fn rebuilt_controls_keep_identity_and_receive_actions_at_their_new_arena_index() {
+        let _runtime_session = crate::RuntimeSession::new();
+        let _runtime_scope = _runtime_session.enter();
         let mut tree = ComponentNodeTree::new();
         let mut metadatas = ComponentNodeMetaDatas::new();
         let root = append_node(&mut tree, &mut metadatas, None, None);
@@ -1466,14 +1478,14 @@ mod tests {
             Role::Slider
         );
 
-        let calls = Arc::new(AtomicUsize::new(0));
-        let observed = Arc::clone(&calls);
+        let calls = crate::testing::TestProbe::new(0usize);
+        let observed = calls.clone();
         metadatas
             .get_mut(&slider)
             .unwrap()
             .accessibility_action_handler = Some(Box::new(move |action| {
             assert_eq!(action, Action::Increment);
-            observed.fetch_add(1, Ordering::Relaxed);
+            observed.with_mut(|calls| *calls += 1);
         }));
         metadatas
             .get_mut(&decoration)
@@ -1494,7 +1506,7 @@ mod tests {
             &mut focus_owner,
             request()
         ));
-        assert_eq!(calls.load(Ordering::Relaxed), 1);
+        assert_eq!(calls.get(), 1);
         tree[slider].get_mut().instance_key = 701;
         assert!(!dispatch_action(
             &tree,
@@ -1502,11 +1514,13 @@ mod tests {
             &mut focus_owner,
             request()
         ));
-        assert_eq!(calls.load(Ordering::Relaxed), 1);
+        assert_eq!(calls.get(), 1);
     }
 
     #[test]
     fn contextual_help_describes_focusable_descendants_without_overriding_explicit_descriptions() {
+        let _runtime_session = crate::RuntimeSession::new();
+        let _runtime_scope = _runtime_session.enter();
         let mut tree = ComponentNodeTree::new();
         let mut metadatas = ComponentNodeMetaDatas::new();
         let root = append_node(&mut tree, &mut metadatas, None, None);
@@ -1539,6 +1553,8 @@ mod tests {
 
     #[test]
     fn runtime_focus_overrides_stale_semantic_focus_and_survives_layout_wrappers() {
+        let _runtime_session = crate::RuntimeSession::new();
+        let _runtime_scope = _runtime_session.enter();
         let mut tree = ComponentNodeTree::new();
         let mut metadatas = ComponentNodeMetaDatas::new();
         let root = append_node(&mut tree, &mut metadatas, None, None);
@@ -1567,6 +1583,8 @@ mod tests {
 
     #[test]
     fn numeric_controls_publish_current_value_bounds_and_steps() {
+        let _runtime_session = crate::RuntimeSession::new();
+        let _runtime_scope = _runtime_session.enter();
         let mut tree = ComponentNodeTree::new();
         let mut metadatas = ComponentNodeMetaDatas::new();
         let root = append_node(&mut tree, &mut metadatas, None, None);
@@ -1591,6 +1609,8 @@ mod tests {
 
     #[test]
     fn menu_trigger_publishes_expanded_and_popup_type() {
+        let _runtime_session = crate::RuntimeSession::new();
+        let _runtime_scope = _runtime_session.enter();
         let mut tree = ComponentNodeTree::new();
         let mut metadatas = ComponentNodeMetaDatas::new();
         let root = append_node(&mut tree, &mut metadatas, None, None);
@@ -1610,6 +1630,8 @@ mod tests {
 
     #[test]
     fn button_selection_distinguishes_selected_unselected_and_not_applicable() {
+        let _runtime_session = crate::RuntimeSession::new();
+        let _runtime_scope = _runtime_session.enter();
         let mut tree = ComponentNodeTree::new();
         let mut metadatas = ComponentNodeMetaDatas::new();
         let root = append_node(&mut tree, &mut metadatas, None, None);
@@ -1636,6 +1658,8 @@ mod tests {
 
     #[test]
     fn actions_reject_inaccessible_ancestors_and_resume_after_reveal() {
+        let _runtime_session = crate::RuntimeSession::new();
+        let _runtime_scope = _runtime_session.enter();
         let mut tree = ComponentNodeTree::new();
         let mut metadatas = ComponentNodeMetaDatas::new();
         let root = append_node(&mut tree, &mut metadatas, None, None);
@@ -1655,14 +1679,14 @@ mod tests {
                     .with_action(Action::Click),
             ),
         );
-        let calls = Arc::new(AtomicUsize::new(0));
-        let observed = Arc::clone(&calls);
+        let calls = crate::testing::TestProbe::new(0usize);
+        let observed = calls.clone();
         metadatas
             .get_mut(&target)
             .unwrap()
             .accessibility_action_handler = Some(Box::new(move |action| {
             assert_eq!(action, Action::Click);
-            observed.fetch_add(1, Ordering::Relaxed);
+            observed.with_mut(|calls| *calls += 1);
         }));
         let mut owner = FocusOwner::new();
         let request = || accesskit::ActionRequest {
@@ -1672,7 +1696,7 @@ mod tests {
             data: None,
         };
         assert!(dispatch_action(&tree, &metadatas, &mut owner, request()));
-        assert_eq!(calls.load(Ordering::Relaxed), 1);
+        assert_eq!(calls.get(), 1);
         metadatas
             .get_mut(&parent)
             .unwrap()
@@ -1681,7 +1705,7 @@ mod tests {
             .unwrap()
             .hidden = true;
         assert!(!dispatch_action(&tree, &metadatas, &mut owner, request()));
-        assert_eq!(calls.load(Ordering::Relaxed), 1);
+        assert_eq!(calls.get(), 1);
         let semantics = metadatas
             .get_mut(&parent)
             .unwrap()
@@ -1691,19 +1715,21 @@ mod tests {
         semantics.hidden = false;
         semantics.merge_descendants = false;
         assert!(!dispatch_action(&tree, &metadatas, &mut owner, request()));
-        assert_eq!(calls.load(Ordering::Relaxed), 1);
+        assert_eq!(calls.get(), 1);
         let metadata = metadatas.get_mut(&parent).unwrap();
         metadata.accessibility.as_mut().unwrap().merge_descendants = true;
         let position = metadata.abs_position.take();
         assert!(!dispatch_action(&tree, &metadatas, &mut owner, request()));
-        assert_eq!(calls.load(Ordering::Relaxed), 1);
+        assert_eq!(calls.get(), 1);
         metadatas.get_mut(&parent).unwrap().abs_position = position;
         assert!(dispatch_action(&tree, &metadatas, &mut owner, request()));
-        assert_eq!(calls.load(Ordering::Relaxed), 2);
+        assert_eq!(calls.get(), 2);
     }
 
     #[test]
     fn focus_actions_reach_registered_targets_without_activating_their_handlers() {
+        let _runtime_session = crate::RuntimeSession::new();
+        let _runtime_scope = _runtime_session.enter();
         use crate::focus::{FocusNode, FocusRegistration, FocusRequester};
 
         let mut tree = ComponentNodeTree::new();
@@ -1769,6 +1795,8 @@ mod tests {
 
     #[test]
     fn tree_without_semantics_keeps_only_the_window_root() {
+        let _runtime_session = crate::RuntimeSession::new();
+        let _runtime_scope = _runtime_session.enter();
         let mut tree = ComponentNodeTree::new();
         let mut metadatas = ComponentNodeMetaDatas::new();
         let root = append_node(&mut tree, &mut metadatas, None, None);

@@ -4,20 +4,15 @@
 //!
 //! Use generated asset constants and call [`AssetExt::read`] to load raw bytes.
 
-use std::{
-    any::TypeId,
-    collections::HashMap,
-    io,
-    sync::{Arc, OnceLock, RwLock, RwLockWriteGuard},
-};
+use std::{any::TypeId, collections::HashMap, io, sync::Arc};
+
+use parking_lot::RwLock;
 
 type AssetCacheKey = (TypeId, u64);
 type AssetCacheMap = HashMap<AssetCacheKey, AssetCacheEntry>;
 
 const CACHE_MAX_ENTRIES: usize = 4096;
 const CACHE_MAX_BYTES: usize = 64 * 1024 * 1024;
-
-static ASSET_BYTES_CACHE: OnceLock<RwLock<AssetLruCache>> = OnceLock::new();
 
 #[derive(Clone)]
 struct AssetCacheEntry {
@@ -100,10 +95,11 @@ where
     T: 'static,
     F: FnOnce() -> io::Result<Arc<[u8]>>,
 {
+    let cache = crate::runtime_resource::<RwLock<AssetLruCache>>();
     let cache_key = (TypeId::of::<T>(), asset_id);
 
     {
-        let mut cache = cache_write();
+        let mut cache = cache.write();
         if let Some(bytes) = cache.get(cache_key) {
             return Ok(bytes);
         }
@@ -111,22 +107,11 @@ where
 
     let loaded = loader()?;
 
-    let mut cache = cache_write();
+    let mut cache = cache.write();
     if let Some(bytes) = cache.get(cache_key) {
         return Ok(bytes);
     }
 
     cache.insert(cache_key, loaded.clone());
     Ok(loaded)
-}
-
-fn cache_instance() -> &'static RwLock<AssetLruCache> {
-    ASSET_BYTES_CACHE.get_or_init(|| RwLock::new(AssetLruCache::default()))
-}
-
-fn cache_write() -> RwLockWriteGuard<'static, AssetLruCache> {
-    match cache_instance().write() {
-        Ok(guard) => guard,
-        Err(poisoned) => poisoned.into_inner(),
-    }
 }

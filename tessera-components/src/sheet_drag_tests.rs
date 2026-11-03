@@ -4,15 +4,12 @@
 //!
 //! Settle sheets smoothly and retain correct dismissal at different densities.
 
-use std::{
-    cell::{Cell, RefCell},
-    time::Duration,
-};
+use std::time::Duration;
 
 use tessera_ui::{
     Color, CursorEventContent, Dp, GestureState, HeadlessConfig, HeadlessRenderer,
     MOUSE_POINTER_ID, Modifier, PointerChange, PressKeyEventType, PxPosition, ScrollEventSource,
-    State, accesskit::Role, remember, tessera, time::Instant, use_context,
+    State, accesskit::Role, remember, tessera, time::Instant,
 };
 
 use crate::{
@@ -24,7 +21,7 @@ use crate::{
     theme::material_theme,
 };
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 enum Kind {
     Bottom,
     Start,
@@ -33,18 +30,22 @@ enum Kind {
     StandardEnd,
 }
 
-thread_local! {
-    static KIND: Cell<Kind> = const { Cell::new(Kind::Bottom) };
-    static OPEN: Cell<Option<State<bool>>> = const { Cell::new(None) };
-    static EDGE: Cell<Option<State<SideSheetPosition>>> = const { Cell::new(None) };
-    static CLOSES: Cell<usize> = const { Cell::new(0) };
-    static ACCEPT_CLOSE: Cell<bool> = const { Cell::new(true) };
-    static CONNECTION: RefCell<Option<NestedScrollConnection>> = const { RefCell::new(None) };
+#[derive(Clone, Default)]
+struct FixtureHandles {
+    open: Option<State<bool>>,
+    edge: Option<State<SideSheetPosition>>,
+    accept_close: Option<State<bool>>,
+    closes: usize,
+    connection: Option<NestedScrollConnection>,
 }
 
-fn request_close(open: State<bool>) {
-    CLOSES.set(CLOSES.get() + 1);
-    if ACCEPT_CLOSE.get() {
+fn request_close(
+    open: State<bool>,
+    accept_close: State<bool>,
+    observed: tessera_ui::testing::TestProbe<FixtureHandles>,
+) {
+    observed.with_mut(|handles| handles.closes += 1);
+    if accept_close.get() {
         open.set(false);
     }
 }
@@ -58,8 +59,8 @@ fn main_content() {
 }
 
 #[tessera]
-fn content() {
-    CONNECTION.set(use_context::<NestedScrollConnection>().map(|c| c.get()));
+fn content(observed: tessera_ui::testing::TestProbe<FixtureHandles>) {
+    observed.with_mut(|handles| handles.connection = NestedScrollConnection::nearest());
     surface()
         .style(Color::RED.into())
         .modifier(Modifier::new().size(Dp(200.0), Dp(120.0)))
@@ -69,27 +70,35 @@ fn content() {
 }
 
 #[tessera]
-fn fixture() {
+fn fixture(kind: Kind, observed: tessera_ui::testing::TestProbe<FixtureHandles>) {
+    let accept_close = remember(|| true);
+    observed.with_mut(|handles| handles.accept_close = Some(accept_close));
     let open = remember(|| true);
     let edge = remember(|| {
-        if matches!(KIND.get(), Kind::Start | Kind::StandardStart) {
+        if matches!(kind, Kind::Start | Kind::StandardStart) {
             SideSheetPosition::Start
         } else {
             SideSheetPosition::End
         }
     });
-    OPEN.set(Some(open));
-    EDGE.set(Some(edge));
-    material_theme().child(move || match KIND.get() {
+    observed.with_mut(|handles| handles.open = Some(open));
+    observed.with_mut(|handles| handles.edge = Some(edge));
+    material_theme().child(move || match kind {
         Kind::Bottom => {
             bottom_sheet_provider()
                 .is_open(open.get())
-                .on_close_request(move || request_close(open))
+                .on_close_request({
+                    let observed = observed.clone();
+                    move || request_close(open, accept_close, observed.clone())
+                })
                 .main_content(|| {
                     main_content();
                 })
-                .bottom_sheet_content(|| {
-                    content();
+                .bottom_sheet_content({
+                    let observed = observed.clone();
+                    move || {
+                        content(observed.clone());
+                    }
                 });
         }
         kind => {
@@ -98,23 +107,35 @@ fn fixture() {
                 standard_side_sheet_provider()
                     .position(position)
                     .is_open(open.get())
-                    .on_close_request(move || request_close(open))
+                    .on_close_request({
+                        let observed = observed.clone();
+                        move || request_close(open, accept_close, observed.clone())
+                    })
                     .main_content(|| {
                         main_content();
                     })
-                    .side_sheet_content(|| {
-                        content();
+                    .side_sheet_content({
+                        let observed = observed.clone();
+                        move || {
+                            content(observed.clone());
+                        }
                     });
             } else {
                 modal_side_sheet_provider()
                     .position(position)
                     .is_open(open.get())
-                    .on_close_request(move || request_close(open))
+                    .on_close_request({
+                        let observed = observed.clone();
+                        move || request_close(open, accept_close, observed.clone())
+                    })
                     .main_content(|| {
                         main_content();
                     })
-                    .side_sheet_content(|| {
-                        content();
+                    .side_sheet_content({
+                        let observed = observed.clone();
+                        move || {
+                            content(observed.clone());
+                        }
                     });
             }
         }
@@ -154,21 +175,19 @@ fn displacement(
     }
 }
 
-fn connection() -> NestedScrollConnection {
-    CONNECTION.with_borrow(|c| c.clone().unwrap())
+fn connection(observed: &tessera_ui::testing::TestProbe<FixtureHandles>) -> NestedScrollConnection {
+    observed.get().connection.unwrap()
 }
 
 fn assert_reused_measurements(renderer: &HeadlessRenderer, kind: Kind) {
-    let diagnostics = renderer.diagnostics();
-    assert_eq!(
-        (
-            diagnostics.cache_miss_no_entry,
-            diagnostics.cache_miss_constraint,
-            diagnostics.cache_miss_dirty_self,
-            diagnostics.cache_miss_child_size,
-        ),
-        (0, 0, 0, 0),
-        "{kind:?}: fixed sheet geometry must reuse measurements: {diagnostics:?}"
+    assert!(
+        renderer
+            .work()
+            .phase(tessera_ui::WorkPhase::Measure)
+            .next()
+            .is_none(),
+        "{kind:?}: fixed sheet geometry must reuse measurements: {:?}",
+        renderer.work()
     );
 }
 
@@ -209,12 +228,13 @@ fn check(samples: u32) {
         Kind::StandardStart,
         Kind::StandardEnd,
     ] {
-        KIND.set(kind);
         for scale in [1.0, 1.5] {
-            CLOSES.set(0);
-            ACCEPT_CLOSE.set(true);
+            let observed = tessera_ui::testing::TestProbe::default();
             let mut renderer = HeadlessRenderer::new(
-                Box::new(fixture),
+                Box::new({
+                    let observed = observed.clone();
+                    move || fixture(kind, observed.clone())
+                }),
                 vec![Box::new(crate::TesseraComponents)],
                 HeadlessConfig {
                     width: 800,
@@ -237,7 +257,11 @@ fn check(samples: u32) {
             };
             let delta = scroll(kind, short * scale as f32);
             assert_eq!(
-                connection().post_scroll(ScrollDelta::ZERO, delta, ScrollEventSource::Touch),
+                connection(&observed).post_scroll(
+                    ScrollDelta::ZERO,
+                    delta,
+                    ScrollEventSource::Touch
+                ),
                 delta
             );
             renderer.step_frame();
@@ -245,7 +269,7 @@ fn check(samples: u32) {
                 (displacement(kind, origin, bounds(&renderer)) - short as f64 * scale).abs() < 0.01
             );
             assert_reused_measurements(&renderer, kind);
-            connection().pre_fling(ScrollVelocity::ZERO);
+            connection(&observed).pre_fling(ScrollVelocity::ZERO);
             renderer.step_frame();
             let after_release = displacement(kind, origin, bounds(&renderer));
             assert!(
@@ -254,7 +278,7 @@ fn check(samples: u32) {
             );
             assert_reused_measurements(&renderer, kind);
             renderer.render_frames(80);
-            assert_eq!(CLOSES.get(), 0);
+            assert_eq!(observed.get().closes, 0);
             assert_eq!(bounds(&renderer), origin);
             assert!(renderer.read_pixels().unwrap() == baseline);
 
@@ -275,7 +299,7 @@ fn check(samples: u32) {
                 let cancelled_offset = displacement(kind, origin, bounds(&renderer));
                 assert!(cancelled_offset > 0.0 && cancelled_offset < 36.0 * scale);
                 renderer.render_frames(80);
-                assert_eq!(CLOSES.get(), 0);
+                assert_eq!(observed.get().closes, 0);
                 assert_eq!(bounds(&renderer), origin);
             }
 
@@ -284,24 +308,24 @@ fn check(samples: u32) {
             } else {
                 210.0
             };
-            connection().post_scroll(
+            connection(&observed).post_scroll(
                 ScrollDelta::ZERO,
                 scroll(kind, long * scale as f32),
                 ScrollEventSource::Touch,
             );
             renderer.step_frame();
             let dragged = bounds(&renderer);
-            connection().pre_fling(ScrollVelocity::ZERO);
+            connection(&observed).pre_fling(ScrollVelocity::ZERO);
             renderer.step_frame();
             assert_eq!(
-                CLOSES.get(),
+                observed.get().closes,
                 1,
                 "{kind:?}: dismissal threshold must follow density/extent"
             );
             assert!(displacement(kind, dragged, bounds(&renderer)).abs() < 32.0 * scale);
             renderer.render_frames(5);
             let closing = bounds(&renderer);
-            OPEN.get().unwrap().set(true);
+            observed.get().open.unwrap().set(true);
             renderer.step_frame();
             assert!(
                 displacement(kind, closing, bounds(&renderer)).abs() < 32.0 * scale,
@@ -311,7 +335,7 @@ fn check(samples: u32) {
             assert_eq!(bounds(&renderer), origin);
             assert!(renderer.read_pixels().unwrap() == baseline);
 
-            connection().post_scroll(
+            connection(&observed).post_scroll(
                 ScrollDelta::ZERO,
                 scroll(kind, 8.0 * scale as f32),
                 ScrollEventSource::Touch,
@@ -323,10 +347,10 @@ fn check(samples: u32) {
                 600.0
             } * scale as f32;
             let velocity = scroll(kind, speed);
-            connection().pre_fling(ScrollVelocity::new(velocity.x, velocity.y));
+            connection(&observed).pre_fling(ScrollVelocity::new(velocity.x, velocity.y));
             renderer.step_frame();
             assert_eq!(
-                CLOSES.get(),
+                observed.get().closes,
                 2,
                 "{kind:?}: fast outward flings must dismiss"
             );
@@ -339,82 +363,86 @@ fn check(samples: u32) {
                     .iter()
                     .any(|(_, n)| n.role() == Role::Dialog)
             );
-            OPEN.get().unwrap().set(true);
+            observed.get().open.unwrap().set(true);
             renderer.render_frames(80);
             assert!(renderer.read_pixels().unwrap() == baseline);
 
-            connection().post_scroll(
+            connection(&observed).post_scroll(
                 ScrollDelta::ZERO,
                 scroll(kind, long * scale as f32),
                 ScrollEventSource::Touch,
             );
             renderer.step_frame();
-            connection().pre_fling(ScrollVelocity::new(-velocity.x, -velocity.y));
+            connection(&observed).pre_fling(ScrollVelocity::new(-velocity.x, -velocity.y));
             renderer.render_frames(80);
             assert_eq!(
-                CLOSES.get(),
+                observed.get().closes,
                 2,
                 "{kind:?}: fast inward flings must return to the open anchor"
             );
             assert!(renderer.read_pixels().unwrap() == baseline);
 
-            ACCEPT_CLOSE.set(false);
-            connection().post_scroll(
+            observed.get().accept_close.unwrap().set(false);
+            connection(&observed).post_scroll(
                 ScrollDelta::ZERO,
                 scroll(kind, long * scale as f32),
                 ScrollEventSource::Touch,
             );
             renderer.step_frame();
-            connection().pre_fling(ScrollVelocity::ZERO);
+            connection(&observed).pre_fling(ScrollVelocity::ZERO);
             renderer.render_frames(80);
-            assert_eq!(CLOSES.get(), 3);
-            assert!(OPEN.get().unwrap().get());
+            assert_eq!(observed.get().closes, 3);
+            assert!(observed.get().open.unwrap().get());
             assert!(
                 renderer.read_pixels().unwrap() == baseline,
                 "{kind:?}: a declined dismissal must settle back"
             );
             if !matches!(kind, Kind::Bottom) {
-                ACCEPT_CLOSE.set(true);
+                observed.get().accept_close.unwrap().set(true);
                 renderer.resize(320, 600);
                 renderer.render_frames(10);
                 let narrow = bounds(&renderer);
-                connection().post_scroll(
+                connection(&observed).post_scroll(
                     ScrollDelta::ZERO,
                     scroll(kind, 90.0 * scale as f32),
                     ScrollEventSource::Touch,
                 );
                 renderer.step_frame();
-                connection().pre_fling(ScrollVelocity::ZERO);
+                connection(&observed).pre_fling(ScrollVelocity::ZERO);
                 renderer.render_frames(80);
-                assert_eq!(CLOSES.get(), 3);
+                assert_eq!(observed.get().closes, 3);
                 assert_eq!(bounds(&renderer), narrow);
-                connection().post_scroll(
+                connection(&observed).post_scroll(
                     ScrollDelta::ZERO,
                     scroll(kind, 180.0 * scale as f32),
                     ScrollEventSource::Touch,
                 );
                 renderer.step_frame();
-                connection().pre_fling(ScrollVelocity::ZERO);
+                connection(&observed).pre_fling(ScrollVelocity::ZERO);
                 renderer.render_frames(80);
                 assert_eq!(
-                    CLOSES.get(),
+                    observed.get().closes,
                     4,
                     "{kind:?}: thresholds must use the resized sheet width"
                 );
-                assert!(!OPEN.get().unwrap().get());
+                assert!(!observed.get().open.unwrap().get());
                 let (edge, reversed) = match kind {
                     Kind::Start => (SideSheetPosition::End, Kind::End),
                     Kind::End => (SideSheetPosition::Start, Kind::Start),
                     Kind::StandardStart => (SideSheetPosition::End, Kind::StandardEnd),
                     _ => (SideSheetPosition::Start, Kind::StandardStart),
                 };
-                EDGE.get().unwrap().set(edge);
-                OPEN.get().unwrap().set(true);
+                observed.get().edge.unwrap().set(edge);
+                observed.get().open.unwrap().set(true);
                 renderer.render_frames(80);
                 let flipped = bounds(&renderer);
                 let delta = scroll(reversed, 20.0 * scale as f32);
                 assert_eq!(
-                    connection().post_scroll(ScrollDelta::ZERO, delta, ScrollEventSource::Touch),
+                    connection(&observed).post_scroll(
+                        ScrollDelta::ZERO,
+                        delta,
+                        ScrollEventSource::Touch
+                    ),
                     delta
                 );
                 renderer.step_frame();
@@ -422,18 +450,21 @@ fn check(samples: u32) {
                     (displacement(reversed, flipped, bounds(&renderer)) - 20.0 * scale).abs()
                         < 0.01
                 );
-                connection().pre_fling(ScrollVelocity::ZERO);
+                connection(&observed).pre_fling(ScrollVelocity::ZERO);
                 renderer.render_frames(80);
-                assert_eq!(CLOSES.get(), 4);
+                assert_eq!(observed.get().closes, 4);
                 assert_eq!(bounds(&renderer), flipped);
             } else {
-                ACCEPT_CLOSE.set(true);
+                observed.get().accept_close.unwrap().set(true);
                 for width in [600.0, 700.0] {
                     let width = (width * scale) as u32;
                     renderer.resize(width, 600);
                     renderer.step_frame();
                     assert!(
-                        renderer.diagnostics().cache_miss_constraint > 0,
+                        renderer
+                            .work()
+                            .phase(tessera_ui::WorkPhase::Measure)
+                            .any(|work| work.target.ends_with("bottom_sheet::BottomSheetLayout")),
                         "resizing across the sheet width limit must update constraints"
                     );
                     renderer.render_frames(10);
@@ -443,7 +474,7 @@ fn check(samples: u32) {
                     assert_eq!(resized.y1, origin.y1);
                     assert!((resized.x0 - (f64::from(width) - resized.width()) / 2.0).abs() < 0.01);
                     let resized_pixels = renderer.read_pixels().unwrap();
-                    connection().post_scroll(
+                    connection(&observed).post_scroll(
                         ScrollDelta::ZERO,
                         scroll(kind, 20.0 * scale as f32),
                         ScrollEventSource::Touch,
@@ -454,10 +485,10 @@ fn check(samples: u32) {
                             < 0.01
                     );
                     assert_reused_measurements(&renderer, kind);
-                    connection().pre_fling(ScrollVelocity::ZERO);
+                    connection(&observed).pre_fling(ScrollVelocity::ZERO);
                     renderer.render_frames(80);
                     assert_eq!(bounds(&renderer), resized);
-                    assert_eq!(CLOSES.get(), 3);
+                    assert_eq!(observed.get().closes, 3);
                     assert!(renderer.read_pixels().unwrap() == resized_pixels);
                 }
                 renderer.resize(800, 600);
@@ -468,7 +499,7 @@ fn check(samples: u32) {
                 renderer.render_frames(10);
                 renderer.pointer_release(MOUSE_POINTER_ID, end, PressKeyEventType::Left);
                 renderer.render_frames(2);
-                assert_eq!(CLOSES.get(), 3);
+                assert_eq!(observed.get().closes, 3);
                 let released = displacement(kind, origin, bounds(&renderer));
                 assert!(released > 0.0 && released < 36.0 * scale);
                 renderer.render_frames(80);
@@ -477,12 +508,12 @@ fn check(samples: u32) {
                 renderer.pointer_release(MOUSE_POINTER_ID, end, PressKeyEventType::Left);
                 renderer.render_frames(2);
                 assert_eq!(
-                    CLOSES.get(),
+                    observed.get().closes,
                     4,
                     "a fast handle fling must dismiss below the distance threshold"
                 );
                 renderer.render_frames(80);
-                assert!(!OPEN.get().unwrap().get());
+                assert!(!observed.get().open.unwrap().get());
             }
         }
     }

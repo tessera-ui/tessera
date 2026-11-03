@@ -1,5 +1,3 @@
-use std::cell::Cell;
-
 use tessera_ui::{
     CallbackWith, Color, Dp, FocusDirection, FocusManager, HeadlessConfig, HeadlessRenderer,
     MOUSE_POINTER_ID, Modifier, PressKeyEventType, PxPosition, State,
@@ -83,13 +81,12 @@ fn range_input_resolves_both_endpoints_and_preserves_invalid_drafts() {
     );
 }
 
-thread_local! {
-    static STATE: Cell<Option<State<DateRangePickerState>>> = const { Cell::new(None) };
-    static OUTER_SCROLL: Cell<Option<State<LazyListController>>> = const { Cell::new(None) };
-}
-
 #[tessera]
-fn nested_fixture() {
+fn nested_fixture(
+    output: tessera_ui::testing::TestProbe<
+        Option<(State<DateRangePickerState>, State<LazyListController>)>,
+    >,
+) {
     let state = remember(|| {
         DateRangePickerState::new(
             None,
@@ -102,8 +99,7 @@ fn nested_fixture() {
         )
     });
     let outer = remember(LazyListController::new);
-    STATE.set(Some(state));
-    OUTER_SCROLL.set(Some(outer));
+    output.set(Some((state, outer)));
     material_theme().child(move || {
         lazy_column()
             .modifier(Modifier::new().fill_max_size())
@@ -143,8 +139,10 @@ fn nested_fixture() {
 }
 
 fn check_nested_scroll(samples: u32) {
+    let output = tessera_ui::testing::TestProbe::default();
+    let probe = output.clone();
     let mut renderer = HeadlessRenderer::new(
-        Box::new(|| nested_fixture()),
+        Box::new(move || nested_fixture(probe.clone())),
         vec![Box::new(crate::TesseraComponents)],
         HeadlessConfig {
             width: 600,
@@ -156,11 +154,11 @@ fn check_nested_scroll(samples: u32) {
     )
     .expect("nested renderer");
     renderer.render_frames(8);
-    let outer = OUTER_SCROLL.get().expect("outer scroll");
+    let outer = output.get().unwrap().1;
     outer.with_mut(|scroll| scroll.scroll_to(Dp::ZERO, Dp(400.0 / 1.5)));
     renderer.render_frames(8);
     click(&mut renderer, "July 29, 2026");
-    let state = STATE.get().expect("range state");
+    let state = output.get().unwrap().0;
     assert_eq!(
         state.with(DateRangePickerState::selected_start_date),
         Some(date(7, 29))
@@ -253,7 +251,7 @@ fn check_nested_scroll(samples: u32) {
 }
 
 #[tessera]
-fn fixture() {
+fn fixture(output: tessera_ui::testing::TestProbe<Option<State<DateRangePickerState>>>) {
     let blocked = CallbackWith::new(|date: CalendarDate| date != self::date(7, 13));
     let state = remember(|| {
         DateRangePickerState::new(
@@ -266,7 +264,7 @@ fn fixture() {
             DatePickerDisplayMode::Picker,
         )
     });
-    STATE.set(Some(state));
+    output.set(Some(state));
     material_theme()
         .theme(|| {
             let mut theme = MaterialTheme::default();
@@ -361,8 +359,10 @@ fn assert_color(renderer: &HeadlessRenderer, x: f64, y: f64, expected: [u8; 3]) 
 }
 
 fn check_range(samples: u32) {
+    let output = tessera_ui::testing::TestProbe::default();
+    let probe = output.clone();
     let mut renderer = HeadlessRenderer::new(
-        Box::new(|| fixture()),
+        Box::new(move || fixture(probe.clone())),
         vec![Box::new(crate::TesseraComponents)],
         HeadlessConfig {
             width: 600,
@@ -374,7 +374,7 @@ fn check_range(samples: u32) {
     )
     .expect("renderer");
     renderer.render_frames(8);
-    let state = STATE.get().expect("state");
+    let state = output.get().unwrap();
     let month = bounds(&renderer, "July 2026");
     let heading = renderer
         .accessibility_snapshot()
@@ -472,7 +472,18 @@ fn check_range(samples: u32) {
     let focus_x = (blocked.x0 + blocked.x1) / 2.0 + 20.0;
     let focus_y = (blocked.y0 + blocked.y1) / 2.0;
     assert_color(&renderer, focus_x, focus_y, [255, 255, 255]);
-    crate::date_picker::navigation::test_keyboard().request(date(7, 13));
+    let tree = renderer.inspect_accessibility().unwrap();
+    let target_node = tree.find("July 12, 2026", Role::Button).unwrap().0;
+    assert!(
+        renderer.dispatch_accessibility_action(tessera_ui::accesskit::ActionRequest {
+            action: tessera_ui::accesskit::Action::Focus,
+            target_tree: tessera_ui::accesskit::TreeId::ROOT,
+            target_node,
+            data: None,
+        })
+    );
+    renderer.render_frames(2);
+    renderer.press_key(tessera_ui::winit::keyboard::NamedKey::ArrowRight);
     renderer.render_frames(8);
     let accessibility = renderer.accessibility_snapshot().expect("tree");
     let focused = accessibility
@@ -661,7 +672,7 @@ fn gpu_date_range_selection_scrolling_input_and_resize_msaa() {
 }
 
 #[tessera]
-fn header_fixture() {
+fn header_fixture(output: tessera_ui::testing::TestProbe<Option<State<DateRangePickerState>>>) {
     let state = remember(|| {
         DateRangePickerState::new(
             None,
@@ -673,7 +684,7 @@ fn header_fixture() {
             DatePickerDisplayMode::Picker,
         )
     });
-    STATE.set(Some(state));
+    output.set(Some(state));
     material_theme().child(move || {
         date_range_picker().state(state);
     });
@@ -682,8 +693,10 @@ fn header_fixture() {
 #[test]
 #[ignore = "requires a native GPU adapter"]
 fn gpu_range_input_uses_modal_header_while_calendar_keeps_compact_header() {
+    let output = tessera_ui::testing::TestProbe::default();
+    let probe = output.clone();
     let mut renderer = HeadlessRenderer::new(
-        Box::new(header_fixture),
+        Box::new(move || header_fixture(probe.clone())),
         vec![Box::new(crate::TesseraComponents)],
         HeadlessConfig {
             width: 400,
@@ -709,7 +722,7 @@ fn gpu_range_input_uses_modal_header_while_calendar_keeps_compact_header() {
     let picker_title = bounds(&renderer, "Select dates");
     assert_eq!(picker_title.x0, 64.0);
     assert!(picker_title.y1 <= 28.0);
-    STATE
+    output
         .get()
         .unwrap()
         .with_mut(|state| state.set_display_mode(DatePickerDisplayMode::Input));
@@ -723,7 +736,7 @@ fn gpu_range_input_uses_modal_header_while_calendar_keeps_compact_header() {
     let inputs = input_bounds(&renderer);
     assert_eq!(inputs.len(), 2);
     assert!(inputs.iter().all(|rect| rect.y0 >= 145.0));
-    STATE
+    output
         .get()
         .unwrap()
         .with_mut(|state| state.set_display_mode(DatePickerDisplayMode::Picker));

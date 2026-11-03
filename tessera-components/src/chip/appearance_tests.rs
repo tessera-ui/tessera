@@ -4,7 +4,7 @@
 //!
 //! Preserve chip shadows and state colors during pointer and focus changes.
 
-use std::{cell::Cell, time::Duration};
+use std::time::Duration;
 
 use tessera_ui::{
     Color, Dp, FocusManager, HeadlessConfig, HeadlessRenderer, MOUSE_POINTER_ID, Modifier,
@@ -36,10 +36,6 @@ struct Settings {
     custom: bool,
 }
 
-thread_local! {
-    static SETTINGS: Cell<Option<State<Settings>>> = const { Cell::new(None) };
-}
-
 fn tagged(name: &str) -> Modifier {
     Modifier::new().semantics(SemanticsArgs {
         test_tag: Some(name.into()),
@@ -48,7 +44,7 @@ fn tagged(name: &str) -> Modifier {
 }
 
 #[tessera]
-fn fixture() {
+fn fixture(probe: tessera_ui::testing::TestProbe<Option<State<Settings>>>) {
     let settings = remember(|| Settings {
         variant: ChipVariant::Assist,
         style: ChipStyle::Elevated,
@@ -57,7 +53,7 @@ fn fixture() {
         reference: Dp(1.0),
         custom: false,
     });
-    SETTINGS.set(Some(settings));
+    probe.set(Some(settings));
     material_theme()
         .theme(|| {
             let mut theme = MaterialTheme::default();
@@ -119,20 +115,13 @@ fn fixture() {
 }
 
 fn rect(renderer: &HeadlessRenderer, key: &str) -> [i64; 4] {
-    let snapshot = renderer.snapshot();
-    let mut pending = vec![&snapshot["root"]];
-    while let Some(node) = pending.pop() {
-        if node["accessibility"]["key"] == key || node["accessibility"]["label"] == key {
-            return ["x", "y", "width", "height"]
-                .map(|field| node["bounds"][field].as_i64().unwrap());
-        }
-        if let Some(children) = node["children"].as_array() {
-            pending.extend(children);
-        }
-    }
-    panic!("missing {key}");
+    let snapshot = renderer.inspect_components();
+    let node = snapshot
+        .find_tag(key)
+        .unwrap_or_else(|| snapshot.labeled(key));
+    let bounds = node.bounds().expect("placed test target");
+    [bounds.x, bounds.y, bounds.width, bounds.height].map(|value| value as i64)
 }
-
 fn shadow(renderer: &HeadlessRenderer, key: &str) -> Vec<u8> {
     let [x, y, width, _] = rect(renderer, key);
     let pixels = renderer.read_pixels().unwrap();
@@ -188,8 +177,10 @@ fn count_icon(renderer: &HeadlessRenderer, color: [u8; 3]) -> usize {
 }
 
 fn check_appearance(samples: u32) {
+    let probe = tessera_ui::testing::TestProbe::default();
+    let observed = probe.clone();
     let mut renderer = HeadlessRenderer::new(
-        Box::new(fixture),
+        Box::new(move || fixture(observed.clone())),
         vec![Box::new(crate::TesseraComponents)],
         HeadlessConfig {
             width: 600,
@@ -201,7 +192,7 @@ fn check_appearance(samples: u32) {
     )
     .unwrap();
     renderer.render_frames(5);
-    let settings = SETTINGS.get().unwrap();
+    let settings = probe.get().unwrap();
     let point = PxPosition::from_f32_xy(120.0, 56.0);
     let outside = PxPosition::from_f32_xy(580.0, 140.0);
     assert_shadow(&renderer, true);

@@ -1,26 +1,13 @@
-//! Text Rendering Pipeline for UI Components
+//! Text shaping and rendering with session-owned font resources.
 //!
-//! This module implements the GPU pipeline and related utilities for efficient
-//! text rendering in Tessera UI components. It leverages the Glyphon engine for
-//! font management, shaping, and rasterization, providing high-quality and
-//! performant text output. Typical use cases include rendering static labels,
-//! paragraphs, and editable text fields within the UI.
+//! ## Usage
 //!
-//! The pipeline is designed to be reusable and efficient, sharing a static font
-//! system across the application to minimize resource usage. It exposes APIs
-//! for preparing, measuring, and rendering text, supporting advanced features
-//! such as font fallback, shaping, and multi-line layout.
-//!
-//! This module is intended for integration into custom UI components and
-//! rendering flows that require flexible and robust text display.
+//! Measure and render labels, paragraphs, and editable text.
 
-use std::{
-    num::NonZero,
-    sync::{Arc, OnceLock},
-};
+use std::sync::Arc;
 
 use glyphon::fontdb;
-use parking_lot::{RwLock, RwLockReadGuard, RwLockWriteGuard};
+use parking_lot::{ArcRwLockReadGuard, ArcRwLockWriteGuard, RawRwLock, RwLock};
 use tessera_ui::{
     Color, PxPosition,
     renderer::drawer::pipeline::{DrawContext, DrawablePipeline, FrameContext},
@@ -38,15 +25,17 @@ use std::io;
 #[cfg(target_family = "wasm")]
 use tessera_ui::AssetExt;
 
-const LRU_CAPACITY: usize = 1024;
+struct TextResources {
+    font_system: Arc<RwLock<glyphon::FontSystem>>,
+}
 
-/// It costs a lot to create a glyphon font system, so we use a static one
-/// to share it every where and avoid creating it multiple times.
-static FONT_SYSTEM: OnceLock<RwLock<glyphon::FontSystem>> = OnceLock::new();
-
-/// Create TextData is a heavy operation, so we provide a lru cache to store
-/// recently used TextData.
-static TEXT_DATA_CACHE: OnceLock<RwLock<lru::LruCache<LruKey, TextData>>> = OnceLock::new();
+impl Default for TextResources {
+    fn default() -> Self {
+        Self {
+            font_system: Arc::new(init_font_system()),
+        }
+    }
+}
 
 fn linear_to_srgb_channel(value: f32) -> f32 {
     let value = value.clamp(0.0, 1.0);
@@ -65,54 +54,11 @@ pub(crate) fn color_to_glyphon(color: Color) -> glyphon::Color {
     glyphon::Color::rgba(r, g, b, a)
 }
 
-struct LruKey {
-    text: String,
-    font_size: f32,
-    line_height: f32,
-    /// The final computed bounds, used as the cache key instead of constraint.
-    bounds: [u32; 2],
-    font: TextFont,
-}
-
 #[derive(Clone, Copy, Debug, PartialEq)]
 struct TextFont {
     weight: u16,
     tracking: f32,
     family: Option<&'static str>,
-}
-
-impl PartialEq for LruKey {
-    fn eq(&self, other: &Self) -> bool {
-        self.text == other.text
-            && self.font_size.to_bits() == other.font_size.to_bits()
-            && self.line_height.to_bits() == other.line_height.to_bits()
-            && self.bounds == other.bounds
-            && self.font == other.font
-    }
-}
-
-impl Eq for LruKey {}
-
-impl std::hash::Hash for LruKey {
-    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
-        self.text.hash(state);
-        self.font_size.to_bits().hash(state);
-        self.line_height.to_bits().hash(state);
-        self.bounds.hash(state);
-        self.font.weight.hash(state);
-        self.font.tracking.to_bits().hash(state);
-        self.font.family.hash(state);
-    }
-}
-
-fn write_lru_cache() -> RwLockWriteGuard<'static, lru::LruCache<LruKey, TextData>> {
-    TEXT_DATA_CACHE
-        .get_or_init(|| {
-            RwLock::new(lru::LruCache::new(
-                NonZero::new(LRU_CAPACITY).expect("text cache size must be non-zero"),
-            ))
-        })
-        .write()
 }
 
 fn load_material_fonts(db: &mut fontdb::Database) {
@@ -253,18 +199,18 @@ fn init_font_system() -> RwLock<glyphon::FontSystem> {
     RwLock::new(font_system)
 }
 
-/// It costs a lot to create a glyphon font system, so we use a static one
-/// to share it every where and avoid creating it multiple times.
-/// This function returns a read lock of the font system.
-pub fn read_font_system() -> RwLockReadGuard<'static, glyphon::FontSystem> {
-    FONT_SYSTEM.get_or_init(init_font_system).read()
+/// Borrows the font system owned by the active runtime session.
+pub fn read_font_system() -> ArcRwLockReadGuard<RawRwLock, glyphon::FontSystem> {
+    tessera_ui::__private::runtime_resource::<TextResources>()
+        .font_system
+        .read_arc()
 }
 
-/// It costs a lot to create a glyphon font system, so we use a static one
-/// to share it every where and avoid creating it multiple times.
-/// This function returns a write lock of the font system.
-pub fn write_font_system() -> RwLockWriteGuard<'static, glyphon::FontSystem> {
-    FONT_SYSTEM.get_or_init(init_font_system).write()
+/// Mutably borrows the font system owned by the active runtime session.
+pub fn write_font_system() -> ArcRwLockWriteGuard<RawRwLock, glyphon::FontSystem> {
+    tessera_ui::__private::runtime_resource::<TextResources>()
+        .font_system
+        .write_arc()
 }
 
 /// A text renderer
@@ -453,7 +399,7 @@ impl PartialEq for TextData {
 }
 
 impl TextData {
-    /// Shapes text once and stores the shaped buffer in the global LRU.
+    /// Shapes text using the active session's font resources.
     pub(crate) fn shape(
         text: String,
         color: Color,
@@ -473,13 +419,6 @@ impl TextData {
         };
         let (text_buffer, bounds, first_baseline, last_baseline, line_count) =
             Self::build_buffer(&text, font_size, line_height, font, &constraint);
-        let key = LruKey {
-            text: text.clone(),
-            font_size,
-            line_height,
-            bounds,
-            font,
-        };
         let data = Self {
             text_buffer: Arc::new(text_buffer),
             size: bounds,
@@ -496,7 +435,6 @@ impl TextData {
             base_span_colors: None,
             span_opacity: 1.0,
         };
-        write_lru_cache().put(key, data.clone());
         data
     }
 

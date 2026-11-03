@@ -17,13 +17,6 @@ use crate::pipelines::SharedQuad;
 
 use super::command::{ImageCommand, ImageData};
 
-#[cfg(test)]
-pub(crate) static INSTANCE_ALLOCATIONS: std::sync::atomic::AtomicUsize =
-    std::sync::atomic::AtomicUsize::new(0);
-#[cfg(test)]
-pub(crate) static TEXTURE_UPLOADS: std::sync::atomic::AtomicUsize =
-    std::sync::atomic::AtomicUsize::new(0);
-
 #[derive(PartialEq, ShaderType)]
 struct ImageUniforms {
     rect: Vec4,
@@ -48,7 +41,7 @@ pub struct ImagePipeline {
     pipeline: wgpu::RenderPipeline,
     bind_group_layout: wgpu::BindGroupLayout,
     uniform_layout: wgpu::BindGroupLayout,
-    uniform_buffer: wgpu::Buffer,
+    uniform_buffer: tessera_ui::TrackedBuffer,
     uniform_group: wgpu::BindGroup,
     uniform_capacity: u64,
     uniform_used: u64,
@@ -64,7 +57,7 @@ pub struct ImagePipeline {
 impl ImagePipeline {
     /// Create a new ImagePipeline.
     pub fn new(
-        device: &wgpu::Device,
+        device: &tessera_ui::GraphicsDevice,
         config: &wgpu::SurfaceConfiguration,
         pipeline_cache: Option<&wgpu::PipelineCache>,
         sample_count: u32,
@@ -183,8 +176,7 @@ impl ImagePipeline {
     /// Return existing resources for `data` or create them.
     fn get_or_create_resources(
         &mut self,
-        device: &wgpu::Device,
-        queue: &wgpu::Queue,
+        device: &tessera_ui::GraphicsDevice,
         data: &ImageData,
     ) -> &ImageResources {
         let identity = (Arc::as_ptr(&data.data) as usize, data.width, data.height);
@@ -216,7 +208,6 @@ impl ImagePipeline {
                 }
                 let mut resource = Self::create_image_resources(
                     device,
-                    queue,
                     &self.bind_group_layout,
                     &self.sampler,
                     data,
@@ -241,18 +232,19 @@ impl ImagePipeline {
     }
 
     fn uniform_resources(
-        device: &wgpu::Device,
+        device: &tessera_ui::GraphicsDevice,
         layout: &wgpu::BindGroupLayout,
         capacity: u64,
-    ) -> (wgpu::Buffer, wgpu::BindGroup) {
-        #[cfg(test)]
-        INSTANCE_ALLOCATIONS.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-        let buffer = device.create_buffer(&wgpu::BufferDescriptor {
-            label: Some("Image Instances"),
-            size: capacity,
-            usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
-            mapped_at_creation: false,
-        });
+    ) -> (tessera_ui::TrackedBuffer, wgpu::BindGroup) {
+        let buffer = device.create_buffer(
+            "image_instances",
+            &wgpu::BufferDescriptor {
+                label: Some("Image Instances"),
+                size: capacity,
+                usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+                mapped_at_creation: false,
+            },
+        );
         let group = device.create_bind_group(&wgpu::BindGroupDescriptor {
             label: Some("Image Instances"),
             layout,
@@ -294,31 +286,32 @@ impl ImagePipeline {
     // Create GPU resources for an image. Kept as a single helper to avoid
     // duplicating GPU setup logic while keeping `draw` concise.
     fn create_image_resources(
-        device: &wgpu::Device,
-        queue: &wgpu::Queue,
+        device: &tessera_ui::GraphicsDevice,
         layout: &wgpu::BindGroupLayout,
         sampler: &wgpu::Sampler,
         data: &ImageData,
     ) -> ImageResources {
-        #[cfg(test)]
-        TEXTURE_UPLOADS.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
         let texture_size = wgpu::Extent3d {
             width: data.width,
             height: data.height,
             depth_or_array_layers: 1,
         };
-        let diffuse_texture = device.create_texture(&wgpu::TextureDescriptor {
-            size: texture_size,
-            mip_level_count: 1,
-            sample_count: 1,
-            dimension: wgpu::TextureDimension::D2,
-            format: wgpu::TextureFormat::Rgba8UnormSrgb,
-            usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
-            label: Some("diffuse_texture"),
-            view_formats: &[],
-        });
+        let diffuse_texture = device.create_texture(
+            "image_textures",
+            &wgpu::TextureDescriptor {
+                size: texture_size,
+                mip_level_count: 1,
+                sample_count: 1,
+                dimension: wgpu::TextureDimension::D2,
+                format: wgpu::TextureFormat::Rgba8UnormSrgb,
+                usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
+                label: Some("diffuse_texture"),
+                view_formats: &[],
+            },
+        );
 
-        queue.write_texture(
+        device.write_texture(
+            "image_textures",
             wgpu::TexelCopyTextureInfo {
                 texture: &diffuse_texture,
                 mip_level: 0,
@@ -383,20 +376,25 @@ impl DrawablePipeline<ImageCommand> for ImagePipeline {
             let mut buffer = UniformBuffer::new(Vec::new());
             buffer.write(&uniforms).expect("buffer write failed");
             let bytes = buffer.into_inner();
-            let alignment =
-                u64::from(context.device.limits().min_uniform_buffer_offset_alignment).max(1);
+            let alignment = u64::from(
+                context
+                    .graphics
+                    .limits()
+                    .min_uniform_buffer_offset_alignment,
+            )
+            .max(1);
             let offset = self.uniform_used.next_multiple_of(alignment);
             let required = offset + bytes.len() as u64;
             if required > self.uniform_capacity {
                 self.uniform_capacity = required.next_power_of_two();
                 (self.uniform_buffer, self.uniform_group) = Self::uniform_resources(
-                    context.device,
+                    context.graphics,
                     &self.uniform_layout,
                     self.uniform_capacity,
                 );
             }
             context
-                .queue
+                .graphics
                 .write_buffer(&self.uniform_buffer, offset, &bytes);
             self.uniform_used = required;
             context.render_pass.set_bind_group(
@@ -404,8 +402,7 @@ impl DrawablePipeline<ImageCommand> for ImagePipeline {
                 &self.uniform_group,
                 &[u32::try_from(offset).expect("image instance offset")],
             );
-            let resource =
-                self.get_or_create_resources(context.device, context.queue, &command.data);
+            let resource = self.get_or_create_resources(context.graphics, &command.data);
             context
                 .render_pass
                 .set_bind_group(1, &resource.bind_group, &[]);

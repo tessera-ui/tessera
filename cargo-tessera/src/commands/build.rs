@@ -3,7 +3,7 @@ use std::{path::Path, process::Command};
 use anyhow::{Context, Result, bail};
 use tessera_build::AssetBackend;
 
-use crate::{color_check, output};
+use crate::{call_guard, output};
 
 pub fn execute(
     release: bool,
@@ -14,15 +14,19 @@ pub fn execute(
     asset_backend_override: Option<AssetBackend>,
 ) -> Result<()> {
     let feature_overrides = build_tessera_ui_features(profiling_output, debug_dirty_overlay);
-    color_check::run(color_check::CheckOptions {
+    call_guard::run(call_guard::CheckOptions {
         package,
         target,
-        target_selection: color_check::TargetSelection::default(),
-        features: color_check::FeatureSelection::Selected {
+        target_selection: call_guard::TargetSelection::default(),
+        features: call_guard::FeatureSelection::Selected {
             features: &feature_overrides,
             no_default_features: false,
         },
-        message_format: color_check::MessageFormat::Human,
+        message_format: call_guard::MessageFormat::Human,
+        quiet: false,
+        release,
+        workspace: false,
+        jobs: None,
     })?;
 
     if profiling_output.is_some() && target_is_android(target) {

@@ -132,30 +132,15 @@ fn install(project: &Path, force: bool) -> Result<()> {
 
 #[cfg(test)]
 mod tests {
-    use std::{
-        fs,
-        path::PathBuf,
-        sync::atomic::{AtomicU64, Ordering},
-    };
+    use std::{fs, path::PathBuf};
 
     use super::{InstallScope, SKILL, install, install_selected, installation_root, scope};
 
-    struct ProjectDirectory(PathBuf);
+    struct ProjectDirectory(tempfile::TempDir);
 
     impl ProjectDirectory {
         fn new() -> Self {
-            static NEXT_ID: AtomicU64 = AtomicU64::new(0);
-            let id = NEXT_ID.fetch_add(1, Ordering::Relaxed);
-            let path = std::env::temp_dir()
-                .join(format!("tessera-skill-install-{}-{id}", std::process::id()));
-            fs::create_dir(&path).expect("isolated project directory");
-            Self(path)
-        }
-    }
-
-    impl Drop for ProjectDirectory {
-        fn drop(&mut self) {
-            let _ = fs::remove_dir_all(&self.0);
+            Self(tempfile::tempdir().expect("isolated project directory"))
         }
     }
 
@@ -164,19 +149,22 @@ mod tests {
         let project = ProjectDirectory::new();
         let home = ProjectDirectory::new();
         let relative = ".agents/skills/tessera-good-taste/SKILL.md";
-        install_selected(Some(InstallScope::Local), Some(&project.0), false, || {
-            panic!("local installation must not resolve home")
-        })
+        install_selected(
+            Some(InstallScope::Local),
+            Some(project.0.path()),
+            false,
+            || panic!("local installation must not resolve home"),
+        )
         .unwrap();
-        assert!(project.0.join(relative).is_file());
-        assert!(!home.0.join(".agents").exists());
+        assert!(project.0.path().join(relative).is_file());
+        assert!(!home.0.path().join(".agents").exists());
 
         install_selected(Some(InstallScope::Global), None, false, || {
-            Some(home.0.clone())
+            Some(home.0.path().to_path_buf())
         })
         .unwrap();
         assert_eq!(
-            fs::read(home.0.join(relative)).unwrap(),
+            fs::read(home.0.path().join(relative)).unwrap(),
             SKILL.get_file("SKILL.md").unwrap().contents()
         );
         assert_eq!(
@@ -191,26 +179,29 @@ mod tests {
     #[test]
     fn cancelled_prompt_does_not_create_directories_or_resolve_home() {
         let project = ProjectDirectory::new();
-        let missing = project.0.join("not-created");
+        let missing = project.0.path().join("not-created");
         let selected = scope::resolve(false, false, true, || Ok(None)).unwrap();
         install_selected(selected, Some(&missing), true, || panic!("cancelled")).unwrap();
         assert!(!missing.exists());
-        assert!(!project.0.join(".agents").exists());
+        assert!(!project.0.path().join(".agents").exists());
     }
 
     #[test]
     fn global_rejects_a_project_override_before_home_lookup_or_installation() {
         let project = ProjectDirectory::new();
-        let error = install_selected(Some(InstallScope::Global), Some(&project.0), false, || {
-            panic!("must reject --path before home lookup")
-        })
+        let error = install_selected(
+            Some(InstallScope::Global),
+            Some(project.0.path()),
+            false,
+            || panic!("must reject --path before home lookup"),
+        )
         .unwrap_err();
         assert!(
             error
                 .to_string()
                 .contains("--path is only supported for local")
         );
-        assert!(!project.0.join(".agents").exists());
+        assert!(!project.0.path().join(".agents").exists());
         assert!(installation_root(InstallScope::Global, None, || None).is_err());
     }
 
@@ -218,22 +209,22 @@ mod tests {
     fn global_installation_preserves_modified_and_unrelated_files() {
         let home = ProjectDirectory::new();
         install_selected(Some(InstallScope::Global), None, false, || {
-            Some(home.0.clone())
+            Some(home.0.path().to_path_buf())
         })
         .unwrap();
-        let destination = home.0.join(".agents/skills/tessera-good-taste");
+        let destination = home.0.path().join(".agents/skills/tessera-good-taste");
         let entry = destination.join("SKILL.md");
         fs::write(&entry, "User skill").unwrap();
         let custom = destination.join("custom.md");
         fs::write(&custom, "User notes").unwrap();
         let error = install_selected(Some(InstallScope::Global), None, false, || {
-            Some(home.0.clone())
+            Some(home.0.path().to_path_buf())
         })
         .unwrap_err();
         assert!(error.to_string().contains("Skill file differs:"));
         assert_eq!(fs::read_to_string(&entry).unwrap(), "User skill");
         install_selected(Some(InstallScope::Global), None, true, || {
-            Some(home.0.clone())
+            Some(home.0.path().to_path_buf())
         })
         .unwrap();
         assert_eq!(
@@ -246,14 +237,14 @@ mod tests {
     #[test]
     fn skill_installation_preserves_project_guidance_and_other_skills() {
         let project = ProjectDirectory::new();
-        let guidance = project.0.join("AGENTS.md");
+        let guidance = project.0.path().join("AGENTS.md");
         fs::write(&guidance, "Existing project instructions\n").expect("project guidance");
-        let other = project.0.join(".agents/skills/other/SKILL.md");
+        let other = project.0.path().join(".agents/skills/other/SKILL.md");
         fs::create_dir_all(other.parent().expect("skill parent")).expect("other skill directory");
         fs::write(&other, "Other skill\n").expect("other skill");
 
-        install(&project.0, false).expect("install bundled skill");
-        install(&project.0, false).expect("repeat matching installation");
+        install(project.0.path(), false).expect("install bundled skill");
+        install(project.0.path(), false).expect("repeat matching installation");
 
         for relative in [
             "SKILL.md",
@@ -274,6 +265,7 @@ mod tests {
                 fs::read(
                     project
                         .0
+                        .path()
                         .join(".agents/skills/tessera-good-taste")
                         .join(relative)
                 )
@@ -296,13 +288,18 @@ mod tests {
         let project = ProjectDirectory::new();
         let reference = project
             .0
+            .path()
             .join(".agents/skills/tessera-good-taste/references/public-apis.md");
         fs::create_dir_all(reference.parent().expect("reference parent"))
             .expect("customized skill directory");
         fs::write(&reference, "Local reference\n").expect("customized reference");
-        let entry = project.0.join(".agents/skills/tessera-good-taste/SKILL.md");
+        let entry = project
+            .0
+            .path()
+            .join(".agents/skills/tessera-good-taste/SKILL.md");
 
-        let error = install(&project.0, false).expect_err("modified file requires explicit force");
+        let error =
+            install(project.0.path(), false).expect_err("modified file requires explicit force");
         assert!(error.to_string().contains("Skill file differs:"));
         assert!(!entry.exists());
         assert_eq!(
@@ -310,7 +307,7 @@ mod tests {
             "Local reference\n"
         );
 
-        install(&project.0, true).expect("explicit replacement");
+        install(project.0.path(), true).expect("explicit replacement");
         assert_eq!(
             fs::read(reference).expect("replaced reference"),
             SKILL
@@ -319,6 +316,6 @@ mod tests {
                 .contents()
         );
         assert!(entry.is_file());
-        assert!(!project.0.join("AGENTS.md").exists());
+        assert!(!project.0.path().join("AGENTS.md").exists());
     }
 }

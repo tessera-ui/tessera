@@ -1,12 +1,11 @@
-use std::cell::Cell;
-
 use tessera_ui::{
     Color, ComputedData, Constraint, Dp, DrawModifierContent, DrawModifierContext,
     DrawModifierNode, HeadlessConfig, HeadlessRenderer, LayoutModifierChild, LayoutModifierInput,
-    LayoutModifierNode, LayoutResult, MeasurementError, Modifier, PxPosition, State,
+    LayoutModifierNode, LayoutResult, MeasurementError, Modifier, PxPosition, State, WorkPhase,
     layout::{MeasureScope, PlacementResult, PlacementScope, layout},
     modifier::ModifierCapabilityExt as _,
     remember, tessera,
+    testing::TestProbe,
 };
 
 use crate::{
@@ -17,25 +16,26 @@ use crate::{
     theme::material_theme,
 };
 
-thread_local! {
-    static DIRECT: Cell<Option<State<bool>>> = const { Cell::new(None) };
-    static INSET: Cell<Option<State<Dp>>> = const { Cell::new(None) };
-    static INK: Cell<Option<State<Color>>> = const { Cell::new(None) };
-    static SHIFT: Cell<Option<State<Dp>>> = const { Cell::new(None) };
-    static PLACED: Cell<Option<State<bool>>> = const { Cell::new(None) };
-    static PAINT_BUILDS: Cell<usize> = const { Cell::new(0) };
-    static PAINTS: Cell<usize> = const { Cell::new(0) };
-    static MEASURES: Cell<usize> = const { Cell::new(0) };
+#[derive(Clone, Copy, Default, PartialEq)]
+struct FixtureHandles {
+    direct: Option<State<bool>>,
+    inset: Option<State<Dp>>,
+    ink: Option<State<Color>>,
+    shift: Option<State<Dp>>,
+    placed: Option<State<bool>>,
 }
 
 #[tessera]
-fn padded_text_fixture() {
+fn padded_text_fixture(probe: TestProbe<FixtureHandles>) {
     let direct = remember(|| false);
     let inset = remember(|| Dp(12.0));
     let ink = remember(|| Color::BLACK);
-    DIRECT.set(Some(direct));
-    INSET.set(Some(inset));
-    INK.set(Some(ink));
+    probe.set(FixtureHandles {
+        direct: Some(direct),
+        inset: Some(inset),
+        ink: Some(ink),
+        ..Default::default()
+    });
     material_theme().child(move || {
         boxed()
             .modifier(Modifier::new().fill_max_size().background(Color::WHITE))
@@ -74,8 +74,12 @@ fn padded_text_fixture() {
 }
 
 fn check_padded_drawing(samples: u32) {
+    let probe = TestProbe::default();
+    let observed = probe.clone();
     let mut renderer = HeadlessRenderer::new(
-        Box::new(|| padded_text_fixture()),
+        Box::new(move || {
+            padded_text_fixture(probe.clone());
+        }),
         vec![Box::new(crate::TesseraComponents)],
         HeadlessConfig {
             width: 480,
@@ -88,7 +92,7 @@ fn check_padded_drawing(samples: u32) {
     .expect("renderer");
     renderer.render_frames(4);
     let reference = renderer.read_pixels().expect("nested reference");
-    let direct = DIRECT.get().expect("direct state");
+    let direct = observed.get().direct.expect("direct state");
     direct.set(true);
     renderer.render_frames(4);
     let actual = renderer.read_pixels().expect("direct modifiers");
@@ -99,15 +103,15 @@ fn check_padded_drawing(samples: u32) {
     renderer.render_frames(5);
     assert!(actual == renderer.read_pixels().expect("cached direct drawing"));
 
-    INSET.get().expect("padding state").set(Dp(25.0));
-    INK.get().expect("ink state").set(Color::WHITE);
+    observed.get().inset.expect("padding state").set(Dp(25.0));
+    observed.get().ink.expect("ink state").set(Color::WHITE);
     renderer.render_frames(4);
     let changed = renderer.read_pixels().expect("changed direct drawing");
     direct.set(false);
     renderer.render_frames(4);
     assert!(changed == renderer.read_pixels().expect("changed reference"));
-    INSET.get().expect("padding state").set(Dp(12.0));
-    INK.get().expect("ink state").set(Color::BLACK);
+    observed.get().inset.expect("padding state").set(Dp(12.0));
+    observed.get().ink.expect("ink state").set(Color::BLACK);
     renderer.render_frames(4);
     assert!(reference == renderer.read_pixels().expect("restored reference"));
     direct.set(true);
@@ -179,7 +183,6 @@ struct SolidLeaf;
 
 impl LayoutModifierNode for SolidLeaf {
     fn measure(&self, scope: &mut MeasureScope<'_>) -> Result<LayoutResult, MeasurementError> {
-        MEASURES.set(MEASURES.get() + 1);
         Ok(LayoutResult::new(ComputedData::min_from_constraint(
             scope.parent_constraint().as_ref(),
         )))
@@ -208,11 +211,14 @@ impl DrawModifierNode for SolidLeaf {
 }
 
 #[tessera]
-fn placement_fixture() {
+fn placement_fixture(probe: TestProbe<FixtureHandles>) {
     let shift = remember(|| Dp::ZERO);
     let placed = remember(|| true);
-    SHIFT.set(Some(shift));
-    PLACED.set(Some(placed));
+    probe.set(FixtureHandles {
+        shift: Some(shift),
+        placed: Some(placed),
+        ..Default::default()
+    });
     boxed()
         .modifier(Modifier::new().fill_max_size().background(Color::WHITE))
         .children(move || {
@@ -226,10 +232,20 @@ fn placement_fixture() {
         });
 }
 
+fn retained_layout_frames(renderer: &mut HeadlessRenderer, count: usize) {
+    for _ in 0..count {
+        renderer.step_frame();
+        assert_eq!(renderer.work().executed::<SolidLeaf>(WorkPhase::Measure), 0);
+    }
+}
+
 fn check_placement_only_drawing() {
-    MEASURES.set(0);
+    let probe = TestProbe::default();
+    let observed = probe.clone();
     let mut renderer = HeadlessRenderer::new(
-        Box::new(|| placement_fixture()),
+        Box::new(move || {
+            placement_fixture(probe.clone());
+        }),
         vec![Box::new(crate::TesseraComponents)],
         HeadlessConfig {
             width: 240,
@@ -239,29 +255,27 @@ fn check_placement_only_drawing() {
         },
     )
     .expect("renderer");
-    renderer.render_frames(4);
+    renderer.render_frames(1);
+    assert!(renderer.work().executed::<SolidLeaf>(WorkPhase::Measure) > 0);
+    retained_layout_frames(&mut renderer, 3);
     let original = renderer.read_pixels().expect("original content");
-    let measures = MEASURES.get();
     let pixel = |pixels: &[u8], x: usize, y: usize| pixels[(y * 240 + x) * 4..][..3].to_vec();
     assert_eq!(pixel(&original, 2, 14), [255, 0, 0]);
     assert_eq!(pixel(&original, 62, 14), [255, 255, 255]);
-    SHIFT.get().expect("offset state").set(Dp(12.0));
-    renderer.render_frames(4);
+    observed.get().shift.expect("offset state").set(Dp(12.0));
+    retained_layout_frames(&mut renderer, 4);
     let shifted = renderer.read_pixels().expect("shifted content");
     assert_eq!(pixel(&shifted, 2, 14), [255, 255, 255]);
     assert_eq!(pixel(&shifted, 20, 14), [255, 0, 0]);
     assert_eq!(pixel(&shifted, 80, 14), [255, 255, 255]);
-    assert_eq!(MEASURES.get(), measures);
-    PLACED.get().expect("placement state").set(false);
-    renderer.render_frames(4);
+    observed.get().placed.expect("placement state").set(false);
+    retained_layout_frames(&mut renderer, 4);
     let hidden = renderer.read_pixels().expect("unplaced content");
     assert_eq!(pixel(&hidden, 20, 14), [255, 255, 255]);
-    assert_eq!(MEASURES.get(), measures);
-    PLACED.get().expect("placement state").set(true);
-    SHIFT.get().expect("offset state").set(Dp::ZERO);
-    renderer.render_frames(4);
+    observed.get().placed.expect("placement state").set(true);
+    observed.get().shift.expect("offset state").set(Dp::ZERO);
+    retained_layout_frames(&mut renderer, 4);
     assert!(original == renderer.read_pixels().expect("restored content"));
-    assert_eq!(MEASURES.get(), measures);
 }
 
 #[test]
@@ -280,7 +294,6 @@ struct StateInkDraw {
 
 impl DrawModifierNode for StateInkDraw {
     fn draw(&self, ctx: &mut DrawModifierContext<'_, '_>, _content: &mut dyn DrawModifierContent) {
-        PAINTS.set(PAINTS.get() + 1);
         ctx.render_input
             .metadata_mut()
             .fragment_mut()
@@ -293,10 +306,12 @@ impl DrawModifierNode for StateInkDraw {
 }
 
 #[tessera]
-fn paint_state_fixture() {
-    PAINT_BUILDS.set(PAINT_BUILDS.get() + 1);
+fn paint_state_fixture(probe: TestProbe<FixtureHandles>) {
     let ink = remember(|| Color::new(1.0, 0.0, 0.0, 1.0));
-    INK.set(Some(ink));
+    probe.set(FixtureHandles {
+        ink: Some(ink),
+        ..Default::default()
+    });
     layout().policy(SolidLeaf).draw(StateInkDraw { ink });
 }
 
@@ -306,11 +321,12 @@ fn paint_state_updates_pixels_without_rebuilding_or_measuring_and_reuses_stable_
     crate::test_utils::run_isolated_test(
         "text::drawing_tests::paint_state_updates_pixels_without_rebuilding_or_measuring_and_reuses_stable_fragments",
         || {
-            MEASURES.set(0);
-            PAINTS.set(0);
-            PAINT_BUILDS.set(0);
+            let probe = TestProbe::default();
+            let observed = probe.clone();
             let mut renderer = HeadlessRenderer::new(
-                Box::new(|| paint_state_fixture()),
+                Box::new(move || {
+                    paint_state_fixture(probe.clone());
+                }),
                 vec![Box::new(crate::TesseraComponents)],
                 HeadlessConfig {
                     width: 64,
@@ -323,24 +339,61 @@ fn paint_state_updates_pixels_without_rebuilding_or_measuring_and_reuses_stable_
             let reference = renderer.read_pixels().expect("red frame");
             let pixel = (12 * 64 + 16) * 4;
             assert_eq!(&reference[pixel..pixel + 4], &[255, 0, 0, 255]);
-            let measures = MEASURES.get();
-            let paints = PAINTS.get();
-            let builds = PAINT_BUILDS.get();
-            renderer.render_frames(3);
+            assert!(renderer.work().executed::<SolidLeaf>(WorkPhase::Measure) > 0);
+            assert_eq!(
+                renderer
+                    .work()
+                    .executed::<StateInkDraw>(tessera_ui::WorkPhase::Paint),
+                1
+            );
+            let builds = renderer
+                .work_totals()
+                .count("paint_state_fixture", tessera_ui::WorkPhase::Build);
+            assert!(builds > 0);
+            retained_paint_frames(&mut renderer, 3);
             assert!(reference == renderer.read_pixels().expect("retained red frame"));
-            assert_eq!(PAINTS.get(), paints);
-            INK.get()
+            observed
+                .get()
+                .ink
                 .expect("ink state")
                 .set(Color::new(0.0, 0.0, 1.0, 1.0));
             renderer.render_frames(1);
             let changed = renderer.read_pixels().expect("blue frame");
             assert_eq!(&changed[pixel..pixel + 4], &[0, 0, 255, 255]);
-            assert_eq!(MEASURES.get(), measures);
-            assert_eq!(PAINT_BUILDS.get(), builds);
-            assert_eq!(PAINTS.get(), paints + 1);
-            renderer.render_frames(3);
+            assert_eq!(renderer.work().executed::<SolidLeaf>(WorkPhase::Measure), 0);
+            assert_eq!(
+                renderer
+                    .work_totals()
+                    .count("paint_state_fixture", tessera_ui::WorkPhase::Build),
+                builds
+            );
+            assert_eq!(
+                renderer
+                    .work()
+                    .executed::<StateInkDraw>(tessera_ui::WorkPhase::Paint),
+                1
+            );
+            retained_paint_frames(&mut renderer, 3);
             assert!(changed == renderer.read_pixels().expect("retained blue frame"));
-            assert_eq!(PAINTS.get(), paints + 1);
+            assert_eq!(
+                renderer
+                    .work()
+                    .executed::<StateInkDraw>(tessera_ui::WorkPhase::Paint),
+                0
+            );
         },
     );
+}
+
+fn retained_paint_frames(renderer: &mut HeadlessRenderer, count: usize) {
+    for _ in 0..count {
+        renderer.step_frame();
+        assert_eq!(renderer.work().executed::<SolidLeaf>(WorkPhase::Measure), 0);
+        assert_eq!(
+            renderer
+                .work()
+                .executed::<StateInkDraw>(tessera_ui::WorkPhase::Paint),
+            0
+        );
+    }
 }

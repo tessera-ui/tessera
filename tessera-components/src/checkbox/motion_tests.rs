@@ -4,7 +4,7 @@
 //!
 //! Preserve timed state transitions, direct updates, and disabled appearance.
 
-use std::{cell::Cell, time::Duration};
+use std::time::Duration;
 
 use tessera_ui::{
     Color, HeadlessConfig, HeadlessRenderer, State,
@@ -27,18 +27,20 @@ struct Settings {
     activations: usize,
 }
 
-thread_local! {
-    static SETTINGS: Cell<Option<State<Settings>>> = const { Cell::new(None) };
-    static CONTROLLER: Cell<Option<State<CheckboxController>>> = const { Cell::new(None) };
-    pub(super) static TICKS: Cell<usize> = const { Cell::new(0) };
+#[derive(Clone, Default)]
+struct FixtureHandles {
+    settings: Option<State<Settings>>,
+    controller: Option<State<CheckboxController>>,
 }
 
 #[tessera]
-fn fixture() {
+fn fixture(probe: tessera_ui::testing::TestProbe<FixtureHandles>) {
     let settings = remember(Settings::default);
     let controller = remember(|| CheckboxController::new(false));
-    SETTINGS.set(Some(settings));
-    CONTROLLER.set(Some(controller));
+    probe.set(FixtureHandles {
+        settings: Some(settings),
+        controller: Some(controller),
+    });
     material_theme()
         .theme(|| {
             let mut theme = MaterialTheme::default();
@@ -91,8 +93,10 @@ fn fill(renderer: &HeadlessRenderer) -> [u8; 4] {
 }
 
 fn check_motion(samples: u32) {
+    let probe = tessera_ui::testing::TestProbe::default();
+    let observed = probe.clone();
     let mut renderer = HeadlessRenderer::new(
-        Box::new(fixture),
+        Box::new(move || fixture(observed.clone())),
         vec![Box::new(crate::TesseraComponents)],
         HeadlessConfig {
             width: 160,
@@ -105,13 +109,14 @@ fn check_motion(samples: u32) {
     )
     .expect("renderer");
     renderer.render_frames(30);
-    let settings = SETTINGS.get().unwrap();
-    let controller = CONTROLLER.get().unwrap();
+    let settings = probe.get().settings.unwrap();
+    let controller = probe.get().controller.unwrap();
     settings.with_mut(|value| value.checked = true);
     renderer.step_frame();
     assert_eq!(controller.with(CheckboxController::progress), 0.0);
     assert_eq!(selection(&renderer).1.toggled(), Some(Toggled::True));
     renderer.render_frames(5);
+    assert!(renderer.frame_clock_diagnostics().callbacks_executed > 0);
     assert!((controller.with(CheckboxController::progress) - 0.28017744).abs() < 0.00001);
     let alpha = fill(&renderer)[3];
     assert!((145..=158).contains(&alpha), "50ms fill alpha: {alpha}");
@@ -123,13 +128,15 @@ fn check_motion(samples: u32) {
     assert_eq!(controller.with(CheckboxController::progress), 1.0);
     assert_eq!(fill(&renderer), [255, 0, 0, 255]);
     renderer.render_frames(3);
-    let ticks = TICKS.get();
-    renderer.render_frames(30);
-    assert_eq!(
-        TICKS.get(),
-        ticks,
-        "settled controls must stop their frame receiver"
-    );
+    for _ in 0..30 {
+        renderer.step_frame();
+        let clock = renderer.frame_clock_diagnostics();
+        assert_eq!(
+            clock.callbacks_executed, 0,
+            "settled controls must stop their frame receiver"
+        );
+        assert_eq!(clock.pending_subscriptions, 0);
+    }
 
     assert!(renderer.dispatch_accessibility_action(ActionRequest {
         action: Action::Click,

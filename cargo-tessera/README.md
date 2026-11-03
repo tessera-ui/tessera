@@ -4,6 +4,8 @@ CLI tool for the Tessera UI framework - streamline project scaffolding, developm
 
 ## Installation
 
+Requires Rust 1.98 or newer.
+
 ```bash
 cargo install cargo-tessera
 ```

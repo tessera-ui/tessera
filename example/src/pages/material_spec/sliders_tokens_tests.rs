@@ -1,4 +1,4 @@
-use std::{cell::Cell, time::Duration};
+use std::time::Duration;
 
 use tessera_components::{
     alignment::Alignment, boxed::boxed, column::column, modifier::ModifierExt as _,
@@ -11,14 +11,6 @@ use tessera_ui::{
 };
 
 use super::tokens;
-
-struct Pipelines;
-
-impl tessera_ui::RenderModule for Pipelines {
-    fn register_pipelines(&self, context: &mut tessera_ui::PipelineContext<'_>) {
-        tessera_components::pipelines::register_pipelines(context);
-    }
-}
 
 #[tessera]
 fn fixture() {
@@ -34,14 +26,10 @@ fn fixture() {
     });
 }
 
-thread_local! {
-    static SCROLL: Cell<Option<State<ScrollableController>>> = const { Cell::new(None) };
-}
-
 #[tessera]
-fn scrolling_fixture() {
+fn scrolling_fixture(output: tessera_ui::testing::TestProbe<Option<State<ScrollableController>>>) {
     let scroll = remember(ScrollableController::new);
-    SCROLL.set(Some(scroll));
+    output.set(Some(scroll));
     material_theme().child(move || {
         column()
             .modifier(Modifier::new().fill_max_size().vertical_scroll(scroll))
@@ -107,7 +95,7 @@ fn menu_options(renderer: &HeadlessRenderer) -> Vec<(NodeId, Node)> {
 fn token_selector_switches_all_sets_and_accordion_controls_hide_and_restore_rows() {
     let mut renderer = HeadlessRenderer::new(
         Box::new(fixture),
-        vec![Box::new(Pipelines)],
+        vec![Box::new(crate::TestPipelines)],
         HeadlessConfig {
             width: 1100,
             height: 1800,
@@ -232,9 +220,11 @@ fn token_selector_switches_all_sets_and_accordion_controls_hide_and_restore_rows
 #[test]
 #[ignore = "Requires a native GPU adapter for retained token drawing and popup positioning"]
 fn translated_expanded_tokens_reuse_drawing_and_keep_the_popup_on_its_selector() {
+    let output = tessera_ui::testing::TestProbe::default();
+    let probe = output.clone();
     let mut renderer = HeadlessRenderer::new(
-        Box::new(scrolling_fixture),
-        vec![Box::new(Pipelines)],
+        Box::new(move || scrolling_fixture(probe.clone())),
+        vec![Box::new(crate::TestPipelines)],
         HeadlessConfig {
             width: 1100,
             height: 600,
@@ -272,7 +262,7 @@ fn translated_expanded_tokens_reuse_drawing_and_keep_the_popup_on_its_selector()
         .unwrap();
     let row_before = token.1.bounds().unwrap();
 
-    SCROLL
+    output
         .get()
         .unwrap()
         .with_mut(|scroll| scroll.set_scroll_position(PxPosition::from_f32_xy(0.0, -32.0)));
@@ -312,8 +302,17 @@ fn translated_expanded_tokens_reuse_drawing_and_keep_the_popup_on_its_selector()
     assert_eq!(row_after.width(), row_before.width());
     assert_eq!(row_after.height(), row_before.height());
     renderer.render_frames(1);
-    assert_eq!(renderer.diagnostics().paint_nodes_recorded, 0);
-    assert_eq!(renderer.diagnostics().measure_node_calls, 1);
+    assert_eq!(
+        renderer.work().phase(tessera_ui::WorkPhase::Paint).count(),
+        0
+    );
+    assert_eq!(
+        renderer
+            .work()
+            .phase(tessera_ui::WorkPhase::Measure)
+            .count(),
+        0
+    );
 
     click_button(&mut renderer, "Slider token set selector");
     let popup_after = menu_options(&renderer)[0].1.bounds().unwrap();

@@ -1,11 +1,10 @@
 use std::{
-    collections::{BTreeMap, HashMap},
+    collections::HashMap,
     ffi::{OsStr, OsString},
     io::Cursor,
     process::Command,
 };
 
-use once_cell_regex::exports::once_cell::sync::OnceCell;
 use serde::Deserialize;
 use thiserror::Error;
 
@@ -16,7 +15,7 @@ use crate::{
     opts::{self, NoiseLevel, Profile},
     target::TargetTrait,
     util::{
-        self, CargoCommand, WithWorkingDirError,
+        self, CargoCommand,
         cli::{Report, Reportable},
     },
 };
@@ -149,7 +148,7 @@ impl Reportable for BuildError {
 #[derive(Debug, Error)]
 pub enum ArchiveError {
     #[error("Failed to set app version number: {0}")]
-    SetVersionFailed(WithWorkingDirError<std::io::Error>),
+    SetVersionFailed(std::io::Error),
     #[error("Failed to archive via `xcodebuild`: {error}")]
     ArchiveFailed { error: std::io::Error },
     #[error(transparent)]
@@ -300,11 +299,9 @@ pub struct Target<'a> {
 impl<'a> TargetTrait<'a> for Target<'a> {
     const DEFAULT_KEY: &'static str = "aarch64";
 
-    fn all() -> &'a BTreeMap<&'a str, Self> {
-        static TARGETS: OnceCell<BTreeMap<&'static str, Target<'static>>> = OnceCell::new();
-        TARGETS.get_or_init(|| {
-            let mut targets = BTreeMap::new();
-            targets.insert(
+    fn all() -> &'a [(&'a str, Self)] {
+        &[
+            (
                 "aarch64",
                 Target {
                     triple: "aarch64-apple-ios",
@@ -313,8 +310,18 @@ impl<'a> TargetTrait<'a> for Target<'a> {
                     alias: Some("arm64e"),
                     min_xcode_version: None,
                 },
-            );
-            targets.insert(
+            ),
+            (
+                "aarch64-sim",
+                Target {
+                    triple: "aarch64-apple-ios-sim",
+                    arch: "arm64-sim",
+                    sdk: "iphonesimulator",
+                    alias: Some("arm64e-sim"),
+                    min_xcode_version: None,
+                },
+            ),
+            (
                 "x86_64",
                 Target {
                     triple: "x86_64-apple-ios",
@@ -328,23 +335,16 @@ impl<'a> TargetTrait<'a> for Target<'a> {
                     // OpenGL's deprecation.
                     min_xcode_version: Some(((11, 0), "iOS Simulator doesn't support Metal until")),
                 },
-            );
-            targets.insert(
-                "aarch64-sim",
-                Target {
-                    triple: "aarch64-apple-ios-sim",
-                    arch: "arm64-sim",
-                    sdk: "iphonesimulator",
-                    alias: Some("arm64e-sim"),
-                    min_xcode_version: None,
-                },
-            );
-            targets
-        })
+            ),
+        ]
     }
 
     fn name_list() -> Vec<&'a str> {
-        Self::all().keys().copied().collect::<Vec<_>>()
+        Self::all()
+            .iter()
+            .map(|(key, _)| key)
+            .copied()
+            .collect::<Vec<_>>()
     }
 
     fn triple(&'a self) -> &'a str {
@@ -374,7 +374,8 @@ impl<'a> Target<'a> {
 
     pub fn for_arch(arch: &str) -> Option<&'a Self> {
         Self::all()
-            .values()
+            .iter()
+            .map(|(_, target)| target)
             .find(|target| target.arch == arch || target.alias == Some(arch))
     }
 
@@ -621,15 +622,11 @@ impl<'a> Target<'a> {
         self.validate_sdk()?;
 
         if let Some(version) = new_version {
-            util::with_working_dir(config.project_dir(), || {
-                duct::cmd(
-                    "xcrun",
-                    ["agvtool", "new-version", "-all", &version.to_string()],
-                )
+            duct::cmd("xcrun", ["agvtool", "new-version", "-all", &version])
+                .dir(config.project_dir())
                 .dup_stdio()
                 .run()
-            })
-            .map_err(ArchiveError::SetVersionFailed)?;
+                .map_err(ArchiveError::SetVersionFailed)?;
         }
 
         let configuration = profile.as_str();

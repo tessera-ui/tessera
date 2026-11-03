@@ -53,7 +53,7 @@ const SWIPE_PAGES: [(&str, &str); 3] = [
 ];
 
 #[tessera]
-pub(super) fn tabs_spec() {
+pub(super) fn tabs_spec(route: Option<crate::pages::material_spec::article::ArticleRoute>) {
     article(
         "Tabs",
         "Tabs organize content across different screens and views",
@@ -80,6 +80,7 @@ pub(super) fn tabs_spec() {
             },
         ],
     )
+    .route_optional(route.clone())
     .pages(vec![
         ArticlePage {
             title: "Overview",
@@ -873,12 +874,12 @@ fn sample(#[prop(into)] label: String, primary: bool, controls: Option<bool>) {
                 })
                 .min_tab_height(Dp(if icons.get() && primary { 64.0 } else { 48.0 }))
                 .modifier(Modifier::new().fill_max_width())
-                .content(move || {
+                .content(move |tab_row| {
                     let visible = if scrollable.get() { 5 } else { 3 };
                     for (index, name) in DESTINATIONS.into_iter().take(visible).enumerate() {
                         let available = index != 1 || enabled.get();
                         if index == 1 && badge.get() {
-                            tab()
+                            tab(tab_row)
                                 .enabled(available)
                                 .accessibility_label(format!("{name}, 3 new items"))
                                 .on_click(move || count.set(count.get() + 1))
@@ -886,14 +887,14 @@ fn sample(#[prop(into)] label: String, primary: bool, controls: Option<bool>) {
                                     badge_title(name, icons.get() && primary, index);
                                 }));
                         } else if icons.get() && primary {
-                            tab()
+                            tab(tab_row)
                                 .label(name)
                                 .icon(destination_asset(index))
                                 .enabled(available)
                                 .accessibility_label(name.to_string())
                                 .on_click(move || count.set(count.get() + 1));
                         } else {
-                            tab()
+                            tab(tab_row)
                                 .label(name)
                                 .enabled(available)
                                 .accessibility_label(name.to_string())
@@ -1525,9 +1526,9 @@ fn swipe_tabs(selected: Option<State<usize>>) {
             tabs()
                 .selected(selected)
                 .modifier(Modifier::new().fill_max_width())
-                .content(|| {
+                .content(move |tab_row| {
                     for (name, _) in SWIPE_PAGES {
-                        tab().label(name);
+                        tab(tab_row).label(name);
                     }
                 });
             let (title, detail) = SWIPE_PAGES[selected.get().min(SWIPE_PAGES.len() - 1)];
@@ -1678,11 +1679,11 @@ fn native_tabs_figure(
                                         .indicator_min_width(Dp(24.0 * scale))
                                         .min_tab_height(Dp(if icons { 64.0 } else { 48.0 } * scale))
                                         .modifier(Modifier::new().fill_max_width())
-                                        .content(move || {
+                                        .content(move |tab_row| {
                                             for (index, name) in (0..count)
                                                 .map(|index| (index, figure_name(primary, index)))
                                             {
-                                                tab()
+                                                tab(tab_row)
                                                     .accessibility_label(
                                                         if index == 0 && unread.get() {
                                                             format!("{name}, 3 new items")
@@ -1979,18 +1980,18 @@ fn nested_tabs() {
         tabs()
             .selected(primary)
             .modifier(Modifier::new().fill_max_width())
-            .content(|| {
-                tab().label("Travel");
-                tab().label("Saved");
+            .content(move |tab_row| {
+                tab(tab_row).label("Travel");
+                tab(tab_row).label("Saved");
             });
         gap(Dp(24.0));
         tabs()
             .variant(TabsVariant::Secondary)
             .selected(secondary)
             .modifier(Modifier::new().fill_max_width())
-            .content(|| {
-                tab().label("Upcoming");
-                tab().label("Past");
+            .content(move |tab_row| {
+                tab(tab_row).label("Upcoming");
+                tab(tab_row).label("Past");
             });
         gap(Dp(32.0));
         text()
@@ -2028,10 +2029,10 @@ fn tab_placement() {
             tabs()
                 .selected(selected)
                 .modifier(Modifier::new().fill_max_width())
-                .content(|| {
-                    tab().label("Flights");
-                    tab().label("Hotels");
-                    tab().label("Trains");
+                .content(move |tab_row| {
+                    tab(tab_row).label("Flights");
+                    tab(tab_row).label("Hotels");
+                    tab(tab_row).label("Trains");
                 });
             column()
                 .modifier(
@@ -2130,9 +2131,9 @@ fn mock_label_tabs(labels: Vec<String>, scrollable: Option<bool>, width: Option<
                         .scrollable(scrollable.unwrap_or(false))
                         .edge_padding(Dp(52.0))
                         .modifier(Modifier::new().fill_max_width())
-                        .content(move || {
+                        .content(move |tab_row| {
                             for label in labels.clone() {
-                                tab().label(label);
+                                tab(tab_row).label(label);
                             }
                         });
                 });
@@ -2157,13 +2158,13 @@ fn mock_icon_tabs(labelled: Vec<bool>) {
                         .selected(selected)
                         .min_tab_height(Dp(64.0))
                         .modifier(Modifier::new().fill_max_width())
-                        .content(move || {
+                        .content(move |tab_row| {
                             for (index, with_label) in labelled.clone().into_iter().enumerate() {
                                 let name = figure_name(true, index);
                                 if with_label {
-                                    tab().label(name).icon(figure_asset(true, index));
+                                    tab(tab_row).label(name).icon(figure_asset(true, index));
                                 } else {
-                                    tab()
+                                    tab(tab_row)
                                         .icon(figure_asset(true, index))
                                         .accessibility_label(name.to_string());
                                 }
@@ -2257,10 +2258,10 @@ fn mock_scrolled_screen(behind_bar: bool) {
                                 tabs()
                                     .selected(selected)
                                     .modifier(Modifier::new().fill_max_width())
-                                    .content(|| {
-                                        tab().label("Flights");
-                                        tab().label("Trips");
-                                        tab().label("Explore");
+                                    .content(move |tab_row| {
+                                        tab(tab_row).label("Flights");
+                                        tab(tab_row).label("Trips");
+                                        tab(tab_row).label("Explore");
                                     });
                             });
                         boxed()
@@ -2366,9 +2367,9 @@ fn secondary_measure_figure(inline_icons: bool) {
                                         .min_tab_height(Dp(48.0 * scale))
                                         .tab_padding(Dp(16.0 * scale))
                                         .modifier(Modifier::new().fill_max_width())
-                                        .content(move || {
+                                        .content(move |tab_row| {
                                             for index in 0..2 {
-                                                tab()
+                                                tab(tab_row)
                                                     .accessibility_label(
                                                         figure_name(false, index).to_string(),
                                                     )
@@ -2568,10 +2569,10 @@ fn scrolling_tabs() {
                                                     tabs()
                                                         .selected(selected)
                                                         .modifier(Modifier::new().fill_max_width())
-                                                        .content(|| {
-                                                            tab().label("Flights");
-                                                            tab().label("Trips");
-                                                            tab().label("Explore");
+                                                        .content(move |tab_row| {
+                                                            tab(tab_row).label("Flights");
+                                                            tab(tab_row).label("Trips");
+                                                            tab(tab_row).label("Explore");
                                                         });
                                                 });
                                         });

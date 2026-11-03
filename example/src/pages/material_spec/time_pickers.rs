@@ -45,7 +45,7 @@ struct Sample {
 }
 
 #[tessera]
-pub(super) fn time_pickers_spec() {
+pub(super) fn time_pickers_spec(route: Option<crate::pages::material_spec::article::ArticleRoute>) {
     let modal = remember(|| false);
     let sample = Sample {
         state: remember(|| TimePickerState::new(9, 41, false, TimePickerDisplayMode::Picker)),
@@ -126,6 +126,7 @@ pub(super) fn time_pickers_spec() {
                     },
                 ],
             )
+            .route_optional(route.clone())
             .compact_content_inset(Dp(8.0))
             .pages(vec![
                 ArticlePage {
@@ -213,8 +214,9 @@ pub(super) fn time_pickers_spec() {
                 },
             ]);
         })
-        .dialog_content(move || {
+        .dialog_content(move |dialog_scope| {
             picker_surface(draft, "Modal")
+                .dialog(dialog_scope)
                 .modal(modal)
                 .committed(committed);
         });
@@ -340,6 +342,7 @@ fn picker_surface(
     #[prop(into)] label: String,
     modal: Option<State<bool>>,
     committed: Option<State<(u8, u8)>>,
+    dialog: Option<tessera_components::dialog::DialogScope>,
 ) {
     let theme = use_context::<MaterialTheme>()
         .expect("MaterialTheme must be provided")
@@ -362,6 +365,7 @@ fn picker_surface(
                 .modifier(Modifier::new().padding_all(Dp(24.0)))
                 .children(move || {
                     picker_contents(sample, confirm_label.clone(), cancel_label.clone())
+                        .dialog_optional(dialog)
                         .modal_optional(modal)
                         .committed_optional(committed);
                 });
@@ -375,8 +379,10 @@ fn picker_contents(
     #[prop(into)] cancel_label: String,
     modal: Option<State<bool>>,
     committed: Option<State<(u8, u8)>>,
+    dialog: Option<tessera_components::dialog::DialogScope>,
 ) {
     time_picker_dialog()
+        .dialog_optional(dialog)
         .state(sample.state)
         .title(sample.state.with(|state| {
             if state.display_mode() == TimePickerDisplayMode::Input {
@@ -1052,8 +1058,6 @@ fn time_figure(
         status: remember(|| "Ready".to_owned()),
     };
     let geometry = remember(PreciseGeometry::new);
-    #[cfg(test)]
-    tests::GEOMETRY.set(Some(geometry));
     let scheme = use_context::<MaterialTheme>().unwrap().get().color_scheme;
     let input = sample
         .state
@@ -1107,6 +1111,7 @@ fn time_figure(
                             .shape(Shape::rounded_rectangle(Dp(28.0)))
                             .modifier(watch_precise(geometry, "container").semantics(
                                 SemanticsArgs {
+                                    test_tag: Some("time-spec-container".into()),
                                     role: Some(Role::Group),
                                     label: Some(format!("{label} annotated time picker")),
                                     merge_descendants: true,
@@ -1252,7 +1257,13 @@ fn time_figure_contents(
                 .content(if input { "Enter time" } else { "Select time" })
                 .style(theme.typography.label_medium)
                 .color(theme.color_scheme.on_surface_variant)
-                .modifier(watch_precise(geometry, "headline"));
+                .modifier(watch_precise(geometry, "headline").semantics(
+                    tessera_components::modifier::SemanticsArgs {
+                        test_tag: Some("time-spec-headline".into()),
+                        merge_descendants: true,
+                        ..Default::default()
+                    },
+                ));
             if !horizontal {
                 gap(Dp(20.0));
             }

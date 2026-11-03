@@ -22,7 +22,7 @@ use tessera_components::{
     spacer::spacer,
     surface::surface,
     text::text,
-    text_field::{TextFieldBuilder, TextFieldContextMenu, TextFieldLineLimit},
+    text_field::{TextFieldContextMenu, TextFieldLineLimit, text_field},
     text_input::TextInputController,
     theme::{MaterialTheme, material_theme},
 };
@@ -39,7 +39,7 @@ use super::{
 };
 
 #[tessera]
-pub(super) fn text_fields_spec() {
+pub(super) fn text_fields_spec(route: Option<crate::pages::material_spec::article::ArticleRoute>) {
     article(
         "Text fields",
         "Enter and edit text in filled or outlined fields.",
@@ -61,7 +61,7 @@ pub(super) fn text_fields_spec() {
                 }),
             },
         ],
-    ).pages(vec![
+    ).route_optional(route.clone()).pages(vec![
         ArticlePage{title:"Overview",intro:Some(RenderSlot::new(overview_variants)),sections:vec![
             SpecSection{title:"Availability & resources",content:RenderSlot::new(availability)},
             SpecSection{title:"Differences from M2",content:RenderSlot::new(differences)},
@@ -220,9 +220,9 @@ fn sample(
                 }))
                 .children(move || {
                     let field = if outlined {
-                        TextFieldBuilder::outlined()
+                        text_field().outlined()
                     } else {
-                        TextFieldBuilder::filled()
+                        text_field().filled()
                     };
                     field
                         .modifier(if let Some(geometry) = anatomy_geometry {
@@ -666,9 +666,9 @@ fn field_figure(outlined: bool, error: bool, multiline: bool, measurements: bool
                         .modifier(Modifier::new().width(Dp(280.0)))
                         .children(move || {
                             let field = if outlined {
-                                TextFieldBuilder::outlined()
+                                text_field().outlined()
                             } else {
-                                TextFieldBuilder::filled()
+                                text_field().filled()
                             };
                             field
                                 .modifier(watch_in_space(geometry, "field").fill_max_width())
@@ -902,9 +902,9 @@ fn differences() {
 #[tessera]
 fn m2_difference_field(outlined: bool) {
     let field = if outlined {
-        TextFieldBuilder::outlined()
+        text_field().outlined()
     } else {
-        TextFieldBuilder::filled()
+        text_field().filled()
     };
     field
         .label("Name")
@@ -978,9 +978,9 @@ fn overview_variant(outlined: bool, scale: f64, numbered: bool) {
         )
         .children(move || {
             let field = if outlined {
-                TextFieldBuilder::outlined()
+                text_field().outlined()
             } else {
-                TextFieldBuilder::filled()
+                text_field().filled()
             };
             field
                 .label("Text field")
@@ -1104,9 +1104,9 @@ fn form_field(label: String, outlined: bool, mode: u8) {
                 gap(Dp(8.0));
             }
             let field = if outlined {
-                TextFieldBuilder::outlined()
+                text_field().outlined()
             } else {
-                TextFieldBuilder::filled()
+                text_field().filled()
             };
             field
                 .modifier(Modifier::new().fill_max_width())
@@ -1522,7 +1522,8 @@ fn field_error_icon_example(password: bool, scale: f64) {
                 .width(Dp(364.0 * scale)),
         )
         .children(move || {
-            let field = TextFieldBuilder::outlined()
+            let field = text_field()
+                .outlined()
                 .controller(controller)
                 .is_error(true)
                 .presentation_state_optional(if password {
@@ -1660,12 +1661,12 @@ fn field_icon_example(kind: usize, scale: f64) {
                     ))
                     .modifier(Modifier::new().size(Dp(180.0 * scale), Dp(56.0 * scale)))
                     .main_content_shared(content)
-                    .menu_content(move || {
-                        menu_item().label("Personal").on_click(move || {
+                    .menu_content(move |menu| {
+                        menu_item().menu(menu).label("Personal").on_click(move || {
                             controller.with_mut(|controller| controller.set_text("Personal"));
                             value.set("Personal".into());
                         });
-                        menu_item().label("Work").on_click(move || {
+                        menu_item().menu(menu).label("Work").on_click(move || {
                             controller.with_mut(|controller| controller.set_text("Work"));
                             value.set("Work".into());
                         });
@@ -1707,7 +1708,8 @@ fn field_icon_input(
     menu: State<MenuController>,
 ) {
     let scheme = use_context::<MaterialTheme>().unwrap().get().color_scheme;
-    let field = TextFieldBuilder::filled()
+    let field = text_field()
+        .filled()
         .controller(controller)
         .min_width(Dp::ZERO)
         .min_height(Dp(56.0 * scale))
@@ -1912,9 +1914,9 @@ fn field_anatomy_item(populated: bool, outlined: bool, geometry: State<SpaceGeom
         .modifier(Modifier::new().width(Dp(180.0)))
         .children(move || {
             let field = if outlined {
-                TextFieldBuilder::outlined()
+                text_field().outlined()
             } else {
-                TextFieldBuilder::filled()
+                text_field().filled()
             };
             field
                 .modifier(
@@ -2562,9 +2564,9 @@ fn field_state_item(
         .modifier(Modifier::new().width(Dp(180.0 * scale)))
         .children(move || {
             let field = if outlined {
-                TextFieldBuilder::outlined()
+                text_field().outlined()
             } else {
-                TextFieldBuilder::filled()
+                text_field().filled()
             };
             field
                 .controller(controller)
@@ -2728,9 +2730,9 @@ fn field_configuration_item(outlined: bool, row: usize, populated: bool, scale: 
         .modifier(Modifier::new().width(Dp(180.0 * scale)))
         .children(move || {
             let field = if outlined {
-                TextFieldBuilder::outlined()
+                text_field().outlined()
             } else {
-                TextFieldBuilder::filled()
+                text_field().filled()
             };
             field
                 .controller(controller)
@@ -2902,9 +2904,9 @@ fn field_measurement_item(
                 }))
                 .children(move || {
                     let field = if outlined {
-                        TextFieldBuilder::outlined()
+                        text_field().outlined()
                     } else {
-                        TextFieldBuilder::filled()
+                        text_field().filled()
                     };
                     field
                         .modifier(

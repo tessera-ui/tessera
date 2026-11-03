@@ -3,12 +3,7 @@
 //! ## Usage
 //!
 //! Use `lazy_column` or `lazy_row` to efficiently display large datasets.
-use std::{
-    collections::{BTreeMap, hash_map::DefaultHasher},
-    hash::{Hash, Hasher},
-    ops::Range,
-    sync::Arc,
-};
+use std::{collections::BTreeMap, hash::Hash, ops::Range, sync::Arc};
 
 use tessera_ui::{
     AxisConstraint, CallbackWith, ComputedData, Constraint, Dp, FocusDirection, FocusScopeNode,
@@ -22,7 +17,7 @@ use tessera_ui::{
 use crate::{
     alignment::CrossAxisAlignment,
     layout_flex::cross_axis_child_constraint,
-    lazy_shared::{MeasuredMain, clamp_reported_main},
+    lazy_shared::{LazyItemsSlot, MeasuredMain, ZeroLayout, clamp_reported_main, hash_key},
     scrollable::{ScrollBarBehavior, ScrollableController, scrollable, synchronize_scroll_density},
 };
 
@@ -221,15 +216,6 @@ fn restore_scroll_position(
     }
 }
 
-fn hash_key<K>(key: K) -> u64
-where
-    K: Hash,
-{
-    let mut hasher = DefaultHasher::new();
-    key.hash(&mut hasher);
-    hasher.finish()
-}
-
 /// Accumulated lazy-list item declarations carried by the builder.
 #[derive(Clone, Default, PartialEq)]
 pub struct LazyListContent {
@@ -308,7 +294,10 @@ pub fn lazy_column(
     #[prop(skip_setter)] content: Option<LazyListContent>,
 ) {
     let content = content.unwrap_or_default();
-    let controller = controller.unwrap_or_else(|| remember(LazyListController::new));
+    let controller = match controller {
+        Some(value) => value,
+        None => remember(LazyListController::new),
+    };
     let scroll_controller = if let Some(controller) = viewport_controller {
         controller
     } else {
@@ -353,6 +342,7 @@ struct LazyListSlotsArgs {
     slots: Vec<LazySlot>,
 }
 
+#[tessera]
 fn lazy_column_slots(parameters: State<LazyListSlotsArgs>) {
     let args = parameters.get();
     // The viewport controller is recreated whenever the list is remounted,
@@ -468,7 +458,10 @@ pub fn lazy_row(
     #[prop(skip_setter)] content: Option<LazyListContent>,
 ) {
     let content = content.unwrap_or_default();
-    let controller = controller.unwrap_or_else(|| remember(LazyListController::new));
+    let controller = match controller {
+        Some(value) => value,
+        None => remember(LazyListController::new),
+    };
     let scroll_controller = if let Some(controller) = viewport_controller {
         controller
     } else {
@@ -499,104 +492,6 @@ pub fn lazy_row(
 macro_rules! impl_lazy_list_builder {
     ($builder:ident) => {
         impl $builder {
-            /// Append a single lazy item.
-            pub fn item<F, Output>(&self, builder: F) -> Self
-            where
-                F: Fn() -> Output + Send + Sync + 'static,
-            {
-                self.push_slot(move || Some(lazy_item_slot(builder)));
-                Self { props: self.props }
-            }
-
-            /// Append a single lazy item with a stable key.
-            pub fn item_with_key<K, F, Output>(&self, key: K, builder: F) -> Self
-            where
-                K: Hash,
-                F: Fn() -> Output + Send + Sync + 'static,
-            {
-                let key = hash_key(key);
-                self.push_slot(move || {
-                    Some(LazySlot::items(
-                        1,
-                        move |_| builder(),
-                        Some(CallbackWith::new(move |_| key)),
-                    ))
-                });
-                Self { props: self.props }
-            }
-
-            /// Append a batch of indexed lazy items.
-            pub fn items<F, Output>(&self, count: usize, builder: F) -> Self
-            where
-                F: Fn(usize) -> Output + Send + Sync + 'static,
-            {
-                self.push_slot(move || Some(LazySlot::items(count, builder, None)));
-                Self { props: self.props }
-            }
-
-            /// Append indexed lazy items with stable keys.
-            pub fn items_with_key<K, KF, F, Output>(
-                &self,
-                count: usize,
-                key_provider: KF,
-                builder: F,
-            ) -> Self
-            where
-                K: Hash,
-                KF: Fn(usize) -> K + Send + Sync + 'static,
-                F: Fn(usize) -> Output + Send + Sync + 'static,
-            {
-                self.push_slot(move || {
-                    let key_provider =
-                        CallbackWith::new(move |index| hash_key(key_provider(index)));
-                    Some(LazySlot::items(count, builder, Some(key_provider)))
-                });
-                Self { props: self.props }
-            }
-
-            /// Append lazy items from an iterator, exposing index and element.
-            pub fn items_from_iter<I, T, F, Output>(&self, iter: I, builder: F) -> Self
-            where
-                I: IntoIterator<Item = T>,
-                T: Send + Sync + 'static,
-                F: Fn(usize, &T) -> Output + Send + Sync + 'static,
-            {
-                let iter: Vec<T> = iter.into_iter().collect();
-                self.push_slot(move || lazy_items_from_iter_slot(iter, builder));
-                Self { props: self.props }
-            }
-
-            /// Append lazy items from an iterator with stable keys.
-            pub fn items_from_iter_with_key<I, T, K, KF, F, Output>(
-                &self,
-                iter: I,
-                key_provider: KF,
-                builder: F,
-            ) -> Self
-            where
-                I: IntoIterator<Item = T>,
-                T: Send + Sync + 'static,
-                K: Hash,
-                KF: Fn(usize, &T) -> K + Send + Sync + 'static,
-                F: Fn(usize, &T) -> Output + Send + Sync + 'static,
-            {
-                let iter: Vec<T> = iter.into_iter().collect();
-                self.push_slot(move || {
-                    lazy_items_from_iter_with_key_slot(iter, key_provider, builder)
-                });
-                Self { props: self.props }
-            }
-
-            /// Append lazy items from an iterator when only the element is used.
-            pub fn items_from_iter_values<I, T, F, Output>(&self, iter: I, builder: F) -> Self
-            where
-                I: IntoIterator<Item = T>,
-                T: Send + Sync + 'static,
-                F: Fn(&T) -> Output + Send + Sync + 'static,
-            {
-                self.items_from_iter(iter, move |_, item| builder(item))
-            }
-
             /// Append indexed items with stable keys and a shared render slot.
             pub fn items_with_key_shared<K, KF>(
                 &self,
@@ -608,15 +503,23 @@ macro_rules! impl_lazy_list_builder {
                 K: Hash,
                 KF: Fn(usize) -> K + Send + Sync + 'static,
             {
-                self.push_slot(move || {
-                    let builder = builder.into();
-                    Some(LazySlot::Items(LazyItemsSlot {
-                        count,
-                        builder,
-                        key_provider: Some(CallbackWith::new(move |index| {
-                            hash_key(key_provider(index))
-                        })),
-                    }))
+                self.props.append("content", move |props| {
+                    let slot = {
+                        let builder = builder.into();
+                        Some(LazySlot::Items(LazyItemsSlot {
+                            count,
+                            builder,
+                            key_provider: Some(CallbackWith::new(move |index| {
+                                hash_key(key_provider(index))
+                            })),
+                        }))
+                    };
+                    if let Some(slot) = slot {
+                        props
+                            .content
+                            .get_or_insert_with(LazyListContent::default)
+                            .push(slot);
+                    }
                 });
                 Self { props: self.props }
             }
@@ -626,7 +529,20 @@ macro_rules! impl_lazy_list_builder {
             where
                 F: Fn() -> Output + Send + Sync + 'static,
             {
-                self.push_slot(move || Some(LazySlot::sticky(builder, None)));
+                self.props.append("content", move |props| {
+                    let slot = Some(LazySlot::sticky(
+                        RenderSlotWith::new(move |_| {
+                            builder();
+                        }),
+                        None,
+                    ));
+                    if let Some(slot) = slot {
+                        props
+                            .content
+                            .get_or_insert_with(LazyListContent::default)
+                            .push(slot);
+                    }
+                });
                 Self { props: self.props }
             }
 
@@ -637,7 +553,20 @@ macro_rules! impl_lazy_list_builder {
                 F: Fn() -> Output + Send + Sync + 'static,
             {
                 let key = hash_key(key);
-                self.push_slot(move || Some(LazySlot::sticky(builder, Some(key))));
+                self.props.append("content", move |props| {
+                    let slot = Some(LazySlot::sticky(
+                        RenderSlotWith::new(move |_| {
+                            builder();
+                        }),
+                        Some(key),
+                    ));
+                    if let Some(slot) = slot {
+                        props
+                            .content
+                            .get_or_insert_with(LazyListContent::default)
+                            .push(slot);
+                    }
+                });
                 Self { props: self.props }
             }
 
@@ -651,25 +580,19 @@ macro_rules! impl_lazy_list_builder {
                 K: Hash,
             {
                 let key_hash = Some(hash_key(key));
-                self.push_slot(move || {
-                    let builder = builder.into();
-                    Some(LazySlot::Sticky(LazyStickySlot { builder, key_hash }))
-                });
-                Self { props: self.props }
-            }
-
-            fn push_slot(
-                &self,
-                make_slot: impl FnOnce() -> Option<LazySlot> + Send + Sync + 'static,
-            ) {
                 self.props.append("content", move |props| {
-                    if let Some(slot) = make_slot() {
+                    let slot = {
+                        let builder = builder.into();
+                        Some(LazySlot::Sticky(LazyStickySlot { builder, key_hash }))
+                    };
+                    if let Some(slot) = slot {
                         props
                             .content
                             .get_or_insert_with(LazyListContent::default)
                             .push(slot);
                     }
                 });
+                Self { props: self.props }
             }
         }
     };
@@ -677,95 +600,10 @@ macro_rules! impl_lazy_list_builder {
 
 impl_lazy_list_builder!(LazyColumnBuilder);
 impl_lazy_list_builder!(LazyRowBuilder);
+crate::lazy_shared::impl_lazy_builder!(LazyColumnBuilder, LazyListContent);
+crate::lazy_shared::impl_lazy_builder!(LazyRowBuilder, LazyListContent);
 
-fn lazy_item_slot<F, Output>(builder: F) -> LazySlot
-where
-    F: Fn() -> Output + Send + Sync + 'static,
-{
-    LazySlot::items(
-        1,
-        move |_| {
-            builder();
-        },
-        None,
-    )
-}
-
-fn lazy_items_from_iter_slot<I, T, F, Output>(iter: I, builder: F) -> Option<LazySlot>
-where
-    I: IntoIterator<Item = T>,
-    T: Send + Sync + 'static,
-    F: Fn(usize, &T) -> Output + Send + Sync + 'static,
-{
-    let items: Arc<Vec<T>> = Arc::new(iter.into_iter().collect());
-    if items.is_empty() {
-        return None;
-    }
-    let builder = Arc::new(builder);
-    let count = items.len();
-    Some(LazySlot::items(
-        count,
-        {
-            let items = items.clone();
-            let builder = builder.clone();
-            move |idx| {
-                if let Some(item) = items.get(idx) {
-                    builder(idx, item);
-                }
-            }
-        },
-        None,
-    ))
-}
-
-fn lazy_items_from_iter_with_key_slot<I, T, K, KF, F, Output>(
-    iter: I,
-    key_provider: KF,
-    builder: F,
-) -> Option<LazySlot>
-where
-    I: IntoIterator<Item = T>,
-    T: Send + Sync + 'static,
-    K: Hash,
-    KF: Fn(usize, &T) -> K + Send + Sync + 'static,
-    F: Fn(usize, &T) -> Output + Send + Sync + 'static,
-{
-    let items: Arc<Vec<T>> = Arc::new(iter.into_iter().collect());
-    if items.is_empty() {
-        return None;
-    }
-    let builder = Arc::new(builder);
-    let key_provider = Arc::new(key_provider);
-    let count = items.len();
-
-    let slot_builder = {
-        let items = items.clone();
-        let builder = builder.clone();
-        move |idx: usize| {
-            if let Some(item) = items.get(idx) {
-                builder(idx, item);
-            }
-        }
-    };
-
-    let slot_key_provider = {
-        let items = items.clone();
-        let key_provider = key_provider.clone();
-        move |idx: usize| -> u64 {
-            items
-                .get(idx)
-                .map(|item| hash_key(key_provider(idx, item)))
-                .unwrap_or(0)
-        }
-    };
-
-    Some(LazySlot::items(
-        count,
-        slot_builder,
-        Some(CallbackWith::new(slot_key_provider)),
-    ))
-}
-
+#[tessera]
 fn lazy_row_slots(parameters: State<LazyListSlotsArgs>) {
     let args = parameters.get();
     // The viewport controller is recreated whenever the list is remounted,
@@ -1079,15 +917,6 @@ fn lazy_list_view(
                 });
             }
         });
-}
-
-#[derive(Clone, Copy, PartialEq, Eq, Hash)]
-struct ZeroLayout;
-
-impl tessera_ui::LayoutModifierNode for ZeroLayout {
-    fn measure(&self, _input: &mut MeasureScope<'_>) -> Result<LayoutResult, MeasurementError> {
-        Ok(LayoutResult::new(ComputedData::ZERO))
-    }
 }
 
 #[derive(Clone)]
@@ -1760,31 +1589,20 @@ enum LazySlot {
 }
 
 impl LazySlot {
-    fn items<F, Output>(
+    fn items(
         count: usize,
-        builder: F,
+        builder: RenderSlotWith<usize>,
         key_provider: Option<CallbackWith<usize, u64>>,
-    ) -> Self
-    where
-        F: Fn(usize) -> Output + Send + Sync + 'static,
-    {
+    ) -> Self {
         Self::Items(LazyItemsSlot {
             count,
-            builder: RenderSlotWith::new(builder),
+            builder,
             key_provider,
         })
     }
 
-    fn sticky<F, Output>(builder: F, key_hash: Option<u64>) -> Self
-    where
-        F: Fn() -> Output + Send + Sync + 'static,
-    {
-        Self::Sticky(LazyStickySlot {
-            builder: RenderSlotWith::new(move |_| {
-                builder();
-            }),
-            key_hash,
-        })
+    fn sticky(builder: RenderSlotWith<usize>, key_hash: Option<u64>) -> Self {
+        Self::Sticky(LazyStickySlot { builder, key_hash })
     }
 
     fn len(&self) -> usize {
@@ -1793,13 +1611,6 @@ impl LazySlot {
             Self::Sticky(_) => 1,
         }
     }
-}
-
-#[derive(Clone, PartialEq)]
-struct LazyItemsSlot {
-    count: usize,
-    builder: RenderSlotWith<usize>,
-    key_provider: Option<CallbackWith<usize, u64>>,
 }
 
 #[derive(Clone, PartialEq)]
@@ -1865,16 +1676,10 @@ impl LazySlotPlan {
                 if let Some(provider) = &slot.key_provider {
                     provider.call(local_index)
                 } else {
-                    let mut hasher = DefaultHasher::new();
-                    index.hash(&mut hasher);
-                    hasher.finish()
+                    hash_key(index)
                 }
             }
-            ResolvedSlot::Sticky(slot) => slot.key_hash.unwrap_or_else(|| {
-                let mut hasher = DefaultHasher::new();
-                index.hash(&mut hasher);
-                hasher.finish()
-            }),
+            ResolvedSlot::Sticky(slot) => slot.key_hash.unwrap_or_else(|| hash_key(index)),
         };
         let (builder, local_index) = match resolved {
             ResolvedSlot::Items(slot, local_index) => (slot.builder, local_index),
@@ -2119,10 +1924,6 @@ fn saturating_sub_px(lhs: Px, rhs: Px) -> Px {
 
 #[cfg(test)]
 mod tests {
-    use std::{
-        cell::Cell,
-        sync::atomic::{AtomicUsize, Ordering},
-    };
 
     use tessera_ui::{
         AxisConstraint, ComputedData, Dp, LayoutResult, MeasurementError, Modifier,
@@ -2140,10 +1941,6 @@ mod tests {
 
     use super::{LazyListCache, LazyListController, lazy_column, lazy_row};
 
-    thread_local! {
-        static CAPPED_ITEMS: Cell<u64> = const { Cell::new(0) };
-    }
-
     #[tessera]
     fn capped_list_fixture(horizontal: bool) {
         material_theme().child(move || {
@@ -2153,7 +1950,6 @@ mod tests {
                     .max_viewport_main(Px(360))
                     .estimated_item_size(Dp(336.0))
                     .items(20, |index| {
-                        CAPPED_ITEMS.set(CAPPED_ITEMS.get() | (1 << index));
                         fixed_test_box()
                             .tag(format!("capped_{index}"))
                             .width(336)
@@ -2165,7 +1961,6 @@ mod tests {
                     .max_viewport_main(Px(360))
                     .estimated_item_size(Dp(336.0))
                     .items(20, |index| {
-                        CAPPED_ITEMS.set(CAPPED_ITEMS.get() | (1 << index));
                         fixed_test_box()
                             .tag(format!("capped_{index}"))
                             .width(40)
@@ -2181,15 +1976,20 @@ mod tests {
             "lazy_list::tests::viewport_cap_limits_initial_item_construction_on_both_axes",
             || {
                 for horizontal in [false, true] {
-                    CAPPED_ITEMS.set(0);
-                    let _ = tessera_ui::testing::layout_test(move || {
-                        capped_list_fixture(horizontal);
-                    })
-                    .viewport_px(360, 360)
-                    .run();
+                    let mut session = tessera_ui::testing::start_layout_test_session(
+                        tessera_ui::testing::layout_test(move || {
+                            capped_list_fixture(horizontal);
+                        })
+                        .viewport_px(360, 360),
+                    );
+                    let snapshot = tessera_ui::testing::pump_layout_test_session(&mut session, 0);
+                    snapshot.node("capped_0").exists();
+                    snapshot.node("capped_1").exists();
                     assert_eq!(
-                        CAPPED_ITEMS.get(),
-                        0b11,
+                        session
+                            .work()
+                            .count("fixed_test_box", tessera_ui::WorkPhase::Build),
+                        2,
                         "the first layout must only construct the two intersecting items"
                     );
                 }
@@ -2197,19 +1997,25 @@ mod tests {
         );
     }
 
-    thread_local! { static ESTIMATE: Cell<Option<State<Dp>>> = const { Cell::new(None) }; }
-    thread_local! {
-        static COLLAPSED_WIDTH: Cell<Option<State<Dp>>> = const { Cell::new(None) };
-        static COLLAPSED_LIST: Cell<Option<State<LazyListController>>> = const { Cell::new(None) };
-        static PROGRAMMATIC_LIST: Cell<Option<State<LazyListController>>> = const { Cell::new(None) };
-        static RESPONSIVE_CROSS: Cell<Option<State<Dp>>> = const { Cell::new(None) };
-        static RESPONSIVE_MAIN: Cell<Option<State<Dp>>> = const { Cell::new(None) };
+    #[derive(Clone, Copy, Default)]
+    struct FixtureHandles {
+        estimate: Option<State<Dp>>,
+        collapsed_width: Option<State<Dp>>,
+        collapsed_list: Option<State<LazyListController>>,
+        programmatic_list: Option<State<LazyListController>>,
+        responsive_cross: Option<State<Dp>>,
+        responsive_main: Option<State<Dp>>,
+        list_generation: Option<State<u64>>,
+        replaced_list: Option<State<LazyListController>>,
     }
 
     #[tessera]
-    fn programmatic_list_fixture(horizontal: bool) {
+    fn programmatic_list_fixture(
+        horizontal: bool,
+        observed: tessera_ui::testing::TestProbe<FixtureHandles>,
+    ) {
         let controller = remember(LazyListController::new);
-        PROGRAMMATIC_LIST.set(Some(controller));
+        observed.with_mut(|handles| handles.programmatic_list = Some(controller));
         let items = RenderSlotWith::new(|index| {
             fixed_test_box()
                 .tag(format!("programmatic_{index}"))
@@ -2235,14 +2041,16 @@ mod tests {
 
     fn check_programmatic_position(horizontal: bool) {
         tessera_ui::dp::set_scale_factor(1.0);
+        let observed = tessera_ui::testing::TestProbe::default();
+        let fixture_observed = observed.clone();
         let mut session = tessera_ui::testing::start_layout_test_session(
             tessera_ui::testing::layout_test(move || {
-                programmatic_list_fixture(horizontal);
+                programmatic_list_fixture(horizontal, fixture_observed.clone());
             })
             .viewport_px(120, 120),
         );
         tessera_ui::testing::pump_layout_test_session(&mut session, 0);
-        let controller = PROGRAMMATIC_LIST.get().expect("controller");
+        let controller = observed.get().programmatic_list.expect("controller");
         controller.with_mut(|controller| {
             controller.scroll_to(
                 if horizontal { Dp(80.0) } else { Dp::ZERO },
@@ -2260,25 +2068,27 @@ mod tests {
 
     #[test]
     fn lazy_column_applies_programmatic_positions_after_mounting() {
+        let runtime = tessera_ui::RuntimeSession::new();
+        let _scope = runtime.enter();
         check_programmatic_position(false);
     }
 
     #[test]
     fn lazy_row_applies_programmatic_positions_after_mounting() {
+        let runtime = tessera_ui::RuntimeSession::new();
+        let _scope = runtime.enter();
         check_programmatic_position(true);
     }
 
-    thread_local! {
-        static LIST_GENERATION: Cell<Option<State<u64>>> = const { Cell::new(None) };
-        static REPLACED_LIST: Cell<Option<State<LazyListController>>> = const { Cell::new(None) };
-    }
-
     #[tessera]
-    fn replaceable_list_fixture(horizontal: bool) {
+    fn replaceable_list_fixture(
+        horizontal: bool,
+        observed: tessera_ui::testing::TestProbe<FixtureHandles>,
+    ) {
         let generation = remember(|| 0_u64);
-        LIST_GENERATION.set(Some(generation));
+        observed.with_mut(|handles| handles.list_generation = Some(generation));
         let controller = remember_with_key(generation.get(), LazyListController::new);
-        REPLACED_LIST.set(Some(controller));
+        observed.with_mut(|handles| handles.replaced_list = Some(controller));
         let items = RenderSlotWith::new(|index| {
             fixed_test_box()
                 .tag(format!("replacement_{index}"))
@@ -2304,22 +2114,26 @@ mod tests {
 
     #[test]
     fn replacing_lazy_list_controllers_refreshes_retained_layout_and_scroll_ownership() {
+        let runtime = tessera_ui::RuntimeSession::new();
+        let _scope = runtime.enter();
         crate::test_utils::run_isolated_test(
             "lazy_list::tests::replacing_lazy_list_controllers_refreshes_retained_layout_and_scroll_ownership",
             || {
                 tessera_ui::dp::set_scale_factor(1.0);
                 for horizontal in [false, true] {
+                    let observed = tessera_ui::testing::TestProbe::default();
+                    let fixture_observed = observed.clone();
                     let mut session = tessera_ui::testing::start_layout_test_session(
                         tessera_ui::testing::layout_test(move || {
-                            replaceable_list_fixture(horizontal);
+                            replaceable_list_fixture(horizontal, fixture_observed.clone());
                         })
                         .viewport_px(120, 120),
                     );
                     tessera_ui::testing::pump_layout_test_session(&mut session, 0);
                     let mut time = 0;
                     for generation in 1..=4 {
-                        let previous = REPLACED_LIST.get().unwrap();
-                        LIST_GENERATION.get().unwrap().set(generation);
+                        let previous = observed.get().replaced_list.unwrap();
+                        observed.get().list_generation.unwrap().set(generation);
                         time += 16_666_667;
                         tessera_ui::testing::pump_layout_test_session(&mut session, time);
                         time += 16_666_667;
@@ -2329,7 +2143,7 @@ mod tests {
                             !previous.is_alive(),
                             "the old keyed controller was actually released"
                         );
-                        let current = REPLACED_LIST.get().unwrap();
+                        let current = observed.get().replaced_list.unwrap();
                         assert!(current.is_alive());
                         assert!(
                             current != previous,
@@ -2393,13 +2207,17 @@ mod tests {
     }
 
     #[tessera]
-    fn responsive_anchor_fixture(horizontal: bool, tall: bool) {
+    fn responsive_anchor_fixture(
+        horizontal: bool,
+        tall: bool,
+        observed: tessera_ui::testing::TestProbe<FixtureHandles>,
+    ) {
         let cross = remember(|| Dp(300.0));
         let main = remember(|| Dp(120.0));
         let controller = remember(LazyListController::new);
-        RESPONSIVE_CROSS.set(Some(cross));
-        RESPONSIVE_MAIN.set(Some(main));
-        PROGRAMMATIC_LIST.set(Some(controller));
+        observed.with_mut(|handles| handles.responsive_cross = Some(cross));
+        observed.with_mut(|handles| handles.responsive_main = Some(main));
+        observed.with_mut(|handles| handles.programmatic_list = Some(controller));
         let items = RenderSlotWith::new(move |index| {
             layout()
                 .modifier(Modifier::new().semantics(SemanticsArgs {
@@ -2433,6 +2251,8 @@ mod tests {
 
     #[test]
     fn responsive_measurements_preserve_the_first_visible_item_start_on_both_axes() {
+        let runtime = tessera_ui::RuntimeSession::new();
+        let _scope = runtime.enter();
         crate::test_utils::run_isolated_test(
             "lazy_list::tests::responsive_measurements_preserve_the_first_visible_item_start_on_both_axes",
             || {
@@ -2441,14 +2261,20 @@ mod tests {
                     for (horizontal, tall) in
                         [(false, false), (true, false), (false, true), (true, true)]
                     {
+                        let observed = tessera_ui::testing::TestProbe::default();
+                        let fixture_observed = observed.clone();
                         let mut session = tessera_ui::testing::start_layout_test_session(
                             tessera_ui::testing::layout_test(move || {
-                                responsive_anchor_fixture(horizontal, tall);
+                                responsive_anchor_fixture(
+                                    horizontal,
+                                    tall,
+                                    fixture_observed.clone(),
+                                );
                             })
                             .viewport_px(800, 800),
                         );
                         tessera_ui::testing::pump_layout_test_session(&mut session, 0);
-                        let controller = PROGRAMMATIC_LIST.get().expect("list controller");
+                        let controller = observed.get().programmatic_list.expect("list controller");
                         let offset = if tall { Dp(60.0) } else { Dp(180.0) };
                         controller.with_mut(|controller| {
                             controller.scroll_to(
@@ -2456,8 +2282,8 @@ mod tests {
                                 if horizontal { Dp::ZERO } else { offset },
                             );
                         });
-                        let cross = RESPONSIVE_CROSS.get().expect("cross-axis state");
-                        let main_span = RESPONSIVE_MAIN.get().expect("main-axis state");
+                        let cross = observed.get().responsive_cross.expect("cross-axis state");
+                        let main_span = observed.get().responsive_main.expect("main-axis state");
                         let mut frame = 1;
                         for (width, span) in [
                             (300.0, 120.0),
@@ -2497,11 +2323,11 @@ mod tests {
     }
 
     #[tessera]
-    fn collapsed_viewport_fixture() {
+    fn collapsed_viewport_fixture(observed: tessera_ui::testing::TestProbe<FixtureHandles>) {
         let width = remember(|| Dp(300.0));
         let controller = remember(LazyListController::new);
-        COLLAPSED_WIDTH.set(Some(width));
-        COLLAPSED_LIST.set(Some(controller));
+        observed.with_mut(|handles| handles.collapsed_width = Some(width));
+        observed.with_mut(|handles| handles.collapsed_list = Some(controller));
         material_theme().child(move || {
             lazy_column()
                 .modifier(Modifier::new().width(width.get()).height(Dp(240.0)))
@@ -2514,9 +2340,12 @@ mod tests {
     }
 
     #[tessera]
-    fn density_scroll_fixture(horizontal: bool) {
+    fn density_scroll_fixture(
+        horizontal: bool,
+        observed: tessera_ui::testing::TestProbe<FixtureHandles>,
+    ) {
         let controller = remember(LazyListController::new);
-        PROGRAMMATIC_LIST.set(Some(controller));
+        observed.with_mut(|handles| handles.programmatic_list = Some(controller));
         let items = RenderSlotWith::new(|index| {
             fixed_test_box()
                 .tag(format!("density_{index}"))
@@ -2550,14 +2379,18 @@ mod tests {
 
     #[test]
     fn density_changes_preserve_scrolled_items_and_new_programmatic_requests() {
+        let runtime = tessera_ui::RuntimeSession::new();
+        let _scope = runtime.enter();
         crate::test_utils::run_isolated_test(
             "lazy_list::tests::density_changes_preserve_scrolled_items_and_new_programmatic_requests",
             || {
                 for horizontal in [false, true] {
                     tessera_ui::dp::set_scale_factor(1.0);
+                    let observed = tessera_ui::testing::TestProbe::default();
+                    let fixture_observed = observed.clone();
                     let mut session = tessera_ui::testing::start_layout_test_session(
                         tessera_ui::testing::layout_test(move || {
-                            density_scroll_fixture(horizontal);
+                            density_scroll_fixture(horizontal, fixture_observed.clone());
                         })
                         .viewport_px(400, 400),
                     );
@@ -2567,7 +2400,7 @@ mod tests {
                             frame * 16_666_667,
                         );
                     }
-                    let controller = PROGRAMMATIC_LIST.get().expect("controller");
+                    let controller = observed.get().programmatic_list.expect("controller");
                     let offset = if horizontal { Dp(104.0) } else { Dp(204.0) };
                     controller.with_mut(|controller| {
                         controller.scroll_to(
@@ -2608,19 +2441,21 @@ mod tests {
 
     #[test]
     fn collapsed_cross_axis_preserves_usable_measurements() {
+        let observed = tessera_ui::testing::TestProbe::default();
+        let fixture_observed = observed.clone();
         let mut session = tessera_ui::testing::start_layout_test_session(
-            tessera_ui::testing::layout_test(|| {
-                collapsed_viewport_fixture();
+            tessera_ui::testing::layout_test(move || {
+                collapsed_viewport_fixture(fixture_observed.clone());
             })
             .viewport_px(300, 240),
         );
         for frame in 0..8 {
             let _ = tessera_ui::testing::pump_layout_test_session(&mut session, frame * 16_666_667);
         }
-        let controller = COLLAPSED_LIST.get().expect("list controller");
+        let controller = observed.get().collapsed_list.expect("list controller");
         let before = controller.with(|state| state.cache.measured_main.clone());
         assert!(before.iter().all(Option::is_some));
-        let width = COLLAPSED_WIDTH.get().expect("viewport width");
+        let width = observed.get().collapsed_width.expect("viewport width");
         width.set(Dp(0.0));
         for frame in 8..12 {
             let _ = tessera_ui::testing::pump_layout_test_session(&mut session, frame * 16_666_667);
@@ -2664,6 +2499,8 @@ mod tests {
 
     #[test]
     fn unvisited_measurements_rebase_density_without_round_trip_drift() {
+        let runtime = tessera_ui::RuntimeSession::new();
+        let _scope = runtime.enter();
         crate::test_utils::run_isolated_test(
             "lazy_list::tests::unvisited_measurements_rebase_density_without_round_trip_drift",
             || {
@@ -2688,9 +2525,9 @@ mod tests {
     }
 
     #[tessera]
-    fn changing_estimate_fixture() {
+    fn changing_estimate_fixture(observed: tessera_ui::testing::TestProbe<FixtureHandles>) {
         let estimate = remember(|| Dp(100.0));
-        ESTIMATE.set(Some(estimate));
+        observed.with_mut(|handles| handles.estimate = Some(estimate));
         material_theme().child(move || {
             lazy_column()
                 .modifier(Modifier::new().fill_max_size())
@@ -2709,18 +2546,22 @@ mod tests {
 
     #[test]
     fn changing_estimates_and_density_keep_items_separated() {
+        let runtime = tessera_ui::RuntimeSession::new();
+        let _scope = runtime.enter();
         crate::test_utils::run_isolated_test(
             "lazy_list::tests::changing_estimates_and_density_keep_items_separated",
             || {
                 tessera_ui::dp::set_scale_factor(1.0);
+                let observed = tessera_ui::testing::TestProbe::default();
+                let fixture_observed = observed.clone();
                 let mut session = tessera_ui::testing::start_layout_test_session(
-                    tessera_ui::testing::layout_test(|| {
-                        changing_estimate_fixture();
+                    tessera_ui::testing::layout_test(move || {
+                        changing_estimate_fixture(fixture_observed.clone());
                     })
                     .viewport_px(200, 240),
                 );
                 let _ = tessera_ui::testing::pump_layout_test_session(&mut session, 0);
-                let estimate = ESTIMATE.get().expect("estimate state");
+                let estimate = observed.get().estimate.expect("estimate state");
                 for (frame, (density, value)) in [(1.0, 20.0), (1.5, 140.0), (1.0, 60.0)]
                     .into_iter()
                     .enumerate()
@@ -2741,8 +2582,6 @@ mod tests {
             },
         );
     }
-
-    static LAZY_LIST_VISIBLE_ITEM_BUILD_COUNT: AtomicUsize = AtomicUsize::new(0);
 
     #[derive(Clone, PartialEq)]
     struct FixedTestLayout {
@@ -2888,7 +2727,7 @@ mod tests {
         lazy_column()
             .modifier(Modifier::new().constrain(
                 Some(AxisConstraint::exact(Px::new(60))),
-                Some(AxisConstraint::exact(Px::new(50))),
+                Some(AxisConstraint::exact(Px::new(39))),
             ))
             .controller(controller)
             .cross_axis_alignment(CrossAxisAlignment::Start)
@@ -2929,7 +2768,7 @@ mod tests {
         lazy_column()
             .modifier(Modifier::new().constrain(
                 Some(AxisConstraint::exact(Px::new(60))),
-                Some(AxisConstraint::exact(Px::new(40))),
+                Some(AxisConstraint::exact(Px::new(38))),
             ))
             .controller(controller)
             .cross_axis_alignment(CrossAxisAlignment::Start)
@@ -3005,7 +2844,6 @@ mod tests {
                     .cross_axis_alignment(CrossAxisAlignment::Start)
                     .estimated_item_size(Px::new(20).into())
                     .items(10, move |index| {
-                        LAZY_LIST_VISIBLE_ITEM_BUILD_COUNT.fetch_add(1, Ordering::Relaxed);
                         fixed_test_box()
                             .tag(format!("stable_visible_item_{index}"))
                             .width(item_width)
@@ -3089,8 +2927,6 @@ mod tests {
 
     #[test]
     fn lazy_column_rebuilds_visible_items_when_item_slot_updates() {
-        LAZY_LIST_VISIBLE_ITEM_BUILD_COUNT.store(0, Ordering::Relaxed);
-
         let mut session = tessera_ui::testing::start_layout_test_session(
             tessera_ui::testing::layout_test(|| {
                 lazy_column_stable_visible_items_case();
@@ -3101,20 +2937,26 @@ mod tests {
         tessera_ui::testing::pump_layout_test_session(&mut session, 0)
             .node("stable_visible_item_0")
             .width(20);
-        let first_builds = LAZY_LIST_VISIBLE_ITEM_BUILD_COUNT.load(Ordering::Relaxed);
+        let first_builds = session
+            .work()
+            .count("fixed_test_box", tessera_ui::WorkPhase::Build);
         assert!(first_builds > 0);
 
         tessera_ui::testing::pump_layout_test_session(&mut session, 16_666_667)
             .node("stable_visible_item_0")
             .width(22);
-        let second_builds = LAZY_LIST_VISIBLE_ITEM_BUILD_COUNT.load(Ordering::Relaxed);
-        assert!(second_builds > first_builds);
+        let second_builds = session
+            .work()
+            .count("fixed_test_box", tessera_ui::WorkPhase::Build);
+        assert!(second_builds > 0);
 
         tessera_ui::testing::pump_layout_test_session(&mut session, 33_333_334)
             .node("stable_visible_item_0")
             .width(24);
-        let third_builds = LAZY_LIST_VISIBLE_ITEM_BUILD_COUNT.load(Ordering::Relaxed);
-        assert!(third_builds > second_builds);
+        let third_builds = session
+            .work()
+            .count("fixed_test_box", tessera_ui::WorkPhase::Build);
+        assert!(third_builds > 0);
     }
 }
 

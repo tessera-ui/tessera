@@ -19,9 +19,13 @@ use tessera_components::{
 use tessera_ui::{Color, Dp, Modifier, RenderSlot, tessera};
 
 #[cfg(all(target_family = "wasm", feature = "md3-diagnostics"))]
-pub(crate) use self::drawers::{diagnostic_drawer_figures, diagnostic_drawer_observations};
+pub(crate) use self::drawers::{
+    DrawerObservations, diagnostic_drawer_figures, diagnostic_drawer_observations,
+};
 pub(crate) use self::{
-    drawers::live_drawer_host, navigation_rail::live_rail_host, side_sheets::live_side_sheet_host,
+    drawers::{LiveDrawerSession, live_drawer_host},
+    navigation_rail::{LiveRailSession, live_rail_host},
+    side_sheets::{LiveSideSheetSession, live_side_sheet_host},
 };
 
 mod action_articles;
@@ -211,15 +215,16 @@ fn spec_table_cells(headers: Vec<String>, cells: Vec<TextTableCell>) {
 }
 
 #[tessera]
-pub(super) fn material_spec() {
-    catalog::component_pages();
+pub(super) fn material_spec(
+    selected: Option<tessera_ui::State<Option<usize>>>,
+    sessions: Option<crate::app::AppLiveSessions>,
+) {
+    catalog::component_pages()
+        .selected_optional(selected)
+        .sessions_optional(sessions);
 }
 
 #[tessera]
-fn slider_spec() {
-    sliders::slider_spec();
+fn slider_spec(route: Option<article::ArticleRoute>) {
+    sliders::slider_spec().route_optional(route);
 }
-
-#[cfg(all(test, not(target_family = "wasm")))]
-#[path = "material_spec/text_table_adapter_tests.rs"]
-mod text_table_adapter_tests;

@@ -354,13 +354,15 @@ pub fn badge(
     modifier: Option<Modifier>,
 ) {
     let _ = content_color;
-    let container_color = container_color.unwrap_or_else(|| {
+    let container_color = if let Some(color) = container_color {
+        color
+    } else {
         use_context::<MaterialTheme>()
             .expect("MaterialTheme must be provided")
             .get()
             .color_scheme
             .error
-    });
+    };
     let policy = BadgeLayout { container_color };
     layout()
         .modifier(modifier.unwrap_or_default())
@@ -417,20 +419,16 @@ pub fn badge_with_content(
     let scheme = theme.color_scheme;
     let typography = theme.typography;
 
-    let container_color = container_color.unwrap_or_else(|| {
-        use_context::<MaterialTheme>()
-            .expect("MaterialTheme must be provided")
-            .get()
-            .color_scheme
-            .error
-    });
-    let content_color = content_color.unwrap_or_else(|| {
-        content_color_for(container_color, &scheme).unwrap_or(
-            use_context::<ContentColor>()
-                .map(|c| c.get().current)
-                .unwrap_or(ContentColor::default().current),
-        )
-    });
+    let container_color = container_color.unwrap_or(scheme.error);
+    let content_color = if let Some(color) = content_color {
+        color
+    } else if let Some(color) = content_color_for(container_color, &scheme) {
+        color
+    } else {
+        use_context::<ContentColor>()
+            .map(|color| color.get().current)
+            .unwrap_or(ContentColor::default().current)
+    };
 
     let padding_px = badge_pixels(BadgeDefaults::WITH_CONTENT_HORIZONTAL_PADDING);
     let policy = BadgeWithContentLayout {

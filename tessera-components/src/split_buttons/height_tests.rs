@@ -1,9 +1,8 @@
-use std::cell::Cell;
-
 use tessera_ui::{
     Dp, HeadlessConfig, HeadlessRenderer, Modifier, State,
     accesskit::{Rect, Role},
     remember, tessera,
+    testing::TestProbe,
 };
 
 use crate::{
@@ -35,14 +34,12 @@ impl Default for Settings {
     }
 }
 
-thread_local! {
-    static SETTINGS: Cell<Option<State<Settings>>> = const { Cell::new(None) };
-}
-
 #[tessera]
-fn fixture() {
+fn fixture(probe: Option<TestProbe<Option<State<Settings>>>>) {
     let settings = remember(Settings::default);
-    SETTINGS.set(Some(settings));
+    if let Some(probe) = probe {
+        probe.set(Some(settings));
+    }
     material_theme().child(move || {
         boxed().children(move || {
             let value = settings.get();
@@ -111,9 +108,11 @@ fn filled_rows(pixels: &[u8], width: usize, bounds: Rect) -> (usize, usize) {
 
 fn check_height_recovery(samples: u32, scale: f64) {
     let width = (650.0 * scale) as u32;
+    let probe = TestProbe::<Option<State<Settings>>>::default();
+    let observed = probe.clone();
     let mut renderer = HeadlessRenderer::new(
-        Box::new(|| {
-            fixture();
+        Box::new(move || {
+            fixture().probe(probe.clone());
         }),
         vec![Box::new(crate::TesseraComponents)],
         HeadlessConfig {
@@ -127,7 +126,7 @@ fn check_height_recovery(samples: u32, scale: f64) {
     .expect("renderer");
     renderer.render_frames(4);
     let initial = renderer.read_pixels().expect("pixels");
-    let settings = SETTINGS.get().expect("settings");
+    let settings = observed.get().expect("settings");
     use SplitButtonSize::{ExtraLarge, ExtraSmall, Small};
     for (leading, trailing, available, expected) in [
         (ExtraSmall, ExtraSmall, 410.0, Some(32.0)),

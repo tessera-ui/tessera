@@ -1,5 +1,3 @@
-use std::cell::{Cell, RefCell};
-
 use tessera_ui::{
     Dp, HeadlessConfig, HeadlessRenderer, Modifier, State,
     clipboard::{ClipboardAction, ClipboardResponse, ClipboardWrite, request_clipboard_action},
@@ -14,26 +12,32 @@ use crate::{
     theme::material_theme,
 };
 
-thread_local! {
-    static EDITOR: Cell<Option<State<TextInputController>>> = const { Cell::new(None) };
-    static OTHER: Cell<Option<State<TextInputController>>> = const { Cell::new(None) };
-    static READ_ONLY: Cell<Option<State<bool>>> = const { Cell::new(None) };
-    static ENABLED: Cell<Option<State<bool>>> = const { Cell::new(None) };
-    static CHANGES: RefCell<Vec<String>> = const { RefCell::new(Vec::new()) };
-    static WRITE: RefCell<Option<ClipboardWrite>> = const { RefCell::new(None) };
-    static HANDLED: Cell<bool> = const { Cell::new(false) };
+#[derive(Clone, Default, PartialEq)]
+struct Probe {
+    editor: tessera_ui::testing::TestProbe<Option<State<TextInputController>>>,
+    other: tessera_ui::testing::TestProbe<Option<State<TextInputController>>>,
+    read_only: tessera_ui::testing::TestProbe<Option<State<bool>>>,
+    enabled: tessera_ui::testing::TestProbe<Option<State<bool>>>,
+    changes: tessera_ui::testing::TestProbe<Vec<String>>,
+    write: tessera_ui::testing::TestProbe<Option<ClipboardWrite>>,
+    handled: tessera_ui::testing::TestProbe<bool>,
 }
 
 #[tessera]
-fn fixture() {
+fn fixture(probe: Probe) {
     let editor = remember(|| TextInputController::new(Dp(16.0), Some(Dp(24.0))));
     let other = remember(|| TextInputController::new(Dp(16.0), Some(Dp(24.0))));
     let read_only = remember(|| false);
     let enabled = remember(|| true);
-    EDITOR.set(Some(editor));
-    OTHER.set(Some(other));
-    READ_ONLY.set(Some(read_only));
-    ENABLED.set(Some(enabled));
+    probe.editor.set(Some(editor));
+    probe.other.set(Some(other));
+    probe.read_only.set(Some(read_only));
+    probe.enabled.set(Some(enabled));
+    let changes = probe.changes.clone();
+    let on_change = tessera_ui::CallbackWith::new(move |text: String| {
+        changes.with_mut(|changes| changes.push(text.clone()));
+        text.to_uppercase()
+    });
     material_theme().child(move || {
         column().children(move || {
             text_input()
@@ -43,36 +47,38 @@ fn fixture() {
                 .enabled(enabled.get())
                 .read_only(read_only.get())
                 .input_transform(|text| text.replace(['\r', '\n'], ""))
-                .on_change(|text| {
-                    CHANGES.with_borrow_mut(|changes| changes.push(text.clone()));
-                    text.to_uppercase()
-                });
+                .on_change_shared(on_change);
             text_input().controller(other).single_line(true);
         });
     });
 }
 
-fn request(action: ClipboardAction) {
-    HANDLED.set(false);
-    WRITE.with_borrow_mut(|write| *write = None);
-    request_clipboard_action(action, |response| {
-        HANDLED.set(!matches!(response, ClipboardResponse::Ignored));
+fn request(probe: &Probe, action: ClipboardAction) {
+    probe.handled.set(false);
+    probe.write.with_mut(|write| *write = None);
+    let probe = probe.clone();
+    request_clipboard_action(action, move |response| {
+        probe
+            .handled
+            .set(!matches!(response, ClipboardResponse::Ignored));
         if let ClipboardResponse::Write(write) = response {
-            WRITE.with_borrow_mut(|pending| *pending = Some(write));
+            probe.write.with_mut(|pending| *pending = Some(write));
         }
     });
 }
 
-fn arrange(editor: State<TextInputController>) {
+fn arrange(probe: &Probe, editor: State<TextInputController>) {
     editor.with_mut(|editor| {
         editor.set_text_and_selection("abé🙂z", TextSelection { start: 8, end: 2 })
     });
-    CHANGES.with_borrow_mut(Vec::clear);
+    probe.changes.with_mut(Vec::clear);
 }
 
 fn check_clipboard() {
+    let probe = Probe::default();
+    let output = probe.clone();
     let mut renderer = HeadlessRenderer::new(
-        Box::new(|| fixture()),
+        Box::new(move || fixture(output.clone())),
         vec![Box::new(crate::TesseraComponents)],
         HeadlessConfig {
             width: 480,
@@ -82,80 +88,86 @@ fn check_clipboard() {
     )
     .expect("renderer");
     renderer.render_frames(4);
-    let editor = EDITOR.get().expect("editor");
+    let editor = probe.editor.get().expect("editor");
     editor.with(|editor| editor.focus_handler().request_focus());
     renderer.render_frames(4);
-    arrange(editor);
-    request(ClipboardAction::Copy);
+    arrange(&probe, editor);
+    request(&probe, ClipboardAction::Copy);
     renderer.render_frames(3);
-    assert!(HANDLED.get());
-    let write = WRITE.with_borrow_mut(Option::take).expect("copy write");
+    assert!(probe.handled.get());
+    let write = probe.write.with_mut(Option::take).expect("copy write");
     assert_eq!(write.text(), "é🙂");
     write.complete(true);
     assert_eq!(editor.with(|editor| editor.text()), "abé🙂z");
-    assert!(CHANGES.with_borrow(Vec::is_empty));
+    assert!(probe.changes.with(Vec::is_empty));
 
-    request(ClipboardAction::Cut);
+    request(&probe, ClipboardAction::Cut);
     renderer.render_frames(3);
-    WRITE
-        .with_borrow_mut(Option::take)
+    probe
+        .write
+        .with_mut(Option::take)
         .expect("denied cut")
         .complete(false);
     assert_eq!(editor.with(|editor| editor.text()), "abé🙂z");
-    assert!(CHANGES.with_borrow(Vec::is_empty));
+    assert!(probe.changes.with(Vec::is_empty));
 
-    request(ClipboardAction::Cut);
+    request(&probe, ClipboardAction::Cut);
     renderer.render_frames(3);
-    WRITE
-        .with_borrow_mut(Option::take)
+    probe
+        .write
+        .with_mut(Option::take)
         .expect("accepted cut")
         .complete(true);
     assert_eq!(editor.with(|editor| editor.text()), "ABZ");
-    assert_eq!(CHANGES.with_borrow(Clone::clone), ["abz"]);
+    assert_eq!(probe.changes.with(Clone::clone), ["abz"]);
 
-    arrange(editor);
-    request(ClipboardAction::Paste("xy\r\n".into()));
+    arrange(&probe, editor);
+    request(&probe, ClipboardAction::Paste("xy\r\n".into()));
     renderer.render_frames(3);
     assert_eq!(editor.with(|editor| editor.text()), "ABXYZ");
-    assert_eq!(CHANGES.with_borrow(Clone::clone), ["abxyz"]);
+    assert_eq!(probe.changes.with(Clone::clone), ["abxyz"]);
     assert!(editor.with(|editor| editor.selection().is_collapsed()));
-    assert_eq!(OTHER.get().expect("other").with(|other| other.text()), "");
+    assert_eq!(
+        probe.other.get().expect("other").with(|other| other.text()),
+        ""
+    );
 
-    arrange(editor);
-    request(ClipboardAction::Cut);
+    arrange(&probe, editor);
+    request(&probe, ClipboardAction::Cut);
     renderer.render_frames(3);
-    let stale = WRITE.with_borrow_mut(Option::take).expect("pending cut");
-    request(ClipboardAction::Paste("new".into()));
+    let stale = probe.write.with_mut(Option::take).expect("pending cut");
+    request(&probe, ClipboardAction::Paste("new".into()));
     renderer.render_frames(3);
     stale.complete(true);
     assert_eq!(editor.with(|editor| editor.text()), "ABNEWZ");
-    assert_eq!(CHANGES.with_borrow(Clone::clone), ["abnewz"]);
+    assert_eq!(probe.changes.with(Clone::clone), ["abnewz"]);
 
-    READ_ONLY.get().expect("read-only state").set(true);
+    probe.read_only.get().expect("read-only state").set(true);
     renderer.render_frames(3);
-    arrange(editor);
-    request(ClipboardAction::Paste("replace".into()));
+    arrange(&probe, editor);
+    request(&probe, ClipboardAction::Paste("replace".into()));
     renderer.render_frames(3);
-    assert!(HANDLED.get());
+    assert!(probe.handled.get());
     assert_eq!(editor.with(|editor| editor.text()), "abé🙂z");
-    request(ClipboardAction::Cut);
+    request(&probe, ClipboardAction::Cut);
     renderer.render_frames(3);
-    assert!(WRITE.with_borrow(Option::is_none));
-    request(ClipboardAction::Copy);
+    assert!(probe.write.with(Option::is_none));
+    request(&probe, ClipboardAction::Copy);
     renderer.render_frames(3);
     assert_eq!(
-        WRITE
-            .with_borrow_mut(Option::take)
+        probe
+            .write
+            .with_mut(Option::take)
             .expect("read-only copy")
             .text(),
         "é🙂"
     );
 
-    ENABLED.get().expect("enabled state").set(false);
+    probe.enabled.get().expect("enabled state").set(false);
     renderer.render_frames(3);
-    request(ClipboardAction::Paste("disabled".into()));
+    request(&probe, ClipboardAction::Paste("disabled".into()));
     renderer.render_frames(3);
-    assert!(!HANDLED.get());
+    assert!(!probe.handled.get());
     assert_eq!(editor.with(|editor| editor.text()), "abé🙂z");
 }
 

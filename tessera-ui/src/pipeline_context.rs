@@ -11,6 +11,10 @@ pub struct PipelineContext<'a> {
 }
 
 impl<'a> PipelineContext<'a> {
+    /// Returns the resource and upload service owned by this renderer.
+    pub fn graphics(&self) -> &crate::GraphicsDevice {
+        self.core.resources().graphics
+    }
     /// Creates a new pipeline context for the given renderer app.
     pub(crate) fn new(core: &'a mut RenderCore) -> Self {
         Self { core }

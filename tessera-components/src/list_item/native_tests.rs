@@ -4,13 +4,13 @@
 //!
 //! Keep list content consistent across layout and state changes.
 
-use std::cell::Cell;
-
 use tessera_ui::{
     Color, Dp, FocusManager, HeadlessConfig, HeadlessRenderer, MOUSE_POINTER_ID, Modifier,
     PressKeyEventType, PxPosition, RenderSlot, State,
     accesskit::{Action, ActionRequest, Node, NodeId, Role, TreeId},
-    remember, tessera, use_context,
+    remember, tessera,
+    testing::TestProbe,
+    use_context,
 };
 
 use crate::{
@@ -33,10 +33,6 @@ struct Settings {
     selected: bool,
     calls: usize,
     custom: bool,
-}
-
-thread_local! {
-    static SETTINGS: Cell<Option<State<Settings>>> = const { Cell::new(None) };
 }
 
 fn tagged(tag: &str) -> Modifier {
@@ -65,7 +61,7 @@ fn slot(name: String) {
 }
 
 #[tessera]
-fn fixture() {
+fn fixture(probe: TestProbe<Option<State<Settings>>>) {
     let settings = remember(|| Settings {
         width: Dp(240.0),
         large: false,
@@ -74,7 +70,7 @@ fn fixture() {
         calls: 0,
         custom: false,
     });
-    SETTINGS.set(Some(settings));
+    probe.set(Some(settings));
     material_theme()
         .theme(move || {
             let mut theme = MaterialTheme::default();
@@ -142,17 +138,13 @@ fn fixture() {
 }
 
 fn rect(renderer: &HeadlessRenderer, tag: &str) -> [i64; 4] {
-    let snapshot = renderer.snapshot();
-    let mut pending = vec![&snapshot["root"]];
-    while let Some(node) = pending.pop() {
-        if node["accessibility"]["key"] == tag || node["accessibility"]["label"] == tag {
-            return ["x", "y", "width", "height"].map(|key| node["bounds"][key].as_i64().unwrap());
-        }
-        if let Some(children) = node["children"].as_array() {
-            pending.extend(children);
-        }
-    }
-    panic!("missing {tag}");
+    let snapshot = renderer.inspect_components();
+    let bounds = snapshot
+        .find_tag(tag)
+        .unwrap_or_else(|| snapshot.labeled(tag))
+        .bounds()
+        .expect("placed list content");
+    [bounds.x, bounds.y, bounds.width, bounds.height].map(|value| value.round() as i64)
 }
 
 fn entry(renderer: &HeadlessRenderer) -> (NodeId, Node) {
@@ -165,9 +157,9 @@ fn entry(renderer: &HeadlessRenderer) -> (NodeId, Node) {
         .unwrap()
 }
 
-fn click(renderer: &mut HeadlessRenderer) {
+fn click(renderer: &mut HeadlessRenderer, settings: State<Settings>) {
     let [x, y, width, height] = rect(renderer, "item");
-    let point_y = if SETTINGS.get().unwrap().get().custom {
+    let point_y = if settings.get().custom {
         y + height - 4
     } else {
         y + height / 2
@@ -197,8 +189,12 @@ fn check(samples: u32) {
         (1.5, 360, 84, 36, 24),
         (2.0, 480, 112, 48, 32),
     ] {
+        let probe = TestProbe::default();
+        let observed = probe.clone();
         let mut renderer = HeadlessRenderer::new(
-            Box::new(fixture),
+            Box::new(move || {
+                fixture(probe.clone());
+            }),
             vec![Box::new(crate::TesseraComponents)],
             HeadlessConfig {
                 width: 640,
@@ -210,7 +206,7 @@ fn check(samples: u32) {
         )
         .unwrap();
         renderer.render_frames(8);
-        let settings = SETTINGS.get().unwrap();
+        let settings = observed.get().unwrap();
         assert_eq!(rect(&renderer, "item"), [0, 0, width, height]);
         assert_eq!(rect(&renderer, "Lead")[3], lead_height);
         assert_eq!(rect(&renderer, "Meta")[3], trail_height);
@@ -234,7 +230,7 @@ fn check(samples: u32) {
         assert_eq!(rect(&renderer, "Support")[3], (28.0 * scale) as i64);
         assert_ink(&renderer, "Over-ink", [0, 0, 255, 255]);
         assert_ink(&renderer, "Support-ink", [0, 0, 255, 255]);
-        click(&mut renderer);
+        click(&mut renderer, settings);
         assert_eq!(settings.get().calls, 1);
         assert!(
             settings.get().selected,
@@ -260,7 +256,7 @@ fn check(samples: u32) {
         assert_ink(&renderer, "Meta-ink", [0, 0, 255, 255]);
         settings.with_mut(|settings| settings.large = false);
         renderer.render_frames(8);
-        click(&mut renderer);
+        click(&mut renderer, settings);
         assert_eq!(settings.get().calls, 1);
         assert_eq!(entry(&renderer).0, id);
         assert_eq!(entry(&renderer).1.is_selected(), Some(true));
@@ -270,7 +266,7 @@ fn check(samples: u32) {
         assert!(entry(&renderer).1.is_disabled());
         assert!(!entry(&renderer).1.supports_action(Action::Click));
         assert!(!entry(&renderer).1.supports_action(Action::Focus));
-        click(&mut renderer);
+        click(&mut renderer, settings);
         assert_eq!(settings.get().calls, 1);
         settings.with_mut(|settings| {
             settings.enabled = true;

@@ -4,14 +4,13 @@
 //!
 //! Keep connected choices consistent across size presets and viewport changes.
 
-use std::cell::Cell;
-
 use tessera_ui::{
     Color, Dp, FocusDirection, FocusManager, HeadlessConfig, HeadlessRenderer, MOUSE_POINTER_ID,
     Modifier, PressKeyEventType, PxPosition, State,
     accesskit::{Action, ActionRequest, Node, NodeId, Orientation, Role, Toggled, TreeId},
     layout::layout,
     remember, tessera,
+    testing::TestProbe,
 };
 
 use crate::{
@@ -58,13 +57,14 @@ struct Settings {
     connected: bool,
 }
 
-thread_local! {
-    static SETTINGS: Cell<Option<State<Settings>>> = const { Cell::new(None) };
-    static GROUPS: Cell<[Option<State<ButtonGroupsState>>; 5]> = const { Cell::new([None; 5]) };
+#[derive(Clone, Copy, Default, PartialEq)]
+struct FixtureHandles {
+    settings: Option<State<Settings>>,
+    groups: [Option<State<ButtonGroupsState>>; 5],
 }
 
 #[tessera]
-fn fixture() {
+fn fixture(probe: TestProbe<FixtureHandles>) {
     let settings = remember(|| Settings {
         width: Dp(800.0),
         calls: 0,
@@ -78,7 +78,7 @@ fn fixture() {
         square: false,
         connected: true,
     });
-    SETTINGS.set(Some(settings));
+    probe.with_mut(|handles| handles.settings = Some(settings));
     material_theme()
         .theme(|| {
             let mut theme = MaterialTheme::default();
@@ -91,84 +91,85 @@ fn fixture() {
         .child(move || {
             column()
                 .modifier(Modifier::new().background(Color::WHITE))
-                .children(move || {
-                    for (index, size) in SIZES.into_iter().enumerate() {
-                        let controller = remember(ButtonGroupsState::new);
-                        let mut controllers = GROUPS.get();
-                        controllers[index] = Some(controller);
-                        GROUPS.set(controllers);
-                        let size = if settings.get().reverse_sizes {
-                            SIZES[4 - index]
-                        } else {
-                            size
-                        };
-                        let group = button_groups()
-                            .state(controller)
-                            .style(if settings.get().connected {
-                                ButtonGroupsStyle::Connected
+                .children({
+                    let probe = probe.clone();
+                    move || {
+                        for (index, size) in SIZES.into_iter().enumerate() {
+                            let controller = remember(ButtonGroupsState::new);
+                            probe.with_mut(|handles| handles.groups[index] = Some(controller));
+                            let size = if settings.get().reverse_sizes {
+                                SIZES[4 - index]
                             } else {
-                                ButtonGroupsStyle::Standard
-                            })
-                            .shape_style(if settings.get().square {
-                                ButtonShape::Square
-                            } else {
-                                ButtonShape::Round
-                            })
-                            .size(size)
-                            .enabled(settings.get().enabled)
-                            .selection_required(settings.get().required)
-                            .disabled_indices(if settings.get().disabled_all {
-                                vec![0, 1, 2]
-                            } else if settings.get().disabled_middle {
-                                vec![1]
-                            } else {
-                                vec![]
-                            })
-                            .selection_mode(if settings.get().multiple {
-                                ButtonGroupsSelectionMode::Multiple
-                            } else {
-                                ButtonGroupsSelectionMode::Single
-                            })
-                            .modifier(Modifier::new().width(settings.get().width).semantics(
-                                SemanticsArgs {
-                                    label: Some(format!("Group {index}")),
-                                    description: Some("Related choices".to_string()),
-                                    ..Default::default()
-                                },
-                            ));
-                        for item in 0..settings.get().items {
-                            group.child(
-                                move || {
-                                    row()
-                                        .cross_axis_alignment(CrossAxisAlignment::Center)
-                                        .children(move || {
-                                            layout()
-                                                .modifier(Modifier::new().semantics(
-                                                    SemanticsArgs {
-                                                        test_tag: Some(format!(
-                                                            "icon-{index}-{item}"
-                                                        )),
-                                                        ..Default::default()
-                                                    },
-                                                ))
-                                                .child(|| {
-                                                    icon().painter(filled::HOME_SVG);
-                                                });
-                                            spacer().modifier(Modifier::new().width(Dp(8.0)));
-                                            text().content(format!("G{index} {item}"));
-                                        });
-                                },
-                                move |selected| {
-                                    assert_eq!(
-                                        controller.with(|value| value.is_selected(item)),
-                                        selected,
-                                        "callbacks must observe the updated selection"
-                                    );
-                                    settings.with_mut(|value| value.calls += 1);
-                                },
-                            );
+                                size
+                            };
+                            let group = button_groups()
+                                .state(controller)
+                                .style(if settings.get().connected {
+                                    ButtonGroupsStyle::Connected
+                                } else {
+                                    ButtonGroupsStyle::Standard
+                                })
+                                .shape_style(if settings.get().square {
+                                    ButtonShape::Square
+                                } else {
+                                    ButtonShape::Round
+                                })
+                                .size(size)
+                                .enabled(settings.get().enabled)
+                                .selection_required(settings.get().required)
+                                .disabled_indices(if settings.get().disabled_all {
+                                    vec![0, 1, 2]
+                                } else if settings.get().disabled_middle {
+                                    vec![1]
+                                } else {
+                                    vec![]
+                                })
+                                .selection_mode(if settings.get().multiple {
+                                    ButtonGroupsSelectionMode::Multiple
+                                } else {
+                                    ButtonGroupsSelectionMode::Single
+                                })
+                                .modifier(Modifier::new().width(settings.get().width).semantics(
+                                    SemanticsArgs {
+                                        label: Some(format!("Group {index}")),
+                                        description: Some("Related choices".to_string()),
+                                        ..Default::default()
+                                    },
+                                ));
+                            for item in 0..settings.get().items {
+                                group.child(
+                                    move || {
+                                        row()
+                                            .cross_axis_alignment(CrossAxisAlignment::Center)
+                                            .children(move || {
+                                                layout()
+                                                    .modifier(Modifier::new().semantics(
+                                                        SemanticsArgs {
+                                                            test_tag: Some(format!(
+                                                                "icon-{index}-{item}"
+                                                            )),
+                                                            ..Default::default()
+                                                        },
+                                                    ))
+                                                    .child(|| {
+                                                        icon().painter(filled::HOME_SVG);
+                                                    });
+                                                spacer().modifier(Modifier::new().width(Dp(8.0)));
+                                                text().content(format!("G{index} {item}"));
+                                            });
+                                    },
+                                    move |selected| {
+                                        assert_eq!(
+                                            controller.with(|value| value.is_selected(item)),
+                                            selected,
+                                            "callbacks must observe the updated selection"
+                                        );
+                                        settings.with_mut(|value| value.calls += 1);
+                                    },
+                                );
+                            }
+                            spacer().modifier(Modifier::new().height(Dp(12.0)));
                         }
-                        spacer().modifier(Modifier::new().height(Dp(12.0)));
                     }
                 });
         });
@@ -241,8 +242,12 @@ fn pixel(renderer: &HeadlessRenderer, x: i64, y: i64) -> [u8; 4] {
 
 fn check_group_metrics(samples: u32) {
     for scale in [1.0, 1.5] {
+        let probe = TestProbe::default();
+        let observed = probe.clone();
         let mut renderer = HeadlessRenderer::new(
-            Box::new(fixture),
+            Box::new(move || {
+                fixture(probe.clone());
+            }),
             vec![Box::new(crate::TesseraComponents)],
             HeadlessConfig {
                 width: 1800,
@@ -254,7 +259,7 @@ fn check_group_metrics(samples: u32) {
         )
         .unwrap();
         renderer.render_frames(10);
-        let settings = SETTINGS.get().unwrap();
+        let settings = observed.get().settings.unwrap();
         for reverse in [false, true, false] {
             settings.with_mut(|value| value.reverse_sizes = reverse);
             renderer.render_frames(45);
@@ -416,7 +421,7 @@ fn check_group_metrics(samples: u32) {
             "removed choices must not restore stale selection"
         );
         assert_eq!(settings.get().calls, 7);
-        let controller = GROUPS.get()[1].unwrap();
+        let controller = observed.get().groups[1].unwrap();
         controller.with_mut(|value| value.set_selected(1, true));
         renderer.render_frames(45);
         assert_eq!(button(&renderer, "G1 1").1.toggled(), Some(Toggled::True));
@@ -572,7 +577,7 @@ fn check_group_metrics(samples: u32) {
             value.required = false;
             value.square = true;
         });
-        for controller in GROUPS.get().into_iter().flatten() {
+        for controller in observed.get().groups.into_iter().flatten() {
             controller.with_mut(ButtonGroupsState::clear);
         }
         renderer.render_frames(45);
@@ -604,6 +609,8 @@ fn check_group_metrics(samples: u32) {
                 );
             }
             click(&mut renderer, &label);
+            FocusManager::current().clear_focus(true);
+            renderer.render_frames(1);
             let selected = button(&renderer, &label);
             assert_eq!(selected.0, before.0);
             assert_eq!(selected.1.bounds(), before.1.bounds());
@@ -622,7 +629,7 @@ fn check_group_metrics(samples: u32) {
             assert_eq!(selected.1.bounds(), before.1.bounds());
             assert_eq!(selected.1.toggled(), Some(Toggled::True));
         }
-        for controller in GROUPS.get().into_iter().flatten() {
+        for controller in observed.get().groups.into_iter().flatten() {
             controller.with_mut(ButtonGroupsState::clear);
         }
         settings.with_mut(|value| value.square = true);
@@ -661,8 +668,10 @@ fn check_group_metrics(samples: u32) {
         let style_before: Vec<_> = (0..5)
             .map(|index| button(&renderer, &format!("G{index} 0")).0)
             .collect();
+        assert!(action(&mut renderer, "G1 0", Action::Focus));
+        renderer.step_frame();
         let focus_before = renderer.accessibility_snapshot().unwrap().focus;
-        for controller in GROUPS.get().into_iter().flatten() {
+        for controller in observed.get().groups.into_iter().flatten() {
             controller.with_mut(ButtonGroupsState::clear);
         }
         settings.with_mut(|value| value.connected = false);
@@ -672,6 +681,8 @@ fn check_group_metrics(samples: u32) {
             focus_before,
             "style changes must preserve focus"
         );
+        FocusManager::current().clear_focus(true);
+        renderer.step_frame();
         for index in 0..5 {
             let label = format!("G{index} 0");
             let before = button(&renderer, &label);
@@ -689,6 +700,8 @@ fn check_group_metrics(samples: u32) {
                 "standard square resting corner {index}"
             );
             click(&mut renderer, &label);
+            FocusManager::current().clear_focus(true);
+            renderer.step_frame();
             let selected = button(&renderer, &label);
             let bounds = selected.1.bounds().unwrap();
             assert_eq!(selected.0, before.0);

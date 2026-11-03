@@ -1,4 +1,4 @@
-use std::cell::Cell;
+use crate::testing::TestProbe;
 
 use crate::{
     AccessibilityActionHandler, AccessibilityNode, ComputedData, Constraint, LayoutModifierNode,
@@ -9,8 +9,6 @@ use crate::{
 };
 
 use super::*;
-
-thread_local! { static LOCAL_PRESS: Cell<Option<PxPosition>> = const { Cell::new(None) }; }
 
 #[derive(Clone, PartialEq)]
 struct Anchor;
@@ -37,7 +35,7 @@ impl LayoutModifierNode for Content {
     }
 }
 
-struct Pointer;
+struct Pointer(TestProbe<Option<PxPosition>>);
 impl PointerInputModifierNode for Pointer {
     fn on_pointer_input(&self, input: PointerInput<'_>) {
         if input.pass == PointerEventPass::Main
@@ -46,7 +44,7 @@ impl PointerInputModifierNode for Pointer {
                 .iter()
                 .any(|change| matches!(change.content, CursorEventContent::Pressed(_)))
         {
-            LOCAL_PRESS.set(input.cursor_position_rel);
+            self.0.set(input.cursor_position_rel);
         }
     }
 }
@@ -60,13 +58,14 @@ impl SemanticsModifierNode for Tag {
 }
 
 #[crate::tessera(crate)]
-fn protocol_fixture() {
-    layout().policy(Anchor).child(|| {
-        scaled_box(0.625).child(|| {
+fn protocol_fixture(probe: TestProbe<Option<PxPosition>>) {
+    layout().policy(Anchor).child(move || {
+        let probe = probe.clone();
+        scaled_box(0.625).child(move || {
             layout().policy(Content).modifier(
                 Modifier::new()
                     .push_semantics(Tag)
-                    .push_pointer_input(Pointer),
+                    .push_pointer_input(Pointer(probe.clone())),
             );
         });
     });
@@ -91,10 +90,11 @@ fn probe_bounds(value: &Value) -> Option<&Value> {
 #[test]
 #[ignore = "requires a native GPU adapter; run this exact test in its own process"]
 fn gpu_worker_protocol_preserves_fractional_input_and_scaled_snapshot_bounds() {
-    LOCAL_PRESS.set(None);
+    let probe = TestProbe::new(None);
     let mut renderer = HeadlessRenderer::new(
-        Box::new(|| {
-            protocol_fixture();
+        Box::new({
+            let probe = probe.clone();
+            move || protocol_fixture(probe.clone())
         }),
         Vec::new(),
         HeadlessConfig {
@@ -119,7 +119,7 @@ fn gpu_worker_protocol_preserves_fractional_input_and_scaled_snapshot_bounds() {
     let (_, response) = handle_request(&mut renderer, request).expect("Input request");
     assert_eq!(response["ok"], true);
     renderer.render_frames(1);
-    assert_eq!(LOCAL_PRESS.get(), Some(PxPosition::from_f32_xy(48.0, 24.0)));
+    assert_eq!(probe.get(), Some(PxPosition::from_f32_xy(48.0, 24.0)));
 }
 
 #[cfg(all(feature = "profiling", not(target_family = "wasm")))]

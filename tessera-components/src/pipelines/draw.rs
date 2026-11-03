@@ -35,7 +35,7 @@ pub(super) fn register(context: &mut PipelineContext<'_>) {
 fn register_path_stroke(context: &mut PipelineContext<'_>) {
     let resources = context.resources();
     let pipeline = PathStrokePipeline::new(
-        resources.device,
+        resources.graphics,
         resources.surface_config,
         resources.pipeline_cache,
         resources.sample_count,
@@ -46,7 +46,7 @@ fn register_path_stroke(context: &mut PipelineContext<'_>) {
 fn register_linear_wave(context: &mut PipelineContext<'_>) {
     let resources = context.resources();
     let pipeline = LinearWavePipeline::new(
-        resources.device,
+        resources.graphics,
         resources.surface_config,
         resources.pipeline_cache,
         resources.sample_count,
@@ -57,7 +57,7 @@ fn register_linear_wave(context: &mut PipelineContext<'_>) {
 fn register_loading_shape(context: &mut PipelineContext<'_>) {
     let resources = context.resources();
     let pipeline = LoadingShapePipeline::new(
-        resources.device,
+        resources.graphics,
         resources.surface_config,
         resources.pipeline_cache,
         resources.sample_count,
@@ -79,7 +79,7 @@ fn register_simple_rect(context: &mut PipelineContext<'_>) {
 fn register_shape(context: &mut PipelineContext<'_>) {
     let resources = context.resources();
     let pipeline = ShapePipeline::new(
-        resources.device,
+        resources.graphics,
         resources.surface_config,
         resources.pipeline_cache,
         resources.sample_count,
@@ -118,7 +118,7 @@ fn register_progress_arc(context: &mut PipelineContext<'_>) {
 fn register_checkmark(context: &mut PipelineContext<'_>) {
     let resources = context.resources();
     let pipeline = CheckmarkPipeline::new(
-        resources.device,
+        resources.graphics,
         resources.pipeline_cache,
         resources.surface_config,
         resources.sample_count,
@@ -151,7 +151,7 @@ fn register_fluid_glass(context: &mut PipelineContext<'_>) {
 fn register_image(context: &mut PipelineContext<'_>) {
     let resources = context.resources();
     let pipeline = ImagePipeline::new(
-        resources.device,
+        resources.graphics,
         resources.surface_config,
         resources.pipeline_cache,
         resources.sample_count,
@@ -162,7 +162,7 @@ fn register_image(context: &mut PipelineContext<'_>) {
 fn register_image_vector(context: &mut PipelineContext<'_>) {
     let resources = context.resources();
     let pipeline = ImageVectorPipeline::new(
-        resources.device,
+        resources.graphics,
         resources.surface_config,
         resources.pipeline_cache,
         resources.sample_count,
@@ -173,7 +173,7 @@ fn register_image_vector(context: &mut PipelineContext<'_>) {
 fn register_divider(context: &mut PipelineContext<'_>) {
     let resources = context.resources();
     let pipeline = DividerPipeline::new(
-        resources.device,
+        resources.graphics,
         resources.pipeline_cache,
         resources.surface_config,
         resources.sample_count,

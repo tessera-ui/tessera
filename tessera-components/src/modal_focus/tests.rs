@@ -4,7 +4,7 @@
 //!
 //! Keep keyboard navigation inside a modal and restore its invoking control.
 
-use std::{cell::Cell, time::Duration};
+use std::time::Duration;
 
 use tessera_ui::{
     Dp, FocusDirection, FocusManager, HeadlessConfig, HeadlessRenderer, MOUSE_POINTER_ID, Modifier,
@@ -24,7 +24,7 @@ use crate::{
     theme::material_theme,
 };
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 enum Kind {
     Dialog,
     BasicDialog,
@@ -47,23 +47,18 @@ struct Settings {
     long_content: bool,
 }
 
-thread_local! {
-    static KIND: Cell<Kind> = const { Cell::new(Kind::Dialog) };
-    static SETTINGS: Cell<Option<State<Settings>>> = const { Cell::new(None) };
-    static LONG_DIALOG_STATE: Cell<Option<State<(bool, usize)>>> = const { Cell::new(None) };
-}
-
 #[tessera]
-fn long_dialog_fixture() {
+fn long_dialog_fixture(output: tessera_ui::testing::TestProbe<Option<State<(bool, usize)>>>) {
     let state = remember(|| (true, 0_usize));
-    LONG_DIALOG_STATE.set(Some(state));
+    output.set(Some(state));
     material_theme().child(move || {
         dialog_provider()
             .accessibility_label("Long message")
             .is_open(state.get().0)
             .on_close_request(move || state.with_mut(|state| state.0 = false))
-            .dialog_content(move || {
+            .dialog_content(move |scope| {
                 basic_dialog()
+                    .dialog(scope)
                     .headline("Long message")
                     .content(|| {
                         column().children(|| {
@@ -105,8 +100,10 @@ fn basic_dialog_scrolls_long_body_while_headline_and_actions_remain_visible() {
     crate::test_utils::run_isolated_test(
         "modal_focus::tests::basic_dialog_scrolls_long_body_while_headline_and_actions_remain_visible",
         || {
+            let output = tessera_ui::testing::TestProbe::default();
+            let probe = output.clone();
             let mut renderer = HeadlessRenderer::new(
-                Box::new(long_dialog_fixture),
+                Box::new(move || long_dialog_fixture(probe.clone())),
                 vec![Box::new(crate::TesseraComponents)],
                 HeadlessConfig {
                     width: 640,
@@ -196,14 +193,13 @@ fn basic_dialog_scrolls_long_body_while_headline_and_actions_remain_visible() {
             );
             assert_eq!(node(&renderer, "Confirm message").1.bounds(), Some(confirm));
             action(&mut renderer, "Confirm message", Action::Click);
-            assert_eq!(LONG_DIALOG_STATE.get().unwrap().get(), (false, 1));
+            assert_eq!(output.get().unwrap().get(), (false, 1));
         },
     );
 }
 
 #[tessera]
-fn main_content() {
-    let settings = SETTINGS.get().unwrap();
+fn main_content(settings: State<Settings>) {
     column()
         .modifier(Modifier::new().fill_max_size())
         .children(move || {
@@ -226,8 +222,7 @@ fn main_content() {
 }
 
 #[tessera]
-fn modal_content() {
-    let settings = SETTINGS.get().unwrap();
+fn modal_content(settings: State<Settings>) {
     column()
         .modifier(Modifier::new().width(Dp(200.0)))
         .children(move || {
@@ -251,7 +246,7 @@ fn modal_content() {
 }
 
 #[tessera]
-fn fixture() {
+fn fixture(kind: Kind, output: tessera_ui::testing::TestProbe<Option<State<Settings>>>) {
     let settings = remember(|| Settings {
         label: "Example modal".to_string(),
         role: DialogRole::Dialog,
@@ -263,35 +258,38 @@ fn fixture() {
         confirmed: 0,
         long_content: false,
     });
-    SETTINGS.set(Some(settings));
-    material_theme().child(move || match KIND.get() {
+    output.set(Some(settings));
+    material_theme().child(move || match kind {
         Kind::Dialog => {
             dialog_provider()
                 .accessibility_label(settings.get().label)
                 .role(settings.get().role)
                 .is_open(settings.get().open)
                 .on_close_request(move || settings.with_mut(|s| s.open = false))
-                .main_content(|| {
-                    main_content();
+                .main_content(move || {
+                    main_content(settings);
                 })
-                .dialog_content(|| {
-                    modal_content();
+                .dialog_content(move |_| {
+                    modal_content(settings);
                 });
         }
         Kind::BasicDialog => {
             dialog_provider()
                 .accessibility_label("Basic dialog")
                 .is_open(settings.get().open)
-                .main_content(main_content)
-                .dialog_content(move || {
-                    basic_dialog().headline("Title").supporting_text(
-                        if settings.get().long_content {
+                .main_content(move || {
+                    main_content(settings);
+                })
+                .dialog_content(move |scope| {
+                    basic_dialog()
+                        .dialog(scope)
+                        .headline("Title")
+                        .supporting_text(if settings.get().long_content {
                             "A detailed explanation that wraps within the dialog container. "
                                 .repeat(8)
                         } else {
                             "Details".to_owned()
-                        },
-                    );
+                        });
                 });
         }
         Kind::FullScreenDialog => {
@@ -300,13 +298,18 @@ fn fixture() {
                 .accessibility_label(settings.get().label)
                 .is_open(settings.get().open)
                 .on_close_request(move || settings.with_mut(|s| s.open = false))
-                .main_content(main_content)
-                .dialog_content(move || {
+                .main_content(move || {
+                    main_content(settings);
+                })
+                .dialog_content(move |scope| {
                     let dialog = full_screen_dialog(tessera_ui::Callback::new(move || {
                         settings.with_mut(|s| s.open = false)
                     }))
+                    .dialog(scope)
                     .title("New event")
-                    .content(modal_content);
+                    .content(move || {
+                        modal_content(settings);
+                    });
                     if settings.get().actions {
                         dialog.on_confirm(move || {
                             settings.with_mut(|s| {
@@ -322,11 +325,11 @@ fn fixture() {
                 .accessibility_label(settings.get().label)
                 .is_open(settings.get().open)
                 .on_close_request(move || settings.with_mut(|s| s.open = false))
-                .main_content(|| {
-                    main_content();
+                .main_content(move || {
+                    main_content(settings);
                 })
-                .bottom_sheet_content(|| {
-                    modal_content();
+                .bottom_sheet_content(move || {
+                    modal_content(settings);
                 });
         }
         Kind::SideSheet => {
@@ -335,11 +338,11 @@ fn fixture() {
                 .position(SideSheetPosition::End)
                 .is_open(settings.get().open)
                 .on_close_request(move || settings.with_mut(|s| s.open = false))
-                .main_content(|| {
-                    main_content();
+                .main_content(move || {
+                    main_content(settings);
                 })
-                .side_sheet_content(|| {
-                    modal_content();
+                .side_sheet_content(move || {
+                    modal_content(settings);
                 });
         }
         Kind::StandardSheet => {
@@ -348,11 +351,11 @@ fn fixture() {
                 .position(SideSheetPosition::End)
                 .is_open(settings.get().open)
                 .on_close_request(move || settings.with_mut(|s| s.open = false))
-                .main_content(|| {
-                    main_content();
+                .main_content(move || {
+                    main_content(settings);
                 })
-                .side_sheet_content(|| {
-                    modal_content();
+                .side_sheet_content(move || {
+                    modal_content(settings);
                 });
         }
     });
@@ -389,7 +392,7 @@ fn tap(renderer: &mut HeadlessRenderer, point: PxPosition) {
     renderer.render_frames(24);
 }
 
-fn open(renderer: &mut HeadlessRenderer) {
+fn open(renderer: &mut HeadlessRenderer, kind: Kind, settings: State<Settings>) {
     let origin = node(renderer, "Open modal").0;
     let other = node(renderer, "Other task").0;
     let bounds = node(renderer, "Open modal").1.bounds().unwrap();
@@ -400,15 +403,15 @@ fn open(renderer: &mut HeadlessRenderer) {
             ((bounds.y0 + bounds.y1) * 0.5) as f32,
         ),
     );
-    assert!(SETTINGS.get().unwrap().get().open);
-    if SETTINGS.get().unwrap().get().actions {
+    assert!(settings.get().open);
+    if settings.get().actions {
         assert_eq!(
             renderer.accessibility_snapshot().unwrap().focus,
             node(
                 renderer,
-                if matches!(KIND.get(), Kind::FullScreenDialog) {
+                if matches!(kind, Kind::FullScreenDialog) {
                     "Close dialog"
-                } else if matches!(KIND.get(), Kind::BottomSheet) {
+                } else if matches!(kind, Kind::BottomSheet) {
                     "Drag handle"
                 } else {
                     "First action"
@@ -430,10 +433,11 @@ fn check(samples: u32) {
         Kind::SideSheet,
         Kind::StandardSheet,
     ] {
-        KIND.set(kind);
         for scale in [1.0, 1.5] {
+            let output = tessera_ui::testing::TestProbe::default();
+            let probe = output.clone();
             let mut renderer = HeadlessRenderer::new(
-                Box::new(fixture),
+                Box::new(move || fixture(kind, probe.clone())),
                 vec![Box::new(crate::TesseraComponents)],
                 HeadlessConfig {
                     width: 960,
@@ -446,11 +450,11 @@ fn check(samples: u32) {
             )
             .unwrap();
             renderer.render_frames(4);
-            let settings = SETTINGS.get().unwrap();
+            let settings = output.get().unwrap();
             let origin = node(&renderer, "Open modal").0;
             let other_id = node(&renderer, "Other task").0;
             let other_bounds = node(&renderer, "Other task").1.bounds().unwrap();
-            open(&mut renderer);
+            open(&mut renderer, kind, output.get().unwrap());
             let snapshot = renderer.accessibility_snapshot().unwrap();
             let dialogs: Vec<_> = snapshot
                 .nodes
@@ -523,7 +527,7 @@ fn check(samples: u32) {
             if matches!(kind, Kind::StandardSheet) {
                 action(&mut renderer, "First action", Action::Click);
                 assert_eq!(renderer.accessibility_snapshot().unwrap().focus, origin);
-                open(&mut renderer);
+                open(&mut renderer, kind, output.get().unwrap());
                 assert!(FocusManager::current().request_move_focus(FocusDirection::Previous));
                 renderer.render_frames(3);
                 assert_eq!(
@@ -581,7 +585,7 @@ fn check(samples: u32) {
                 origin,
                 "{kind:?}"
             );
-            open(&mut renderer);
+            open(&mut renderer, kind, output.get().unwrap());
             tap(
                 &mut renderer,
                 PxPosition::from_f32_xy(
@@ -597,7 +601,7 @@ fn check(samples: u32) {
                 "{kind:?}"
             );
             settings.with_mut(|s| s.actions = false);
-            open(&mut renderer);
+            open(&mut renderer, kind, output.get().unwrap());
             let empty_focus = renderer.accessibility_snapshot().unwrap().focus;
             for direction in [FocusDirection::Next, FocusDirection::Previous] {
                 assert!(FocusManager::current().request_move_focus(direction));
@@ -620,7 +624,7 @@ fn check(samples: u32) {
             assert_eq!(renderer.accessibility_snapshot().unwrap().focus, origin);
             let other = node(&renderer, "Other task").0;
             for remove in [false, true] {
-                open(&mut renderer);
+                open(&mut renderer, kind, output.get().unwrap());
                 settings.with_mut(|s| {
                     s.open = false;
                     s.origin_enabled = false;
@@ -641,11 +645,13 @@ fn check(samples: u32) {
 }
 
 fn check_full_screen(samples: u32) {
-    KIND.set(Kind::FullScreenDialog);
+    let kind = Kind::FullScreenDialog;
     for scale in [1.0, 1.5] {
         for width in [390, 960] {
+            let output = tessera_ui::testing::TestProbe::default();
+            let probe = output.clone();
             let mut renderer = HeadlessRenderer::new(
-                Box::new(fixture),
+                Box::new(move || fixture(kind, probe.clone())),
                 vec![Box::new(crate::TesseraComponents)],
                 HeadlessConfig {
                     width,
@@ -659,8 +665,8 @@ fn check_full_screen(samples: u32) {
             .unwrap();
             renderer.render_frames(4);
             let origin = node(&renderer, "Open modal").0;
-            let settings = SETTINGS.get().unwrap();
-            open(&mut renderer);
+            let settings = output.get().unwrap();
+            open(&mut renderer, kind, output.get().unwrap());
             let dialog = labeled_node(&renderer, "Example modal", Role::Dialog)
                 .1
                 .bounds()
@@ -709,7 +715,7 @@ fn check_full_screen(samples: u32) {
             renderer.render_frames(24);
             assert_eq!(settings.get().confirmed, 1);
             assert_eq!(renderer.accessibility_snapshot().unwrap().focus, origin);
-            open(&mut renderer);
+            open(&mut renderer, kind, output.get().unwrap());
             action(&mut renderer, "Close dialog", Action::Click);
             renderer.render_frames(24);
             assert!(!settings.get().open);
@@ -717,7 +723,7 @@ fn check_full_screen(samples: u32) {
             assert_eq!(settings.get().background_actions, 0);
             assert_eq!(renderer.accessibility_snapshot().unwrap().focus, origin);
             settings.with_mut(|settings| settings.actions = false);
-            open(&mut renderer);
+            open(&mut renderer, kind, output.get().unwrap());
             assert!(
                 !renderer
                     .accessibility_snapshot()
@@ -738,9 +744,11 @@ fn check_full_screen(samples: u32) {
             assert_eq!(settings.get().confirmed, 1);
         }
     }
-    KIND.set(Kind::BasicDialog);
+    let kind = Kind::BasicDialog;
+    let output = tessera_ui::testing::TestProbe::default();
+    let probe = output.clone();
     let mut renderer = HeadlessRenderer::new(
-        Box::new(fixture),
+        Box::new(move || fixture(kind, probe.clone())),
         vec![Box::new(crate::TesseraComponents)],
         HeadlessConfig {
             width: 960,
@@ -751,7 +759,7 @@ fn check_full_screen(samples: u32) {
     )
     .unwrap();
     renderer.render_frames(4);
-    let settings = SETTINGS.get().unwrap();
+    let settings = output.get().unwrap();
     settings.with_mut(|settings| settings.open = true);
     renderer.render_frames(24);
     assert_eq!(
@@ -782,9 +790,11 @@ fn explicit_alert_dialog_role_preserves_modal_controls_and_focus_restoration() {
     crate::test_utils::run_isolated_test(
         "modal_focus::tests::explicit_alert_dialog_role_preserves_modal_controls_and_focus_restoration",
         || {
-            KIND.set(Kind::Dialog);
+            let kind = Kind::Dialog;
+            let output = tessera_ui::testing::TestProbe::default();
+            let probe = output.clone();
             let mut renderer = HeadlessRenderer::new(
-                Box::new(fixture),
+                Box::new(move || fixture(kind, probe.clone())),
                 vec![Box::new(crate::TesseraComponents)],
                 HeadlessConfig {
                     width: 640,
@@ -796,10 +806,10 @@ fn explicit_alert_dialog_role_preserves_modal_controls_and_focus_restoration() {
             )
             .unwrap();
             renderer.render_frames(4);
-            let state = SETTINGS.get().unwrap();
+            let state = output.get().unwrap();
             state.with_mut(|state| state.role = DialogRole::AlertDialog);
             let origin = node(&renderer, "Open modal").0;
-            open(&mut renderer);
+            open(&mut renderer, kind, output.get().unwrap());
             let (id, alert) = labeled_node(&renderer, "Example modal", Role::AlertDialog);
             assert!(alert.is_modal());
             assert_eq!(

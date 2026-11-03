@@ -1,4 +1,4 @@
-use std::{cell::Cell, time::Duration};
+use std::time::Duration;
 
 use tessera_ui::{
     CursorEventContent, FocusDirection, FocusManager, GestureState, HeadlessConfig,
@@ -23,14 +23,15 @@ struct Settings {
     variant: TopAppBarVariant,
 }
 
-thread_local! {
-    static SETTINGS: Cell<Option<State<Settings>>> = const { Cell::new(None) };
-    static BAR: Cell<Option<State<AppBarScrollState>>> = const { Cell::new(None) };
-    static CONTENT: Cell<Option<State<ScrollableController>>> = const { Cell::new(None) };
+#[derive(Clone, Copy, Default)]
+struct FixtureHandles {
+    settings: Option<State<Settings>>,
+    bar: Option<State<AppBarScrollState>>,
+    content: Option<State<ScrollableController>>,
 }
 
 #[tessera]
-fn fixture() {
+fn fixture(observed: tessera_ui::testing::TestProbe<FixtureHandles>) {
     let settings = remember(|| Settings {
         behavior: AppBarScrollBehavior::ExitUntilCollapsed,
         enabled: true,
@@ -39,9 +40,9 @@ fn fixture() {
     });
     let state = remember(AppBarScrollState::default);
     let content = remember(ScrollableController::new);
-    SETTINGS.set(Some(settings));
-    BAR.set(Some(state));
-    CONTENT.set(Some(content));
+    observed.with_mut(|handles| handles.settings = Some(settings));
+    observed.with_mut(|handles| handles.bar = Some(state));
+    observed.with_mut(|handles| handles.content = Some(content));
     material_theme()
         .theme(|| {
             let mut theme = MaterialTheme::default();
@@ -61,6 +62,7 @@ fn fixture() {
                         .modifier(Modifier::new().fill_max_size())
                         .top_bar(move || {
                             top_app_bar()
+                                .scroll_state(state)
                                 .title("Library")
                                 .subtitle("Saved items")
                                 .variant(settings.get().variant)
@@ -149,16 +151,30 @@ fn wheel(renderer: &mut HeadlessRenderer, delta: f32) {
     renderer.render_frames(3);
 }
 
-fn reset(renderer: &mut HeadlessRenderer, behavior: AppBarScrollBehavior, snap: bool) {
-    SETTINGS.get().expect("settings").with_mut(|settings| {
-        settings.behavior = behavior;
-        settings.snap = snap;
-        settings.variant = TopAppBarVariant::LargeFlexible;
-        settings.enabled = true;
-    });
-    BAR.get().expect("bar").with_mut(AppBarScrollState::reset);
-    CONTENT
+fn reset(
+    renderer: &mut HeadlessRenderer,
+    behavior: AppBarScrollBehavior,
+    snap: bool,
+    observed: &tessera_ui::testing::TestProbe<FixtureHandles>,
+) {
+    observed
         .get()
+        .settings
+        .expect("settings")
+        .with_mut(|settings| {
+            settings.behavior = behavior;
+            settings.snap = snap;
+            settings.variant = TopAppBarVariant::LargeFlexible;
+            settings.enabled = true;
+        });
+    observed
+        .get()
+        .bar
+        .expect("bar")
+        .with_mut(AppBarScrollState::reset);
+    observed
+        .get()
+        .content
         .expect("content")
         .with_mut(|controller| controller.set_scroll_position(PxPosition::ZERO));
     renderer.render_frames(8);
@@ -175,8 +191,10 @@ fn touch(renderer: &mut HeadlessRenderer, content: CursorEventContent, state: Ge
 }
 
 fn check_scrolling(samples: u32) {
+    let observed = tessera_ui::testing::TestProbe::default();
+    let fixture_observed = observed.clone();
     let mut renderer = HeadlessRenderer::new(
-        Box::new(|| fixture()),
+        Box::new(move || fixture(fixture_observed.clone())),
         vec![Box::new(crate::TesseraComponents)],
         HeadlessConfig {
             width: 600,
@@ -189,8 +207,8 @@ fn check_scrolling(samples: u32) {
     )
     .expect("renderer");
     renderer.render_frames(8);
-    let bar = BAR.get().expect("bar");
-    let content = CONTENT.get().expect("content");
+    let bar = observed.get().bar.expect("bar");
+    let content = observed.get().content.expect("content");
     assert_eq!(height(&renderer), 228.0);
     assert_eq!(labels(&renderer), 1);
     let baseline = renderer.read_pixels().expect("baseline");
@@ -223,7 +241,12 @@ fn check_scrolling(samples: u32) {
     assert_eq!(height(&renderer), 228.0);
     background(&renderer, [255, 255, 255]);
 
-    reset(&mut renderer, AppBarScrollBehavior::EnterAlways, false);
+    reset(
+        &mut renderer,
+        AppBarScrollBehavior::EnterAlways,
+        false,
+        &observed,
+    );
     wheel(&mut renderer, -300.0);
     renderer.render_frames(40);
     let child = content.with(ScrollableController::target_position);
@@ -237,7 +260,7 @@ fn check_scrolling(samples: u32) {
     );
     assert_eq!(labels(&renderer), 1);
 
-    reset(&mut renderer, AppBarScrollBehavior::Pinned, true);
+    reset(&mut renderer, AppBarScrollBehavior::Pinned, true, &observed);
     wheel(&mut renderer, -60.0);
     renderer.render_frames(90);
     assert_eq!(height(&renderer), 228.0);
@@ -251,9 +274,11 @@ fn check_scrolling(samples: u32) {
         &mut renderer,
         AppBarScrollBehavior::ExitUntilCollapsed,
         false,
+        &observed,
     );
-    SETTINGS
+    observed
         .get()
+        .settings
         .expect("settings")
         .with_mut(|settings| settings.enabled = false);
     renderer.render_frames(3);
@@ -265,6 +290,7 @@ fn check_scrolling(samples: u32) {
         &mut renderer,
         AppBarScrollBehavior::ExitUntilCollapsed,
         true,
+        &observed,
     );
     touch(
         &mut renderer,
@@ -323,6 +349,7 @@ fn check_scrolling(samples: u32) {
         &mut renderer,
         AppBarScrollBehavior::ExitUntilCollapsed,
         false,
+        &observed,
     );
     touch(
         &mut renderer,
@@ -368,9 +395,15 @@ fn check_scrolling(samples: u32) {
     renderer.render_frames(180);
     assert!(!bar.with(AppBarScrollState::is_animating));
 
-    reset(&mut renderer, AppBarScrollBehavior::EnterAlways, false);
-    SETTINGS
+    reset(
+        &mut renderer,
+        AppBarScrollBehavior::EnterAlways,
+        false,
+        &observed,
+    );
+    observed
         .get()
+        .settings
         .expect("settings")
         .with_mut(|settings| settings.variant = TopAppBarVariant::Small);
     renderer.render_frames(5);
@@ -417,6 +450,7 @@ fn check_scrolling(samples: u32) {
         &mut renderer,
         AppBarScrollBehavior::ExitUntilCollapsed,
         true,
+        &observed,
     );
     renderer.resize(1, 1);
     renderer.render_frames(3);
@@ -426,13 +460,18 @@ fn check_scrolling(samples: u32) {
         renderer.read_pixels().expect("resized") == baseline,
         "nested-scroll geometry and pixels recover after collapse-sized viewports"
     );
-    let ticks = bar.with(|state| state.frame_ticks);
-    renderer.render_frames(12);
-    assert_eq!(
-        bar.with(|state| state.frame_ticks),
-        ticks,
-        "the provider unregisters its frame callback at rest"
-    );
+    for _ in 0..12 {
+        renderer.step_frame();
+        let clock = renderer.frame_clock_diagnostics();
+        assert_eq!(
+            clock.callbacks_executed, 0,
+            "the provider stops ticking at rest"
+        );
+        assert_eq!(
+            clock.pending_subscriptions, 0,
+            "the provider unregisters its frame callback at rest"
+        );
+    }
 }
 
 #[test]

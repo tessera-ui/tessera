@@ -74,8 +74,8 @@ impl Drop for BrowserClipboard {
     }
 }
 
-thread_local! {
-    static BRIDGE: RefCell<Option<BrowserClipboard>> = const { RefCell::new(None) };
+fn bridge() -> Rc<RefCell<Option<BrowserClipboard>>> {
+    tessera_ui::__private::local_runtime_resource::<RefCell<Option<BrowserClipboard>>>()
 }
 
 fn targets_canvas(event: &Event, canvas: &HtmlCanvasElement) -> bool {
@@ -102,6 +102,9 @@ pub(super) fn install(window: Arc<Window>) -> Result<(), web_sys::wasm_bindgen::
         return Ok(());
     };
     let target: EventTarget = document.unchecked_into();
+    let session = tessera_ui::__private::current_runtime_session().ok_or_else(|| {
+        web_sys::wasm_bindgen::JsValue::from_str("clipboard requires a UI session")
+    })?;
     let mut listeners = Vec::new();
     let restore = Rc::new(Cell::new(None));
     listeners.push(Listener::new(&target, "keydown", true, {
@@ -143,6 +146,7 @@ pub(super) fn install(window: Arc<Window>) -> Result<(), web_sys::wasm_bindgen::
         }
     })?);
     for name in ["copy", "cut", "paste"] {
+        let session = session.clone();
         let canvas = canvas.clone();
         listeners.push(Listener::new(&target, name, true, move |event| {
             if !targets_canvas(&event, &canvas) {
@@ -168,21 +172,19 @@ pub(super) fn install(window: Arc<Window>) -> Result<(), web_sys::wasm_bindgen::
                 }
             };
             event.prevent_default();
-            request_clipboard_action(action, handle_response);
+            let _ = session.run(|| request_clipboard_action(action, handle_response));
         })?);
     }
-    BRIDGE.with_borrow_mut(|bridge| {
-        *bridge = Some(BrowserClipboard {
-            _listeners: listeners,
-            window,
-            restore,
-        })
-    });
+    bridge().replace(Some(BrowserClipboard {
+        _listeners: listeners,
+        window,
+        restore,
+    }));
     Ok(())
 }
 
 pub(super) fn clear() {
-    let bridge = BRIDGE.with_borrow_mut(Option::take);
+    let bridge = bridge().take();
     drop(bridge);
 }
 
@@ -195,6 +197,12 @@ fn handle_response(response: ClipboardResponse) {
 }
 
 pub(super) fn write_text(text: String, completion: impl FnOnce(bool) + 'static) {
+    let session = tessera_ui::__private::current_runtime_session();
+    let completion = move |succeeded| {
+        if let Some(session) = session {
+            let _ = session.run(|| completion(succeeded));
+        }
+    };
     spawn_local(async move {
         let Some(window) = web_sys::window() else {
             completion(false);

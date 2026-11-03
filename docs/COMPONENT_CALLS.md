@@ -22,7 +22,34 @@ Ordinary helpers can accept a handle and configure it. Declaration ownership,
 control-flow group, key, and stable component identity come from the entry
 call, including when configuration happens in another group.
 
+## Checking call boundaries
+
+Run `cargo tessera check -p my-app` to check Tessera execution contexts and then
+run Cargo's compilation checks. Tessera components and runtime APIs must be
+called inside a component or a recognized render-slot closure. Ordinary helpers,
+callbacks, and iterator closures remain uncolored, including inside components.
+
+The terminal shows `Running tessera checkers` and `Checking <crate> v<version>`
+for each crate. A white Cargo-style progress bar shows the completed crate count
+and currently active crates. `Finished` reports the result and elapsed time.
+Crates are checked in parallel; `--jobs` controls the worker count. Progress uses
+stderr and is cleared before diagnostics. Redirected output keeps static status
+lines; `--quiet` and `--message-format=json` suppress progress entirely.
+
+The checker checks the selected targets and library dependencies that directly
+use `tessera-ui`, `tessera-foundation`, `tessera-components`, or `tessera-shard` in
+their resolved Cargo dependency graph. Target and feature selection apply to
+this graph; unrelated workspace crates are excluded. Unresolved Tessera-sensitive
+calls fail the check.
+
 ## Execution and lifetime
+
+Root build callbacks use the same controlled execution model. The callbacks
+accepted by `EntryPoint::new`, `HeadlessRenderer::new`, `testing::layout_test`,
+and the `Renderer::run` variants are build fragments. Call checking recognizes
+these APIs by their resolved definitions, including `Box::new` wrapping a root
+callback directly. Ordinary helper functions and event callbacks keep their
+ordinary Rust execution contexts.
 
 Each component body is a build fragment. After the body returns, the runtime
 expands the uses declared by that fragment in declaration order. Each use
@@ -109,3 +136,6 @@ The scheduler does not introduce an additional layout or drawing phase.
 Generated `*Builder` types now contain configuration tokens rather than pending
 execution ownership. Component execution is explicit in the runtime. Guards
 still restore build context and clean up resources on normal return or unwind.
+
+The build closure passed to `key` runs as a controlled Tessera fragment.
+Key-provider callbacks and initializer factories remain ordinary Rust closures.

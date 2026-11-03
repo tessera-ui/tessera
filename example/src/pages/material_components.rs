@@ -7,6 +7,11 @@
 use tessera_shard::shard;
 
 #[shard]
-pub fn material_components_page() {
-    super::material_spec::material_spec();
+pub fn material_components_page(
+    selected: Option<tessera_ui::State<Option<usize>>>,
+    sessions: Option<crate::app::AppLiveSessions>,
+) {
+    super::material_spec::material_spec()
+        .selected_optional(selected)
+        .sessions_optional(sessions);
 }

@@ -83,6 +83,8 @@ programming contract; the guidelines below also govern framework implementation.
 - Tessera color is an execution-context color, not a general UI-code marker. The only colored contexts are:
   - free functions annotated with `#[tessera]`, or a project-approved alias that lowers to a Tessera component free function such as `#[shard]`;
   - closures carried directly by `RenderSlot`, `RenderSlotWith`, or generated setters and required constructor arguments for parameters declared as RenderSlot types (including `impl Into<RenderSlot>` / `impl Into<RenderSlotWith<...>>`);
+  - root build closures passed to `EntryPoint::new`, `HeadlessRenderer::new`, `testing::layout_test`, or `Renderer::run` / `run_with_config` / `run_web_with_config`. A semantically resolved `Box::new` can transparently carry this closure into the root argument; ordinary helper wrappers remain uncolored;
+  - the build closure of `key`, the child build closure of `provide_context`, and private Pending-property materializers passed to `ComponentCall::append` / `configure_deferred`, which execute in the declaration's restored build scope. Initializer factories and immediate plain property updates remain ordinary Rust;
   - content closures in the approved built-in render setters listed in [component calls](docs/COMPONENT_CALLS.md#built-in-render-setters). Their key providers and action callbacks remain uncolored.
 - All other executable contexts are uncolored by default: ordinary free functions, impl methods, trait methods/default methods, local functions, callbacks, event handlers, async tasks, iterator closures, `Option`/`Result` combinator closures, and arbitrary higher-order function closures.
 - Color does not propagate through helpers. A helper called by a Tessera-colored component remains uncolored unless the helper itself is a Tessera-colored free function. A helper that calls a Tessera component or Tessera-only API is invalid; it is not implicitly promoted to Tessera.
@@ -91,6 +93,7 @@ programming contract; the guidelines below also govern framework implementation.
 - Closures do not inherit Tessera color merely because they are written inside a Tessera-colored function. Only a closure passed directly to a recognized Tessera carrier, such as `RenderSlot::new`, a generated render-slot parameter, or an approved built-in render setter, is checked as a Tessera closure.
 - `RenderSlot` and `RenderSlotWith` are Tessera functors: their carried closures are delayed Tessera fragments and may only be executed by the Tessera runtime at controlled build/replay boundaries.
 - Do not introduce custom closure carriers that can execute Tessera code unless the carrier is explicitly added to the color-checker specification. Unknown higher-order functions must be treated as uncolored boundaries.
+- A plain lexical block can return a carrier closure as its tail value. This preserves the closure's carrier context without coloring initializer statements, nested ordinary closures, or async/const/generator blocks.
 - A color-check diagnostic is a false positive only when the reported expression is actually inside a Tessera-colored free-function body or a recognized Tessera carrier closure. Reports for helper functions, ordinary closures, callbacks, iterator combinators, `unwrap_or_else`, `then`, or event handlers are not false positives merely because those constructs appear syntactically inside a component.
 - The checker must use the `rust-analyzer` analysis crates as its semantic frontend and must run them as library crates from `cargo-tessera`; it must not depend on an LSP server process, `syn`, heuristic fallback parsing, `rustc_private`, or macro/build-script generated color metadata.
 - The checker must fail closed when rust-analyzer cannot resolve semantic information that is needed to classify a Tessera-sensitive call. Diagnostics should report the specific invalid uncolored boundary and call target, for example a Tessera component or `remember` call inside an ordinary closure, rather than saying only that metadata is missing.
@@ -202,6 +205,7 @@ programming contract; the guidelines below also govern framework implementation.
 ## 🛠️ Contribution & Style Guidelines
 
 - **Code Style**:
+  - Keep general cleanup and style refactors within Tessera-owned crates; preserve submodule sources for upstream synchronization.
   - Enforce `rustfmt edition 2024` default rules
   - `use` imports must be grouped in four sections (standard library, third-party crates, crate root, submodules), separated by one blank line, sorted alphabetically within each group, and merged by root path
   - All code, comments, and documentation comments must be in English (except for rare functional clarifications)

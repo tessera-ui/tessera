@@ -104,7 +104,7 @@ const DOT_STAGE: Color = Color::from_rgb(0.9911021, 0.9646862, 1.0);
 const DARK_STAGE: Color = Color::from_rgb(0.0080003, 0.0071827, 0.0103978);
 
 #[tessera]
-pub(super) fn snackbars_spec() {
+pub(super) fn snackbars_spec(route: Option<crate::pages::material_spec::article::ArticleRoute>) {
     article(
         "Snackbar",
         "Snackbars show short updates about app processes at the bottom of the screen",
@@ -127,6 +127,7 @@ pub(super) fn snackbars_spec() {
             },
         ],
     )
+    .route_optional(route.clone())
     .intro(anatomy)
     .page_heading_levels(std::collections::BTreeMap::from([("Accessibility", 3)]))
     .pages(vec![
@@ -2984,12 +2985,6 @@ mod anatomy_tests {
         HeadlessConfig, HeadlessRenderer,
         accesskit::{Node, NodeId},
     };
-    struct Pipelines;
-    impl tessera_ui::RenderModule for Pipelines {
-        fn register_pipelines(&self, context: &mut tessera_ui::PipelineContext<'_>) {
-            tessera_components::pipelines::register_pipelines(context);
-        }
-    }
     #[tessera]
     fn fixture() {
         material_theme().child(|| {
@@ -2999,20 +2994,20 @@ mod anatomy_tests {
         });
     }
     fn node(renderer: &HeadlessRenderer, label: &str, role: Role) -> (NodeId, Node) {
-        renderer
-            .accessibility_snapshot()
-            .unwrap()
-            .nodes
-            .into_iter()
-            .find(|(_, node)| node.role() == role && node.label() == Some(label))
-            .unwrap_or_else(|| panic!("missing {label} {role:?}"))
+        let snapshot = renderer
+            .inspect_accessibility()
+            .expect("accessibility tree");
+        let (id, node) = snapshot
+            .find(label, role)
+            .unwrap_or_else(|| panic!("missing {label} {role:?}"));
+        (id, node.clone())
     }
     #[test]
     #[ignore = "requires a native GPU adapter"]
     fn snackbar_spec_anatomy_numbers_container_close_action_and_text_like_material() {
         let mut renderer = HeadlessRenderer::new(
             Box::new(fixture),
-            vec![Box::new(Pipelines)],
+            vec![Box::new(crate::TestPipelines)],
             HeadlessConfig {
                 width: 900,
                 height: 400,

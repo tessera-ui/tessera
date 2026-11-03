@@ -4,11 +4,8 @@
 //!
 //! Verify real dates, selection, focus, and disabled calendar choices.
 
-use std::cell::Cell;
-
 use tessera_ui::{
     HeadlessConfig, HeadlessRenderer, MOUSE_POINTER_ID, PressKeyEventType, PxPosition,
-    RenderModule,
     accesskit::{Action, ActionRequest, Node, NodeId, TreeId},
 };
 
@@ -23,25 +20,14 @@ struct Selection {
     actions: usize,
 }
 
-thread_local! {
-    static SELECTION: Cell<Option<State<Selection>>> = const { Cell::new(None) };
-}
-
-struct Pipelines;
-impl RenderModule for Pipelines {
-    fn register_pipelines(&self, context: &mut tessera_ui::PipelineContext<'_>) {
-        crate::pipelines::register_pipelines(context);
-    }
-}
-
 #[tessera]
-fn fixture() {
+fn fixture(output: tessera_ui::testing::TestProbe<Option<State<Selection>>>) {
     let selection = remember(|| Selection {
         day: CalendarDate::new(2025, 8, 17).unwrap(),
         year: 2025,
         actions: 0,
     });
-    SELECTION.set(Some(selection));
+    output.set(Some(selection));
     material_theme().child(move || {
         column()
             .modifier(Modifier::new().padding_all(Dp(16.0)))
@@ -136,9 +122,11 @@ fn authored_cells_keep_actual_dates_callbacks_focus_and_disabled_state() {
     crate::test_utils::run_isolated_test(
         "date_picker::cell::tests::authored_cells_keep_actual_dates_callbacks_focus_and_disabled_state",
         || {
+            let output = tessera_ui::testing::TestProbe::default();
+            let probe = output.clone();
             let mut renderer = HeadlessRenderer::new(
-                Box::new(fixture),
-                vec![Box::new(Pipelines)],
+                Box::new(move || fixture(probe.clone())),
+                vec![Box::new(crate::TesseraComponents)],
                 HeadlessConfig {
                     width: 400,
                     height: 200,
@@ -225,12 +213,12 @@ fn authored_cells_keep_actual_dates_callbacks_focus_and_disabled_state() {
             assert_eq!(renderer.accessibility_snapshot().unwrap().focus, root_focus);
             renderer.pointer_move(MOUSE_POINTER_ID, PxPosition::from_f32_xy(380.0, 180.0));
             renderer.render_frames(4);
-            let actions = SELECTION.get().unwrap().with(|selection| selection.actions);
+            let actions = output.get().unwrap().with(|selection| selection.actions);
             let before = renderer.read_pixels().unwrap();
             assert!(action(&mut renderer, first, Action::Focus));
             assert_eq!(renderer.accessibility_snapshot().unwrap().focus, first);
             assert_eq!(
-                SELECTION.get().unwrap().with(|selection| selection.actions),
+                output.get().unwrap().with(|selection| selection.actions),
                 actions
             );
             let after = renderer.read_pixels().unwrap();
@@ -238,7 +226,7 @@ fn authored_cells_keep_actual_dates_callbacks_focus_and_disabled_state() {
             assert_ne!(&before[left_ring.clone()], &after[left_ring]);
             pointer_click(&mut renderer, "August 18, 2025");
             assert_eq!(
-                SELECTION.get().unwrap().with(|selection| selection.day),
+                output.get().unwrap().with(|selection| selection.day),
                 CalendarDate::new(2025, 8, 18).unwrap()
             );
             assert_eq!(
@@ -251,10 +239,10 @@ fn authored_cells_keep_actual_dates_callbacks_focus_and_disabled_state() {
             );
             let disabled = node(&renderer, "August 19, 2025");
             assert!(disabled.1.is_disabled());
-            let count = SELECTION.get().unwrap().with(|selection| selection.actions);
+            let count = output.get().unwrap().with(|selection| selection.actions);
             assert!(!action(&mut renderer, disabled.0, Action::Click));
             assert_eq!(
-                SELECTION.get().unwrap().with(|selection| selection.actions),
+                output.get().unwrap().with(|selection| selection.actions),
                 count
             );
             let (year, choice) = node(&renderer, "2025");
@@ -263,14 +251,14 @@ fn authored_cells_keep_actual_dates_callbacks_focus_and_disabled_state() {
             assert!(action(&mut renderer, year, Action::Focus));
             assert_eq!(renderer.accessibility_snapshot().unwrap().focus, year);
             assert_eq!(
-                SELECTION.get().unwrap().with(|selection| selection.actions),
+                output.get().unwrap().with(|selection| selection.actions),
                 count
             );
             let disabled_year = node(&renderer, "2026");
             assert!(disabled_year.1.is_disabled());
             assert!(!action(&mut renderer, disabled_year.0, Action::Click));
             assert_eq!(
-                SELECTION.get().unwrap().with(|selection| selection.actions),
+                output.get().unwrap().with(|selection| selection.actions),
                 count
             );
         },

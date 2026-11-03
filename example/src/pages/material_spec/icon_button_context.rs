@@ -4,8 +4,6 @@
 //!
 //! Explore actions in app bars, restaurant cards and floating toolbars.
 
-use std::sync::OnceLock;
-
 use tessera_components::{
     alignment::{Alignment, CrossAxisAlignment},
     boxed::boxed,
@@ -30,7 +28,7 @@ use tessera_ui::{
 };
 
 use super::super::{
-    annotations::{self, ObservedGeometry, observed_relative_geometry, watch_observed},
+    annotations::{SpaceGeometry, space_geometry, watch_observed},
     gap, media, srgb, subheading, type_style,
 };
 
@@ -166,9 +164,8 @@ pub(super) fn context_row(prose: RenderSlot, figure: RenderSlot) {
 }
 
 #[tessera]
-fn canvas(height: f64, geometry: State<ObservedGeometry>, child: RenderSlot) {
+fn canvas(height: f64, geometry: State<SpaceGeometry>, child: RenderSlot) {
     media::load_fonts();
-    annotations::publish_observed_geometry(geometry);
     let width = remember(|| Dp(676.0));
     let scale = (width.get().0 / 676.0) as f32;
     let scheme = use_context::<MaterialTheme>().unwrap().get().color_scheme;
@@ -289,34 +286,19 @@ fn device(x: f64, y: f64, height: f64) {
 }
 
 fn photo_data(source: usize) -> ImageData {
-    static APPBAR: OnceLock<ImageData> = OnceLock::new();
-    static LABEL: OnceLock<ImageData> = OnceLock::new();
-    static DENSITY: OnceLock<ImageData> = OnceLock::new();
-    let (slot, bytes): (&OnceLock<ImageData>, &[u8]) = match source {
-        0 => (
-            &APPBAR,
-            include_bytes!("../../../assets/material_spec/icon-context-appbar.png"),
-        ),
-        1 => (
-            &LABEL,
-            include_bytes!("../../../assets/material_spec/icon-context-label.png"),
-        ),
-        _ => (
-            &DENSITY,
-            include_bytes!("../../../assets/material_spec/icon-context-density.png"),
-        ),
+    let bytes: &[u8] = match source {
+        0 => include_bytes!("../../../assets/material_spec/icon-context-appbar.png"),
+        1 => include_bytes!("../../../assets/material_spec/icon-context-label.png"),
+        _ => include_bytes!("../../../assets/material_spec/icon-context-density.png"),
     };
-    slot.get_or_init(|| {
-        bytes
-            .try_into_image_data()
-            .expect("icon button context photograph")
-    })
-    .clone()
+    bytes
+        .try_into_image_data()
+        .expect("icon button context photograph")
 }
 
 #[tessera]
 fn photo_region(source: usize, x: f64, y: f64, width: f64, height: f64) {
-    let data = photo_data(source);
+    let data = tessera_ui::remember_with_key(source, move || photo_data(source)).get();
     let source_height = [400.0, 258.0, 300.0][source];
     boxed()
         .modifier(
@@ -348,7 +330,7 @@ fn photo_region(source: usize, x: f64, y: f64, width: f64, height: f64) {
 
 #[tessera]
 fn app_bar_figure() {
-    let geometry = remember(ObservedGeometry::new);
+    let geometry = remember(SpaceGeometry::new);
     let selected = remember(|| false);
     canvas(
         400.0,
@@ -415,7 +397,7 @@ fn app_bar_figure() {
 
 #[tessera]
 fn toolbar_figure() {
-    let geometry = remember(ObservedGeometry::new);
+    let geometry = remember(SpaceGeometry::new);
     let undo = remember(|| 0_u32);
     canvas(
         400.0,
@@ -461,7 +443,7 @@ fn toolbar_figure() {
 
 #[tessera]
 fn labeling_figure() {
-    let geometry = remember(ObservedGeometry::new);
+    let geometry = remember(SpaceGeometry::new);
     let selected = remember(|| false);
     canvas(
         258.0,
@@ -515,8 +497,8 @@ fn labeling_figure() {
 }
 
 #[tessera]
-fn labeling_annotation(geometry: State<ObservedGeometry>, selected: State<bool>) {
-    let rects = geometry.with(observed_relative_geometry);
+fn labeling_annotation(geometry: State<SpaceGeometry>, selected: State<bool>) {
+    let rects = geometry.with(space_geometry);
     let Some(target) = rects.get("favorite").copied() else {
         return;
     };
@@ -584,7 +566,7 @@ fn labeling_annotation(geometry: State<ObservedGeometry>, selected: State<bool>)
 
 #[tessera]
 fn density_figure() {
-    let geometry = remember(ObservedGeometry::new);
+    let geometry = remember(SpaceGeometry::new);
     let starred = remember(|| false);
     canvas(
         300.0,
@@ -673,8 +655,8 @@ fn density_figure() {
 }
 
 #[tessera]
-fn density_annotation(geometry: State<ObservedGeometry>) {
-    let rects = geometry.with(observed_relative_geometry);
+fn density_annotation(geometry: State<SpaceGeometry>) {
+    let rects = geometry.with(space_geometry);
     let Some(target) = rects.get("delete").copied() else {
         return;
     };

@@ -374,7 +374,7 @@ pub(super) fn options(
         } else {
             RadioGroupOrientation::Vertical
         })
-        .content(move || {
+        .content(move |group| {
             let values = values.clone();
             let content = RenderSlot::new(move || {
                 for (index, value) in values.iter().enumerate() {
@@ -384,6 +384,7 @@ pub(super) fn options(
                         .cross_axis_alignment(CrossAxisAlignment::Center)
                         .children(move || {
                             radio_button()
+                                .group(group)
                                 .focus_requester(focus)
                                 .selected(selected.get() == Some(index))
                                 .enabled(enabled)

@@ -1,11 +1,12 @@
 use std::{
-    io::{BufRead, BufReader, Read},
+    io::{self, Read},
+    ops::{Deref, DerefMut},
     path::{Path, PathBuf},
-    process::{Child, Command, Stdio},
+    process::{Child, ChildStderr, ChildStdout, Command, Stdio},
     sync::{
         Arc,
         atomic::{AtomicBool, Ordering},
-        mpsc::{Sender, channel},
+        mpsc::{Receiver, Sender, channel},
     },
     thread,
     time::{Duration, Instant},
@@ -15,7 +16,7 @@ use anyhow::{Result, anyhow};
 use notify::{Event, EventKind, RecursiveMode, Watcher};
 use tessera_build::{AssetBackend, load_tessera_config_from_dir, resolve_assets_dir};
 
-use crate::{color_check, output};
+use crate::{call_guard, output};
 
 use super::find_package_dir;
 
@@ -184,10 +185,10 @@ fn supervise(config: SuperviseConfig) -> Result<()> {
     let profiling_output = profiling_output.as_deref();
     let profiling_ipc = profiling_ipc.as_deref();
 
-    // Color-check diagnostics print straight to the terminal, which would
+    // Call-check diagnostics print straight to the terminal, which would
     // corrupt the live view, so they are skipped while `--top` owns the screen.
     if !reporter.is_tui() {
-        run_color_check(package, &feature_overrides)?;
+        run_call_guard(package, &feature_overrides, release)?;
     }
 
     reporter.status("Starting", "dev server (auto rebuild/restart)");
@@ -252,10 +253,10 @@ fn supervise(config: SuperviseConfig) -> Result<()> {
         watcher.watch(&assets_dir, RecursiveMode::Recursive)?;
     }
 
-    let mut child: Option<Child> = None;
-    let mut build_child: Option<Child> = None;
+    let mut child: Option<ManagedChild> = None;
+    let mut build_child: Option<ManagedChild> = None;
     let mut pending_change = true;
-    let mut color_check_current = true;
+    let mut call_guard_current = true;
     let mut last_change = Instant::now() - Duration::from_secs(1);
     let debounce_window = Duration::from_millis(300);
 
@@ -268,7 +269,7 @@ fn supervise(config: SuperviseConfig) -> Result<()> {
         match rx.recv_timeout(Duration::from_millis(100)) {
             Ok(_) => {
                 pending_change = true;
-                color_check_current = false;
+                call_guard_current = false;
                 last_change = Instant::now();
 
                 // Cancel an in-flight build so we only build once per stable
@@ -286,13 +287,13 @@ fn supervise(config: SuperviseConfig) -> Result<()> {
         // Kick off a build once the tree is quiet and no build is currently
         // running.
         if pending_change && build_child.is_none() && last_change.elapsed() >= debounce_window {
-            if !color_check_current && !reporter.is_tui() {
-                match run_color_check(package, &feature_overrides) {
+            if !call_guard_current && !reporter.is_tui() {
+                match run_call_guard(package, &feature_overrides, release) {
                     Ok(()) => {
-                        color_check_current = true;
+                        call_guard_current = true;
                     }
                     Err(err) => {
-                        reporter.error(format!("color check failed: {err}"));
+                        reporter.error(format!("Tessera call checking failed: {err}"));
                         reporter.warn("waiting for changes");
                         pending_change = false;
                         continue;
@@ -331,9 +332,8 @@ fn supervise(config: SuperviseConfig) -> Result<()> {
             }
 
             match build_cmd.spawn() {
-                Ok(mut c) => {
-                    forward_child_output(&mut c, &reporter);
-                    build_child = Some(c);
+                Ok(c) => {
+                    build_child = Some(ManagedChild::new(c, &reporter));
                     pending_change = false;
                 }
                 Err(e) => {
@@ -371,9 +371,8 @@ fn supervise(config: SuperviseConfig) -> Result<()> {
                         }
 
                         match run_cmd.spawn() {
-                            Ok(mut c) => {
-                                forward_child_output(&mut c, &reporter);
-                                child = Some(c);
+                            Ok(c) => {
+                                child = Some(ManagedChild::new(c, &reporter));
                                 reporter.status("Running", "app (watching for changes)");
                             }
                             Err(e) => {
@@ -431,31 +430,165 @@ fn supervise(config: SuperviseConfig) -> Result<()> {
     Ok(())
 }
 
-/// Forwards a managed child's stdout/stderr lines to the reporter's log sink.
-///
-/// The live view owns the terminal, so subprocess output is piped here instead
-/// of being inherited; before the view starts these lines are echoed to the
-/// console, and afterwards they appear in the view's log pane.
-fn forward_child_output(child: &mut Child, reporter: &Reporter) {
-    if let Some(stdout) = child.stdout.take() {
-        forward_lines(stdout, reporter.clone());
-    }
-    if let Some(stderr) = child.stderr.take() {
-        forward_lines(stderr, reporter.clone());
+struct ManagedChild {
+    child: Child,
+    readers: Vec<OutputReader>,
+}
+
+impl ManagedChild {
+    fn new(mut child: Child, reporter: &Reporter) -> Self {
+        let mut readers = Vec::new();
+        if let Some(stdout) = child.stdout.take() {
+            match OutputReader::new(stdout, reporter.clone()) {
+                Ok(reader) => readers.push(reader),
+                Err(error) => reporter.warn(format!("failed to read child stdout: {error}")),
+            }
+        }
+        if let Some(stderr) = child.stderr.take() {
+            match OutputReader::new(stderr, reporter.clone()) {
+                Ok(reader) => readers.push(reader),
+                Err(error) => reporter.warn(format!("failed to read child stderr: {error}")),
+            }
+        }
+        Self { child, readers }
     }
 }
 
-fn forward_lines(stream: impl Read + Send + 'static, reporter: Reporter) {
-    let _ = thread::Builder::new()
-        .name("tessera-dev-log".to_string())
-        .spawn(move || {
-            for line in BufReader::new(stream)
-                .lines()
-                .map_while(std::result::Result::ok)
-            {
-                reporter.log(line);
+impl Deref for ManagedChild {
+    type Target = Child;
+
+    fn deref(&self) -> &Child {
+        &self.child
+    }
+}
+
+impl DerefMut for ManagedChild {
+    fn deref_mut(&mut self) -> &mut Child {
+        &mut self.child
+    }
+}
+
+impl Drop for ManagedChild {
+    fn drop(&mut self) {
+        if !matches!(self.child.try_wait(), Ok(Some(_))) {
+            let _ = self.child.kill();
+            let _ = self.child.wait();
+        }
+        self.readers.clear();
+    }
+}
+
+trait OutputPipe: Read + Send + 'static {
+    fn ready(&self) -> io::Result<bool>;
+}
+
+macro_rules! output_pipe {
+    ($pipe:ty) => {
+        impl OutputPipe for $pipe {
+            fn ready(&self) -> io::Result<bool> {
+                pipe_ready(self)
             }
-        });
+        }
+    };
+}
+
+output_pipe!(ChildStdout);
+output_pipe!(ChildStderr);
+
+#[cfg(windows)]
+fn pipe_ready(pipe: &impl std::os::windows::io::AsRawHandle) -> io::Result<bool> {
+    let mut available = 0;
+    // Child output handles remain owned by the reader for this call.
+    let success = unsafe {
+        windows_sys::Win32::System::Pipes::PeekNamedPipe(
+            pipe.as_raw_handle(),
+            std::ptr::null_mut(),
+            0,
+            std::ptr::null_mut(),
+            &mut available,
+            std::ptr::null_mut(),
+        )
+    };
+    if success == 0 {
+        return Err(io::Error::last_os_error());
+    }
+    Ok(available > 0)
+}
+
+#[cfg(unix)]
+fn pipe_ready(pipe: &impl std::os::fd::AsRawFd) -> io::Result<bool> {
+    let mut descriptor = libc::pollfd {
+        fd: pipe.as_raw_fd(),
+        events: libc::POLLIN,
+        revents: 0,
+    };
+    // The descriptor remains owned by the reader and the array has one entry.
+    let ready = unsafe { libc::poll(&mut descriptor, 1, 0) };
+    if ready < 0 {
+        return Err(io::Error::last_os_error());
+    }
+    Ok(ready > 0)
+}
+
+struct OutputReader {
+    stop: Sender<()>,
+    worker: Option<thread::JoinHandle<()>>,
+}
+
+impl OutputReader {
+    fn new(stream: impl OutputPipe, reporter: Reporter) -> io::Result<Self> {
+        let (stop, stopped) = channel();
+        let worker = thread::Builder::new()
+            .name("tessera-dev-log".to_string())
+            .spawn(move || read_output(stream, reporter, stopped))?;
+        Ok(Self {
+            stop,
+            worker: Some(worker),
+        })
+    }
+}
+
+impl Drop for OutputReader {
+    fn drop(&mut self) {
+        let _ = self.stop.send(());
+        if let Some(worker) = self.worker.take() {
+            let _ = worker.join();
+        }
+    }
+}
+
+fn read_output(mut stream: impl OutputPipe, reporter: Reporter, stopped: Receiver<()>) {
+    let mut pending = Vec::new();
+    let mut chunk = [0; 4096];
+    loop {
+        match stream.ready() {
+            Ok(true) => match stream.read(&mut chunk) {
+                Ok(0) | Err(_) => break,
+                Ok(count) => {
+                    pending.extend_from_slice(&chunk[..count]);
+                    while let Some(end) = pending.iter().position(|byte| *byte == b'\n') {
+                        let mut line: Vec<_> = pending.drain(..=end).collect();
+                        line.pop();
+                        if line.last() == Some(&b'\r') {
+                            line.pop();
+                        }
+                        reporter.log(String::from_utf8_lossy(&line));
+                    }
+                }
+            },
+            Ok(false) => match stopped.recv_timeout(Duration::from_millis(10)) {
+                Err(std::sync::mpsc::RecvTimeoutError::Timeout) => continue,
+                _ => break,
+            },
+            Err(_) => break,
+        }
+        if stopped.try_recv().is_ok() {
+            break;
+        }
+    }
+    if !pending.is_empty() {
+        reporter.log(String::from_utf8_lossy(&pending));
+    }
 }
 
 fn build_tessera_ui_features(
@@ -490,16 +623,20 @@ fn configure_tessera_ui_features(
     }
 }
 
-fn run_color_check(package: Option<&str>, features: &[String]) -> Result<()> {
-    color_check::run(color_check::CheckOptions {
+fn run_call_guard(package: Option<&str>, features: &[String], release: bool) -> Result<()> {
+    call_guard::run(call_guard::CheckOptions {
         package,
         target: None,
-        target_selection: color_check::TargetSelection::default(),
-        features: color_check::FeatureSelection::Selected {
+        target_selection: call_guard::TargetSelection::default(),
+        features: call_guard::FeatureSelection::Selected {
             features,
             no_default_features: false,
         },
-        message_format: color_check::MessageFormat::Human,
+        message_format: call_guard::MessageFormat::Human,
+        quiet: false,
+        release,
+        workspace: false,
+        jobs: None,
     })
 }
 
@@ -514,4 +651,66 @@ fn resolve_asset_backend(asset_backend_override: Option<AssetBackend>) -> Result
     }
 
     Ok(AssetBackend::Embed)
+}
+
+#[cfg(test)]
+mod tests {
+    use std::io::Write;
+
+    use super::*;
+
+    #[test]
+    fn managed_child_cancels_idle_readers_and_terminates_before_closing_input() {
+        const CHILD: &str = "TESSERA_DEV_LOG_CHILD";
+        if let Some(directory) = std::env::var_os(CHILD) {
+            println!("owned child output");
+            std::io::stdout().flush().unwrap();
+            let mut input = String::new();
+            std::io::stdin().read_line(&mut input).unwrap();
+            std::fs::write(
+                PathBuf::from(directory).join("input-closed"),
+                b"unexpected EOF",
+            )
+            .unwrap();
+            return;
+        }
+        let directory = tempfile::tempdir().unwrap();
+        let child = Command::new(std::env::current_exe().unwrap())
+            .args(["--exact", "commands::dev::tests::managed_child_cancels_idle_readers_and_terminates_before_closing_input", "--nocapture"])
+            .env(CHILD, directory.path())
+            .stdin(Stdio::piped())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .spawn().unwrap();
+        let (logs, output) = channel();
+        let reporter = Reporter::Tui(logs);
+        let mut owner = ManagedChild::new(child, &reporter);
+        drop(reporter);
+        loop {
+            let line = output
+                .recv_timeout(Duration::from_secs(15))
+                .expect("child output must reach the live view");
+            if line.contains("owned child output") {
+                break;
+            }
+        }
+        owner.readers.clear();
+        while output.recv_timeout(Duration::from_secs(15)).is_ok() {}
+        assert!(
+            matches!(
+                output.try_recv(),
+                Err(std::sync::mpsc::TryRecvError::Disconnected)
+            ),
+            "reader shutdown must release the output channel"
+        );
+        assert!(
+            owner.try_wait().unwrap().is_none(),
+            "an idle log reader must stop while its pipe writer is still alive"
+        );
+        drop(owner);
+        assert!(
+            !directory.path().join("input-closed").exists(),
+            "child teardown must terminate the process before dropping its input"
+        );
+    }
 }

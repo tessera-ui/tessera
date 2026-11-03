@@ -37,7 +37,9 @@ const DO_COLOR: Color = Color::from_rgb(0.121, 0.478, 0.196);
 const DONT_COLOR: Color = Color::from_rgb(0.741, 0.161, 0.161);
 
 #[tessera]
-pub(super) fn navigation_bar_spec() {
+pub(super) fn navigation_bar_spec(
+    route: Option<crate::pages::material_spec::article::ArticleRoute>,
+) {
     article(
         "Navigation bar",
         "Navigation bars let people switch between primary destinations",
@@ -72,6 +74,7 @@ pub(super) fn navigation_bar_spec() {
             },
         ],
     )
+    .route_optional(route.clone())
     .pages(vec![
         ArticlePage {
             title: "Overview",
@@ -279,11 +282,12 @@ fn bar_demo(
             ..Default::default()
         }))
         .children(move || {
-            navigation_bar().content(move || {
+            navigation_bar().content(move |icon_position| {
                 for (index, name) in NAMES.into_iter().take(count).enumerate() {
                     if index == 1 {
                         if badge_count > 0 {
                             navigation_bar_item()
+                                .icon_position(icon_position)
                                 .label(name)
                                 .label_behavior(label_behavior)
                                 .selected(selected.get() == index)
@@ -313,6 +317,7 @@ fn bar_demo(
                                 });
                         } else {
                             navigation_bar_item()
+                                .icon_position(icon_position)
                                 .label(name)
                                 .label_behavior(label_behavior)
                                 .selected(selected.get() == index)
@@ -323,6 +328,7 @@ fn bar_demo(
                         }
                     } else {
                         navigation_bar_item()
+                            .icon_position(icon_position)
                             .label(name)
                             .label_behavior(label_behavior)
                             .selected(selected.get() == index)

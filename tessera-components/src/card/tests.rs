@@ -4,7 +4,7 @@
 //!
 //! Verify card variants remain usable during interaction and slow frames.
 
-use std::{cell::Cell, time::Duration};
+use std::time::Duration;
 
 use tessera_ui::{
     Callback, Color, Dp, FocusDirection, FocusManager, HeadlessConfig, HeadlessRenderer,
@@ -76,16 +76,16 @@ struct Config {
     nested_action: bool,
 }
 
-thread_local! {
-    static CONFIG: Cell<Option<State<Config>>> = const { Cell::new(None) };
-    static CALLS: Cell<Option<State<u32>>> = const { Cell::new(None) };
-    static NESTED_CALLS: Cell<Option<State<u32>>> = const { Cell::new(None) };
-    static INTERACTION: Cell<Option<State<InteractionState>>> = const { Cell::new(None) };
-    static CONTENT_BUILDS: Cell<u32> = const { Cell::new(0) };
+#[derive(Clone, Default)]
+struct FixtureHandles {
+    config: Option<State<Config>>,
+    calls: Option<State<u32>>,
+    nested_calls: Option<State<u32>>,
+    interaction: Option<State<InteractionState>>,
 }
 
 #[tessera]
-fn fixture() {
+fn fixture(probe: tessera_ui::testing::TestProbe<FixtureHandles>) {
     let config = remember(|| Config {
         variant: CardVariant::Elevated,
         enabled: true,
@@ -98,10 +98,12 @@ fn fixture() {
     let calls = remember(|| 0);
     let nested_calls = remember(|| 0);
     let interaction = remember(InteractionState::new);
-    CONFIG.set(Some(config));
-    CALLS.set(Some(calls));
-    NESTED_CALLS.set(Some(nested_calls));
-    INTERACTION.set(Some(interaction));
+    probe.set(FixtureHandles {
+        config: Some(config),
+        calls: Some(calls),
+        nested_calls: Some(nested_calls),
+        interaction: Some(interaction),
+    });
     material_theme()
         .theme(move || {
             let mut theme = MaterialTheme::default();
@@ -147,30 +149,7 @@ fn fixture() {
                         .interaction_state(interaction)
                         .accessibility_label("Card action")
                         .content(move || {
-                            CONTENT_BUILDS.set(CONTENT_BUILDS.get() + 1);
-                            boxed()
-                                .modifier(Modifier::new().fill_max_size().background(
-                                    if config.get().covered {
-                                        Color::RED
-                                    } else {
-                                        Color::TRANSPARENT
-                                    },
-                                ))
-                                .children(move || {
-                                    text()
-                                        .content("Card content")
-                                        .modifier(Modifier::new().padding_all(Dp(16.0)));
-                                    if config.get().nested_action {
-                                        button()
-                                            .accessibility_label("Nested action")
-                                            .on_click(move || {
-                                                nested_calls.with_mut(|calls| *calls += 1)
-                                            })
-                                            .child(|| {
-                                                text().content("Nested action");
-                                            });
-                                    }
-                                });
+                            card_content(config, nested_calls);
                         });
                     button()
                         .accessibility_label("After card")
@@ -200,6 +179,33 @@ fn fixture() {
                                 .modifier(Modifier::new().padding_all(Dp(16.0)));
                         });
                 });
+        });
+}
+
+#[tessera]
+fn card_content(config: State<Config>, nested_calls: State<u32>) {
+    boxed()
+        .modifier(
+            Modifier::new()
+                .fill_max_size()
+                .background(if config.get().covered {
+                    Color::RED
+                } else {
+                    Color::TRANSPARENT
+                }),
+        )
+        .children(move || {
+            text()
+                .content("Card content")
+                .modifier(Modifier::new().padding_all(Dp(16.0)));
+            if config.get().nested_action {
+                button()
+                    .accessibility_label("Nested action")
+                    .on_click(move || nested_calls.with_mut(|calls| *calls += 1))
+                    .child(|| {
+                        text().content("Nested action");
+                    });
+            }
         });
 }
 
@@ -247,8 +253,10 @@ fn save(renderer: &HeadlessRenderer, samples: u32) {
 }
 
 fn check_cards(samples: u32) {
+    let probe = tessera_ui::testing::TestProbe::default();
+    let observed = probe.clone();
     let mut renderer = HeadlessRenderer::new(
-        Box::new(fixture),
+        Box::new(move || fixture(observed.clone())),
         vec![Box::new(crate::TesseraComponents)],
         HeadlessConfig {
             width: 540,
@@ -260,10 +268,17 @@ fn check_cards(samples: u32) {
         },
     )
     .expect("renderer");
-    renderer.render_frames(12);
-    let config = CONFIG.get().unwrap();
-    let interaction = INTERACTION.get().unwrap();
-    let calls = CALLS.get().unwrap();
+    renderer.step_frame();
+    assert!(
+        renderer
+            .work()
+            .count("card_content", tessera_ui::WorkPhase::Build)
+            > 0
+    );
+    renderer.render_frames(11);
+    let config = probe.get().config.unwrap();
+    let interaction = probe.get().interaction.unwrap();
+    let calls = probe.get().calls.unwrap();
     let (id, node) = control(&renderer, "Card action");
     let bounds = node.bounds().expect("card bounds");
     assert_eq!(node.role(), Role::Button);
@@ -273,17 +288,20 @@ fn check_cards(samples: u32) {
     assert_eq!(bounds.y1 - bounds.y0, 144.0);
     assert_eq!(pixel(&renderer, 380, 160), [0, 255, 0, 255]);
     let baseline = renderer.read_pixels().expect("baseline pixels");
-    let content_builds = CONTENT_BUILDS.get();
     let position = PxPosition::from_f32_xy(100.0, 100.0);
     renderer.pointer_move(MOUSE_POINTER_ID, position);
-    renderer.render_frames(90);
+    for _ in 0..90 {
+        renderer.step_frame();
+        assert_eq!(
+            renderer
+                .work()
+                .count("card_content", tessera_ui::WorkPhase::Build),
+            0,
+            "elevation and state layers must not rebuild the content component"
+        );
+    }
     assert!(interaction.with(|state| state.is_hovered()));
     assert_ne!(renderer.read_pixels().expect("hover pixels"), baseline);
-    assert_eq!(
-        CONTENT_BUILDS.get(),
-        content_builds,
-        "elevation and state layers must not rebuild the content slot"
-    );
     renderer.pointer_move(MOUSE_POINTER_ID, PxPosition::from_f32_xy(500.0, 330.0));
     renderer.render_frames(90);
     assert_eq!(renderer.read_pixels().expect("restored pixels"), baseline);
@@ -481,6 +499,7 @@ fn check_cards(samples: u32) {
         config.dark = false;
         config.variant = CardVariant::Elevated;
     });
+    FocusManager::current().clear_focus(true);
     renderer.render_frames(90);
     let restored = renderer.read_pixels().expect("restored theme pixels");
     for y in 40..194 {
@@ -505,7 +524,7 @@ fn check_cards(samples: u32) {
     renderer.step_frame();
     renderer.pointer_release(MOUSE_POINTER_ID, position, PressKeyEventType::Left);
     renderer.render_frames(100);
-    assert_eq!(NESTED_CALLS.get().unwrap().get(), 1);
+    assert_eq!(probe.get().nested_calls.unwrap().get(), 1);
     assert_eq!(
         calls.get(),
         parent_calls,
@@ -522,7 +541,7 @@ fn check_cards(samples: u32) {
     renderer.pointer_release(MOUSE_POINTER_ID, position, PressKeyEventType::Left);
     renderer.render_frames(100);
     assert_eq!(
-        NESTED_CALLS.get().unwrap().get(),
+        probe.get().nested_calls.unwrap().get(),
         2,
         "a press and release queued before one frame activate the nested action once"
     );

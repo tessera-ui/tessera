@@ -32,6 +32,8 @@ pub struct TaskHandle {
 /// Tracks multiple background tasks and aborts them on drop.
 pub struct TaskHandles {
     tasks: Mutex<Vec<TaskHandle>>,
+    #[cfg(not(target_family = "wasm"))]
+    executor: tokio::runtime::Handle,
 }
 
 impl Default for TaskHandles {
@@ -51,6 +53,11 @@ impl TaskHandles {
     pub fn new() -> Self {
         Self {
             tasks: Mutex::new(Vec::new()),
+            #[cfg(not(target_family = "wasm"))]
+            executor:
+                tessera_ui::__private::runtime_resource::<super::tokio_runtime::TaskExecutor>()
+                    .handle()
+                    .clone(),
         }
     }
 
@@ -59,6 +66,9 @@ impl TaskHandles {
     where
         F: Future<Output = ()> + Send + 'static,
     {
+        #[cfg(not(target_family = "wasm"))]
+        let (handle, cancel) = spawn_task(&self.executor, fut);
+        #[cfg(target_family = "wasm")]
         let (handle, cancel) = spawn_task(fut);
         self.tasks.lock().push(TaskHandle { handle, cancel });
     }
@@ -73,13 +83,13 @@ impl TaskHandles {
 }
 
 #[cfg(not(target_family = "wasm"))]
-fn spawn_task<F>(fut: F) -> (TaskRuntimeHandle, AbortHandle)
+fn spawn_task<F>(executor: &tokio::runtime::Handle, fut: F) -> (TaskRuntimeHandle, AbortHandle)
 where
     F: Future<Output = ()> + Send + 'static,
 {
     let (cancel, registration) = AbortHandle::new_pair();
     let wrapped = Abortable::new(fut, registration);
-    let handle = crate::async_support::tokio_runtime::get().spawn(async move {
+    let handle = executor.spawn(async move {
         let _ = wrapped.await;
     });
     (handle, cancel)
@@ -96,4 +106,27 @@ where
         let _ = wrapped.await;
     });
     ((), cancel)
+}
+
+#[cfg(all(test, not(target_family = "wasm")))]
+mod tests {
+    use super::TaskHandles;
+
+    #[test]
+    fn session_teardown_cancels_jobs_even_when_the_task_collection_survives() {
+        let session = tessera_ui::RuntimeSession::new();
+        let tasks = session.run(TaskHandles::new);
+        tasks.spawn(std::future::pending());
+        let task = tasks.tasks.lock().pop().expect("registered job");
+        drop(session);
+        let executor = tokio::runtime::Builder::new_current_thread()
+            .build()
+            .expect("test executor");
+        let result = executor.block_on(task.handle);
+        assert!(
+            result
+                .expect_err("session must cancel its job")
+                .is_cancelled()
+        );
+    }
 }

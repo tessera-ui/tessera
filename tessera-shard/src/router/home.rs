@@ -1,41 +1,11 @@
 use std::sync::Arc;
 
-use tessera_ui::{State, provide_context, remember, tessera};
+use tessera_ui::{State, remember, tessera};
 
 use crate::{
-    router::{RouterContext, RouterController, RouterDestination},
+    router::{RouterController, RouterDestination},
     state::{ShardState, ShardStateLifeCycle},
 };
-
-/// Resolve the current router controller from the Tessera runtime context.
-#[macro_export]
-macro_rules! __resolve_router_controller {
-    () => {
-        {
-            match ::tessera_ui::__private::current_phase() {
-                Some(::tessera_ui::__private::RuntimePhase::Build) => {
-                    ::tessera_ui::use_context::<$crate::router::RouterContext>()
-                        .expect("Router is missing in build scope. Mount UI inside shard_home.")
-                        .get()
-                        .controller()
-                }
-                Some(::tessera_ui::__private::RuntimePhase::Input) => {
-                    let instance_key = ::tessera_ui::__private::current_replay_boundary_instance_key_from_scope()
-                        .expect("Router command requires an active component scope during input handling");
-                    ::tessera_ui::__private::context_from_previous_snapshot_for_instance::<$crate::router::RouterContext>(
-                        instance_key,
-                    )
-                    .expect("Router is missing in input scope. Ensure callbacks run inside shard_home.")
-                    .get()
-                    .controller()
-                }
-                _ => {
-                    panic!("Router access must happen during build or input phase");
-                }
-            }
-        }
-    };
-}
 
 pub(crate) fn with_current_router_shard_state<T, F, R>(
     shard_id: &str,
@@ -47,7 +17,9 @@ where
     T: Default + Send + Sync + 'static,
     F: FnOnce(ShardState<T>) -> R,
 {
-    controller.with(|router| router.init_or_get_with_lifecycle(shard_id, life_cycle, f))
+    let (owner, marker) = controller.with(|router| router.state_context(life_cycle));
+    let value = owner.state_with_key(("shard", shard_id), T::default);
+    f(ShardState::new(value, marker))
 }
 
 /// # shard_home
@@ -72,9 +44,9 @@ where
 /// # #[derive(Clone)]
 /// # struct DemoDestination;
 /// # impl tessera_shard::router::RouterDestination for DemoDestination {
-/// #     fn exec_component(&self) {}
-/// #     fn exec_component_handle(&self) -> std::sync::Arc<dyn Fn() + Send + Sync> {
-/// #         std::sync::Arc::new(|| {})
+/// #     fn exec_component(&self, _: tessera_ui::State<tessera_shard::RouterController>) {}
+/// #     fn exec_component_handle(&self) -> std::sync::Arc<dyn Fn(tessera_ui::State<tessera_shard::RouterController>) + Send + Sync> {
+/// #         std::sync::Arc::new(|_| {})
 /// #     }
 /// #     fn destination_id() -> &'static str { "demo" }
 /// # }
@@ -105,23 +77,10 @@ pub fn shard_home(
         panic!("shard_home requires `root` when `controller` is not provided");
     }
 
-    // Ensure the compiler sees field reads (actual reads happen in
-    // macro-generated code in downstream crates).
-    let _ = RouterContext::new(controller).controller();
-
-    provide_context(
-        || RouterContext::new(controller),
-        || {
-            let destination = controller.with(RouterController::current_destination);
-            let executed = destination
-                .map(|destination| {
-                    destination();
-                    true
-                })
-                .unwrap_or(false);
-            assert!(executed, "Router stack should not be empty");
-        },
-    );
+    let destination = controller
+        .with(RouterController::current_destination)
+        .expect("Router stack should not be empty");
+    destination(controller);
 }
 
 impl ShardHomeBuilder {

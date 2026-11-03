@@ -1,5 +1,3 @@
-use std::cell::Cell;
-
 use tessera_ui::{
     Color, Dp, HeadlessConfig, HeadlessRenderer, MOUSE_POINTER_ID, Modifier, PressKeyEventType,
     PxPosition, State,
@@ -37,17 +35,18 @@ impl Default for Settings {
     }
 }
 
-thread_local! {
-    static SETTINGS: Cell<Option<State<Settings>>> = const { Cell::new(None) };
-    static ACTIVATIONS: Cell<Option<State<u32>>> = const { Cell::new(None) };
-}
-
 const STANDARD: Color = Color::new(0.4, 0.5, 0.6, 1.0);
 const SELECTED: Color = Color::new(0.7, 0.3, 0.2, 1.0);
 const VIBRANT_SELECTED: Color = Color::new(0.2, 0.3, 0.1, 1.0);
 
+#[derive(Clone, Copy, Default)]
+struct FixtureHandles {
+    settings: Option<State<Settings>>,
+    activations: Option<State<u32>>,
+}
+
 #[tessera]
-fn fixture() {
+fn fixture(observed: tessera_ui::testing::TestProbe<FixtureHandles>) {
     let settings = remember(Settings::default);
     let activations = remember(|| 0);
     let controller = remember(|| {
@@ -55,8 +54,8 @@ fn fixture() {
         controller.open();
         controller
     });
-    SETTINGS.set(Some(settings));
-    ACTIVATIONS.set(Some(activations));
+    observed.with_mut(|handles| handles.settings = Some(settings));
+    observed.with_mut(|handles| handles.activations = Some(activations));
     material_theme()
         .theme(|| {
             let mut theme = MaterialTheme::default();
@@ -79,12 +78,14 @@ fn fixture() {
                         .modifier(Modifier::new().fill_max_size())
                         .child(|| {});
                 })
-                .menu_content(move || {
+                .menu_content(move |menu| {
                     menu_group()
+                        .menu(menu)
                         .position(MenuPosition::First)
                         .accessibility_label("Primary group")
                         .children(move || {
                             menu_item()
+                                .menu(menu)
                                 .label("A long menu action that must wrap")
                                 .supporting_text("Additional context")
                                 .trailing_text("Ctrl+S")
@@ -92,6 +93,7 @@ fn fixture() {
                                 .close_on_click(false)
                                 .on_click(move || activations.set(activations.get() + 1));
                             menu_item()
+                                .menu(menu)
                                 .label("Priority")
                                 .position(MenuPosition::Last)
                                 .selected(settings.get().selected)
@@ -103,14 +105,16 @@ fn fixture() {
                                 });
                         });
                     menu_group()
+                        .menu(menu)
                         .position(MenuPosition::Last)
                         .accessibility_label("Other group")
                         .children(move || {
                             menu_item()
+                                .menu(menu)
                                 .label("Unavailable")
                                 .enabled(false)
                                 .on_click(move || activations.set(activations.get() + 1));
-                            menu_item().label("No action");
+                            menu_item().menu(menu).label("No action");
                         });
                 });
         });
@@ -164,9 +168,13 @@ fn assert_color(pixels: &[u8], width: usize, x: f64, y: f64, color: Color) {
 
 fn check_appearance(samples: u32) {
     let scale = 1.5;
+    let observed = tessera_ui::testing::TestProbe::default();
     let mut renderer = HeadlessRenderer::new(
-        Box::new(|| {
-            fixture();
+        Box::new({
+            let observed = observed.clone();
+            move || {
+                fixture(observed.clone());
+            }
         }),
         vec![Box::new(crate::TesseraComponents)],
         HeadlessConfig {
@@ -179,7 +187,7 @@ fn check_appearance(samples: u32) {
     )
     .expect("renderer");
     renderer.render_frames(4);
-    let settings = SETTINGS.get().expect("settings");
+    let settings = observed.get().settings.expect("settings");
     let first = node(&renderer, "Primary group", Role::Group)
         .bounds()
         .expect("bounds");
@@ -226,7 +234,7 @@ fn check_appearance(samples: u32) {
         assert!(!item.supports_action(tessera_ui::accesskit::Action::Click));
         click(&mut renderer, item.bounds().expect("bounds"));
     }
-    assert_eq!(ACTIVATIONS.get().expect("activations").get(), 0);
+    assert_eq!(observed.get().activations.expect("activations").get(), 0);
     for style in [MenuColorStyle::Standard, MenuColorStyle::Vibrant] {
         for selected in [false, true] {
             settings.set(Settings {

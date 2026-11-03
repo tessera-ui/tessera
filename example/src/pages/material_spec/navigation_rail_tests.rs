@@ -13,14 +13,6 @@ use tessera_ui::{
 
 use super::*;
 
-struct Pipelines;
-
-impl tessera_ui::RenderModule for Pipelines {
-    fn register_pipelines(&self, context: &mut tessera_ui::PipelineContext<'_>) {
-        tessera_components::pipelines::register_pipelines(context);
-    }
-}
-
 #[tessera]
 fn unmodified_dark_surface_fixture() {
     material_theme()
@@ -45,8 +37,8 @@ fn unmodified_dark_surface_fixture() {
                                 .size(Dp(96.0), Dp(560.0)),
                         )
                         .children(|| {
-                            navigation_rail().content(|| {
-                                navigation_rail_item()
+                            navigation_rail().content(move |rail_scope| {
+                                navigation_rail_item(rail_scope)
                                     .label("Home")
                                     .selected(true)
                                     .icon(|| {
@@ -70,7 +62,7 @@ fn color_reference_fixture() {
 fn renderer<Output: 'static>(root: fn() -> Output, width: u32, height: u32) -> HeadlessRenderer {
     let mut renderer = HeadlessRenderer::new(
         Box::new(root),
-        vec![Box::new(Pipelines)],
+        vec![Box::new(crate::TestPipelines)],
         HeadlessConfig {
             width,
             height,

@@ -83,9 +83,8 @@ pub(crate) struct QueuedClipboardAction {
     pub reply: Box<dyn FnOnce(ClipboardResponse) + Send + Sync>,
 }
 
-thread_local! {
-    static REQUESTS: RefCell<VecDeque<QueuedClipboardAction>> = const { RefCell::new(VecDeque::new()) };
-}
+const REQUESTS: crate::session::SessionLocal<RefCell<VecDeque<QueuedClipboardAction>>> =
+    crate::session::SessionLocal::new();
 
 /// Queues a user clipboard action in order with keyboard input.
 ///

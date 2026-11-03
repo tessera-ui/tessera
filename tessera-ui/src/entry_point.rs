@@ -22,15 +22,23 @@ use winit::platform::android::activity::AndroidApp;
 
 /// Builder for application entry configuration and startup.
 pub struct EntryPoint {
+    session: crate::RuntimeSession,
     entry: Box<dyn Fn()>,
     registry: EntryRegistry,
     config: TesseraConfig,
 }
 
 impl EntryPoint {
+    /// Returns the runtime owner used by this application entry.
+    pub fn runtime_session(&self) -> &crate::RuntimeSession {
+        &self.session
+    }
     /// Creates a new entry point builder from the root UI function.
     pub fn new<Output>(entry: impl Fn() -> Output + 'static) -> Self {
+        let session = crate::RuntimeSession::new();
+        session.activate();
         Self {
+            session,
             entry: Box::new(move || {
                 entry();
             }),
@@ -41,24 +49,28 @@ impl EntryPoint {
 
     /// Adds a render module to the entry registry.
     pub fn module(mut self, module: impl RenderModule + 'static) -> Self {
+        let _session = self.session.enter();
         self.registry.add_module(module);
         self
     }
 
-    /// Registers a plugin instance with the global plugin registry.
+    /// Registers a plugin instance with this application session.
     pub fn plugin(mut self, plugin: impl Plugin) -> Self {
+        let _session = self.session.enter();
         self.registry.register_plugin(plugin);
         self
     }
 
-    /// Registers a boxed plugin instance with the global plugin registry.
+    /// Registers a boxed plugin instance with this application session.
     pub fn plugin_boxed<P: Plugin>(mut self, plugin: Arc<RwLock<P>>) -> Self {
+        let _session = self.session.enter();
         self.registry.register_plugin_boxed(plugin);
         self
     }
 
     /// Registers a package into the entry registry.
     pub fn package(mut self, package: impl TesseraPackage) -> Self {
+        let _session = self.session.enter();
         self.registry.register_package(package);
         self
     }
@@ -72,6 +84,7 @@ impl EntryPoint {
     /// Runs the entry point on desktop platforms.
     #[cfg(all(not(target_os = "android"), not(target_family = "wasm")))]
     pub fn run_desktop(self) -> Result<(), winit::error::EventLoopError> {
+        let _session = self.session.enter();
         #[cfg(feature = "headless")]
         if crate::headless::headless_mode_requested() {
             // Headless mode owns stdout for its JSONL protocol, so tracing is
@@ -94,6 +107,7 @@ impl EntryPoint {
     /// Runs the entry point on web platforms.
     #[cfg(target_family = "wasm")]
     pub fn run_web(self) -> Result<(), winit::error::EventLoopError> {
+        let _session = self.session.enter();
         init_web_panic_hook();
         init_tracing();
         Renderer::run_web_with_config(self.entry, self.registry.finish(), self.config)
@@ -102,6 +116,7 @@ impl EntryPoint {
     /// Runs the entry point on Android.
     #[cfg(target_os = "android")]
     pub fn run_android(self, android_app: AndroidApp) -> Result<(), winit::error::EventLoopError> {
+        let _session = self.session.enter();
         init_tracing();
         #[cfg(debug_assertions)]
         init_deadlock_detection();
@@ -111,33 +126,31 @@ impl EntryPoint {
 
 #[cfg(target_family = "wasm")]
 fn init_web_panic_hook() {
-    static INIT: std::sync::Once = std::sync::Once::new();
-    INIT.call_once(|| {
-        let previous = std::panic::take_hook();
-        std::panic::set_hook(Box::new(move |info| {
-            web_sys::console::error_1(&info.to_string().into());
-            previous(info);
-        }));
-    });
+    console_error_panic_hook::set_once();
 }
 
 #[cfg(all(debug_assertions, not(target_family = "wasm")))]
-fn init_deadlock_detection() {
-    use std::{sync::Once, thread, time::Duration};
+struct DeadlockMonitor {
+    stop: std::sync::mpsc::Sender<()>,
+    worker: Option<std::thread::JoinHandle<()>>,
+}
 
-    static INIT: Once = Once::new();
-    INIT.call_once(|| {
-        thread::spawn(|| {
-            loop {
-                thread::sleep(Duration::from_secs(10));
+#[cfg(all(debug_assertions, not(target_family = "wasm")))]
+impl Default for DeadlockMonitor {
+    fn default() -> Self {
+        let (stop, receive) = std::sync::mpsc::channel();
+        let worker = std::thread::spawn(move || {
+            while matches!(
+                receive.recv_timeout(std::time::Duration::from_secs(10)),
+                Err(std::sync::mpsc::RecvTimeoutError::Timeout)
+            ) {
                 let deadlocks = parking_lot::deadlock::check_deadlock();
                 if deadlocks.is_empty() {
                     continue;
                 }
-
                 eprintln!("{} deadlocks detected", deadlocks.len());
-                for (idx, threads) in deadlocks.iter().enumerate() {
-                    eprintln!("Deadlock #{}", idx);
+                for (index, threads) in deadlocks.iter().enumerate() {
+                    eprintln!("Deadlock #{index}");
                     for thread in threads {
                         eprintln!("Thread Id {:#?}", thread.thread_id());
                         eprintln!("{:?}", thread.backtrace());
@@ -145,7 +158,26 @@ fn init_deadlock_detection() {
                 }
             }
         });
-    });
+        Self {
+            stop,
+            worker: Some(worker),
+        }
+    }
+}
+
+#[cfg(all(debug_assertions, not(target_family = "wasm")))]
+impl Drop for DeadlockMonitor {
+    fn drop(&mut self) {
+        let _ = self.stop.send(());
+        if let Some(worker) = self.worker.take() {
+            let _ = worker.join();
+        }
+    }
+}
+
+#[cfg(all(debug_assertions, not(target_family = "wasm")))]
+fn init_deadlock_detection() {
+    let _ = crate::local_runtime_resource::<DeadlockMonitor>();
 }
 
 fn init_tracing() {

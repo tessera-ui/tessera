@@ -4,11 +4,7 @@
 //!
 //! Preserve table tracks and merged-cell semantics during reflow.
 
-use std::{
-    cell::{Cell, RefCell},
-    collections::BTreeMap,
-    time::Duration,
-};
+use std::{collections::BTreeMap, time::Duration};
 
 use tessera_ui::{
     HeadlessConfig, HeadlessRenderer, LayoutCoordinates, PlacementModifierNode, State,
@@ -20,12 +16,7 @@ use tessera_ui::{
 
 use super::*;
 
-thread_local! {
-    pub(super) static CELLS:RefCell<BTreeMap<(usize,usize),LayoutCoordinates>>=const{RefCell::new(BTreeMap::new())};
-    static WIDTH:Cell<Option<State<f64>>>=const{Cell::new(None)};
-    static FONT_SIZE:Cell<Option<State<f64>>>=const{Cell::new(None)};
-    static HEADER_COLOR:Cell<Option<State<Option<Color>>>>=const{Cell::new(None)};
-}
+type Observed = (State<f64>, State<f64>, State<Option<Color>>);
 
 fn data() -> Vec<TextTableCell> {
     let mut cells = ["Category", "Configuration", "Availability"]
@@ -90,13 +81,11 @@ impl PlacementModifierNode for Origin {
 }
 
 #[tessera]
-fn fixture() {
+fn fixture(output: tessera_ui::testing::TestProbe<Option<Observed>>) {
     let width = remember(|| 1000.0_f64);
     let font_size = remember(|| 16.0_f64);
     let header_color = remember(|| Some(Color::RED));
-    WIDTH.set(Some(width));
-    FONT_SIZE.set(Some(font_size));
-    HEADER_COLOR.set(Some(header_color));
+    output.set(Some((width, font_size, header_color)));
     boxed()
         .alignment(Alignment::TopStart)
         .modifier(Modifier::new().push_placement(Origin))
@@ -122,8 +111,17 @@ fn fixture() {
         });
 }
 
-fn coordinates() -> BTreeMap<(usize, usize), LayoutCoordinates> {
-    CELLS.with_borrow(Clone::clone)
+fn coordinates(
+    snapshot: tessera_ui::testing::ComponentSnapshot,
+) -> BTreeMap<(usize, usize), LayoutCoordinates> {
+    snapshot
+        .nodes()
+        .iter()
+        .filter_map(|node| {
+            let (row, _, column, _, _) = node.semantics()?.collection_item_info?;
+            Some(((row, column), node.layout_coordinates()?))
+        })
+        .collect()
 }
 
 fn assert_tracks(values: &BTreeMap<(usize, usize), LayoutCoordinates>, width: i32) {
@@ -172,19 +170,21 @@ fn assert_tracks(values: &BTreeMap<(usize, usize), LayoutCoordinates>, width: i3
 
 #[test]
 fn table_measures_shared_intrinsic_columns_and_row_spans_across_reflow() {
+    let runtime = tessera_ui::RuntimeSession::new();
+    let _scope = runtime.enter();
     crate::test_utils::run_isolated_test(
         "text_table::tests::table_measures_shared_intrinsic_columns_and_row_spans_across_reflow",
         || {
-            tessera_ui::dp::set_scale_factor(1.0);
-            CELLS.with_borrow_mut(BTreeMap::clear);
+            let output = tessera_ui::testing::TestProbe::default();
+            let probe = output.clone();
             let mut session = start_layout_test_session(
-                layout_test(|| {
-                    fixture();
+                layout_test(move || {
+                    fixture(probe.clone());
                 })
                 .viewport_px(800, 600),
             );
             pump_layout_test_session(&mut session, 0);
-            let original = coordinates();
+            let original = coordinates(session.inspect_components());
             assert_tracks(&original, 1000);
             assert_eq!(
                 original[&(0, 0)].local_size.height,
@@ -192,33 +192,33 @@ fn table_measures_shared_intrinsic_columns_and_row_spans_across_reflow() {
                 "24dp line plus16dp top and bottom insets"
             );
             assert_eq!(original[&(1, 0)].local_size.height, Px(112));
-            WIDTH.get().unwrap().set(240.0);
+            output.get().unwrap().0.set(240.0);
             pump_layout_test_session(&mut session, 16_666_667);
-            let narrow = coordinates();
+            let narrow = coordinates(session.inspect_components());
             assert_tracks(&narrow, 240);
             assert!(
                 narrow[&(2, 2)].local_size.height > original[&(2, 2)].local_size.height,
                 "Real text wrapping must grow the row"
             );
-            WIDTH.get().unwrap().set(1000.0);
+            output.get().unwrap().0.set(1000.0);
             pump_layout_test_session(&mut session, 33_333_334);
             assert_eq!(
-                coordinates(),
+                coordinates(session.inspect_components()),
                 original,
                 "Restored tracks must not reuse narrow cell measurements"
             );
-            FONT_SIZE.get().unwrap().set(20.0);
+            output.get().unwrap().1.set(20.0);
             pump_layout_test_session(&mut session, 50_000_001);
-            let larger_text = coordinates();
+            let larger_text = coordinates(session.inspect_components());
             assert_tracks(&larger_text, 1000);
             assert_ne!(
                 larger_text[&(0, 0)].local_size.width,
                 original[&(0, 0)].local_size.width,
                 "Typography changes must invalidate intrinsic column measurements"
             );
-            FONT_SIZE.get().unwrap().set(16.0);
+            output.get().unwrap().1.set(16.0);
             pump_layout_test_session(&mut session, 66_666_668);
-            assert_eq!(coordinates(), original);
+            assert_eq!(coordinates(session.inspect_components()), original);
         },
     );
 }
@@ -255,9 +255,10 @@ fn table_publishes_merged_cell_semantics_and_independent_heading_ink() {
     crate::test_utils::run_isolated_test(
         "text_table::tests::table_publishes_merged_cell_semantics_and_independent_heading_ink",
         || {
-            tessera_ui::dp::set_scale_factor(1.0);
+            let output = tessera_ui::testing::TestProbe::default();
+            let probe = output.clone();
             let mut renderer = HeadlessRenderer::new(
-                Box::new(fixture),
+                Box::new(move || fixture(probe.clone())),
                 vec![Box::new(crate::TesseraComponents)],
                 HeadlessConfig {
                     width: 800,
@@ -283,6 +284,11 @@ fn table_publishes_merged_cell_semantics_and_independent_heading_ink() {
                 (Some(4), Some(3))
             );
             assert_eq!(table.children().len(), 4);
+            for (column, id) in map[&table.children()[0]].children().iter().enumerate() {
+                assert_eq!(map[id].role(), Role::ColumnHeader);
+                assert_eq!(map[id].column_index(), Some(column));
+            }
+
             let expected = [
                 vec!["Category", "Configuration", "Availability"],
                 vec!["Inset icon", "No (default)", "Available"],
@@ -339,7 +345,7 @@ fn table_publishes_merged_cell_semantics_and_independent_heading_ink() {
             assert_eq!(bounds.height(), 70.0);
             assert_eq!(bounds.y0, 55.5);
 
-            let geometry = coordinates();
+            let geometry = coordinates(renderer.inspect_components());
             let region = |pixels: &[u8], cell: (usize, usize)| {
                 let bounds = geometry[&cell].window_bounds();
                 let mut result = Vec::new();
@@ -365,19 +371,19 @@ fn table_publishes_merged_cell_semantics_and_independent_heading_ink() {
             let body = region(&initial, (1, 1));
             assert!(ink(&region(&initial, (0, 0)), 0) > 2);
             assert!(ink(&body, 2) > 2);
-            HEADER_COLOR.get().unwrap().set(Some(Color::GREEN));
+            output.get().unwrap().2.set(Some(Color::GREEN));
             renderer.render_frames(2);
             let updated = renderer.read_pixels().unwrap();
             assert!(ink(&region(&updated, (0, 0)), 1) > 2);
             assert_eq!(ink(&region(&updated, (0, 0)), 0), 0);
             assert_eq!(region(&updated, (1, 1)), body);
-            assert_eq!(coordinates(), geometry);
-            HEADER_COLOR.get().unwrap().set(None);
+            assert_eq!(coordinates(renderer.inspect_components()), geometry);
+            output.get().unwrap().2.set(None);
             renderer.render_frames(2);
             let inherited = renderer.read_pixels().unwrap();
             assert!(ink(&region(&inherited, (0, 0)), 2) > 2);
             assert_eq!(region(&inherited, (1, 1)), body);
-            assert_eq!(coordinates(), geometry);
+            assert_eq!(coordinates(renderer.inspect_components()), geometry);
         },
     );
 }

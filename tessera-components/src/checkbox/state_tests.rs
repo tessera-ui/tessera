@@ -4,8 +4,6 @@
 //!
 //! Preserve complete selection and validation states across theme changes.
 
-use std::cell::Cell;
-
 use tessera_ui::{
     Color, Dp, FocusManager, HeadlessConfig, HeadlessRenderer, MOUSE_POINTER_ID, Modifier,
     PressKeyEventType, PxPosition, State,
@@ -39,10 +37,6 @@ struct Settings {
     presentation: Option<InteractionVisualState>,
 }
 
-thread_local! {
-    static SETTINGS: Cell<Option<State<Settings>>> = const { Cell::new(None) };
-}
-
 fn palettes() -> [MaterialTheme; 2] {
     [
         MaterialTheme::default(),
@@ -51,10 +45,10 @@ fn palettes() -> [MaterialTheme; 2] {
 }
 
 #[tessera]
-fn fixture() {
+fn fixture(probe: tessera_ui::testing::TestProbe<Option<State<Settings>>>) {
     let settings = remember(Settings::default);
     let palettes = remember(palettes);
-    SETTINGS.set(Some(settings));
+    probe.set(Some(settings));
     material_theme()
         .theme(move || palettes.with(|palettes| palettes[usize::from(settings.get().dark)].clone()))
         .child(move || {
@@ -153,8 +147,10 @@ fn action(renderer: &mut HeadlessRenderer, action: Action) -> bool {
 
 fn check_states(samples: u32) {
     let palettes = palettes();
+    let probe = tessera_ui::testing::TestProbe::default();
+    let observed = probe.clone();
     let mut renderer = HeadlessRenderer::new(
-        Box::new(fixture),
+        Box::new(move || fixture(observed.clone())),
         vec![Box::new(crate::TesseraComponents)],
         HeadlessConfig {
             width: 200,
@@ -166,7 +162,7 @@ fn check_states(samples: u32) {
     )
     .unwrap();
     renderer.render_frames(30);
-    let settings = SETTINGS.get().unwrap();
+    let settings = probe.get().unwrap();
     let identity = node(&renderer, "Selection").0;
     let bounds = node(&renderer, "Selection").1.bounds().unwrap();
     assert_eq!((bounds.x1 - bounds.x0, bounds.y1 - bounds.y0), (96.0, 96.0));

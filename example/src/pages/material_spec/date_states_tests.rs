@@ -11,13 +11,6 @@ use tessera_ui::{
 
 use super::*;
 
-struct Pipelines;
-impl tessera_ui::RenderModule for Pipelines {
-    fn register_pipelines(&self, context: &mut tessera_ui::PipelineContext<'_>) {
-        tessera_components::pipelines::register_pipelines(context);
-    }
-}
-
 #[tessera]
 fn fixture() {
     super::super::super::media::load_fonts();
@@ -70,7 +63,7 @@ fn click(renderer: &mut HeadlessRenderer, group: &str, label: &str) {
 fn states_matrix_preserves_themed_native_choices_and_scaled_pointer_input() {
     let mut renderer = HeadlessRenderer::new(
         Box::new(fixture),
-        vec![Box::new(Pipelines)],
+        vec![Box::new(crate::TestPipelines)],
         HeadlessConfig {
             width: 1024,
             height: 1400,

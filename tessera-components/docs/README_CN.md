@@ -85,8 +85,8 @@ Home/End、PageUp/PageDown。连续滑块按 1% 调整，离散滑块按配置�
 设置各自的本地化名称，组名称仍由 `.accessibility_label(...)` 设置。
 
 `tooltip_provider("Help text")` 在页面上方显示普通提示；用
-`tooltip_anchor().child(...)` 包裹触发控件。嵌套提供器时可显式共享
-`TooltipController`。悬停等待 500ms，键盘焦点显示提示，触摸长按 500ms
+`.child(|controller| { tooltip_anchor(controller).child(...); })` 包裹触发控件。嵌套提供器时可显式共享
+`.group(...)`。悬停等待 500ms，键盘焦点显示提示，触摸长按 500ms
 会阻止松手时误触原控件。Escape 和外部按下可关闭提示，其他控件仍可操作。
 `TooltipVariant::Rich`、`.headline(...)` 与 `.action_label(...).on_action(...)`
 提供富内容提示；`.actions(...)` 支持自定义操作内容，包括两枚文字按钮。

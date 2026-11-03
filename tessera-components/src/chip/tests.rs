@@ -4,8 +4,6 @@
 //!
 //! Preserve compact control geometry and behavior as chip state changes.
 
-use std::cell::Cell;
-
 use tessera_ui::{
     Dp, HeadlessConfig, HeadlessRenderer, MOUSE_POINTER_ID, Modifier, PressKeyEventType,
     PxPosition, State,
@@ -32,14 +30,10 @@ struct Settings {
     calls: usize,
 }
 
-thread_local! {
-    static SETTINGS: Cell<Option<State<Settings>>> = const { Cell::new(None) };
-}
-
 #[tessera]
-fn fixture() {
+fn fixture(probe: tessera_ui::testing::TestProbe<Option<State<Settings>>>) {
     let settings = remember(Settings::default);
-    SETTINGS.set(Some(settings));
+    probe.set(Some(settings));
     material_theme()
         .theme(move || {
             let mut theme = MaterialTheme::default();
@@ -85,20 +79,13 @@ fn fixture() {
 }
 
 fn rect(renderer: &HeadlessRenderer, key: &str) -> [i64; 4] {
-    let snapshot = renderer.snapshot();
-    let mut pending = vec![&snapshot["root"]];
-    while let Some(node) = pending.pop() {
-        if node["accessibility"]["key"] == key || node["accessibility"]["label"] == key {
-            return ["x", "y", "width", "height"]
-                .map(|field| node["bounds"][field].as_i64().unwrap());
-        }
-        if let Some(children) = node["children"].as_array() {
-            pending.extend(children);
-        }
-    }
-    panic!("missing {key}");
+    let snapshot = renderer.inspect_components();
+    let node = snapshot
+        .find_tag(key)
+        .unwrap_or_else(|| snapshot.labeled(key));
+    let bounds = node.bounds().expect("placed test target");
+    [bounds.x, bounds.y, bounds.width, bounds.height].map(|value| value as i64)
 }
-
 fn node(renderer: &HeadlessRenderer, label: &str) -> (NodeId, Node) {
     renderer
         .accessibility_snapshot()
@@ -111,8 +98,10 @@ fn node(renderer: &HeadlessRenderer, label: &str) -> (NodeId, Node) {
 
 fn check_chips() {
     for scale in [1.0, 2.0] {
+        let probe = tessera_ui::testing::TestProbe::default();
+        let observed = probe.clone();
         let mut renderer = HeadlessRenderer::new(
-            Box::new(fixture),
+            Box::new(move || fixture(observed.clone())),
             vec![Box::new(crate::TesseraComponents)],
             HeadlessConfig {
                 width: 800,
@@ -123,7 +112,7 @@ fn check_chips() {
         )
         .unwrap();
         renderer.render_frames(5);
-        let settings = SETTINGS.get().unwrap();
+        let settings = probe.get().unwrap();
         for (leading, trailing) in [(false, false), (true, false), (false, true), (true, true)] {
             settings.set(Settings {
                 leading,

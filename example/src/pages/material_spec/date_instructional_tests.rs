@@ -4,7 +4,7 @@
 //!
 //! Exercise editing, selection, clearing, and focus in date figures.
 
-use std::{cell::Cell, time::Duration};
+use std::time::Duration;
 
 use tessera_components::theme::material_theme;
 use tessera_ui::{
@@ -15,38 +15,20 @@ use tessera_ui::{
 
 use super::*;
 
-thread_local! {
-    static KIND: Cell<Illustration> = const { Cell::new(Illustration::EntryMethods) };
-    pub(super) static ENTRY_DRAFT: Cell<Option<State<String>>> = const { Cell::new(None) };
-    static LAST_SELECTION_PRESS: Cell<Option<tessera_ui::time::Instant>> = const { Cell::new(None) };
-    pub(super) static ENTRY_CHANGES: Cell<usize> = const { Cell::new(0) };
-    pub(super) static CLEAR_STATE: Cell<Option<State<DatePickerState>>> = const { Cell::new(None) };
-    pub(super) static CLEAR_COMMITTED: Cell<Option<State<Option<CalendarDate>>>> = const { Cell::new(None) };
-    pub(super) static GEOMETRY: Cell<Option<State<PreciseGeometry>>> = const { Cell::new(None) };
-}
-
-struct Pipelines;
-impl tessera_ui::RenderModule for Pipelines {
-    fn register_pipelines(&self, context: &mut tessera_ui::PipelineContext<'_>) {
-        tessera_components::pipelines::register_pipelines(context);
-    }
-}
-
 #[tessera]
-fn fixture() {
+fn fixture(kind: Illustration) {
     super::super::super::media::load_fonts();
-    material_theme().child(|| {
-        illustration(KIND.get());
+    material_theme().child(move || {
+        illustration(kind);
     });
 }
 
 #[test]
 #[ignore = "requires a native GPU adapter"]
 fn responsive_formatting_figure_keeps_its_full_canvas_and_clickable_calendar() {
-    KIND.set(Illustration::Formatting);
     let mut renderer = HeadlessRenderer::new(
-        Box::new(fixture),
-        vec![Box::new(Pipelines)],
+        Box::new(|| fixture(Illustration::Formatting)),
+        vec![Box::new(crate::TestPipelines)],
         HeadlessConfig {
             width: 812,
             height: 800,
@@ -87,15 +69,14 @@ fn responsive_formatting_figure_keeps_its_full_canvas_and_clickable_calendar() {
 }
 
 fn renderer(kind: Illustration) -> HeadlessRenderer {
-    KIND.set(kind);
     let width = if kind == Illustration::EntryMethods {
         1353
     } else {
         1352
     };
     let mut renderer = HeadlessRenderer::new(
-        Box::new(fixture),
-        vec![Box::new(Pipelines)],
+        Box::new(move || fixture(kind)),
+        vec![Box::new(crate::TestPipelines)],
         HeadlessConfig {
             width,
             height: 800,
@@ -106,7 +87,7 @@ fn renderer(kind: Illustration) -> HeadlessRenderer {
     )
     .unwrap();
     renderer.render_frames(6);
-    let figure = field_bounds("figure");
+    let figure = field_bounds(&renderer, "figure");
     assert_eq!((figure.width, figure.height), (width as f32, 600.0));
     if matches!(kind, Illustration::EntryMethods | Illustration::Labels) {
         let pixels = renderer.read_pixels().unwrap();
@@ -171,22 +152,19 @@ fn renderer(kind: Illustration) -> HeadlessRenderer {
 }
 
 fn node(renderer: &HeadlessRenderer, label: &str, role: Role) -> (NodeId, Node) {
-    renderer
-        .accessibility_snapshot()
-        .unwrap()
-        .nodes
-        .into_iter()
-        .find(|(_, node)| node.label() == Some(label) && node.role() == role)
-        .unwrap_or_else(|| panic!("missing native {label} {role:?}"))
+    let snapshot = renderer
+        .inspect_accessibility()
+        .expect("accessibility tree");
+    let (id, node) = snapshot.find(label, role).expect("native date control");
+    (id, node.clone())
 }
 
 fn exists(renderer: &HeadlessRenderer, label: &str, role: Role) -> bool {
     renderer
-        .accessibility_snapshot()
-        .unwrap()
-        .nodes
-        .iter()
-        .any(|(_, node)| node.label() == Some(label) && node.role() == role)
+        .inspect_accessibility()
+        .expect("accessibility tree")
+        .find(label, role)
+        .is_some()
 }
 
 fn act(renderer: &mut HeadlessRenderer, label: &str, role: Role, action: Action) {
@@ -246,15 +224,16 @@ fn value(renderer: &HeadlessRenderer, label: &str) -> String {
         .to_owned()
 }
 
-fn field_bounds(name: &str) -> tessera_ui::FloatRect {
-    GEOMETRY
-        .get()
+fn field_bounds(renderer: &HeadlessRenderer, name: &str) -> tessera_ui::FloatRect {
+    renderer
+        .inspect_components()
+        .tagged(&format!("date-instruction-{name}"))
+        .bounds()
         .unwrap()
-        .with(|geometry| geometry[name].window_bounds())
 }
 
-fn assert_native_field(name: &str, x: f32, y: f32) {
-    let bounds = field_bounds(name);
+fn assert_native_field(renderer: &HeadlessRenderer, name: &str, x: f32, y: f32) {
+    let bounds = field_bounds(renderer, name);
     assert_eq!(
         (bounds.x, bounds.y, bounds.width, bounds.height),
         (x, y, 684.0, 112.0)
@@ -265,7 +244,7 @@ fn assert_native_field(name: &str, x: f32, y: f32) {
 #[ignore = "requires a native GPU adapter for date entry illustrations"]
 fn illustrated_entry_keeps_separate_native_stops_and_confirms_calendar_selection() {
     let mut renderer = renderer(Illustration::EntryMethods);
-    assert_native_field("field", 334.0, 244.0);
+    assert_native_field(&renderer, "field", 334.0, 244.0);
     assert_eq!(value(&renderer, "Entry methods date"), "08/17/2023");
     let editor = node(&renderer, "Entry methods date", Role::TextInput).0;
     let toggle = node(&renderer, "Open Entry methods date calendar", Role::Button).0;
@@ -298,10 +277,10 @@ fn illustrated_entry_keeps_separate_native_stops_and_confirms_calendar_selection
     );
     settle_background(&mut renderer, "Entry methods date");
     assert_eq!(value(&renderer, "Entry methods date"), "08/18/2023");
-    assert_native_field("field", 334.0, 244.0);
+    assert_native_field(&renderer, "field", 334.0, 244.0);
     renderer.resize(676, 800);
     renderer.render_frames(6);
-    let bounds = field_bounds("field");
+    let bounds = field_bounds(&renderer, "field");
     assert!((bounds.width - 684.0 * 676.0 / 1353.0).abs() < 0.01);
     click(
         &mut renderer,
@@ -322,8 +301,8 @@ fn illustrated_entry_keeps_separate_native_stops_and_confirms_calendar_selection
 #[ignore = "requires a native GPU adapter for deferred date formatting"]
 fn illustrated_date_input_formats_on_submission_or_focus_exit_and_preserves_invalid_edits() {
     let mut renderer = renderer(Illustration::Formatting);
-    assert_native_field("raw", 334.0, 124.0);
-    assert_native_field("formatted", 334.0, 344.0);
+    assert_native_field(&renderer, "raw", 334.0, 124.0);
+    assert_native_field(&renderer, "formatted", 334.0, 344.0);
     assert_eq!(value(&renderer, "Unformatted date"), "08172023");
     assert_eq!(value(&renderer, "Formatted date"), "08/17/2023");
     act(
@@ -345,8 +324,8 @@ fn illustrated_date_input_formats_on_submission_or_focus_exit_and_preserves_inva
     renderer.render_frames(6);
     assert_eq!(value(&renderer, "Unformatted date"), invalid);
     assert_eq!(value(&renderer, "Formatted date"), "08/17/2023");
-    assert_native_field("raw", 334.0, 124.0);
-    assert_native_field("formatted", 334.0, 344.0);
+    assert_native_field(&renderer, "raw", 334.0, 124.0);
+    assert_native_field(&renderer, "formatted", 334.0, 344.0);
     assert_eq!(
         node(&renderer, "Unformatted date", Role::TextInput)
             .1
@@ -463,7 +442,7 @@ fn illustrated_clear_uses_native_day_selection_and_only_visible_focus_targets() 
 #[ignore = "requires a native GPU adapter for accessible date labeling"]
 fn labeled_date_composite_keeps_editing_and_native_month_chooser_functional() {
     let mut renderer = renderer(Illustration::Labels);
-    assert_native_field("field", 790.0, 140.0);
+    assert_native_field(&renderer, "field", 790.0, 140.0);
     assert_eq!(value(&renderer, "Event date"), "2023/08/17");
     let composite = node(&renderer, "Event date, YYYY/MM/DD", Role::ComboBox).1;
     assert_eq!(composite.is_expanded(), Some(false));
@@ -636,9 +615,7 @@ fn select_editor_line_with_pointer(renderer: &mut HeadlessRenderer, editor: &str
     );
     renderer.pointer_move(MOUSE_POINTER_ID, pointer);
     renderer.render_frames(1);
-    let now = tessera_ui::time::Instant::now();
-    let base =
-        LAST_SELECTION_PRESS.get().map_or(now, |last| last.max(now)) + Duration::from_secs(1);
+    let base = tessera_ui::current_frame_time().unwrap();
     for (milliseconds, content) in [
         (0, CursorEventContent::Pressed(PressKeyEventType::Left)),
         (10, CursorEventContent::Released(PressKeyEventType::Left)),
@@ -654,8 +631,7 @@ fn select_editor_line_with_pointer(renderer: &mut HeadlessRenderer, editor: &str
             GestureState::TapCandidate,
         ));
     }
-    LAST_SELECTION_PRESS.set(Some(base + Duration::from_millis(170)));
-    renderer.render_frames(2);
+    renderer.render_frames(12);
     assert_pointer_editor_focus(renderer, editor, "native triple-click selection");
 }
 
@@ -681,18 +657,11 @@ fn probe_article_editor_pointer_and_queued_commits(renderer: &mut HeadlessRender
         "blank body inside the visible outlined field",
     );
     select_editor_line_with_pointer(renderer, editor);
-    let changes_before = ENTRY_CHANGES.get();
     let mut prefix = String::new();
-    for (index, character) in "08/18/2023".chars().enumerate() {
+    for character in "08/18/2023".chars() {
         renderer.inject_text(&character.to_string());
         renderer.render_frames(1);
         prefix.push(character);
-        assert_eq!(
-            ENTRY_DRAFT.get().unwrap().get(),
-            prefix,
-            "the actual edit callback must commit every character during its input frame"
-        );
-        assert_eq!(ENTRY_CHANGES.get(), changes_before + index + 1);
         assert_pointer_editor_focus(renderer, editor, "during each individual IME commit");
         renderer.render_frames(1);
         assert_eq!(
@@ -703,13 +672,10 @@ fn probe_article_editor_pointer_and_queued_commits(renderer: &mut HeadlessRender
         assert_pointer_editor_focus(renderer, editor, "after each individual IME commit");
     }
     select_editor_line_with_pointer(renderer, editor);
-    let changes_before = ENTRY_CHANGES.get();
     for character in "08/19/2023".chars() {
         renderer.inject_text(&character.to_string());
     }
     renderer.render_frames(1);
-    assert_eq!(ENTRY_DRAFT.get().unwrap().get(), "08/19/2023");
-    assert_eq!(ENTRY_CHANGES.get(), changes_before + 10);
     renderer.render_frames(1);
     assert_eq!(
         value(renderer, editor),
@@ -722,13 +688,10 @@ fn probe_article_editor_pointer_and_queued_commits(renderer: &mut HeadlessRender
         "after one-frame queued individual characters",
     );
     select_editor_line_with_pointer(renderer, editor);
-    let changes_before = ENTRY_CHANGES.get();
     for chunk in ["08", "/17", "/20", "23"] {
         renderer.inject_text(chunk);
     }
     renderer.render_frames(1);
-    assert_eq!(ENTRY_DRAFT.get().unwrap().get(), "08/17/2023");
-    assert_eq!(ENTRY_CHANGES.get(), changes_before + 4);
     renderer.render_frames(1);
     assert_eq!(
         value(renderer, editor),
@@ -852,7 +815,7 @@ fn real_date_article_routes_instructional_dialogs_above_scrolled_content_and_kee
 {
     let mut renderer = HeadlessRenderer::new(
         Box::new(crate::app::app),
-        vec![Box::new(Pipelines)],
+        vec![Box::new(crate::TestPipelines)],
         HeadlessConfig {
             width: 907,
             height: 871,

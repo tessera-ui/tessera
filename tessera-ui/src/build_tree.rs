@@ -447,6 +447,7 @@ pub(crate) fn build_component_tree<F: Fn() -> Output, Output>(entry_point: &F) -
         crate::component_call::with_pending_scope(|| {
             entry_point();
         });
+        crate::nested_scroll::flush_attachment_changes();
         finalize_frame_component_replay_tracking();
         finalize_frame_component_context_tracking();
         finalize_frame_layout_dirty_tracking();
@@ -699,6 +700,7 @@ pub(crate) fn build_component_tree<F: Fn() -> Output, Output>(entry_point: &F) -
                 }
             });
 
+            crate::nested_scroll::flush_attachment_changes();
             let round_invalidations = take_build_invalidations();
             // A write from another component after an instance was rebuilt in
             // this frame means that instance observed a stale value. It cannot

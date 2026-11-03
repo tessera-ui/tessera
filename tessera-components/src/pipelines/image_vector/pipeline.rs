@@ -5,7 +5,7 @@ use glam::{Vec2, Vec4};
 use tessera_ui::{
     Color, PxSize,
     renderer::drawer::pipeline::{DrawContext, DrawablePipeline, FrameContext},
-    wgpu::{self, util::DeviceExt},
+    wgpu,
 };
 
 use super::command::{ImageVectorCommand, ImageVectorData, ImageVectorVertex, VectorTintMode};
@@ -16,14 +16,9 @@ const ATLAS_PADDING: u32 = 1;
 const ATLAS_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Rgba8UnormSrgb;
 const SAMPLES_PER_BUFFER: usize = 64;
 
-#[cfg(test)]
-thread_local! {
-    pub(super) static SAMPLE_UPLOADS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
-}
-
 struct GeometryResources {
-    vertex_buffer: wgpu::Buffer,
-    index_buffer: wgpu::Buffer,
+    vertex_buffer: tessera_ui::TrackedBuffer,
+    index_buffer: tessera_ui::TrackedBuffer,
     index_count: u32,
 }
 
@@ -51,7 +46,7 @@ struct AtlasCacheEntry {
 }
 
 struct SampleResources {
-    buffer: wgpu::Buffer,
+    buffer: tessera_ui::TrackedBuffer,
     bind_groups: HashMap<usize, wgpu::BindGroup>,
     bytes: Vec<u8>,
     used: usize,
@@ -95,7 +90,7 @@ pub struct ImageVectorPipeline {
 impl ImageVectorPipeline {
     /// Creates the vector atlas pipeline with raster and sampling passes.
     pub fn new(
-        device: &wgpu::Device,
+        device: &tessera_ui::GraphicsDevice,
         config: &wgpu::SurfaceConfiguration,
         pipeline_cache: Option<&wgpu::PipelineCache>,
         sample_count: u32,
@@ -162,11 +157,14 @@ impl ImageVectorPipeline {
         uniform_data
             .write(&raster_uniforms)
             .expect("raster uniform serialization failed");
-        let raster_uniform_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            label: Some("image_vector_raster_uniform_buffer"),
-            contents: &uniform_data.into_inner(),
-            usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
-        });
+        let raster_uniform_buffer = device.create_buffer_init(
+            "vector_geometry",
+            &wgpu::util::BufferInitDescriptor {
+                label: Some("image_vector_raster_uniform_buffer"),
+                contents: &uniform_data.into_inner(),
+                usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+            },
+        );
 
         let raster_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
             layout: &raster_bind_group_layout,
@@ -297,18 +295,27 @@ impl ImageVectorPipeline {
         }
     }
 
-    fn create_resources(device: &wgpu::Device, data: &ImageVectorData) -> GeometryResources {
-        let vertex_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            label: Some("image_vector_vertex_buffer"),
-            contents: bytemuck::cast_slice(data.vertices.as_slice()),
-            usage: wgpu::BufferUsages::VERTEX,
-        });
+    fn create_resources(
+        device: &tessera_ui::GraphicsDevice,
+        data: &ImageVectorData,
+    ) -> GeometryResources {
+        let vertex_buffer = device.create_buffer_init(
+            "vector_geometry",
+            &wgpu::util::BufferInitDescriptor {
+                label: Some("image_vector_vertex_buffer"),
+                contents: bytemuck::cast_slice(data.vertices.as_slice()),
+                usage: wgpu::BufferUsages::VERTEX,
+            },
+        );
 
-        let index_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            label: Some("image_vector_index_buffer"),
-            contents: bytemuck::cast_slice(data.indices.as_slice()),
-            usage: wgpu::BufferUsages::INDEX,
-        });
+        let index_buffer = device.create_buffer_init(
+            "vector_geometry",
+            &wgpu::util::BufferInitDescriptor {
+                label: Some("image_vector_index_buffer"),
+                contents: bytemuck::cast_slice(data.indices.as_slice()),
+                usage: wgpu::BufferUsages::INDEX,
+            },
+        );
 
         GeometryResources {
             vertex_buffer,
@@ -319,7 +326,7 @@ impl ImageVectorPipeline {
 
     fn ensure_cached_entry(
         &mut self,
-        device: &wgpu::Device,
+        device: &tessera_ui::GraphicsDevice,
         queue: &wgpu::Queue,
         data: &ImageVectorData,
         width: u32,
@@ -363,7 +370,7 @@ impl ImageVectorPipeline {
 
     fn rasterize_into_allocation(
         &self,
-        device: &wgpu::Device,
+        device: &tessera_ui::GraphicsDevice,
         queue: &wgpu::Queue,
         geometry: &GeometryResources,
         allocation: &AtlasAllocation,
@@ -374,37 +381,43 @@ impl ImageVectorPipeline {
             label: Some("image_vector_atlas_encoder"),
         });
 
-        let resolved_texture = device.create_texture(&wgpu::TextureDescriptor {
-            label: Some("image_vector_resolved_texture"),
-            size: wgpu::Extent3d {
-                width,
-                height,
-                depth_or_array_layers: 1,
-            },
-            mip_level_count: 1,
-            sample_count: 1,
-            dimension: wgpu::TextureDimension::D2,
-            format: ATLAS_FORMAT,
-            usage: wgpu::TextureUsages::COPY_SRC | wgpu::TextureUsages::RENDER_ATTACHMENT,
-            view_formats: &[],
-        });
-        let resolved_view = resolved_texture.create_view(&wgpu::TextureViewDescriptor::default());
-
-        let (color_view, resolve_target, _msaa_texture) = if self.raster_sample_count > 1 {
-            let msaa_texture = device.create_texture(&wgpu::TextureDescriptor {
-                label: Some("image_vector_msaa_texture"),
+        let resolved_texture = device.create_texture(
+            "vector_atlas",
+            &wgpu::TextureDescriptor {
+                label: Some("image_vector_resolved_texture"),
                 size: wgpu::Extent3d {
                     width,
                     height,
                     depth_or_array_layers: 1,
                 },
                 mip_level_count: 1,
-                sample_count: self.raster_sample_count,
+                sample_count: 1,
                 dimension: wgpu::TextureDimension::D2,
                 format: ATLAS_FORMAT,
-                usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
+                usage: wgpu::TextureUsages::COPY_SRC | wgpu::TextureUsages::RENDER_ATTACHMENT,
                 view_formats: &[],
-            });
+            },
+        );
+        let resolved_view = resolved_texture.create_view(&wgpu::TextureViewDescriptor::default());
+
+        let (color_view, resolve_target, _msaa_texture) = if self.raster_sample_count > 1 {
+            let msaa_texture = device.create_texture(
+                "vector_atlas",
+                &wgpu::TextureDescriptor {
+                    label: Some("image_vector_msaa_texture"),
+                    size: wgpu::Extent3d {
+                        width,
+                        height,
+                        depth_or_array_layers: 1,
+                    },
+                    mip_level_count: 1,
+                    sample_count: self.raster_sample_count,
+                    dimension: wgpu::TextureDimension::D2,
+                    format: ATLAS_FORMAT,
+                    usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
+                    view_formats: &[],
+                },
+            );
             let msaa_view = msaa_texture.create_view(&wgpu::TextureViewDescriptor::default());
             (msaa_view, Some(resolved_view.clone()), Some(msaa_texture))
         } else {
@@ -469,8 +482,6 @@ impl DrawablePipeline<ImageVectorCommand> for ImageVectorPipeline {
     }
 
     fn end_frame(&mut self, context: &FrameContext<'_>) {
-        #[cfg(test)]
-        SAMPLE_UPLOADS.set(0);
         // Queue writes precede submission of the frame's encoded draws.
         for resources in self
             .sample_resources
@@ -478,10 +489,8 @@ impl DrawablePipeline<ImageVectorCommand> for ImageVectorPipeline {
             .take(self.next_sample.div_ceil(SAMPLES_PER_BUFFER))
         {
             context
-                .queue
+                .graphics
                 .write_buffer(&resources.buffer, 0, &resources.bytes[..resources.used]);
-            #[cfg(test)]
-            SAMPLE_UPLOADS.with(|count| count.set(count.get() + 1));
         }
     }
 
@@ -493,7 +502,7 @@ impl DrawablePipeline<ImageVectorCommand> for ImageVectorPipeline {
         for (command, geometry) in context.commands.iter() {
             if let Some((width, height)) = physical_dimensions(*geometry) {
                 self.ensure_cached_entry(
-                    context.device,
+                    context.graphics,
                     context.queue,
                     &command.data,
                     width,
@@ -533,12 +542,15 @@ impl DrawablePipeline<ImageVectorCommand> for ImageVectorPipeline {
             let offset = (self.next_sample % SAMPLES_PER_BUFFER) * self.sample_stride;
             self.next_sample += 1;
             if slot_index == self.sample_resources.len() {
-                let buffer = context.device.create_buffer(&wgpu::BufferDescriptor {
-                    label: Some("image_vector_sample_uniform_buffer"),
-                    size: (self.sample_stride * SAMPLES_PER_BUFFER) as u64,
-                    usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
-                    mapped_at_creation: false,
-                });
+                let buffer = context.graphics.create_buffer(
+                    "vector_samples",
+                    &wgpu::BufferDescriptor {
+                        label: Some("image_vector_sample_uniform_buffer"),
+                        size: (self.sample_stride * SAMPLES_PER_BUFFER) as u64,
+                        usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+                        mapped_at_creation: false,
+                    },
+                );
                 self.sample_resources.push(SampleResources {
                     buffer,
                     bind_groups: HashMap::new(),
@@ -552,7 +564,7 @@ impl DrawablePipeline<ImageVectorCommand> for ImageVectorPipeline {
             let buffer = &resources.buffer;
             let bind_group = resources.bind_groups.entry(page_index).or_insert_with(|| {
                 create_sample_bind_group(
-                    context.device,
+                    context.graphics,
                     &self.sample_bind_group_layout,
                     self.atlas.page_view(page_index),
                     &self.atlas_sampler,
@@ -570,7 +582,7 @@ impl DrawablePipeline<ImageVectorCommand> for ImageVectorPipeline {
 }
 
 fn create_sample_bind_group(
-    device: &wgpu::Device,
+    device: &tessera_ui::GraphicsDevice,
     layout: &wgpu::BindGroupLayout,
     view: &wgpu::TextureView,
     sampler: &wgpu::Sampler,
@@ -689,7 +701,7 @@ struct VectorAtlas {
 }
 
 impl VectorAtlas {
-    fn new(device: &wgpu::Device) -> Self {
+    fn new(device: &tessera_ui::GraphicsDevice) -> Self {
         let max_dimension = device.limits().max_texture_dimension_2d;
         let default_size = DEFAULT_ATLAS_SIZE.min(max_dimension);
         Self {
@@ -701,7 +713,7 @@ impl VectorAtlas {
 
     fn allocate(
         &mut self,
-        device: &wgpu::Device,
+        device: &tessera_ui::GraphicsDevice,
         queue: &wgpu::Queue,
         width: u32,
         height: u32,
@@ -754,7 +766,12 @@ impl VectorAtlas {
         }
     }
 
-    fn add_page(&mut self, device: &wgpu::Device, queue: &wgpu::Queue, size: u32) -> usize {
+    fn add_page(
+        &mut self,
+        device: &tessera_ui::GraphicsDevice,
+        queue: &wgpu::Queue,
+        size: u32,
+    ) -> usize {
         let page = AtlasPage::new(device, queue, size, size);
         self.pages.push(page);
         self.pages.len() - 1
@@ -785,28 +802,37 @@ struct AtlasPage {
 }
 
 impl AtlasPage {
-    fn new(device: &wgpu::Device, queue: &wgpu::Queue, width: u32, height: u32) -> Self {
-        let texture = device.create_texture(&wgpu::TextureDescriptor {
-            label: Some("image_vector_atlas_page"),
-            size: wgpu::Extent3d {
-                width,
-                height,
-                depth_or_array_layers: 1,
+    fn new(
+        device: &tessera_ui::GraphicsDevice,
+        _queue: &wgpu::Queue,
+        width: u32,
+        height: u32,
+    ) -> Self {
+        let texture = device.create_texture(
+            "vector_atlas",
+            &wgpu::TextureDescriptor {
+                label: Some("image_vector_atlas_page"),
+                size: wgpu::Extent3d {
+                    width,
+                    height,
+                    depth_or_array_layers: 1,
+                },
+                mip_level_count: 1,
+                sample_count: 1,
+                dimension: wgpu::TextureDimension::D2,
+                format: ATLAS_FORMAT,
+                usage: wgpu::TextureUsages::TEXTURE_BINDING
+                    | wgpu::TextureUsages::COPY_DST
+                    | wgpu::TextureUsages::COPY_SRC,
+                view_formats: &[],
             },
-            mip_level_count: 1,
-            sample_count: 1,
-            dimension: wgpu::TextureDimension::D2,
-            format: ATLAS_FORMAT,
-            usage: wgpu::TextureUsages::TEXTURE_BINDING
-                | wgpu::TextureUsages::COPY_DST
-                | wgpu::TextureUsages::COPY_SRC,
-            view_formats: &[],
-        });
+        );
         #[cfg(target_arch = "wasm32")]
         {
             // WebGPU does not support `clear_texture` on the web backend.
             let zeroed = vec![0; (width as usize) * (height as usize) * 4];
-            queue.write_texture(
+            device.write_texture(
+                "vector_atlas",
                 wgpu::TexelCopyTextureInfo {
                     texture: &texture,
                     mip_level: 0,
@@ -842,7 +868,7 @@ impl AtlasPage {
                     array_layer_count: Some(1),
                 },
             );
-            queue.submit(std::iter::once(encoder.finish()));
+            _queue.submit(std::iter::once(encoder.finish()));
         }
 
         let view = texture.create_view(&wgpu::TextureViewDescriptor::default());

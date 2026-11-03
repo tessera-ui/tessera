@@ -4,28 +4,22 @@
 //!
 //! Verify clipped, scaled and cached surfaces across repeated draw batches.
 
-use std::cell::Cell;
-
 use tessera_ui::{
-    Color, Dp, HeadlessConfig, HeadlessRenderer, Modifier, RenderModule, State, remember,
-    scaled_box, tessera,
+    Color, Dp, HeadlessConfig, HeadlessRenderer, Modifier, State, remember, scaled_box, tessera,
+    testing::TestProbe,
 };
 
 use crate::{boxed::boxed, modifier::ModifierExt as _, shape_def::Shape};
 
-struct Pipelines;
-
 const BATCH_COUNT: usize = 300;
 const VIEWPORT_WIDTH: u32 = 8 + BATCH_COUNT as u32 * 16;
 
-thread_local! {
-    static DISTINCT: Cell<Option<State<bool>>> = const { Cell::new(None) };
-}
-
 #[tessera]
-fn cache_clock_fixture() {
+fn cache_clock_fixture(probe: Option<TestProbe<Option<State<bool>>>>) {
     let distinct = remember(|| false);
-    DISTINCT.set(Some(distinct));
+    if let Some(probe) = probe {
+        probe.set(Some(distinct));
+    }
     boxed()
         .modifier(Modifier::new().fill_max_size())
         .children(move || {
@@ -60,9 +54,13 @@ fn shape_batches_share_uploads_and_preserve_cache_heat_and_pixels_across_buffers
         "pipelines::shape::coverage_tests::shape_batches_share_uploads_and_preserve_cache_heat_and_pixels_across_buffers",
         || {
             for sample_count in [1, 4] {
+                let probe = TestProbe::<Option<State<bool>>>::default();
+                let observed = probe.clone();
                 let mut renderer = HeadlessRenderer::new(
-                    Box::new(cache_clock_fixture),
-                    vec![Box::new(Pipelines)],
+                    Box::new(move || {
+                        cache_clock_fixture().probe(probe.clone());
+                    }),
+                    vec![Box::new(crate::TesseraComponents)],
                     HeadlessConfig {
                         width: VIEWPORT_WIDTH,
                         height: 24,
@@ -71,17 +69,26 @@ fn shape_batches_share_uploads_and_preserve_cache_heat_and_pixels_across_buffers
                     },
                 )
                 .unwrap();
-                super::pipeline::CACHE_BUILDS.set(0);
                 renderer.render_frames(1);
                 assert_eq!(
-                    super::pipeline::CACHE_BUILDS.get(),
+                    renderer
+                        .graphics_work()
+                        .group("shape_cache")
+                        .texture_allocations,
                     0,
                     "repeated batches in one frame must not warm a transient shape"
                 );
                 assert!(
-                    super::pipeline::BATCH_UPLOADS.get() <= 2,
+                    renderer
+                        .frame_graphics_work()
+                        .group("shape_batches")
+                        .buffer_uploads
+                        <= 2,
                     "uncached batches must share frame uploads, got {}",
-                    super::pipeline::BATCH_UPLOADS.get()
+                    renderer
+                        .frame_graphics_work()
+                        .group("shape_batches")
+                        .buffer_uploads
                 );
                 let uncached = renderer.read_pixels().unwrap();
                 let first = pixel(&uncached, VIEWPORT_WIDTH, 10, 10);
@@ -95,19 +102,33 @@ fn shape_batches_share_uploads_and_preserve_cache_heat_and_pixels_across_buffers
                 }
                 renderer.render_frames(7);
                 assert_eq!(
-                    super::pipeline::CACHE_BUILDS.get(),
+                    renderer
+                        .graphics_work()
+                        .group("shape_cache")
+                        .texture_allocations,
                     1,
                     "one stable shape must become cached across real frames"
                 );
                 assert!(
-                    super::pipeline::BATCH_UPLOADS.get() <= 2,
+                    renderer
+                        .frame_graphics_work()
+                        .group("shape_batches")
+                        .buffer_uploads
+                        <= 2,
                     "cached batches must share frame uploads"
                 );
-                DISTINCT.get().unwrap().set(true);
-                let before = super::pipeline::CACHE_BUILDS.get();
+                observed.get().unwrap().set(true);
+                let before = renderer
+                    .graphics_work()
+                    .group("shape_cache")
+                    .texture_allocations;
                 renderer.render_frames(8);
                 assert_eq!(
-                    super::pipeline::CACHE_BUILDS.get() - before,
+                    renderer
+                        .graphics_work()
+                        .group("shape_cache")
+                        .texture_allocations
+                        - before,
                     15,
                     "more than ten batches per frame must not expire stable shape heat"
                 );
@@ -133,13 +154,23 @@ fn shape_batches_share_uploads_and_preserve_cache_heat_and_pixels_across_buffers
                     previous_red = Some(actual[0]);
                 }
                 assert!(
-                    super::pipeline::BATCH_UPLOADS.get() <= 2,
+                    renderer
+                        .frame_graphics_work()
+                        .group("shape_batches")
+                        .buffer_uploads
+                        <= 2,
                     "distinct cached textures must share transform uploads"
                 );
-                let allocations = super::pipeline::BATCH_ALLOCATIONS.get();
+                let allocations = renderer
+                    .graphics_work()
+                    .group("shape_batches")
+                    .buffer_allocations;
                 renderer.render_frames(2);
                 assert_eq!(
-                    super::pipeline::BATCH_ALLOCATIONS.get(),
+                    renderer
+                        .graphics_work()
+                        .group("shape_batches")
+                        .buffer_allocations,
                     allocations,
                     "stable frame batches must reuse GPU buffers and bindings"
                 );
@@ -147,12 +178,6 @@ fn shape_batches_share_uploads_and_preserve_cache_heat_and_pixels_across_buffers
             }
         },
     );
-}
-
-impl RenderModule for Pipelines {
-    fn register_pipelines(&self, context: &mut tessera_ui::PipelineContext<'_>) {
-        crate::pipelines::register_pipelines(context);
-    }
 }
 
 #[tessera]
@@ -230,7 +255,7 @@ fn native_borders_keep_fully_covered_pixels_opaque_at_integer_and_fractional_cli
     for sample_count in [1, 4] {
         let mut renderer = HeadlessRenderer::new(
             Box::new(fixture),
-            vec![Box::new(Pipelines)],
+            vec![Box::new(crate::TesseraComponents)],
             HeadlessConfig {
                 width: 112,
                 height: 88,
@@ -241,10 +266,16 @@ fn native_borders_keep_fully_covered_pixels_opaque_at_integer_and_fractional_cli
         .unwrap();
         renderer.render_frames(8);
         let pixels = renderer.read_pixels().unwrap();
-        let allocations = super::pipeline::BATCH_ALLOCATIONS.get();
+        let allocations = renderer
+            .graphics_work()
+            .group("shape_batches")
+            .buffer_allocations;
         renderer.render_frames(8);
         assert_eq!(
-            super::pipeline::BATCH_ALLOCATIONS.get(),
+            renderer
+                .graphics_work()
+                .group("shape_batches")
+                .buffer_allocations,
             allocations,
             "warmed shape batches must reuse GPU buffers and bindings"
         );

@@ -43,7 +43,7 @@ use crate::{
     pipeline_context::PipelineContext,
     render_module::RenderModule,
     renderer::{
-        MAX_FOCUS_SETTLING_RETRIES, RenderCore, TesseraConfig, composite::expand_composites,
+        MAX_FRAME_SETTLING_RETRIES, RenderCore, TesseraConfig, composite::expand_composites,
         core::OffscreenReadbackError, focus_settling_can_progress,
     },
     runtime::{
@@ -51,7 +51,7 @@ use crate::{
         has_pending_build_invalidations, has_pending_layout_invalidations,
         prune_persistent_focus_handles, reset_build_invalidations, reset_component_replay_tracking,
         reset_focus_read_dependencies, reset_frame_clock, reset_layout_dirty_tracking,
-        reset_render_slot_read_dependencies, reset_slots, reset_state_read_dependencies,
+        reset_render_slot_read_dependencies, reset_state_read_dependencies,
         take_layout_dirty_nodes, tick_frame_nanos_receivers,
     },
     time::Instant,
@@ -166,6 +166,7 @@ impl Default for HeadlessConfig {
 /// Frames advance on a virtual clock, so a fixed input script always produces
 /// the same output regardless of wall-clock timing.
 pub struct HeadlessRenderer {
+    session: crate::RuntimeSession,
     core: RenderCore,
     entry: Box<dyn Fn()>,
     cursor: CursorState,
@@ -178,11 +179,35 @@ pub struct HeadlessRenderer {
     current_frame_nanos: u64,
     frame_time: Duration,
     diagnostics: crate::component_tree::LayoutFrameDiagnostics,
+    work: crate::FrameWork,
+    work_totals: crate::WorkTotals,
+    frame_clock_diagnostics: crate::FrameClockDiagnostics,
+    frame_graphics_work: crate::GraphicsWorkDiagnostics,
+
     #[cfg(feature = "profiling")]
     profile_summary: bool,
 }
 
 impl HeadlessRenderer {
+    /// Captures cumulative resource creation and uploads performed by pipelines.
+    pub fn graphics_work(&self) -> crate::GraphicsWorkDiagnostics {
+        self.core.resources().graphics.diagnostics()
+    }
+
+    /// Returns actual resource operations performed in the last completed frame.
+    pub fn frame_graphics_work(&self) -> &crate::GraphicsWorkDiagnostics {
+        &self.frame_graphics_work
+    }
+    /// Returns the runtime identity shared by this session's snapshots and diagnostics.
+    pub fn session_id(&self) -> crate::RuntimeSessionId {
+        self.session.identity()
+    }
+
+    /// Runs state or controller operations in this renderer's session.
+    pub fn run<R>(&self, work: impl FnOnce() -> R) -> R {
+        self.session.run(work)
+    }
+
     /// Creates a headless renderer for the given entry point and render
     /// modules.
     pub fn new<Output: 'static>(
@@ -190,6 +215,8 @@ impl HeadlessRenderer {
         modules: Vec<Box<dyn RenderModule>>,
         config: HeadlessConfig,
     ) -> Result<Self, HeadlessError> {
+        let session = crate::RuntimeSession::for_root();
+        session.activate();
         let width = config.width.max(1);
         let height = config.height.max(1);
         let physical_size = winit::dpi::PhysicalSize::new(width, height);
@@ -218,6 +245,7 @@ impl HeadlessRenderer {
         );
 
         Ok(Self {
+            session,
             core,
             entry: Box::new(move || {
                 entry();
@@ -232,6 +260,11 @@ impl HeadlessRenderer {
             current_frame_nanos: 0,
             frame_time: config.frame_time.max(Duration::from_nanos(1)),
             diagnostics: Default::default(),
+            work: Default::default(),
+            work_totals: Default::default(),
+            frame_clock_diagnostics: Default::default(),
+            frame_graphics_work: Default::default(),
+
             #[cfg(feature = "profiling")]
             profile_summary: false,
         })
@@ -239,16 +272,19 @@ impl HeadlessRenderer {
 
     /// Returns the current offscreen size in physical pixels.
     pub fn physical_size(&self) -> winit::dpi::PhysicalSize<u32> {
+        let _session = self.session.enter();
         self.physical_size
     }
 
     /// Returns the number of frames rendered so far.
     pub fn frame_index(&self) -> u64 {
+        let _session = self.session.enter();
         self.frame_index
     }
 
     /// Returns the work performed by the most recently rendered frame.
     pub fn diagnostics(&self) -> crate::component_tree::LayoutFrameDiagnostics {
+        let _session = self.session.enter();
         self.diagnostics
     }
 
@@ -257,6 +293,7 @@ impl HeadlessRenderer {
     /// Movement changes also update the tracked cursor position so hit testing
     /// observes the new location on the next frame.
     pub fn inject_pointer(&mut self, change: PointerChange) {
+        let _session = self.session.enter();
         if let Some(position) = change.position_snapshot() {
             self.cursor
                 .update_pointer_position(change.pointer_id, position);
@@ -266,6 +303,7 @@ impl HeadlessRenderer {
 
     /// Moves the given pointer to `position`.
     pub fn pointer_move(&mut self, pointer_id: PointerId, position: PxPosition) {
+        let _session = self.session.enter();
         self.cursor.update_pointer_position(pointer_id, position);
         self.cursor.push_event(PointerChange {
             timestamp: Instant::now(),
@@ -285,6 +323,7 @@ impl HeadlessRenderer {
         position: PxPosition,
         button: PressKeyEventType,
     ) {
+        let _session = self.session.enter();
         self.cursor.update_pointer_position(pointer_id, position);
         self.cursor.push_event(PointerChange {
             timestamp: Instant::now(),
@@ -304,6 +343,7 @@ impl HeadlessRenderer {
         position: PxPosition,
         button: PressKeyEventType,
     ) {
+        let _session = self.session.enter();
         self.cursor.update_pointer_position(pointer_id, position);
         self.cursor.push_event(PointerChange {
             timestamp: Instant::now(),
@@ -324,6 +364,7 @@ impl HeadlessRenderer {
         delta_x: f32,
         delta_y: f32,
     ) {
+        let _session = self.session.enter();
         self.cursor.update_pointer_position(pointer_id, position);
         self.cursor.push_event(PointerChange {
             timestamp: Instant::now(),
@@ -343,11 +384,13 @@ impl HeadlessRenderer {
 
     /// Starts a touch contact at the given window position.
     pub fn touch_start(&mut self, touch_id: u64, position: PxPosition) {
+        let _session = self.session.enter();
         self.cursor.handle_touch_start(touch_id, position);
     }
 
     /// Moves a touch contact, generating scrolling after touch slop is crossed.
     pub fn touch_move(&mut self, touch_id: u64, position: PxPosition) {
+        let _session = self.session.enter();
         if let Some(scroll) = self.cursor.handle_touch_move(touch_id, position) {
             self.cursor.push_event(scroll);
         }
@@ -355,41 +398,62 @@ impl HeadlessRenderer {
 
     /// Releases a touch contact and completes its gesture.
     pub fn touch_end(&mut self, touch_id: u64) {
+        let _session = self.session.enter();
         self.cursor.handle_touch_end(touch_id);
     }
 
     /// Cancels a touch contact without producing a tap or fling.
     pub fn touch_cancel(&mut self, touch_id: u64) {
+        let _session = self.session.enter();
         self.cursor.handle_touch_cancel(touch_id);
     }
 
-    /// Queues a keyboard event.
-    ///
-    /// Note that winit does not allow constructing `KeyEvent` values outside of
-    /// its own crates; callers must forward events they already received. For
-    /// synthetic text entry use [`HeadlessRenderer::inject_text`].
-    pub fn inject_key_event(&mut self, event: winit::event::KeyEvent) {
+    /// Queues a native or owned keyboard sample for the next frame.
+    pub fn inject_key_event(&mut self, event: impl Into<crate::KeyboardEvent>) {
+        let _session = self.session.enter();
+        let event = event.into();
+        TesseraRuntime::with_mut(|runtime| {
+            runtime
+                .component_tree
+                .focus_owner_mut()
+                .record_keyboard_input(event.state, Instant::now())
+        });
         self.keyboard.push_event(event);
+    }
+
+    /// Queues a non-repeating press of a named key for the next frame.
+    pub fn press_key(&mut self, key: winit::keyboard::NamedKey) {
+        self.inject_key_event(crate::KeyboardEvent::named(
+            key,
+            winit::event::ElementState::Pressed,
+        ));
     }
 
     /// Sets the modifier state captured by subsequent keyboard events.
     pub fn set_key_modifiers(&mut self, modifiers: winit::keyboard::ModifiersState) {
+        let _session = self.session.enter();
         self.keyboard.update_modifiers(modifiers);
     }
 
     /// Queues an IME event, used for synthetic text entry.
     pub fn inject_ime_event(&mut self, event: winit::event::Ime) {
+        let _session = self.session.enter();
         self.ime.push_event(event);
     }
 
     /// Commits `text` as IME input for the next frame.
     pub fn inject_text(&mut self, text: &str) {
+        let _session = self.session.enter();
         self.ime
             .push_event(winit::event::Ime::Commit(text.to_string()));
     }
 
     /// Advances the virtual clock by one frame and renders it.
     pub fn step_frame(&mut self) {
+        let _session = self.session.enter();
+        TesseraRuntime::with_mut(|runtime| runtime.component_tree.begin_frame_diagnostics());
+        let graphics_before = self.graphics_work();
+        crate::work::begin();
         self.current_frame_nanos = self
             .current_frame_nanos
             .saturating_add(self.frame_time.as_nanos().min(u64::MAX as u128) as u64);
@@ -421,7 +485,8 @@ impl HeadlessRenderer {
         let mut retry_focus_reveal = false;
         let mut retries = 0;
         let mut _record_cost = Duration::ZERO;
-        let (graph, _diagnostics) = loop {
+        let mut _diagnostics = crate::component_tree::LayoutFrameDiagnostics::default();
+        let graph = loop {
             self.core.compute_resource_manager_mut().clear();
             let layout_dirty_nodes = take_layout_dirty_nodes();
             let core = &mut self.core;
@@ -447,16 +512,19 @@ impl HeadlessRenderer {
                     )
                 });
             _record_cost += record_cost;
+            _diagnostics.accumulate_pass(diagnostics);
             flush_pending_focus_callbacks();
             crate::component_tree::flush_pending_globally_positioned_callbacks();
             let next_keyboard = next_keyboard
                 || TesseraRuntime::with(|runtime| {
                     runtime.component_tree.has_pending_focus_reveal()
                 });
-            if next_move.is_none() && !next_reveal && !next_keyboard {
-                break (graph, diagnostics);
+            let focus_retry = next_move.is_some() || next_reveal || next_keyboard;
+            if !focus_retry && !has_pending_layout_invalidations() {
+                break graph;
             }
-            if retries >= MAX_FOCUS_SETTLING_RETRIES || !focus_settling_can_progress(next_keyboard)
+            if retries >= MAX_FRAME_SETTLING_RETRIES
+                || (focus_retry && !focus_settling_can_progress(next_keyboard))
             {
                 if next_reveal
                     && (has_pending_build_invalidations() || has_pending_layout_invalidations())
@@ -468,12 +536,14 @@ impl HeadlessRenderer {
                             .retain_reveal_retry();
                     });
                 }
-                break (graph, diagnostics);
+                break graph;
             }
             retries += 1;
             retry_focus_move = next_move;
             retry_focus_reveal = next_reveal;
-            _build_tree_result.absorb_retry(build_component_tree(&self.entry));
+            if focus_retry {
+                _build_tree_result.absorb_retry(build_component_tree(&self.entry));
+            }
         };
         self.diagnostics = _diagnostics;
         prune_persistent_focus_handles();
@@ -560,11 +630,17 @@ impl HeadlessRenderer {
             profiler_end_frame();
         }
 
+        self.frame_clock_diagnostics = crate::runtime::frame_clock_diagnostics();
+
+        self.work = crate::work::finish();
+        self.work_totals.record(&self.work);
+        self.frame_graphics_work = self.graphics_work().since(&graphics_before);
         self.frame_index = self.frame_index.wrapping_add(1);
     }
 
     /// Renders exactly `frames` frames (at least one).
     pub fn render_frames(&mut self, frames: u32) {
+        let _session = self.session.enter();
         for _ in 0..frames.max(1) {
             self.step_frame();
         }
@@ -572,6 +648,7 @@ impl HeadlessRenderer {
 
     /// Renders frames until at least `duration` of virtual time has elapsed.
     pub fn render_for_duration(&mut self, duration: Duration) {
+        let _session = self.session.enter();
         let mut elapsed = Duration::ZERO;
         loop {
             self.step_frame();
@@ -584,11 +661,13 @@ impl HeadlessRenderer {
 
     /// Reads the last rendered frame back as tightly packed RGBA8 pixels.
     pub fn read_pixels(&self) -> Result<Vec<u8>, HeadlessError> {
+        let _session = self.session.enter();
         Ok(self.core.read_offscreen_rgba()?)
     }
 
     /// Resizes the offscreen target and updates the runtime window size.
     pub fn resize(&mut self, width: u32, height: u32) {
+        let _session = self.session.enter();
         let width = width.max(1);
         let height = height.max(1);
         let physical_size = winit::dpi::PhysicalSize::new(width, height);
@@ -599,12 +678,42 @@ impl HeadlessRenderer {
         TesseraRuntime::with_mut(|runtime| runtime.window_size = [width, height]);
     }
 
+    /// Returns actual component, layout, and paint work in the last frame.
+    pub fn work(&self) -> &crate::FrameWork {
+        &self.work
+    }
+
+    /// Returns cumulative work for this fixture's lifetime.
+    pub fn work_totals(&self) -> &crate::WorkTotals {
+        &self.work_totals
+    }
+
+    /// Returns frame-clock work and remaining subscriptions for the last frame.
+    pub fn frame_clock_diagnostics(&self) -> &crate::FrameClockDiagnostics {
+        &self.frame_clock_diagnostics
+    }
+
+    /// Captures typed component bounds, labels, and test tags for inspection.
+    #[cfg(any(test, feature = "testing"))]
+    pub fn inspect_components(&self) -> crate::testing::ComponentSnapshot {
+        let _session = self.session.enter();
+        crate::testing::ComponentSnapshot::capture()
+    }
+
+    /// Captures the complete published accessibility tree with typed queries.
+    #[cfg(any(test, feature = "testing"))]
+    pub fn inspect_accessibility(&self) -> Option<crate::testing::AccessibilitySnapshot> {
+        self.accessibility_snapshot()
+            .map(|tree| crate::testing::AccessibilitySnapshot::new(tree, self.session.identity()))
+    }
+
     /// Captures a semantic snapshot of the component tree as JSON.
     ///
     /// Each node reports its component function name, role, absolute bounds and
     /// accessibility metadata (role, label, value, key and state flags), which
     /// is what an automated agent needs to locate and target widgets.
     pub fn snapshot(&self) -> Value {
+        let _session = self.session.enter();
         TesseraRuntime::with(|runtime| {
             let tree = runtime.component_tree.tree();
             let metadatas = runtime.component_tree.metadatas();
@@ -631,6 +740,7 @@ impl HeadlessRenderer {
     /// order, visibility, actions, and focus independently of layout
     /// snapshots.
     pub fn accessibility_snapshot(&self) -> Option<accesskit::TreeUpdate> {
+        let _session = self.session.enter();
         TesseraRuntime::with_mut(|runtime| runtime.component_tree.accessibility_update(None, true))
     }
 
@@ -639,6 +749,7 @@ impl HeadlessRenderer {
     /// Returns whether a focus target or action handler received the request.
     /// Render another frame to publish resulting state and focus changes.
     pub fn dispatch_accessibility_action(&mut self, request: accesskit::ActionRequest) -> bool {
+        let _session = self.session.enter();
         let handled = TesseraRuntime::with_mut(|runtime| {
             let (tree, metadatas, focus_owner) =
                 runtime.component_tree.accessibility_dispatch_context();
@@ -743,7 +854,7 @@ fn reset_headless_runtime(size: winit::dpi::PhysicalSize<u32>) {
     reset_frame_clock();
     clear_redraw_waker();
     clear_persistent_focus_handles();
-    reset_slots();
+    crate::runtime::reset_component_slots();
 }
 
 /// Runs the worker side of the `cargo tessera headless` protocol.
@@ -1179,12 +1290,16 @@ mod tests {
 
     #[test]
     fn adler32_matches_reference_values() {
+        let _runtime_session = crate::RuntimeSession::new();
+        let _runtime_scope = _runtime_session.enter();
         assert_eq!(adler32(b""), 1);
         assert_eq!(adler32(b"Wikipedia"), 0x11E6_0398);
     }
 
     #[test]
     fn crc32_matches_reference_value() {
+        let _runtime_session = crate::RuntimeSession::new();
+        let _runtime_scope = _runtime_session.enter();
         let mut crc = Crc32::new();
         crc.update(b"123456789");
         assert_eq!(crc.finish(), 0xCBF4_3926);
@@ -1192,6 +1307,8 @@ mod tests {
 
     #[test]
     fn png_encoder_emits_valid_structure() {
+        let _runtime_session = crate::RuntimeSession::new();
+        let _runtime_scope = _runtime_session.enter();
         let width = 2;
         let height = 1;
         let pixels = vec![255, 0, 0, 255, 0, 255, 0, 255];

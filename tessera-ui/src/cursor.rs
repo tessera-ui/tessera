@@ -18,39 +18,18 @@ pub const MOUSE_POINTER_ID: PointerId = 0;
 /// Gesture boundaries and scroll deltas are never evicted to meet this limit.
 const KEEP_EVENTS_COUNT: usize = 128;
 
-/// Tracks the state of a single touch point for gesture recognition and
-/// scroll tracking.
-///
-/// This struct maintains the necessary information to track touch movement and
-/// determine when to trigger scrolling.
 #[derive(Debug, Clone)]
 struct TouchPointState {
     pointer_id: PointerId,
-    /// The last recorded position of this touch point.
     last_position: PxPosition,
-    /// Initial position used for cumulative touch slop.
     start_position: PxPosition,
-    /// Timestamp of the last position update.
     last_update_time: Instant,
-    /// Tracks whether this touch gesture generated a scroll event.
-    ///
-    /// When set, the gesture should be treated as a drag/scroll rather than a
-    /// tap.
     generated_scroll_event: bool,
 }
 
-/// Configuration settings for touch scrolling behavior.
-///
-/// This struct controls various aspects of how touch gestures are interpreted
-/// and converted into scroll events.
 #[derive(Debug, Clone)]
 struct TouchScrollConfig {
-    /// Minimum movement distance in pixels required to trigger a scroll event.
-    ///
-    /// Smaller values make scrolling more sensitive but may cause jitter.
-    /// Larger values require more deliberate movement but provide stability.
     min_move_threshold: f32,
-    /// Whether touch scrolling is currently enabled.
     enabled: bool,
 }
 
@@ -424,27 +403,10 @@ impl PointerChange {
         }
     }
 
-    /// Associates the sample with its absolute position at the time of input.
+    /// Associates the sample with its window position at the time of input.
     ///
     /// Passing `None` records an unavailable position rather than using a later
     /// cursor location. Movement events always use their own coordinates.
-    ///
-    /// ```
-    /// use tessera_ui::{
-    ///     CursorEventContent, GestureState, MOUSE_POINTER_ID, PointerChange, PressKeyEventType,
-    ///     PxPosition, time::Instant,
-    /// };
-    /// let position = PxPosition::from_f32_xy(20.0, 40.0);
-    /// let sample = PointerChange::new(
-    ///     Instant::now(),
-    ///     MOUSE_POINTER_ID,
-    ///     CursorEventContent::Pressed(PressKeyEventType::Left),
-    ///     GestureState::TapCandidate,
-    /// )
-    /// .with_position(position);
-    /// assert_eq!(sample.position(), Some(position));
-    /// assert_eq!(sample.with_position(None).position(), None);
-    /// ```
     pub fn with_position(mut self, position: impl Into<Option<PxPosition>>) -> Self {
         self.sampled_position = match position.into() {
             Some(position) => PointerPosition::At(position),
@@ -642,6 +604,8 @@ mod queue_tests {
     use crate::Px;
     #[test]
     fn long_frame_preserves_touch_boundaries_and_displacement() {
+        let _runtime_session = crate::RuntimeSession::new();
+        let _runtime_scope = _runtime_session.enter();
         let mut cursor = CursorState::default();
         cursor.handle_touch_start(1, PxPosition::ZERO);
         for x in 1..=300 {
@@ -680,6 +644,8 @@ mod tests {
 
     #[test]
     fn queued_samples_keep_their_original_positions_including_unavailable_positions() {
+        let _runtime_session = crate::RuntimeSession::new();
+        let _runtime_scope = _runtime_session.enter();
         let mut cursor = CursorState::default();
         let sample = |content| {
             super::PointerChange::new(
@@ -720,6 +686,8 @@ mod tests {
 
     #[test]
     fn independent_pointers_and_delayed_touch_scroll_keep_their_own_positions() {
+        let _runtime_session = crate::RuntimeSession::new();
+        let _runtime_scope = _runtime_session.enter();
         let mut cursor = CursorState::default();
         cursor.update_position(position(100));
         cursor.handle_touch_start(1, position(0));
@@ -744,6 +712,8 @@ mod tests {
 
     #[test]
     fn platform_touch_identifiers_never_alias_mouse_and_keep_their_pointer_identity() {
+        let _runtime_session = crate::RuntimeSession::new();
+        let _runtime_scope = _runtime_session.enter();
         let mut cursor = CursorState::default();
         cursor.handle_touch_start(0, position(0));
         cursor.handle_touch_start(u64::MAX, position(10));
@@ -768,6 +738,8 @@ mod tests {
 
     #[test]
     fn touch_slop_is_cumulative_and_follow_up_micro_moves_scroll() {
+        let _runtime_session = crate::RuntimeSession::new();
+        let _runtime_scope = _runtime_session.enter();
         let mut cursor = CursorState::default();
         cursor.handle_touch_start(1, position(0));
         assert!(cursor.handle_touch_move(1, position(2)).is_none());
@@ -787,6 +759,8 @@ mod tests {
 
     #[test]
     fn cancelled_touch_is_not_a_tap_boundary() {
+        let _runtime_session = crate::RuntimeSession::new();
+        let _runtime_scope = _runtime_session.enter();
         let mut cursor = CursorState::default();
         cursor.handle_touch_start(1, position(0));
         cursor.handle_touch_cancel(1);

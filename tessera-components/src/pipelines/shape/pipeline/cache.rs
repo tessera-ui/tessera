@@ -230,7 +230,7 @@ impl ShapeCacheKey {
 impl ShapePipeline {
     pub(super) fn get_or_create_cache_entry(
         &mut self,
-        gpu: &wgpu::Device,
+        gpu: &tessera_ui::GraphicsDevice,
         gpu_queue: &wgpu::Queue,
         command: &ShapeCommand,
         size: PxSize,
@@ -271,51 +271,56 @@ impl ShapePipeline {
 
     fn build_cache_entry(
         &self,
-        gpu: &wgpu::Device,
+        gpu: &tessera_ui::GraphicsDevice,
         gpu_queue: &wgpu::Queue,
         command: &ShapeCommand,
         size: PxSize,
     ) -> ShapeCacheEntry {
-        #[cfg(test)]
-        super::CACHE_BUILDS.with(|count| count.set(count.get() + 1));
         let object_width = size.width.positive().max(1);
         let object_height = size.height.positive().max(1);
         let width = object_width;
         let height = object_height;
 
-        let cache_texture = gpu.create_texture(&wgpu::TextureDescriptor {
-            label: Some("Shape Cache Texture"),
-            size: wgpu::Extent3d {
-                width,
-                height,
-                depth_or_array_layers: 1,
+        let cache_texture = gpu.create_texture(
+            "shape_cache",
+            &wgpu::TextureDescriptor {
+                label: Some("Shape Cache Texture"),
+                size: wgpu::Extent3d {
+                    width,
+                    height,
+                    depth_or_array_layers: 1,
+                },
+                mip_level_count: 1,
+                sample_count: 1,
+                dimension: wgpu::TextureDimension::D2,
+                format: self.render_format,
+                usage: wgpu::TextureUsages::TEXTURE_BINDING
+                    | wgpu::TextureUsages::RENDER_ATTACHMENT,
+                view_formats: &[],
             },
-            mip_level_count: 1,
-            sample_count: 1,
-            dimension: wgpu::TextureDimension::D2,
-            format: self.render_format,
-            usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::RENDER_ATTACHMENT,
-            view_formats: &[],
-        });
+        );
         let cache_view = cache_texture.create_view(&wgpu::TextureViewDescriptor::default());
 
         let mut uniforms = rect_to_uniforms(command, size, PxPosition::ZERO);
         uniforms.screen_size = [width as f32, height as f32].into();
         let instances = vec![uniforms];
 
-        let storage_buffer = gpu.create_buffer(&wgpu::BufferDescriptor {
-            label: Some("Shape Cache Storage Buffer"),
-            size: 16 + ShapeUniforms::SHADER_SIZE.get() * instances.len() as u64,
-            usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
-            mapped_at_creation: false,
-        });
+        let storage_buffer = gpu.create_buffer(
+            "shape_cache_uniforms",
+            &wgpu::BufferDescriptor {
+                label: Some("Shape Cache Storage Buffer"),
+                size: 16 + ShapeUniforms::SHADER_SIZE.get() * instances.len() as u64,
+                usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
+                mapped_at_creation: false,
+            },
+        );
 
         let uniforms = ShapeInstances { instances };
         let mut buffer_content = StorageBuffer::new(Vec::<u8>::new());
         buffer_content
             .write(&uniforms)
             .expect("buffer write failed");
-        gpu_queue.write_buffer(&storage_buffer, 0, buffer_content.as_ref());
+        gpu.write_buffer(&storage_buffer, 0, buffer_content.as_ref());
 
         let bind_group = gpu.create_bind_group(&wgpu::BindGroupDescriptor {
             layout: &self.bind_group_layout,
@@ -331,20 +336,23 @@ impl ShapePipeline {
         });
 
         let stencil = gpu
-            .create_texture(&wgpu::TextureDescriptor {
-                label: Some("Shape Cache Stencil"),
-                size: wgpu::Extent3d {
-                    width,
-                    height,
-                    depth_or_array_layers: 1,
+            .create_texture(
+                "shape_cache_auxiliary",
+                &wgpu::TextureDescriptor {
+                    label: Some("Shape Cache Stencil"),
+                    size: wgpu::Extent3d {
+                        width,
+                        height,
+                        depth_or_array_layers: 1,
+                    },
+                    mip_level_count: 1,
+                    sample_count: self.sample_count,
+                    dimension: wgpu::TextureDimension::D2,
+                    format: wgpu::TextureFormat::Stencil8,
+                    usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
+                    view_formats: &[],
                 },
-                mip_level_count: 1,
-                sample_count: self.sample_count,
-                dimension: wgpu::TextureDimension::D2,
-                format: wgpu::TextureFormat::Stencil8,
-                usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
-                view_formats: &[],
-            })
+            )
             .create_view(&Default::default());
         let stencil_attachment = || {
             Some(wgpu::RenderPassDepthStencilAttachment {
@@ -366,20 +374,23 @@ impl ShapePipeline {
         };
 
         if self.sample_count > 1 {
-            let msaa_texture = gpu.create_texture(&wgpu::TextureDescriptor {
-                label: Some("Shape Cache MSAA Texture"),
-                size: wgpu::Extent3d {
-                    width,
-                    height,
-                    depth_or_array_layers: 1,
+            let msaa_texture = gpu.create_texture(
+                "shape_cache_auxiliary",
+                &wgpu::TextureDescriptor {
+                    label: Some("Shape Cache MSAA Texture"),
+                    size: wgpu::Extent3d {
+                        width,
+                        height,
+                        depth_or_array_layers: 1,
+                    },
+                    mip_level_count: 1,
+                    sample_count: self.sample_count,
+                    dimension: wgpu::TextureDimension::D2,
+                    format: self.render_format,
+                    usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
+                    view_formats: &[],
                 },
-                mip_level_count: 1,
-                sample_count: self.sample_count,
-                dimension: wgpu::TextureDimension::D2,
-                format: self.render_format,
-                usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
-                view_formats: &[],
-            });
+            );
             let msaa_view = msaa_texture.create_view(&wgpu::TextureViewDescriptor::default());
 
             {

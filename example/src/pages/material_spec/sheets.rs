@@ -5,8 +5,6 @@
 //! Compare sheet variants, adjust modal sheet height and review dismissal
 //! behaviour.
 
-use std::sync::OnceLock;
-
 use tessera_components::{
     alignment::{Alignment, CrossAxisAlignment},
     bottom_sheet::{BottomSheetController, BottomSheetExpansion, bottom_sheet_provider},
@@ -48,14 +46,17 @@ fn prose(#[prop(into)] value: String) {
 }
 
 #[tessera]
-pub(super) fn sheets_spec(side: bool) {
+pub(super) fn sheets_spec(
+    side: bool,
+    route: Option<crate::pages::material_spec::article::ArticleRoute>,
+) {
     // The side sheet article lives in its own module; this page always presents
     // the bottom sheet specification.
     let _ = side;
     let action = remember(|| String::from("No action selected"));
     let controller = remember(|| BottomSheetController::new(false));
     let main = RenderSlot::new(move || {
-        sheet_article(action, controller);
+        sheet_article(action, controller).route_optional(route.clone());
     });
     let body = RenderSlot::new(move || {
         sheet_content(Callback::new(move || close_sheet(controller)), action);
@@ -74,7 +75,11 @@ fn close_sheet(controller: State<BottomSheetController>) {
 }
 
 #[tessera]
-fn sheet_article(action: State<String>, controller: State<BottomSheetController>) {
+fn sheet_article(
+    action: State<String>,
+    controller: State<BottomSheetController>,
+    route: Option<crate::pages::material_spec::article::ArticleRoute>,
+) {
     article(
         "Bottom sheets",
         "Bottom sheets show secondary content anchored to the bottom of the screen",
@@ -98,7 +103,7 @@ fn sheet_article(action: State<String>, controller: State<BottomSheetController>
                 }),
             },
         ],
-    )
+    ).route_optional(route.clone())
     .intro(|| {
         prose("Modal bottom sheets are above a scrim while standard bottom sheets don't have a scrim. Besides this, both variants of bottom sheets have the same specs.");
         gap(Dp(32.0));
@@ -1085,18 +1090,14 @@ fn touch_target() {
     }));
 }
 
-fn sheet_album(index: usize) -> ImageData {
-    static ALBUMS: OnceLock<[ImageData; 4]> = OnceLock::new();
-    ALBUMS.get_or_init(|| {
-        [
-            include_bytes!("../../../assets/material_spec/sheets-player-album-1.png").as_slice(),
-            include_bytes!("../../../assets/material_spec/sheets-player-album-2.png").as_slice(),
-            include_bytes!("../../../assets/material_spec/sheets-player-album-3.png").as_slice(),
-            include_bytes!("../../../assets/material_spec/sheets-player-cover.png").as_slice(),
-        ]
-        .map(|bytes| bytes.try_into_image_data().expect("sheet album artwork"))
-    })[index]
-        .clone()
+fn sheet_albums() -> [ImageData; 4] {
+    [
+        include_bytes!("../../../assets/material_spec/sheets-player-album-1.png").as_slice(),
+        include_bytes!("../../../assets/material_spec/sheets-player-album-2.png").as_slice(),
+        include_bytes!("../../../assets/material_spec/sheets-player-album-3.png").as_slice(),
+        include_bytes!("../../../assets/material_spec/sheets-player-cover.png").as_slice(),
+    ]
+    .map(|bytes| bytes.try_into_image_data().expect("sheet album artwork"))
 }
 
 #[tessera]
@@ -1118,6 +1119,7 @@ fn sheet_context_text(
 
 #[tessera]
 fn music_context() {
+    let albums = remember(sheet_albums);
     let playing = remember(|| true);
     let cover = remember(|| 3usize);
     let scale = 1.0_f64;
@@ -1158,7 +1160,7 @@ fn music_context() {
                                     for (index, x, w) in
                                         [(0, 19.0, 151.0), (1, 186.0, 151.0), (2, 354.0, 58.0)]
                                     {
-                                        image().raster(sheet_album(index)).modifier(
+                                        image().raster(albums.get()[index].clone()).modifier(
                                             Modifier::new()
                                                 .offset(Dp(x * scale), Dp(24.0 * scale))
                                                 .size(Dp(w * scale), Dp(124.0 * scale))
@@ -1175,13 +1177,15 @@ fn music_context() {
                                                 .background(scheme.surface_container),
                                         )
                                         .children(move || {
-                                            image().raster(sheet_album(cover.get())).modifier(
-                                                Modifier::new()
-                                                    .size(Dp(64.0 * scale), Dp(68.0 * scale))
-                                                    .clip_shape(Shape::rounded_rectangle(Dp(
-                                                        8.0 * scale
-                                                    ))),
-                                            );
+                                            image()
+                                                .raster(albums.get()[cover.get()].clone())
+                                                .modifier(
+                                                    Modifier::new()
+                                                        .size(Dp(64.0 * scale), Dp(68.0 * scale))
+                                                        .clip_shape(Shape::rounded_rectangle(Dp(
+                                                            8.0 * scale,
+                                                        ))),
+                                                );
                                             sheet_context_text(
                                                 "Cassette Futurism".into(),
                                                 80.0,

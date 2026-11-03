@@ -4,13 +4,15 @@
 //!
 //! Preserve switch colors and accessible values across state changes.
 
-use std::{cell::Cell, sync::Arc};
+use std::sync::Arc;
 
 use tessera_ui::{
     Color, Dp, FocusManager, HeadlessConfig, HeadlessRenderer, MOUSE_POINTER_ID, Modifier,
     PressKeyEventType, PxPosition, State,
     accesskit::{Action, ActionRequest, Node, NodeId, Role, Toggled, TreeId},
-    remember, tessera, use_context,
+    remember, tessera,
+    testing::TestProbe,
+    use_context,
 };
 
 use crate::{
@@ -34,10 +36,6 @@ struct Settings {
     icon_size: Option<Dp>,
     activations: usize,
     presentation: Option<InteractionVisualState>,
-}
-
-thread_local! {
-    static SETTINGS: Cell<Option<State<Settings>>> = const { Cell::new(None) };
 }
 
 fn palettes() -> [MaterialTheme; 2] {
@@ -64,11 +62,13 @@ fn square_icon() -> ImageVectorData {
 }
 
 #[tessera]
-fn fixture() {
+fn fixture(probe: Option<TestProbe<Option<State<Settings>>>>) {
     let settings = remember(Settings::default);
     let palettes = remember(palettes);
     let icon_data = remember(square_icon);
-    SETTINGS.set(Some(settings));
+    if let Some(probe) = probe {
+        probe.set(Some(settings));
+    }
     material_theme()
         .theme(move || palettes.with(|palettes| palettes[usize::from(settings.get().dark)].clone()))
         .child(move || {
@@ -169,8 +169,12 @@ fn assert_pixel(renderer: &HeadlessRenderer, x: u32, y: u32, color: Color, conte
 }
 
 fn check_states(samples: u32) {
+    let probe = TestProbe::<Option<State<Settings>>>::default();
+    let observed = probe.clone();
     let mut renderer = HeadlessRenderer::new(
-        Box::new(fixture),
+        Box::new(move || {
+            fixture().probe(probe.clone());
+        }),
         vec![Box::new(crate::TesseraComponents)],
         HeadlessConfig {
             width: 200,
@@ -182,7 +186,7 @@ fn check_states(samples: u32) {
     )
     .unwrap();
     renderer.render_frames(30);
-    let settings = SETTINGS.get().unwrap();
+    let settings = observed.get().unwrap();
     let palettes = palettes();
     let identity = node(&renderer).0;
     for dark in [false, true] {

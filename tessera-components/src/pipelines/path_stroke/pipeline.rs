@@ -5,10 +5,6 @@ use tessera_ui::{
 
 use super::command::PathStrokeCommand;
 
-#[cfg(test)]
-pub(crate) static ALLOCATIONS: std::sync::atomic::AtomicUsize =
-    std::sync::atomic::AtomicUsize::new(0);
-
 #[repr(C)]
 #[derive(Clone, Copy, bytemuck::Pod, bytemuck::Zeroable)]
 struct Instance {
@@ -27,10 +23,10 @@ struct Segment {
 }
 
 struct Buffer {
-    buffer: wgpu::Buffer,
+    buffer: tessera_ui::TrackedBuffer,
     bind_group: wgpu::BindGroup,
     capacity: usize,
-    segments: wgpu::Buffer,
+    segments: tessera_ui::TrackedBuffer,
     segment_capacity: usize,
 }
 
@@ -43,7 +39,7 @@ pub(crate) struct PathStrokePipeline {
 
 impl PathStrokePipeline {
     pub(crate) fn new(
-        device: &wgpu::Device,
+        device: &tessera_ui::GraphicsDevice,
         config: &wgpu::SurfaceConfiguration,
         cache: Option<&wgpu::PipelineCache>,
         sample_count: u32,
@@ -105,7 +101,12 @@ impl PathStrokePipeline {
         }
     }
 
-    fn ensure_buffer(&mut self, device: &wgpu::Device, count: usize, segment_count: usize) {
+    fn ensure_buffer(
+        &mut self,
+        device: &tessera_ui::GraphicsDevice,
+        count: usize,
+        segment_count: usize,
+    ) {
         if self.buffers.get(self.cursor).is_some_and(|buffer| {
             buffer.capacity >= count && buffer.segment_capacity >= segment_count
         }) {
@@ -119,12 +120,15 @@ impl PathStrokePipeline {
                     .map_or(0, |buffer| buffer.capacity),
             )
             .next_power_of_two();
-        let buffer = device.create_buffer(&wgpu::BufferDescriptor {
-            label: Some("Path Stroke Instances"),
-            size: (capacity * std::mem::size_of::<Instance>()) as u64,
-            usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
-            mapped_at_creation: false,
-        });
+        let buffer = device.create_buffer(
+            "path_stroke_instances",
+            &wgpu::BufferDescriptor {
+                label: Some("Path Stroke Instances"),
+                size: (capacity * std::mem::size_of::<Instance>()) as u64,
+                usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
+                mapped_at_creation: false,
+            },
+        );
         let segment_capacity = segment_count
             .max(1024)
             .max(
@@ -133,12 +137,15 @@ impl PathStrokePipeline {
                     .map_or(0, |buffer| buffer.segment_capacity),
             )
             .next_power_of_two();
-        let segments = device.create_buffer(&wgpu::BufferDescriptor {
-            label: Some("Path Stroke Segments"),
-            size: (segment_capacity * std::mem::size_of::<Segment>()) as u64,
-            usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
-            mapped_at_creation: false,
-        });
+        let segments = device.create_buffer(
+            "path_stroke_instances",
+            &wgpu::BufferDescriptor {
+                label: Some("Path Stroke Segments"),
+                size: (segment_capacity * std::mem::size_of::<Segment>()) as u64,
+                usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
+                mapped_at_creation: false,
+            },
+        );
         let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
             label: Some("Path Stroke Instances"),
             layout: &self.layout,
@@ -153,8 +160,7 @@ impl PathStrokePipeline {
                 },
             ],
         });
-        #[cfg(test)]
-        ALLOCATIONS.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+
         let buffer = Buffer {
             buffer,
             bind_group,
@@ -282,13 +288,13 @@ impl DrawablePipeline<PathStrokeCommand> for PathStrokePipeline {
         if instances.is_empty() {
             return;
         }
-        self.ensure_buffer(context.device, instances.len(), segments.len());
+        self.ensure_buffer(context.graphics, instances.len(), segments.len());
         let buffer = &self.buffers[self.cursor];
         context
-            .queue
+            .graphics
             .write_buffer(&buffer.buffer, 0, bytemuck::cast_slice(&instances));
         context
-            .queue
+            .graphics
             .write_buffer(&buffer.segments, 0, bytemuck::cast_slice(&segments));
         context.render_pass.set_pipeline(&self.pipeline);
         context

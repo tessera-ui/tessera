@@ -50,11 +50,6 @@ mod selection_tests;
 #[cfg(all(test, not(target_family = "wasm")))]
 mod shape_tests;
 
-#[cfg(test)]
-thread_local! {
-    static ITEM_BUILDS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
-}
-
 /// Vertical placement of content inside a list row.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub enum ListItemVerticalAlignment {
@@ -393,8 +388,6 @@ pub fn list_item(
     #[prop(into)] accessibility_label: Option<String>,
     #[prop(into)] accessibility_description: Option<String>,
 ) {
-    #[cfg(test)]
-    ITEM_BUILDS.set(ITEM_BUILDS.get() + 1);
     let theme = use_context::<MaterialTheme>()
         .expect("MaterialTheme must be provided")
         .get();

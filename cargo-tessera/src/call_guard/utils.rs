@@ -65,6 +65,8 @@ pub(crate) fn runtime_api_label(api: TesseraRuntimeApi) -> &'static str {
         TesseraRuntimeApi::Key => "key",
         TesseraRuntimeApi::RenderSlotNew => "RenderSlot::new",
         TesseraRuntimeApi::RenderSlotWithNew => "RenderSlotWith::new",
+        TesseraRuntimeApi::RenderSlotRender => "RenderSlot::render",
+        TesseraRuntimeApi::RenderSlotWithRender => "RenderSlotWith::render",
         TesseraRuntimeApi::InternalRuntime => "internal runtime API",
     }
 }
@@ -84,15 +86,15 @@ pub(crate) fn crate_has_tessera_name(db: &RootDatabase, krate: Crate) -> bool {
         .as_ref()
         .is_some_and(|name| {
             matches!(
-                name.canonical_name().as_str(),
-                "tessera-build"
-                    | "tessera-components"
-                    | "tessera-foundation"
-                    | "tessera-macros"
-                    | "tessera-mobile"
-                    | "tessera-platform"
-                    | "tessera-shard"
-                    | "tessera-ui"
+                name.crate_name().as_str(),
+                "tessera_build"
+                    | "tessera_components"
+                    | "tessera_foundation"
+                    | "tessera_macros"
+                    | "tessera_mobile"
+                    | "tessera_platform"
+                    | "tessera_shard"
+                    | "tessera_ui"
             )
         })
 }

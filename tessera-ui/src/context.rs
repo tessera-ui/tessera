@@ -159,9 +159,13 @@ impl ContextGlobals {
     }
 }
 
-thread_local! {
-    static CONTEXT_GLOBALS: ContextGlobals = ContextGlobals::new();
+impl Default for ContextGlobals {
+    fn default() -> Self {
+        Self::new()
+    }
 }
+const CONTEXT_GLOBALS: crate::session::SessionLocal<ContextGlobals> =
+    crate::session::SessionLocal::new();
 
 pub(crate) fn current_context_map() -> ContextMap {
     with_execution_context(|context| {
@@ -464,41 +468,11 @@ pub(crate) fn drop_context_slots_for_instance_logic_ids(instance_logic_ids: &Has
     drop(removed);
 }
 
-/// Handle to a context value created by [`provide_context`] and retrieved by
-/// [`use_context`].
+/// Handle to inherited visual defaults created by [`provide_context`].
 ///
-/// Handles are validated with a slot generation token so stale references fail
-/// fast if their slot has been recycled.
-///
-/// # Examples
-///
-/// ```
-/// use tessera_ui::{provide_context, tessera, use_context};
-///
-/// #[derive(Default)]
-/// struct Theme {
-///     color: String,
-/// }
-///
-/// #[tessera]
-/// fn root() {
-///     provide_context(
-///         || Theme {
-///             color: "blue".into(),
-///         },
-///         || {
-///             child();
-///         },
-///     );
-/// }
-///
-/// #[tessera]
-/// fn child() {
-///     let theme = use_context::<Theme>().expect("Theme must be provided");
-///     theme.with(|t| println!("Color: {}", t.color));
-/// }
-/// ```
+/// Accessing a stale handle fails rather than reading a replacement value.
 pub struct Context<T> {
+    session: u128,
     slot: u32,
     generation: u64,
     _marker: PhantomData<T>,
@@ -515,6 +489,7 @@ impl<T> Clone for Context<T> {
 impl<T> Context<T> {
     fn new(slot: u32, generation: u64) -> Self {
         Self {
+            session: crate::session::current_session_identity().expect("active context session"),
             slot,
             generation,
             _marker: PhantomData,
@@ -527,6 +502,11 @@ where
     T: Send + Sync + 'static,
 {
     fn load_entry(&self) -> Arc<dyn Any + Send + Sync> {
+        assert_eq!(
+            crate::session::current_session_identity(),
+            Some(self.session),
+            "context belongs to a different runtime session"
+        );
         with_slot_table(|table| {
             let entry = table
                 .entries
@@ -565,6 +545,11 @@ where
 
     /// Execute a closure with a shared reference to the context value.
     pub fn with<R>(&self, f: impl FnOnce(&T) -> R) -> R {
+        assert_eq!(
+            crate::session::current_session_identity(),
+            Some(self.session),
+            "context belongs to a different runtime session"
+        );
         track_context_read_dependency(self.slot, self.generation);
         let lock = self.load_lock();
         let guard = lock.read();
@@ -745,24 +730,9 @@ where
     result
 }
 
-/// Reads a typed context value from the current scope.
+/// Reads inherited visual defaults from the current build scope.
 ///
-/// # Examples
-///
-/// ```
-/// use tessera_ui::{Color, tessera, use_context};
-///
-/// #[derive(Default)]
-/// struct Theme {
-///     primary: Color,
-/// }
-///
-/// #[tessera]
-/// fn component() {
-///     let theme = use_context::<Theme>();
-///     assert!(theme.is_none());
-/// }
-/// ```
+/// Returns `None` when no provider of this type is present.
 pub fn use_context<T>() -> Option<Context<T>>
 where
     T: Send + Sync + 'static,
@@ -806,6 +776,8 @@ mod tests {
 
     #[test]
     fn context_cleanup_drops_values_outside_table_borrow() {
+        let _runtime_session = crate::RuntimeSession::new();
+        let _runtime_scope = _runtime_session.enter();
         struct ReadOnDrop;
         impl Drop for ReadOnDrop {
             fn drop(&mut self) {
@@ -850,6 +822,8 @@ mod tests {
 
     #[test]
     fn with_context_snapshot_restores_stack_after_panic() {
+        let _runtime_session = crate::RuntimeSession::new();
+        let _runtime_scope = _runtime_session.enter();
         reset_test_state();
 
         let base_layer = ContextMap::new();
@@ -900,6 +874,8 @@ mod tests {
 
     #[test]
     fn with_context_snapshot_remaps_stale_generation() {
+        let _runtime_session = crate::RuntimeSession::new();
+        let _runtime_scope = _runtime_session.enter();
         reset_test_state();
 
         let key = SlotKey {
@@ -938,6 +914,8 @@ mod tests {
 
     #[test]
     fn with_context_snapshot_remaps_stale_slot_by_key() {
+        let _runtime_session = crate::RuntimeSession::new();
+        let _runtime_scope = _runtime_session.enter();
         reset_test_state();
 
         let key = SlotKey {

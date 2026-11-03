@@ -1,5 +1,3 @@
-use std::cell::{Cell, RefCell};
-
 use crate::{
     ComputedData, Constraint, CursorEventContent, FocusModifierExt, GestureState,
     LayoutCoordinates, LayoutModifierNode, LayoutResult, Modifier, PointerChange, PointerEventPass,
@@ -15,25 +13,25 @@ use crate::{
 
 use super::{FloatRect, scaled_box};
 
-thread_local! {
-    static VISIBLE_BOUNDS: RefCell<Vec<Option<FloatRect>>> = const { RefCell::new(Vec::new()) };
-    static COORDINATES: RefCell<Vec<LayoutCoordinates>> = const { RefCell::new(Vec::new()) };
-    static INPUT: RefCell<Vec<(bool, Option<PxPosition>, Option<PxPosition>, f32)>> = const { RefCell::new(Vec::new()) };
-    static PARENT_OFFSET: Cell<Option<State<PxPosition>>> = const { Cell::new(None) };
-    static CHILD_OFFSET: Cell<Option<State<PxPosition>>> = const { Cell::new(None) };
-    static CHILD_TRANSFORMS: Cell<usize> = const { Cell::new(0) };
-    static OBSERVER_VISIBLE: Cell<Option<State<bool>>> = const { Cell::new(None) };
-    static SPACE_RECTS: RefCell<Vec<FloatRect>> = const { RefCell::new(Vec::new()) };
-    static OUTER_SCALE: Cell<Option<State<f32>>> = const { Cell::new(None) };
-    static INNER_SCALE: Cell<Option<State<f32>>> = const { Cell::new(None) };
-    static MARK_SPACE: Cell<Option<State<bool>>> = const { Cell::new(None) };
-    static NESTED_SPACE: Cell<Option<State<bool>>> = const { Cell::new(None) };
-    static CONTENT_SIZE: Cell<Option<State<ComputedData>>> = const { Cell::new(None) };
-    static SPACE_OFFSET: Cell<Option<State<PxPosition>>> = const { Cell::new(None) };
-    static COUNTER_OFFSET: Cell<Option<State<PxPosition>>> = const { Cell::new(None) };
-    static SIZES: RefCell<Vec<crate::PxSize>> = const { RefCell::new(Vec::new()) };
-    static LATE_SIZES: RefCell<Vec<crate::PxSize>> = const { RefCell::new(Vec::new()) };
-    static LATE_OBSERVER: Cell<Option<State<bool>>> = const { Cell::new(None) };
+#[derive(Clone, Default, PartialEq)]
+struct GeometryProbe {
+    visible_bounds: crate::testing::TestProbe<Vec<Option<FloatRect>>>,
+    coordinates: crate::testing::TestProbe<Vec<LayoutCoordinates>>,
+    input: crate::testing::TestProbe<Vec<(bool, Option<PxPosition>, Option<PxPosition>, f32)>>,
+    parent_offset: crate::testing::TestProbe<Option<State<PxPosition>>>,
+    child_offset: crate::testing::TestProbe<Option<State<PxPosition>>>,
+    observer_visible: crate::testing::TestProbe<Option<State<bool>>>,
+    space_rects: crate::testing::TestProbe<Vec<FloatRect>>,
+    outer_scale: crate::testing::TestProbe<Option<State<f32>>>,
+    inner_scale: crate::testing::TestProbe<Option<State<f32>>>,
+    mark_space: crate::testing::TestProbe<Option<State<bool>>>,
+    nested_space: crate::testing::TestProbe<Option<State<bool>>>,
+    content_size: crate::testing::TestProbe<Option<State<ComputedData>>>,
+    space_offset: crate::testing::TestProbe<Option<State<PxPosition>>>,
+    counter_offset: crate::testing::TestProbe<Option<State<PxPosition>>>,
+    sizes: crate::testing::TestProbe<Vec<crate::PxSize>>,
+    late_sizes: crate::testing::TestProbe<Vec<crate::PxSize>>,
+    late_observer: crate::testing::TestProbe<Option<State<bool>>>,
 }
 
 #[derive(Clone, PartialEq)]
@@ -69,7 +67,7 @@ impl LayoutModifierNode for SizeOnlyContent {
 }
 
 #[crate::tessera(crate)]
-fn size_only_observer_fixture() {
+fn size_only_observer_fixture(probe: GeometryProbe) {
     let parent = crate::remember(|| PxPosition::ZERO);
     let child = crate::remember(|| PxPosition::ZERO);
     let visible = crate::remember(|| true);
@@ -79,27 +77,25 @@ fn size_only_observer_fixture() {
         width: Px(150),
         height: Px(35),
     });
-    PARENT_OFFSET.set(Some(parent));
-    CHILD_OFFSET.set(Some(child));
-    OBSERVER_VISIBLE.set(Some(visible));
-    OUTER_SCALE.set(Some(scale));
-    CONTENT_SIZE.set(Some(size));
-    LATE_OBSERVER.set(Some(late));
+    probe.parent_offset.set(Some(parent));
+    probe.child_offset.set(Some(child));
+    probe.observer_visible.set(Some(visible));
+    probe.outer_scale.set(Some(scale));
+    probe.content_size.set(Some(size));
+    probe.late_observer.set(Some(late));
     layout()
         .policy(SizeOnlyRoot(visible))
-        .modifier(Modifier::new().push_placement(StateTranslation(parent, false)))
+        .modifier(Modifier::new().push_placement(StateTranslation(parent)))
         .child(move || {
+            let probe = probe.clone();
             scaled_box(scale.get()).child(move || {
+                let probe = probe.clone();
                 let modifier = Modifier::new()
-                    .push_placement(StateTranslation(child, false))
-                    .on_layout_size_changed(|size| SIZES.with_borrow_mut(|sizes| sizes.push(size)))
-                    .on_visible_window_bounds(|bounds| {
-                        VISIBLE_BOUNDS.with_borrow_mut(|items| items.push(bounds))
-                    });
+                    .push_placement(StateTranslation(child))
+                    .on_layout_size_changed(probe.sizes.recorder())
+                    .on_visible_window_bounds(probe.visible_bounds.recorder());
                 let modifier = if late.get() {
-                    modifier.on_layout_size_changed(|size| {
-                        LATE_SIZES.with_borrow_mut(|sizes| sizes.push(size))
-                    })
+                    modifier.on_layout_size_changed(probe.late_sizes.recorder())
                 } else {
                     modifier
                 };
@@ -110,12 +106,14 @@ fn size_only_observer_fixture() {
 
 #[test]
 fn visible_bounds_observers_clip_fractional_geometry_to_the_window_and_report_unplacement() {
-    VISIBLE_BOUNDS.with_borrow_mut(Vec::clear);
-    let mut session =
-        start_layout_test_session(layout_test(size_only_observer_fixture).viewport_px(160, 100));
+    let probe = GeometryProbe::default();
+    probe.visible_bounds.with_mut(Vec::clear);
+    let mut session = start_layout_test_session(
+        layout_test(|| size_only_observer_fixture(probe.clone())).viewport_px(160, 100),
+    );
     pump_layout_test_session(&mut session, 0);
     assert_eq!(
-        VISIBLE_BOUNDS.with_borrow(|items| items.clone()),
+        probe.visible_bounds.with(|items| items.clone()),
         vec![Some(FloatRect {
             x: 10.25,
             y: 20.5,
@@ -124,14 +122,15 @@ fn visible_bounds_observers_clip_fractional_geometry_to_the_window_and_report_un
         })]
     );
     pump_layout_test_session(&mut session, 16_666_667);
-    assert_eq!(VISIBLE_BOUNDS.with_borrow(Vec::len), 1);
-    PARENT_OFFSET
+    assert_eq!(probe.visible_bounds.with(Vec::len), 1);
+    probe
+        .parent_offset
         .get()
         .unwrap()
         .set(PxPosition::from_f32_xy(128.5, 0.0));
     pump_layout_test_session(&mut session, 33_333_334);
     assert_eq!(
-        VISIBLE_BOUNDS.with_borrow(|items| *items.last().unwrap()),
+        probe.visible_bounds.with(|items| *items.last().unwrap()),
         Some(FloatRect {
             x: 138.75,
             y: 20.5,
@@ -139,16 +138,16 @@ fn visible_bounds_observers_clip_fractional_geometry_to_the_window_and_report_un
             height: 35.0,
         })
     );
-    OBSERVER_VISIBLE.get().unwrap().set(false);
+    probe.observer_visible.get().unwrap().set(false);
     pump_layout_test_session(&mut session, 50_000_001);
     assert_eq!(
-        VISIBLE_BOUNDS.with_borrow(|items| *items.last().unwrap()),
+        probe.visible_bounds.with(|items| *items.last().unwrap()),
         None
     );
-    OBSERVER_VISIBLE.get().unwrap().set(true);
+    probe.observer_visible.get().unwrap().set(true);
     pump_layout_test_session(&mut session, 66_666_668);
     assert_eq!(
-        VISIBLE_BOUNDS.with_borrow(|items| *items.last().unwrap()),
+        probe.visible_bounds.with(|items| *items.last().unwrap()),
         Some(FloatRect {
             x: 138.75,
             y: 20.5,
@@ -160,93 +159,97 @@ fn visible_bounds_observers_clip_fractional_geometry_to_the_window_and_report_un
 
 #[test]
 fn size_observers_ignore_movement_and_scaling_and_publish_resized_revealed_and_new_subscribers() {
-    SIZES.with_borrow_mut(Vec::clear);
-    LATE_SIZES.with_borrow_mut(Vec::clear);
-    let mut session =
-        start_layout_test_session(layout_test(size_only_observer_fixture).viewport_px(300, 200));
+    let probe = GeometryProbe::default();
+    probe.sizes.with_mut(Vec::clear);
+    probe.late_sizes.with_mut(Vec::clear);
+    let mut session = start_layout_test_session(
+        layout_test(|| size_only_observer_fixture(probe.clone())).viewport_px(300, 200),
+    );
     pump_layout_test_session(&mut session, 0);
     assert_eq!(
-        SIZES.with_borrow(|sizes| sizes.clone()),
+        probe.sizes.with(|sizes| sizes.clone()),
         vec![crate::PxSize::new(Px(150), Px(35))]
     );
-    PARENT_OFFSET
+    probe
+        .parent_offset
         .get()
         .unwrap()
         .set(PxPosition::from_f32_xy(128.5, -0.25));
     pump_layout_test_session(&mut session, 16_666_667);
     assert!(session.diagnostics().unwrap().geometry_nodes_updated > 0);
-    CHILD_OFFSET
+    probe
+        .child_offset
         .get()
         .unwrap()
         .set(PxPosition::from_f32_xy(3.75, 4.0));
     pump_layout_test_session(&mut session, 33_333_334);
-    OUTER_SCALE.get().unwrap().set(0.625);
+    probe.outer_scale.get().unwrap().set(0.625);
     pump_layout_test_session(&mut session, 50_000_001);
-    assert_eq!(SIZES.with_borrow(Vec::len), 1);
-    CONTENT_SIZE.get().unwrap().set(ComputedData {
+    assert_eq!(probe.sizes.with(Vec::len), 1);
+    probe.content_size.get().unwrap().set(ComputedData {
         width: Px(220),
         height: Px(55),
     });
     pump_layout_test_session(&mut session, 66_666_668);
     assert_eq!(
-        SIZES.with_borrow(|sizes| *sizes.last().unwrap()),
+        probe.sizes.with(|sizes| *sizes.last().unwrap()),
         crate::PxSize::new(Px(220), Px(55))
     );
-    assert_eq!(SIZES.with_borrow(Vec::len), 2);
-    OBSERVER_VISIBLE.get().unwrap().set(false);
+    assert_eq!(probe.sizes.with(Vec::len), 2);
+    probe.observer_visible.get().unwrap().set(false);
     pump_layout_test_session(&mut session, 83_333_335);
-    CONTENT_SIZE.get().unwrap().set(ComputedData {
+    probe.content_size.get().unwrap().set(ComputedData {
         width: Px(250),
         height: Px(60),
     });
     pump_layout_test_session(&mut session, 100_000_002);
-    assert_eq!(SIZES.with_borrow(Vec::len), 2);
-    OBSERVER_VISIBLE.get().unwrap().set(true);
+    assert_eq!(probe.sizes.with(Vec::len), 2);
+    probe.observer_visible.get().unwrap().set(true);
     pump_layout_test_session(&mut session, 116_666_669);
-    assert_eq!(SIZES.with_borrow(Vec::len), 3);
+    assert_eq!(probe.sizes.with(Vec::len), 3);
     assert_eq!(
-        SIZES.with_borrow(|sizes| *sizes.last().unwrap()),
+        probe.sizes.with(|sizes| *sizes.last().unwrap()),
         crate::PxSize::new(Px(250), Px(60))
     );
-    LATE_OBSERVER.get().unwrap().set(true);
+    probe.late_observer.get().unwrap().set(true);
     pump_layout_test_session(&mut session, 133_333_336);
-    assert_eq!(SIZES.with_borrow(Vec::len), 3);
+    assert_eq!(probe.sizes.with(Vec::len), 3);
     assert_eq!(
-        LATE_SIZES.with_borrow(|sizes| sizes.clone()),
+        probe.late_sizes.with(|sizes| sizes.clone()),
         vec![crate::PxSize::new(Px(250), Px(60))]
     );
-    OBSERVER_VISIBLE.get().unwrap().set(false);
+    probe.observer_visible.get().unwrap().set(false);
     pump_layout_test_session(&mut session, 150_000_003);
-    CONTENT_SIZE.get().unwrap().set(ComputedData {
+    probe.content_size.get().unwrap().set(ComputedData {
         width: Px(310),
         height: Px(70),
     });
     pump_layout_test_session(&mut session, 166_666_670);
-    assert_eq!(SIZES.with_borrow(Vec::len), 3);
-    assert_eq!(LATE_SIZES.with_borrow(Vec::len), 1);
-    OBSERVER_VISIBLE.get().unwrap().set(true);
+    assert_eq!(probe.sizes.with(Vec::len), 3);
+    assert_eq!(probe.late_sizes.with(Vec::len), 1);
+    probe.observer_visible.get().unwrap().set(true);
     pump_layout_test_session(&mut session, 183_333_337);
-    assert_eq!(SIZES.with_borrow(Vec::len), 4);
+    assert_eq!(probe.sizes.with(Vec::len), 4);
     assert_eq!(
-        LATE_SIZES.with_borrow(|sizes| *sizes.last().unwrap()),
+        probe.late_sizes.with(|sizes| *sizes.last().unwrap()),
         crate::PxSize::new(Px(310), Px(70))
     );
-    LATE_OBSERVER.get().unwrap().set(false);
+    probe.late_observer.get().unwrap().set(false);
     pump_layout_test_session(&mut session, 200_000_004);
-    PARENT_OFFSET.get().unwrap().set(PxPosition::ZERO);
+    probe.parent_offset.get().unwrap().set(PxPosition::ZERO);
     pump_layout_test_session(&mut session, 216_666_671);
-    assert_eq!(SIZES.with_borrow(Vec::len), 4);
-    assert_eq!(LATE_SIZES.with_borrow(Vec::len), 2);
-    OBSERVER_VISIBLE.get().unwrap().set(false);
+    assert_eq!(probe.sizes.with(Vec::len), 4);
+    assert_eq!(probe.late_sizes.with(Vec::len), 2);
+    probe.observer_visible.get().unwrap().set(false);
     pump_layout_test_session(&mut session, 233_333_338);
-    OBSERVER_VISIBLE.get().unwrap().set(true);
+    probe.observer_visible.get().unwrap().set(true);
     pump_layout_test_session(&mut session, 250_000_005);
-    assert_eq!(SIZES.with_borrow(Vec::len), 5);
+    assert_eq!(probe.sizes.with(Vec::len), 5);
     assert_eq!(
-        SIZES.with_borrow(|sizes| *sizes.last().unwrap()),
+        probe.sizes.with(|sizes| *sizes.last().unwrap()),
         crate::PxSize::new(Px(310), Px(70))
     );
-    assert_eq!(LATE_SIZES.with_borrow(Vec::len), 2);
+    assert_eq!(probe.late_sizes.with(Vec::len), 2);
 }
 
 #[derive(Clone, PartialEq)]
@@ -272,7 +275,7 @@ impl LayoutModifierNode for SpaceContent {
 }
 
 #[crate::tessera(crate)]
-fn relative_observer_fixture() {
+fn relative_observer_fixture(probe: GeometryProbe) {
     let parent = crate::remember(|| PxPosition::ZERO);
     let child = crate::remember(|| PxPosition::from_f32_xy(2.25, 3.5));
     let visible = crate::remember(|| true);
@@ -286,21 +289,23 @@ fn relative_observer_fixture() {
         width: Px(150),
         height: Px(35),
     });
-    PARENT_OFFSET.set(Some(parent));
-    CHILD_OFFSET.set(Some(child));
-    OBSERVER_VISIBLE.set(Some(visible));
-    OUTER_SCALE.set(Some(outer));
-    INNER_SCALE.set(Some(inner));
-    MARK_SPACE.set(Some(marked));
-    NESTED_SPACE.set(Some(nested));
-    SPACE_OFFSET.set(Some(space_offset));
-    COUNTER_OFFSET.set(Some(counter_offset));
-    CONTENT_SIZE.set(Some(size));
+    probe.parent_offset.set(Some(parent));
+    probe.child_offset.set(Some(child));
+    probe.observer_visible.set(Some(visible));
+    probe.outer_scale.set(Some(outer));
+    probe.inner_scale.set(Some(inner));
+    probe.mark_space.set(Some(marked));
+    probe.nested_space.set(Some(nested));
+    probe.space_offset.set(Some(space_offset));
+    probe.counter_offset.set(Some(counter_offset));
+    probe.content_size.set(Some(size));
     layout()
         .policy(Anchor)
-        .modifier(Modifier::new().push_placement(StateTranslation(parent, false)))
+        .modifier(Modifier::new().push_placement(StateTranslation(parent)))
         .child(move || {
+            let probe = probe.clone();
             scaled_box(outer.get()).child(move || {
+                let probe = probe.clone();
                 let modifier = if marked.get() {
                     Modifier::new().layout_coordinate_space()
                 } else {
@@ -308,9 +313,11 @@ fn relative_observer_fixture() {
                 };
                 layout()
                     .policy(Anchor)
-                    .modifier(modifier.push_placement(StateTranslation(space_offset, false)))
+                    .modifier(modifier.push_placement(StateTranslation(space_offset)))
                     .child(move || {
+                        let probe = probe.clone();
                         scaled_box(inner.get()).child(move || {
+                            let probe = probe.clone();
                             let modifier = if nested.get() {
                                 Modifier::new().layout_coordinate_space()
                             } else {
@@ -318,23 +325,14 @@ fn relative_observer_fixture() {
                             };
                             layout()
                                 .policy(SpaceContent(visible, size))
-                                .modifier(
-                                    modifier
-                                        .push_placement(StateTranslation(counter_offset, false)),
-                                )
+                                .modifier(modifier.push_placement(StateTranslation(counter_offset)))
                                 .child(move || {
+                                    let probe = probe.clone();
                                     layout().modifier(
                                         Modifier::new()
-                                            .push_placement(StateTranslation(child, false))
-                                            .on_layout_rect_in_space(|rect| {
-                                                SPACE_RECTS
-                                                    .with_borrow_mut(|rects| rects.push(rect));
-                                            })
-                                            .on_layout_coordinates(|coordinates| {
-                                                COORDINATES.with_borrow_mut(|items| {
-                                                    items.push(coordinates)
-                                                });
-                                            }),
+                                            .push_placement(StateTranslation(child))
+                                            .on_layout_rect_in_space(probe.space_rects.recorder())
+                                            .on_layout_coordinates(probe.coordinates.recorder()),
                                     );
                                 });
                         });
@@ -345,10 +343,12 @@ fn relative_observer_fixture() {
 
 #[test]
 fn relative_observers_ignore_space_motion_and_track_local_changes_and_reparenting() {
-    SPACE_RECTS.with_borrow_mut(Vec::clear);
-    COORDINATES.with_borrow_mut(Vec::clear);
-    let mut session =
-        start_layout_test_session(layout_test(relative_observer_fixture).viewport_px(1000, 800));
+    let probe = GeometryProbe::default();
+    probe.space_rects.with_mut(Vec::clear);
+    probe.coordinates.with_mut(Vec::clear);
+    let mut session = start_layout_test_session(
+        layout_test(|| relative_observer_fixture(probe.clone())).viewport_px(1000, 800),
+    );
     pump_layout_test_session(&mut session, 0);
     let expected = FloatRect {
         x: 18.0625,
@@ -357,25 +357,26 @@ fn relative_observers_ignore_space_motion_and_track_local_changes_and_reparentin
         height: 21.875,
     };
     assert_eq!(
-        SPACE_RECTS.with_borrow(|rects| rects.clone()),
+        probe.space_rects.with(|rects| rects.clone()),
         vec![expected]
     );
     for frame in 1..=5 {
-        PARENT_OFFSET
+        probe
+            .parent_offset
             .get()
             .unwrap()
             .set(PxPosition::from_f32_xy(65536.25 * frame as f32, -0.5));
         pump_layout_test_session(&mut session, frame * 16_666_667);
     }
-    assert_eq!(SPACE_RECTS.with_borrow(Vec::len), 1);
-    assert_eq!(COORDINATES.with_borrow(Vec::len), 6);
-    OUTER_SCALE.get().unwrap().set(0.75);
+    assert_eq!(probe.space_rects.with(Vec::len), 1);
+    assert_eq!(probe.coordinates.with(Vec::len), 6);
+    probe.outer_scale.get().unwrap().set(0.75);
     pump_layout_test_session(&mut session, 100_000_000);
-    assert_eq!(SPACE_RECTS.with_borrow(Vec::len), 1);
-    INNER_SCALE.get().unwrap().set(0.5);
+    assert_eq!(probe.space_rects.with(Vec::len), 1);
+    probe.inner_scale.get().unwrap().set(0.5);
     pump_layout_test_session(&mut session, 116_666_667);
     assert_eq!(
-        SPACE_RECTS.with_borrow(|rects| *rects.last().unwrap()),
+        probe.space_rects.with(|rects| *rects.last().unwrap()),
         FloatRect {
             x: 16.5,
             y: 32.5,
@@ -383,13 +384,14 @@ fn relative_observers_ignore_space_motion_and_track_local_changes_and_reparentin
             height: 17.5
         }
     );
-    CHILD_OFFSET
+    probe
+        .child_offset
         .get()
         .unwrap()
         .set(PxPosition::from_f32_xy(3.75, 4.0));
     pump_layout_test_session(&mut session, 133_333_334);
     assert_eq!(
-        SPACE_RECTS.with_borrow(|rects| *rects.last().unwrap()),
+        probe.space_rects.with(|rects| *rects.last().unwrap()),
         FloatRect {
             x: 17.25,
             y: 32.75,
@@ -397,7 +399,7 @@ fn relative_observers_ignore_space_motion_and_track_local_changes_and_reparentin
             height: 17.5
         }
     );
-    CONTENT_SIZE.get().unwrap().set(ComputedData {
+    probe.content_size.get().unwrap().set(ComputedData {
         width: Px(120),
         height: Px(40),
     });
@@ -409,41 +411,43 @@ fn relative_observers_ignore_space_motion_and_track_local_changes_and_reparentin
         height: 20.0,
     };
     assert_eq!(
-        SPACE_RECTS.with_borrow(|rects| *rects.last().unwrap()),
+        probe.space_rects.with(|rects| *rects.last().unwrap()),
         resized
     );
-    let count = SPACE_RECTS.with_borrow(Vec::len);
-    OBSERVER_VISIBLE.get().unwrap().set(false);
+    let count = probe.space_rects.with(Vec::len);
+    probe.observer_visible.get().unwrap().set(false);
     pump_layout_test_session(&mut session, 166_666_668);
-    PARENT_OFFSET.get().unwrap().set(PxPosition::ZERO);
+    probe.parent_offset.get().unwrap().set(PxPosition::ZERO);
     pump_layout_test_session(&mut session, 183_333_335);
-    assert_eq!(SPACE_RECTS.with_borrow(Vec::len), count);
-    OBSERVER_VISIBLE.get().unwrap().set(true);
+    assert_eq!(probe.space_rects.with(Vec::len), count);
+    probe.observer_visible.get().unwrap().set(true);
     pump_layout_test_session(&mut session, 200_000_002);
-    assert_eq!(SPACE_RECTS.with_borrow(Vec::len), count + 1);
+    assert_eq!(probe.space_rects.with(Vec::len), count + 1);
     assert_eq!(
-        SPACE_RECTS.with_borrow(|rects| *rects.last().unwrap()),
+        probe.space_rects.with(|rects| *rects.last().unwrap()),
         resized
     );
-    MARK_SPACE.get().unwrap().set(false);
+    probe.mark_space.get().unwrap().set(false);
     pump_layout_test_session(&mut session, 216_666_669);
-    assert_eq!(SPACE_RECTS.with_borrow(Vec::len), count + 2);
+    assert_eq!(probe.space_rects.with(Vec::len), count + 2);
     assert_eq!(
-        SPACE_RECTS.with_borrow(|rects| *rects.last().unwrap()),
-        COORDINATES.with_borrow(|items| items.last().unwrap().window_bounds())
+        probe.space_rects.with(|rects| *rects.last().unwrap()),
+        probe
+            .coordinates
+            .with(|items| items.last().unwrap().window_bounds())
     );
-    MARK_SPACE.get().unwrap().set(true);
+    probe.mark_space.get().unwrap().set(true);
     pump_layout_test_session(&mut session, 233_333_336);
-    assert_eq!(SPACE_RECTS.with_borrow(Vec::len), count + 3);
+    assert_eq!(probe.space_rects.with(Vec::len), count + 3);
     assert_eq!(
-        SPACE_RECTS.with_borrow(|rects| *rects.last().unwrap()),
+        probe.space_rects.with(|rects| *rects.last().unwrap()),
         resized
     );
-    NESTED_SPACE.get().unwrap().set(true);
+    probe.nested_space.get().unwrap().set(true);
     pump_layout_test_session(&mut session, 250_000_003);
-    assert_eq!(SPACE_RECTS.with_borrow(Vec::len), count + 4);
+    assert_eq!(probe.space_rects.with(Vec::len), count + 4);
     assert_eq!(
-        SPACE_RECTS.with_borrow(|rects| *rects.last().unwrap()),
+        probe.space_rects.with(|rects| *rects.last().unwrap()),
         FloatRect {
             x: 14.0,
             y: 24.5,
@@ -451,27 +455,29 @@ fn relative_observers_ignore_space_motion_and_track_local_changes_and_reparentin
             height: 40.0,
         }
     );
-    NESTED_SPACE.get().unwrap().set(false);
+    probe.nested_space.get().unwrap().set(false);
     pump_layout_test_session(&mut session, 266_666_670);
-    assert_eq!(SPACE_RECTS.with_borrow(Vec::len), count + 5);
+    assert_eq!(probe.space_rects.with(Vec::len), count + 5);
     assert_eq!(
-        SPACE_RECTS.with_borrow(|rects| *rects.last().unwrap()),
+        probe.space_rects.with(|rects| *rects.last().unwrap()),
         resized
     );
-    let window_count = COORDINATES.with_borrow(Vec::len);
-    SPACE_OFFSET
+    let window_count = probe.coordinates.with(Vec::len);
+    probe
+        .space_offset
         .get()
         .unwrap()
         .set(PxPosition::from_f32_xy(64.0, 0.0));
-    COUNTER_OFFSET
+    probe
+        .counter_offset
         .get()
         .unwrap()
         .set(PxPosition::from_f32_xy(-128.0, 0.0));
     pump_layout_test_session(&mut session, 283_333_337);
-    assert_eq!(COORDINATES.with_borrow(Vec::len), window_count);
-    assert_eq!(SPACE_RECTS.with_borrow(Vec::len), count + 6);
+    assert_eq!(probe.coordinates.with(Vec::len), window_count);
+    assert_eq!(probe.space_rects.with(Vec::len), count + 6);
     assert_eq!(
-        SPACE_RECTS.with_borrow(|rects| *rects.last().unwrap()),
+        probe.space_rects.with(|rects| *rects.last().unwrap()),
         FloatRect {
             x: -46.75,
             y: 32.75,
@@ -481,50 +487,142 @@ fn relative_observers_ignore_space_motion_and_track_local_changes_and_reparentin
     );
 }
 
+struct GeometryChildTag;
+impl crate::SemanticsModifierNode for GeometryChildTag {
+    fn apply(
+        &self,
+        node: &mut crate::AccessibilityNode,
+        _: &mut Option<crate::AccessibilityActionHandler>,
+    ) {
+        node.key = Some("geometry-child".to_owned());
+    }
+}
+
 #[derive(Clone, PartialEq)]
-struct StateTranslation(State<PxPosition>, bool);
+struct StateTranslation(State<PxPosition>);
 
 impl crate::PlacementModifierNode for StateTranslation {
     fn transform_position(&self, position: PxPosition) -> PxPosition {
-        if self.1 {
-            CHILD_TRANSFORMS.set(CHILD_TRANSFORMS.get() + 1);
-        }
         position + self.0.get()
     }
 }
 
 #[crate::tessera(crate)]
-fn inherited_translation_fixture() {
+fn observer_follow_fixture(probe: GeometryProbe) {
+    let source = crate::remember(|| PxPosition::ZERO);
+    let observed = crate::remember(|| PxPosition::from_f32_xy(100.0, 0.0));
+    let size = crate::remember(|| ComputedData {
+        width: Px(20),
+        height: Px(10),
+    });
+    probe.parent_offset.set(Some(source));
+    layout().child(move || {
+        let input = probe.input.clone();
+        scaled_box(0.625).child(move || {
+            layout().policy(SizeOnlyContent(size)).modifier(
+                Modifier::new()
+                    .push_pointer_input(ObserveInput(false, input.clone()))
+                    .push_placement(StateTranslation(source))
+                    .on_layout_coordinates(move |coordinates: LayoutCoordinates| {
+                        let bounds = coordinates.window_bounds();
+                        observed.set_if_changed(PxPosition::from_f32_xy(bounds.x, bounds.y));
+                    }),
+            );
+        });
+        layout().policy(SizeOnlyContent(size)).modifier(
+            Modifier::new()
+                .push_pointer_input(ObserveInput(true, probe.input.clone()))
+                .push_placement(StateTranslation(observed))
+                .push_semantics(GeometryChildTag),
+        );
+    });
+}
+
+#[test]
+fn geometry_observer_updates_settle_placement_before_the_frame_snapshot() {
+    let probe = GeometryProbe::default();
+    let mut session = start_layout_test_session(
+        layout_test(|| observer_follow_fixture(probe.clone())).viewport_px(300, 200),
+    );
+    pump_layout_test_session(&mut session, 0);
+    assert!(session.diagnostics().unwrap().cache_miss_no_entry > 0);
+    assert_eq!(session.diagnostics().unwrap().pointer_nodes_dispatched, 2);
+    let before = session.inspect_components();
+    assert_eq!(before.tagged("geometry-child").bounds().unwrap().x, 0.0);
+    probe
+        .parent_offset
+        .get()
+        .unwrap()
+        .set(PxPosition::from_f32_xy(12.0, 2.0));
+    pump_layout_test_session(&mut session, 1);
+    assert_eq!(session.diagnostics().unwrap().pointer_nodes_dispatched, 2);
+    assert_eq!(session.diagnostics().unwrap().cache_miss_no_entry, 0);
+    let after = session.inspect_components();
+    let bounds = after.tagged("geometry-child").bounds().unwrap();
+    assert_eq!((bounds.x, bounds.y), (7.5, 1.25));
+    assert_eq!(
+        session
+            .work()
+            .count("observer_follow_fixture", crate::WorkPhase::Build),
+        0
+    );
+    assert_eq!(
+        session
+            .work()
+            .executed::<SizeOnlyContent>(crate::WorkPhase::Measure),
+        0
+    );
+    pump_layout_test_session(&mut session, 2);
+    assert_eq!(session.diagnostics().unwrap().pointer_nodes_dispatched, 0);
+    assert_eq!(session.diagnostics().unwrap().cache_miss_no_entry, 0);
+    assert_eq!(
+        session
+            .work()
+            .executed::<StateTranslation>(crate::WorkPhase::Transform),
+        0
+    );
+}
+
+#[crate::tessera(crate)]
+fn inherited_translation_fixture(probe: GeometryProbe) {
     let parent = crate::remember(|| PxPosition::ZERO);
     let child = crate::remember(|| PxPosition::from_f32_xy(2.25, 3.5));
-    PARENT_OFFSET.set(Some(parent));
-    CHILD_OFFSET.set(Some(child));
+    probe.parent_offset.set(Some(parent));
+    probe.child_offset.set(Some(child));
     layout()
         .policy(Anchor)
-        .modifier(Modifier::new().push_placement(StateTranslation(parent, false)))
+        .modifier(Modifier::new().push_placement(StateTranslation(parent)))
         .child(move || {
+            let probe = probe.clone();
             layout().modifier(
                 Modifier::new()
-                    .push_placement(StateTranslation(child, true))
-                    .on_layout_coordinates(|coordinates| {
-                        COORDINATES.with_borrow_mut(|items| items.push(coordinates));
-                    }),
+                    .push_placement(StateTranslation(child))
+                    .push_semantics(GeometryChildTag)
+                    .on_layout_coordinates(probe.coordinates.recorder()),
             );
         });
 }
 
 #[test]
 fn inherited_translation_reuses_local_placement_and_preserves_fractional_observers() {
-    COORDINATES.with_borrow_mut(Vec::clear);
-    CHILD_TRANSFORMS.set(0);
-    let mut session =
-        start_layout_test_session(layout_test(inherited_translation_fixture).viewport_px(300, 200));
+    let probe = GeometryProbe::default();
+    probe.coordinates.with_mut(Vec::clear);
+    let mut session = start_layout_test_session(
+        layout_test(|| inherited_translation_fixture(probe.clone())).viewport_px(300, 200),
+    );
     pump_layout_test_session(&mut session, 0);
-    let initial = CHILD_TRANSFORMS.get();
-    assert!(initial > 0);
+    let snapshot = session.run(crate::testing::ComponentSnapshot::capture);
+    let child = snapshot.tagged("geometry-child").instance_id();
+    assert!(
+        session
+            .work()
+            .for_instance(child, crate::WorkPhase::Transform)
+            > 0
+    );
     for frame in 1..=40 {
         let offset = if frame % 2 == 0 { 0.0 } else { 41.25 };
-        PARENT_OFFSET
+        probe
+            .parent_offset
             .get()
             .unwrap()
             .set(PxPosition::from_f32_xy(-0.5, offset));
@@ -534,22 +632,33 @@ fn inherited_translation_reuses_local_placement_and_preserves_fractional_observe
             0,
             "moving decorative layouts must not update the pointer index"
         );
-        let bounds = COORDINATES.with_borrow(|items| items.last().unwrap().window_bounds());
+        assert_eq!(
+            session
+                .work()
+                .for_instance(child, crate::WorkPhase::Transform),
+            0
+        );
+        let bounds = probe
+            .coordinates
+            .with(|items| items.last().unwrap().window_bounds());
         assert_eq!(bounds.x, 12.0);
         assert_eq!(bounds.y, 24.0 + offset);
     }
-    assert_eq!(
-        CHILD_TRANSFORMS.get(),
-        initial,
-        "An ancestor translation must not reevaluate unchanged local placement modifiers"
-    );
-    CHILD_OFFSET
+    probe
+        .child_offset
         .get()
         .unwrap()
         .set(PxPosition::from_f32_xy(3.75, 4.0));
     pump_layout_test_session(&mut session, 700_000_000);
-    assert!(CHILD_TRANSFORMS.get() > initial);
-    let bounds = COORDINATES.with_borrow(|items| items.last().unwrap().window_bounds());
+    assert!(
+        session
+            .work()
+            .for_instance(child, crate::WorkPhase::Transform)
+            > 0
+    );
+    let bounds = probe
+        .coordinates
+        .with(|items| items.last().unwrap().window_bounds());
     assert_eq!((bounds.x, bounds.y), (13.5, 24.5));
 }
 
@@ -574,45 +683,47 @@ impl LayoutModifierNode for PlaceWhenVisible {
 }
 
 #[crate::tessera(crate)]
-fn hidden_position_observer_fixture() {
+fn hidden_position_observer_fixture(probe: GeometryProbe) {
     let visible = crate::remember(|| true);
     let parent = crate::remember(|| PxPosition::ZERO);
-    OBSERVER_VISIBLE.set(Some(visible));
-    PARENT_OFFSET.set(Some(parent));
+    probe.observer_visible.set(Some(visible));
+    probe.parent_offset.set(Some(parent));
     layout()
         .policy(PlaceWhenVisible(visible))
-        .modifier(Modifier::new().push_placement(StateTranslation(parent, false)))
-        .child(|| {
-            layout().modifier(Modifier::new().on_layout_coordinates(|coordinates| {
-                COORDINATES.with_borrow_mut(|items| items.push(coordinates));
-            }));
+        .modifier(Modifier::new().push_placement(StateTranslation(parent)))
+        .child(move || {
+            let probe = probe.clone();
+            layout().modifier(Modifier::new().on_layout_coordinates(probe.coordinates.recorder()));
         });
 }
 
 #[test]
 fn position_observer_resumes_after_hidden_ancestor_moves() {
-    COORDINATES.with_borrow_mut(Vec::clear);
+    let probe = GeometryProbe::default();
+    probe.coordinates.with_mut(Vec::clear);
     let mut session = start_layout_test_session(
-        layout_test(hidden_position_observer_fixture).viewport_px(300, 200),
+        layout_test(|| hidden_position_observer_fixture(probe.clone())).viewport_px(300, 200),
     );
     pump_layout_test_session(&mut session, 0);
-    assert_eq!(COORDINATES.with_borrow(Vec::len), 1);
-    OBSERVER_VISIBLE.get().unwrap().set(false);
-    PARENT_OFFSET
+    assert_eq!(probe.coordinates.with(Vec::len), 1);
+    probe.observer_visible.get().unwrap().set(false);
+    probe
+        .parent_offset
         .get()
         .unwrap()
         .set(PxPosition::from_f32_xy(0.0, 41.25));
     pump_layout_test_session(&mut session, 16_666_667);
-    assert_eq!(COORDINATES.with_borrow(Vec::len), 1);
-    PARENT_OFFSET
+    assert_eq!(probe.coordinates.with(Vec::len), 1);
+    probe
+        .parent_offset
         .get()
         .unwrap()
         .set(PxPosition::from_f32_xy(0.0, 80.5));
     pump_layout_test_session(&mut session, 33_333_334);
-    assert_eq!(COORDINATES.with_borrow(Vec::len), 1);
-    OBSERVER_VISIBLE.get().unwrap().set(true);
+    assert_eq!(probe.coordinates.with(Vec::len), 1);
+    probe.observer_visible.get().unwrap().set(true);
     pump_layout_test_session(&mut session, 50_000_001);
-    let coordinates = COORDINATES.with_borrow(|items| {
+    let coordinates = probe.coordinates.with(|items| {
         assert_eq!(items.len(), 2);
         items[1]
     });
@@ -660,7 +771,10 @@ impl LayoutModifierNode for Content {
     }
 }
 
-struct ObserveInput(bool);
+struct ObserveInput(
+    bool,
+    crate::testing::TestProbe<Vec<(bool, Option<PxPosition>, Option<PxPosition>, f32)>>,
+);
 
 impl PointerInputModifierNode for ObserveInput {
     fn on_pointer_input(&self, input: PointerInput<'_>) {
@@ -671,9 +785,8 @@ impl PointerInputModifierNode for ObserveInput {
         let absolute = input.cursor_position_abs();
         for change in input.pointer_changes.iter_mut() {
             if let CursorEventContent::Scroll(scroll) = &mut change.content {
-                INPUT.with_borrow_mut(|input| {
-                    input.push((self.0, position, absolute, scroll.delta_y))
-                });
+                self.1
+                    .with_mut(|input| input.push((self.0, position, absolute, scroll.delta_y)));
                 if self.0 {
                     scroll.delta_y -= 8.0;
                 }
@@ -698,7 +811,7 @@ impl LayoutModifierNode for ResponsiveInputStage {
 }
 
 #[crate::tessera(crate)]
-fn dynamic_scale_input_fixture() {
+fn dynamic_scale_input_fixture(probe: GeometryProbe) {
     let scale = crate::remember(|| 1.0_f32);
     let visible = crate::remember(|| true);
     let size = crate::remember(|| ComputedData {
@@ -709,11 +822,11 @@ fn dynamic_scale_input_fixture() {
         width: Px(200),
         height: Px(80),
     });
-    CONTENT_SIZE.set(Some(stage_size));
+    probe.content_size.set(Some(stage_size));
     let content = crate::RenderSlot::new(move || {
         layout()
             .policy(SizeOnlyContent(size))
-            .modifier(Modifier::new().push_pointer_input(ObserveInput(true)));
+            .modifier(Modifier::new().push_pointer_input(ObserveInput(true, probe.input.clone())));
     });
     layout().policy(SizeOnlyRoot(visible)).child(move || {
         layout()
@@ -734,15 +847,17 @@ fn dynamic_scale_input_fixture() {
 
 #[test]
 fn dynamic_ancestor_scale_updates_unobserved_pointer_coordinates_and_scroll_units() {
+    let probe = GeometryProbe::default();
     {
         let mut previous = start_layout_test_session(
-            layout_test(dynamic_scale_input_fixture).viewport_px(300, 200),
+            layout_test(|| dynamic_scale_input_fixture(probe.clone())).viewport_px(300, 200),
         );
         pump_layout_test_session(&mut previous, 0);
     }
-    INPUT.with_borrow_mut(Vec::clear);
-    let mut session =
-        start_layout_test_session(layout_test(dynamic_scale_input_fixture).viewport_px(300, 200));
+    probe.input.with_mut(Vec::clear);
+    let mut session = start_layout_test_session(
+        layout_test(|| dynamic_scale_input_fixture(probe.clone())).viewport_px(300, 200),
+    );
     pump_layout_test_session(&mut session, 0);
     for (index, (width, scale, x, y, local_delta)) in [
         (200, 1.0, 50.25, 44.5, 12.0),
@@ -753,7 +868,7 @@ fn dynamic_ancestor_scale_updates_unobserved_pointer_coordinates_and_scroll_unit
     .into_iter()
     .enumerate()
     {
-        CONTENT_SIZE.get().unwrap().set(ComputedData {
+        probe.content_size.get().unwrap().set(ComputedData {
             width: Px(width),
             height: Px(80),
         });
@@ -761,7 +876,7 @@ fn dynamic_ancestor_scale_updates_unobserved_pointer_coordinates_and_scroll_unit
         pump_layout_test_session(&mut session, frame);
         pump_layout_test_session(&mut session, frame + 16_666_667);
         pump_layout_test_session(&mut session, frame + 33_333_334);
-        INPUT.with_borrow_mut(Vec::clear);
+        probe.input.with_mut(Vec::clear);
         let position = PxPosition::from_f32_xy(x, y);
         let scroll = PointerChange::new(
             Instant::now(),
@@ -781,7 +896,7 @@ fn dynamic_ancestor_scale_updates_unobserved_pointer_coordinates_and_scroll_unit
             vec![scroll],
             Some(position),
         );
-        let samples = INPUT.with_borrow(Clone::clone);
+        let samples = probe.input.with(Clone::clone);
         assert_eq!(samples.len(), 1, "Input delivery at scale {scale}");
         assert_eq!(
             samples[0].1,
@@ -801,18 +916,18 @@ fn dynamic_ancestor_scale_updates_unobserved_pointer_coordinates_and_scroll_unit
 }
 
 #[crate::tessera(crate)]
-fn scale_fixture() {
+fn scale_fixture(probe: GeometryProbe) {
     layout()
         .policy(Anchor)
-        .modifier(Modifier::new().push_pointer_input(ObserveInput(false)))
-        .child(|| {
-            scaled_box(0.625).child(|| {
+        .modifier(Modifier::new().push_pointer_input(ObserveInput(false, probe.input.clone())))
+        .child(move || {
+            let probe = probe.clone();
+            scaled_box(0.625).child(move || {
+                let probe = probe.clone();
                 layout().policy(Content).modifier(
                     Modifier::new()
-                        .push_pointer_input(ObserveInput(true))
-                        .on_layout_coordinates(|coordinates| {
-                            COORDINATES.with_borrow_mut(|items| items.push(coordinates));
-                        }),
+                        .push_pointer_input(ObserveInput(true, probe.input.clone()))
+                        .on_layout_coordinates(probe.coordinates.recorder()),
                 );
             });
         });
@@ -820,17 +935,19 @@ fn scale_fixture() {
 
 #[test]
 fn scaled_layout_keeps_local_dimensions_maps_actual_input_and_returns_window_scroll_remainder() {
-    COORDINATES.with_borrow_mut(Vec::clear);
-    INPUT.with_borrow_mut(Vec::clear);
+    let probe = GeometryProbe::default();
+    probe.coordinates.with_mut(Vec::clear);
+    probe.input.with_mut(Vec::clear);
     let mut session = start_layout_test_session(
         layout_test(|| {
-            scale_fixture();
+            scale_fixture(probe.clone());
         })
         .viewport_px(300, 200),
     );
     pump_layout_test_session(&mut session, 0);
-    let coordinates =
-        COORDINATES.with_borrow(|items| *items.last().expect("Layout observer must run"));
+    let coordinates = probe
+        .coordinates
+        .with(|items| *items.last().expect("Layout observer must run"));
     assert_eq!(coordinates.local_size.width, Px(240));
     assert_eq!(coordinates.local_size.height, Px(56));
     assert_eq!(
@@ -842,10 +959,10 @@ fn scaled_layout_keeps_local_dimensions_maps_actual_input_and_returns_window_scr
             height: 35.0
         }
     );
-    let observed = COORDINATES.with_borrow(Vec::len);
+    let observed = probe.coordinates.with(Vec::len);
     pump_layout_test_session(&mut session, 1);
     assert_eq!(
-        COORDINATES.with_borrow(Vec::len),
+        probe.coordinates.with(Vec::len),
         observed,
         "An idle frame must not republish unchanged geometry"
     );
@@ -863,7 +980,7 @@ fn scaled_layout_keeps_local_dimensions_maps_actual_input_and_returns_window_scr
     )
     .with_position(position);
     pump_layout_test_session_with_input(&mut session, 16_000_000, vec![scroll], Some(position));
-    let samples = INPUT.with_borrow(Clone::clone);
+    let samples = probe.input.with(Clone::clone);
     let child = samples
         .iter()
         .find(|sample| sample.0)

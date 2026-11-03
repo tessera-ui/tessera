@@ -40,7 +40,9 @@ mod figures_tests;
 mod page_figures;
 
 #[tessera]
-pub(super) fn radio_buttons_spec() {
+pub(super) fn radio_buttons_spec(
+    route: Option<crate::pages::material_spec::article::ArticleRoute>,
+) {
     article(
         "Radio button",
         "Radio buttons let people select one option from a set of options",
@@ -69,6 +71,7 @@ pub(super) fn radio_buttons_spec() {
             },
         ],
     )
+    .route_optional(route.clone())
     .pages(vec![
         ArticlePage {
             title: "Overview",
@@ -170,7 +173,7 @@ fn overview() {
         .children(move || {
             radio_group()
                 .accessibility_label("Radio button selection example")
-                .content(move || {
+                .content(move |group| {
                     row()
                         .modifier(Modifier::new().offset(Dp(-7.0 * scale), Dp::ZERO))
                         .children(move || {
@@ -181,6 +184,7 @@ fn overview() {
                                     );
                                 }
                                 radio_button()
+                                    .group(group)
                                     .selected(selected.get() == index)
                                     .size(Dp(20.0 * scale))
                                     .stroke_width(Dp(2.0 * scale))
@@ -296,7 +300,7 @@ fn ringtone() {
                         .children(move || {
                             radio_group()
                                 .accessibility_label("Ringtone")
-                                .content(move || {
+                                .content(move |group| {
                                     column().children(move || {
                                         for (index, label) in
                                             ["None", "Callisto", "Ganymede", "Luna"]
@@ -309,6 +313,7 @@ fn ringtone() {
                                                 .modifier(Modifier::new().height(Dp(56.0 * scale)))
                                                 .children(move || {
                                                     radio_button()
+                                                        .group(group)
                                                         .focus_requester(focus)
                                                         .selected(selected.get() == index)
                                                         .size(Dp(20.0 * scale))
@@ -350,7 +355,7 @@ fn choices(#[prop(into)] label: String, enabled: bool) {
         let label = label.clone();
         radio_group()
             .accessibility_label(label.clone())
-            .content(move || {
+            .content(move |group| {
                 let label = label.clone();
                 column().children(move || {
                     for (index, option) in ["All notifications", "Important only", "None"]
@@ -363,6 +368,7 @@ fn choices(#[prop(into)] label: String, enabled: bool) {
                             .cross_axis_alignment(CrossAxisAlignment::Center)
                             .children(move || {
                                 radio_button()
+                                    .group(group)
                                     .focus_requester(focus)
                                     .selected(selected.get() == index)
                                     .enabled(enabled)
@@ -460,14 +466,6 @@ mod tests {
 
     use super::*;
 
-    struct Pipelines;
-
-    impl tessera_ui::RenderModule for Pipelines {
-        fn register_pipelines(&self, context: &mut tessera_ui::PipelineContext<'_>) {
-            tessera_components::pipelines::register_pipelines(context);
-        }
-    }
-
     #[tessera]
     fn fixture() {
         scheme(true);
@@ -478,7 +476,7 @@ mod tests {
     fn dark_radio_scheme_paints_the_content_padding() {
         let mut renderer = HeadlessRenderer::new(
             Box::new(fixture),
-            vec![Box::new(Pipelines)],
+            vec![Box::new(crate::TestPipelines)],
             HeadlessConfig {
                 width: 400,
                 height: 300,

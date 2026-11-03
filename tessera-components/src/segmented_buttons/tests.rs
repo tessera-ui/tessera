@@ -4,13 +4,12 @@
 //!
 //! Keep connected choices accessible and usable as state and bounds change.
 
-use std::cell::Cell;
-
 use tessera_ui::{
     Dp, FocusDirection, FocusManager, HeadlessConfig, HeadlessRenderer, MOUSE_POINTER_ID, Modifier,
     PressKeyEventType, PxPosition, State,
     accesskit::{Action, ActionRequest, Node, NodeId, Orientation, Role, Toggled, TreeId},
     remember, tessera,
+    testing::TestProbe,
 };
 
 use crate::{
@@ -53,14 +52,10 @@ impl Default for Settings {
     }
 }
 
-thread_local! {
-    static SETTINGS: Cell<Option<State<Settings>>> = const { Cell::new(None) };
-}
-
 #[tessera]
-fn fixture() {
+fn fixture(observed: TestProbe<Option<State<Settings>>>) {
     let settings = remember(Settings::default);
-    SETTINGS.set(Some(settings));
+    observed.set(Some(settings));
     material_theme()
         .theme(move || {
             let mut theme = MaterialTheme::default();
@@ -84,9 +79,10 @@ fn fixture() {
                             ..Default::default()
                         }),
                     )
-                    .content(move || {
+                    .content(move |mode| {
                         for (index, label) in ["Day", "Week", "Month"].into_iter().enumerate() {
                             segmented_button()
+                                .selection_mode(mode)
                                 .label(label)
                                 .min_height(Dp(settings.get().height))
                                 .content_padding(crate::modifier::Padding::symmetric(
@@ -109,9 +105,10 @@ fn fixture() {
                                 });
                         }
                     });
-                multi_choice_segmented_button_row().content(move || {
+                multi_choice_segmented_button_row().content(move |mode| {
                     for (index, label) in ["Bold", "Italic"].into_iter().enumerate() {
                         segmented_button()
+                            .selection_mode(mode)
                             .label(label)
                             .accessibility_label(format!("Multi {label}"))
                             .selected(settings.get().checked[index])
@@ -174,22 +171,16 @@ fn traverse(renderer: &mut HeadlessRenderer, direction: FocusDirection, label: &
     );
 }
 
-fn text_rect(renderer: &HeadlessRenderer, label: &str) -> [i64; 4] {
-    let snapshot = renderer.snapshot();
-    let mut pending = vec![&snapshot["root"]];
-    while let Some(node) = pending.pop() {
-        if node["accessibility"]["label"].as_str() == Some(label) {
-            return ["x", "y", "width", "height"]
-                .map(|field| node["bounds"][field].as_i64().unwrap());
-        }
-        if let Some(children) = node["children"].as_array() {
-            pending.extend(children);
-        }
-    }
-    panic!("missing {label}");
+fn text_rect(renderer: &HeadlessRenderer, label: &str) -> [f64; 4] {
+    let bounds = renderer
+        .inspect_components()
+        .labeled(label)
+        .bounds()
+        .expect("text geometry");
+    [bounds.x, bounds.y, bounds.width, bounds.height].map(f64::from)
 }
 
-fn text_height(renderer: &HeadlessRenderer, label: &str) -> i64 {
+fn text_height(renderer: &HeadlessRenderer, label: &str) -> f64 {
     text_rect(renderer, label)[3]
 }
 
@@ -220,8 +211,12 @@ fn check_segments(samples: u32) {
 }
 
 fn check_segments_at_density(samples: u32, scale: f64) {
+    let observed = TestProbe::default();
+    let fixture_observed = observed.clone();
     let mut renderer = HeadlessRenderer::new(
-        Box::new(fixture),
+        Box::new(move || {
+            fixture(fixture_observed.clone());
+        }),
         vec![Box::new(crate::TesseraComponents)],
         HeadlessConfig {
             width: 900,
@@ -233,7 +228,7 @@ fn check_segments_at_density(samples: u32, scale: f64) {
     )
     .unwrap();
     renderer.render_frames(8);
-    let settings = SETTINGS.get().unwrap();
+    let settings = observed.get().unwrap();
     let natural_width = node(&renderer, "Single Month").1.bounds().unwrap().x1;
     let day = node(&renderer, "Single Day").1.bounds().unwrap();
     let label = text_rect(&renderer, "Day");
@@ -348,10 +343,10 @@ fn check_segments_at_density(samples: u32, scale: f64) {
     renderer.render_frames(5);
     traverse(&mut renderer, FocusDirection::Right, "Single Month");
     assert_eq!(settings.get().selected, 2);
-    assert_eq!(text_height(&renderer, "Month"), (20.0 * scale) as i64);
+    assert_eq!(text_height(&renderer, "Month"), 20.0 * scale);
     settings.with_mut(|value| value.large = true);
     renderer.render_frames(5);
-    assert_eq!(text_height(&renderer, "Month"), (28.0 * scale) as i64);
+    assert_eq!(text_height(&renderer, "Month"), 28.0 * scale);
     settings.with_mut(|value| {
         value.large = false;
         value.disabled = false;
@@ -373,7 +368,7 @@ fn check_segments_at_density(samples: u32, scale: f64) {
             assert!(((day.x1 - day.x0) - (month.x1 - month.x0)).abs() <= 1.0);
         }
     }
-    assert_eq!(text_height(&renderer, "Month"), (20.0 * scale) as i64);
+    assert_eq!(text_height(&renderer, "Month"), 20.0 * scale);
     for height in [40.0, 36.0, 32.0, 28.0] {
         settings.with_mut(|settings| {
             settings.height = height;

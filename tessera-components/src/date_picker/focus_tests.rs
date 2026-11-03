@@ -5,10 +5,8 @@
 //! Keep day and year focus visible without activating their selection
 //! callbacks.
 
-use std::cell::Cell;
-
 use tessera_ui::{
-    HeadlessConfig, HeadlessRenderer, RenderModule,
+    HeadlessConfig, HeadlessRenderer,
     accesskit::{Action, ActionRequest, Node, NodeId, TreeId},
 };
 
@@ -16,21 +14,11 @@ use crate::{column::column, theme::material_theme};
 
 use super::*;
 
-thread_local! {
-    static YEAR: Cell<bool> = const { Cell::new(false) };
-    static STATE: Cell<Option<State<DatePickerState>>> = const { Cell::new(None) };
-    static VIEW: Cell<Option<State<DatePickerView>>> = const { Cell::new(None) };
-}
-
-struct Pipelines;
-impl RenderModule for Pipelines {
-    fn register_pipelines(&self, context: &mut tessera_ui::PipelineContext<'_>) {
-        crate::pipelines::register_pipelines(context);
-    }
-}
-
 #[tessera]
-fn fixture() {
+fn fixture(
+    year: bool,
+    output: tessera_ui::testing::TestProbe<Option<(State<DatePickerState>, State<DatePickerView>)>>,
+) {
     let state = remember(|| {
         DatePickerState::new(
             CalendarDate::new(2025, 8, 17),
@@ -42,14 +30,13 @@ fn fixture() {
         )
     });
     let view = remember(|| {
-        if YEAR.get() {
+        if year {
             DatePickerView::Year
         } else {
             DatePickerView::Calendar
         }
     });
-    STATE.set(Some(state));
-    VIEW.set(Some(view));
+    output.set(Some((state, view)));
     material_theme().child(move || {
         column().children(move || {
             date_picker()
@@ -107,10 +94,11 @@ fn focus_outline_changes(
 }
 
 fn check_focus(year: bool) {
-    YEAR.set(year);
+    let output = tessera_ui::testing::TestProbe::default();
+    let probe = output.clone();
     let mut renderer = HeadlessRenderer::new(
-        Box::new(fixture),
-        vec![Box::new(Pipelines)],
+        Box::new(move || fixture(year, probe.clone())),
+        vec![Box::new(crate::TesseraComponents)],
         HeadlessConfig {
             width: 400,
             height: 650,
@@ -138,15 +126,15 @@ fn check_focus(year: bool) {
         "the fixture must start without focus on the target choice"
     );
     let before = renderer.read_pixels().unwrap();
-    let selected = STATE.get().unwrap().with(DatePickerState::selected_date);
+    let selected = output.get().unwrap().0.with(DatePickerState::selected_date);
     action(&mut renderer, id, Action::Focus);
     assert_eq!(renderer.accessibility_snapshot().unwrap().focus, id);
     assert_eq!(
-        STATE.get().unwrap().with(DatePickerState::selected_date),
+        output.get().unwrap().0.with(DatePickerState::selected_date),
         selected
     );
     assert_eq!(
-        VIEW.get().unwrap().get(),
+        output.get().unwrap().1.get(),
         if year {
             DatePickerView::Year
         } else {
@@ -164,20 +152,21 @@ fn check_focus(year: bool) {
     action(&mut renderer, other, Action::Click);
     if year {
         assert_eq!(
-            STATE
+            output
                 .get()
                 .unwrap()
+                .0
                 .with(|state| state.displayed_month().year()),
             2026
         );
-        assert_eq!(VIEW.get().unwrap().get(), DatePickerView::Calendar);
+        assert_eq!(output.get().unwrap().1.get(), DatePickerView::Calendar);
         assert_eq!(
-            STATE.get().unwrap().with(DatePickerState::selected_date),
+            output.get().unwrap().0.with(DatePickerState::selected_date),
             selected
         );
     } else {
         assert_eq!(
-            STATE.get().unwrap().with(DatePickerState::selected_date),
+            output.get().unwrap().0.with(DatePickerState::selected_date),
             CalendarDate::new(2025, 8, 19)
         );
     }

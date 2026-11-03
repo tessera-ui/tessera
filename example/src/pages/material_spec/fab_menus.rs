@@ -41,7 +41,7 @@ const ITEMS: [(&str, &str); 3] = [
 ];
 
 #[tessera]
-pub(super) fn fab_menu_spec() {
+pub(super) fn fab_menu_spec(route: Option<crate::pages::material_spec::article::ArticleRoute>) {
     article(
         "FAB menu",
         "The FAB menu expands from a floating action button to show related actions",
@@ -76,6 +76,7 @@ pub(super) fn fab_menu_spec() {
             },
         ],
     )
+    .route_optional(route.clone())
     .pages(vec![
         ArticlePage {
             title: "Overview",

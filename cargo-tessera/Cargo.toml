@@ -2,6 +2,7 @@
 name = "cargo-tessera"
 version = "0.5.0"
 edition.workspace = true
+rust-version = "1.98"
 license.workspace = true
 repository.workspace = true
 homepage.workspace = true
@@ -37,15 +38,17 @@ inquire = { version = "0.9.3", default-features = false, features = [
 ] }
 notify = "8.2.0"
 owo-colors = "4.3"
-ra_ap_hir = "=0.0.333"
-ra_ap_hir_def = "=0.0.333"
-ra_ap_ide = "=0.0.333"
-ra_ap_base_db = "=0.0.333"
-ra_ap_load-cargo = "=0.0.333"
-ra_ap_project_model = "=0.0.333"
-ra_ap_span = "=0.0.333"
-ra_ap_syntax = "=0.0.333"
-ra_ap_vfs = "=0.0.333"
+ra_ap_hir = "=0.0.358"
+ra_ap_hir_def = "=0.0.358"
+ra_ap_ide = "=0.0.358"
+ra_ap_base_db = "=0.0.358"
+ra_ap_cfg = "=0.0.358"
+ra_ap_intern = "=0.0.358"
+ra_ap_load-cargo = "=0.0.358"
+ra_ap_project_model = "=0.0.358"
+ra_ap_span = "=0.0.358"
+ra_ap_syntax = "=0.0.358"
+ra_ap_vfs = "=0.0.358"
 ratatui = "0.29"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = { version = "1", features = ["unbounded_depth"] }
@@ -54,3 +57,10 @@ toml = "1.1.0"
 unicode-width = "0.2"
 wasm-bindgen-cli-support = "0.2.114"
 interprocess = "2.4.4"
+tempfile = "3.27"
+
+[target.'cfg(windows)'.dependencies]
+windows-sys = { version = "0.61", features = ["Win32_System_Pipes"] }
+
+[target.'cfg(unix)'.dependencies]
+libc = "0.2"

@@ -10,10 +10,7 @@ use std::{
     collections::VecDeque,
     hash::{Hash, Hasher},
     marker::PhantomData,
-    sync::{
-        Arc,
-        atomic::{AtomicU64, Ordering},
-    },
+    sync::Arc,
 };
 
 use rustc_hash::{FxHashMap as HashMap, FxHasher};
@@ -52,12 +49,13 @@ struct PendingCalls {
     calls: HashMap<u64, PendingCall>,
     scopes: Vec<VecDeque<u64>>,
     reset_generation: u64,
+    next_call_id: u64,
 }
 
-thread_local! {
-    static PENDING_CALLS: RefCell<PendingCalls> = RefCell::new(PendingCalls::default());
-    static ACTIVE_RUNNER: RefCell<Option<Arc<dyn ErasedComponentRunner>>> = RefCell::new(None);
-}
+const PENDING_CALLS: crate::session::SessionLocal<RefCell<PendingCalls>> =
+    crate::session::SessionLocal::new();
+const ACTIVE_RUNNER: crate::session::SessionLocal<RefCell<Option<Arc<dyn ErasedComponentRunner>>>> =
+    crate::session::SessionLocal::new();
 
 /// Return the runner executing the current registered use.
 pub fn current_component_runner() -> Option<Arc<dyn ErasedComponentRunner>> {
@@ -83,6 +81,7 @@ pub(crate) fn with_component_runner<R>(
 
 /// A configuration handle to one registered component use.
 pub struct ComponentCall<P: Prop> {
+    session: u128,
     id: u64,
     marker: PhantomData<fn(P)>,
 }
@@ -96,12 +95,20 @@ impl<P: Prop> Clone for ComponentCall<P> {
 }
 
 impl<P: Prop> ComponentCall<P> {
+    fn validate_session(&self) {
+        assert_eq!(
+            crate::session::current_session_identity(),
+            Some(self.session),
+            "component handle belongs to a different runtime session"
+        );
+    }
     /// Set a property while this call is pending.
     #[track_caller]
     pub fn configure<F>(&self, property: &'static str, update: F)
     where
         F: FnOnce(&mut P),
     {
+        self.validate_session();
         let mut guard = begin_configuration(self.id);
         let call = guard.call.as_mut().expect("active configuration");
         clear_property_updates(call, property);
@@ -119,6 +126,7 @@ impl<P: Prop> ComponentCall<P> {
     where
         F: FnOnce(&mut P) + Send + Sync + 'static,
     {
+        self.validate_session();
         self.store(property, false, update);
     }
 
@@ -128,6 +136,7 @@ impl<P: Prop> ComponentCall<P> {
     where
         F: FnOnce(&mut P) + Send + Sync + 'static,
     {
+        self.validate_session();
         self.store(property, true, update);
     }
 
@@ -148,6 +157,7 @@ impl<P: Prop> ComponentCall<P> {
 
     /// Expand this call at a controlled runtime boundary.
     pub(crate) fn execute_now(self) {
+        self.validate_session();
         loop {
             let next = PENDING_CALLS.with(|calls| {
                 calls
@@ -249,6 +259,7 @@ pub fn register_component_call<P: Prop>(
 ) -> ComponentCall<P> {
     let id = register_erased_call(name, component_type_id, Box::new(props), runner);
     ComponentCall {
+        session: crate::session::current_session_identity().expect("active component session"),
         id,
         marker: PhantomData,
     }
@@ -268,10 +279,14 @@ fn register_erased_call(
             "component declarations require an active build fragment"
         );
     });
-    static NEXT_CALL_ID: AtomicU64 = AtomicU64::new(1);
-    let id = NEXT_CALL_ID
-        .fetch_update(Ordering::Relaxed, Ordering::Relaxed, |id| id.checked_add(1))
-        .expect("component call token space exhausted");
+    let id = PENDING_CALLS.with(|calls| {
+        let mut calls = calls.borrow_mut();
+        calls.next_call_id = calls
+            .next_call_id
+            .checked_add(1)
+            .expect("component call token space exhausted");
+        calls.next_call_id
+    });
     let identity = reserve_component_identity(component_type_id);
     let call = PendingCall {
         name,
@@ -455,15 +470,12 @@ pub(crate) fn reset_pending_calls() {
 
 #[cfg(test)]
 mod tests {
-    use std::{
-        cell::RefCell,
-        panic::{AssertUnwindSafe, catch_unwind},
-    };
+    use std::panic::{AssertUnwindSafe, catch_unwind};
 
     use crate::{
         RenderSlot,
         execution_context::reset_execution_context,
-        prop::{Prop, make_component_runner},
+        prop::{ErasedComponentRunner, ErasedProp, Prop},
         runtime::{GroupGuard, RuntimePhase, push_phase, reset_slots},
     };
 
@@ -481,67 +493,83 @@ mod tests {
         }
     }
 
-    thread_local! {
-        static OBSERVED: RefCell<Vec<Props>> = const { RefCell::new(Vec::new()) };
+    #[derive(Clone, Default)]
+    struct Recorder {
+        observed: crate::testing::TestProbe<Vec<Props>>,
     }
 
-    fn observe(props: &Props) {
-        OBSERVED.with(|observed| observed.borrow_mut().push(props.clone()));
+    impl ErasedComponentRunner for Recorder {
+        fn run(&self, props: &dyn ErasedProp) {
+            let props = props.as_any().downcast_ref::<Props>().unwrap();
+            self.observed.with_mut(|values| values.push(props.clone()));
+        }
     }
 
-    fn declare(value: u32) -> ComponentCall<Props> {
-        register_component_call(
-            "probe",
-            123,
-            Props { value, slot: None },
-            make_component_runner(observe),
-        )
-    }
+    impl Recorder {
+        fn declare(&self, value: u32) -> ComponentCall<Props> {
+            register_component_call(
+                "probe",
+                123,
+                Props { value, slot: None },
+                std::sync::Arc::new(self.clone()),
+            )
+        }
 
-    fn build<R>(body: impl FnOnce() -> R) -> R {
-        reset_execution_context();
-        OBSERVED.with(|observed| observed.borrow_mut().clear());
-        let _phase = push_phase(RuntimePhase::Build);
-        with_pending_scope(body)
-    }
+        fn build<R>(&self, body: impl FnOnce() -> R) -> R {
+            reset_execution_context();
+            self.observed.with_mut(Vec::clear);
+            let _phase = push_phase(RuntimePhase::Build);
+            with_pending_scope(body)
+        }
 
-    fn values() -> Vec<u32> {
-        OBSERVED.with(|observed| observed.borrow().iter().map(|props| props.value).collect())
+        fn values(&self) -> Vec<u32> {
+            self.observed
+                .with(|values| values.iter().map(|props| props.value).collect())
+        }
     }
 
     #[test]
     fn registered_uses_survive_handle_disposal_and_execute_in_declaration_order() {
+        let _runtime_session = crate::RuntimeSession::new();
+        let _runtime_scope = _runtime_session.enter();
+        let recorder = Recorder::default();
         struct OwnedHandle(ComponentCall<Props>);
-        build(|| {
-            let first = OwnedHandle(declare(1));
-            let second = declare(2);
+        recorder.build(|| {
+            let first = OwnedHandle(recorder.declare(1));
+            let second = recorder.declare(2);
             {
                 let _group = GroupGuard::new(17);
                 second.configure("value", |props| props.value = 20);
                 first.0.configure("value", |props| props.value = 10);
             }
             drop(first);
-            std::mem::forget(OwnedHandle(declare(3)));
-            assert!(values().is_empty());
+            std::mem::forget(OwnedHandle(recorder.declare(3)));
+            assert!(recorder.values().is_empty());
         });
-        assert_eq!(values(), [10, 20, 3]);
+        assert_eq!(recorder.values(), [10, 20, 3]);
     }
 
     #[test]
     fn only_the_final_property_configuration_is_materialized() {
-        build(|| {
-            let call = declare(1);
+        let _runtime_session = crate::RuntimeSession::new();
+        let _runtime_scope = _runtime_session.enter();
+        let recorder = Recorder::default();
+        recorder.build(|| {
+            let call = recorder.declare(1);
             call.configure_deferred("value", |_| panic!("superseded configuration executed"));
             call.configure_deferred("value", |props| props.value = 9);
         });
-        assert_eq!(values(), [9]);
+        assert_eq!(recorder.values(), [9]);
     }
 
     #[test]
     fn stale_handles_cannot_configure_a_new_registered_use() {
-        let stale = build(|| declare(1));
-        build(|| {
-            declare(2);
+        let _runtime_session = crate::RuntimeSession::new();
+        let _runtime_scope = _runtime_session.enter();
+        let recorder = Recorder::default();
+        let stale = recorder.build(|| recorder.declare(1));
+        recorder.build(|| {
+            recorder.declare(2);
             let error = catch_unwind(AssertUnwindSafe(|| {
                 stale.configure("value", |props| props.value = 99);
             }))
@@ -551,31 +579,33 @@ mod tests {
                 .expect("call status diagnostic");
             assert!(message.contains("is no longer Pending"));
         });
-        assert_eq!(values(), [2]);
+        assert_eq!(recorder.values(), [2]);
     }
 
     #[test]
     fn property_slot_identity_is_independent_of_configuration_groups_and_order() {
+        let _runtime_session = crate::RuntimeSession::new();
+        let _runtime_scope = _runtime_session.enter();
+        let recorder = Recorder::default();
         reset_slots();
         let configure = |call: ComponentCall<Props>| {
             call.configure_deferred("slot", |props| props.slot = Some(RenderSlot::new(|| {})));
         };
-        build(|| {
-            let first = declare(1);
-            let second = declare(2);
+        recorder.build(|| {
+            let first = recorder.declare(1);
+            let second = recorder.declare(2);
             configure(first);
             configure(second);
         });
-        let first = OBSERVED.with(|observed| observed.borrow().clone());
-        build(|| {
-            let a = declare(1);
-            let b = declare(2);
+        let first = recorder.observed.get();
+        recorder.build(|| {
+            let a = recorder.declare(1);
+            let b = recorder.declare(2);
             let _group = GroupGuard::new(81);
             configure(b);
             configure(a);
         });
-        OBSERVED.with(|observed| {
-            let observed = observed.borrow();
+        recorder.observed.with(|observed| {
             assert!(first[0].slot == observed[0].slot);
             assert!(first[1].slot == observed[1].slot);
             assert!(observed[0].slot != observed[1].slot);
@@ -584,11 +614,14 @@ mod tests {
 
     #[test]
     fn aborted_fragments_discard_their_pending_uses() {
-        build(|| {
+        let _runtime_session = crate::RuntimeSession::new();
+        let _runtime_scope = _runtime_session.enter();
+        let recorder = Recorder::default();
+        recorder.build(|| {
             let mut abandoned = None;
             let error = catch_unwind(AssertUnwindSafe(|| {
                 with_pending_scope(|| {
-                    abandoned = Some(declare(99));
+                    abandoned = Some(recorder.declare(99));
                     panic!("abort fragment");
                 });
             }));
@@ -601,17 +634,20 @@ mod tests {
                 }))
                 .is_err()
             );
-            declare(7);
+            recorder.declare(7);
         });
-        assert_eq!(values(), [7]);
+        assert_eq!(recorder.values(), [7]);
     }
 
     #[test]
     fn runtime_reset_invalidates_pending_handles_without_reusing_their_tokens() {
-        build(|| {
-            let stale = declare(1);
+        let _runtime_session = crate::RuntimeSession::new();
+        let _runtime_scope = _runtime_session.enter();
+        let recorder = Recorder::default();
+        recorder.build(|| {
+            let stale = recorder.declare(1);
             reset_slots();
-            declare(2);
+            recorder.declare(2);
             assert!(
                 catch_unwind(AssertUnwindSafe(|| {
                     stale.configure("value", |props| props.value = 99);
@@ -619,37 +655,43 @@ mod tests {
                 .is_err()
             );
         });
-        assert_eq!(values(), [2]);
+        assert_eq!(recorder.values(), [2]);
     }
 
     #[test]
     fn configuration_can_register_more_calls_without_borrowing_the_pending_registry() {
-        build(|| {
-            let first = declare(1);
+        let _runtime_session = crate::RuntimeSession::new();
+        let _runtime_scope = _runtime_session.enter();
+        let recorder = Recorder::default();
+        recorder.build(|| {
+            let first = recorder.declare(1);
             first.configure("value", |props| {
                 props.value = 10;
-                declare(2);
+                recorder.declare(2);
             });
         });
-        assert_eq!(values(), [10, 2]);
+        assert_eq!(recorder.values(), [10, 2]);
     }
 
     #[test]
     fn superseded_configuration_captures_drop_outside_the_pending_registry_borrow() {
-        struct RegisterOnDrop;
+        let _runtime_session = crate::RuntimeSession::new();
+        let _runtime_scope = _runtime_session.enter();
+        let recorder = Recorder::default();
+        struct RegisterOnDrop(Recorder);
 
         impl Drop for RegisterOnDrop {
             fn drop(&mut self) {
-                declare(2);
+                self.0.declare(2);
             }
         }
 
-        build(|| {
-            let first = declare(1);
-            let capture = RegisterOnDrop;
+        recorder.build(|| {
+            let first = recorder.declare(1);
+            let capture = RegisterOnDrop(recorder.clone());
             first.configure_deferred("value", move |_| drop(capture));
             first.configure("value", |props| props.value = 10);
         });
-        assert_eq!(values(), [10, 2]);
+        assert_eq!(recorder.values(), [10, 2]);
     }
 }

@@ -4,8 +4,6 @@
 //!
 //! Preserve selection strokes and state colors across display densities.
 
-use std::cell::Cell;
-
 use tessera_ui::{
     Color, Dp, FocusDirection, FocusManager, HeadlessConfig, HeadlessRenderer, MOUSE_POINTER_ID,
     PressKeyEventType, PxPosition, State, remember, tessera,
@@ -28,14 +26,10 @@ struct Settings {
     tiny_stroke: bool,
 }
 
-thread_local! {
-    static SETTINGS: Cell<Option<State<Settings>>> = const { Cell::new(None) };
-}
-
 #[tessera]
-fn fixture() {
+fn fixture(probe: tessera_ui::testing::TestProbe<Option<State<Settings>>>) {
     let settings = remember(Settings::default);
-    SETTINGS.set(Some(settings));
+    probe.set(Some(settings));
     material_theme()
         .theme(|| {
             let mut theme = MaterialTheme::default();
@@ -70,8 +64,10 @@ fn fixture() {
 
 fn check_appearance(samples: u32) {
     for density in [2.0, 1.0, 1.25, 1.5] {
+        let probe = tessera_ui::testing::TestProbe::default();
+        let observed = probe.clone();
         let mut renderer = HeadlessRenderer::new(
-            Box::new(fixture),
+            Box::new(move || fixture(observed.clone())),
             vec![Box::new(crate::TesseraComponents)],
             HeadlessConfig {
                 width: 160,
@@ -83,7 +79,7 @@ fn check_appearance(samples: u32) {
         )
         .expect("renderer");
         renderer.render_frames(30);
-        let settings = SETTINGS.get().unwrap();
+        let settings = probe.get().unwrap();
         settings.with_mut(|value| value.mixed = true);
         renderer.render_frames(30);
         let bounds = renderer

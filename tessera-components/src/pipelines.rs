@@ -58,33 +58,35 @@ struct SharedQuadSlot {
     quad: SharedQuad,
 }
 
-thread_local! {
-    static SHARED_QUAD: RefCell<Option<SharedQuadSlot>> = const { RefCell::new(None) };
-}
+#[derive(Default)]
+struct SharedQuadCache(RefCell<Option<SharedQuadSlot>>);
 
 impl SharedQuad {
     fn clear() {
-        SHARED_QUAD.with(|cache| *cache.borrow_mut() = None);
+        let cache = tessera_ui::__private::local_runtime_resource::<SharedQuadCache>();
+        let removed = cache.0.replace(None);
+        drop(removed);
     }
 
     /// Returns the shared (0,0)-(1,1) quad buffers for `device`.
     ///
-    /// Repeated calls on the same device and thread reuse the buffers.
+    /// Repeated calls on the same device and runtime session reuse the buffers.
     pub(crate) fn get(device: &wgpu::Device) -> Self {
-        SHARED_QUAD.with(|cache| {
-            let mut cache = cache.borrow_mut();
-            if let Some(slot) = cache.as_ref()
-                && slot.device == *device
-            {
-                return slot.quad.clone();
-            }
-            let quad = Self::create(device);
-            *cache = Some(SharedQuadSlot {
-                device: device.clone(),
-                quad: quad.clone(),
-            });
-            quad
-        })
+        let cache = tessera_ui::__private::local_runtime_resource::<SharedQuadCache>();
+        let mut slot = cache.0.borrow_mut();
+        if let Some(slot) = slot.as_ref()
+            && slot.device == *device
+        {
+            return slot.quad.clone();
+        }
+        let quad = Self::create(device);
+        let removed = slot.replace(SharedQuadSlot {
+            device: device.clone(),
+            quad: quad.clone(),
+        });
+        drop(slot);
+        drop(removed);
+        quad
     }
 
     fn create(device: &wgpu::Device) -> Self {

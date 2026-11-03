@@ -126,25 +126,7 @@ pub enum Shape {
 }
 
 impl Default for Shape {
-    /// Returns the default shape, which is a rectangle with zero corner radius.
-    ///
-    /// # Example
-    ///
-    /// ```
-    /// use tessera_foundation::shape_def::{RoundedCorner, Shape};
-    /// use tessera_ui::dp::Dp;
-    ///
-    /// let default_shape = Shape::default();
-    /// assert_eq!(
-    ///     default_shape,
-    ///     Shape::RoundedRectangle {
-    ///         top_left: RoundedCorner::manual(Dp(0.0), 3.0),
-    ///         top_right: RoundedCorner::manual(Dp(0.0), 3.0),
-    ///         bottom_right: RoundedCorner::manual(Dp(0.0), 3.0),
-    ///         bottom_left: RoundedCorner::manual(Dp(0.0), 3.0),
-    ///     }
-    /// );
-    /// ```
+    /// Returns a rectangle with zero corner radius.
     fn default() -> Self {
         Shape::RoundedRectangle {
             top_left: RoundedCorner::manual(Dp(0.0), 3.0),

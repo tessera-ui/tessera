@@ -16,13 +16,13 @@ use tessera_foundation::{
     },
 };
 use tessera_ui::{
-    AccessibilityActionHandler, AccessibilityNode, Callback, CallbackWith, ComputedData,
-    FocusRequester, FocusState, KeyboardInput, KeyboardInputModifierNode, Modifier, PointerInput,
-    PointerInputModifierNode, PxPosition, PxSize, SemanticsModifierNode, State,
+    AccessibilityActionHandler, AccessibilityNode, BuildModifierNode, Callback, CallbackWith,
+    ComputedData, FocusRequester, FocusState, KeyboardInput, KeyboardInputModifierNode, Modifier,
+    ModifierBuildContext, PointerInput, PointerInputModifierNode, PxPosition, PxSize,
+    SemanticsModifierNode, State,
     accesskit::{self, Action, Toggled},
     current_frame_nanos,
     modifier::{CursorModifierExt as _, FocusModifierExt as _, ModifierCapabilityExt as _},
-    remember,
     winit::window::CursorIcon,
 };
 
@@ -71,7 +71,7 @@ where
 }
 
 fn has_keyboard_activation_event(
-    keyboard_events: &[tessera_ui::winit::event::KeyEvent],
+    keyboard_events: &[tessera_ui::KeyboardEvent],
     modifiers: tessera_ui::winit::keyboard::ModifiersState,
 ) -> bool {
     if modifiers.control_key() || modifiers.alt_key() || modifiers.super_key() {
@@ -130,7 +130,7 @@ enum TapRecognizerHandle {
 
 impl TapRecognizerHandle {
     fn new(state: Option<State<TapRecognizer>>) -> Self {
-        Self::State(state.unwrap_or_else(|| remember(TapRecognizer::default)))
+        Self::State(state.expect("materialized tap recognizer"))
     }
 
     fn with_mut<R>(&self, f: impl FnOnce(&mut TapRecognizer) -> R) -> R {
@@ -793,7 +793,7 @@ pub(crate) fn apply_clickable_modifier(base: Modifier, args: ClickableArgs) -> M
     apply_combined_clickable_modifier(base, args, None, true)
 }
 
-pub(crate) fn apply_combined_clickable_modifier(
+fn apply_combined_clickable_resolved(
     base: Modifier,
     args: ClickableArgs,
     on_long_click: Option<Callback>,
@@ -870,7 +870,7 @@ pub(crate) fn apply_combined_clickable_modifier(
         })
 }
 
-pub(crate) fn apply_toggleable_modifier(base: Modifier, args: ToggleableArgs) -> Modifier {
+fn apply_toggleable_resolved(base: Modifier, args: ToggleableArgs) -> Modifier {
     let ToggleableArgs {
         value,
         on_value_change,
@@ -930,7 +930,7 @@ pub(crate) fn apply_toggleable_modifier(base: Modifier, args: ToggleableArgs) ->
         })
 }
 
-pub(crate) fn apply_selectable_modifier(base: Modifier, args: SelectableArgs) -> Modifier {
+fn apply_selectable_resolved(base: Modifier, args: SelectableArgs) -> Modifier {
     let SelectableArgs {
         selected,
         on_click,
@@ -990,8 +990,7 @@ pub(crate) fn apply_selectable_modifier(base: Modifier, args: SelectableArgs) ->
 
 #[cfg(not(any(target_family = "wasm", target_os = "android", target_os = "ios")))]
 pub(crate) fn apply_window_drag_region_modifier(base: Modifier) -> Modifier {
-    let tap_recognizer = TapRecognizerHandle::new(None);
-    base.push_pointer_input(WindowDragRegionPointerModifierNode { tap_recognizer })
+    base.push_build(WindowDragBuild)
 }
 
 #[cfg(any(target_family = "wasm", target_os = "android", target_os = "ios"))]
@@ -1001,4 +1000,99 @@ pub(crate) fn apply_window_drag_region_modifier(base: Modifier) -> Modifier {
 
 pub(crate) fn apply_block_touch_propagation_modifier(base: Modifier) -> Modifier {
     base.push_pointer_input(BlockTouchPropagationPointerModifierNode)
+}
+
+struct ClickableBuild {
+    args: ClickableArgs,
+    on_long_click: Option<Callback>,
+    click_enabled: bool,
+}
+
+impl BuildModifierNode for ClickableBuild {
+    fn materialize(&self, context: &mut ModifierBuildContext) -> Option<Modifier> {
+        let mut args = self.args.clone();
+        args.tap_recognizer = Some(
+            args.tap_recognizer
+                .unwrap_or_else(|| context.state(TapRecognizer::default)),
+        );
+        args.focus_requester = Some(
+            args.focus_requester
+                .unwrap_or_else(|| context.state(FocusRequester::new).get()),
+        );
+        Some(apply_combined_clickable_resolved(
+            Modifier::new(),
+            args,
+            self.on_long_click,
+            self.click_enabled,
+        ))
+    }
+}
+
+pub(crate) fn apply_combined_clickable_modifier(
+    base: Modifier,
+    args: ClickableArgs,
+    on_long_click: Option<Callback>,
+    click_enabled: bool,
+) -> Modifier {
+    base.push_build(ClickableBuild {
+        args,
+        on_long_click,
+        click_enabled,
+    })
+}
+
+struct ToggleableBuild(ToggleableArgs);
+
+impl BuildModifierNode for ToggleableBuild {
+    fn materialize(&self, context: &mut ModifierBuildContext) -> Option<Modifier> {
+        let mut args = self.0.clone();
+        args.tap_recognizer = Some(
+            args.tap_recognizer
+                .unwrap_or_else(|| context.state(TapRecognizer::default)),
+        );
+        args.focus_requester = Some(
+            args.focus_requester
+                .unwrap_or_else(|| context.state(FocusRequester::new).get()),
+        );
+        Some(apply_toggleable_resolved(Modifier::new(), args))
+    }
+}
+
+pub(crate) fn apply_toggleable_modifier(base: Modifier, args: ToggleableArgs) -> Modifier {
+    base.push_build(ToggleableBuild(args))
+}
+
+struct SelectableBuild(SelectableArgs);
+
+impl BuildModifierNode for SelectableBuild {
+    fn materialize(&self, context: &mut ModifierBuildContext) -> Option<Modifier> {
+        let mut args = self.0.clone();
+        args.tap_recognizer = Some(
+            args.tap_recognizer
+                .unwrap_or_else(|| context.state(TapRecognizer::default)),
+        );
+        args.focus_requester = Some(
+            args.focus_requester
+                .unwrap_or_else(|| context.state(FocusRequester::new).get()),
+        );
+        Some(apply_selectable_resolved(Modifier::new(), args))
+    }
+}
+
+pub(crate) fn apply_selectable_modifier(base: Modifier, args: SelectableArgs) -> Modifier {
+    base.push_build(SelectableBuild(args))
+}
+
+#[cfg(not(any(target_family = "wasm", target_os = "android", target_os = "ios")))]
+struct WindowDragBuild;
+
+#[cfg(not(any(target_family = "wasm", target_os = "android", target_os = "ios")))]
+impl BuildModifierNode for WindowDragBuild {
+    fn materialize(&self, context: &mut ModifierBuildContext) -> Option<Modifier> {
+        let tap_recognizer = TapRecognizerHandle::new(Some(context.state(TapRecognizer::default)));
+        Some(
+            Modifier::new()
+                .push_pointer_input(WindowDragRegionPointerModifierNode { tap_recognizer }),
+        )
+    }
 }

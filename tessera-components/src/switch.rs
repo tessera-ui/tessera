@@ -472,8 +472,6 @@ pub fn switch(
 
     if controller.with(|c| c.is_animating()) {
         receive_frame_nanos(move |frame_nanos| {
-            #[cfg(test)]
-            motion_tests::TICKS.set(motion_tests::TICKS.get() + 1);
             let is_animating = controller.with_mut(|controller| {
                 controller.update_progress(frame_nanos);
                 controller.is_animating()
@@ -686,8 +684,6 @@ fn switch_content(
     }
     if geometry.with(Geometry::is_animating) {
         receive_frame_nanos(move |frame| {
-            #[cfg(test)]
-            motion_tests::TICKS.set(motion_tests::TICKS.get() + 1);
             let active = geometry.with_mut(|geometry| {
                 geometry.advance(frame);
                 geometry.is_animating()

@@ -2558,7 +2558,7 @@ impl TextEditorController {
     /// An optional vector of `glyphon::Action` to be applied to the editor.
     pub fn map_key_event_to_action(
         &mut self,
-        key_event: winit::event::KeyEvent,
+        key_event: tessera_ui::KeyboardEvent,
         key_modifiers: winit::keyboard::ModifiersState,
     ) -> Option<Vec<glyphon::Action>> {
         let is_ctrl = key_modifiers.control_key() || key_modifiers.super_key();
@@ -3038,7 +3038,6 @@ fn compute_selection_rects_for_range(
     compute_range_rects(buffer, selection_start, selection_end)
 }
 
-/// Compute selection rectangles for the given editor.
 fn compute_selection_rects(editor: &glyphon::Editor) -> Vec<RectDef> {
     let selection = match editor.selection() {
         Selection::None => None,
@@ -3348,7 +3347,6 @@ fn build_display_editor(
     editor
 }
 
-/// Clip rects to visible area and drop those fully outside.
 fn clip_and_take_visible(rects: Vec<RectDef>, visible_x1: Px, visible_y1: Px) -> Vec<RectDef> {
     let visible_x0 = Px(0);
     let visible_y0 = Px(0);
@@ -3616,7 +3614,6 @@ mod tests {
     use tessera_ui::{ComputedData, Dp, Px};
 
     mod layout_reuse {
-        use std::cell::{Cell, RefCell};
 
         use tessera_ui::{
             Dp, State,
@@ -3629,38 +3626,39 @@ mod tests {
             DisplayTransform, TextEditorController, TransformedText, text_edit_core,
         };
 
-        thread_local! {
-            static BUILDS: Cell<usize> = const { Cell::new(0) };
-            static CONTROLLER: RefCell<Option<State<TextEditorController>>> =
-                const { RefCell::new(None) };
+        #[derive(Clone, Default, PartialEq)]
+        struct Probe {
+            controller: tessera_ui::testing::TestProbe<Option<State<TextEditorController>>>,
+            transform: tessera_ui::testing::TestProbe<Option<DisplayTransform>>,
+            enabled: tessera_ui::testing::TestProbe<Option<State<bool>>>,
+            width: tessera_ui::testing::TestProbe<Option<State<i32>>>,
+            size: tessera_ui::testing::TestProbe<Option<tessera_ui::ComputedData>>,
         }
 
         #[tessera]
-        fn editor_cache_probe() {
+        fn editor_cache_contents(controller: State<TextEditorController>) {
+            let _ = controller.with(|controller| controller.layout_version());
+            text_edit_core().controller(controller);
+        }
+
+        #[tessera]
+        fn editor_cache_probe(probe: Probe) {
             let controller = remember(|| {
                 let mut controller = TextEditorController::new(Dp(14.0), None);
                 controller.set_text("a");
                 controller
             });
-            CONTROLLER.with(|slot| *slot.borrow_mut() = Some(controller));
+            probe.controller.set(Some(controller));
             layout().child(move || {
-                BUILDS.with(|builds| builds.set(builds.get() + 1));
-                let _ = controller.with(|c| c.layout_version());
-                text_edit_core().controller(controller);
+                editor_cache_contents(controller);
             });
-        }
-
-        thread_local! {
-            static DISPLAY_TRANSFORM: Cell<Option<DisplayTransform>> = const { Cell::new(None) };
-            static PROBE_ENABLED: Cell<Option<State<bool>>> = const {Cell::new(None)};
-            static PROBE_WIDTH: Cell<Option<State<i32>>> = const {Cell::new(None)};
-            static PROBE_SIZE: Cell<tessera_ui::ComputedData> = const {Cell::new(tessera_ui::ComputedData::ZERO)};
         }
 
         #[derive(Clone, PartialEq)]
         struct ProbeAfterFinal {
             enabled: State<bool>,
             width: State<i32>,
+            output: tessera_ui::testing::TestProbe<Option<tessera_ui::ComputedData>>,
         }
 
         impl tessera_ui::LayoutModifierNode for ProbeAfterFinal {
@@ -3682,7 +3680,7 @@ mod tests {
                             tessera_ui::AxisConstraint::NONE,
                         ),
                     )?;
-                    PROBE_SIZE.set(natural.size());
+                    self.output.set(Some(natural.size()));
                 }
                 let mut result = tessera_ui::layout::LayoutResult::new(normal.size());
                 result.place_child(child, tessera_ui::PxPosition::ZERO);
@@ -3691,27 +3689,29 @@ mod tests {
         }
 
         #[tessera]
-        fn intrinsic_editor_probe() {
+        fn intrinsic_editor_probe(probe: Probe) {
             let display_transform = DisplayTransform::new(|raw: String| {
                 TransformedText::from_strings(&raw, String::new())
             });
-            DISPLAY_TRANSFORM.set(Some(display_transform));
+            probe.transform.set(Some(display_transform));
             let controller = remember(|| {
                 let mut controller = TextEditorController::new(Dp(14.0), None);
                 controller.set_text("one two three four five six seven eight nine");
                 controller
             });
-            CONTROLLER.with(|slot| *slot.borrow_mut() = Some(controller));
+            probe.controller.set(Some(controller));
             let enabled = remember(|| false);
             let width = remember(|| 40_i32);
-            PROBE_ENABLED.set(Some(enabled));
-            PROBE_WIDTH.set(Some(width));
+            probe.enabled.set(Some(enabled));
+            probe.width.set(Some(width));
             layout()
-                .policy(ProbeAfterFinal { enabled, width })
+                .policy(ProbeAfterFinal {
+                    enabled,
+                    width,
+                    output: probe.size.clone(),
+                })
                 .child(move || {
-                    BUILDS.with(|builds| builds.set(builds.get() + 1));
-                    let _ = controller.with(|controller| controller.layout_version());
-                    text_edit_core().controller(controller);
+                    editor_cache_contents(controller);
                 });
         }
 
@@ -3721,14 +3721,18 @@ mod tests {
             use crate::{pipelines::text::command::TextConstraint, theme::TextStyle};
             use tessera_ui::Px;
 
-            BUILDS.set(0);
+            let probe = Probe::default();
+            let output = probe.clone();
             let mut session = start_layout_test_session(
-                layout_test(intrinsic_editor_probe).viewport_px(400, 200),
+                layout_test(move || {
+                    intrinsic_editor_probe(output.clone());
+                })
+                .viewport_px(400, 200),
             );
             for frame in 0..4 {
                 pump_layout_test_session(&mut session, frame * 16_666_667);
             }
-            let controller = CONTROLLER.with(|slot| slot.borrow().unwrap());
+            let controller = probe.controller.get().unwrap();
             let normal = TextConstraint {
                 max_width: Some(200.0),
                 max_height: Some(80.0),
@@ -3745,7 +3749,7 @@ mod tests {
                 )
             });
             assert!(before.2.is_some());
-            PROBE_ENABLED.get().unwrap().set(true);
+            probe.enabled.get().unwrap().set(true);
             for frame in 4..8 {
                 pump_layout_test_session(&mut session, frame * 16_666_667);
             }
@@ -3764,21 +3768,21 @@ mod tests {
                 after, before,
                 "intrinsic probing must not publish editor viewport, draw snapshot, cursor, IME or scroll changes"
             );
-            let narrow = PROBE_SIZE.get();
+            let narrow = probe.size.get().unwrap();
             assert!(narrow.height > Px(before.1[1] as i32));
-            PROBE_WIDTH.get().unwrap().set(80);
+            probe.width.get().unwrap().set(80);
             for frame in 8..11 {
                 pump_layout_test_session(&mut session, frame * 16_666_667);
             }
             assert!(
-                PROBE_SIZE.get().height < narrow.height,
+                probe.size.get().unwrap().height < narrow.height,
                 "a wider intrinsic constraint must reshape wrapped content"
             );
             controller.with_mut(|controller| controller.set_text("hi"));
             for frame in 11..14 {
                 pump_layout_test_session(&mut session, frame * 16_666_667);
             }
-            let short = PROBE_SIZE.get();
+            let short = probe.size.get().unwrap();
             assert!(short.height < narrow.height);
             controller.with_mut(|controller| {
                 controller.set_text_style(TextStyle {
@@ -3790,15 +3794,15 @@ mod tests {
             for frame in 14..17 {
                 pump_layout_test_session(&mut session, frame * 16_666_667);
             }
-            assert!(PROBE_SIZE.get().height >= Px(44));
-            assert!(PROBE_SIZE.get().height > short.height);
+            assert!(probe.size.get().unwrap().height >= Px(44));
+            assert!(probe.size.get().unwrap().height > short.height);
             controller
-                .with_mut(|controller| controller.set_display_transform(DISPLAY_TRANSFORM.get()));
+                .with_mut(|controller| controller.set_display_transform(probe.transform.get()));
             for frame in 17..20 {
                 pump_layout_test_session(&mut session, frame * 16_666_667);
             }
             assert_eq!(
-                PROBE_SIZE.get().width,
+                probe.size.get().unwrap().width,
                 CURSOR_WIDTH.to_px(),
                 "intrinsic sizing must use transformed display text"
             );
@@ -3816,12 +3820,16 @@ mod tests {
                     (Some(200.0), Some(80.0))
                 );
             });
-            let settled = BUILDS.get();
+            let settled = session
+                .work_totals()
+                .count("editor_cache_contents", tessera_ui::WorkPhase::Build);
             for frame in 20..28 {
                 pump_layout_test_session(&mut session, frame * 16_666_667);
             }
             assert_eq!(
-                BUILDS.get(),
+                session
+                    .work_totals()
+                    .count("editor_cache_contents", tessera_ui::WorkPhase::Build),
                 settled,
                 "a cached intrinsic probe must not perpetually invalidate editor readers"
             );
@@ -3829,29 +3837,42 @@ mod tests {
 
         #[test]
         fn cached_text_measurement_stops_rebuilding_without_edits() {
-            BUILDS.with(|builds| builds.set(0));
+            let probe = Probe::default();
+            let output = probe.clone();
             let mut session = start_layout_test_session(
-                layout_test(|| {
-                    editor_cache_probe();
+                layout_test(move || {
+                    editor_cache_probe(output.clone());
                 })
                 .viewport_px(400, 100),
             );
             for frame in 0..4 {
                 let _ = pump_layout_test_session(&mut session, frame * 16_666_667);
             }
-            let settled_builds = BUILDS.with(Cell::get);
+            let settled_builds = session
+                .work_totals()
+                .count("editor_cache_contents", tessera_ui::WorkPhase::Build);
             for frame in 4..12 {
                 let _ = pump_layout_test_session(&mut session, frame * 16_666_667);
             }
-            assert_eq!(BUILDS.with(Cell::get), settled_builds);
+            assert_eq!(
+                session
+                    .work_totals()
+                    .count("editor_cache_contents", tessera_ui::WorkPhase::Build),
+                settled_builds
+            );
 
-            let controller = CONTROLLER.with(|slot| slot.borrow().expect("editor controller"));
+            let controller = probe.controller.get().expect("editor controller");
             let initial_width = controller.with(|c| c.current_text_data().unwrap().size[0]);
             controller.with_mut(|c| c.set_text("a much longer value"));
             for frame in 12..16 {
                 let _ = pump_layout_test_session(&mut session, frame * 16_666_667);
             }
-            assert!(BUILDS.with(Cell::get) > settled_builds);
+            assert!(
+                session
+                    .work_totals()
+                    .count("editor_cache_contents", tessera_ui::WorkPhase::Build)
+                    > settled_builds
+            );
             assert!(controller.with(|c| c.current_text_data().unwrap().size[0]) > initial_width);
         }
     }
@@ -3860,6 +3881,22 @@ mod tests {
         let mut controller = TextEditorController::new(Dp(14.0), None);
         controller.set_text(text);
         controller
+    }
+
+    fn cursor_position_at_raw(controller: &TextEditorController, raw: usize) -> (i32, i32) {
+        let buffer = controller.snapshot_buffer().expect("transformed layout");
+        let offset = controller
+            .layout_state
+            .transformed_text()
+            .expect("display mapping")
+            .map_from_raw(raw);
+        build_display_editor(
+            buffer.clone(),
+            text_offset_to_cursor_in_buffer(&buffer, offset),
+            None,
+        )
+        .cursor_position()
+        .expect("display cursor")
     }
 
     fn prepare_transformed_layout(
@@ -3897,6 +3934,8 @@ mod tests {
 
     #[test]
     fn single_line_typography_resize_keeps_fitting_text_at_the_top_of_its_viewport() {
+        let runtime = tessera_ui::RuntimeSession::new();
+        let _scope = runtime.enter();
         let mut controller = TextEditorController::new(Dp(16.0), Some(Dp(24.0)));
         controller.set_single_line(true);
         controller.set_text("Carmen");
@@ -3924,6 +3963,8 @@ mod tests {
 
     #[test]
     fn text_data_reuses_cached_snapshot_for_same_layout_key() {
+        let runtime = tessera_ui::RuntimeSession::new();
+        let _scope = runtime.enter();
         let mut controller = controller_with_text("hello");
         let constraint = TextConstraint {
             max_width: Some(240.0),
@@ -3980,6 +4021,8 @@ mod tests {
 
     #[test]
     fn scroll_horizontal_by_reuses_text_layout_cache_and_syncs_editor_scroll() {
+        let runtime = tessera_ui::RuntimeSession::new();
+        let _scope = runtime.enter();
         let mut controller =
             controller_with_text("hello world hello world hello world hello world");
         controller.set_single_line(true);
@@ -4014,6 +4057,8 @@ mod tests {
 
     #[test]
     fn horizontal_overflow_reports_and_clamps_consumed_scroll() {
+        let runtime = tessera_ui::RuntimeSession::new();
+        let _scope = runtime.enter();
         let mut controller =
             controller_with_text("hello world hello world hello world hello world");
         controller.set_single_line(true);
@@ -4032,6 +4077,8 @@ mod tests {
 
     #[test]
     fn vertical_overflow_is_detected_for_wrapped_content() {
+        let runtime = tessera_ui::RuntimeSession::new();
+        let _scope = runtime.enter();
         let mut controller = controller_with_text("111\n222\n333\n444\n555\n666\n777\n888");
         controller.text_data(TextConstraint {
             max_width: Some(120.0),
@@ -4042,6 +4089,8 @@ mod tests {
 
     #[test]
     fn vertical_consumed_scroll_stops_at_the_content_boundary() {
+        let runtime = tessera_ui::RuntimeSession::new();
+        let _scope = runtime.enter();
         let mut controller = controller_with_text("111\n222\n333\n444\n555\n666\n777\n888");
         controller.text_data(TextConstraint {
             max_width: Some(120.0),
@@ -4055,6 +4104,8 @@ mod tests {
 
     #[test]
     fn ensure_cursor_visible_keeps_scroll_state_in_sync_with_editor_scroll() {
+        let runtime = tessera_ui::RuntimeSession::new();
+        let _scope = runtime.enter();
         let text = "hello world hello world hello world hello world";
         let mut controller = controller_with_text(text);
         controller.set_single_line(true);
@@ -4073,6 +4124,8 @@ mod tests {
 
     #[test]
     fn scroll_vertical_by_reuses_text_layout_cache_and_syncs_scroll_state() {
+        let runtime = tessera_ui::RuntimeSession::new();
+        let _scope = runtime.enter();
         let mut controller = controller_with_text("111\n222\n333\n444\n555\n666\n777\n888");
         let constraint = TextConstraint {
             max_width: Some(120.0),
@@ -4099,6 +4152,8 @@ mod tests {
 
     #[test]
     fn current_raw_layout_editor_preserves_backward_selection_direction() {
+        let runtime = tessera_ui::RuntimeSession::new();
+        let _scope = runtime.enter();
         let mut controller = controller_with_text("hello");
         controller.set_text_and_selection("hello", TextSelection { start: 4, end: 1 });
         controller.text_data(TextConstraint {
@@ -4125,6 +4180,8 @@ mod tests {
 
     #[test]
     fn current_layout_geometry_renders_backward_selection_rects() {
+        let runtime = tessera_ui::RuntimeSession::new();
+        let _scope = runtime.enter();
         let mut controller = controller_with_text("hello");
         controller.set_text_and_selection("hello", TextSelection { start: 4, end: 1 });
 
@@ -4137,6 +4194,8 @@ mod tests {
 
     #[test]
     fn collapse_selection_left_moves_cursor_to_selection_start() {
+        let runtime = tessera_ui::RuntimeSession::new();
+        let _scope = runtime.enter();
         let mut controller = controller_with_text("hello");
         controller.set_text_and_selection("hello", TextSelection { start: 1, end: 4 });
 
@@ -4147,6 +4206,8 @@ mod tests {
 
     #[test]
     fn collapse_selection_right_moves_cursor_to_selection_end() {
+        let runtime = tessera_ui::RuntimeSession::new();
+        let _scope = runtime.enter();
         let mut controller = controller_with_text("hello");
         controller.set_text_and_selection("hello", TextSelection { start: 1, end: 4 });
 
@@ -4155,283 +4216,207 @@ mod tests {
         assert!(controller.editor().selection_bounds().is_none());
     }
 
-    #[test]
-    fn handle_named_key_arrow_up_collapses_selection_to_start() {
-        let mut controller = controller_with_text("111\n222\n333");
-        controller.set_text_and_selection("111\n222\n333", TextSelection { start: 8, end: 4 });
-
-        assert_eq!(
-            controller.handle_named_key(NamedKey::ArrowUp, false, false),
-            None
+    fn assert_named_key_sequence(
+        text: &str,
+        display: Option<&str>,
+        initial: [usize; 2],
+        key: NamedKey,
+        ctrl: bool,
+        shift: bool,
+        expected: &[[usize; 2]],
+    ) {
+        let mut controller = controller_with_text(text);
+        if let Some(display) = display {
+            prepare_transformed_layout(
+                &mut controller,
+                TransformedText::from_strings(text, display.to_string()),
+            );
+        }
+        controller.set_text_and_selection(
+            text,
+            TextSelection {
+                start: initial[0],
+                end: initial[1],
+            },
         );
-        assert_eq!(controller.cursor_offset(), 4);
-        assert_eq!(controller.selection(), TextSelection::collapsed(4));
+        for &[start, end] in expected {
+            assert_eq!(controller.handle_named_key(key, ctrl, shift), None);
+            assert_eq!(
+                controller.selection(),
+                TextSelection { start, end },
+                "{text:?} {key:?} ctrl={ctrl} shift={shift}"
+            );
+            assert_eq!(controller.cursor_offset(), end);
+        }
     }
 
     #[test]
-    fn handle_named_key_arrow_down_collapses_selection_to_end() {
-        let mut controller = controller_with_text("111\n222\n333");
-        controller.set_text_and_selection("111\n222\n333", TextSelection { start: 8, end: 4 });
-
-        assert_eq!(
-            controller.handle_named_key(NamedKey::ArrowDown, false, false),
-            None
-        );
-        assert_eq!(controller.cursor_offset(), 8);
-        assert_eq!(controller.selection(), TextSelection::collapsed(8));
-    }
-
-    #[test]
-    fn handle_named_key_page_up_collapses_selection_to_start() {
-        let mut controller = controller_with_text("111\n222\n333\n444");
-        controller
-            .set_text_and_selection("111\n222\n333\n444", TextSelection { start: 10, end: 4 });
-
-        assert_eq!(
-            controller.handle_named_key(NamedKey::PageUp, false, false),
-            None
-        );
-        assert_eq!(controller.cursor_offset(), 4);
-        assert_eq!(controller.selection(), TextSelection::collapsed(4));
-    }
-
-    #[test]
-    fn handle_named_key_page_down_collapses_selection_to_end() {
-        let mut controller = controller_with_text("111\n222\n333\n444");
-        controller
-            .set_text_and_selection("111\n222\n333\n444", TextSelection { start: 10, end: 4 });
-
-        assert_eq!(
-            controller.handle_named_key(NamedKey::PageDown, false, false),
-            None
-        );
-        assert_eq!(controller.cursor_offset(), 10);
-        assert_eq!(controller.selection(), TextSelection::collapsed(10));
-    }
-
-    #[test]
-    fn handle_named_key_ctrl_arrow_down_moves_to_next_paragraph_start() {
-        let mut controller = controller_with_text("111\n\n222\n\n333");
-        controller.set_text_and_selection("111\n\n222\n\n333", TextSelection::collapsed(1));
-
-        assert_eq!(
-            controller.handle_named_key(NamedKey::ArrowDown, true, false),
-            None
-        );
-        assert_eq!(controller.cursor_offset(), 5);
-
-        assert_eq!(
-            controller.handle_named_key(NamedKey::ArrowDown, true, false),
-            None
-        );
-        assert_eq!(controller.cursor_offset(), 10);
-    }
-
-    #[test]
-    fn handle_named_key_ctrl_arrow_up_moves_to_previous_paragraph_start() {
-        let mut controller = controller_with_text("111\n\n222\n\n333");
-        controller.set_text_and_selection("111\n\n222\n\n333", TextSelection::collapsed(10));
-
-        assert_eq!(
-            controller.handle_named_key(NamedKey::ArrowUp, true, false),
-            None
-        );
-        assert_eq!(controller.cursor_offset(), 5);
-
-        assert_eq!(
-            controller.handle_named_key(NamedKey::ArrowUp, true, false),
-            None
-        );
-        assert_eq!(controller.cursor_offset(), 0);
-    }
-
-    #[test]
-    fn handle_named_key_ctrl_arrow_up_collapses_selection_to_start() {
-        let mut controller = controller_with_text("111\n\n222\n\n333");
-        controller.set_text_and_selection("111\n\n222\n\n333", TextSelection { start: 9, end: 5 });
-
-        assert_eq!(
-            controller.handle_named_key(NamedKey::ArrowUp, true, false),
-            None
-        );
-        assert_eq!(controller.cursor_offset(), 5);
-        assert_eq!(controller.selection(), TextSelection::collapsed(5));
-    }
-
-    #[test]
-    fn handle_named_key_ctrl_arrow_down_collapses_selection_to_end() {
-        let mut controller = controller_with_text("111\n\n222\n\n333");
-        controller.set_text_and_selection("111\n\n222\n\n333", TextSelection { start: 9, end: 5 });
-
-        assert_eq!(
-            controller.handle_named_key(NamedKey::ArrowDown, true, false),
-            None
-        );
-        assert_eq!(controller.cursor_offset(), 9);
-        assert_eq!(controller.selection(), TextSelection::collapsed(9));
-    }
-
-    #[test]
-    fn handle_named_key_ctrl_shift_arrow_down_extends_to_next_paragraph_start() {
-        let mut controller = controller_with_text("111\n\n222\n\n333");
-        controller.set_text_and_selection("111\n\n222\n\n333", TextSelection::collapsed(1));
-
-        assert_eq!(
-            controller.handle_named_key(NamedKey::ArrowDown, true, true),
-            None
-        );
-        assert_eq!(controller.selection(), TextSelection { start: 1, end: 5 });
-    }
-
-    #[test]
-    fn handle_named_key_ctrl_shift_arrow_up_extends_to_previous_paragraph_start() {
-        let mut controller = controller_with_text("111\n\n222\n\n333");
-        controller.set_text_and_selection("111\n\n222\n\n333", TextSelection::collapsed(10));
-
-        assert_eq!(
-            controller.handle_named_key(NamedKey::ArrowUp, true, true),
-            None
-        );
-        assert_eq!(controller.selection(), TextSelection { start: 10, end: 5 });
-    }
-
-    #[test]
-    fn handle_named_key_ctrl_arrow_down_uses_transformed_paragraph_boundaries() {
-        let mut controller = controller_with_text("123456\n\nabcdef\n\nghijkl");
-        prepare_transformed_layout(
-            &mut controller,
-            TransformedText::from_strings(
-                "123456\n\nabcdef\n\nghijkl",
-                "123 456\n\nabc def\n\nghi jkl".to_string(),
+    fn named_keys_collapse_selections_and_traverse_or_extend_paragraphs() {
+        let runtime = tessera_ui::RuntimeSession::new();
+        let _scope = runtime.enter();
+        for (text, initial, key, ctrl, shift, expected) in [
+            (
+                "111\n222\n333",
+                [8, 4],
+                NamedKey::ArrowUp,
+                false,
+                false,
+                &[[4, 4]][..],
             ),
-        );
-        controller
-            .set_text_and_selection("123456\n\nabcdef\n\nghijkl", TextSelection::collapsed(4));
-
-        assert_eq!(
-            controller.handle_named_key(NamedKey::ArrowDown, true, false),
-            None
-        );
-        assert_eq!(controller.cursor_offset(), 8);
-
-        assert_eq!(
-            controller.handle_named_key(NamedKey::ArrowDown, true, false),
-            None
-        );
-        assert_eq!(controller.cursor_offset(), 16);
-    }
-
-    #[test]
-    fn handle_named_key_ctrl_arrow_up_uses_transformed_paragraph_boundaries() {
-        let mut controller = controller_with_text("123456\n\nabcdef\n\nghijkl");
-        prepare_transformed_layout(
-            &mut controller,
-            TransformedText::from_strings(
-                "123456\n\nabcdef\n\nghijkl",
-                "123 456\n\nabc def\n\nghi jkl".to_string(),
+            (
+                "111\n222\n333",
+                [8, 4],
+                NamedKey::ArrowDown,
+                false,
+                false,
+                &[[8, 8]][..],
             ),
-        );
-        controller
-            .set_text_and_selection("123456\n\nabcdef\n\nghijkl", TextSelection::collapsed(16));
-
-        assert_eq!(
-            controller.handle_named_key(NamedKey::ArrowUp, true, false),
-            None
-        );
-        assert_eq!(controller.cursor_offset(), 8);
-
-        assert_eq!(
-            controller.handle_named_key(NamedKey::ArrowUp, true, false),
-            None
-        );
-        assert_eq!(controller.cursor_offset(), 0);
-    }
-
-    #[test]
-    fn handle_named_key_ctrl_shift_arrow_up_uses_transformed_paragraph_boundaries() {
-        let mut controller = controller_with_text("123456\n\nabcdef\n\nghijkl");
-        prepare_transformed_layout(
-            &mut controller,
-            TransformedText::from_strings(
-                "123456\n\nabcdef\n\nghijkl",
-                "123 456\n\nabc def\n\nghi jkl".to_string(),
+            (
+                "111\n222\n333\n444",
+                [10, 4],
+                NamedKey::PageUp,
+                false,
+                false,
+                &[[4, 4]][..],
             ),
-        );
-        controller
-            .set_text_and_selection("123456\n\nabcdef\n\nghijkl", TextSelection::collapsed(16));
-
-        assert_eq!(
-            controller.handle_named_key(NamedKey::ArrowUp, true, true),
-            None
-        );
-        assert_eq!(controller.selection(), TextSelection { start: 16, end: 8 });
+            (
+                "111\n222\n333\n444",
+                [10, 4],
+                NamedKey::PageDown,
+                false,
+                false,
+                &[[10, 10]][..],
+            ),
+            (
+                "111\n\n222\n\n333",
+                [1, 1],
+                NamedKey::ArrowDown,
+                true,
+                false,
+                &[[5, 5], [10, 10]][..],
+            ),
+            (
+                "111\n\n222\n\n333",
+                [10, 10],
+                NamedKey::ArrowUp,
+                true,
+                false,
+                &[[5, 5], [0, 0]][..],
+            ),
+            (
+                "111\n\n222\n\n333",
+                [9, 5],
+                NamedKey::ArrowUp,
+                true,
+                false,
+                &[[5, 5]][..],
+            ),
+            (
+                "111\n\n222\n\n333",
+                [9, 5],
+                NamedKey::ArrowDown,
+                true,
+                false,
+                &[[9, 9]][..],
+            ),
+            (
+                "111\n\n222\n\n333",
+                [1, 1],
+                NamedKey::ArrowDown,
+                true,
+                true,
+                &[[1, 5]][..],
+            ),
+            (
+                "111\n\n222\n\n333",
+                [10, 10],
+                NamedKey::ArrowUp,
+                true,
+                true,
+                &[[10, 5]][..],
+            ),
+        ] {
+            assert_named_key_sequence(text, None, initial, key, ctrl, shift, expected);
+        }
     }
 
     #[test]
-    fn handle_named_key_ctrl_home_uses_transformed_buffer_start() {
-        let mut controller = controller_with_text("123456\nabcdef");
-        prepare_transformed_layout(
-            &mut controller,
-            TransformedText::from_strings("123456\nabcdef", "123 456\nabc def".to_string()),
-        );
-        controller.set_text_and_selection("123456\nabcdef", TextSelection::collapsed(11));
-
-        assert_eq!(
-            controller.handle_named_key(NamedKey::Home, true, false),
-            None
-        );
-        assert_eq!(controller.cursor_offset(), 0);
-        assert_eq!(controller.selection(), TextSelection::collapsed(0));
-    }
-
-    #[test]
-    fn handle_named_key_ctrl_end_uses_transformed_buffer_end() {
-        let mut controller = controller_with_text("123456\nabcdef");
-        prepare_transformed_layout(
-            &mut controller,
-            TransformedText::from_strings("123456\nabcdef", "123 456\nabc def".to_string()),
-        );
-        controller.set_text_and_selection("123456\nabcdef", TextSelection::collapsed(1));
-
-        assert_eq!(
-            controller.handle_named_key(NamedKey::End, true, false),
-            None
-        );
-        assert_eq!(controller.cursor_offset(), 13);
-        assert_eq!(controller.selection(), TextSelection::collapsed(13));
-    }
-
-    #[test]
-    fn handle_named_key_ctrl_shift_home_uses_transformed_buffer_start() {
-        let mut controller = controller_with_text("123456\nabcdef");
-        prepare_transformed_layout(
-            &mut controller,
-            TransformedText::from_strings("123456\nabcdef", "123 456\nabc def".to_string()),
-        );
-        controller.set_text_and_selection("123456\nabcdef", TextSelection::collapsed(11));
-
-        assert_eq!(
-            controller.handle_named_key(NamedKey::Home, true, true),
-            None
-        );
-        assert_eq!(controller.selection(), TextSelection { start: 11, end: 0 });
-    }
-
-    #[test]
-    fn handle_named_key_ctrl_shift_end_uses_transformed_buffer_end() {
-        let mut controller = controller_with_text("123456\nabcdef");
-        prepare_transformed_layout(
-            &mut controller,
-            TransformedText::from_strings("123456\nabcdef", "123 456\nabc def".to_string()),
-        );
-        controller.set_text_and_selection("123456\nabcdef", TextSelection::collapsed(1));
-
-        assert_eq!(controller.handle_named_key(NamedKey::End, true, true), None);
-        assert_eq!(controller.selection(), TextSelection { start: 1, end: 13 });
+    fn named_keys_map_transformed_paragraphs_and_document_boundaries_to_raw_offsets() {
+        let runtime = tessera_ui::RuntimeSession::new();
+        let _scope = runtime.enter();
+        for (text, display, initial, key, ctrl, shift, expected) in [
+            (
+                "123456\n\nabcdef\n\nghijkl",
+                "123 456\n\nabc def\n\nghi jkl",
+                [4, 4],
+                NamedKey::ArrowDown,
+                true,
+                false,
+                &[[8, 8], [16, 16]][..],
+            ),
+            (
+                "123456\n\nabcdef\n\nghijkl",
+                "123 456\n\nabc def\n\nghi jkl",
+                [16, 16],
+                NamedKey::ArrowUp,
+                true,
+                false,
+                &[[8, 8], [0, 0]][..],
+            ),
+            (
+                "123456\n\nabcdef\n\nghijkl",
+                "123 456\n\nabc def\n\nghi jkl",
+                [16, 16],
+                NamedKey::ArrowUp,
+                true,
+                true,
+                &[[16, 8]][..],
+            ),
+            (
+                "123456\nabcdef",
+                "123 456\nabc def",
+                [11, 11],
+                NamedKey::Home,
+                true,
+                false,
+                &[[0, 0]][..],
+            ),
+            (
+                "123456\nabcdef",
+                "123 456\nabc def",
+                [1, 1],
+                NamedKey::End,
+                true,
+                false,
+                &[[13, 13]][..],
+            ),
+            (
+                "123456\nabcdef",
+                "123 456\nabc def",
+                [11, 11],
+                NamedKey::Home,
+                true,
+                true,
+                &[[11, 0]][..],
+            ),
+            (
+                "123456\nabcdef",
+                "123 456\nabc def",
+                [1, 1],
+                NamedKey::End,
+                true,
+                true,
+                &[[1, 13]][..],
+            ),
+        ] {
+            assert_named_key_sequence(text, Some(display), initial, key, ctrl, shift, expected);
+        }
     }
 
     #[test]
     fn extend_selection_with_motion_creates_selection_from_cursor() {
+        let runtime = tessera_ui::RuntimeSession::new();
+        let _scope = runtime.enter();
         let mut controller = controller_with_text("hello");
         controller.set_text_and_selection("hello", TextSelection::collapsed(1));
 
@@ -4441,6 +4426,8 @@ mod tests {
 
     #[test]
     fn extend_selection_with_motion_clears_when_returning_to_anchor() {
+        let runtime = tessera_ui::RuntimeSession::new();
+        let _scope = runtime.enter();
         let mut controller = controller_with_text("hello");
         controller.set_text_and_selection("hello", TextSelection::collapsed(1));
 
@@ -4452,6 +4439,8 @@ mod tests {
 
     #[test]
     fn extend_selection_with_word_motion_reaches_next_word_boundary() {
+        let runtime = tessera_ui::RuntimeSession::new();
+        let _scope = runtime.enter();
         let mut controller = controller_with_text("hello world");
         controller.set_text_and_selection("hello world", TextSelection::collapsed(0));
 
@@ -4461,6 +4450,8 @@ mod tests {
 
     #[test]
     fn extend_selection_to_point_selects_from_existing_cursor_anchor() {
+        let runtime = tessera_ui::RuntimeSession::new();
+        let _scope = runtime.enter();
         let mut controller = controller_with_text("hello");
         controller.set_text_and_selection("hello", TextSelection::collapsed(1));
 
@@ -4476,6 +4467,8 @@ mod tests {
 
     #[test]
     fn extend_selection_to_point_clears_when_pointing_back_to_anchor() {
+        let runtime = tessera_ui::RuntimeSession::new();
+        let _scope = runtime.enter();
         let mut controller = controller_with_text("hello");
         controller.set_text_and_selection("hello", TextSelection::collapsed(1));
         let anchor_pos = controller
@@ -4500,6 +4493,8 @@ mod tests {
 
     #[test]
     fn set_text_and_selection_keeps_single_line_caret_in_view() {
+        let runtime = tessera_ui::RuntimeSession::new();
+        let _scope = runtime.enter();
         let text = "hello world hello world";
         let mut controller = controller_with_text(text);
         controller.with_editor_mut(|editor| {
@@ -4513,6 +4508,8 @@ mod tests {
 
     #[test]
     fn set_text_and_selection_resets_cursor_blink_phase() {
+        let runtime = tessera_ui::RuntimeSession::new();
+        let _scope = runtime.enter();
         let mut controller = controller_with_text("hello");
         controller.update_frame_nanos(123);
         controller.blink_start_frame_nanos = 0;
@@ -4525,6 +4522,8 @@ mod tests {
 
     #[test]
     fn select_all_marks_full_text_selection() {
+        let runtime = tessera_ui::RuntimeSession::new();
+        let _scope = runtime.enter();
         let mut controller = controller_with_text("hello");
 
         controller.select_all();
@@ -4535,6 +4534,8 @@ mod tests {
 
     #[test]
     fn apply_pointer_action_maps_raw_double_click_to_word_selection() {
+        let runtime = tessera_ui::RuntimeSession::new();
+        let _scope = runtime.enter();
         let mut controller = controller_with_text("foo bar");
         controller.set_text_and_selection("foo bar", TextSelection::collapsed(5));
         let (x, y) = controller
@@ -4550,6 +4551,8 @@ mod tests {
 
     #[test]
     fn apply_pointer_action_maps_raw_double_click_drag_to_word_selection() {
+        let runtime = tessera_ui::RuntimeSession::new();
+        let _scope = runtime.enter();
         let mut controller = controller_with_text("foo bar baz");
         controller.set_text_and_selection("foo bar baz", TextSelection::collapsed(5));
         let (start_x, start_y) = controller
@@ -4575,6 +4578,8 @@ mod tests {
 
     #[test]
     fn apply_pointer_action_maps_raw_double_click_drag_to_backward_word_selection() {
+        let runtime = tessera_ui::RuntimeSession::new();
+        let _scope = runtime.enter();
         let mut controller = controller_with_text("foo bar baz");
         controller.set_text_and_selection("foo bar baz", TextSelection::collapsed(5));
         let (start_x, start_y) = controller
@@ -4600,6 +4605,8 @@ mod tests {
 
     #[test]
     fn apply_pointer_action_maps_raw_triple_click_to_line_selection() {
+        let runtime = tessera_ui::RuntimeSession::new();
+        let _scope = runtime.enter();
         let mut controller = controller_with_text("111\n222\n333");
         controller.set_text_and_selection("111\n222\n333", TextSelection::collapsed(5));
         let (x, y) = controller
@@ -4615,6 +4622,8 @@ mod tests {
 
     #[test]
     fn apply_pointer_action_maps_raw_triple_click_drag_to_line_selection() {
+        let runtime = tessera_ui::RuntimeSession::new();
+        let _scope = runtime.enter();
         let mut controller = controller_with_text("111\n222\n333");
         controller.set_text_and_selection("111\n222\n333", TextSelection::collapsed(5));
         let (start_x, start_y) = controller
@@ -4640,6 +4649,8 @@ mod tests {
 
     #[test]
     fn apply_pointer_action_maps_raw_triple_click_drag_to_backward_line_selection() {
+        let runtime = tessera_ui::RuntimeSession::new();
+        let _scope = runtime.enter();
         let mut controller = controller_with_text("111\n222\n333");
         controller.set_text_and_selection("111\n222\n333", TextSelection::collapsed(5));
         let (start_x, start_y) = controller
@@ -4685,6 +4696,8 @@ mod tests {
 
     #[test]
     fn apply_pointer_action_maps_transformed_click_to_raw_cursor_offset() {
+        let runtime = tessera_ui::RuntimeSession::new();
+        let _scope = runtime.enter();
         let mut controller = controller_with_text("1234567890");
         let transformed = prepare_transformed_layout(
             &mut controller,
@@ -4711,6 +4724,8 @@ mod tests {
 
     #[test]
     fn apply_pointer_action_click_below_single_line_moves_cursor_to_nearest_offset() {
+        let runtime = tessera_ui::RuntimeSession::new();
+        let _scope = runtime.enter();
         let mut controller = controller_with_text("hello");
         let constraint = TextConstraint {
             max_width: Some(240.0),
@@ -4734,28 +4749,14 @@ mod tests {
 
     #[test]
     fn apply_pointer_action_maps_transformed_double_click_to_raw_word_selection() {
+        let runtime = tessera_ui::RuntimeSession::new();
+        let _scope = runtime.enter();
         let mut controller = controller_with_text("1234567890");
-        let transformed = prepare_transformed_layout(
+        prepare_transformed_layout(
             &mut controller,
             TransformedText::from_strings("1234567890", "123 456 7890".to_string()),
         );
-        let buffer = controller
-            .snapshot_buffer()
-            .expect("transformed layout buffer should exist");
-        let display_offset = transformed.map_from_raw(4);
-        let display_editor = build_display_editor(
-            buffer,
-            text_offset_to_cursor_in_buffer(
-                &controller
-                    .snapshot_buffer()
-                    .expect("transformed layout buffer should exist"),
-                display_offset,
-            ),
-            None,
-        );
-        let (x, y) = display_editor
-            .cursor_position()
-            .expect("transformed cursor position should be available");
+        let (x, y) = cursor_position_at_raw(&controller, 4);
 
         controller.apply_pointer_action(GlyphonAction::DoubleClick { x, y });
 
@@ -4765,35 +4766,15 @@ mod tests {
 
     #[test]
     fn apply_pointer_action_maps_transformed_double_click_drag_to_raw_word_selection() {
+        let runtime = tessera_ui::RuntimeSession::new();
+        let _scope = runtime.enter();
         let mut controller = controller_with_text("1234567890");
-        let transformed = prepare_transformed_layout(
+        prepare_transformed_layout(
             &mut controller,
             TransformedText::from_strings("1234567890", "123 456 7890".to_string()),
         );
-        let buffer = controller
-            .snapshot_buffer()
-            .expect("transformed layout buffer should exist");
-        let start_editor = build_display_editor(
-            buffer.clone(),
-            text_offset_to_cursor_in_buffer(&buffer, transformed.map_from_raw(4)),
-            None,
-        );
-        let end_editor = build_display_editor(
-            buffer,
-            text_offset_to_cursor_in_buffer(
-                &controller
-                    .snapshot_buffer()
-                    .expect("transformed layout buffer should exist"),
-                transformed.map_from_raw(8),
-            ),
-            None,
-        );
-        let (start_x, start_y) = start_editor
-            .cursor_position()
-            .expect("transformed cursor position should be available");
-        let (end_x, end_y) = end_editor
-            .cursor_position()
-            .expect("transformed cursor position should be available");
+        let (start_x, start_y) = cursor_position_at_raw(&controller, 4);
+        let (end_x, end_y) = cursor_position_at_raw(&controller, 8);
 
         controller.apply_pointer_action(GlyphonAction::DoubleClick {
             x: start_x,
@@ -4808,35 +4789,15 @@ mod tests {
 
     #[test]
     fn apply_pointer_action_maps_transformed_double_click_drag_to_backward_word_selection() {
+        let runtime = tessera_ui::RuntimeSession::new();
+        let _scope = runtime.enter();
         let mut controller = controller_with_text("1234567890");
-        let transformed = prepare_transformed_layout(
+        prepare_transformed_layout(
             &mut controller,
             TransformedText::from_strings("1234567890", "123 456 7890".to_string()),
         );
-        let buffer = controller
-            .snapshot_buffer()
-            .expect("transformed layout buffer should exist");
-        let start_editor = build_display_editor(
-            buffer.clone(),
-            text_offset_to_cursor_in_buffer(&buffer, transformed.map_from_raw(4)),
-            None,
-        );
-        let end_editor = build_display_editor(
-            buffer,
-            text_offset_to_cursor_in_buffer(
-                &controller
-                    .snapshot_buffer()
-                    .expect("transformed layout buffer should exist"),
-                transformed.map_from_raw(1),
-            ),
-            None,
-        );
-        let (start_x, start_y) = start_editor
-            .cursor_position()
-            .expect("transformed cursor position should be available");
-        let (end_x, end_y) = end_editor
-            .cursor_position()
-            .expect("transformed cursor position should be available");
+        let (start_x, start_y) = cursor_position_at_raw(&controller, 4);
+        let (end_x, end_y) = cursor_position_at_raw(&controller, 1);
 
         controller.apply_pointer_action(GlyphonAction::DoubleClick {
             x: start_x,
@@ -4851,35 +4812,15 @@ mod tests {
 
     #[test]
     fn apply_pointer_action_preserves_backward_transformed_drag_selection_direction() {
+        let runtime = tessera_ui::RuntimeSession::new();
+        let _scope = runtime.enter();
         let mut controller = controller_with_text("1234567890");
-        let transformed = prepare_transformed_layout(
+        prepare_transformed_layout(
             &mut controller,
             TransformedText::from_strings("1234567890", "123 456 7890".to_string()),
         );
-        let buffer = controller
-            .snapshot_buffer()
-            .expect("transformed layout buffer should exist");
-        let start_editor = build_display_editor(
-            buffer.clone(),
-            text_offset_to_cursor_in_buffer(&buffer, transformed.map_from_raw(6)),
-            None,
-        );
-        let end_editor = build_display_editor(
-            buffer,
-            text_offset_to_cursor_in_buffer(
-                &controller
-                    .snapshot_buffer()
-                    .expect("transformed layout buffer should exist"),
-                transformed.map_from_raw(3),
-            ),
-            None,
-        );
-        let (start_x, start_y) = start_editor
-            .cursor_position()
-            .expect("transformed cursor position should be available");
-        let (end_x, end_y) = end_editor
-            .cursor_position()
-            .expect("transformed cursor position should be available");
+        let (start_x, start_y) = cursor_position_at_raw(&controller, 6);
+        let (end_x, end_y) = cursor_position_at_raw(&controller, 3);
 
         controller.apply_pointer_action(GlyphonAction::Click {
             x: start_x,
@@ -4893,6 +4834,8 @@ mod tests {
 
     #[test]
     fn apply_pointer_action_maps_transformed_triple_click_to_raw_line_selection() {
+        let runtime = tessera_ui::RuntimeSession::new();
+        let _scope = runtime.enter();
         let mut controller = controller_with_text("123456\nabcdef");
         let transformed =
             TransformedText::from_strings("123456\nabcdef", "123 456\nabc def".to_string());
@@ -4937,36 +4880,16 @@ mod tests {
 
     #[test]
     fn apply_pointer_action_maps_transformed_triple_click_drag_to_raw_line_selection() {
+        let runtime = tessera_ui::RuntimeSession::new();
+        let _scope = runtime.enter();
         let mut controller = controller_with_text("111\n222\n333");
-        let transformed = prepare_transformed_layout_with_height(
+        prepare_transformed_layout_with_height(
             &mut controller,
             TransformedText::from_strings("111\n222\n333", "1 11\n2 22\n3 33".to_string()),
             80.0,
         );
-        let buffer = controller
-            .snapshot_buffer()
-            .expect("transformed layout buffer should exist");
-        let start_editor = build_display_editor(
-            buffer.clone(),
-            text_offset_to_cursor_in_buffer(&buffer, transformed.map_from_raw(5)),
-            None,
-        );
-        let end_editor = build_display_editor(
-            buffer,
-            text_offset_to_cursor_in_buffer(
-                &controller
-                    .snapshot_buffer()
-                    .expect("transformed layout buffer should exist"),
-                transformed.map_from_raw(9),
-            ),
-            None,
-        );
-        let (start_x, start_y) = start_editor
-            .cursor_position()
-            .expect("transformed cursor position should be available");
-        let (end_x, end_y) = end_editor
-            .cursor_position()
-            .expect("transformed cursor position should be available");
+        let (start_x, start_y) = cursor_position_at_raw(&controller, 5);
+        let (end_x, end_y) = cursor_position_at_raw(&controller, 9);
 
         controller.apply_pointer_action(GlyphonAction::TripleClick {
             x: start_x,
@@ -4981,36 +4904,16 @@ mod tests {
 
     #[test]
     fn apply_pointer_action_maps_transformed_triple_click_drag_to_backward_line_selection() {
+        let runtime = tessera_ui::RuntimeSession::new();
+        let _scope = runtime.enter();
         let mut controller = controller_with_text("111\n222\n333");
-        let transformed = prepare_transformed_layout_with_height(
+        prepare_transformed_layout_with_height(
             &mut controller,
             TransformedText::from_strings("111\n222\n333", "1 11\n2 22\n3 33".to_string()),
             80.0,
         );
-        let buffer = controller
-            .snapshot_buffer()
-            .expect("transformed layout buffer should exist");
-        let start_editor = build_display_editor(
-            buffer.clone(),
-            text_offset_to_cursor_in_buffer(&buffer, transformed.map_from_raw(5)),
-            None,
-        );
-        let end_editor = build_display_editor(
-            buffer,
-            text_offset_to_cursor_in_buffer(
-                &controller
-                    .snapshot_buffer()
-                    .expect("transformed layout buffer should exist"),
-                transformed.map_from_raw(1),
-            ),
-            None,
-        );
-        let (start_x, start_y) = start_editor
-            .cursor_position()
-            .expect("transformed cursor position should be available");
-        let (end_x, end_y) = end_editor
-            .cursor_position()
-            .expect("transformed cursor position should be available");
+        let (start_x, start_y) = cursor_position_at_raw(&controller, 5);
+        let (end_x, end_y) = cursor_position_at_raw(&controller, 1);
 
         controller.apply_pointer_action(GlyphonAction::TripleClick {
             x: start_x,
@@ -5025,6 +4928,8 @@ mod tests {
 
     #[test]
     fn move_cursor_with_motion_uses_transformed_vertical_offsets() {
+        let runtime = tessera_ui::RuntimeSession::new();
+        let _scope = runtime.enter();
         let mut controller = controller_with_text("123456\nabcdef");
         let transformed =
             TransformedText::from_strings("123456\nabcdef", "123 456\nabc def".to_string());
@@ -5057,6 +4962,8 @@ mod tests {
 
     #[test]
     fn move_cursor_with_motion_uses_transformed_line_boundaries() {
+        let runtime = tessera_ui::RuntimeSession::new();
+        let _scope = runtime.enter();
         let mut controller = controller_with_text("123456\nabcdef");
         prepare_transformed_layout(
             &mut controller,
@@ -5073,6 +4980,8 @@ mod tests {
 
     #[test]
     fn extend_selection_with_motion_uses_transformed_line_boundaries() {
+        let runtime = tessera_ui::RuntimeSession::new();
+        let _scope = runtime.enter();
         let mut controller = controller_with_text("123456\nabcdef");
         prepare_transformed_layout(
             &mut controller,
@@ -5090,6 +4999,8 @@ mod tests {
 
     #[test]
     fn move_cursor_with_motion_uses_transformed_page_vertical_offsets() {
+        let runtime = tessera_ui::RuntimeSession::new();
+        let _scope = runtime.enter();
         let mut controller = controller_with_text("111\n222\n333\n444");
         prepare_transformed_layout_with_height(
             &mut controller,
@@ -5110,6 +5021,8 @@ mod tests {
 
     #[test]
     fn extend_selection_with_motion_uses_transformed_page_vertical_offsets() {
+        let runtime = tessera_ui::RuntimeSession::new();
+        let _scope = runtime.enter();
         let mut controller = controller_with_text("111\n222\n333\n444");
         prepare_transformed_layout_with_height(
             &mut controller,
@@ -5127,6 +5040,8 @@ mod tests {
 
     #[test]
     fn move_cursor_with_motion_uses_transformed_word_boundaries() {
+        let runtime = tessera_ui::RuntimeSession::new();
+        let _scope = runtime.enter();
         let mut controller = controller_with_text("1234567890");
         prepare_transformed_layout(
             &mut controller,
@@ -5143,6 +5058,8 @@ mod tests {
 
     #[test]
     fn extend_selection_with_motion_uses_transformed_word_boundaries() {
+        let runtime = tessera_ui::RuntimeSession::new();
+        let _scope = runtime.enter();
         let mut controller = controller_with_text("1234567890");
         prepare_transformed_layout(
             &mut controller,
@@ -5156,6 +5073,8 @@ mod tests {
 
     #[test]
     fn deletion_range_for_motion_uses_transformed_word_boundaries() {
+        let runtime = tessera_ui::RuntimeSession::new();
+        let _scope = runtime.enter();
         let mut controller = controller_with_text("1234567890");
         prepare_transformed_layout(
             &mut controller,
@@ -5175,6 +5094,8 @@ mod tests {
 
     #[test]
     fn deletion_range_for_motion_prefers_existing_selection() {
+        let runtime = tessera_ui::RuntimeSession::new();
+        let _scope = runtime.enter();
         let mut controller = controller_with_text("hello world");
         controller.set_text_and_selection("hello world", TextSelection { start: 8, end: 2 });
 
@@ -5269,6 +5190,8 @@ mod tests {
     }
     #[test]
     fn typography_changes_preserve_selection_and_apply_to_subsequent_edits() {
+        let runtime = tessera_ui::RuntimeSession::new();
+        let _scope = runtime.enter();
         let mut controller = TextEditorController::new(Dp(16.0), Some(Dp(24.0)));
         let selection = TextSelection { start: 2, end: 8 };
         controller.set_text_and_selection("Material typography", selection.clone());

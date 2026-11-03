@@ -19,7 +19,7 @@ use tessera_components::{
     shape_def::{RoundedCorner, Shape},
     surface::surface,
     text::text,
-    text_field::TextFieldBuilder,
+    text_field::text_field,
     text_input::TextInputController,
     theme::MaterialTheme,
 };
@@ -64,19 +64,24 @@ impl FieldGeometry {
 }
 
 #[tessera]
-pub(super) fn illustration(kind: Illustration) {
+pub(super) fn illustration(
+    kind: Illustration,
+    modal_controller: Option<
+        crate::pages::material_spec::article::modal_host::ArticleModalController,
+    >,
+) {
     match kind {
         Illustration::EntryMethods => {
-            entry_methods();
+            entry_methods().modal_controller_optional(modal_controller);
         }
         Illustration::Formatting => {
-            formatting();
+            formatting().modal_controller_optional(modal_controller);
         }
         Illustration::Clear => {
             optional_clear();
         }
         Illustration::Labels => {
-            field_labels();
+            field_labels().modal_controller_optional(modal_controller);
         }
     }
 }
@@ -115,8 +120,6 @@ fn canvas(
 ) {
     let width = width.unwrap_or(1352.0);
     let scheme = use_context::<MaterialTheme>().unwrap().get().color_scheme;
-    #[cfg(all(test, not(target_family = "wasm")))]
-    tests::GEOMETRY.set(Some(geometry));
     super::date_canvas(
         width,
         600.0,
@@ -128,6 +131,7 @@ fn canvas(
                         .background(scheme.surface_container_low)
                         .clip_to_bounds()
                         .semantics(SemanticsArgs {
+                            test_tag: Some("date-instruction-figure".into()),
                             role: Some(Role::Group),
                             label: Some(label.clone()),
                             merge_descendants: true,
@@ -228,7 +232,8 @@ fn date_field(
     let show_calendar = show_calendar.unwrap_or(true);
     let error = error.map(|error| error.get()).unwrap_or_default();
     let had_focus = remember(|| false);
-    TextFieldBuilder::outlined()
+    text_field()
+        .outlined()
         .controller(controller)
         .label(label)
         .accessibility_label(accessible_name)
@@ -246,6 +251,11 @@ fn date_field(
         })
         .modifier(
             watch_precise(geometry, geometry_key.name())
+                .semantics(SemanticsArgs {
+                    test_tag: Some(format!("date-instruction-{}", geometry_key.name())),
+                    merge_descendants: true,
+                    ..Default::default()
+                })
                 .offset(Dp(x), Dp(y))
                 .size(Dp(342.0), Dp(56.0))
                 .focus_group()
@@ -294,13 +304,19 @@ fn calendar_dialog(
     state: State<DatePickerState>,
     on_confirm: Callback,
     content: RenderSlot,
+
+    modal_controller: Option<
+        crate::pages::material_spec::article::modal_host::ArticleModalController,
+    >,
 ) {
     hosted_dialog(open)
+        .modal_controller_optional(modal_controller)
         .accessibility_label("Optional date selection")
         .on_close_request(move || open.set(false))
         .main_content_shared(content)
-        .dialog_content(move || {
+        .dialog_content(move |dialog_scope| {
             date_picker_dialog()
+                .dialog(dialog_scope)
                 .state(state)
                 .picker_today(CalendarDate::new(2023, 8, 1).unwrap())
                 .picker_first_day_of_week(Weekday::Sunday)
@@ -329,13 +345,13 @@ fn calendar_dialog(
 }
 
 #[tessera]
-fn entry_methods() {
+fn entry_methods(
+    modal_controller: Option<
+        crate::pages::material_spec::article::modal_host::ArticleModalController,
+    >,
+) {
     let controller = remember(|| initial_controller("08/17/2023"));
     let draft = remember(|| "08/17/2023".to_owned());
-    #[cfg(test)]
-    {
-        tests::ENTRY_DRAFT.set(Some(draft));
-    }
     let error = remember(String::new);
     let state = remember(|| initial_state(2023));
     let open = remember(|| false);
@@ -367,8 +383,6 @@ fn entry_methods() {
                         167.0,
                         122.0,
                         CallbackWith::new(move |value: String| {
-                            #[cfg(test)]
-                            tests::ENTRY_CHANGES.set(tests::ENTRY_CHANGES.get() + 1);
                             error.set(String::new());
                             draft.set(value.clone());
                             value
@@ -396,11 +410,15 @@ fn entry_methods() {
             )
             .width(1353.0);
         }),
-    );
+    ).modal_controller_optional(modal_controller);
 }
 
 #[tessera]
-fn formatting() {
+fn formatting(
+    modal_controller: Option<
+        crate::pages::material_spec::article::modal_host::ArticleModalController,
+    >,
+) {
     let raw = remember(|| initial_controller("08172023"));
     let formatted = remember(|| initial_controller("08/17/2023"));
     let raw_draft = remember(|| "08172023".to_owned());
@@ -493,18 +511,14 @@ fn formatting() {
                 }),
             );
         }),
-    );
+    )
+    .modal_controller_optional(modal_controller);
 }
 
 #[tessera]
 fn optional_clear() {
     let state = remember(|| initial_state(2020));
     let committed = remember(|| Some(CalendarDate::new(2020, 8, 17).unwrap()));
-    #[cfg(all(test, not(target_family = "wasm")))]
-    {
-        tests::CLEAR_STATE.set(Some(state));
-        tests::CLEAR_COMMITTED.set(Some(committed));
-    }
     let geometry = remember(PreciseGeometry::new);
     let scheme = use_context::<MaterialTheme>().unwrap().get().color_scheme;
     canvas(
@@ -603,7 +617,11 @@ fn dotted_background() {
 }
 
 #[tessera]
-fn field_labels() {
+fn field_labels(
+    modal_controller: Option<
+        crate::pages::material_spec::article::modal_host::ArticleModalController,
+    >,
+) {
     let controller = remember(|| initial_controller("2023/08/17"));
     let draft = remember(|| "2023/08/17".to_owned());
     let error = remember(String::new);
@@ -617,10 +635,10 @@ fn field_labels() {
     let chooser = remember(|| false);
     let view = remember(|| DockedDatePickerView::Month);
     let scheme = use_context::<MaterialTheme>().unwrap().get().color_scheme;
-    hosted_dialog(chooser)
+    hosted_dialog(chooser).modal_controller_optional(modal_controller)
         .accessibility_label("Labeled date calendar chooser")
         .on_close_request(move || chooser.set(false))
-        .dialog_content(move || {
+        .dialog_content(move |_| {
             docked_date_picker()
                 .state(state)
                 .view(view)

@@ -39,7 +39,7 @@ use tessera_build::{
 };
 
 use crate::{
-    color_check, output,
+    call_guard, output,
     template::{write_template_dir, write_template_file},
 };
 
@@ -357,20 +357,26 @@ impl AndroidContext {
                 })?;
             Ok(vec![target])
         } else {
-            Ok(Target::all().values().collect())
+            Ok(Target::all().iter().map(|(_, target)| target).collect())
         }
     }
 
     fn target_by_name_or_triple(&self, value: &str) -> Result<&'static Target<'static>> {
         Target::for_name(value)
             .or_else(|| Target::for_arch(value))
-            .or_else(|| Target::all().values().find(|target| target.triple == value))
+            .or_else(|| {
+                Target::all()
+                    .iter()
+                    .map(|(_, target)| target)
+                    .find(|target| target.triple == value)
+            })
             .ok_or_else(|| {
                 anyhow!(
                     "Unknown target '{}'. Supported targets: {}",
                     value,
                     Target::all()
-                        .values()
+                        .iter()
+                        .map(|(_, target)| target)
                         .map(|target| target.triple)
                         .collect::<Vec<_>>()
                         .join(", ")
@@ -379,7 +385,7 @@ impl AndroidContext {
     }
 }
 
-fn run_android_color_check(ctx: &AndroidContext, target: Option<&str>) -> Result<()> {
+fn run_android_call_guard(ctx: &AndroidContext, target: Option<&str>) -> Result<()> {
     let target = if let Some(target) = target {
         ctx.target_by_name_or_triple(target)?.triple
     } else {
@@ -389,15 +395,19 @@ fn run_android_color_check(ctx: &AndroidContext, target: Option<&str>) -> Result
             .triple
     };
     let features = ctx.metadata.features().unwrap_or_default();
-    color_check::run(color_check::CheckOptions {
+    call_guard::run(call_guard::CheckOptions {
         package: Some(&ctx.package_name),
         target: Some(target),
-        target_selection: color_check::TargetSelection::lib_only(),
-        features: color_check::FeatureSelection::Selected {
+        target_selection: call_guard::TargetSelection::lib_only(),
+        features: call_guard::FeatureSelection::Selected {
             features,
             no_default_features: ctx.metadata.no_default_features(),
         },
-        message_format: color_check::MessageFormat::Human,
+        message_format: call_guard::MessageFormat::Human,
+        quiet: false,
+        release: ctx.release,
+        workspace: false,
+        jobs: None,
     })
 }
 
@@ -434,39 +444,20 @@ fn normalize_android_profiling_output_path(path: &str, app_identifier: &str) -> 
     format!("/data/user/0/{app_identifier}/{path}")
 }
 
-fn apply_android_runtime_env(ctx: &AndroidContext) {
-    // SAFETY: This CLI mutates process env only on the main thread before
-    // spawning child processes that should inherit the variable.
-    unsafe {
-        std::env::set_var("TESSERA_ASSET_BACKEND", ctx.asset_backend.as_str());
-    }
-
-    if let Some(path) = &ctx.profiling_output {
-        // SAFETY: This CLI mutates process env only on the main thread before
-        // spawning child processes that should inherit the variable.
-        unsafe {
-            std::env::set_var("TESSERA_PROFILING_OUTPUT", path);
-        }
-    } else {
-        // SAFETY: Same reasoning as above; remove stale value for non-profiling
-        // runs.
-        unsafe {
-            std::env::remove_var("TESSERA_PROFILING_OUTPUT");
-        }
-    }
-
-    if ctx.debug_dirty_overlay {
-        // SAFETY: This CLI mutates process env only on the main thread before
-        // spawning child processes that should inherit the variable.
-        unsafe {
-            std::env::set_var("TESSERA_DEBUG_DIRTY_OVERLAY", "1");
-        }
-    } else {
-        // SAFETY: Same reasoning as above; remove stale value when disabled.
-        unsafe {
-            std::env::remove_var("TESSERA_DEBUG_DIRTY_OVERLAY");
-        }
-    }
+fn android_runtime_env(ctx: &AndroidContext) -> Result<AndroidEnv> {
+    Ok(AndroidEnv::new()?
+        .with_command_var(
+            "TESSERA_ASSET_BACKEND",
+            Some(ctx.asset_backend.as_str().into()),
+        )
+        .with_command_var(
+            "TESSERA_PROFILING_OUTPUT",
+            ctx.profiling_output.as_ref().map(Into::into),
+        )
+        .with_command_var(
+            "TESSERA_DEBUG_DIRTY_OVERLAY",
+            ctx.debug_dirty_overlay.then(|| "1".into()),
+        ))
 }
 
 pub fn init(skip_targets_install: bool) -> Result<()> {
@@ -614,15 +605,14 @@ fn register_helpers(handlebars: &mut Handlebars<'static>) {
 
 pub fn build(opts: BuildOptions) -> Result<()> {
     let ctx = AndroidContext::from_build_opts(opts)?;
-    run_android_color_check(&ctx, None)?;
-    apply_android_runtime_env(&ctx);
+    run_android_call_guard(&ctx, None)?;
     if !ctx.config.project_dir_exists() {
         return Err(anyhow!(
             "Android project not initialized. Run `cargo tessera android init` first."
         ));
     }
     sync_android_project(&ctx)?;
-    let env = AndroidEnv::new()?;
+    let env = android_runtime_env(&ctx)?;
     let targets = ctx.targets()?;
     let profile = ctx.profile();
 
@@ -679,8 +669,7 @@ pub fn build(opts: BuildOptions) -> Result<()> {
 
 pub fn dev(opts: DevOptions) -> Result<()> {
     let ctx = AndroidContext::from_dev_opts(opts)?;
-    run_android_color_check(&ctx, None)?;
-    apply_android_runtime_env(&ctx);
+    run_android_call_guard(&ctx, None)?;
     if !ctx.config.project_dir_exists() {
         return Err(anyhow!(
             "Android project not initialized. Run `cargo tessera android init` first."
@@ -711,7 +700,7 @@ pub fn dev(opts: DevOptions) -> Result<()> {
         format!("backend `{}`", ctx.asset_backend.as_str()),
     );
 
-    let env = AndroidEnv::new()?;
+    let env = android_runtime_env(&ctx)?;
     let profile = ctx.profile();
 
     output::status("Watching", "for file changes");
@@ -826,14 +815,13 @@ pub fn dev(opts: DevOptions) -> Result<()> {
 pub fn rust_build(opts: RustBuildOptions) -> Result<()> {
     let target_name = opts.target.clone();
     let ctx = AndroidContext::from_rust_build_opts(opts)?;
-    run_android_color_check(&ctx, Some(&target_name))?;
-    apply_android_runtime_env(&ctx);
+    run_android_call_guard(&ctx, Some(&target_name))?;
     if !ctx.config.project_dir_exists() {
         return Err(anyhow!(
             "Android project not initialized. Run `cargo tessera android init` first."
         ));
     }
-    let env = AndroidEnv::new()?;
+    let env = android_runtime_env(&ctx)?;
     let target = ctx.target_by_name_or_triple(&target_name)?;
     let profile = ctx.profile();
     if let Some(path) = &ctx.profiling_output {
@@ -962,7 +950,7 @@ fn build_android_template_data(
     let mut abi_list = Vec::new();
     let mut arch_list = Vec::new();
     let mut target_list = Vec::new();
-    for target in Target::all().values() {
+    for target in Target::all().iter().map(|(_, target)| target) {
         abi_list.push(target.abi.to_string());
         arch_list.push(target.arch.to_string());
         target_list.push(target.triple.to_string());
@@ -1407,7 +1395,7 @@ fn collect_files_recursive(root: &Path) -> Result<Vec<PathBuf>> {
 fn collect_existing_android_libs(ctx: &AndroidContext, profile: Profile) -> Vec<PathBuf> {
     let mut paths = Vec::new();
     let so_name = ctx.config.so_name();
-    for target in Target::all().values() {
+    for target in Target::all().iter().map(|(_, target)| target) {
         let path = ctx
             .config
             .app()

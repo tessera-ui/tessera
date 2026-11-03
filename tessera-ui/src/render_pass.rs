@@ -430,6 +430,8 @@ mod tests {
 
     #[test]
     fn clip_state_preserves_sampled_draw_batching() {
+        let _runtime_session = crate::RuntimeSession::new();
+        let _runtime_scope = _runtime_session.enter();
         let target = wgpu::Extent3d {
             width: 100,
             height: 100,
@@ -456,6 +458,8 @@ mod tests {
 
     #[test]
     fn clip_state_after_local_work_targets_the_scene() {
+        let _runtime_session = crate::RuntimeSession::new();
+        let _runtime_scope = _runtime_session.enter();
         let target = wgpu::Extent3d {
             width: 100,
             height: 100,
@@ -491,6 +495,8 @@ mod tests {
 
     #[test]
     fn fractional_draw_and_sample_bounds_round_outwards() {
+        let _runtime_session = crate::RuntimeSession::new();
+        let _runtime_scope = _runtime_session.enter();
         let size = PxSize::new(Px(20), Px(10));
         let position = PxPosition::from_f32_xy(10.25, 10.75);
         let geometry = DrawGeometry::from_position_size(position, size);
@@ -524,6 +530,8 @@ mod tests {
 
     #[test]
     fn scaled_draw_plan_preserves_local_geometry_and_window_sampling_under_clips() {
+        let _runtime_session = crate::RuntimeSession::new();
+        let _runtime_scope = _runtime_session.enter();
         let geometry = DrawGeometry::new(
             PxSize::new(Px(240), Px(56)),
             crate::LocalToWindow::new(0.625, PxPosition::from_f32_xy(10.25, 20.5)).unwrap(),
@@ -592,6 +600,8 @@ mod tests {
 
     #[test]
     fn negative_bounds_do_not_extend_the_opposite_edge() {
+        let _runtime_session = crate::RuntimeSession::new();
+        let _runtime_scope = _runtime_session.enter();
         let target = wgpu::Extent3d {
             width: 100,
             height: 100,

@@ -1,16 +1,12 @@
 use tessera_ui::{
     renderer::drawer::pipeline::{DrawContext, DrawablePipeline, FrameContext},
-    wgpu::{self, util::DeviceExt as _},
+    wgpu,
 };
 
 use super::{
     command::LoadingShapeCommand,
     geometry::{center, geometry},
 };
-
-#[cfg(test)]
-pub(crate) static INSTANCE_ALLOCATIONS: std::sync::atomic::AtomicUsize =
-    std::sync::atomic::AtomicUsize::new(0);
 
 #[repr(C)]
 #[derive(Clone, Copy, bytemuck::Pod, bytemuck::Zeroable)]
@@ -23,7 +19,7 @@ struct Instance {
 }
 
 struct InstanceBuffer {
-    buffer: wgpu::Buffer,
+    buffer: tessera_ui::TrackedBuffer,
     bind_group: wgpu::BindGroup,
     capacity: usize,
 }
@@ -39,7 +35,7 @@ pub(crate) struct LoadingShapePipeline {
 
 impl LoadingShapePipeline {
     pub(crate) fn new(
-        device: &wgpu::Device,
+        device: &tessera_ui::GraphicsDevice,
         config: &wgpu::SurfaceConfiguration,
         cache: Option<&wgpu::PipelineCache>,
         sample_count: u32,
@@ -61,11 +57,14 @@ impl LoadingShapePipeline {
         };
         let geometry_layout = storage_layout("Loading Shape Geometry Layout");
         let instance_layout = storage_layout("Loading Shape Instance Layout");
-        let buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            label: Some("Loading Shape Geometry"),
-            contents: bytemuck::cast_slice(&geometry().curves),
-            usage: wgpu::BufferUsages::STORAGE,
-        });
+        let buffer = device.create_buffer_init(
+            "loading_shape_geometry",
+            &wgpu::util::BufferInitDescriptor {
+                label: Some("Loading Shape Geometry"),
+                contents: bytemuck::cast_slice(&geometry().curves),
+                usage: wgpu::BufferUsages::STORAGE,
+            },
+        );
         let geometry_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
             label: Some("Loading Shape Geometry"),
             layout: &geometry_layout,
@@ -122,7 +121,7 @@ impl LoadingShapePipeline {
         }
     }
 
-    fn ensure_buffer(&mut self, device: &wgpu::Device, count: usize) {
+    fn ensure_buffer(&mut self, device: &tessera_ui::GraphicsDevice, count: usize) {
         if self
             .buffers
             .get(self.cursor)
@@ -131,14 +130,16 @@ impl LoadingShapePipeline {
             return;
         }
         let capacity = count.max(1).next_power_of_two();
-        #[cfg(test)]
-        INSTANCE_ALLOCATIONS.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-        let buffer = device.create_buffer(&wgpu::BufferDescriptor {
-            label: Some("Loading Shape Instances"),
-            size: (capacity * std::mem::size_of::<Instance>()) as u64,
-            usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
-            mapped_at_creation: false,
-        });
+
+        let buffer = device.create_buffer(
+            "loading_shape_instances",
+            &wgpu::BufferDescriptor {
+                label: Some("Loading Shape Instances"),
+                size: (capacity * std::mem::size_of::<Instance>()) as u64,
+                usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
+                mapped_at_creation: false,
+            },
+        );
         let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
             label: Some("Loading Shape Instances"),
             layout: &self.instance_layout,
@@ -229,10 +230,10 @@ impl DrawablePipeline<LoadingShapeCommand> for LoadingShapePipeline {
         }
         // A separate slot per draw keeps later writes from changing earlier
         // batches.
-        self.ensure_buffer(context.device, instances.len());
+        self.ensure_buffer(context.graphics, instances.len());
         let buffer = &self.buffers[self.cursor];
         context
-            .queue
+            .graphics
             .write_buffer(&buffer.buffer, 0, bytemuck::cast_slice(&instances));
         context.render_pass.set_pipeline(&self.pipeline);
         context

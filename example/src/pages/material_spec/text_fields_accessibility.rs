@@ -15,7 +15,7 @@ use tessera_components::{
     shape_def::Shape,
     spacer::spacer,
     text::text,
-    text_field::{TextFieldBuilder, TextFieldContextMenu},
+    text_field::{TextFieldContextMenu, text_field},
     text_input::TextInputController,
     theme::{MaterialTheme, material_theme},
 };
@@ -252,7 +252,8 @@ fn email_diagram(scale: f64) {
 
 #[tessera]
 fn editable_field(x: f64, y: f64, width: f64, label: String, initial: String, scale: f64) {
-    TextFieldBuilder::outlined()
+    text_field()
+        .outlined()
         .label(label.clone())
         .initial_text(initial)
         .accessibility_label(label)
@@ -280,7 +281,8 @@ fn password_diagram(scale: f64) {
     rectangle(378.0, 0.0, 8.0, 300.0, scheme.outline_variant, scale);
     editable_field(26.5, 41.5, 327.0, "Label".into(), "Input".into(), scale);
     dropdown_field(scale);
-    let field = TextFieldBuilder::outlined()
+    let field = text_field()
+        .outlined()
         .label("Password")
         .accessibility_label("Password")
         .controller(controller)
@@ -360,7 +362,8 @@ fn dropdown_field(scale: f64) {
                 ))
                 .modifier(Modifier::new().size(Dp(327.0 * scale), Dp(56.0 * scale)))
                 .main_content(move || {
-                    TextFieldBuilder::outlined()
+                    text_field()
+                        .outlined()
                         .controller(controller)
                         .label("Label")
                         .accessibility_label("Label options")
@@ -381,11 +384,11 @@ fn dropdown_field(scale: f64) {
                                 .on_click(move || menu.with_mut(MenuController::toggle));
                         }));
                 })
-                .menu_content(move || {
-                    menu_item().label("Personal").on_click(move || {
+                .menu_content(move |menu| {
+                    menu_item().menu(menu).label("Personal").on_click(move || {
                         controller.with_mut(|controller| controller.set_text("Personal"));
                     });
-                    menu_item().label("Work").on_click(move || {
+                    menu_item().menu(menu).label("Work").on_click(move || {
                         controller.with_mut(|controller| controller.set_text("Work"));
                     });
                 });
@@ -625,7 +628,8 @@ fn labeled_field(kind: usize, x: f64, y: f64, width: f64, scale: f64) {
         3 => "Label",
         _ => "Username*",
     };
-    let field = TextFieldBuilder::outlined()
+    let field = text_field()
+        .outlined()
         .controller(controller)
         .accessibility_label(name)
         .accessibility_description(description)

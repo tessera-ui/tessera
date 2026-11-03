@@ -4,8 +4,6 @@
 //!
 //! Preserve interactive item state while navigating unequal-height lists.
 
-use std::cell::Cell;
-
 use tessera_ui::{
     FocusDirection, FocusManager, HeadlessConfig, HeadlessRenderer, MOUSE_POINTER_ID, Modifier,
     PressKeyEventType, PxPosition,
@@ -17,21 +15,13 @@ use crate::{boxed::boxed, checkbox::checkbox, modifier::ModifierExt as _, theme:
 
 use super::*;
 
-thread_local! {
-    static LIST: Cell<Option<State<LazyListController>>> = const { Cell::new(None) };
-    static KEEP: Cell<bool> = const { Cell::new(true) };
-    static MOUNTED: Cell<Option<State<bool>>> = const { Cell::new(None) };
-    static COUNT: Cell<Option<State<usize>>> = const { Cell::new(None) };
-    static NAVIGATION: Cell<Option<State<Option<FocusDirection>>>> = const { Cell::new(None) };
-    static NAVIGATION_ACCEPTED: Cell<bool> = const { Cell::new(false) };
-}
-
-struct Pipelines;
-
-impl tessera_ui::RenderModule for Pipelines {
-    fn register_pipelines(&self, context: &mut tessera_ui::PipelineContext<'_>) {
-        crate::pipelines::register_pipelines(context);
-    }
+#[derive(Clone, Copy, Default)]
+struct FixtureHandles {
+    list: Option<State<LazyListController>>,
+    mounted: Option<State<bool>>,
+    count: Option<State<usize>>,
+    navigation: Option<State<Option<FocusDirection>>>,
+    navigation_accepted: bool,
 }
 
 #[tessera]
@@ -52,20 +42,22 @@ fn retained_option(index: usize) {
 }
 
 #[tessera]
-fn fixture() {
+fn fixture(keep: bool, observed: tessera_ui::testing::TestProbe<FixtureHandles>) {
     let controller = remember(LazyListController::new);
     let viewport = remember(ScrollableController::new);
     let mounted = remember(|| true);
     let count = remember(|| 12_usize);
-    COUNT.set(Some(count));
+    observed.with_mut(|handles| handles.count = Some(count));
     let navigation = remember(|| None::<FocusDirection>);
-    NAVIGATION.set(Some(navigation));
+    observed.with_mut(|handles| handles.navigation = Some(navigation));
     if let Some(direction) = navigation.get() {
         navigation.set(None);
-        NAVIGATION_ACCEPTED.set(FocusManager::current().request_move_focus(direction));
+        observed.with_mut(|handles| {
+            handles.navigation_accepted = FocusManager::current().request_move_focus(direction)
+        });
     }
-    LIST.set(Some(controller));
-    MOUNTED.set(Some(mounted));
+    observed.with_mut(|handles| handles.list = Some(controller));
+    observed.with_mut(|handles| handles.mounted = Some(mounted));
     let items = RenderSlotWith::new(|index| {
         retained_option(index);
     });
@@ -77,7 +69,7 @@ fn fixture() {
             .alignment(crate::alignment::Alignment::TopStart)
             .modifier(Modifier::new().fill_max_size())
             .children(move || {
-                let mut list = lazy_column()
+                let list = lazy_column()
                     .modifier(Modifier::new().size(Dp(180.0), Dp(200.0)))
                     .controller(controller)
                     .viewport_controller(viewport)
@@ -85,10 +77,11 @@ fn fixture() {
                     .max_viewport_main(Px(200))
                     .scroll_smoothing(0.0)
                     .scrollbar_behavior(ScrollBarBehavior::Hidden);
-                if KEEP.get() {
-                    list = list.keep_composed_items(true);
-                }
-                list.items_with_key_shared(count.get(), |index| index, items);
+                list.keep_composed_items(keep).items_with_key_shared(
+                    count.get(),
+                    |index| index,
+                    items,
+                );
             });
     });
 }
@@ -107,10 +100,14 @@ fn node(renderer: &HeadlessRenderer, index: usize) -> (tessera_ui::accesskit::No
 #[test]
 #[ignore = "requires a native GPU adapter for lazy focus and checkbox interaction"]
 fn retained_items_keep_real_checkbox_state_and_focus_through_cold_index_navigation_and_wheel() {
-    KEEP.set(true);
+    let observed = tessera_ui::testing::TestProbe::default();
+    let keep = true;
     let mut renderer = HeadlessRenderer::new(
-        Box::new(fixture),
-        vec![Box::new(Pipelines)],
+        Box::new({
+            let observed = observed.clone();
+            move || fixture(keep, observed.clone())
+        }),
+        vec![Box::new(crate::TesseraComponents)],
         HeadlessConfig {
             width: 200,
             height: 220,
@@ -128,7 +125,9 @@ fn retained_items_keep_real_checkbox_state_and_focus_through_cold_index_navigati
     renderer.render_frames(8);
     assert_eq!(node(&renderer, 0).1.toggled(), Some(Toggled::True));
     assert_eq!(renderer.accessibility_snapshot().unwrap().focus, first);
-    LIST.get()
+    observed
+        .get()
+        .list
         .unwrap()
         .with_mut(|list| list.scroll_to_item(8, Dp(20.0)));
     renderer.render_frames(8);
@@ -136,7 +135,9 @@ fn retained_items_keep_real_checkbox_state_and_focus_through_cold_index_navigati
     assert_eq!(node(&renderer, 0).1.toggled(), Some(Toggled::True));
     assert_eq!(renderer.accessibility_snapshot().unwrap().focus, first);
     assert_eq!(node(&renderer, 8).1.toggled(), Some(Toggled::False));
-    LIST.get()
+    observed
+        .get()
+        .list
         .unwrap()
         .with_mut(|list| list.scroll_to_item(9, Dp(20.0)));
     renderer.pointer_scroll(
@@ -170,7 +171,9 @@ fn retained_items_keep_real_checkbox_state_and_focus_through_cold_index_navigati
         Some(Toggled::False),
         "focus reveal cannot activate the checkbox"
     );
-    LIST.get()
+    observed
+        .get()
+        .list
         .unwrap()
         .with_mut(|list| list.scroll_to_item(0, Dp::ZERO));
     renderer.render_frames(8);
@@ -185,7 +188,9 @@ fn retained_items_keep_real_checkbox_state_and_focus_through_cold_index_navigati
         renderer.accessibility_snapshot().unwrap().focus,
         node(&renderer, 1).0
     );
-    LIST.get()
+    observed
+        .get()
+        .list
         .unwrap()
         .with_mut(|list| list.scroll_to_item(8, Dp(20.0)));
     renderer.render_frames(8);
@@ -198,7 +203,9 @@ fn retained_items_keep_real_checkbox_state_and_focus_through_cold_index_navigati
             .any(|(_, node)| node.label() == Some("Retained option 0")),
         "An unfocused retained item must be unplaced and absent from accessibility"
     );
-    LIST.get()
+    observed
+        .get()
+        .list
         .unwrap()
         .with_mut(|list| list.scroll_to_item(0, Dp::ZERO));
     renderer.render_frames(8);
@@ -206,10 +213,16 @@ fn retained_items_keep_real_checkbox_state_and_focus_through_cold_index_navigati
     assert_eq!(node(&renderer, 0).1.toggled(), Some(Toggled::True));
 }
 
-fn make_renderer() -> HeadlessRenderer {
+fn make_renderer(
+    keep: bool,
+    observed: &tessera_ui::testing::TestProbe<FixtureHandles>,
+) -> HeadlessRenderer {
     let mut renderer = HeadlessRenderer::new(
-        Box::new(fixture),
-        vec![Box::new(Pipelines)],
+        Box::new({
+            let observed = observed.clone();
+            move || fixture(keep, observed.clone())
+        }),
+        vec![Box::new(crate::TesseraComponents)],
         HeadlessConfig {
             width: 200,
             height: 220,
@@ -220,7 +233,7 @@ fn make_renderer() -> HeadlessRenderer {
     .unwrap();
     renderer.render_frames(8);
     assert_eq!(
-        LIST.get().unwrap().with(|list| {
+        observed.get().list.unwrap().with(|list| {
             list.viewport
                 .unwrap()
                 .with(|viewport| viewport.visible_size().height)
@@ -243,10 +256,12 @@ fn toggle_first(renderer: &mut HeadlessRenderer) {
 #[test]
 #[ignore = "requires a native GPU adapter"]
 fn default_lazy_items_release_local_state_when_they_leave_composition() {
-    KEEP.set(false);
-    let mut renderer = make_renderer();
+    let observed = tessera_ui::testing::TestProbe::default();
+    let mut renderer = make_renderer(false, &observed);
     toggle_first(&mut renderer);
-    LIST.get()
+    observed
+        .get()
+        .list
         .unwrap()
         .with_mut(|list| list.scroll_to_item(8, Dp::ZERO));
     renderer.render_frames(8);
@@ -258,7 +273,9 @@ fn default_lazy_items_release_local_state_when_they_leave_composition() {
             .iter()
             .any(|(_, node)| node.label() == Some("Retained option 0"))
     );
-    LIST.get()
+    observed
+        .get()
+        .list
         .unwrap()
         .with_mut(|list| list.scroll_to_item(0, Dp::ZERO));
     renderer.render_frames(8);
@@ -268,19 +285,19 @@ fn default_lazy_items_release_local_state_when_they_leave_composition() {
 #[test]
 #[ignore = "requires a native GPU adapter"]
 fn unmounting_the_list_clears_visit_history_from_a_live_external_controller() {
-    KEEP.set(true);
-    let mut renderer = make_renderer();
+    let observed = tessera_ui::testing::TestProbe::default();
+    let mut renderer = make_renderer(true, &observed);
     toggle_first(&mut renderer);
-    let controller = LIST.get().unwrap();
+    let controller = observed.get().list.unwrap();
     assert!(controller.with(|list| !list.composed.is_empty()));
-    MOUNTED.get().unwrap().set(false);
+    observed.get().mounted.unwrap().set(false);
     renderer.render_frames(8);
     assert!(controller.is_alive());
     assert!(controller.with(|list| list.composed.is_empty()
         && list.viewport.is_none()
         && list.geometry.is_none()
         && list.focused_item.is_none()));
-    MOUNTED.get().unwrap().set(true);
+    observed.get().mounted.unwrap().set(true);
     renderer.render_frames(8);
     assert_eq!(node(&renderer, 0).1.toggled(), Some(Toggled::False));
 }
@@ -288,11 +305,11 @@ fn unmounting_the_list_clears_visit_history_from_a_live_external_controller() {
 #[test]
 #[ignore = "requires a native GPU adapter"]
 fn emptying_a_mounted_list_discards_removed_item_state_and_focus_history() {
-    KEEP.set(true);
-    let mut renderer = make_renderer();
+    let observed = tessera_ui::testing::TestProbe::default();
+    let mut renderer = make_renderer(true, &observed);
     toggle_first(&mut renderer);
-    let controller = LIST.get().unwrap();
-    COUNT.get().unwrap().set(0);
+    let controller = observed.get().list.unwrap();
+    observed.get().count.unwrap().set(0);
     renderer.render_frames(8);
     assert!(controller.is_alive());
     assert!(controller.with(|list| list.composed.is_empty() && list.focused_item.is_none()));
@@ -304,7 +321,7 @@ fn emptying_a_mounted_list_discards_removed_item_state_and_focus_history() {
             .iter()
             .any(|(_, node)| { node.role() == Role::CheckBox })
     );
-    COUNT.get().unwrap().set(12);
+    observed.get().count.unwrap().set(12);
     renderer.render_frames(8);
     assert_eq!(node(&renderer, 0).1.toggled(), Some(Toggled::False));
 }
@@ -312,13 +329,17 @@ fn emptying_a_mounted_list_discards_removed_item_state_and_focus_history() {
 #[test]
 #[ignore = "requires a native GPU adapter"]
 fn requested_focus_traversal_reveals_items_beyond_the_initial_visible_range() {
-    KEEP.set(true);
-    let mut renderer = make_renderer();
+    let observed = tessera_ui::testing::TestProbe::default();
+    let mut renderer = make_renderer(true, &observed);
     toggle_first(&mut renderer);
     for index in 1..12 {
-        NAVIGATION.get().unwrap().set(Some(FocusDirection::Next));
+        observed
+            .get()
+            .navigation
+            .unwrap()
+            .set(Some(FocusDirection::Next));
         renderer.render_frames(12);
-        assert!(NAVIGATION_ACCEPTED.get());
+        assert!(observed.get().navigation_accepted);
         let target = node(&renderer, index);
         assert_eq!(
             renderer.accessibility_snapshot().unwrap().focus,

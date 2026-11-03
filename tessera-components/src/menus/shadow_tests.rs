@@ -1,5 +1,3 @@
-use std::cell::Cell;
-
 use tessera_ui::{
     Color, Dp, HeadlessConfig, HeadlessRenderer, MOUSE_POINTER_ID, Modifier, PressKeyEventType,
     PxPosition, State,
@@ -18,26 +16,27 @@ use super::{
     MenuAnchor, MenuController, MenuDefaults, MenuPosition, menu_group, menu_item, menu_provider,
 };
 
-thread_local! {
-    static CONTROLLER: Cell<Option<State<MenuController>>> = const { Cell::new(None) };
-    static GROUPED: Cell<Option<State<bool>>> = const { Cell::new(None) };
-    static LONG: Cell<Option<State<bool>>> = const { Cell::new(None) };
-    static ACTIONS: Cell<Option<State<u32>>> = const { Cell::new(None) };
-    static REFERENCE: Cell<Option<State<Option<Vec<Rect>>>>> = const { Cell::new(None) };
+#[derive(Clone, Copy, Default)]
+struct FixtureHandles {
+    controller: Option<State<MenuController>>,
+    grouped: Option<State<bool>>,
+    long: Option<State<bool>>,
+    actions: Option<State<u32>>,
+    reference: Option<State<Option<Vec<Rect>>>>,
 }
 
 #[tessera]
-fn fixture() {
+fn fixture(observed: tessera_ui::testing::TestProbe<FixtureHandles>) {
     let controller = remember(MenuController::new);
     let grouped = remember(|| true);
     let long = remember(|| false);
     let actions = remember(|| 0);
     let reference = remember(|| None::<Vec<Rect>>);
-    CONTROLLER.set(Some(controller));
-    GROUPED.set(Some(grouped));
-    LONG.set(Some(long));
-    ACTIONS.set(Some(actions));
-    REFERENCE.set(Some(reference));
+    observed.with_mut(|handles| handles.controller = Some(controller));
+    observed.with_mut(|handles| handles.grouped = Some(grouped));
+    observed.with_mut(|handles| handles.long = Some(long));
+    observed.with_mut(|handles| handles.actions = Some(actions));
+    observed.with_mut(|handles| handles.reference = Some(reference));
     material_theme().child(move || {
         if let Some(rects) = reference.get() {
             boxed()
@@ -90,33 +89,38 @@ fn fixture() {
                         .modifier(Modifier::new().fill_max_size())
                         .child(|| {});
                 })
-                .menu_content(move || {
+                .menu_content(move |menu| {
                     if grouped.get() {
                         menu_group()
+                            .menu(menu)
                             .position(MenuPosition::First)
                             .accessibility_label("First group")
                             .children(move || {
                                 menu_item()
+                                    .menu(menu)
                                     .label("Share")
                                     .on_click(move || actions.set(actions.get() + 1));
                                 if long.get() {
                                     for index in 0..12 {
                                         menu_item()
+                                            .menu(menu)
                                             .label(format!("Extra action {index}"))
                                             .on_click(move || actions.set(actions.get() + 1));
                                     }
                                 }
                             });
                         menu_group()
+                            .menu(menu)
                             .position(MenuPosition::Last)
                             .accessibility_label("Last group")
                             .children(move || {
                                 menu_item()
+                                    .menu(menu)
                                     .label("Delete")
                                     .on_click(move || actions.set(actions.get() + 1));
                             });
                     } else {
-                        menu_item().label("Copy link").on_click(|| {});
+                        menu_item().menu(menu).label("Copy link").on_click(|| {});
                     }
                 });
         }
@@ -143,8 +147,12 @@ fn pixel(pixels: &[u8], x: f64, y: f64) -> u8 {
 }
 
 fn check_shadows(samples: u32) {
+    let observed = tessera_ui::testing::TestProbe::default();
     let mut renderer = HeadlessRenderer::new(
-        Box::new(|| fixture()),
+        Box::new({
+            let observed = observed.clone();
+            move || fixture(observed.clone())
+        }),
         vec![Box::new(crate::TesseraComponents)],
         HeadlessConfig {
             width: 900,
@@ -157,8 +165,8 @@ fn check_shadows(samples: u32) {
     .expect("renderer");
     renderer.render_frames(4);
     let background = renderer.read_pixels().expect("background");
-    let controller = CONTROLLER.get().expect("controller");
-    let grouped = GROUPED.get().expect("grouped");
+    let controller = observed.get().controller.expect("controller");
+    let grouped = observed.get().grouped.expect("grouped");
     for is_grouped in [true, false] {
         grouped.set(is_grouped);
         controller.with_mut(|menu| {
@@ -213,7 +221,7 @@ fn check_shadows(samples: u32) {
     }
 
     grouped.set(true);
-    LONG.get().expect("long").set(true);
+    observed.get().long.expect("long").set(true);
     controller.with_mut(|menu| {
         menu.open_at(MenuAnchor::from_dp(
             (Dp(80.0), Dp(60.0)),
@@ -258,7 +266,7 @@ fn check_shadows(samples: u32) {
         !controller.with(MenuController::is_open),
         "shadow pixels do not enlarge the menu's click target"
     );
-    assert_eq!(ACTIONS.get().expect("actions").get(), 0);
+    assert_eq!(observed.get().actions.expect("actions").get(), 0);
     assert_eq!(
         renderer.read_pixels().expect("dismissed after scrolling"),
         background
@@ -300,8 +308,12 @@ fn inside_group(rect: Rect, index: usize, x: f64, y: f64) -> bool {
 }
 
 fn check_corner_shadows(samples: u32) {
+    let observed = tessera_ui::testing::TestProbe::default();
     let mut renderer = HeadlessRenderer::new(
-        Box::new(|| fixture()),
+        Box::new({
+            let observed = observed.clone();
+            move || fixture(observed.clone())
+        }),
         vec![Box::new(crate::TesseraComponents)],
         HeadlessConfig {
             width: 900,
@@ -313,19 +325,27 @@ fn check_corner_shadows(samples: u32) {
     )
     .expect("renderer");
     renderer.render_frames(4);
-    CONTROLLER.get().expect("controller").with_mut(|menu| {
-        menu.open_at(MenuAnchor::from_dp(
-            (Dp(80.0), Dp(60.0)),
-            (Dp(80.0), Dp(40.0)),
-        ));
-    });
+    observed
+        .get()
+        .controller
+        .expect("controller")
+        .with_mut(|menu| {
+            menu.open_at(MenuAnchor::from_dp(
+                (Dp(80.0), Dp(60.0)),
+                (Dp(80.0), Dp(40.0)),
+            ));
+        });
     renderer.render_frames(8);
     let rects = vec![
         bounds(&renderer, Role::Group, Some("First group")),
         bounds(&renderer, Role::Group, Some("Last group")),
     ];
     let actual = renderer.read_pixels().expect("menu corners");
-    REFERENCE.get().expect("reference").set(Some(rects.clone()));
+    observed
+        .get()
+        .reference
+        .expect("reference")
+        .set(Some(rects.clone()));
     renderer.render_frames(8);
     let reference = renderer.read_pixels().expect("unclipped surfaces");
     for (index, rect) in rects.iter().enumerate() {

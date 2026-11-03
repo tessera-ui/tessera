@@ -4,7 +4,75 @@
 //!
 //! Display long lists and grids in resizable windows on different displays.
 
-use tessera_ui::Px;
+use std::{
+    collections::hash_map::DefaultHasher,
+    hash::{Hash, Hasher},
+};
+
+use tessera_ui::{CallbackWith, Px, RenderSlotWith};
+
+pub(crate) fn hash_key(key: impl Hash) -> u64 {
+    let mut hasher = DefaultHasher::new();
+    key.hash(&mut hasher);
+    hasher.finish()
+}
+
+#[derive(Clone, PartialEq)]
+pub(crate) struct LazyItemsSlot {
+    pub(crate) count: usize,
+    pub(crate) builder: RenderSlotWith<usize>,
+    pub(crate) key_provider: Option<CallbackWith<usize, u64>>,
+}
+
+impl LazyItemsSlot {
+    pub(crate) fn items(
+        count: usize,
+        builder: RenderSlotWith<usize>,
+        key_provider: Option<CallbackWith<usize, u64>>,
+    ) -> Self {
+        Self {
+            count,
+            builder,
+            key_provider,
+        }
+    }
+}
+
+#[derive(Clone, PartialEq)]
+pub(crate) struct LazyItemsPlan {
+    entries: Vec<(usize, LazyItemsSlot)>,
+    total_count: usize,
+}
+
+impl LazyItemsPlan {
+    pub(crate) fn new(slots: Vec<LazyItemsSlot>) -> Self {
+        let mut total_count = 0;
+        let entries = slots
+            .into_iter()
+            .map(|slot| {
+                let start = total_count;
+                total_count += slot.count;
+                (start, slot)
+            })
+            .collect();
+        Self {
+            entries,
+            total_count,
+        }
+    }
+
+    pub(crate) fn total_count(&self) -> usize {
+        self.total_count
+    }
+
+    pub(crate) fn resolve(&self, index: usize) -> Option<(&LazyItemsSlot, usize)> {
+        self.entries.iter().find_map(|(start, slot)| {
+            (*start..*start + slot.count)
+                .contains(&index)
+                .then(|| (slot, index - *start))
+        })
+    }
+}
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub(crate) struct MeasuredMain {
@@ -46,4 +114,161 @@ pub(crate) fn clamp_reported_main(
         report = report.min(max_value.max(Px::ZERO));
     }
     report
+}
+
+macro_rules! impl_lazy_builder {
+    ($builder:ident, $content:ident) => {
+        impl $builder {
+            /// Append a single lazy item.
+            pub fn item<F, Output>(&self, builder: F) -> Self
+            where
+                F: Fn() -> Output + Send + Sync + 'static,
+            {
+                self.items(1, move |_| builder())
+            }
+
+            /// Append a single lazy item with a stable key.
+            pub fn item_with_key<K, F, Output>(&self, key: K, builder: F) -> Self
+            where
+                K: Hash,
+                F: Fn() -> Output + Send + Sync + 'static,
+            {
+                let key = hash_key(key);
+                self.props.append("content", move |props| {
+                    props
+                        .content
+                        .get_or_insert_with($content::default)
+                        .push(LazySlot::items(
+                            1,
+                            RenderSlotWith::new(move |_| builder()),
+                            Some(CallbackWith::new(move |_| key)),
+                        ));
+                });
+                Self { props: self.props }
+            }
+
+            /// Append a batch of indexed lazy items.
+            pub fn items<F, Output>(&self, count: usize, builder: F) -> Self
+            where
+                F: Fn(usize) -> Output + Send + Sync + 'static,
+            {
+                self.props.append("content", move |props| {
+                    props
+                        .content
+                        .get_or_insert_with($content::default)
+                        .push(LazySlot::items(count, RenderSlotWith::new(builder), None));
+                });
+                Self { props: self.props }
+            }
+
+            /// Append indexed lazy items with stable keys.
+            pub fn items_with_key<K, KF, F, Output>(
+                &self,
+                count: usize,
+                key_provider: KF,
+                builder: F,
+            ) -> Self
+            where
+                K: Hash,
+                KF: Fn(usize) -> K + Send + Sync + 'static,
+                F: Fn(usize) -> Output + Send + Sync + 'static,
+            {
+                self.props.append("content", move |props| {
+                    props
+                        .content
+                        .get_or_insert_with($content::default)
+                        .push(LazySlot::items(
+                            count,
+                            RenderSlotWith::new(builder),
+                            Some(CallbackWith::new(move |index| {
+                                hash_key(key_provider(index))
+                            })),
+                        ));
+                });
+                Self { props: self.props }
+            }
+
+            /// Append lazy items from an iterator, exposing index and element.
+            pub fn items_from_iter<I, T, F, Output>(&self, iter: I, builder: F) -> Self
+            where
+                I: IntoIterator<Item = T>,
+                T: Send + Sync + 'static,
+                F: Fn(usize, &T) -> Output + Send + Sync + 'static,
+            {
+                let items: Vec<T> = iter.into_iter().collect();
+                self.props.append("content", move |props| {
+                    if !items.is_empty() {
+                        props
+                            .content
+                            .get_or_insert_with($content::default)
+                            .push(LazySlot::items(
+                                items.len(),
+                                RenderSlotWith::new(move |index| builder(index, &items[index])),
+                                None,
+                            ));
+                    }
+                });
+                Self { props: self.props }
+            }
+
+            /// Append lazy items from an iterator with stable keys.
+            pub fn items_from_iter_with_key<I, T, K, KF, F, Output>(
+                &self,
+                iter: I,
+                key_provider: KF,
+                builder: F,
+            ) -> Self
+            where
+                I: IntoIterator<Item = T>,
+                T: Send + Sync + 'static,
+                K: Hash,
+                KF: Fn(usize, &T) -> K + Send + Sync + 'static,
+                F: Fn(usize, &T) -> Output + Send + Sync + 'static,
+            {
+                let items: Arc<Vec<T>> = Arc::new(iter.into_iter().collect());
+                self.props.append("content", move |props| {
+                    if !items.is_empty() {
+                        let keys = items.clone();
+                        props
+                            .content
+                            .get_or_insert_with($content::default)
+                            .push(LazySlot::items(
+                                items.len(),
+                                RenderSlotWith::new(move |index| builder(index, &items[index])),
+                                Some(CallbackWith::new(move |index| {
+                                    hash_key(key_provider(index, &keys[index]))
+                                })),
+                            ));
+                    }
+                });
+                Self { props: self.props }
+            }
+
+            /// Append lazy items from an iterator when only the element is used.
+            pub fn items_from_iter_values<I, T, F, Output>(&self, iter: I, builder: F) -> Self
+            where
+                I: IntoIterator<Item = T>,
+                T: Send + Sync + 'static,
+                F: Fn(&T) -> Output + Send + Sync + 'static,
+            {
+                self.items_from_iter(iter, move |_, item| builder(item))
+            }
+        }
+    };
+}
+
+pub(crate) use impl_lazy_builder;
+
+#[derive(Clone, Copy, Default, PartialEq, Eq, Hash)]
+pub(crate) struct ZeroLayout;
+
+impl tessera_ui::LayoutModifierNode for ZeroLayout {
+    fn measure(
+        &self,
+        _input: &mut tessera_ui::layout::MeasureScope<'_>,
+    ) -> Result<tessera_ui::LayoutResult, tessera_ui::MeasurementError> {
+        Ok(tessera_ui::LayoutResult::new(
+            tessera_ui::ComputedData::ZERO,
+        ))
+    }
 }

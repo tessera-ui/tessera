@@ -1,26 +1,23 @@
-//! Wall-clock bound for the Tessera color check.
+//! Wall-clock bound for Tessera call checking.
 //!
 //! ## Usage
 //!
-//! Keep color checks responsive when semantic analysis stops making progress.
+//! Keep call checking responsive when semantic analysis stops making progress.
 
 use std::{
     env,
-    sync::{
-        Arc,
-        atomic::{AtomicBool, Ordering},
-    },
-    thread,
-    time::{Duration, Instant},
+    sync::mpsc::{self, RecvTimeoutError, Sender},
+    thread::{self, JoinHandle},
+    time::Duration,
 };
 
 /// Environment variable that overrides the wall-clock budget in seconds.
 const LIMIT_ENV: &str = "TESSERA_COLOR_CHECK_TIMEOUT_SECS";
 
-/// Default budget for a complete color check run.
+/// Default budget for a complete call checking run.
 const DEFAULT_LIMIT: Duration = Duration::from_secs(300);
 
-/// Exit code used when the color check exceeds its wall-clock budget.
+/// Exit code used when call checking exceeds its wall-clock budget.
 const TIMEOUT_EXIT_CODE: i32 = 2;
 
 /// Reads the configured wall-clock budget.
@@ -40,44 +37,40 @@ pub(super) fn limit_from_env() -> Option<Duration> {
     }
 }
 
-/// Keeps a bound alive for as long as the color check is running.
+/// Keeps a bound alive for as long as call checking is running.
 ///
 /// Dropping the handle marks the run as finished, which stops the watcher
 /// without terminating the process.
 pub(super) struct Watchdog {
-    finished: Arc<AtomicBool>,
+    finished: Sender<()>,
+    worker: Option<JoinHandle<()>>,
 }
 
 impl Drop for Watchdog {
     fn drop(&mut self) {
-        self.finished.store(true, Ordering::SeqCst);
+        let _ = self.finished.send(());
+        if let Some(worker) = self.worker.take() {
+            let _ = worker.join();
+        }
     }
 }
 
-/// Arms the wall-clock bound for the current color check run.
+/// Arms the wall-clock bound for the current call checking run.
 ///
 /// The watcher terminates the process rather than returning an error because a
 /// blocked rust-analyzer load cannot be cancelled cooperatively: the blocked
 /// call owns the main thread and holds no cancellation handle.
 pub(super) fn arm(limit: Option<Duration>) -> Option<Watchdog> {
     let limit = limit?;
-    let finished = Arc::new(AtomicBool::new(false));
-    let watcher_flag = Arc::clone(&finished);
-    thread::Builder::new()
-        .name("tessera-color-check-watchdog".to_string())
+    let (finished, receiver) = mpsc::channel();
+    let worker = thread::Builder::new()
+        .name("tessera-call-guard-watchdog".to_string())
         .spawn(move || {
-            let started = Instant::now();
-            while started.elapsed() < limit {
-                if watcher_flag.load(Ordering::SeqCst) {
-                    return;
-                }
-                thread::sleep(Duration::from_millis(100));
-            }
-            if watcher_flag.load(Ordering::SeqCst) {
+            if receiver.recv_timeout(limit) != Err(RecvTimeoutError::Timeout) {
                 return;
             }
             eprintln!(
-                "error: Tessera color check exceeded its {}s wall-clock budget and was aborted; \
+                "error: Tessera call checking exceeded its {}s wall-clock budget and was aborted; \
                  set {} to raise the limit or 0 to disable it",
                 limit.as_secs(),
                 LIMIT_ENV
@@ -85,5 +78,8 @@ pub(super) fn arm(limit: Option<Duration>) -> Option<Watchdog> {
             std::process::exit(TIMEOUT_EXIT_CODE);
         })
         .ok()?;
-    Some(Watchdog { finished })
+    Some(Watchdog {
+        finished,
+        worker: Some(worker),
+    })
 }

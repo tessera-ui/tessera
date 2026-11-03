@@ -22,6 +22,7 @@ pub(crate) struct ExecutionContext {
 }
 
 impl ExecutionContext {
+    #[cfg(test)]
     pub(crate) fn new() -> Self {
         Self {
             context_stack: vec![ContextMap::new()],
@@ -37,13 +38,13 @@ pub(crate) struct OrderFrame {
     pub(crate) context: u64,
     pub(crate) instance: u64,
     pub(crate) frame_receiver: u64,
+    pub(crate) modifier_attachment: u64,
     pub(crate) occurrence_salt: u64,
     pub(crate) group_occurrences: SmallVec<[(u64, u64); 4]>,
 }
 
-thread_local! {
-    static EXECUTION_CONTEXT: RefCell<ExecutionContext> = RefCell::new(ExecutionContext::new());
-}
+const EXECUTION_CONTEXT: crate::session::SessionLocal<RefCell<ExecutionContext>> =
+    crate::session::SessionLocal::new();
 
 pub(crate) fn with_execution_context<R>(f: impl FnOnce(&ExecutionContext) -> R) -> R {
     EXECUTION_CONTEXT.with(|context| f(&context.borrow()))

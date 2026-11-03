@@ -1,5 +1,3 @@
-use std::cell::Cell;
-
 use tessera_ui::{
     AxisConstraint, ComputedData, Dp, LayoutModifierNode, LayoutResult, MeasurementError, Modifier,
     Px, RenderSlot, State,
@@ -26,16 +24,19 @@ struct Inputs {
     count: u32,
 }
 
-thread_local! {
-    static INPUTS: Cell<Option<State<Inputs>>> = const { Cell::new(None) };
-    static MEASURES: Cell<usize> = const { Cell::new(0) };
-    static WRAPPER_WIDTH: Cell<Option<State<Dp>>> = const { Cell::new(None) };
+#[derive(Clone, Copy, Default)]
+struct FixtureHandles {
+    inputs: Option<State<Inputs>>,
+    width: Option<State<Dp>>,
 }
 
 #[tessera]
-fn padded_constraint_fixture(vertical: bool) {
+fn padded_constraint_fixture(
+    vertical: bool,
+    observed: tessera_ui::testing::TestProbe<FixtureHandles>,
+) {
     let width = remember(|| Dp(16.0));
-    WRAPPER_WIDTH.set(Some(width));
+    observed.with_mut(|handles| handles.width = Some(width));
     let children = RenderSlot::new(move || {
         boxed().modifier(Modifier::new().size(width.get(), width.get()));
         boxed()
@@ -58,9 +59,13 @@ fn padded_constraint_fixture(vertical: bool) {
 #[test]
 fn fixed_size_wrappers_preserve_child_origins_when_offered_bounds_change() {
     for vertical in [false, true] {
+        let observed = tessera_ui::testing::TestProbe::default();
         let mut session = start_layout_test_session(
-            layout_test(move || {
-                padded_constraint_fixture(vertical);
+            layout_test({
+                let observed = observed.clone();
+                move || {
+                    padded_constraint_fixture(vertical, observed.clone());
+                }
             })
             .viewport_px(200, 200),
         );
@@ -68,7 +73,7 @@ fn fixed_size_wrappers_preserve_child_origins_when_offered_bounds_change() {
             .node("flex-77")
             .size(20, 10)
             .position(if vertical { 5 } else { 21 }, if vertical { 21 } else { 5 });
-        WRAPPER_WIDTH.get().unwrap().set(Dp(24.0));
+        observed.get().width.unwrap().set(Dp(24.0));
         pump_layout_test_session(&mut session, 16_666_667)
             .node("flex-77")
             .size(20, 10)
@@ -86,7 +91,6 @@ struct Leaf;
 
 impl LayoutModifierNode for Leaf {
     fn measure(&self, scope: &mut MeasureScope<'_>) -> Result<LayoutResult, MeasurementError> {
-        MEASURES.set(MEASURES.get() + 1);
         Ok(LayoutResult::new(ComputedData {
             width: scope.parent_constraint().width().clamp(Px(20)),
             height: scope.parent_constraint().height().clamp(Px(10)),
@@ -109,7 +113,7 @@ fn leaf(id: Option<u32>, weight: Option<f32>) {
 }
 
 #[tessera]
-fn fixture(vertical: bool) {
+fn fixture(vertical: bool, observed: tessera_ui::testing::TestProbe<FixtureHandles>) {
     let inputs = remember(|| Inputs {
         ink: false,
         end: false,
@@ -118,7 +122,7 @@ fn fixture(vertical: bool) {
         reverse: false,
         count: 2,
     });
-    INPUTS.set(Some(inputs));
+    observed.with_mut(|handles| handles.inputs = Some(inputs));
     let current = inputs.get();
     let children = RenderSlot::new(move || {
         let current = inputs.get();
@@ -177,10 +181,13 @@ fn fixture(vertical: bool) {
 #[test]
 fn flex_alignment_reuses_measurements_and_weights_and_structure_refresh_constraints() {
     for vertical in [false, true] {
-        MEASURES.set(0);
+        let observed = tessera_ui::testing::TestProbe::default();
         let mut session = start_layout_test_session(
-            layout_test(move || {
-                fixture(vertical);
+            layout_test({
+                let observed = observed.clone();
+                move || {
+                    fixture(vertical, observed.clone());
+                }
             })
             .viewport_px(240, 180),
         );
@@ -188,15 +195,20 @@ fn flex_alignment_reuses_measurements_and_weights_and_structure_refresh_constrai
             .node("flex-0")
             .size(20, 10)
             .position(0, 0);
-        let inputs = INPUTS.get().unwrap();
-        let initial = MEASURES.get();
+        let inputs = observed.get().inputs.unwrap();
+        assert!(
+            session
+                .work()
+                .executed::<Leaf>(tessera_ui::WorkPhase::Measure)
+                > 0
+        );
         inputs.with_mut(|inputs| inputs.ink = true);
         pump_layout_test_session(&mut session, 8_000_000)
             .node("flex-0")
             .position(0, 0);
         assert_eq!(
-            session.diagnostics().unwrap().measure_node_calls,
-            1,
+            session.work().phase(tessera_ui::WorkPhase::Measure).count(),
+            0,
             "paint changes must resolve from the root cache"
         );
         assert_eq!(session.diagnostics().unwrap().geometry_nodes_updated, 0);
@@ -207,8 +219,10 @@ fn flex_alignment_reuses_measurements_and_weights_and_structure_refresh_constrai
             if vertical { 80 } else { 50 },
         );
         assert_eq!(
-            MEASURES.get(),
-            initial,
+            session
+                .work()
+                .executed::<Leaf>(tessera_ui::WorkPhase::Measure),
+            0,
             "alignment must use cached child measurements"
         );
         inputs.with_mut(|inputs| inputs.stretch = true);
@@ -218,7 +232,10 @@ fn flex_alignment_reuses_measurements_and_weights_and_structure_refresh_constrai
             if vertical { 10 } else { 60 },
         );
         assert!(
-            MEASURES.get() > initial,
+            session
+                .work()
+                .executed::<Leaf>(tessera_ui::WorkPhase::Measure)
+                > 0,
             "stretch changes the child constraints"
         );
         inputs.with_mut(|inputs| {

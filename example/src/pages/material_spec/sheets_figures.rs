@@ -27,7 +27,7 @@ use super::{
     super::{ACCENT, INK, srgb},
     Geometry, annotations, caption,
     color::at,
-    gap, sheet_album, sheet_canvas, type_style,
+    gap, sheet_albums, sheet_canvas, type_style,
 };
 
 fn top_rounded(radius: f64) -> Shape {
@@ -45,6 +45,14 @@ const HANDLE_CENTER: f64 = 24.0;
 
 fn badge_ink() -> Color {
     srgb(48, 48, 52)
+}
+
+fn watch_figure(geometry: State<Geometry>, name: &'static str) -> Modifier {
+    annotations::watch_precise(geometry, name).semantics(SemanticsArgs {
+        test_tag: Some(format!("sheet-figure-{name}")),
+        merge_descendants: true,
+        ..Default::default()
+    })
 }
 
 #[derive(Clone, Copy, Default, PartialEq)]
@@ -154,7 +162,7 @@ fn stage(
         RenderSlot::new(move || {
             let mut modifier = Modifier::new();
             if let Some(geometry) = geometry {
-                modifier = annotations::watch_precise(geometry, "figure");
+                modifier = watch_figure(geometry, "figure");
             }
             boxed()
                 .alignment(Alignment::TopStart)
@@ -197,7 +205,7 @@ fn phone(
         .children(move || {
             let mut modifier = at(7.0, 7.0);
             if let Some(geometry) = geometry {
-                modifier = modifier.then(annotations::watch_precise(geometry, "screen"));
+                modifier = modifier.then(watch_figure(geometry, "screen"));
             }
             boxed()
                 .alignment(Alignment::TopStart)
@@ -212,7 +220,7 @@ fn phone(
                     if scrim {
                         let mut modifier = Modifier::new();
                         if let Some(geometry) = geometry {
-                            modifier = annotations::watch_precise(geometry, "scrim");
+                            modifier = watch_figure(geometry, "scrim");
                         }
                         spacer().modifier(
                             modifier
@@ -241,7 +249,7 @@ fn sheet(
     let content = content.unwrap_or_else(RenderSlot::empty);
     let mut modifier = at(x, y);
     if let Some(geometry) = geometry {
-        modifier = modifier.then(annotations::watch_precise(geometry, "container"));
+        modifier = modifier.then(watch_figure(geometry, "container"));
     }
     boxed()
         .alignment(Alignment::TopStart)
@@ -255,7 +263,7 @@ fn sheet(
             if let Some(center) = handle {
                 let mut modifier = at(handle_x.unwrap_or(w / 2.0) - 16.0, center - 2.0);
                 if let Some(geometry) = geometry {
-                    modifier = modifier.then(annotations::watch_precise(geometry, "handle"));
+                    modifier = modifier.then(watch_figure(geometry, "handle"));
                 }
                 spacer().modifier(
                     modifier
@@ -473,8 +481,6 @@ pub(super) fn m2_figure() {
 #[tessera]
 pub(super) fn anatomy_figure(outlined: bool) {
     let geometry = remember(Geometry::new);
-    #[cfg(all(test, not(target_family = "wasm")))]
-    super::scaled_tests::GEOMETRY.set(Some(geometry));
     stage(
         1024.0,
         502.0,
@@ -507,8 +513,6 @@ pub(super) fn anatomy_figure(outlined: bool) {
 #[tessera]
 pub(super) fn measurements_figure() {
     let geometry = remember(Geometry::new);
-    #[cfg(all(test, not(target_family = "wasm")))]
-    super::scaled_tests::GEOMETRY.set(Some(geometry));
     stage(
         1024.0,
         836.0,
@@ -688,11 +692,13 @@ pub(super) fn tablet_figure() {
 
 #[tessera]
 fn photo(index: usize, x: f64, y: f64, w: f64, h: f64, radius: Option<f64>) {
-    image().raster(sheet_album(index)).modifier(
-        at(x, y)
-            .required_size(Dp(w), Dp(h))
-            .clip_shape(Shape::rounded_rectangle(Dp(radius.unwrap_or(0.0)))),
-    );
+    image()
+        .raster(tessera_ui::remember_with_key(index, move || sheet_albums()[index].clone()).get())
+        .modifier(
+            at(x, y)
+                .required_size(Dp(w), Dp(h))
+                .clip_shape(Shape::rounded_rectangle(Dp(radius.unwrap_or(0.0)))),
+        );
 }
 
 #[tessera]

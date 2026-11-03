@@ -351,14 +351,6 @@ impl ComponentNodeMetaDatas {
             metadata.paint_dirty = true;
         }
     }
-
-    #[cfg(any(test, feature = "testing"))]
-    pub(crate) fn with_entries<R>(
-        &self,
-        f: impl FnOnce(&FxHashMap<NodeId, ComponentNodeMetaData>) -> R,
-    ) -> R {
-        f(&self.entries)
-    }
 }
 
 /// Represents errors that can occur during node measurement.
@@ -555,7 +547,7 @@ pub struct KeyboardInput<'a> {
     /// The size of the component node, computed during the measure stage.
     pub computed_data: ComputedData,
     /// Keyboard events from the event loop, if any.
-    pub keyboard_events: &'a mut Vec<winit::event::KeyEvent>,
+    pub keyboard_events: &'a mut Vec<crate::KeyboardEvent>,
     /// The current state of the keyboard modifiers at the time of the event.
     pub key_modifiers: winit::keyboard::ModifiersState,
     pub(crate) ime_request: &'a mut Option<ImeRequest>,
@@ -983,7 +975,7 @@ pub(crate) fn measure_node(
         parent_constraint
     );
 
-    // Ensure thread-local current node context for nested control-flow
+    // Restore the owning node context for nested control-flow
     // instrumentation.
     let _node_ctx_guard = push_current_node_with_instance_logic_id(
         node_id,

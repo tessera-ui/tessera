@@ -1,5 +1,3 @@
-use std::cell::{Cell, RefCell};
-
 use tessera_ui::{
     HeadlessConfig, HeadlessRenderer, MOUSE_POINTER_ID, PressKeyEventType, Px, PxPosition, PxSize,
     accesskit::{Action, Node, NodeId, Rect, TreeUpdate},
@@ -61,23 +59,25 @@ impl Default for Settings {
     }
 }
 
-thread_local! {
-    static FOCUS_REFERENCE: Cell<Option<tessera_ui::PxRect>> = const { Cell::new(None) };
-    static SETTINGS: Cell<Option<State<Settings>>> = const { Cell::new(None) };
-    static CLICKS: Cell<Option<State<usize>>> = const { Cell::new(None) };
-    static INTERACTIONS: RefCell<[Option<State<InteractionState>>; 15]> = const { RefCell::new([None; 15]) };
+#[derive(Clone, Default, PartialEq)]
+struct FixtureProbes {
+    focus_reference: tessera_ui::testing::TestProbe<Option<tessera_ui::PxRect>>,
+    settings: tessera_ui::testing::TestProbe<Option<State<Settings>>>,
+    clicks: tessera_ui::testing::TestProbe<Option<State<usize>>>,
+    interactions: tessera_ui::testing::TestProbe<[Option<State<InteractionState>>; 15]>,
 }
 
 #[tessera]
-fn fixture() {
+fn fixture(probe: FixtureProbes) {
     let settings = remember(Settings::default);
     let clicks = remember(|| 0usize);
     let painter = remember(|| {
         try_painter(br#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M0 0H24V24H0Z"/></svg>"#.as_slice()).unwrap()
     });
-    SETTINGS.set(Some(settings));
-    CLICKS.set(Some(clicks));
+    probe.settings.set(Some(settings));
+    probe.clicks.set(Some(clicks));
     material_theme().child(move || {
+        let probe = probe.clone();
         provide_context(
             || ContentColor {
                 current: settings.get().inherited,
@@ -96,75 +96,100 @@ fn fixture() {
                             .background(Color::WHITE)
                             .padding_all(Dp(16.0)),
                     )
-                    .children(move || {
-                        column().children(move || {
-                            for (size_index, size) in SIZES.into_iter().enumerate() {
-                                row().children(move || {
-                                    for (width_index, width) in WIDTHS.into_iter().enumerate() {
-                                        let index = size_index * 3 + width_index;
-                                        let state = remember(InteractionState::new);
-                                        INTERACTIONS.with(|states| {
-                                            states.borrow_mut()[index] = Some(state)
+                    .children({
+                        let probe = probe.clone();
+                        move || {
+                            column().children({
+                                let probe = probe.clone();
+                                move || {
+                                    for (size_index, size) in SIZES.into_iter().enumerate() {
+                                        row().children({
+                                            let probe = probe.clone();
+                                            move || {
+                                                for (width_index, width) in
+                                                    WIDTHS.into_iter().enumerate()
+                                                {
+                                                    let index = size_index * 3 + width_index;
+                                                    let state = remember(InteractionState::new);
+                                                    probe.interactions.with_mut(|states| {
+                                                        states[index] = Some(state)
+                                                    });
+                                                    let value = settings.get();
+                                                    icon_button()
+                                                        .icon(painter.get())
+                                                        .size(size)
+                                                        .width(width)
+                                                        .variant(value.variant)
+                                                        .selected_optional(value.selected)
+                                                        .shape_style(value.shape)
+                                                        .shape_optional(value.fixed_shape)
+                                                        .enabled(value.enabled)
+                                                        .color_style(value.color_style)
+                                                        .color_optional(value.color)
+                                                        .content_color_optional(value.content)
+                                                        .interaction_state(state)
+                                                        .presentation_state_optional(
+                                                            if index == 7 {
+                                                                value.presentation_state
+                                                            } else {
+                                                                None
+                                                            },
+                                                        )
+                                                        .presentation_ripple_optional(
+                                                            if index == 7 {
+                                                                value.presentation_ripple
+                                                            } else {
+                                                                None
+                                                            },
+                                                        )
+                                                        .accessibility_label(format!(
+                                                            "Icon action {index}"
+                                                        ))
+                                                        .on_click(move || {
+                                                            clicks.set(clicks.get() + 1);
+                                                            settings.with_mut(|settings| {
+                                                                if let Some(selected) =
+                                                                    &mut settings.selected
+                                                                {
+                                                                    *selected = !*selected;
+                                                                }
+                                                            });
+                                                        });
+                                                    spacer()
+                                                        .modifier(Modifier::new().width(Dp(24.0)));
+                                                }
+                                            }
                                         });
-                                        let value = settings.get();
-                                        icon_button()
-                                            .icon(painter.get())
-                                            .size(size)
-                                            .width(width)
-                                            .variant(value.variant)
-                                            .selected_optional(value.selected)
-                                            .shape_style(value.shape)
-                                            .shape_optional(value.fixed_shape)
-                                            .enabled(value.enabled)
-                                            .color_style(value.color_style)
-                                            .color_optional(value.color)
-                                            .content_color_optional(value.content)
-                                            .interaction_state(state)
-                                            .presentation_state_optional(if index == 7 {
-                                                value.presentation_state
-                                            } else {
-                                                None
-                                            })
-                                            .presentation_ripple_optional(if index == 7 {
-                                                value.presentation_ripple
-                                            } else {
-                                                None
-                                            })
-                                            .accessibility_label(format!("Icon action {index}"))
-                                            .on_click(move || {
-                                                clicks.set(clicks.get() + 1);
-                                                settings.with_mut(|settings| {
-                                                    if let Some(selected) = &mut settings.selected {
-                                                        *selected = !*selected;
-                                                    }
-                                                });
-                                            });
-                                        spacer().modifier(Modifier::new().width(Dp(24.0)));
+                                        spacer().modifier(Modifier::new().height(Dp(8.0)));
                                     }
-                                });
-                                spacer().modifier(Modifier::new().height(Dp(8.0)));
-                            }
-                            if settings.with(|settings| settings.focus_reference) {
-                                let reference_modifier = Modifier::new()
-                                    .size(Dp(66.0), Dp(66.0))
-                                    .on_globally_positioned(|bounds| {
-                                        FOCUS_REFERENCE.set(Some(bounds))
-                                    });
-                                surface()
-                                    .shape(Shape::CAPSULE)
-                                    .style(SurfaceStyle::Filled {
-                                        color: Color::WHITE,
-                                    })
-                                    .show_state_layer(false)
-                                    .presentation_state_optional(
-                                        settings.with(|settings| settings.presentation_state),
-                                    )
-                                    .presentation_ripple_optional(
-                                        settings.with(|settings| settings.presentation_ripple),
-                                    )
-                                    .modifier(reference_modifier);
-                            }
-                        });
+                                    if settings.with(|settings| settings.focus_reference) {
+                                        let reference_modifier = Modifier::new()
+                                            .size(Dp(66.0), Dp(66.0))
+                                            .on_globally_positioned({
+                                                let probe = probe.clone();
+                                                move |bounds| {
+                                                    probe.focus_reference.set(Some(bounds))
+                                                }
+                                            });
+                                        surface()
+                                            .shape(Shape::CAPSULE)
+                                            .style(SurfaceStyle::Filled {
+                                                color: Color::WHITE,
+                                            })
+                                            .show_state_layer(false)
+                                            .presentation_state_optional(
+                                                settings
+                                                    .with(|settings| settings.presentation_state),
+                                            )
+                                            .presentation_ripple_optional(
+                                                settings
+                                                    .with(|settings| settings.presentation_ripple),
+                                            )
+                                            .modifier(reference_modifier);
+                                    }
+                                }
+                            });
+                        }
                     });
             },
         );
@@ -200,10 +225,10 @@ fn click(renderer: &mut HeadlessRenderer, point: PxPosition) {
 fn check_geometry(samples: u32, scale: f64) {
     let width = (600.0 * scale) as u32;
     let height = (600.0 * scale) as u32;
+    let probe = FixtureProbes::default();
+    let observed = probe.clone();
     let mut renderer = HeadlessRenderer::new(
-        Box::new(|| {
-            fixture();
-        }),
+        Box::new(move || fixture(observed.clone())),
         vec![Box::new(crate::TesseraComponents)],
         HeadlessConfig {
             width,
@@ -272,7 +297,7 @@ fn check_geometry(samples: u32, scale: f64) {
             assert_eq!(icon_height, expected_icon, "icon height {index}");
         }
     }
-    let settings = SETTINGS.get().unwrap();
+    let settings = probe.settings.get().unwrap();
     let scheme = MaterialTheme::default().color_scheme;
     let point = center(bounds(&tree, 7));
     let assert_icon_color = |renderer: &HeadlessRenderer, color: Color| {
@@ -365,7 +390,7 @@ fn check_geometry(samples: u32, scale: f64) {
         PxPosition::from_f32_xy((rect.x0 + 1.0) as f32, center(rect).y),
     );
     assert_eq!(
-        CLICKS.get().unwrap().get(),
+        probe.clicks.get().unwrap().get(),
         1,
         "touch padding is interactive"
     );
@@ -383,7 +408,7 @@ fn check_geometry(samples: u32, scale: f64) {
         assert!(!node.supports_action(Action::Click));
     }
     click(&mut renderer, center(rect));
-    assert_eq!(CLICKS.get().unwrap().get(), 1);
+    assert_eq!(probe.clicks.get().unwrap().get(), 1);
     settings.with_mut(|settings| {
         settings.enabled = true;
         settings.selected = Some(false);
@@ -396,11 +421,12 @@ fn check_geometry(samples: u32, scale: f64) {
     renderer.pointer_press(MOUSE_POINTER_ID, point, PressKeyEventType::Left);
     renderer.render_frames(30);
     assert!(
-        INTERACTIONS
-            .with(|states| states.borrow()[7].unwrap())
+        probe
+            .interactions
+            .with(|states| states[7].unwrap())
             .with(InteractionState::is_pressed)
     );
-    assert_eq!(CLICKS.get().unwrap().get(), 1);
+    assert_eq!(probe.clicks.get().unwrap().get(), 1);
     renderer.pointer_release(MOUSE_POINTER_ID, point, PressKeyEventType::Left);
     renderer.pointer_move(
         MOUSE_POINTER_ID,
@@ -411,7 +437,7 @@ fn check_geometry(samples: u32, scale: f64) {
     assert_eq!(node(&after, 7).0, identity);
     assert_eq!(node(&after, 7).1.role(), Role::Button);
     assert_eq!(node(&after, 7).1.toggled(), Some(Toggled::True));
-    assert_eq!(CLICKS.get().unwrap().get(), 2);
+    assert_eq!(probe.clicks.get().unwrap().get(), 2);
     settings.with_mut(|settings| {
         settings.selected = None;
         settings.variant = IconButtonVariant::Outlined;
@@ -574,8 +600,10 @@ fn controlled_presentation_matches_native_states_without_taking_focus() {
         || {
             use tessera_ui::accesskit::{Action, ActionRequest, TreeId};
 
+            let probe = FixtureProbes::default();
+            let observed = probe.clone();
             let mut renderer = HeadlessRenderer::new(
-                Box::new(fixture),
+                Box::new(move || fixture(observed.clone())),
                 vec![Box::new(crate::TesseraComponents)],
                 HeadlessConfig {
                     width: 600,
@@ -586,7 +614,7 @@ fn controlled_presentation_matches_native_states_without_taking_focus() {
             )
             .unwrap();
             renderer.render_frames(20);
-            let settings = SETTINGS.get().unwrap();
+            let settings = probe.settings.get().unwrap();
             settings.with_mut(|settings| settings.focus_reference = true);
             renderer.render_frames(20);
             let tree = renderer.accessibility_snapshot().unwrap();
@@ -636,12 +664,10 @@ fn controlled_presentation_matches_native_states_without_taking_focus() {
                     preview, rest,
                     "presentation changes native appearance: {presentation:?}"
                 );
-                let live = INTERACTIONS
-                    .with(|states| states.borrow()[7].unwrap())
-                    .get();
+                let live = probe.interactions.with(|states| states[7].unwrap()).get();
                 assert_eq!(live, InteractionState::new());
                 assert_ne!(renderer.accessibility_snapshot().unwrap().focus, id);
-                assert_eq!(CLICKS.get().unwrap().get(), 0);
+                assert_eq!(probe.clicks.get().unwrap().get(), 0);
                 if presentation == InteractionVisualState::Focus {
                     let pixels = renderer.read_pixels().unwrap();
                     focus_preview = Some(focus_crop(&pixels));
@@ -691,7 +717,7 @@ fn controlled_presentation_matches_native_states_without_taking_focus() {
             renderer.render_frames(20);
             let sampled = crop(&renderer.read_pixels().unwrap());
             let pixels = renderer.read_pixels().unwrap();
-            let reference = FOCUS_REFERENCE.get().unwrap();
+            let reference = probe.focus_reference.get().unwrap();
             let x = (reference.x.0 as f32 + reference.width.0 as f32 * 0.7) as usize;
             let y = (reference.y.0 as f32 + reference.height.0 as f32 * 0.9) as usize;
             assert!(
@@ -711,7 +737,10 @@ fn controlled_presentation_matches_native_states_without_taking_focus() {
                 sampled,
                 "presentation ripple remains static across frame timestamps"
             );
-            assert_eq!(renderer.diagnostics().paint_nodes_recorded, 0);
+            assert_eq!(
+                renderer.work().phase(tessera_ui::WorkPhase::Paint).count(),
+                0
+            );
             settings.with_mut(|settings| settings.presentation_ripple = None);
             renderer.render_frames(20);
             assert_eq!(crop(&renderer.read_pixels().unwrap()), previews[2]);
@@ -821,15 +850,14 @@ fn controlled_presentation_matches_native_states_without_taking_focus() {
             renderer.pointer_press(MOUSE_POINTER_ID, point, PressKeyEventType::Left);
             renderer.render_frames(20);
             assert!(
-                INTERACTIONS
-                    .with(|states| states.borrow()[7].unwrap())
+                probe
+                    .interactions
+                    .with(|states| states[7].unwrap())
                     .with(InteractionState::is_pressed)
             );
             tessera_ui::FocusManager::current().clear_focus(true);
             renderer.render_frames(20);
-            let held = INTERACTIONS
-                .with(|states| states.borrow()[7].unwrap())
-                .get();
+            let held = probe.interactions.with(|states| states[7].unwrap()).get();
             assert!(
                 held.is_pressed(),
                 "clearing keyboard focus preserves the actual held pointer press"
@@ -850,7 +878,7 @@ fn controlled_presentation_matches_native_states_without_taking_focus() {
             renderer.pointer_move(MOUSE_POINTER_ID, outside);
             tessera_ui::FocusManager::current().clear_focus(true);
             renderer.render_frames(20);
-            assert_eq!(CLICKS.get().unwrap().get(), 0);
+            assert_eq!(probe.clicks.get().unwrap().get(), 0);
             settings.with_mut(|settings| {
                 settings.enabled = false;
                 settings.presentation_state = Some(InteractionVisualState::Pressed);

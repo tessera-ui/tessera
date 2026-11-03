@@ -36,3 +36,10 @@ workers, `kill` stops one, and `shutdown` closes the supervisor.
 Set `TESSERA_HEADLESS_SCALE_FACTOR` before starting the supervisor for DPI cases.
 Each render advances the virtual clock by the configured frame step. See
 [CLI tools](tooling.md) for profiling capture and analysis.
+
+For in-process Rust tests, enable `testing` alongside `headless`. Give each fixture
+explicit props and `TestProbe` observations. Query actual component coordinates
+with `inspect_components()` and published semantics with `inspect_accessibility()`.
+Use `work()` for executed phases and frame-clock and graphics diagnostics for
+scheduling and resource observations. Inject named keyboard input with `press_key`;
+use pixels and input for rendering and interaction assertions.
