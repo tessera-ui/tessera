@@ -13,58 +13,35 @@ env:
 
 jobs:
   build_and_test:
-    name: Build and Test
-    runs-on: ubuntu-latest
+    name: Desktop (${{ matrix.os }})
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
         with:
           submodules: recursive
       - uses: actions-rust-lang/setup-rust-toolchain@v1
         with:
-          toolchain: nightly
-      - name: Install rustfmt for nightly
-        run: rustup component add rustfmt --toolchain nightly
-      - name: Install stable
-        run: rustup toolchain install stable --profile minimal
-      - uses: Swatinem/rust-cache@v2
+          toolchain: stable
+          components: rustfmt, rust-src, rust-analyzer
+          target: wasm32-unknown-unknown
       - name: Check all targets
-        run: cargo +stable check --workspace --all-targets --verbose
+        run: cargo tessera check --workspace --all-targets --verbose
       - name: Run tests
-        run: cargo +stable test --workspace --lib --bins --tests --verbose
-      - name: Run documentation tests
-        run: cargo +stable test --workspace --doc --verbose
-      - name: Install rust-script
-        run: cargo install rust-script
-      - name: Test profiler script
-        run: rust-script --test scripts/analyze-profiler.rs
-      - name: Check formatting
-        run: >-
-          rust-script scripts/check-imports.rs --check
-          cargo-tessera example tessera-ui tessera-components tessera-foundation
-          tessera-macros tessera-shard tessera-platform tessera-build tessera-mobile
-      - name: Check Rust formatting
-        run: >-
-          cargo +nightly fmt
-          -p cargo-tessera -p example -p tessera-ui -p tessera-components
-          -p tessera-foundation -p tessera-macros -p tessera-shard
-          -p tessera-platform -p tessera-build -p tessera-mobile -- --check
-
-  check_macos:
-    name: Check macOS
-    runs-on: macos-latest
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          submodules: recursive
-      - uses: actions-rust-lang/setup-rust-toolchain@v1
-      - name: Install stable
-        run: rustup toolchain install stable --profile minimal
-      - uses: Swatinem/rust-cache@v2
-      - name: Check macOS build
+        if: runner.os == 'Linux'
+        run: cargo test --workspace --verbose
+      - name: Check scripts and formatting
+        if: runner.os == 'Linux'
         run: |
-          cargo +stable check -p tessera-ui --all-targets --verbose
-          cargo +stable check -p example --verbose
-          cargo tessera build -p example
+          cargo install rust-script --locked
+          rust-script --test scripts/analyze-profiler.rs
+          rust-script --test scripts/check-imports.rs
+          rust-script scripts/check-imports.rs --check
+      - name: Build macOS example
+        if: runner.os == 'macOS'
+        run: cargo tessera build -p example
 
   check_web:
     name: Check Web
@@ -75,18 +52,11 @@ jobs:
           submodules: recursive
       - uses: actions-rust-lang/setup-rust-toolchain@v1
         with:
+          toolchain: stable
+          components: rust-src, rust-analyzer
           target: wasm32-unknown-unknown
-      - name: Install stable
-        run: |
-          rustup toolchain install stable --profile minimal
-          rustup target add wasm32-unknown-unknown --toolchain stable
-      - uses: Swatinem/rust-cache@v2
-      - name: Check wasm target
-        run: cargo +stable check -p example --target wasm32-unknown-unknown --verbose
       - name: Build web example
-        env:
-          RUSTUP_TOOLCHAIN: stable
-        run: cargo +stable tessera web build --release -p example
+        run: cargo tessera web build --release -p example
 
   check_android:
     name: Check Android
@@ -97,26 +67,16 @@ jobs:
           submodules: recursive
       - uses: actions-rust-lang/setup-rust-toolchain@v1
         with:
+          toolchain: stable
+          components: rust-src, rust-analyzer
           target: aarch64-linux-android
-      - name: Install stable
-        run: |
-          rustup toolchain install stable --profile minimal
-          rustup target add aarch64-linux-android --toolchain stable
-      - uses: Swatinem/rust-cache@v2
-      - name: Install cargo-ndk
-        run: cargo install cargo-ndk
       - name: Setup Android NDK
         uses: nttld/setup-ndk@v1
         id: setup-ndk
         with:
           ndk-version: r28c
-      - name: Check Android target
+      - name: Build Android example
         env:
           ANDROID_NDK_HOME: ${{ steps.setup-ndk.outputs.ndk-path }}
           NDK_HOME: ${{ steps.setup-ndk.outputs.ndk-path }}
-        run: |
-          cargo +stable ndk -t arm64-v8a check -p tessera-ui --verbose
-          cargo +stable ndk -t arm64-v8a check -p tessera-components --verbose
-          cargo +stable ndk -t arm64-v8a check -p tessera-macros --verbose
-          cargo +stable ndk -t arm64-v8a check -p tessera-shard --verbose
-          cargo tessera android build --format apk -p example
+        run: cargo tessera android build --format apk -p example

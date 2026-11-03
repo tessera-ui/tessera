@@ -29,8 +29,8 @@ jobs:
       - uses: actions-rust-lang/setup-rust-toolchain@v1
         with:
           toolchain: stable
+          components: rust-src, rust-analyzer
           target: wasm32-unknown-unknown
-      - uses: Swatinem/rust-cache@v2
       - name: Build Documentation
         run: |
           cargo doc --all --no-deps
