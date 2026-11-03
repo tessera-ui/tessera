@@ -5,11 +5,13 @@ use ra_ap_syntax::{
     ast::{self, HasArgList},
 };
 
-use super::super::{
-    error_codes::{DiagnosticCode, Lint},
-    types::{Applicability, Edit, Suggestion},
+use super::{
+    super::{
+        error_codes::{DiagnosticCode, Lint},
+        types::{Applicability, Edit, Suggestion},
+    },
+    CallAnalyzer, CallKind, CallTarget, Diagnostic, TesseraRuntimeApi,
 };
-use super::{CallAnalyzer, CallKind, CallTarget, Diagnostic, TesseraRuntimeApi};
 
 impl<'db> CallAnalyzer<'db> {
     pub(super) fn redundant_render_slot(&self, closure: &ast::ClosureExpr) -> Option<Diagnostic> {

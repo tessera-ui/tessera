@@ -10,11 +10,13 @@ use ra_ap_syntax::{
     ast::{self, HasAttrs},
 };
 
-use super::super::{
-    error_codes::Lint,
-    levels::{Level, LintTarget},
+use super::{
+    super::{
+        error_codes::Lint,
+        levels::{Level, LintTarget},
+    },
+    CallAnalyzer, Diagnostic, DiagnosticCode, ErrorCode, LintOptions,
 };
-use super::{CallAnalyzer, Diagnostic, DiagnosticCode, ErrorCode, LintOptions};
 
 struct Setting {
     file: FileId,

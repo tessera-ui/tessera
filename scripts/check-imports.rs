@@ -330,6 +330,11 @@ fn collect_rs_files(paths: &[PathBuf]) -> Vec<PathBuf> {
 /// (e.g. a git submodule). Those repositories are owned by other projects, so
 /// this check must not lint or rewrite their files.
 fn is_in_nested_repo(file: &Path, root: &Path) -> bool {
+    let root = if root.is_file() {
+        root.parent().unwrap_or(root)
+    } else {
+        root
+    };
     file.parent()
         .into_iter()
         .flat_map(Path::ancestors)
@@ -337,53 +342,17 @@ fn is_in_nested_repo(file: &Path, root: &Path) -> bool {
         .any(|dir| dir.join(".git").exists())
 }
 
-/// Build a normalized imports string for `ast`, identify the original line
-/// numbers occupied by `use` items, and return the insertion point
-/// (first_use_line). Return value:
-///  - String: the formatted imports block to insert
-///  - Vec<usize>: original line numbers to remove
-///  - usize: the first line where `use` items appeared (insertion anchor)
-fn build_new_imports_and_lines(ast: &File) -> Result<(String, Vec<usize>, usize)> {
-    let use_items: Vec<_> = ast
-        .items
-        .iter()
-        .filter_map(|item| {
-            if let Item::Use(use_item) = item {
-                Some(use_item)
-            } else {
-                None
-            }
-        })
-        .collect();
-
-    if use_items.is_empty() {
-        return Ok(("".to_string(), Vec::new(), 0));
-    }
-
-    // Compute local modules once for classification helpers.
-    let local_mods = find_local_modules(ast);
-    let new_imports_str = collect_and_format_imports(ast, &local_mods)?;
-
-    let lines_to_remove = collect_use_item_lines(&use_items);
-
-    let first_use_line = use_items
-        .iter()
-        .map(|item| item.span().start().line)
-        .min()
-        .unwrap_or(0);
-
-    Ok((
-        new_imports_str,
-        lines_to_remove.into_iter().collect(),
-        first_use_line,
-    ))
+fn import_blocks(ast: &File) -> impl DoubleEndedIterator<Item = &[Item]> {
+    ast.items
+        .split(|item| !matches!(item, Item::Use(_)))
+        .filter(|items| !items.is_empty())
 }
 
 /// Collects imports from the AST, deduplicates and sorts them, then formats
 /// the final imports block for insertion. This function centralizes the
 /// collect -> sort -> dedup -> format pipeline.
-fn collect_and_format_imports(ast: &syn::File, local_mods: &HashSet<String>) -> Result<String> {
-    let mut collected_imports = collect_imports(ast, local_mods)?;
+fn collect_and_format_imports(items: &[Item], local_mods: &HashSet<String>) -> Result<String> {
+    let mut collected_imports = collect_imports(items, local_mods)?;
     collected_imports.sort();
     collected_imports.dedup();
     Ok(format_imports_from_collected(collected_imports)
@@ -391,55 +360,41 @@ fn collect_and_format_imports(ast: &syn::File, local_mods: &HashSet<String>) -> 
         .to_string())
 }
 
-/// Replace the `use` statements in `path` with the normalized imports block.
-/// This function:
-///  - Parses the file to an AST
-///  - Builds the new imports block and identifies original lines to remove
-///  - Reconstructs file contents by skipping removed lines and inserting the
-///    new imports block at the original first `use` line (or appending if
-///    needed)
-///  - Writes the updated file back to disk
-///
-/// Returns Ok(true) if the file was modified, Ok(false) if there were no
-/// imports to rewrite, or Err on IO / parse errors.
 fn fix_file(path: &Path) -> Result<bool> {
     let content = fs::read_to_string(path)?;
-    let ast = syn::parse_file(&content)?;
-
-    let (new_imports_str, mut lines_to_remove, first_use_line) = build_new_imports_and_lines(&ast)?;
-
-    if new_imports_str.is_empty() {
+    let formatted = fix_imports(&content)?;
+    if formatted == content {
         return Ok(false);
     }
-
-    let lines_to_remove_set: HashSet<usize> = lines_to_remove.drain(..).collect();
-    let original_lines: Vec<&str> = content.lines().collect();
-    let mut final_lines: Vec<String> = Vec::with_capacity(original_lines.len() + 4);
-    let mut new_imports_written = false;
-
-    for (i, line) in original_lines.iter().enumerate() {
-        let current_line_num = i + 1;
-
-        if lines_to_remove_set.contains(&current_line_num) {
-            if !new_imports_written && current_line_num >= first_use_line {
-                final_lines.push(new_imports_str.clone());
-                new_imports_written = true;
-            }
-        } else {
-            final_lines.push(line.to_string());
-        }
-    }
-
-    // In case the file only contains `use` statements
-    if !new_imports_written {
-        final_lines.push(new_imports_str);
-    }
-
-    let final_content = final_lines.join("\n") + "\n";
-
-    fs::write(path, &final_content)?;
-
+    fs::write(path, formatted)?;
     Ok(true)
+}
+
+fn fix_imports(content: &str) -> Result<String> {
+    let ast = syn::parse_file(content)?;
+    if import_blocks(&ast).next().is_none() {
+        return Ok(content.to_owned());
+    }
+    let local_mods = find_local_modules(&ast);
+    let mut lines = content.lines().map(String::from).collect::<Vec<_>>();
+    for items in import_blocks(&ast).rev() {
+        let imports = items
+            .iter()
+            .filter_map(|item| match item {
+                Item::Use(item) => Some(item),
+                _ => None,
+            })
+            .collect::<Vec<_>>();
+        let removed = collect_use_item_lines(&imports);
+        let first = *removed.iter().min().expect("nonempty import block");
+        let mut line = 0;
+        lines.retain(|_| {
+            line += 1;
+            !removed.contains(&line)
+        });
+        lines.insert(first - 1, collect_and_format_imports(items, &local_mods)?);
+    }
+    Ok(lines.join("\n") + "\n")
 }
 
 /// Format a sequence of flattened `Import` entries into the canonical `use`
@@ -597,9 +552,9 @@ fn format_attrs(attrs: &[syn::Attribute]) -> String {
         .join("\n")
 }
 
-fn collect_imports(ast: &File, local_mods: &HashSet<String>) -> Result<Vec<Import>> {
+fn collect_imports(items: &[Item], local_mods: &HashSet<String>) -> Result<Vec<Import>> {
     let mut imports = Vec::new();
-    for item in &ast.items {
+    for item in items {
         if let Item::Use(use_item) = item {
             let visibility = format_visibility(&use_item.vis);
             let attrs = format_attrs(&use_item.attrs);
@@ -688,16 +643,13 @@ fn check_file(path: &Path) -> Result<()> {
     let content = fs::read_to_string(path)?;
     let ast = syn::parse_file(&content)?;
     let local_mods = find_local_modules(&ast);
-    let use_items = collect_and_classify_uses(&ast, &local_mods)?;
-
-    if use_items.is_empty() {
-        return Ok(());
+    for items in import_blocks(&ast) {
+        let use_items = collect_and_classify_uses(items, &local_mods)?;
+        check_group_order(&use_items)?;
+        check_intra_group_sorting(&use_items)?;
+        check_blank_lines(&use_items)?;
+        check_merge_status(&use_items)?;
     }
-
-    check_group_order(&use_items)?;
-    check_intra_group_sorting(&use_items)?;
-    check_blank_lines(&use_items)?;
-    check_merge_status(&use_items)?;
 
     Ok(())
 }
@@ -826,9 +778,12 @@ fn build_use_item_info(
     })
 }
 
-fn collect_and_classify_uses(ast: &File, local_mods: &HashSet<String>) -> Result<Vec<UseItemInfo>> {
+fn collect_and_classify_uses(
+    items: &[Item],
+    local_mods: &HashSet<String>,
+) -> Result<Vec<UseItemInfo>> {
     let mut final_items = Vec::new();
-    for item in &ast.items {
+    for item in items {
         if let Item::Use(use_item) = item {
             let paths = collect_use_paths(&use_item.tree);
             if let Some(info) = build_use_item_info(use_item, paths, local_mods) {
@@ -929,4 +884,26 @@ fn check_blank_lines(items: &[UseItemInfo]) -> Result<()> {
         }
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn fixing_imports_preserves_macro_reexport_order_and_comments() {
+        let source = "use std::path::Path;\n// Keep this note.\nuse std::fmt::Debug;\n\nmacro_rules! local { () => {} }\n\npub(crate) use local;\n";
+        let output = fix_imports(source).unwrap();
+        let ast = syn::parse_file(&output).unwrap();
+        assert!(matches!(&ast.items[0], Item::Use(_)));
+        assert!(matches!(&ast.items[1], Item::Macro(_)));
+        assert!(matches!(&ast.items[2], Item::Use(_)));
+        assert!(output.contains("// Keep this note."));
+        let local_mods = find_local_modules(&ast);
+        for items in import_blocks(&ast) {
+            let imports = collect_and_classify_uses(items, &local_mods).unwrap();
+            check_intra_group_sorting(&imports).unwrap();
+            check_blank_lines(&imports).unwrap();
+        }
+    }
 }

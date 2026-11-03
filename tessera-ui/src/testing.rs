@@ -27,9 +27,8 @@ pub use crate::component_tree::LayoutFrameDiagnostics;
 mod probe;
 mod query;
 
-pub use query::{AccessibilitySnapshot, ComponentSnapshot, ComponentSnapshotNode};
-
 pub use probe::TestProbe;
+pub use query::{AccessibilitySnapshot, ComponentSnapshot, ComponentSnapshotNode};
 
 /// Create a headless layout test harness for the provided component content.
 pub fn layout_test<F, Output>(content: F) -> LayoutTestHarness<impl Fn()>

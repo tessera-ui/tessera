@@ -1,7 +1,9 @@
-use tessera_ui::{CallbackWith, LocalToWindow, PxPosition, ScrollEventSource, remember, tessera};
+use tessera_ui::{
+    CallbackWith, LocalToWindow, PxPosition, ScrollEventSource, remember, tessera,
+    testing::TestProbe,
+};
 
 use super::*;
-use tessera_ui::testing::TestProbe;
 
 fn handlers(
     connection: NestedScrollConnection,
