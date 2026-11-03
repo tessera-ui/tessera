@@ -2,50 +2,44 @@ use std::{
     collections::{HashMap, HashSet},
     env,
     path::{Path, PathBuf},
+    process::Command,
 };
 
-use anyhow::{Context, Result, anyhow};
+use anyhow::{Context, Result};
 use ra_ap_base_db::all_crates;
 use ra_ap_cfg::{CfgAtom, CfgDiff};
-use ra_ap_hir::crate_def_map;
 use ra_ap_ide::{AnalysisHost, RootDatabase};
 use ra_ap_intern::Symbol;
-use ra_ap_load_cargo::{LoadCargoConfig, ProcMacroServerChoice, load_workspace_at};
-use ra_ap_project_model::{CargoConfig, CargoFeatures, RustLibSource};
-use ra_ap_vfs::{FileId, Vfs, VfsPath};
-
-use super::{
-    CheckOptions, FeatureSelection,
-    progress::Progress,
-    types::{LoadedWorkspace, SelectedSources},
-    utils::tessera_crates,
+use ra_ap_load_cargo::{LoadCargoConfig, ProcMacroServerChoice};
+use ra_ap_project_model::{
+    CargoConfig, CargoFeatures, ProjectManifest, ProjectWorkspace, RustLibSource,
 };
+use ra_ap_vfs::{AbsPathBuf, FileId, Vfs, VfsPath};
 
-pub(crate) fn load_workspace(
-    options: &CheckOptions<'_>,
-    progress: &Progress,
-) -> Result<LoadedWorkspace> {
+use super::{CheckOptions, FeatureSelection, types::LoadedWorkspace, utils::tessera_crates};
+
+pub(crate) fn load_workspace(options: &CheckOptions<'_>) -> Result<LoadedWorkspace> {
     let root = env::current_dir().context("Failed to resolve current directory")?;
-    load_workspace_from(options, progress, &root)
+    load_workspace_from(options, &root)
 }
 
 pub(crate) fn load_workspace_from(
     options: &CheckOptions<'_>,
-    progress: &Progress,
     root: &Path,
 ) -> Result<LoadedWorkspace> {
     let mut cargo_config = CargoConfig {
+        wrap_rustc_in_build_scripts: false,
         all_targets: options.target_selection.requires_cargo_all_targets(),
         features: cargo_features(&options.features),
         sysroot: Some(RustLibSource::Discover),
         target: options.target.map(str::to_string),
         set_test: options.target_selection.tests || options.target_selection.all_targets,
+        run_build_script_command: Some(build_script_command(options)),
         ..CargoConfig::default()
     };
     if let Some(package) = options.package {
         cargo_config.extra_args.push("--package".to_string());
         cargo_config.extra_args.push(package.to_string());
-        cargo_config.run_build_script_command = Some(build_script_command(options, package));
     }
     if options.release {
         cargo_config.extra_args.push("--release".to_string());
@@ -53,9 +47,6 @@ pub(crate) fn load_workspace_from(
             Vec::new(),
             vec![CfgAtom::Flag(Symbol::intern("debug_assertions"))],
         );
-    }
-    if options.workspace {
-        cargo_config.extra_args.push("--workspace".to_string());
     }
     if let Some(jobs) = options.jobs {
         cargo_config
@@ -73,29 +64,71 @@ pub(crate) fn load_workspace_from(
         proc_macro_processes: 1,
     };
 
-    let (db, vfs, proc_macro_client) =
-        load_workspace_at(root, &cargo_config, &load_config, &|message| {
-            progress.workspace(&message)
+    let root = AbsPathBuf::assert_utf8(env::current_dir()?.join(root));
+    let manifest = ProjectManifest::discover_single(&root)?;
+    let mut project = ProjectWorkspace::load(manifest, &cargo_config, &|_| {})?;
+    let command = build_script_command(options);
+    let output = Command::new(&command[0])
+        .args(&command[1..])
+        .current_dir(&root)
+        .output()
+        .context("Failed to collect Cargo check artifacts")?;
+    let native_artifacts = cargo_metadata::Message::parse_stream(output.stdout.as_slice())
+        .filter_map(|message| match message {
+            Ok(cargo_metadata::Message::CompilerArtifact(artifact)) => Some(artifact),
+            _ => None,
         })
-        .context("Failed to load rust-analyzer workspace for CallGuard")?;
+        .collect();
+    let build_scripts = project.run_build_scripts(&cargo_config, &|_| {})?;
+    let cacheable = output.status.success() && build_scripts.error().is_none();
+    project.set_build_scripts(build_scripts);
+    let (db, vfs, proc_macro_client) =
+        ra_ap_load_cargo::load_workspace(project.clone(), &cargo_config.extra_env, &load_config)
+            .context("Failed to load rust-analyzer workspace for CallGuard")?;
+    let (graph, macros) = project.to_crate_graph(
+        &mut |path| {
+            vfs.file_id(&VfsPath::from(path.to_path_buf()))
+                .map(|(file, _)| file)
+        },
+        &cargo_config.extra_env,
+    );
+    let mut macro_artifacts = HashMap::<_, Vec<_>>::new();
+    for (krate, artifact) in macros {
+        if let Ok((_, path)) = artifact {
+            macro_artifacts
+                .entry(graph[krate].basic.root_file_id)
+                .or_default()
+                .push(PathBuf::from(path.as_str()));
+        }
+    }
+    for paths in macro_artifacts.values_mut() {
+        paths.sort();
+        paths.dedup();
+    }
     drop(proc_macro_client);
 
     Ok(LoadedWorkspace {
         host: AnalysisHost::with_database(db),
         vfs,
+        macro_artifacts,
+        native_artifacts,
+        cacheable,
     })
 }
 
-fn build_script_command(options: &CheckOptions<'_>, package: &str) -> Vec<String> {
+fn build_script_command(options: &CheckOptions<'_>) -> Vec<String> {
     let mut command = vec![
         "cargo".to_string(),
         "check".to_string(),
         "--quiet".to_string(),
         "--message-format=json".to_string(),
         "--keep-going".to_string(),
-        "--package".to_string(),
-        package.to_string(),
     ];
+    if let Some(package) = options.package {
+        command.extend(["--package".to_string(), package.to_string()]);
+    } else if options.workspace {
+        command.push("--workspace".to_string());
+    }
     if options.release {
         command.push("--release".to_string());
     }
@@ -138,44 +171,11 @@ fn build_script_command(options: &CheckOptions<'_>, package: &str) -> Vec<String
     command
 }
 
-pub(crate) fn local_files_for_roots(
+pub(crate) fn relevant_crates(
     db: &RootDatabase,
     vfs: &Vfs,
     target_roots: &[PathBuf],
-) -> Result<HashSet<FileId>> {
-    let roots = target_roots.iter().map(|root| file_id_for_path(vfs, root).ok_or_else(|| anyhow!("rust-analyzer did not load target {}; refusing to proceed with unchecked calls", root.display()))).collect::<Result<HashSet<_>>>()?;
-    let loaded_roots = all_crates(db)
-        .iter()
-        .map(|krate| krate.root_file_id(db).file_id(db))
-        .collect::<HashSet<_>>();
-    if !roots.is_subset(&loaded_roots) {
-        return Err(anyhow!(
-            "rust-analyzer did not resolve every selected target crate; refusing to proceed with unchecked calls"
-        ));
-    }
-    let files = all_crates(db)
-        .iter()
-        .filter(|krate| roots.contains(&krate.root_file_id(db).file_id(db)))
-        .flat_map(|krate| {
-            crate_def_map(db, *krate)
-                .modules()
-                .filter_map(|(_, module)| module.definition_source_file_id().file_id())
-                .map(|file| file.file_id(db))
-        })
-        .collect::<HashSet<_>>();
-    if files.is_empty() {
-        return Err(anyhow!(
-            "rust-analyzer did not load the selected target modules; refusing to proceed with unchecked calls"
-        ));
-    }
-    Ok(files)
-}
-
-pub(crate) fn sources_for_roots(
-    db: &RootDatabase,
-    vfs: &Vfs,
-    target_roots: &[PathBuf],
-) -> Result<SelectedSources> {
+) -> Result<HashSet<ra_ap_base_db::Crate>> {
     let target_root_files = target_roots
         .iter()
         .filter_map(|root| file_id_for_path(vfs, root))
@@ -186,8 +186,6 @@ pub(crate) fn sources_for_roots(
         .filter(|krate| target_root_files.contains(&krate.root_file_id(db).file_id(db)))
         .collect::<HashSet<_>>();
 
-    let local_files = local_files_for_roots(db, vfs, target_roots)?;
-
     let dependencies = allowed_crates
         .iter()
         .flat_map(|krate| krate.transitive_deps(db))
@@ -196,30 +194,11 @@ pub(crate) fn sources_for_roots(
         .into_iter()
         .flat_map(|krate| krate.transitive_rev_deps(db).into_vec())
         .collect::<HashSet<_>>();
-    let mut file_crates = HashMap::<_, HashSet<_>>::new();
-    // Only crates in the selected dependency graph can supply call targets.
-    // Include third-party Tessera crates, but avoid expanding unrelated crates
-    // or traversing every source file in the VFS.
-    for krate in dependencies
+    Ok(dependencies
         .intersection(&sensitive_crates)
         .chain(allowed_crates.iter())
         .copied()
-        .collect::<HashSet<_>>()
-    {
-        for (_, module) in crate_def_map(db, krate).modules() {
-            if let Some(file_id) = module.definition_source_file_id().file_id() {
-                file_crates
-                    .entry(file_id.file_id(db))
-                    .or_default()
-                    .insert(krate);
-            }
-        }
-    }
-
-    Ok(SelectedSources {
-        local_files,
-        file_crates,
-    })
+        .collect::<HashSet<_>>())
 }
 
 fn cargo_features(selection: &FeatureSelection<'_>) -> CargoFeatures {
@@ -235,7 +214,7 @@ fn cargo_features(selection: &FeatureSelection<'_>) -> CargoFeatures {
     }
 }
 
-fn file_id_for_path(vfs: &Vfs, path: &Path) -> Option<FileId> {
+pub(super) fn file_id_for_path(vfs: &Vfs, path: &Path) -> Option<FileId> {
     let path = normalize_path(path);
     let vfs_path = VfsPath::new_real_path(path.display().to_string());
     vfs.file_id(&vfs_path).map(|(file_id, _)| file_id)
@@ -277,7 +256,7 @@ mod tests {
         fs::create_dir_all(unselected.join("src")).expect("unselected source directory");
         fs::write(
             fixture.root.join("Cargo.toml"),
-            "[workspace]\nmembers = [\"member\", \"unselected\"]\nresolver = \"3\"\n",
+            "[workspace]\nmembers = [\"member\", \"unselected\"]\ndefault-members = [\"member\"]\nresolver = \"3\"\n",
         )
         .expect("workspace manifest");
         fs::write(
@@ -291,20 +270,23 @@ mod tests {
         )
         .expect("unselected source");
 
-        let command = build_script_command(&CheckOptions::new(Some("member"), None), "member");
-        let output = Command::new(&command[0])
-            .args(&command[1..])
-            .current_dir(&fixture.root)
-            .output()
-            .expect("selected package check should run");
-        assert!(
-            output.status.success(),
-            "selected package check failed: {}",
-            String::from_utf8_lossy(&output.stderr)
-        );
-        let messages = String::from_utf8(output.stdout).expect("Cargo messages should be UTF-8");
-        assert!(messages.contains("\"name\":\"member\""));
-        assert!(!messages.contains("\"name\":\"unselected\""));
+        for package in [Some("member"), None] {
+            let command = build_script_command(&CheckOptions::new(package, None));
+            let output = Command::new(&command[0])
+                .args(&command[1..])
+                .current_dir(&fixture.root)
+                .output()
+                .expect("selected package check should run");
+            assert!(
+                output.status.success(),
+                "selected package check failed: {}",
+                String::from_utf8_lossy(&output.stderr)
+            );
+            let messages =
+                String::from_utf8(output.stdout).expect("Cargo messages should be UTF-8");
+            assert!(messages.contains("\"name\":\"member\""));
+            assert!(!messages.contains("\"name\":\"unselected\""));
+        }
     }
 
     #[test]
@@ -316,7 +298,7 @@ mod tests {
             features: &features,
             no_default_features: true,
         };
-        let command = build_script_command(&options, "member");
+        let command = build_script_command(&options);
         assert!(
             command
                 .windows(2)

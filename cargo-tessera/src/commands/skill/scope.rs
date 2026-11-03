@@ -98,7 +98,10 @@ fn run_prompt<B: Backend>(
     terminal: &mut Terminal<B>,
     choices: &Choices,
     mut read_event: impl FnMut() -> Result<Event>,
-) -> Result<Option<InstallScope>> {
+) -> Result<Option<InstallScope>>
+where
+    B::Error: Send + Sync + 'static,
+{
     let mut selected = InstallScope::Local;
     loop {
         terminal.draw(|frame| {

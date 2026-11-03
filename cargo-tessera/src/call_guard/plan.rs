@@ -15,7 +15,6 @@ use super::{CheckOptions, FeatureSelection, TargetSelection};
 #[derive(Clone, Debug)]
 pub(super) struct CrateJob {
     pub(super) id: String,
-    #[cfg(test)]
     pub(super) name: String,
     pub(super) display: String,
     pub(super) target_roots: Vec<PathBuf>,
@@ -23,6 +22,7 @@ pub(super) struct CrateJob {
 
 pub(super) struct Plan {
     pub(super) jobs: Vec<CrateJob>,
+    pub(super) target_directory: PathBuf,
 }
 
 impl Plan {
@@ -101,6 +101,9 @@ impl Plan {
             let Some(package) = packages.get(id) else {
                 bail!("Resolved Cargo package `{id}` is missing");
             };
+            if package.name.as_ref() == "tessera-ui" {
+                continue;
+            }
             let Some(node) = nodes.get(id) else {
                 bail!("Resolved Cargo node `{id}` is missing");
             };
@@ -143,14 +146,16 @@ impl Plan {
             }
             jobs.push(CrateJob {
                 id: id.clone(),
-                #[cfg(test)]
                 name: package.name.to_string(),
                 display: format!("{} v{}", package.name, package.version),
                 target_roots,
             });
         }
         jobs.sort_by(|left, right| left.id.cmp(&right.id));
-        Ok(Self { jobs })
+        Ok(Self {
+            jobs,
+            target_directory: metadata.target_directory.into_std_path_buf(),
+        })
     }
 }
 
@@ -323,6 +328,15 @@ mod tests {
                 .target_roots,
             vec![fixture.root.join("app/src/lib.rs")]
         );
+        let runtime = Plan::resolve_at(&CheckOptions::new(Some("tessera-ui"), None), &fixture.root)
+            .expect("runtime implementation is not checked as application code");
+        assert!(runtime.jobs.is_empty());
+        let mut workspace_options = CheckOptions::new(None, None);
+        workspace_options.workspace = true;
+        let workspace =
+            Plan::resolve_at(&workspace_options, &fixture.root).expect("workspace plan");
+        assert!(!workspace.jobs.iter().any(|job| job.name == "tessera-ui"));
+        assert!(workspace.jobs.iter().any(|job| job.name == "widgets"));
         let defaults = Plan::resolve_at(&CheckOptions::new(None, None), &fixture.root)
             .expect("default-member plan");
         assert_eq!(

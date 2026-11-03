@@ -1,6 +1,6 @@
 use std::{
     cell::RefCell,
-    collections::{HashMap, HashSet},
+    collections::{BTreeSet, HashMap, HashSet},
 };
 
 use anyhow::{Result, anyhow};
@@ -22,7 +22,8 @@ use ra_ap_syntax::{
 use ra_ap_vfs::Vfs;
 
 use super::{
-    error_codes::ErrorCode,
+    LintOptions,
+    error_codes::{DiagnosticCode, ErrorCode},
     types::{
         CallAnalyzer, CallIndex, CallKind, CallTarget, ContextColor, Diagnostic, SelectedSources,
         TesseraRuntimeApi,
@@ -32,6 +33,9 @@ use super::{
         runtime_api_label, tessera_crates,
     },
 };
+
+mod lint_levels;
+mod lints;
 
 const RENDER_SLOT_TYPE_PATH: &str = "tessera_ui::prop::RenderSlot";
 const RENDER_SLOT_WITH_TYPE_PATH: &str = "tessera_ui::prop::RenderSlotWith";
@@ -142,22 +146,13 @@ impl<'db> CallAnalyzer<'db> {
         })
     }
 
-    #[cfg(test)]
-    pub(crate) fn collect_index(&mut self) -> Result<()> {
-        let mut files = self.metadata_files.iter().copied().collect::<Vec<_>>();
-        files.sort_unstable();
-        for file_id in files {
-            self.collect_file_metadata(file_id)?;
-        }
-        Ok(())
-    }
-
-    pub(crate) fn check_files(&mut self) -> Result<()> {
+    pub(crate) fn check_files(&mut self, lints: &LintOptions) -> Result<()> {
         let mut files = self.local_files.iter().copied().collect::<Vec<_>>();
         files.sort_unstable();
         for file_id in files {
             self.analyze_file(file_id)?;
         }
+        self.apply_lint_levels(lints);
         Ok(())
     }
 
@@ -179,12 +174,6 @@ impl<'db> CallAnalyzer<'db> {
             inactive_bodies: HashMap::new(),
             call_targets: RefCell::new(HashMap::new()),
         }
-    }
-
-    #[cfg(test)]
-    pub(crate) fn analyze(&mut self) -> Result<()> {
-        self.collect_index()?;
-        self.check_files()
     }
 
     pub(crate) fn collect_file_metadata(&mut self, file_id: FileId) -> Result<()> {
@@ -268,7 +257,7 @@ impl<'db> CallAnalyzer<'db> {
             return;
         }
         match item {
-            ast::Item::Fn(function) => self.analyze_function(function, false),
+            ast::Item::Fn(function) => self.analyze_function(function),
             ast::Item::Impl(item_impl) => {
                 if let Some(items) = item_impl.assoc_item_list() {
                     for item in items.assoc_items() {
@@ -326,7 +315,7 @@ impl<'db> CallAnalyzer<'db> {
 
         if let Some(path) = self.source_function_path(function) {
             let mut index = 0;
-            let mut slots = HashSet::new();
+            let mut slots = BTreeSet::new();
             for param in param_list.params() {
                 let Some(ty) = param.ty() else { continue };
                 let optional = if let ast::Type::PathType(ty) = &ty {
@@ -374,7 +363,7 @@ impl<'db> CallAnalyzer<'db> {
                 continue;
             }
 
-            let mut indexes = HashSet::new();
+            let mut indexes = BTreeSet::new();
             indexes.insert(0);
             let Some(type_path) = &type_path else {
                 continue;
@@ -481,9 +470,9 @@ impl<'db> CallAnalyzer<'db> {
         })
     }
 
-    fn render_slot_carrier_param_indexes(&self, function: &ast::Fn) -> HashSet<usize> {
+    fn render_slot_carrier_param_indexes(&self, function: &ast::Fn) -> BTreeSet<usize> {
         let Some(param_list) = function.param_list() else {
-            return HashSet::new();
+            return BTreeSet::new();
         };
         param_list
             .params()
@@ -636,11 +625,11 @@ impl<'db> CallAnalyzer<'db> {
 
     fn analyze_assoc_item(&mut self, item: ast::AssocItem) {
         if let ast::AssocItem::Fn(function) = item {
-            self.analyze_function(function, false);
+            self.analyze_function(function);
         }
     }
 
-    fn analyze_function(&mut self, function: ast::Fn, allow_runtime_body: bool) {
+    fn analyze_function(&mut self, function: ast::Fn) {
         if self.is_inactive(function.syntax()) {
             return;
         }
@@ -677,8 +666,8 @@ impl<'db> CallAnalyzer<'db> {
                 }
             }
         }
-        let allow_entry_point_new = self.is_entry_function(&function) || allow_runtime_body;
-        let color = if self.is_colored_function(&function) || allow_runtime_body {
+        let allow_entry_point_new = self.is_entry_function(&function);
+        let color = if self.is_tessera_function(&function) {
             ContextColor::Tessera
         } else {
             ContextColor::Plain
@@ -695,6 +684,11 @@ impl<'db> CallAnalyzer<'db> {
         } else {
             ContextColor::Plain
         };
+        if color == ContextColor::Tessera
+            && let Some(diagnostic) = self.redundant_render_slot(&closure)
+        {
+            self.diagnostics.push(diagnostic);
+        }
         if let Some(call) = ast::CallExpr::cast(body.syntax().clone()) {
             self.analyze_call(call, color, false);
         } else if let Some(call) = ast::MethodCallExpr::cast(body.syntax().clone()) {
@@ -709,7 +703,7 @@ impl<'db> CallAnalyzer<'db> {
                 continue;
             }
             if let Some(function) = ast::Fn::cast(child.clone()) {
-                self.analyze_function(function, false);
+                self.analyze_function(function);
                 continue;
             }
             if let Some(closure) = ast::ClosureExpr::cast(child.clone()) {
@@ -870,10 +864,6 @@ impl<'db> CallAnalyzer<'db> {
         })
     }
 
-    fn is_colored_function(&self, function: &ast::Fn) -> bool {
-        self.is_tessera_function(function) || self.is_runtime_api_function(function)
-    }
-
     fn is_entry_function(&self, function: &ast::Fn) -> bool {
         self.is_free_function(function)
             && function.attrs().any(|attr| self.is_entry_attribute(&attr))
@@ -914,27 +904,6 @@ impl<'db> CallAnalyzer<'db> {
         original
             .attrs()
             .any(|attr| self.is_tessera_attribute(&attr))
-    }
-
-    fn is_runtime_api_function(&self, function: &ast::Fn) -> bool {
-        let Some(def) = self.sema.to_fn_def(function) else {
-            return false;
-        };
-
-        let path = self.function_path(def);
-        if Self::runtime_api_for_canonical_path(&path).is_some() {
-            return true;
-        }
-
-        let name = def.name(self.db).as_str().to_string();
-        match name.as_str() {
-            "new" if self.is_entry_point_method(def) => true,
-            "new" if self.is_render_slot_method(def, RENDER_SLOT_TYPE_PATH) => true,
-            "new" if self.is_render_slot_method(def, PUBLIC_RENDER_SLOT_TYPE_PATH) => true,
-            "new" if self.is_render_slot_method(def, RENDER_SLOT_WITH_TYPE_PATH) => true,
-            "new" if self.is_render_slot_method(def, PUBLIC_RENDER_SLOT_WITH_TYPE_PATH) => true,
-            _ => false,
-        }
     }
 
     fn is_tessera_attribute(&self, attr: &ast::Attr) -> bool {
@@ -1553,11 +1522,14 @@ impl<'db> CallAnalyzer<'db> {
         self.diagnostics.push(Diagnostic {
             file_id,
             range: source.range,
-            code,
+            code: code.into(),
+            severity: cargo_metadata::diagnostic::DiagnosticLevel::Error,
             message,
             label: label.to_string(),
-            help,
+            help: help.into(),
             boundary,
+            notes: Vec::new(),
+            suggestions: Vec::new(),
         });
     }
 
@@ -1640,11 +1612,13 @@ fn plain() { foreign_component(); }
                 let jobs = [
                     super::super::AnalysisJob {
                         index: 0,
+                        name: "fixture".to_string(),
                         display: "fixture v0.0.0".to_string(),
                         files: analyzer.local_files.clone(),
                     },
                     super::super::AnalysisJob {
                         index: 1,
+                        name: "widgets".to_string(),
                         display: "widgets v0.0.0".to_string(),
                         files: dependency_files,
                     },
@@ -1659,6 +1633,7 @@ fn plain() { foreign_component(); }
                         &index,
                         &jobs,
                         workers,
+                        &super::LintOptions::default(),
                         &progress,
                     )
                     .expect("crate workers");
@@ -1683,8 +1658,8 @@ fn plain() { foreign_component(); }
     }
 
     #[test]
-    fn direct_slot_carriers_remain_colored() {
-        let diagnostics = diagnostics_for(
+    fn direct_slot_carriers_warn_and_fix_only_redundant_forwarders() {
+        with_analyzer_options(
             r#"
 use tessera_ui::{EntryPoint, RenderSlot, RenderSlotWith, remember};
 
@@ -1735,6 +1710,52 @@ pub fn root() {
     }
     saved.slot(|| child());
     required_host(1, || child());
+    use tessera_ui::RenderSlot as Slot;
+    host().slot({
+        // Preserve this explanation when reviewing the simplification.
+        let content = Slot::new(|| child());
+        move || { content.render(); }
+    });
+    required_host(1, {
+        let content = RenderSlotWith::new(|_: ()| child());
+        move |value| content.render(value)
+    });
+    let content = Slot::new(|| child());
+    host().slot_shared(content);
+    host().slot({
+        let content = Slot::new(|| child());
+        move || { content.render(); child(); }
+    });
+    required_host(1, {
+        let content = RenderSlotWith::new(|_: ()| child());
+        move |value| content.render({ let _ = value; () })
+    });
+}
+
+use tessera_ui::lint as lint_level;
+
+#[cfg_attr(all(), lint_level(allow(tessera::redundant_render_slot)))]
+#[cfg_attr(any(), lint_level(deny(tessera::redundant_render_slot)))]
+#[tessera_ui::tessera]
+pub fn conditionally_allowed() {
+    host().slot({
+        let content = RenderSlot::new(|| child());
+        move || content.render()
+    });
+}
+
+#[lint_level(deny(tessera::all))]
+mod scoped {
+    use super::*;
+
+    #[tessera_ui::tessera]
+    #[lint_level(allow(tessera::redundant_render_slot))]
+    pub fn inner() {
+        host().slot({
+            let content = RenderSlot::new(|| child());
+            move || content.render()
+        });
+    }
 }
 
 #[tessera_ui::entry]
@@ -1754,12 +1775,124 @@ fn themed() {
     tessera_ui::provide_context(|| 0u32, { let _input = 1; move || { child(); } });
 }
 "#,
-        );
+            CheckOptions {
+                workspace: true,
+                ..CheckOptions::new(None, None)
+            },
+            |analyzer| {
+                use super::super::{diagnostics::Reporter, error_codes::DiagnosticCode};
+                use ra_ap_base_db::SourceDatabase;
 
-        assert!(
-            diagnostics.is_empty(),
-            "unexpected diagnostics:\n{}",
-            diagnostics.join("\n")
+                assert_eq!(analyzer.diagnostics.len(), 2);
+                assert!(analyzer.diagnostics.iter().all(|diagnostic| {
+                    diagnostic.code
+                        == DiagnosticCode::Lint(
+                            super::super::error_codes::Lint::RedundantRenderSlot,
+                        )
+                }));
+                let reporter = Reporter::new(analyzer, &analyzer.diagnostics);
+                let mut fixes = 0;
+                for diagnostic in &analyzer.diagnostics {
+                    let json = reporter.json(diagnostic);
+                    assert_eq!(json["message"]["level"], "warning");
+                    let input = json["message"].to_string();
+                    let automatic = rustfix::get_suggestions_from_json(
+                        &input,
+                        &std::collections::HashSet::<String>::new(),
+                        rustfix::Filter::MachineApplicableOnly,
+                    )
+                    .expect("rustfix reads Tessera suggestions");
+                    let all = rustfix::get_suggestions_from_json(
+                        &input,
+                        &std::collections::HashSet::<String>::new(),
+                        rustfix::Filter::Everything,
+                    )
+                    .expect("reviewable suggestions");
+                    assert_eq!(all.len(), 1);
+                    assert_eq!(all[0].solutions[0].replacements.len(), 2);
+                    fixes += automatic.len();
+                    assert_eq!(
+                        json["message"]["code"]["explanation"],
+                        serde_json::Value::Null
+                    );
+                    let span = &json["message"]["spans"][0];
+                    let source = analyzer.db.file_text(diagnostic.file_id);
+                    let highlighted = &source.text(analyzer.db)[span["byte_start"].as_u64().unwrap()
+                        as usize
+                        ..span["byte_end"].as_u64().unwrap() as usize];
+                    assert!(
+                        highlighted.starts_with("Slot::new(")
+                            || highlighted.starts_with("RenderSlotWith::new(")
+                    );
+                    for short in [false, true] {
+                        let output = reporter.render(diagnostic, short, false);
+                        assert!(
+                            output.contains("warning[tessera::redundant_render_slot]"),
+                            "{output}"
+                        );
+                        if short {
+                            assert_eq!(output.lines().count(), 1, "{output}");
+                        } else {
+                            assert_eq!(
+                                output.matches("pass the build closure directly").count(),
+                                1,
+                                "{output}"
+                            );
+                            assert!(!output.contains("applicability:"), "{output}");
+                            assert!(!output.contains("remove this"), "{output}");
+                        }
+                    }
+                }
+                assert_eq!(fixes, 1, "comment-removing suggestions require review");
+                let snapshot = analyzer.db.file_text(analyzer.diagnostics[0].file_id);
+                assert!(
+                    reporter
+                        .fix(&analyzer.diagnostics, true)
+                        .expect("apply safe fixes")
+                );
+                let path = analyzer.absolute_path(analyzer.diagnostics[0].file_id);
+                let fixed = fs::read_to_string(&path).expect("fixed source");
+                assert_ne!(fixed.as_str(), snapshot.text(analyzer.db).as_ref());
+                assert!(fixed.contains("required_host(1, |_: ()| child());"));
+                assert!(
+                    fixed.contains(
+                        "// Preserve this explanation when reviewing the simplification."
+                    )
+                );
+                assert!(
+                    ra_ap_syntax::SourceFile::parse(&fixed, ra_ap_syntax::Edition::CURRENT)
+                        .errors()
+                        .is_empty()
+                );
+                let error = reporter.fix(&analyzer.diagnostics, true).unwrap_err();
+                assert!(error.to_string().contains("source changed since analysis"));
+                assert_eq!(fs::read_to_string(&path).unwrap(), fixed);
+                for level in [super::super::Level::Allow, super::super::Level::Deny] {
+                    analyzer.diagnostics.clear();
+                    analyzer
+                        .check_files(&super::super::LintOptions {
+                            overrides: vec![(super::super::LintTarget::All, level)],
+                            cap: None,
+                        })
+                        .expect("recheck with configured lint level");
+                    if level == super::super::Level::Allow {
+                        assert!(analyzer.diagnostics.is_empty());
+                    } else {
+                        assert_eq!(analyzer.diagnostics.len(), 2);
+                        let reporter = Reporter::new(analyzer, &analyzer.diagnostics);
+                        for diagnostic in &analyzer.diagnostics {
+                            let json = reporter.json(diagnostic);
+                            assert_eq!(json["message"]["level"], "error");
+                            assert!(
+                                json["message"]["rendered"]
+                                    .as_str()
+                                    .unwrap()
+                                    .contains("error[tessera::redundant_render_slot]")
+                            );
+                        }
+                    }
+                }
+            },
         );
     }
 
@@ -1975,16 +2108,20 @@ fn cfg_fragment(value: usize) {
 pub fn unresolved() { missing::control(); }
 "#;
         for target in [None, Some("wasm32-unknown-unknown")] {
-            with_analyzer_target(source, target, |analyzer| {
-                let diagnostics = analyzer
-                    .diagnostics
-                    .iter()
-                    .map(|diagnostic| diagnostic.message.as_str())
-                    .collect::<Vec<_>>();
-                assert_eq!(diagnostics.len(), 1, "{target:?}: {diagnostics:?}");
-                assert!(diagnostics[0].contains("cannot resolve"));
-                assert!(diagnostics[0].contains("missing::control"));
-            });
+            with_analyzer_options(
+                source,
+                CheckOptions::new(Some("fixture"), target),
+                |analyzer| {
+                    let diagnostics = analyzer
+                        .diagnostics
+                        .iter()
+                        .map(|diagnostic| diagnostic.message.as_str())
+                        .collect::<Vec<_>>();
+                    assert_eq!(diagnostics.len(), 1, "{target:?}: {diagnostics:?}");
+                    assert!(diagnostics[0].contains("cannot resolve"));
+                    assert!(diagnostics[0].contains("missing::control"));
+                },
+            );
         }
     }
 
@@ -1993,7 +2130,19 @@ pub fn unresolved() { missing::control(); }
         use super::super::{diagnostics::Reporter, error_codes::ErrorCode};
 
         let source = "use tessera_ui::remember;\r\n#[tessera_ui::tessera]\r\nfn child() {}\r\nfn helper() {\r\n\tlet \u{754c} = remember(\r\n\t\t|| 1usize,\r\n\t);\r\n\tlet _callback = || child();\r\n\tmissing::remember(|| 0usize);\r\n}\r\n";
-        with_analyzer(source, |analyzer| {
+        let source = format!(
+            "{source}{}",
+            r#"
+#[tessera_ui::lint(forbid(redundant_render_slot))]
+mod guarded {
+    #[tessera_ui::lint(deny(redundant_render_slot))]
+    pub fn unchanged() {}
+    #[tessera_ui::lint(allow(redundant_render_slot))]
+    pub fn invalid() {}
+}
+"#
+        );
+        with_analyzer(&source, |analyzer| {
             assert_eq!(
                 analyzer
                     .diagnostics
@@ -2001,15 +2150,16 @@ pub fn unresolved() { missing::control(); }
                     .map(|diagnostic| diagnostic.code)
                     .collect::<Vec<_>>(),
                 [
-                    ErrorCode::RuntimeCall,
-                    ErrorCode::ComponentCall,
-                    ErrorCode::UnresolvedCall
+                    ErrorCode::RuntimeCall.into(),
+                    ErrorCode::ComponentCall.into(),
+                    ErrorCode::UnresolvedCall.into(),
+                    ErrorCode::LintConfiguration.into()
                 ]
             );
             let diagnostic = &analyzer.diagnostics[0];
             fs::write(analyzer.absolute_path(diagnostic.file_id), "").expect("edit after analysis");
             let reporter = Reporter::new(analyzer, &analyzer.diagnostics);
-            let json = reporter.json(diagnostic).expect("structured diagnostic");
+            let json = reporter.json(diagnostic);
             let span = &json["message"]["spans"][0];
             assert_eq!(json["message"]["code"]["code"], "T0002");
             assert_eq!(
@@ -2031,26 +2181,130 @@ pub fn unresolved() { missing::control(); }
                     .unwrap()
                     .contains("function")
             );
-            let closure = reporter
-                .json(&analyzer.diagnostics[1])
-                .expect("closure diagnostic");
+            let closure = reporter.json(&analyzer.diagnostics[1]);
             assert!(
                 closure["message"]["spans"][1]["label"]
                     .as_str()
                     .unwrap()
                     .contains("ordinary closure")
             );
-            let rendered = reporter
-                .render(diagnostic, false, false)
-                .expect("human diagnostic");
+            let rendered = reporter.render(diagnostic, false, false);
             assert!(rendered.contains("error[T0002]"), "{rendered}");
             assert!(rendered.contains("let \u{754c} = remember("), "{rendered}");
-            let short = reporter
-                .render(diagnostic, true, false)
-                .expect("short diagnostic");
+            let styled = reporter.render(&analyzer.diagnostics[1], false, true);
+            assert!(styled.contains("lib.rs:8:21"), "{styled:?}");
+            assert!(
+                styled.contains(&format!(
+                    "{}child()",
+                    annotate_snippets::renderer::DEFAULT_ERROR_STYLE
+                )),
+                "{styled:?}"
+            );
+            let short = reporter.render(diagnostic, true, false);
             assert!(short.contains("lib.rs:5:10: error[T0002]"), "{short}");
             assert_eq!(short.lines().count(), 1);
+            analyzer.diagnostics.clear();
+            analyzer
+                .check_files(&super::super::LintOptions {
+                    overrides: vec![(super::super::LintTarget::All, super::super::Level::Allow)],
+                    cap: Some(super::super::Level::Allow),
+                })
+                .expect("hard errors remain checked");
+            assert_eq!(analyzer.diagnostics.len(), 3);
+            assert!(analyzer.diagnostics.iter().all(|diagnostic| {
+                diagnostic.severity == cargo_metadata::diagnostic::DiagnosticLevel::Error
+            }));
         });
+    }
+
+    #[test]
+    fn persistent_cache_rechecks_macro_declared_external_inputs() {
+        use super::super::{
+            TargetSelection,
+            cache::{Cache, shape},
+            plan::Plan,
+        };
+
+        let project = FixtureProject::new(
+            r#"
+#[schema_macro::select]
+pub type Selected = ();
+pub struct Ordinary;
+impl Ordinary {
+    pub fn new(_: impl Fn() + Send + Sync + 'static) -> Self { Self }
+}
+pub fn helper() { let _ = Selected::new(|| {}); }
+"#,
+        );
+        for directory in ["mini-ui/src", "schema-macro/src"] {
+            fs::create_dir_all(project.root().join(directory)).unwrap();
+        }
+        fs::write(project.root().join("Cargo.toml"), "[package]\nname='fixture'\nversion='0.0.0'\nedition='2024'\n[workspace]\nmembers=['mini-ui','schema-macro']\n[dependencies]\ntessera-ui={path='mini-ui'}\nschema-macro={path='schema-macro'}\n").unwrap();
+        fs::write(
+            project.root().join(".cargo/config.toml"),
+            format!(
+                "[build]\ntarget-dir=\"{}\"\n",
+                toml_path(&project.root().join("target"))
+            ),
+        )
+        .unwrap();
+        fs::write(
+            project.root().join("mini-ui/Cargo.toml"),
+            "[package]\nname='tessera-ui'\nversion='0.0.0'\nedition='2024'\n",
+        )
+        .unwrap();
+        fs::write(project.root().join("mini-ui/src/lib.rs"), "pub mod prop { pub struct RenderSlot; impl RenderSlot { pub fn new(_: impl Fn() + Send + Sync + 'static) -> Self { Self } } }\npub use prop::RenderSlot;\n").unwrap();
+        fs::write(project.root().join("schema-macro/Cargo.toml"), "[package]\nname='schema-macro'\nversion='0.0.0'\nedition='2024'\n[lib]\nproc-macro=true\n").unwrap();
+        fs::write(project.root().join("schema-macro/src/lib.rs"), r#"
+use proc_macro::TokenStream;
+#[proc_macro_attribute]
+pub fn select(_: TokenStream, _: TokenStream) -> TokenStream {
+    let path = std::path::PathBuf::from(std::env::var("CARGO_MANIFEST_DIR").unwrap()).join("src/schema.txt");
+    let target = if std::fs::read_to_string(path).unwrap() == "slot" { "tessera_ui::RenderSlot" } else { "crate::Ordinary" };
+    format!("pub type Selected = {target}; const _: &str = include_str!(\"schema.txt\");").parse().unwrap()
+}
+"#).unwrap();
+        let schema = project.root().join("src/schema.txt");
+        fs::write(&schema, "ordinary").unwrap();
+        let pass = || {
+            let mut options = CheckOptions::new(Some("fixture"), None);
+            options.target_selection = TargetSelection::lib_only();
+            let loaded = workspace::load_workspace_from(&options, project.root()).unwrap();
+            let db = loaded.host.raw_database();
+            ra_ap_hir::attach_db(db, || {
+                let plan = Plan::resolve_at(&options, project.root()).unwrap();
+                let selected = plan.jobs.iter().find(|job| job.name == "fixture").unwrap();
+                let crates =
+                    workspace::relevant_crates(db, &loaded.vfs, &selected.target_roots).unwrap();
+                let mut cache = Cache::new(&loaded, &plan, &options);
+                let index = cache.index(&crates, 1).unwrap();
+                let (job, key) = cache.job(selected, 0, &shape(&index), &options).unwrap();
+                let cached = cache.diagnostics(&key);
+                let reused = cached.is_some();
+                let diagnostics = cached.unwrap_or_else(|| {
+                    let mut analyzer = CallAnalyzer::from_index(db, &loaded.vfs, job.files, index);
+                    analyzer.check_files(&options.lints).unwrap();
+                    cache.save_diagnostics(&key, &analyzer.diagnostics);
+                    analyzer.diagnostics
+                });
+                (
+                    cache.indexed,
+                    reused,
+                    diagnostics
+                        .into_iter()
+                        .map(|diagnostic| diagnostic.code)
+                        .collect::<Vec<_>>(),
+                )
+            })
+        };
+        let cold = pass();
+        assert!(cold.0 > 0 && !cold.1 && cold.2.is_empty());
+        assert_eq!(pass(), (0, true, Vec::new()));
+        fs::write(schema, "slot").unwrap();
+        let changed = pass();
+        assert!(changed.0 > 0 && !changed.1);
+        assert_eq!(changed.2, [super::super::ErrorCode::RuntimeCall.into()]);
+        assert_eq!(pass(), (0, true, changed.2));
     }
 
     fn diagnostics_for(source: &str) -> Vec<String> {
@@ -2063,38 +2317,45 @@ pub fn unresolved() { missing::control(); }
         })
     }
 
-    fn with_analyzer<T>(source: &str, inspect: impl FnOnce(&CallAnalyzer<'_>) -> T) -> T {
-        with_analyzer_target(source, None, inspect)
+    fn with_analyzer<T>(source: &str, inspect: impl FnOnce(&mut CallAnalyzer<'_>) -> T) -> T {
+        with_analyzer_options(source, CheckOptions::new(Some("fixture"), None), inspect)
     }
 
-    fn with_analyzer_target<T>(
+    fn with_analyzer_options<T>(
         source: &str,
-        target: Option<&str>,
-        inspect: impl FnOnce(&CallAnalyzer<'_>) -> T,
+        options: CheckOptions<'_>,
+        inspect: impl FnOnce(&mut CallAnalyzer<'_>) -> T,
     ) -> T {
         let project = FixtureProject::new(source);
-        let options = CheckOptions::new(Some("fixture"), target);
-        let progress = super::super::progress::Progress::new(false);
-        let workspace = workspace::load_workspace_from(&options, &progress, project.root())
+        let workspace = workspace::load_workspace_from(&options, project.root())
             .expect("fixture workspace should load");
         let db = workspace.host.raw_database();
 
         ra_ap_hir::attach_db(db, || {
             let plan = super::super::plan::Plan::resolve_at(&options, project.root())
                 .expect("fixture plan");
-            let roots = &plan
+            let job = plan
                 .jobs
                 .iter()
                 .find(|job| job.name == "fixture")
-                .expect("fixture job")
-                .target_roots;
-            let sources = workspace::sources_for_roots(db, &workspace.vfs, roots)
-                .expect("fixture files should be selected");
-            let mut analyzer = CallAnalyzer::new(db, &workspace.vfs, sources)
-                .expect("fixture analyzer should initialize");
+                .expect("fixture job");
+            let crates = workspace::relevant_crates(db, &workspace.vfs, &job.target_roots)
+                .expect("fixture crates");
+            let mut cache = super::super::cache::Cache::new(&workspace, &plan, &options);
+            let index = cache.index(&crates, 1).expect("fixture index");
+            let files = cache
+                .job(job, 0, &super::super::cache::shape(&index), &options)
+                .expect("fixture job files")
+                .0
+                .files;
+            let metadata_files = index.inactive_code_ranges.keys().copied().collect();
+            let mut analyzer = CallAnalyzer::from_index(db, &workspace.vfs, files, index);
+            analyzer.metadata_files = metadata_files;
             analyzer.display_root = project.root().to_path_buf();
-            analyzer.analyze().expect("fixture should analyze");
-            inspect(&analyzer)
+            analyzer
+                .check_files(&super::LintOptions::default())
+                .expect("fixture should analyze");
+            inspect(&mut analyzer)
         })
     }
 

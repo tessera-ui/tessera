@@ -42,6 +42,21 @@ their resolved Cargo dependency graph. Target and feature selection apply to
 this graph; unrelated workspace crates are excluded. Unresolved Tessera-sensitive
 calls fail the check.
 
+`tessera::redundant_render_slot` warns when a content argument constructs a slot
+merely to forward it through a closure whose only operation is `render`.
+Its default level is `warn`, which permits Cargo to continue. Configure lint
+levels on an item or inline module tree with
+`#[tessera_ui::lint(allow(tessera::redundant_render_slot))]`. Source levels are
+`allow`, `warn`, `deny`, and `forbid`; nested settings override ordinary CLI and
+outer settings unless forbidden.
+
+`cargo tessera check` accepts `-A LINT`, `-W LINT`, `-D LINT`, and
+`--forbid LINT`. Use `warnings` for warning-level lints or `tessera::all` for all
+Tessera lints.
+Flags apply in command-line order; `--forbid` and `--force-warn` lock the
+selected level. `--cap-lints LEVEL` caps levels, including `forbid`, except
+`force-warn`. Tessera call-boundary errors remain unconditional.
+
 ## Execution and lifetime
 
 Root build callbacks use the same controlled execution model. The callbacks
@@ -70,8 +85,10 @@ handles describe a single build's declaration.
 
 ## Deferred child content
 
-RenderSlot types hold build logic. A parent chooses whether to expand that
-logic, its position in the tree, and the context available to the content.
+Pass content directly as a build closure. Create `RenderSlot` / `RenderSlotWith`
+handles only for independent storage, sharing, or forwarding, and pass existing
+handles through the matching `_shared` setter. The parent expands the slot
+during build, choosing whether, where, and in which context it runs.
 An unexpanded slot registers no uses from its closure.
 
 ```rust
@@ -83,6 +100,11 @@ row().children(|| {
 A component handle already refers to a registered use. It is not child content
 and has no implicit conversion to a slot, reattachment, or invocation operation.
 Calling `text()` as an argument happens before the receiving function runs.
+
+Pass actions directly as ordinary closures that update state or controllers;
+subsequent UI construction reflects the result. Create `Callback` / `CallbackWith`
+handles only for independent storage, sharing, or forwarding, and pass existing
+handles through the matching `_shared` setter.
 
 Props own their values. Stored callbacks and slots require owned captures that
 satisfy `Send + Sync + 'static`; keep changing values in `State<T>` and read them

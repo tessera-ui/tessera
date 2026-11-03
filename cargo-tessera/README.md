@@ -112,6 +112,16 @@ Enable dirty replay overlay in desktop build artifacts:
 cargo tessera build -p example --debug-dirty-overlay
 ```
 
+### Fix diagnostics
+
+```bash
+cargo tessera fix -p my-app
+```
+
+Runs `cargo fix`, applies machine-applicable Tessera suggestions, and checks the
+result. Review uncertain suggestions manually. Cargo fix options such as
+`--allow-dirty`, `--allow-staged`, and `--allow-no-vcs` are supported.
+
 ### Analyze profiler output
 
 ```bash

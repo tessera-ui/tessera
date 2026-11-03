@@ -1,7 +1,7 @@
 use std::{path::PathBuf, process::ExitCode};
 
 use anyhow::{Result, bail};
-use clap::{Args, Parser, Subcommand, ValueEnum};
+use clap::{ArgMatches, Args, CommandFactory, FromArgMatches, Parser, Subcommand, ValueEnum};
 use tessera_build::AssetBackend;
 
 use commands::{
@@ -99,62 +99,20 @@ enum TesseraCommands {
         #[arg(long, value_enum)]
         asset_backend: Option<AssetBackendArg>,
     },
-    /// Check the project for compilation errors and invalid Tessera calls
+    /// Check compilation and Tessera call boundaries
     Check {
+        #[command(flatten)]
+        args: CheckArgs,
         /// Explain a Tessera diagnostic code without checking a project
         #[arg(long, value_name = "CODE")]
         explain: Option<call_guard::ErrorCode>,
-        /// Specify package to check
-        #[arg(short, long)]
-        package: Option<String>,
-        /// Target triple (passed to cargo check)
-        #[arg(short, long)]
-        target: Option<String>,
-        /// Check in release mode
-        #[arg(short, long)]
-        release: bool,
-        /// Check only this package's library
-        #[arg(long)]
-        lib: bool,
-        /// Check all binaries
-        #[arg(long)]
-        bins: bool,
-        /// Check all examples
-        #[arg(long)]
-        examples: bool,
-        /// Check all tests
-        #[arg(long)]
-        tests: bool,
-        /// Check all benches
-        #[arg(long)]
-        benches: bool,
-        /// Check all targets
-        #[arg(long)]
-        all_targets: bool,
-        /// Features to activate
-        #[arg(short = 'F', long)]
-        features: Vec<String>,
-        /// Activate all available features
-        #[arg(long)]
-        all_features: bool,
-        /// Do not activate the `default` feature
-        #[arg(long)]
-        no_default_features: bool,
-        /// Number of parallel jobs
-        #[arg(short, long)]
-        jobs: Option<String>,
-        /// Check all packages in the workspace
-        #[arg(long)]
-        workspace: bool,
-        /// Error format
-        #[arg(long)]
-        message_format: Option<String>,
-        /// Use verbose output
-        #[arg(short, long)]
-        verbose: bool,
-        /// Do not print cargo log messages
-        #[arg(short, long)]
-        quiet: bool,
+    },
+    /// Apply compiler fixes and machine-applicable Tessera suggestions
+    Fix {
+        #[command(flatten)]
+        args: CheckArgs,
+        #[command(flatten)]
+        fix: FixArgs,
     },
     /// Profiling utilities
     Profiling {
@@ -176,6 +134,155 @@ enum TesseraCommands {
         #[command(subcommand)]
         command: PluginCommands,
     },
+}
+
+#[derive(Args)]
+pub(crate) struct CheckArgs {
+    #[command(flatten)]
+    lints: LintArgs,
+    /// Select a package
+    #[arg(short, long)]
+    package: Option<String>,
+    /// Target triple
+    #[arg(short, long)]
+    target: Option<String>,
+    /// Use release mode
+    #[arg(short, long)]
+    release: bool,
+    /// Select only this package's library
+    #[arg(long)]
+    lib: bool,
+    /// Select all binaries
+    #[arg(long)]
+    bins: bool,
+    /// Select all examples
+    #[arg(long)]
+    examples: bool,
+    /// Select all tests
+    #[arg(long)]
+    tests: bool,
+    /// Select all benches
+    #[arg(long)]
+    benches: bool,
+    /// Select all targets
+    #[arg(long)]
+    all_targets: bool,
+    /// Features to activate
+    #[arg(short = 'F', long)]
+    features: Vec<String>,
+    /// Activate all available features
+    #[arg(long)]
+    all_features: bool,
+    /// Do not activate the `default` feature
+    #[arg(long)]
+    no_default_features: bool,
+    /// Number of parallel jobs
+    #[arg(short, long)]
+    jobs: Option<String>,
+    /// Select all packages in the workspace
+    #[arg(long)]
+    workspace: bool,
+    /// Error format
+    #[arg(long)]
+    message_format: Option<String>,
+    /// Use verbose output
+    #[arg(short, long)]
+    verbose: bool,
+    /// Do not print cargo log messages
+    #[arg(short, long)]
+    quiet: bool,
+}
+
+#[derive(Args)]
+pub(crate) struct FixArgs {
+    /// Fix code even if the working directory is dirty
+    #[arg(long)]
+    allow_dirty: bool,
+    /// Fix code even if the working directory has staged changes
+    #[arg(long)]
+    allow_staged: bool,
+    /// Fix code even if a VCS was not detected
+    #[arg(long)]
+    allow_no_vcs: bool,
+    /// Fix code even if it already has compiler errors
+    #[arg(long)]
+    broken_code: bool,
+    /// Fix in preparation for the next edition
+    #[arg(long)]
+    edition: bool,
+    /// Fix warnings to migrate to the idioms of an edition
+    #[arg(long)]
+    edition_idioms: bool,
+}
+
+#[derive(Args)]
+struct LintArgs {
+    /// Allow a Tessera lint or group
+    #[arg(short = 'A', long, value_name = "LINT")]
+    allow: Vec<call_guard::LintTarget>,
+    /// Warn on a Tessera lint or group
+    #[arg(short = 'W', long, value_name = "LINT")]
+    warn: Vec<call_guard::LintTarget>,
+    /// Deny a Tessera lint or group
+    #[arg(short = 'D', long, value_name = "LINT")]
+    deny: Vec<call_guard::LintTarget>,
+    /// Forbid a Tessera lint or group
+    #[arg(long, value_name = "LINT")]
+    forbid: Vec<call_guard::LintTarget>,
+    /// Warn even when a Tessera lint is allowed or capped
+    #[arg(long, value_name = "LINT", value_parser = parse_force_warn)]
+    force_warn: Vec<call_guard::LintTarget>,
+    /// Cap ordinary Tessera lint levels at allow, warn, deny, or forbid
+    #[arg(long, value_name = "LEVEL", value_parser = parse_lint_cap)]
+    cap_lints: Option<call_guard::Level>,
+}
+
+impl LintArgs {
+    fn options(&self, matches: &ArgMatches) -> call_guard::LintOptions {
+        let check = matches
+            .subcommand_matches("tessera")
+            .and_then(|matches| matches.subcommand())
+            .map(|(_, matches)| matches)
+            .expect("parsed check or fix command");
+        let mut overrides = Vec::new();
+        for (arg, level, targets) in [
+            ("allow", call_guard::Level::Allow, &self.allow),
+            ("warn", call_guard::Level::Warn, &self.warn),
+            ("deny", call_guard::Level::Deny, &self.deny),
+            ("forbid", call_guard::Level::Forbid, &self.forbid),
+            ("force_warn", call_guard::Level::ForceWarn, &self.force_warn),
+        ] {
+            if let Some(indices) = check.indices_of(arg) {
+                overrides.extend(
+                    indices
+                        .zip(targets.iter().copied())
+                        .map(|(index, target)| (index, (target, level))),
+                );
+            }
+        }
+        overrides.sort_by_key(|(index, _)| *index);
+        call_guard::LintOptions {
+            overrides: overrides.into_iter().map(|(_, value)| value).collect(),
+            cap: self.cap_lints,
+        }
+    }
+}
+
+fn parse_lint_cap(value: &str) -> Result<call_guard::Level, String> {
+    let level = value.parse()?;
+    match level {
+        call_guard::Level::ForceWarn => {
+            Err("--cap-lints accepts allow, warn, deny, or forbid".into())
+        }
+        level => Ok(level),
+    }
+}
+
+fn parse_force_warn(value: &str) -> Result<call_guard::LintTarget, String> {
+    match value.parse()? {
+        call_guard::LintTarget::Warnings => Err("--force-warn does not accept `warnings`".into()),
+        target => Ok(target),
+    }
 }
 
 #[derive(Args)]
@@ -430,7 +537,8 @@ fn main() -> ExitCode {
 }
 
 fn run() -> Result<()> {
-    let Cli { command } = Cli::parse();
+    let matches = Cli::command().get_matches();
+    let Cli { command } = Cli::from_arg_matches(&matches)?;
 
     match command {
         Commands::Tessera(args) => match args.command {
@@ -512,49 +620,17 @@ fn run() -> Result<()> {
                     asset_backend.map(AssetBackendArg::to_backend),
                 )?;
             }
-            TesseraCommands::Check {
-                explain,
-                package,
-                target,
-                release,
-                lib,
-                bins,
-                examples,
-                tests,
-                benches,
-                all_targets,
-                features,
-                all_features,
-                no_default_features,
-                jobs,
-                workspace,
-                message_format,
-                verbose,
-                quiet,
-            } => {
+            TesseraCommands::Check { args, explain } => {
                 if let Some(code) = explain {
                     print!("{}", code.explanation());
                     return Ok(());
                 }
-                commands::check::execute(
-                    package.as_deref(),
-                    target.as_deref(),
-                    release,
-                    lib,
-                    bins,
-                    examples,
-                    tests,
-                    benches,
-                    all_targets,
-                    &features,
-                    all_features,
-                    no_default_features,
-                    jobs.as_deref(),
-                    workspace,
-                    message_format.as_deref(),
-                    verbose,
-                    quiet,
-                )?;
+                let lints = args.lints.options(&matches);
+                commands::check::execute(&args, lints, None)?;
+            }
+            TesseraCommands::Fix { args, fix } => {
+                let lints = args.lints.options(&matches);
+                commands::check::execute(&args, lints, Some(&fix))?;
             }
             TesseraCommands::Profiling { command } => match command {
                 ProfilingCommands::Analyze {
@@ -680,7 +756,7 @@ fn print_error(err: &anyhow::Error) {
 }
 
 #[cfg(test)]
-mod skill_cli_tests {
+mod cli_tests {
     use super::*;
 
     fn skill_args(extra: &[&str]) -> Result<SkillArgs, clap::Error> {
@@ -727,5 +803,74 @@ mod skill_cli_tests {
             };
             assert_eq!(error.kind(), clap::error::ErrorKind::ArgumentConflict);
         }
+    }
+
+    #[test]
+    fn check_and_fix_preserve_interleaved_lints_and_keep_f_for_features() {
+        for command in ["check", "fix"] {
+            let matches = Cli::command()
+                .try_get_matches_from([
+                    "cargo",
+                    "tessera",
+                    command,
+                    "-Awarnings",
+                    "-F",
+                    "demo",
+                    "--deny=tessera::redundant_render_slot",
+                    "--allow",
+                    "tessera::all",
+                    "-Wwarnings",
+                    "--forbid",
+                    "tessera::redundant_render_slot",
+                    "--force-warn=tessera::all",
+                    "--cap-lints",
+                    "warn",
+                ])
+                .unwrap();
+            let Cli {
+                command: Commands::Tessera(args),
+            } = Cli::from_arg_matches(&matches).unwrap();
+            let args = match args.command {
+                TesseraCommands::Check { args, .. } | TesseraCommands::Fix { args, .. } => args,
+                _ => panic!("expected check or fix"),
+            };
+            let options = args.lints.options(&matches);
+            let lint = "tessera::redundant_render_slot".parse().unwrap();
+            assert_eq!(args.features, ["demo"]);
+            assert_eq!(options.cap, Some(call_guard::Level::Warn));
+            assert_eq!(
+                options.overrides,
+                [
+                    (call_guard::LintTarget::Warnings, call_guard::Level::Allow),
+                    (lint, call_guard::Level::Deny),
+                    (call_guard::LintTarget::All, call_guard::Level::Allow),
+                    (call_guard::LintTarget::Warnings, call_guard::Level::Warn),
+                    (lint, call_guard::Level::Forbid),
+                    (call_guard::LintTarget::All, call_guard::Level::ForceWarn),
+                ]
+            );
+        }
+    }
+
+    #[test]
+    fn check_validates_lint_targets_and_caps_without_exposing_them_on_other_commands() {
+        for args in [
+            ["cargo", "tessera", "check", "-A", "T0001"],
+            ["cargo", "tessera", "check", "-W", "tessera::missing"],
+            ["cargo", "tessera", "check", "--cap-lints", "force-warn"],
+            ["cargo", "tessera", "check", "--force-warn", "warnings"],
+        ] {
+            assert_eq!(
+                Cli::command()
+                    .try_get_matches_from(args)
+                    .unwrap_err()
+                    .kind(),
+                clap::error::ErrorKind::ValueValidation
+            );
+        }
+        let error = Cli::command()
+            .try_get_matches_from(["cargo", "tessera", "build", "-A", "warnings"])
+            .unwrap_err();
+        assert_eq!(error.kind(), clap::error::ErrorKind::UnknownArgument);
     }
 }

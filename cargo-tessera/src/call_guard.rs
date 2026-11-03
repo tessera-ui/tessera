@@ -6,8 +6,10 @@ use std::{
 };
 
 use anyhow::{Context, Result, anyhow, bail};
+use cargo_metadata::diagnostic::DiagnosticLevel as Severity;
 
 pub use error_codes::ErrorCode;
+pub use levels::{Level, LintOptions, LintTarget};
 pub use types::MessageFormat;
 
 pub struct CheckOptions<'a> {
@@ -17,9 +19,12 @@ pub struct CheckOptions<'a> {
     pub features: FeatureSelection<'a>,
     pub message_format: MessageFormat,
     pub quiet: bool,
+    pub verbose: bool,
     pub release: bool,
     pub workspace: bool,
     pub jobs: Option<&'a str>,
+    pub lints: LintOptions,
+    pub fix: bool,
 }
 
 impl<'a> CheckOptions<'a> {
@@ -31,9 +36,12 @@ impl<'a> CheckOptions<'a> {
             features: FeatureSelection::default(),
             message_format: MessageFormat::default(),
             quiet: false,
+            verbose: false,
             release: false,
             workspace: false,
             jobs: None,
+            lints: LintOptions::default(),
+            fix: false,
         }
     }
 }
@@ -97,50 +105,85 @@ impl<'a> FeatureSelection<'a> {
 }
 
 pub fn run(options: CheckOptions<'_>) -> Result<()> {
-    let progress = progress::Progress::new(!options.quiet && !options.message_format.is_json());
-
     // Loading rust-analyzer may block indefinitely on cargo subprocesses or a
     // stuck proc-macro server. Call checking must always terminate, so the
     // whole run is bounded instead of relying on those subprocesses finishing.
     let _watchdog = watchdog::arm(watchdog::limit_from_env());
+    while run_pass(&options)? {}
+    Ok(())
+}
+
+fn run_pass(options: &CheckOptions<'_>) -> Result<bool> {
+    let progress = progress::Progress::new(!options.quiet && !options.message_format.is_json());
     let workers = worker_count(options.jobs)?;
 
-    let plan = plan::Plan::resolve(&options)?;
-    progress.begin_crates(plan.jobs.len());
-    let workspace = workspace::load_workspace(&options, &progress)?;
+    let plan = plan::Plan::resolve(options)?;
+    if plan.jobs.is_empty() {
+        progress.finish(0, 0, 0);
+        return Ok(false);
+    }
+    let workspace = workspace::load_workspace(options)?;
     let db = workspace.host.raw_database();
 
-    // rust-analyzer may panic on unsupported semantic edge cases. Incomplete
-    // analysis must fail closed rather than approve unchecked Tessera calls.
-    let analyzer = finish_analysis(|| {
+    // Incomplete semantic analysis must never become a reusable successful check.
+    let mut cache = finish_analysis(|| {
+        ra_ap_hir::attach_db(db, || Ok(cache::Cache::new(&workspace, &plan, options)))
+    })?;
+    let (index, jobs, keys, cached) = finish_analysis(|| {
         ra_ap_hir::attach_db(db, || {
-            progress.selecting();
-            let target_roots = plan
+            let roots = plan
                 .jobs
                 .iter()
                 .flat_map(|job| job.target_roots.iter().cloned())
                 .collect::<Vec<_>>();
-            let sources = workspace::sources_for_roots(db, &workspace.vfs, &target_roots)
-                .context("Failed to select Rust source files for CallGuard")?;
-            types::CallAnalyzer::new(db, &workspace.vfs, sources)
+            let crates = workspace::relevant_crates(db, &workspace.vfs, &roots)?;
+            let index = cache.index(&crates, workers)?;
+            if options.verbose && !options.quiet && !options.message_format.is_json() {
+                crate::output::status(
+                    "Index",
+                    format!(
+                        "Tessera: {} rebuilt, {} reused",
+                        cache.indexed,
+                        crates.len() - cache.indexed
+                    ),
+                );
+            }
+            let shape = cache::shape(&index);
+            let mut jobs = Vec::new();
+            let mut keys = Vec::new();
+            let mut cached = Vec::new();
+            for (position, job) in plan.jobs.iter().enumerate() {
+                let (job, key) = cache.job(job, position, &shape, options)?;
+                if let Some(diagnostics) = cache.diagnostics(&key) {
+                    if options.verbose && !options.quiet && !options.message_format.is_json() {
+                        crate::output::status("Fresh", format!("{} (Tessera)", job.display));
+                    }
+                    cached.push((position, Ok(diagnostics)));
+                } else {
+                    jobs.push(job);
+                }
+                keys.push(key);
+            }
+            Ok((index, jobs, keys, cached))
         })
     })?;
-    let index = collect_index_parallel(&analyzer, workers)?;
-    let jobs = ra_ap_hir::attach_db(db, || {
-        plan.jobs
-            .iter()
-            .enumerate()
-            .map(|(index, job)| {
-                Ok(AnalysisJob {
-                    index,
-                    display: job.display.clone(),
-                    files: workspace::local_files_for_roots(db, &workspace.vfs, &job.target_roots)?,
-                })
-            })
-            .collect::<Result<Vec<_>>>()
-    })?;
-    let results = analyze_parallel(db, &workspace.vfs, &index, &jobs, workers, &progress)?;
+    progress.begin_crates(jobs.len());
+    let results = analyze_parallel(
+        db,
+        &workspace.vfs,
+        &index,
+        &jobs,
+        workers,
+        &options.lints,
+        &progress,
+    )?;
+    for (position, result) in &results {
+        if let Ok(diagnostics) = result {
+            cache.save_diagnostics(&keys[*position], diagnostics);
+        }
+    }
     let mut results = results;
+    results.extend(cached);
     results.sort_by_key(|(index, _)| *index);
     let mut diagnostics = Vec::new();
     for (_, result) in results {
@@ -149,36 +192,54 @@ pub fn run(options: CheckOptions<'_>) -> Result<()> {
     let mut seen = HashSet::new();
     diagnostics
         .retain(|diagnostic| seen.insert((diagnostic.file_id, diagnostic.range, diagnostic.code)));
-    progress.finish(plan.jobs.len(), diagnostics.len());
-
-    if diagnostics.is_empty() {
-        return Ok(());
-    }
-    let reporter = diagnostics::Reporter::new(&analyzer, &diagnostics);
-    progress.suspend(|| -> Result<()> {
-        for diagnostic in &diagnostics {
-            reporter.emit(diagnostic, options.message_format)?;
+    let errors = diagnostics
+        .iter()
+        .filter(|diagnostic| diagnostic.severity == Severity::Error)
+        .count();
+    let warnings = diagnostics.len() - errors;
+    if !diagnostics.is_empty() {
+        let analyzer = types::CallAnalyzer::from_index(db, &workspace.vfs, HashSet::new(), index);
+        let reporter = diagnostics::Reporter::new(&analyzer, &diagnostics);
+        if options.fix
+            && progress.suspend(|| {
+                reporter.fix(
+                    &diagnostics,
+                    options.quiet || options.message_format.is_json(),
+                )
+            })?
+        {
+            return Ok(true);
         }
-        Ok(())
-    })?;
-    if !options.message_format.is_json() {
-        let first = diagnostics
+        progress.suspend(|| {
+            for diagnostic in &diagnostics {
+                reporter.emit(diagnostic, options.message_format);
+            }
+        });
+    }
+    progress.finish(plan.jobs.len(), errors, warnings);
+    if errors == 0 {
+        return Ok(false);
+    }
+    if options.message_format == MessageFormat::Human
+        && let Some(first) = diagnostics
             .iter()
-            .map(|diagnostic| diagnostic.code)
+            .filter(|diagnostic| diagnostic.severity == Severity::Error)
+            .filter_map(|diagnostic| diagnostic.code.error_code())
             .min()
-            .expect("nonempty diagnostics");
+    {
         eprintln!("For more information, run `cargo tessera check --explain {first}`.");
     }
 
     bail!(
         "could not check Tessera calls due to {} previous error{}",
-        diagnostics.len(),
-        if diagnostics.len() == 1 { "" } else { "s" }
+        errors,
+        if errors == 1 { "" } else { "s" }
     )
 }
 
 pub(super) struct AnalysisJob {
     pub(super) index: usize,
+    pub(super) name: String,
     pub(super) display: String,
     pub(super) files: std::collections::HashSet<ra_ap_ide::FileId>,
 }
@@ -189,6 +250,7 @@ pub(super) fn analyze_parallel(
     index: &types::CallIndex,
     jobs: &[AnalysisJob],
     workers: usize,
+    lints: &LintOptions,
     progress: &progress::Progress,
 ) -> Result<Vec<(usize, Result<Vec<types::Diagnostic>>)>> {
     let next = AtomicUsize::new(0);
@@ -202,7 +264,7 @@ pub(super) fn analyze_parallel(
                 loop {
                     let position = next.fetch_add(1, Ordering::Relaxed);
                     let Some(job) = jobs.get(position) else { break };
-                    progress.crate_started(&job.display);
+                    progress.crate_started(job.index, &job.name, &job.display);
                     let result = finish_analysis(|| {
                         ra_ap_hir::attach_db(&db, || {
                             let mut analyzer = types::CallAnalyzer::from_index(
@@ -211,11 +273,11 @@ pub(super) fn analyze_parallel(
                                 job.files.clone(),
                                 index.clone(),
                             );
-                            analyzer.check_files()?;
+                            analyzer.check_files(lints)?;
                             Ok(analyzer.diagnostics)
                         })
                     });
-                    progress.crate_finished();
+                    progress.crate_finished(job.index);
                     results.push((job.index, result));
                 }
                 results
@@ -322,8 +384,10 @@ mod tests {
 }
 
 mod analyzer;
+mod cache;
 mod diagnostics;
 mod error_codes;
+mod levels;
 mod plan;
 mod progress;
 mod types;

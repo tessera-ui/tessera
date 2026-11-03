@@ -625,18 +625,12 @@ fn configure_tessera_ui_features(
 
 fn run_call_guard(package: Option<&str>, features: &[String], release: bool) -> Result<()> {
     call_guard::run(call_guard::CheckOptions {
-        package,
-        target: None,
-        target_selection: call_guard::TargetSelection::default(),
         features: call_guard::FeatureSelection::Selected {
             features,
             no_default_features: false,
         },
-        message_format: call_guard::MessageFormat::Human,
-        quiet: false,
         release,
-        workspace: false,
-        jobs: None,
+        ..call_guard::CheckOptions::new(package, None)
     })
 }
 

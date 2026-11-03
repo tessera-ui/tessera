@@ -15,18 +15,12 @@ pub fn execute(
 ) -> Result<()> {
     let feature_overrides = build_tessera_ui_features(profiling_output, debug_dirty_overlay);
     call_guard::run(call_guard::CheckOptions {
-        package,
-        target,
-        target_selection: call_guard::TargetSelection::default(),
         features: call_guard::FeatureSelection::Selected {
             features: &feature_overrides,
             no_default_features: false,
         },
-        message_format: call_guard::MessageFormat::Human,
-        quiet: false,
         release,
-        workspace: false,
-        jobs: None,
+        ..call_guard::CheckOptions::new(package, target)
     })?;
 
     if profiling_output.is_some() && target_is_android(target) {

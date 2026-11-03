@@ -1206,6 +1206,18 @@ pub fn tessera(attr: TokenStream, item: TokenStream) -> TokenStream {
     TokenStream::from(expanded)
 }
 
+/// Sets Tessera lint levels for an item or inline module tree.
+///
+/// Use `#[tessera_ui::lint(allow(tessera::redundant_render_slot))]` with
+/// `allow`, `warn`, `deny`, or `forbid`. Lints begin at their default levels;
+/// nested item settings override inherited levels unless forbidden.
+/// `cargo tessera check` applies these settings with rustc lint-level precedence,
+/// including command-line `--force-warn` and `--cap-lints` controls.
+#[proc_macro_attribute]
+pub fn lint(_attr: TokenStream, item: TokenStream) -> TokenStream {
+    item
+}
+
 /// Generates platform-specific entry points from a shared `run` function.
 ///
 /// # Usage

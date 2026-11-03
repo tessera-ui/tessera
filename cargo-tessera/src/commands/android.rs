@@ -396,18 +396,13 @@ fn run_android_call_guard(ctx: &AndroidContext, target: Option<&str>) -> Result<
     };
     let features = ctx.metadata.features().unwrap_or_default();
     call_guard::run(call_guard::CheckOptions {
-        package: Some(&ctx.package_name),
-        target: Some(target),
         target_selection: call_guard::TargetSelection::lib_only(),
         features: call_guard::FeatureSelection::Selected {
             features,
             no_default_features: ctx.metadata.no_default_features(),
         },
-        message_format: call_guard::MessageFormat::Human,
-        quiet: false,
         release: ctx.release,
-        workspace: false,
-        jobs: None,
+        ..call_guard::CheckOptions::new(Some(&ctx.package_name), Some(target))
     })
 }
 
