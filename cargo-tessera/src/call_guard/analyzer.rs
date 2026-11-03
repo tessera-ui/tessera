@@ -2218,7 +2218,7 @@ mod guarded {
     }
 
     #[test]
-    fn persistent_cache_rechecks_macro_declared_external_inputs() {
+    fn persistent_cache_tracks_build_inputs_and_target_cfg() {
         use super::super::{
             TargetSelection,
             cache::{Cache, shape},
@@ -2266,9 +2266,14 @@ pub fn select(_: TokenStream, _: TokenStream) -> TokenStream {
 "#).unwrap();
         let schema = project.root().join("src/schema.txt");
         fs::write(&schema, "ordinary").unwrap();
+        fs::create_dir(project.root().join("examples")).unwrap();
+        fs::write(project.root().join("examples/plain.rs"), "#[cfg(test)]\nfn inactive() { let _ = tessera_ui::RenderSlot::new(|| {}); }\nfn main() {}\n").unwrap();
         let pass = || {
             let mut options = CheckOptions::new(Some("fixture"), None);
-            options.target_selection = TargetSelection::lib_only();
+            options.target_selection = TargetSelection {
+                all_targets: true,
+                ..TargetSelection::default()
+            };
             let loaded = workspace::load_workspace_from(&options, project.root()).unwrap();
             let db = loaded.host.raw_database();
             ra_ap_hir::attach_db(db, || {

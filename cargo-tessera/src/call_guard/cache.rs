@@ -1,5 +1,5 @@
 use std::{
-    collections::{BTreeMap, HashMap, HashSet},
+    collections::{HashMap, HashSet},
     env, fs,
     io::{self, Write},
     path::Path,
@@ -75,7 +75,16 @@ fn cargo_inputs(
         let files = artifact
             .filenames
             .iter()
-            .map(|path| Some((path.to_string(), file_hash(path.as_std_path())?)))
+            .map(|path| {
+                let metadata = fs::metadata(path).ok()?;
+                // Test checks can emit empty metadata; recompilation must still invalidate it.
+                let stamp = if metadata.len() == 0 {
+                    Some(metadata.modified().ok()?)
+                } else {
+                    None
+                };
+                Some((path.to_string(), file_hash(path.as_std_path())?, stamp))
+            })
             .collect::<Option<Vec<_>>>()?;
         if !files.is_empty() {
             units
@@ -109,20 +118,7 @@ impl<'a> Cache<'a> {
         let db = workspace.host.raw_database();
         let cargo = cargo_inputs(workspace);
         let tool = env::current_exe().ok().and_then(|path| file_hash(&path));
-        let environment = env::vars_os()
-            .filter(|(name, _)| {
-                !matches!(
-                    name.to_str(),
-                    Some("CARGO_MAKEFLAGS" | "MAKEFLAGS" | "MFLAGS")
-                )
-            })
-            .collect::<BTreeMap<_, _>>();
-        let global = fingerprint((
-            &tool,
-            format!("{environment:?}"),
-            options.target,
-            options.release,
-        ));
+        let global = fingerprint((&tool, options.target, options.release));
         let paths = workspace
             .vfs
             .iter()

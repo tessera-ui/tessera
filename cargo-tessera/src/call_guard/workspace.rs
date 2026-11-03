@@ -6,7 +6,7 @@ use std::{
 };
 
 use anyhow::{Context, Result};
-use ra_ap_base_db::all_crates;
+use ra_ap_base_db::{all_crates, salsa::Setter};
 use ra_ap_cfg::{CfgAtom, CfgDiff};
 use ra_ap_ide::{AnalysisHost, RootDatabase};
 use ra_ap_intern::Symbol;
@@ -33,7 +33,6 @@ pub(crate) fn load_workspace_from(
         features: cargo_features(&options.features),
         sysroot: Some(RustLibSource::Discover),
         target: options.target.map(str::to_string),
-        set_test: options.target_selection.tests || options.target_selection.all_targets,
         run_build_script_command: Some(build_script_command(options)),
         ..CargoConfig::default()
     };
@@ -73,7 +72,7 @@ pub(crate) fn load_workspace_from(
         .current_dir(&root)
         .output()
         .context("Failed to collect Cargo check artifacts")?;
-    let native_artifacts = cargo_metadata::Message::parse_stream(output.stdout.as_slice())
+    let native_artifacts: Vec<_> = cargo_metadata::Message::parse_stream(output.stdout.as_slice())
         .filter_map(|message| match message {
             Ok(cargo_metadata::Message::CompilerArtifact(artifact)) => Some(artifact),
             _ => None,
@@ -82,9 +81,20 @@ pub(crate) fn load_workspace_from(
     let build_scripts = project.run_build_scripts(&cargo_config, &|_| {})?;
     let cacheable = output.status.success() && build_scripts.error().is_none();
     project.set_build_scripts(build_scripts);
-    let (db, vfs, proc_macro_client) =
+    let (mut db, vfs, proc_macro_client) =
         ra_ap_load_cargo::load_workspace(project.clone(), &cargo_config.extra_env, &load_config)
             .context("Failed to load rust-analyzer workspace for CallGuard")?;
+    for krate in all_crates(&db).iter().copied().collect::<Vec<_>>() {
+        let root = vfs.file_path(krate.data(&db).root_file_id).to_string();
+        if native_artifacts
+            .iter()
+            .any(|artifact| artifact.profile.test && artifact.target.src_path.as_str() == root)
+        {
+            let mut cfg = krate.cfg_options(&db).clone();
+            cfg.insert_atom(Symbol::intern("test"));
+            krate.set_cfg_options(&mut db).to(cfg);
+        }
+    }
     let (graph, macros) = project.to_crate_graph(
         &mut |path| {
             vfs.file_id(&VfsPath::from(path.to_path_buf()))
