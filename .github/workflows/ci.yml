@@ -13,7 +13,7 @@ env:
 
 jobs:
   build_and_test:
-    name: Desktop (${{ matrix.os }})
+    name: ${{ matrix.os == 'ubuntu-latest' && 'Build and Test' || 'Check macOS' }}
     strategy:
       matrix:
         os: [ubuntu-latest, macos-latest]
