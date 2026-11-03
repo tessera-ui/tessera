@@ -15,9 +15,10 @@
 Use `cargo tessera check -D warnings` to treat Tessera lint warnings as errors.
 Repeated checks reuse unchanged crate indexes and diagnostics; use `-v` to see reuse.
 Build scripts and macros must declare external file and environment inputs to Cargo.
-`cargo tessera fix` runs `cargo fix`, applies `MachineApplicable` Tessera suggestions,
-and checks the result. Review `MaybeIncorrect` suggestions manually. Cargo's
-`--allow-dirty`, `--allow-staged`, and `--allow-no-vcs` flags remain available.
+`cargo tessera fix` checks workspace safety, applies `MachineApplicable` Tessera
+suggestions, runs `cargo fix`, and rechecks the result. Review `MaybeIncorrect`
+suggestions manually. Cargo's `--allow-dirty`, `--allow-staged`, and `--allow-no-vcs`
+flags remain available.
 Select individual lints by name, such as `-A tessera::redundant_render_slot`.
 Use `#[tessera_ui::lint(allow(tessera::redundant_render_slot))]` on an item or
 inline module tree for source overrides. Use `allow`, `warn`, `deny`, or `forbid`;
