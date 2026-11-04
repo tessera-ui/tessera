@@ -294,8 +294,6 @@ pub struct Renderer<F> {
     web_init_in_progress: bool,
     #[cfg(feature = "profiling")]
     pending_redraw_reasons: BTreeSet<RedrawReason>,
-    #[cfg(target_os = "android")]
-    android_ime_opened: bool,
 }
 
 impl<F, Output> Renderer<F>
@@ -487,7 +485,6 @@ where
             plugins: PluginHost::new(),
             ime_state,
             ime_bridge_state,
-            android_ime_opened: false,
             config,
             accessibility_adapter: None,
             accessibility_active: false,
@@ -513,11 +510,7 @@ struct RenderFrameArgs<'a> {
     pub keyboard_state: &'a mut KeyboardState,
     pub ime_state: &'a mut ImeState,
     pub ime_bridge_state: &'a mut RendererImeBridgeState,
-    #[cfg(target_os = "android")]
-    pub android_ime_opened: &'a mut bool,
     pub app: &'a mut RenderCore,
-    #[cfg(target_os = "android")]
-    pub event_loop: &'a ActiveEventLoop,
 }
 
 struct RenderFrameContext<'a, F> {
@@ -544,18 +537,45 @@ struct RenderFrameOutcome {
 #[derive(Clone, Debug, Default, PartialEq)]
 struct RendererImeBridgeState {
     current_request: Option<ImeRequest>,
-    ime_allowed: bool,
 }
 
 #[derive(Clone, Debug, Default, PartialEq)]
 struct RendererImeBridgeUpdate {
     allowed: Option<bool>,
     cursor_area: Option<(PxPosition, PxSize)>,
-    request: Option<ImeRequest>,
-    snapshot_changed: bool,
+    text_state: Option<winit::event::ImeTextState>,
+    options: Option<winit::window::ImeOptions>,
+    warn_missing_position: bool,
+    show_keyboard: bool,
+    change_cause: winit::event::ImeChangeCause,
 }
 
 impl RendererImeBridgeState {
+    fn sync_window(&mut self, window: &Window, request: Option<crate::ImeRequest>) {
+        let ime_was_allowed = self.current_request.is_some();
+        let ime_bridge_update = self.update_request(request);
+        if ime_was_allowed && ime_bridge_update.allowed == Some(true) {
+            window.set_ime_allowed(false);
+        }
+        if let Some(options) = ime_bridge_update.options {
+            window.set_ime_options(options);
+        }
+        if let Some(state) = ime_bridge_update.text_state {
+            let _ = window.set_ime_text_state(state, ime_bridge_update.change_cause);
+        }
+        if let Some(allowed) = ime_bridge_update.allowed {
+            window.set_ime_allowed(allowed);
+        }
+        if ime_bridge_update.show_keyboard {
+            window.set_ime_allowed(true);
+        }
+        if let Some((position, size)) = ime_bridge_update.cursor_area {
+            window.set_ime_cursor_area::<PxPosition, PxSize>(position, size);
+        } else if ime_bridge_update.warn_missing_position {
+            warn!("IME request missing position; skipping IME cursor area update");
+        }
+    }
+
     #[cfg(test)]
     fn request(&self) -> Option<&ImeRequest> {
         self.current_request.as_ref()
@@ -565,29 +585,63 @@ impl RendererImeBridgeState {
         *self = Self::default();
     }
 
-    fn update_request(&mut self, request: Option<ImeRequest>) -> RendererImeBridgeUpdate {
-        let snapshot_changed = self.current_request != request;
-        let allowed = (self.ime_allowed != request.is_some()).then_some(request.is_some());
-        let cursor_area = request.as_ref().and_then(|next_request| {
-            let previous_area = self.current_request.as_ref().and_then(|previous_request| {
-                previous_request
-                    .position
-                    .map(|position| (position, previous_request.size))
+    fn receive_event(&mut self, event: &winit::event::Ime) -> Option<crate::focus::FocusHandleId> {
+        let request = self.current_request.as_mut()?;
+        let client = request.client_id?;
+        if let winit::event::Ime::TextState(state) = event {
+            // Echoing native edits can restart the input connection and end composition.
+            request.text_state.clone_from(state);
+        }
+        Some(client)
+    }
+
+    fn update_request(&mut self, mut request: Option<ImeRequest>) -> RendererImeBridgeUpdate {
+        let change_cause = request
+            .as_mut()
+            .map_or(winit::event::ImeChangeCause::Other, |request| {
+                std::mem::take(&mut request.change_cause)
             });
-            let next_area = next_request
-                .position
-                .map(|position| (position, next_request.size));
-            (previous_area != next_area).then_some(next_area).flatten()
+
+        let show_keyboard = request
+            .as_mut()
+            .is_some_and(|request| std::mem::take(&mut request.show_keyboard));
+        let previous = self.current_request.as_ref();
+        let context_changed = previous.map(|request| (request.client_id, request.options))
+            != request
+                .as_ref()
+                .map(|request| (request.client_id, request.options));
+        let allowed = context_changed.then_some(request.is_some());
+        let cursor_area = request.as_ref().and_then(|next| {
+            let old_area =
+                previous.and_then(|old| old.position.map(|position| (position, old.size)));
+            let area = next.position.map(|position| (position, next.size));
+            (context_changed || old_area != area)
+                .then_some(area)
+                .flatten()
         });
-
-        self.ime_allowed = request.is_some();
-        self.current_request = request.clone();
-
+        let text_state = request
+            .as_ref()
+            .filter(|next| {
+                context_changed || previous.is_none_or(|old| old.text_state != next.text_state)
+            })
+            .map(|next| next.text_state.clone());
+        let options = request
+            .as_ref()
+            .filter(|_| context_changed)
+            .map(|next| next.options);
+        let warn_missing_position = self.current_request != request
+            && request
+                .as_ref()
+                .is_some_and(|request| request.position.is_none());
+        self.current_request = request;
         RendererImeBridgeUpdate {
+            change_cause,
             allowed,
             cursor_area,
-            request,
-            snapshot_changed,
+            text_state,
+            options,
+            warn_missing_position,
+            show_keyboard: show_keyboard && allowed != Some(true),
         }
     }
 }
@@ -1067,10 +1121,7 @@ Fps: {:.2}
                 true,
             );
             new_graph = retry_graph;
-            let request_window_drag =
-                window_requests.request_window_drag || retry_window_requests.request_window_drag;
-            window_requests = retry_window_requests;
-            window_requests.request_window_drag = request_window_drag;
+            window_requests.settle(retry_window_requests);
             draw_cost += retry_draw_cost;
             layout_diagnostics.accumulate_pass(retry_layout_diagnostics);
             record_cost += retry_record_cost;
@@ -1209,37 +1260,8 @@ Fps: {:.2}
         let request_window_drag =
             Self::supports_native_window_frame_controls() && window_requests.request_window_drag;
 
-        let ime_bridge_update = args
-            .ime_bridge_state
-            .update_request(window_requests.ime_request);
-        if let Some(allowed) = ime_bridge_update.allowed {
-            #[cfg(not(target_os = "android"))]
-            args.app.window().set_ime_allowed(allowed);
-            #[cfg(target_os = "android")]
-            {
-                if allowed {
-                    if !*args.android_ime_opened {
-                        args.app.window().set_ime_allowed(true);
-                        show_soft_input(true, args.event_loop.android_app());
-                        *args.android_ime_opened = true;
-                    }
-                } else if *args.android_ime_opened {
-                    args.app.window().set_ime_allowed(false);
-                    hide_soft_input(args.event_loop.android_app());
-                    *args.android_ime_opened = false;
-                }
-            }
-        }
-        if let Some((position, size)) = ime_bridge_update.cursor_area {
-            args.app
-                .window()
-                .set_ime_cursor_area::<PxPosition, PxSize>(position, size);
-        } else if ime_bridge_update.snapshot_changed
-            && let Some(ime_request) = ime_bridge_update.request
-            && ime_request.position.is_none()
-        {
-            warn!("IME request missing position; skipping IME cursor area update");
-        }
+        args.ime_bridge_state
+            .sync_window(args.app.window(), window_requests.ime_request);
 
         // End of frame cleanup
         args.cursor_state.frame_cleanup();
@@ -1695,10 +1717,37 @@ where
         self.keyboard_state.push_event(event.into());
     }
 
-    fn handle_redraw_requested(
-        &mut self,
-        #[cfg(target_os = "android")] event_loop: &ActiveEventLoop,
-    ) {
+    fn flush_focused_input(&mut self) {
+        if self.app.is_none() {
+            return;
+        }
+        let modifiers = self.keyboard_state.modifiers();
+        let keyboard = self.keyboard_state.take_events();
+        let ime = self.ime_state.take_events();
+        let requests = TesseraRuntime::with_mut(|runtime| {
+            runtime.component_tree.flush_focused_input(
+                &mut self.cursor_state,
+                modifiers,
+                keyboard,
+                ime,
+            )
+        });
+        flush_pending_focus_callbacks();
+        if requests.request_window_drag {
+            let window = self.app.as_ref().unwrap().window_arc();
+            self.apply_window_drag(&window);
+        }
+        let request = requests.ime_request.filter(|request| {
+            TesseraRuntime::with(|runtime| {
+                request.client_id == runtime.component_tree.focus_owner().active_handle_id()
+            })
+        });
+        // The next native event must see edits made by this event, before the next frame.
+        self.ime_bridge_state
+            .sync_window(self.app.as_ref().unwrap().window(), request);
+    }
+
+    fn handle_redraw_requested(&mut self) {
         let _session = self.session.enter();
         self.redraw_request_pending.store(false, Ordering::Release);
         let mut app = match self.app.take() {
@@ -1730,11 +1779,7 @@ where
                 keyboard_state: &mut self.keyboard_state,
                 ime_state: &mut self.ime_state,
                 ime_bridge_state: &mut self.ime_bridge_state,
-                #[cfg(target_os = "android")]
-                android_ime_opened: &mut self.android_ime_opened,
                 app: &mut app,
-                #[cfg(target_os = "android")]
-                event_loop,
             };
             Self::execute_render_frame(RenderFrameContext {
                 entry_point: &self.entry_point,
@@ -1984,10 +2029,6 @@ where
             self.web_init_in_progress = false;
             self.pending_web_inits.borrow_mut().clear();
         }
-        #[cfg(target_os = "android")]
-        {
-            self.android_ime_opened = false;
-        }
 
         TesseraRuntime::with_mut(|runtime| {
             runtime.component_tree.reset();
@@ -2101,6 +2142,7 @@ where
             }
             WindowEvent::KeyboardInput { event, .. } => {
                 self.handle_keyboard_input(event);
+                self.flush_focused_input();
                 request_redraw = true;
                 #[cfg(feature = "profiling")]
                 redraw_reasons.push(RedrawReason::KeyboardInput);
@@ -2114,7 +2156,10 @@ where
             }
             WindowEvent::Ime(ime_event) => {
                 debug!("IME event: {ime_event:?}");
-                self.ime_state.push_event(ime_event);
+                if let Some(client) = self.ime_bridge_state.receive_event(&ime_event) {
+                    self.ime_state.push_event_for(Some(client), ime_event);
+                    self.flush_focused_input();
+                }
                 request_redraw = true;
                 #[cfg(feature = "profiling")]
                 redraw_reasons.push(RedrawReason::ImeEvent);
@@ -2136,9 +2181,6 @@ where
                 redraw_reasons.push(RedrawReason::FocusChanged);
             }
             WindowEvent::RedrawRequested => {
-                #[cfg(target_os = "android")]
-                self.handle_redraw_requested(event_loop);
-                #[cfg(not(target_os = "android"))]
                 self.handle_redraw_requested();
             }
             _ => (),
@@ -2658,13 +2700,16 @@ mod tests {
     fn positioned_request(
         position: PxPosition,
         size: PxSize,
-        selection_range: Option<std::ops::Range<usize>>,
-        composition_range: Option<std::ops::Range<usize>>,
+        selection: std::ops::Range<usize>,
+        composition: Option<std::ops::Range<usize>>,
     ) -> ImeRequest {
         let mut request = ImeRequest::new(size)
             .with_local_position(position)
-            .with_selection_range(selection_range)
-            .with_composition_range(composition_range);
+            .with_text_state(winit::event::ImeTextState {
+                text: "0123456789".into(),
+                selection,
+                composition,
+            });
         request.position = Some(position);
         request
     }
@@ -2677,7 +2722,7 @@ mod tests {
         let request = positioned_request(
             PxPosition::new(Px(12), Px(18)),
             PxSize::new(Px(7), Px(13)),
-            Some(2..6),
+            2..6,
             Some(3..5),
         );
 
@@ -2688,8 +2733,9 @@ mod tests {
             RendererImeBridgeUpdate {
                 allowed: Some(true),
                 cursor_area: Some((PxPosition::new(Px(12), Px(18)), PxSize::new(Px(7), Px(13)))),
-                request: Some(request.clone()),
-                snapshot_changed: true,
+                text_state: Some(request.text_state.clone()),
+                options: Some(request.options),
+                ..Default::default()
             }
         );
         assert_eq!(bridge.request(), Some(&request));
@@ -2702,7 +2748,7 @@ mod tests {
         let request = positioned_request(
             PxPosition::new(Px(12), Px(18)),
             PxSize::new(Px(7), Px(13)),
-            Some(2..6),
+            2..6,
             Some(3..5),
         );
         let mut bridge = RendererImeBridgeState::default();
@@ -2710,16 +2756,32 @@ mod tests {
 
         let update = bridge.update_request(Some(request.clone()));
 
+        assert_eq!(update, RendererImeBridgeUpdate::default());
+        assert_eq!(bridge.request(), Some(&request));
+        let mut show = request.clone();
+        show.show_keyboard = true;
+        show.change_cause = winit::event::ImeChangeCause::InputMethod;
+        let mut requests = crate::component_tree::WindowRequests {
+            ime_request: Some(show),
+            ..Default::default()
+        };
+        requests.settle(crate::component_tree::WindowRequests {
+            ime_request: Some(request.clone()),
+            ..Default::default()
+        });
+        let update = bridge.update_request(requests.ime_request);
         assert_eq!(
             update,
             RendererImeBridgeUpdate {
-                allowed: None,
-                cursor_area: None,
-                request: Some(request.clone()),
-                snapshot_changed: false,
+                show_keyboard: true,
+                change_cause: winit::event::ImeChangeCause::InputMethod,
+                ..Default::default()
             }
         );
-        assert_eq!(bridge.request(), Some(&request));
+        assert_eq!(
+            bridge.update_request(Some(request)),
+            RendererImeBridgeUpdate::default()
+        );
     }
 
     #[test]
@@ -2731,22 +2793,53 @@ mod tests {
         bridge.update_request(Some(positioned_request(
             PxPosition::new(Px(12), Px(18)),
             size,
-            Some(2..6),
+            2..6,
             Some(3..5),
         )));
-        let next_request = positioned_request(
-            PxPosition::new(Px(12), Px(18)),
-            size,
-            Some(4..8),
-            Some(5..7),
-        );
+        let next_request =
+            positioned_request(PxPosition::new(Px(12), Px(18)), size, 4..8, Some(5..7));
 
         let update = bridge.update_request(Some(next_request.clone()));
 
         assert_eq!(update.allowed, None);
         assert_eq!(update.cursor_area, None);
-        assert!(update.snapshot_changed);
+        assert_eq!(update.text_state, Some(next_request.text_state.clone()));
         assert_eq!(bridge.request(), Some(&next_request));
+        let mut moved = next_request.clone();
+        moved.position = Some(PxPosition::new(Px(20), Px(30)));
+        let update = bridge.update_request(Some(moved));
+        assert_eq!(update.allowed, None);
+        assert_eq!(update.text_state, None);
+        assert_eq!(update.options, None);
+        assert_eq!(
+            update.cursor_area,
+            Some((PxPosition::new(Px(20), Px(30)), size))
+        );
+        let mut another_client = next_request.clone();
+        another_client.client_id = Some(42);
+        let update = bridge.update_request(Some(another_client.clone()));
+        assert_eq!(update.allowed, Some(true));
+        assert_eq!(
+            update.cursor_area,
+            Some((PxPosition::new(Px(12), Px(18)), size))
+        );
+        another_client.text_state.text = "native edit".into();
+        another_client.text_state.selection = 11..11;
+        another_client.text_state.composition = Some(7..11);
+        assert_eq!(
+            bridge.receive_event(&winit::event::Ime::TextState(
+                another_client.text_state.clone()
+            )),
+            Some(42)
+        );
+        assert_eq!(
+            bridge.update_request(Some(another_client.clone())),
+            RendererImeBridgeUpdate::default()
+        );
+        another_client.text_state.text = "transformed edit".into();
+        let update = bridge.update_request(Some(another_client.clone()));
+        assert_eq!(update.text_state, Some(another_client.text_state));
+        assert_eq!(update.allowed, None);
     }
 
     #[test]
@@ -2756,7 +2849,7 @@ mod tests {
         let request = positioned_request(
             PxPosition::new(Px(12), Px(18)),
             PxSize::new(Px(7), Px(13)),
-            Some(2..6),
+            2..6,
             Some(3..5),
         );
         let mut bridge = RendererImeBridgeState::default();
@@ -2769,175 +2862,11 @@ mod tests {
             RendererImeBridgeUpdate {
                 allowed: Some(false),
                 cursor_area: None,
-                request: None,
-                snapshot_changed: true,
+                text_state: None,
+                options: None,
+                ..Default::default()
             }
         );
         assert_eq!(bridge.request(), None);
-    }
-}
-
-/// Shows the Android soft keyboard.
-// https://github.com/rust-mobile/android-activity/pull/178
-#[cfg(target_os = "android")]
-pub fn show_soft_input(show_implicit: bool, android_app: &AndroidApp) {
-    let ctx = android_app;
-
-    let jvm = unsafe { jni::JavaVM::from_raw(ctx.vm_as_ptr().cast()) }.unwrap();
-    let na = unsafe { jni::objects::JObject::from_raw(ctx.activity_as_ptr().cast()) };
-
-    let mut env = jvm.attach_current_thread().unwrap();
-    if env.exception_check().unwrap() {
-        return;
-    }
-    let class_ctxt = env.find_class("android/content/Context").unwrap();
-    if env.exception_check().unwrap() {
-        return;
-    }
-    let ims = env
-        .get_static_field(class_ctxt, "INPUT_METHOD_SERVICE", "Ljava/lang/String;")
-        .unwrap();
-    if env.exception_check().unwrap() {
-        return;
-    }
-
-    let im_manager = env
-        .call_method(
-            &na,
-            "getSystemService",
-            "(Ljava/lang/String;)Ljava/lang/Object;",
-            &[(&ims).into()],
-        )
-        .unwrap()
-        .l()
-        .unwrap();
-    if env.exception_check().unwrap() {
-        return;
-    }
-
-    let jni_window = env
-        .call_method(&na, "getWindow", "()Landroid/view/Window;", &[])
-        .unwrap()
-        .l()
-        .unwrap();
-    if env.exception_check().unwrap() {
-        return;
-    }
-    let view = env
-        .call_method(&jni_window, "getDecorView", "()Landroid/view/View;", &[])
-        .unwrap()
-        .l()
-        .unwrap();
-    if env.exception_check().unwrap() {
-        return;
-    }
-
-    let _ = env.call_method(
-        im_manager,
-        "showSoftInput",
-        "(Landroid/view/View;I)Z",
-        &[
-            jni::objects::JValue::Object(&view),
-            if show_implicit {
-                (ndk_sys::ANATIVEACTIVITY_SHOW_SOFT_INPUT_IMPLICIT as i32).into()
-            } else {
-                0i32.into()
-            },
-        ],
-    );
-    // showSoftInput can trigger exceptions if the keyboard is currently
-    // animating open/closed
-    if env.exception_check().unwrap() {
-        let _ = env.exception_clear();
-    }
-}
-
-/// Hides the Android soft keyboard.
-#[cfg(target_os = "android")]
-pub fn hide_soft_input(android_app: &AndroidApp) {
-    use jni::objects::JValue;
-
-    let ctx = android_app;
-    let jvm = match unsafe { jni::JavaVM::from_raw(ctx.vm_as_ptr().cast()) } {
-        Ok(jvm) => jvm,
-        Err(_) => return, // Early exit if failing to get the JVM
-    };
-    let activity = unsafe { jni::objects::JObject::from_raw(ctx.activity_as_ptr().cast()) };
-
-    let mut env = match jvm.attach_current_thread() {
-        Ok(env) => env,
-        Err(_) => return,
-    };
-
-    // --- 1. Get the InputMethodManager ---
-    // This part is the same as in show_soft_input.
-    let class_ctxt = match env.find_class("android/content/Context") {
-        Ok(c) => c,
-        Err(_) => return,
-    };
-    let ims_field =
-        match env.get_static_field(class_ctxt, "INPUT_METHOD_SERVICE", "Ljava/lang/String;") {
-            Ok(f) => f,
-            Err(_) => return,
-        };
-    let ims = match ims_field.l() {
-        Ok(s) => s,
-        Err(_) => return,
-    };
-
-    let im_manager = match env.call_method(
-        &activity,
-        "getSystemService",
-        "(Ljava/lang/String;)Ljava/lang/Object;",
-        &[(&ims).into()],
-    ) {
-        Ok(m) => match m.l() {
-            Ok(im) => im,
-            Err(_) => return,
-        },
-        Err(_) => return,
-    };
-
-    // --- 2. Get the current window's token ---
-    // This is the key step that differs from show_soft_input.
-    let window = match env.call_method(&activity, "getWindow", "()Landroid/view/Window;", &[]) {
-        Ok(w) => match w.l() {
-            Ok(win) => win,
-            Err(_) => return,
-        },
-        Err(_) => return,
-    };
-
-    let decor_view = match env.call_method(&window, "getDecorView", "()Landroid/view/View;", &[]) {
-        Ok(v) => match v.l() {
-            Ok(view) => view,
-            Err(_) => return,
-        },
-        Err(_) => return,
-    };
-
-    let window_token =
-        match env.call_method(&decor_view, "getWindowToken", "()Landroid/os/IBinder;", &[]) {
-            Ok(t) => match t.l() {
-                Ok(token) => token,
-                Err(_) => return,
-            },
-            Err(_) => return,
-        };
-
-    // --- 3. Call hideSoftInputFromWindow ---
-    let _ = env.call_method(
-        &im_manager,
-        "hideSoftInputFromWindow",
-        "(Landroid/os/IBinder;I)Z",
-        &[
-            JValue::Object(&window_token),
-            JValue::Int(0), // flags, usually 0
-        ],
-    );
-
-    // Hiding the keyboard can also cause exceptions, so we clear them.
-    if env.exception_check().unwrap_or(false) {
-        let _ = env.exception_clear();
     }
 }

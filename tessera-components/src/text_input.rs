@@ -171,6 +171,14 @@ fn apply_text_input_input_modifiers(
         base
     };
     modifier
+        .on_focus_changed(move |focus: tessera_ui::FocusState| {
+            if !focus.is_focused()
+                && controller.is_alive()
+                && controller.with(|c| c.composition().is_some())
+            {
+                controller.with_mut(|c| c.clear_composition());
+            }
+        })
         .push_semantics(TextInputSemanticsModifierNode {
             args: args.clone(),
             controller,
@@ -535,7 +543,7 @@ pub fn text_input(
     editor_args.controller = Some(controller);
 
     if !editor_args.enabled {
-        controller.with_mut(|c| c.focus_handler_mut().unfocus());
+        controller.with(|c| *c.focus_handler()).unfocus();
     }
     sync_text_input_controller(&controller, &editor_args);
     let focus = controller.with(|c| *c.focus_handler());
@@ -585,7 +593,7 @@ fn text_input_editor(props: TextInputProps) {
     let editor_args: TextInputProps = props.clone();
 
     if !editor_args.enabled {
-        controller.with_mut(|c| c.focus_handler_mut().unfocus());
+        controller.with(|c| *c.focus_handler()).unfocus();
     }
     sync_text_input_controller(&controller, &editor_args);
     let focus = controller.with(|c| *c.focus_handler());
@@ -719,9 +727,7 @@ fn handle_text_input(
         if tap_result.pressed {
             // Request focus if not already focused
             if !controller.with(|s| s.focus_handler().is_focused()) {
-                controller.with_mut(|s| {
-                    s.focus_handler_mut().request_focus();
-                });
+                controller.with(|s| *s.focus_handler()).request_focus();
             }
 
             // Handle cursor positioning for clicks
@@ -877,9 +883,12 @@ fn handle_text_input(
 
     if args.enabled && !args.read_only && controller.with(|s| s.focus_handler().is_focused()) {
         let computed_data = input.computed_data;
-        input
-            .ime_session()
-            .update(current_ime_request(args, controller, computed_data));
+        let request = current_ime_request(args, controller, computed_data);
+        if tap_result.pressed && is_cursor_in_editor {
+            input.ime_session().show(request);
+        } else {
+            input.ime_session().update(request);
+        }
     }
 }
 
@@ -1175,6 +1184,22 @@ fn handle_text_input_ime(
     }
 
     for event in input.ime_events.drain(..) {
+        if !controller.with(|controller| controller.focus_handler().is_focused()) {
+            break;
+        }
+        let direction = match event {
+            winit::event::Ime::Action(winit::event::ImeAction::Next) => {
+                Some(tessera_ui::FocusDirection::Next)
+            }
+            winit::event::Ime::Action(winit::event::ImeAction::Previous) => {
+                Some(tessera_ui::FocusDirection::Previous)
+            }
+            _ => None,
+        };
+        if let Some(direction) = direction {
+            tessera_ui::FocusManager::current().request_move_focus(direction);
+            break;
+        }
         let Some(plan) = controller.with(|c| c.plan_ime_event(args.single_line, &event)) else {
             continue;
         };
@@ -1211,42 +1236,43 @@ fn current_ime_request(
     controller: &State<TextInputController>,
     computed_data: ComputedData,
 ) -> ImeRequest {
-    let (ime_rect, selection_range, composition_range) = controller.with(|c| {
+    let (ime_rect, state) = controller.with(|c| {
         (
             c.current_ime_rect(),
-            Some(c.selection().ordered_range()),
-            c.composition().map(|composition| composition.range.clone()),
+            winit::event::ImeTextState {
+                text: c.text(),
+                selection: c.selection().start..c.selection().end,
+                composition: c.composition().map(|composition| composition.range.clone()),
+            },
         )
     });
-    build_ime_request(
-        text_content_origin(args),
-        computed_data,
-        ime_rect,
-        selection_range,
-        composition_range,
-    )
+    build_ime_request(text_content_origin(args), computed_data, ime_rect)
+        .with_text_state(state)
+        .with_options(winit::window::ImeOptions {
+            purpose: if args.is_secure {
+                winit::window::ImePurpose::Password
+            } else {
+                winit::window::ImePurpose::Normal
+            },
+            action: if args.single_line {
+                winit::event::ImeAction::Submit
+            } else {
+                winit::event::ImeAction::Newline
+            },
+        })
 }
 
 fn build_ime_request(
     text_origin: PxPosition,
     computed_data: ComputedData,
     ime_rect: Option<RectDef>,
-    selection_range: Option<std::ops::Range<usize>>,
-    composition_range: Option<std::ops::Range<usize>>,
 ) -> ImeRequest {
     ime_rect
         .map(|ime_rect| {
-            let local_position = text_origin + PxPosition::new(ime_rect.x, ime_rect.y);
             ImeRequest::new(PxSize::new(ime_rect.width, ime_rect.height))
-                .with_local_position(local_position)
-                .with_selection_range(selection_range.clone())
-                .with_composition_range(composition_range.clone())
+                .with_local_position(text_origin + PxPosition::new(ime_rect.x, ime_rect.y))
         })
-        .unwrap_or_else(|| {
-            ImeRequest::new(computed_data.into())
-                .with_selection_range(selection_range)
-                .with_composition_range(composition_range)
-        })
+        .unwrap_or_else(|| ImeRequest::new(computed_data.into()))
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -2414,14 +2440,10 @@ mod tests {
                 width: Px(7),
                 height: Px(13),
             }),
-            Some(2..6),
-            Some(3..5),
         );
 
         assert_eq!(ime_request.local_position, PxPosition::new(Px(12), Px(16)));
         assert_eq!(ime_request.size, PxSize::new(Px(7), Px(13)));
-        assert_eq!(ime_request.selection_range, Some(2..6));
-        assert_eq!(ime_request.composition_range, Some(3..5));
     }
 
     #[test]
@@ -2433,14 +2455,10 @@ mod tests {
                 height: Px(40),
             },
             None,
-            Some(2..6),
-            None,
         );
 
         assert_eq!(ime_request.local_position, PxPosition::ZERO);
         assert_eq!(ime_request.size, PxSize::new(Px(120), Px(40)));
-        assert_eq!(ime_request.selection_range, Some(2..6));
-        assert_eq!(ime_request.composition_range, None);
     }
 
     fn scheme() -> crate::theme::MaterialColorScheme {

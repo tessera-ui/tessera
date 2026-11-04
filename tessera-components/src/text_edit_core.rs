@@ -1099,8 +1099,8 @@ impl TextImeState {
         self.composition = composition;
     }
 
-    fn clear(&mut self) {
-        self.composition = None;
+    fn clear(&mut self) -> bool {
+        self.composition.take().is_some()
     }
 
     fn composition_range(&self) -> Option<Range<usize>> {
@@ -1122,6 +1122,7 @@ impl TextImeState {
         &self,
         selection: TextSelection,
         single_line: bool,
+        text: &str,
         event: &winit::event::Ime,
     ) -> Option<PlannedImeEvent> {
         if single_line
@@ -1140,6 +1141,39 @@ impl TextImeState {
             .unwrap_or_else(|| selection.ordered_range());
 
         match event {
+            winit::event::Ime::DeleteSurroundingText { before, after } => {
+                let range = selection.ordered_range();
+                let start = range.start.checked_sub(*before)?;
+                let end = range.end.checked_add(*after)?;
+                text.get(start..end)?;
+                Some(PlannedImeEvent::Edit(PlannedImeEdit {
+                    replacement_range: start..end,
+                    replacement_text: text.get(range.clone())?.into(),
+                    selection: TextSelection {
+                        start: start + selection.start - range.start,
+                        end: start + selection.end - range.start,
+                    },
+                    composition_range: None,
+                }))
+            }
+            winit::event::Ime::TextState(state) => Some(PlannedImeEvent::Edit(PlannedImeEdit {
+                replacement_range: 0..text.len(),
+                replacement_text: state.text.clone(),
+                selection: TextSelection {
+                    start: state.selection.start,
+                    end: state.selection.end,
+                },
+                composition_range: state.composition.clone(),
+            })),
+            winit::event::Ime::Action(winit::event::ImeAction::Submit) => {
+                Some(PlannedImeEvent::Submit)
+            }
+            winit::event::Ime::Action(winit::event::ImeAction::Newline) => self.plan_event(
+                selection,
+                single_line,
+                text,
+                &winit::event::Ime::Commit("\n".into()),
+            ),
             winit::event::Ime::Commit(text) => Some(PlannedImeEvent::Edit(PlannedImeEdit {
                 replacement_range: replacement_range.clone(),
                 replacement_text: text.clone(),
@@ -1148,6 +1182,7 @@ impl TextImeState {
             })),
             winit::event::Ime::Preedit(text, cursor_offset) => {
                 if text.is_empty() {
+                    self.composition.as_ref()?;
                     Some(PlannedImeEvent::Edit(PlannedImeEdit {
                         replacement_range: replacement_range.clone(),
                         replacement_text: String::new(),
@@ -1175,13 +1210,6 @@ impl TextImeState {
             }
             _ => None,
         }
-    }
-
-    fn commit_edit_result(&mut self, plan: &PlannedImeEdit, result: &ImeEditResult) {
-        self.composition = plan.composition_range.as_ref().map(|_| ImeComposition {
-            range: result.replaced_range.clone(),
-            selection: result.selection.clone(),
-        });
     }
 }
 
@@ -2096,11 +2124,6 @@ impl TextEditorController {
         &self.focus_handler
     }
 
-    // Returns a mutable reference to the internal focus handler.
-    pub(crate) fn focus_handler_mut(&mut self) -> &mut FocusRequester {
-        &mut self.focus_handler
-    }
-
     /// Returns a reference to the underlying `glyphon::Editor`.
     pub fn editor(&self) -> &glyphon::Editor<'static> {
         self.edit_state.editor()
@@ -2780,7 +2803,9 @@ impl TextEditorController {
     }
 
     pub(crate) fn clear_composition(&mut self) {
-        self.ime_state.clear();
+        if self.ime_state.clear() {
+            self.invalidate_layout_geometry();
+        }
     }
 
     pub(crate) fn plan_ime_event(
@@ -2789,11 +2814,22 @@ impl TextEditorController {
         event: &winit::event::Ime,
     ) -> Option<PlannedImeEvent> {
         self.ime_state
-            .plan_event(self.selection(), single_line, event)
+            .plan_event(self.selection(), single_line, &self.text(), event)
     }
 
     pub(crate) fn commit_ime_edit(&mut self, plan: &PlannedImeEdit, result: &ImeEditResult) {
-        self.ime_state.commit_edit_result(plan, result);
+        self.ime_state.composition = plan.composition_range.as_ref().and_then(|range| {
+            let text = self.text();
+            let replacement = &text[result.replaced_range.clone()];
+            let relative = range.start.saturating_sub(plan.replacement_range.start)
+                ..range.end.saturating_sub(plan.replacement_range.start);
+            let range = rebase_range(&plan.replacement_text, replacement, relative);
+            (!range.is_empty()).then(|| ImeComposition {
+                range: (result.replaced_range.start + range.start)
+                    ..(result.replaced_range.start + range.end),
+                selection: result.selection.clone(),
+            })
+        });
     }
 
     pub(crate) fn selected_text(&self) -> Option<String> {
@@ -2873,6 +2909,14 @@ impl TextEditorController {
         let preview = self.edit_state.preview_replace_result(range, replacement);
         let raw_content_after_replace = preview.text;
         let raw_replaced_range = preview.replaced_range;
+
+        if raw_content_after_replace == self.text() {
+            self.set_text_and_selection(&raw_content_after_replace, selection);
+            return ImeEditResult {
+                selection: self.selection(),
+                replaced_range: raw_replaced_range,
+            };
+        }
 
         let transformed_content = if let Some(transform) = input_transform.as_ref() {
             transform.call(raw_content_after_replace.clone())
@@ -3612,7 +3656,7 @@ mod tests {
     use crate::pipelines::text::command::TextConstraint;
     use glyphon::{Action as GlyphonAction, Edit as _, cosmic_text::Motion};
     use tessera_ui::winit::keyboard::NamedKey;
-    use tessera_ui::{ComputedData, Dp, Px};
+    use tessera_ui::{CallbackWith, ComputedData, Dp, Px, winit};
 
     mod layout_reuse {
 
@@ -3876,6 +3920,96 @@ mod tests {
             );
             assert!(controller.with(|c| c.current_text_data().unwrap().size[0]) > initial_width);
         }
+    }
+
+    #[test]
+    fn native_ime_edits_preserve_composition_and_selection() {
+        #[tessera_ui::tessera]
+        fn snapshot_contract() {
+            let mut controller = controller_with_text("old");
+            for (selection, composition) in [
+                (8..1, Some(1..8)),
+                (5..8, Some(5..8)),
+                (9..9, None),
+                (8..1, None),
+            ] {
+                let event = winit::event::Ime::TextState(winit::event::ImeTextState {
+                    text: "a😃中z".into(),
+                    selection: selection.clone(),
+                    composition: composition.clone(),
+                });
+                let Some(super::PlannedImeEvent::Edit(plan)) =
+                    controller.plan_ime_event(false, &event)
+                else {
+                    panic!("text snapshot must produce an edit");
+                };
+                let on_change = if controller.text() == "a😃中z" {
+                    CallbackWith::new(|_| {
+                        panic!("selection and composition must not rerun on_change")
+                    })
+                } else {
+                    CallbackWith::identity()
+                };
+                let result = controller.replace_text_range_with_pipeline(
+                    plan.replacement_range.clone(),
+                    &plan.replacement_text,
+                    plan.selection.clone(),
+                    on_change,
+                    None,
+                );
+                controller.commit_ime_edit(&plan, &result);
+                assert_eq!(controller.text(), "a😃中z");
+                assert_eq!(
+                    controller.selection(),
+                    TextSelection {
+                        start: selection.start,
+                        end: selection.end
+                    }
+                );
+                assert_eq!(
+                    controller
+                        .composition()
+                        .map(|composition| composition.range.clone()),
+                    composition
+                );
+            }
+            assert!(
+                controller
+                    .plan_ime_event(false, &winit::event::Ime::Preedit(String::new(), None))
+                    .is_none()
+            );
+            let Some(super::PlannedImeEvent::Edit(plan)) = controller.plan_ime_event(
+                false,
+                &winit::event::Ime::DeleteSurroundingText {
+                    before: 1,
+                    after: 1,
+                },
+            ) else {
+                panic!("surrounding deletion must produce an edit");
+            };
+            let result = controller.replace_text_range_with_pipeline(
+                plan.replacement_range.clone(),
+                &plan.replacement_text,
+                plan.selection.clone(),
+                CallbackWith::identity(),
+                None,
+            );
+            controller.commit_ime_edit(&plan, &result);
+            assert_eq!(controller.text(), "😃中");
+            assert_eq!(controller.selection(), TextSelection { start: 7, end: 0 });
+            assert!(
+                controller
+                    .plan_ime_event(
+                        false,
+                        &winit::event::Ime::DeleteSurroundingText {
+                            before: 1,
+                            after: 0
+                        }
+                    )
+                    .is_none()
+            );
+        }
+        tessera_ui::testing::layout_test(snapshot_contract).run();
     }
 
     fn controller_with_text(text: &str) -> TextEditorController {

@@ -15,6 +15,10 @@ android {
         versionCode = 1
         versionName = "1.0"
     }{{#if android-vulkan-validation}}
+    compileOptions {
+        sourceCompatibility = JavaVersion.VERSION_17
+        targetCompatibility = JavaVersion.VERSION_17
+    }
     sourceSets.getByName("main") {
         // Vulkan validation layers
         val ndkHome = System.getenv("NDK_HOME")
@@ -47,8 +51,7 @@ rust {
 }
 
 dependencies {
-    implementation(platform("org.jetbrains.kotlin:kotlin-bom:1.8.22"))
-    implementation("androidx.games:games-activity:2.0.2")
+    implementation("androidx.games:games-activity:4.4.0")
     implementation("androidx.appcompat:appcompat:1.6.1")
 {{#each android-app-dependencies-platform}}
     implementation(platform("{{this}}"))

@@ -94,11 +94,14 @@ impl RenderCore {
         adapter: &wgpu::Adapter,
         _offscreen: bool,
     ) -> (wgpu::Device, wgpu::Queue) {
-        let required_limits = if cfg!(target_arch = "wasm32") {
+        let mut required_limits = if cfg!(target_arch = "wasm32") {
             wgpu::Limits::downlevel_webgl2_defaults()
         } else {
             wgpu::Limits::default()
         };
+        required_limits.max_uniform_buffer_binding_size = required_limits
+            .max_uniform_buffer_binding_size
+            .min(adapter.limits().max_uniform_buffer_binding_size);
         let base_features = wgpu::Features::CLEAR_TEXTURE;
         #[cfg(all(
             feature = "profiling",
@@ -231,6 +234,7 @@ impl RenderCore {
     ) -> Self {
         // Looking for adapters
         let mut instance_desc = wgpu::InstanceDescriptor::new_without_display_handle();
+        instance_desc.flags = wgpu::InstanceFlags::from_env_or_default();
         #[cfg(not(target_os = "windows"))]
         {
             instance_desc.backends = wgpu::Backends::all();

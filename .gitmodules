@@ -4,5 +4,17 @@
 	branch = main
 [submodule "tessera-cosmic-text"]
 	path = tessera-cosmic-text
-	url = https://github.com/tessera-ui/cosmic-text-tessera-fork
+	url = https://github.com/tessera-ui/tessera-cosmic-text
 	branch = main
+[submodule "tessera-winit"]
+	path = tessera-winit
+	url = https://github.com/tessera-ui/tessera-winit.git
+	branch = ime
+[submodule "tessera-accesskit"]
+	path = tessera-accesskit
+	url = https://github.com/tessera-ui/tessera-accesskit.git
+	branch = ime
+[submodule "tessera-android-activity"]
+	path = tessera-android-activity
+	url = https://github.com/tessera-ui/tessera-android-activity.git
+	branch = ime

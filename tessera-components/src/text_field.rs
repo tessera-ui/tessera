@@ -1460,7 +1460,7 @@ pub fn text_field(
                 && is_inside
             {
                 let press_timestamp = focus_tap_result.press_timestamp;
-                controller.with_mut(|c| c.focus_handler_mut().request_focus());
+                controller.with(|c| *c.focus_handler()).request_focus();
                 let inner_handled_click = press_timestamp
                     .map(|timestamp| controller.with(|c| c.last_click_time() == Some(timestamp)))
                     .unwrap_or(false);
@@ -2101,8 +2101,8 @@ mod native_field_regressions {
                     long,
                     crate::text_edit_core::TextSelection::collapsed(long.len()),
                 );
-                editor.focus_handler_mut().unfocus();
             });
+            editor.with(|editor| *editor.focus_handler()).unfocus();
             renderer.render_frames(4);
             assert!(editor.with(|editor| editor.scroll_state().horizontal()) > 0.0);
             let end_pixels = renderer.read_pixels().unwrap();

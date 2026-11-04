@@ -153,7 +153,7 @@ new_key_type! {
 struct SlotEntry {
     key: SlotKey,
     generation: u64,
-    value: Option<Box<dyn Any + Send + Sync>>,
+    value: Option<Arc<dyn Any + Send + Sync>>,
     last_alive_epoch: u64,
     retained: bool,
 }
@@ -2069,10 +2069,8 @@ where
             "state belongs to a different runtime session"
         );
         track_state_read_dependency(self.slot, self.generation);
-        with_slot_table(|table| {
-            let value = state_value_ref::<T>(table, self.slot, self.generation);
-            f(value)
-        })
+        let value = with_slot_table(|table| state_value::<T>(table, self.slot, self.generation));
+        f(&value)
     }
 
     /// Execute a closure with a mutable reference to the stored value.
@@ -3006,11 +3004,11 @@ fn current_group_path_hash() -> u64 {
     with_execution_context(|context| hash_components(&[&context.group_path_stack[..]]))
 }
 
-fn state_value_ref<'a, T: 'static>(
-    table: &'a SlotTable,
+fn state_value<T: Send + Sync + 'static>(
+    table: &SlotTable,
     slot: SlotHandle,
     generation: u64,
-) -> &'a T {
+) -> Arc<T> {
     let entry = table
         .entries
         .get(slot)
@@ -3028,12 +3026,13 @@ fn state_value_ref<'a, T: 'static>(
             entry.key.type_id
         );
     }
-    entry
-        .value
-        .as_ref()
-        .unwrap_or_else(|| panic!("State slot {slot:?} has been cleared"))
-        .downcast_ref::<T>()
-        .unwrap_or_else(|| panic!("State slot {slot:?} downcast failed"))
+    clone_slot_value(
+        entry
+            .value
+            .as_ref()
+            .unwrap_or_else(|| panic!("State slot {slot:?} has been cleared")),
+        slot,
+    )
 }
 
 /// Restores a value moved out of the slot table by [`State::with_mut`].
@@ -3056,7 +3055,11 @@ impl<T: Send + Sync + 'static> Drop for StateValueRestore<T> {
     }
 }
 
-fn take_state_value<T: 'static>(table: &mut SlotTable, slot: SlotHandle, generation: u64) -> T {
+fn take_state_value<T: Send + Sync + 'static>(
+    table: &mut SlotTable,
+    slot: SlotHandle,
+    generation: u64,
+) -> T {
     let entry = table
         .entries
         .get_mut(slot)
@@ -3074,13 +3077,22 @@ fn take_state_value<T: 'static>(table: &mut SlotTable, slot: SlotHandle, generat
             entry.key.type_id
         );
     }
-    let boxed = entry
+    let value = entry
         .value
-        .take()
+        .as_ref()
         .unwrap_or_else(|| panic!("State slot {slot:?} has been cleared"));
-    *boxed
-        .downcast::<T>()
-        .unwrap_or_else(|_| panic!("State slot {slot:?} downcast failed"))
+    assert_eq!(
+        Arc::strong_count(value),
+        1,
+        "State slot {slot:?} is being read"
+    );
+    let value = entry.value.take().expect("state value is present");
+    Arc::try_unwrap(
+        value
+            .downcast::<T>()
+            .unwrap_or_else(|_| panic!("State slot {slot:?} downcast failed")),
+    )
+    .unwrap_or_else(|_| unreachable!("state value must be unique"))
 }
 
 fn restore_state_value<T: Send + Sync + 'static>(
@@ -3098,23 +3110,18 @@ fn restore_state_value<T: Send + Sync + 'static>(
     {
         return Some(value);
     }
-    entry.value = Some(Box::new(value));
+    entry.value = Some(Arc::new(value));
     None
 }
 
-fn box_state_value<T: Send + Sync + 'static>(value: T) -> Box<dyn Any + Send + Sync> {
-    Box::new(value)
-}
-
-fn box_functor_value<T: Send + Sync + 'static>(value: T) -> Box<dyn Any + Send + Sync> {
-    Box::new(Arc::new(value))
-}
-
-fn downcast_functor_arc<T: Send + Sync + 'static>(value: &dyn Any, slot: SlotHandle) -> Arc<T> {
+fn clone_slot_value<T: Send + Sync + 'static>(
+    value: &Arc<dyn Any + Send + Sync>,
+    slot: SlotHandle,
+) -> Arc<T> {
     value
-        .downcast_ref::<Arc<T>>()
-        .unwrap_or_else(|| panic!("callback slot {slot:?} downcast failed"))
         .clone()
+        .downcast::<T>()
+        .unwrap_or_else(|_| panic!("Slot {slot:?} downcast failed"))
 }
 
 fn resolve_state_key<T: Send + Sync + 'static>(
@@ -3145,7 +3152,7 @@ fn resolve_state_key<T: Send + Sync + 'static>(
             if entry.value.is_some() || key.owned_owner.is_some() {
                 return (State::new(slot, entry.generation), Some(value));
             }
-            entry.value = Some(box_state_value(value));
+            entry.value = Some(Arc::new(value));
             entry.generation = entry
                 .generation
                 .checked_add(1)
@@ -3155,7 +3162,7 @@ fn resolve_state_key<T: Send + Sync + 'static>(
         let slot = table.entries.insert(SlotEntry {
             key,
             generation: 1,
-            value: Some(box_state_value(value)),
+            value: Some(Arc::new(value)),
             last_alive_epoch: table.epoch,
             retained,
         });
@@ -3499,18 +3506,17 @@ where
                     let init_fn = init_opt
                         .take()
                         .expect("callback slot init called more than once");
-                    entry.value = Some(box_functor_value(init_fn()));
+                    entry.value = Some(Arc::new(init_fn()));
                     entry.generation = entry.generation.wrapping_add(1);
                 }
 
                 (
                     entry.generation,
-                    downcast_functor_arc::<T>(
+                    clone_slot_value::<T>(
                         entry
                             .value
                             .as_ref()
-                            .expect("callback slot must contain a value")
-                            .as_ref(),
+                            .expect("callback slot must contain a value"),
                         slot,
                     ),
                 )
@@ -3539,18 +3545,17 @@ where
                     let init_fn = init_opt
                         .take()
                         .expect("callback slot init called more than once");
-                    entry.value = Some(box_functor_value(init_fn()));
+                    entry.value = Some(Arc::new(init_fn()));
                     entry.generation = entry.generation.wrapping_add(1);
                 }
 
                 (
                     entry.generation,
-                    downcast_functor_arc::<T>(
+                    clone_slot_value::<T>(
                         entry
                             .value
                             .as_ref()
-                            .expect("callback slot must contain a value")
-                            .as_ref(),
+                            .expect("callback slot must contain a value"),
                         slot,
                     ),
                 )
@@ -3566,7 +3571,7 @@ where
             let slot = table.entries.insert(SlotEntry {
                 key: slot_key,
                 generation,
-                value: Some(box_functor_value(init_fn())),
+                value: Some(Arc::new(init_fn())),
                 last_alive_epoch: epoch,
                 retained: false,
             });
@@ -3574,15 +3579,14 @@ where
             table.index_slot(slot_key, slot);
             table.record_slot_usage_slow(instance_logic_id, slot);
 
-            let value = downcast_functor_arc::<T>(
+            let value = clone_slot_value::<T>(
                 table
                     .entries
                     .get(slot)
                     .expect("functor slot entry should exist")
                     .value
                     .as_ref()
-                    .expect("callback slot must contain a value")
-                    .as_ref(),
+                    .expect("callback slot must contain a value"),
                 slot,
             );
 
@@ -3622,12 +3626,11 @@ where
             );
         }
 
-        downcast_functor_arc::<T>(
+        clone_slot_value::<T>(
             entry
                 .value
                 .as_ref()
-                .unwrap_or_else(|| panic!("Callback slot {:?} has been cleared", handle.slot))
-                .as_ref(),
+                .unwrap_or_else(|| panic!("Callback slot {:?} has been cleared", handle.slot)),
             handle.slot,
         )
     })
@@ -4098,6 +4101,14 @@ mod tests {
         reset_slots();
         let state = with_test_component_scope(815, || remember(|| 4_u32));
         assert!(state.is_alive());
+        let other = with_test_component_scope(816, || remember(|| 0_u32));
+        state.with(|value| {
+            other.set(*value + 1);
+            assert_eq!(state.get(), 4);
+            assert!(std::panic::catch_unwind(|| state.set(9)).is_err());
+            assert_eq!(state.get(), 4);
+        });
+        assert_eq!(other.get(), 5);
         state.with_mut(|value| {
             assert!(state.is_alive());
             *value = 5;
@@ -4798,14 +4809,14 @@ mod tests {
         let keep_slot = table.entries.insert(SlotEntry {
             key: keep_key,
             generation: 1,
-            value: Some(Box::new(10_i32)),
+            value: Some(Arc::new(10_i32)),
             last_alive_epoch: 0,
             retained: true,
         });
         let drop_slot = table.entries.insert(SlotEntry {
             key: drop_key,
             generation: 1,
-            value: Some(Box::new(20_i32)),
+            value: Some(Arc::new(20_i32)),
             last_alive_epoch: 0,
             retained: false,
         });

@@ -33,6 +33,7 @@ pub(crate) fn load_workspace_from(
         features: cargo_features(&options.features),
         sysroot: Some(RustLibSource::Discover),
         target: options.target.map(str::to_string),
+        metadata_extra_args: vec!["--filter-platform".to_string(), super::plan::host_target()?],
         run_build_script_command: Some(build_script_command(options)),
         ..CargoConfig::default()
     };

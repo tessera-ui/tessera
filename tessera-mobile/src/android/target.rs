@@ -224,6 +224,7 @@ impl<'a> Target<'a> {
                 "-Clink-arg=-landroid".to_owned(),
                 "-Clink-arg=-llog".to_owned(),
                 "-Clink-arg=-lOpenSLES".to_owned(),
+                "-Clink-arg=-Wl,-z,max-page-size=16384".to_owned(),
             ],
         })
     }

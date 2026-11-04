@@ -29,7 +29,7 @@ slotmap = "1.1.1"
 rustc-hash = "2.1.1"
 tessera-macros = { path = "../tessera-macros" }
 accesskit = "0.24.0"
-accesskit_winit = "0.32.0"
+accesskit_winit = { package = "tessera-accesskit-winit", version = "0.32.2", path = "../tessera-accesskit/platforms/winit" }
 smallvec = "1.15.1"
 downcast-rs = "2.0.2"
 dyn-clone = "1.0.20"
@@ -58,7 +58,7 @@ objc2-quartz-core = { version = "0.3.2", default-features = false, features = [
 ] }
 
 [target.'cfg(not(target_os = "android"))'.dependencies]
-winit = "0.30.12"
+winit = { package = "tessera-winit", version = "0.30.13", path = "../tessera-winit" }
 
 [target.'cfg(target_family = "wasm")'.dependencies]
 console_error_panic_hook = "0.1.7"
@@ -67,7 +67,7 @@ wasm-bindgen-futures = "0.4.55"
 web-time = "1.1.0"
 
 [target.'cfg(target_os = "android")'.dependencies]
-winit = { version = "0.30.12", features = ["android-game-activity"] }
+winit = { package = "tessera-winit", version = "0.30.13", path = "../tessera-winit", features = ["android-game-activity"] }
 ndk-sys = "0.6.0"
 jni = "0.21.1"
 ndk-context = "0.1.1"

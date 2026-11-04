@@ -74,7 +74,7 @@ fn arrange(probe: &Probe, editor: State<TextInputController>) {
     probe.changes.with_mut(Vec::clear);
 }
 
-fn check_clipboard() {
+fn check_edits() {
     let probe = Probe::default();
     let output = probe.clone();
     let mut renderer = HeadlessRenderer::new(
@@ -91,6 +91,31 @@ fn check_clipboard() {
     let editor = probe.editor.get().expect("editor");
     editor.with(|editor| editor.focus_handler().request_focus());
     renderer.render_frames(4);
+    renderer.inject_ime_event(tessera_ui::winit::event::Ime::Preedit(
+        "ni".into(),
+        Some((2, 2)),
+    ));
+    renderer.render_frames(3);
+    assert!(editor.with(|editor| editor.composition().is_some()));
+    assert!(editor.with(|editor| !editor.current_composition_rects().is_empty()));
+    probe
+        .other
+        .get()
+        .expect("other")
+        .with(|other| other.focus_handler().request_focus());
+    renderer.render_frames(3);
+    assert_eq!(editor.with(|editor| editor.text()), "NI");
+    assert!(editor.with(|editor| editor.composition().is_none()));
+    assert!(editor.with(|editor| editor.current_composition_rects().is_empty()));
+    editor.with(|editor| editor.focus_handler().request_focus());
+    renderer.render_frames(3);
+    renderer.inject_ime_event(tessera_ui::winit::event::Ime::Preedit(
+        "h".into(),
+        Some((1, 1)),
+    ));
+    renderer.render_frames(3);
+    assert_eq!(editor.with(|editor| editor.text()), "NIH");
+
     arrange(&probe, editor);
     request(&probe, ClipboardAction::Copy);
     renderer.render_frames(3);
@@ -173,9 +198,9 @@ fn check_clipboard() {
 
 #[test]
 #[ignore = "requires a native GPU adapter"]
-fn focused_clipboard_edits_use_the_pipeline_and_acknowledge_writes() {
+fn focused_edits_keep_ime_ownership_and_acknowledge_clipboard_writes() {
     crate::test_utils::run_isolated_test(
-        "text_input::clipboard_tests::focused_clipboard_edits_use_the_pipeline_and_acknowledge_writes",
-        check_clipboard,
+        "text_input::clipboard_tests::focused_edits_keep_ime_ownership_and_acknowledge_clipboard_writes",
+        check_edits,
     );
 }

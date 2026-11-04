@@ -273,7 +273,7 @@ fn target_is_selected(target: &Target, selection: &TargetSelection) -> bool {
     target_is_library(target) || target.is_bin()
 }
 
-fn host_target() -> Result<String> {
+pub(super) fn host_target() -> Result<String> {
     let output = Command::new("rustc")
         .arg("-vV")
         .output()

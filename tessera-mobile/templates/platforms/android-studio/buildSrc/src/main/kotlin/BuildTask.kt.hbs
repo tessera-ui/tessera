@@ -9,6 +9,8 @@ import org.gradle.process.ExecOperations
 import javax.inject.Inject
 
 abstract class BuildTask : DefaultTask() {
+    private val projectDirectory = project.projectDir
+
     @get:Inject
     protected abstract val execOperations: ExecOperations
 
@@ -31,12 +33,12 @@ abstract class BuildTask : DefaultTask() {
         val release = release ?: throw GradleException("release cannot be null")
 
         execOperations.exec {
-            workingDir(File(project.projectDir, rootDirRel))
+            workingDir(File(projectDirectory, rootDirRel))
             executable("cargo")
             args(listOf("tessera", "android", "rust-build"))
-            if (project.logger.isEnabled(LogLevel.DEBUG)) {
+            if (logger.isEnabled(LogLevel.DEBUG)) {
                 args("-vv")
-            } else if (project.logger.isEnabled(LogLevel.INFO)) {
+            } else if (logger.isEnabled(LogLevel.INFO)) {
                 args("-v")
             }
             if (release) {

@@ -73,7 +73,7 @@ impl From<winit::event::KeyEvent> for KeyboardEvent {
 }
 
 #[derive(Debug)]
-pub(crate) struct QueuedKeyEvent<E = KeyboardEvent> {
+pub(crate) struct QueuedInput<E = KeyboardEvent> {
     pub event: E,
     pub modifiers: ModifiersState,
     pub sequence: u64,
@@ -94,7 +94,7 @@ pub(crate) fn next_input_sequence() -> u64 {
 
 #[derive(Debug)]
 pub(crate) struct KeyboardQueue<E> {
-    events: VecDeque<QueuedKeyEvent<E>>,
+    events: VecDeque<QueuedInput<E>>,
     modifiers: ModifiersState,
 }
 
@@ -111,14 +111,14 @@ impl<E> Default for KeyboardQueue<E> {
 
 impl<E> KeyboardQueue<E> {
     pub fn push_event(&mut self, event: E) {
-        self.events.push_back(QueuedKeyEvent {
+        self.events.push_back(QueuedInput {
             event,
             modifiers: self.modifiers,
             sequence: next_input_sequence(),
         });
     }
 
-    pub fn take_events(&mut self) -> Vec<QueuedKeyEvent<E>> {
+    pub fn take_events(&mut self) -> Vec<QueuedInput<E>> {
         self.events.drain(..).collect()
     }
 

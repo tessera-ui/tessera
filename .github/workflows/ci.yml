@@ -40,9 +40,11 @@ jobs:
           rust-script --test scripts/analyze-profiler.rs
           rust-script --test scripts/check-imports.rs
           rust-script scripts/check-imports.rs --check
-      - name: Build macOS example
+      - name: Verify Apple IME and build example
         if: runner.os == 'macOS'
-        run: cargo tessera build -p example
+        run: |
+          python3 scripts/test-apple-ime.py
+          cargo tessera build -p example
 
   check_web:
     name: Check Web

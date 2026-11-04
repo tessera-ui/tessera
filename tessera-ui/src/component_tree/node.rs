@@ -611,19 +611,40 @@ pub(crate) struct WindowRequests {
     pub request_window_drag: bool,
 }
 
-/// Frame-local IME bridge used by input handlers to publish text input state.
-///
-/// Use this bridge when an input handler needs to expose the current text-input
-/// snapshot to the renderer-facing IME integration without mutating renderer
-/// aggregation state directly.
+impl WindowRequests {
+    pub(crate) fn settle(&mut self, mut next: Self) {
+        next.request_window_drag |= self.request_window_drag;
+        if let (Some(previous), Some(request)) = (&self.ime_request, &mut next.ime_request) {
+            request.show_keyboard |=
+                previous.show_keyboard && previous.client_id == request.client_id;
+            if previous.client_id == request.client_id && previous.text_state == request.text_state
+            {
+                request.change_cause = previous.change_cause;
+            }
+        }
+        *self = next;
+    }
+}
+
+/// Publishes the focused editor's text, selection and input configuration.
 pub struct ImeSession<'a> {
     request: &'a mut Option<ImeRequest>,
 }
 
 impl ImeSession<'_> {
     /// Publishes the IME snapshot for the current frame.
-    pub fn update(&mut self, request: ImeRequest) {
+    pub fn update(&mut self, mut request: ImeRequest) {
+        request.show_keyboard |= self
+            .request
+            .as_ref()
+            .is_some_and(|request| request.show_keyboard);
         *self.request = Some(request);
+    }
+
+    /// Opens the software keyboard and publishes the current editor snapshot.
+    pub fn show(&mut self, mut request: ImeRequest) {
+        request.show_keyboard = true;
+        self.update(request);
     }
 
     /// Clears the IME snapshot for the current frame.
@@ -640,26 +661,28 @@ pub struct ImeRequest {
     pub size: PxSize,
     /// The position of the IME anchor relative to the requesting node.
     pub local_position: PxPosition,
-    /// The current ordered selection range in the backing text buffer.
-    pub selection_range: Option<std::ops::Range<usize>>,
-    /// The current ordered composition range in the backing text buffer.
-    pub composition_range: Option<std::ops::Range<usize>>,
-    /// The absolute position where the IME should be placed.
-    /// This is set internally by the component tree during the compute pass.
-    pub(crate) position: Option<PxPosition>, // should be setted in tessera node tree compute
+    /// The complete text snapshot, including directional selection and composition.
+    pub text_state: winit::event::ImeTextState,
+    /// The input purpose and return-key action.
+    pub options: winit::window::ImeOptions,
+    pub(crate) change_cause: winit::event::ImeChangeCause,
+    pub(crate) show_keyboard: bool,
+    pub(crate) client_id: Option<crate::focus::FocusHandleId>,
+    pub(crate) position: Option<PxPosition>,
 }
 
 impl ImeRequest {
     /// Creates a new IME request with the target input area size.
-    ///
-    /// The absolute position is injected during the compute pass.
     pub fn new(size: PxSize) -> Self {
         Self {
             size,
             local_position: PxPosition::ZERO,
-            selection_range: None,
-            composition_range: None,
-            position: None, // Position will be set during the compute phase
+            text_state: winit::event::ImeTextState::default(),
+            options: winit::window::ImeOptions::default(),
+            change_cause: winit::event::ImeChangeCause::Other,
+            show_keyboard: false,
+            client_id: None,
+            position: None,
         }
     }
 
@@ -669,18 +692,15 @@ impl ImeRequest {
         self
     }
 
-    /// Sets the current ordered text selection range.
-    pub fn with_selection_range(mut self, selection_range: Option<std::ops::Range<usize>>) -> Self {
-        self.selection_range = selection_range;
+    /// Sets the complete editable text snapshot using UTF-8 byte offsets.
+    pub fn with_text_state(mut self, text_state: winit::event::ImeTextState) -> Self {
+        self.text_state = text_state;
         self
     }
 
-    /// Sets the current ordered text composition range.
-    pub fn with_composition_range(
-        mut self,
-        composition_range: Option<std::ops::Range<usize>>,
-    ) -> Self {
-        self.composition_range = composition_range;
+    /// Sets the input purpose and return-key action.
+    pub fn with_options(mut self, options: winit::window::ImeOptions) -> Self {
+        self.options = options;
         self
     }
 }

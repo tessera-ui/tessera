@@ -17,11 +17,10 @@ use crate::{
     focus::{
         FocusDirection, FocusHandleId, FocusOwner, PendingFocusCallbackInvocation, bind_focus_owner,
     },
-    keyboard_state::QueuedKeyEvent,
+    keyboard_state::QueuedInput,
     layout::{LayoutResult, RenderInput},
     modifier::{
-        DrawModifierContent, DrawModifierContext, ImeInputModifierNode, KeyboardInputModifierNode,
-        OrderedModifierAction, PointerInputModifierNode,
+        DrawModifierContent, DrawModifierContext, OrderedModifierAction, PointerInputModifierNode,
     },
     px::{PxPosition, PxSize},
     render_graph::RenderGraph,
@@ -474,8 +473,8 @@ pub(crate) struct ComputeParams<'a> {
     pub screen_size: PxSize,
     pub cursor_position: Option<PxPosition>,
     pub pointer_changes: Vec<PointerChange>,
-    pub keyboard_events: Vec<QueuedKeyEvent>,
-    pub ime_events: Vec<winit::event::Ime>,
+    pub keyboard_events: Vec<QueuedInput>,
+    pub ime_events: Vec<QueuedInput<crate::ime_state::ImeEvent>>,
     pub retry_focus_move: Option<FocusDirection>,
     pub retry_focus_reveal: bool,
     pub modifiers: winit::keyboard::ModifiersState,
@@ -498,8 +497,9 @@ struct GlobalPositionSnapshot {
 }
 
 enum QueuedFocusedInput {
-    Keyboard(QueuedKeyEvent),
+    Keyboard(QueuedInput),
     Clipboard(QueuedClipboardAction),
+    Ime(QueuedInput<crate::ime_state::ImeEvent>),
 }
 
 impl QueuedFocusedInput {
@@ -507,6 +507,7 @@ impl QueuedFocusedInput {
         match self {
             Self::Keyboard(event) => event.sequence,
             Self::Clipboard(event) => event.sequence,
+            Self::Ime(event) => event.sequence,
         }
     }
 }
@@ -545,8 +546,7 @@ pub struct ComponentTree {
     pointer_work: (u64, HashSet<u64>),
     /// Per-tree focus owner used for keyboard and IME routing.
     focus_owner: FocusOwner,
-    pending_keyboard_events: VecDeque<QueuedFocusedInput>,
-    pending_ime_events: Vec<winit::event::Ime>,
+    pending_focused_input: VecDeque<QueuedFocusedInput>,
     /// Last reported window-space bounds for nodes with globally positioned
     /// callbacks, keyed by instance key.
     last_global_rects: HashMap<u64, GlobalPositionSnapshot>,
@@ -625,8 +625,7 @@ impl ComponentTree {
             active_pointer_positions: HashMap::default(),
             pointer_work: (0, HashSet::default()),
             focus_owner: FocusOwner::new(),
-            pending_keyboard_events: VecDeque::new(),
-            pending_ime_events: Vec::new(),
+            pending_focused_input: VecDeque::new(),
             last_global_rects: HashMap::default(),
             observer_viewport: None,
             position_observer_nodes: HashSet::default(),
@@ -683,9 +682,8 @@ impl ComponentTree {
         self.active_pointer_positions.clear();
         self.pointer_work.1.clear();
         self.focus_owner.reset();
-        self.pending_keyboard_events.clear();
+        self.pending_focused_input.clear();
         clipboard::clear_requests();
-        self.pending_ime_events.clear();
     }
 
     pub(crate) fn begin_frame_diagnostics(&mut self) {
@@ -1909,7 +1907,7 @@ impl ComponentTree {
     fn dispatch_keyboard_event(
         &mut self,
         root_node: NodeId,
-        queued: QueuedKeyEvent,
+        queued: QueuedInput,
         window_requests: &mut WindowRequests,
     ) -> Option<FocusDirection> {
         let path = collect_focus_chain_node_ids(root_node, &self.tree, &self.focus_owner);
@@ -1919,6 +1917,7 @@ impl ComponentTree {
             metadatas: &self.metadatas,
             keyboard_events: &mut events,
             modifiers: queued.modifiers,
+            ime_client: self.focus_owner.active_handle_id(),
             window_requests,
             focus_owner: &mut self.focus_owner,
         };
@@ -1928,11 +1927,13 @@ impl ComponentTree {
             };
             for action in node.modifier.ordered_actions() {
                 if let OrderedModifierAction::KeyboardPreviewInput(modifier) = action {
-                    run_keyboard_modifier_for_node(&mut context, node_id, modifier.as_ref());
+                    run_keyboard_input_for_node(&mut context, node_id, |input| {
+                        modifier.on_keyboard_input(input)
+                    });
                 }
             }
             for handler in &node.keyboard_preview_handlers {
-                run_keyboard_handler_for_node(&mut context, node_id, handler.as_ref());
+                run_keyboard_input_for_node(&mut context, node_id, handler.as_ref());
             }
         }
         for node_id in path.iter().rev().copied() {
@@ -1941,11 +1942,13 @@ impl ComponentTree {
             };
             for action in node.modifier.ordered_actions() {
                 if let OrderedModifierAction::KeyboardInput(modifier) = action {
-                    run_keyboard_modifier_for_node(&mut context, node_id, modifier.as_ref());
+                    run_keyboard_input_for_node(&mut context, node_id, |input| {
+                        modifier.on_keyboard_input(input)
+                    });
                 }
             }
             for handler in &node.keyboard_handlers {
-                run_keyboard_handler_for_node(&mut context, node_id, handler.as_ref());
+                run_keyboard_input_for_node(&mut context, node_id, handler.as_ref());
             }
         }
         dispatch_default_focus_keyboard_navigation(
@@ -1995,39 +1998,47 @@ impl ComponentTree {
     fn dispatch_ime_input(
         &mut self,
         root_node: NodeId,
-        events: &mut Vec<winit::event::Ime>,
+        events: &mut Vec<crate::ime_state::ImeEvent>,
         window_requests: &mut WindowRequests,
     ) {
-        if events.is_empty() {
-            return;
-        }
         let path = collect_focus_chain_node_ids(root_node, &self.tree, &self.focus_owner);
+        let client = self.focus_owner.active_handle_id();
+        let mut pending = std::mem::take(events)
+            .into_iter()
+            .filter_map(|(source, event)| {
+                source
+                    .is_none_or(|source| Some(source) == client)
+                    .then_some(event)
+            })
+            .collect();
         for node_id in path.iter().copied() {
             let Some(node) = self.tree.get(node_id).map(|node| node.get()) else {
                 continue;
             };
             for action in node.modifier.ordered_actions() {
                 if let OrderedModifierAction::ImePreviewInput(modifier) = action {
-                    run_ime_modifier_for_node(
+                    run_ime_input_for_node(
                         &self.tree,
                         &self.metadatas,
                         node_id,
-                        modifier.as_ref(),
-                        events,
+                        &mut pending,
                         window_requests,
                         &mut self.focus_owner,
+                        client,
+                        |input| modifier.on_ime_input(input),
                     );
                 }
             }
             for handler in &node.ime_preview_handlers {
-                run_ime_handler_for_node(
+                run_ime_input_for_node(
                     &self.tree,
                     &self.metadatas,
                     node_id,
-                    handler.as_ref(),
-                    events,
+                    &mut pending,
                     window_requests,
                     &mut self.focus_owner,
+                    client,
+                    handler.as_ref(),
                 );
             }
         }
@@ -2037,29 +2048,146 @@ impl ComponentTree {
             };
             for action in node.modifier.ordered_actions() {
                 if let OrderedModifierAction::ImeInput(modifier) = action {
-                    run_ime_modifier_for_node(
+                    run_ime_input_for_node(
                         &self.tree,
                         &self.metadatas,
                         node_id,
-                        modifier.as_ref(),
-                        events,
+                        &mut pending,
                         window_requests,
                         &mut self.focus_owner,
+                        client,
+                        |input| modifier.on_ime_input(input),
                     );
                 }
             }
             for handler in &node.ime_handlers {
-                run_ime_handler_for_node(
+                run_ime_input_for_node(
                     &self.tree,
                     &self.metadatas,
                     node_id,
-                    handler.as_ref(),
-                    events,
+                    &mut pending,
                     window_requests,
                     &mut self.focus_owner,
+                    client,
+                    handler.as_ref(),
                 );
             }
         }
+    }
+
+    fn queue_focused_input(
+        &mut self,
+        keyboard: Vec<QueuedInput>,
+        ime: Vec<QueuedInput<crate::ime_state::ImeEvent>>,
+    ) {
+        self.pending_focused_input
+            .extend(keyboard.into_iter().map(QueuedFocusedInput::Keyboard));
+        self.pending_focused_input
+            .extend(ime.into_iter().map(QueuedFocusedInput::Ime));
+        self.pending_focused_input.extend(
+            clipboard::take_requests()
+                .into_iter()
+                .map(QueuedFocusedInput::Clipboard),
+        );
+        self.pending_focused_input
+            .make_contiguous()
+            .sort_by_key(QueuedFocusedInput::sequence);
+    }
+
+    fn dispatch_pending_focused_input(
+        &mut self,
+        root: NodeId,
+        requests: &mut WindowRequests,
+    ) -> Option<FocusDirection> {
+        let mut events = std::mem::take(&mut self.pending_focused_input);
+        let retry = if self.focus_owner.keyboard_is_deferred() {
+            None
+        } else {
+            drain_pending_focused_input(&mut events, |event| {
+                let cause = match &event {
+                    QueuedFocusedInput::Ime(event) => {
+                        let (client, event) = &event.event;
+                        (client.is_none_or(|client| {
+                            Some(client) == self.focus_owner.active_handle_id()
+                        }) && !matches!(
+                            event,
+                            winit::event::Ime::Enabled | winit::event::Ime::Disabled
+                        ))
+                        .then_some(winit::event::ImeChangeCause::InputMethod)
+                    }
+                    _ => Some(winit::event::ImeChangeCause::Other),
+                };
+                let retry = match event {
+                    QueuedFocusedInput::Keyboard(event) => {
+                        self.dispatch_keyboard_event(root, event, requests)
+                    }
+                    QueuedFocusedInput::Clipboard(request) => {
+                        self.dispatch_clipboard_action(root, request);
+                        None
+                    }
+                    QueuedFocusedInput::Ime(event) => {
+                        self.dispatch_ime_input(root, &mut vec![event.event], requests);
+                        None
+                    }
+                };
+                if let (Some(request), Some(cause)) = (&mut requests.ime_request, cause) {
+                    request.change_cause = cause;
+                }
+                self.focus_owner.commit_pending();
+                (retry, self.focus_owner.keyboard_is_deferred())
+            })
+        };
+        self.pending_focused_input = events;
+        if retry.is_some()
+            || self.focus_owner.keyboard_is_deferred()
+            || self.focus_owner.has_pending_navigation()
+        {
+            requests.ime_request = None;
+        } else {
+            let cause = requests
+                .ime_request
+                .as_ref()
+                .map_or(winit::event::ImeChangeCause::Other, |request| {
+                    request.change_cause
+                });
+            self.dispatch_ime_input(root, &mut Vec::new(), requests);
+            if let Some(request) = &mut requests.ime_request {
+                request.change_cause = cause;
+            }
+        }
+        retry
+    }
+
+    pub(crate) fn flush_focused_input(
+        &mut self,
+        cursor: &mut crate::cursor::CursorState,
+        modifiers: winit::keyboard::ModifiersState,
+        keyboard: Vec<QueuedInput>,
+        ime: Vec<QueuedInput<crate::ime_state::ImeEvent>>,
+    ) -> WindowRequests {
+        self.queue_focused_input(keyboard, ime);
+        let Some(root) = self.tree.get_node_id_at(NonZero::new(1).unwrap()) else {
+            return WindowRequests::default();
+        };
+        if self
+            .metadatas
+            .get(&root)
+            .is_none_or(|metadata| metadata.computed_data.is_none())
+        {
+            return WindowRequests::default();
+        }
+        let mut pointer = cursor.take_events();
+        let mut position = cursor.position();
+        let mut requests =
+            self.dispatch_pointer_input(root, &mut pointer, &mut position, modifiers);
+        self.focus_owner.commit_pending();
+        if self.focus_owner.keyboard_is_deferred() || self.focus_owner.has_pending_navigation() {
+            requests.ime_request = None;
+            return requests;
+        }
+        let retry = self.dispatch_pending_focused_input(root, &mut requests);
+        self.focus_owner.retain_navigation_retry(retry);
+        requests
     }
 
     /// Compute the ComponentTree into a render graph
@@ -2402,48 +2530,13 @@ impl ComponentTree {
                 FocusMoveRequestResult::Moved | FocusMoveRequestResult::NotHandled => None,
             }
         });
-        let mut focused_events: Vec<_> = keyboard_events
-            .into_iter()
-            .map(QueuedFocusedInput::Keyboard)
-            .collect();
-        focused_events.extend(
-            clipboard::take_requests()
-                .into_iter()
-                .map(QueuedFocusedInput::Clipboard),
-        );
-        focused_events.sort_by_key(QueuedFocusedInput::sequence);
-        self.pending_keyboard_events.extend(focused_events);
-        self.pending_ime_events.extend(ime_events);
-        let mut queued_events = std::mem::take(&mut self.pending_keyboard_events);
-        let pending_focus_move_retry = pending_focus_move_retry.or_else(|| {
-            if self.focus_owner.keyboard_is_deferred() {
-                return None;
-            }
-            drain_pending_keyboard_events(&mut queued_events, |queued| {
-                let retry = match queued {
-                    QueuedFocusedInput::Keyboard(event) => {
-                        self.dispatch_keyboard_event(root_node, event, &mut window_requests)
-                    }
-                    QueuedFocusedInput::Clipboard(request) => {
-                        self.dispatch_clipboard_action(root_node, request);
-                        None
-                    }
-                };
-                self.focus_owner.commit_pending();
-                (retry, self.focus_owner.keyboard_is_deferred())
-            })
-        });
-        self.pending_keyboard_events = queued_events;
+        self.queue_focused_input(keyboard_events, ime_events);
+        let pending_focus_move_retry = pending_focus_move_retry
+            .or_else(|| self.dispatch_pending_focused_input(root_node, &mut window_requests));
         self.focus_owner
             .retain_navigation_retry(pending_focus_move_retry);
-        let pending_keyboard_retry = needs_deferred_focus_retry(
-            &self.focus_owner,
-            !self.pending_keyboard_events.is_empty() || !self.pending_ime_events.is_empty(),
-        );
-        if pending_focus_move_retry.is_none() && !self.focus_owner.keyboard_is_deferred() {
-            let mut ime_events = std::mem::take(&mut self.pending_ime_events);
-            self.dispatch_ime_input(root_node, &mut ime_events, &mut window_requests);
-        }
+        let pending_keyboard_retry =
+            needs_deferred_focus_retry(&self.focus_owner, !self.pending_focused_input.is_empty());
         let pending_focus_reveal_retry =
             if pending_focus_move_retry.is_none() && !self.focus_owner.keyboard_is_deferred() {
                 dispatch_pending_focus_reveal_request(
@@ -2473,7 +2566,7 @@ impl ComponentTree {
     }
 }
 
-fn drain_pending_keyboard_events<E>(
+fn drain_pending_focused_input<E>(
     queue: &mut VecDeque<E>,
     mut dispatch: impl FnMut(E) -> (Option<FocusDirection>, bool),
 ) -> Option<FocusDirection> {
@@ -2572,13 +2665,26 @@ fn resolve_node_input_context_with_name(
 fn attach_ime_position_if_needed(
     window_requests: &mut WindowRequests,
     transform: crate::LocalToWindow,
+    source: Option<crate::focus::FocusHandleId>,
+    active: Option<crate::focus::FocusHandleId>,
 ) {
-    if let Some(ref mut ime_request) = window_requests.ime_request
-        && ime_request.position.is_none()
-    {
-        ime_request.position = Some(transform.map_point(ime_request.local_position));
-        let size = transform.map_size(ime_request.size);
-        ime_request.size = PxSize::new(
+    let Some(request) = window_requests.ime_request.as_mut() else {
+        return;
+    };
+    let source = if request.position.is_none() {
+        source
+    } else {
+        request.client_id
+    };
+    if source.is_none() || source != active {
+        window_requests.ime_request = None;
+        return;
+    }
+    if request.position.is_none() {
+        request.client_id = source;
+        request.position = Some(transform.map_point(request.local_position));
+        let size = transform.map_size(request.size);
+        request.size = PxSize::new(
             crate::Px(size[0].ceil() as i32),
             crate::Px(size[1].ceil() as i32),
         );
@@ -3126,15 +3232,27 @@ fn run_pointer_input_for_node<F>(
         }
         let _ = profiler_guard.take();
     }
-    attach_ime_position_if_needed(dispatch_ctx.window_requests, transform);
-}
-
-fn run_keyboard_handler_for_node(
-    dispatch_ctx: &mut KeyboardInputDispatchContext<'_>,
-    node_id: indextree::NodeId,
-    keyboard_handler: &KeyboardInputHandlerFn,
-) {
-    run_keyboard_input_for_node(dispatch_ctx, node_id, keyboard_handler);
+    let ime_client = dispatch_ctx
+        .window_requests
+        .ime_request
+        .as_ref()
+        .filter(|request| request.position.is_none())
+        .and_then(|_| dispatch_ctx.focus_owner.active_component_node_id())
+        .filter(|focused| {
+            focused
+                .ancestors(dispatch_ctx.tree)
+                .any(|owner| owner == node_id)
+                || node_id
+                    .ancestors(dispatch_ctx.tree)
+                    .any(|owner| owner == *focused)
+        })
+        .and(dispatch_ctx.focus_owner.active_handle_id());
+    attach_ime_position_if_needed(
+        dispatch_ctx.window_requests,
+        transform,
+        ime_client,
+        dispatch_ctx.focus_owner.active_handle_id(),
+    );
 }
 
 struct KeyboardInputDispatchContext<'a> {
@@ -3142,18 +3260,9 @@ struct KeyboardInputDispatchContext<'a> {
     metadatas: &'a ComponentNodeMetaDatas,
     keyboard_events: &'a mut Vec<crate::KeyboardEvent>,
     modifiers: winit::keyboard::ModifiersState,
+    ime_client: Option<FocusHandleId>,
     window_requests: &'a mut WindowRequests,
     focus_owner: &'a mut FocusOwner,
-}
-
-fn run_keyboard_modifier_for_node(
-    dispatch_ctx: &mut KeyboardInputDispatchContext<'_>,
-    node_id: indextree::NodeId,
-    keyboard_modifier: &dyn KeyboardInputModifierNode,
-) {
-    run_keyboard_input_for_node(dispatch_ctx, node_id, |input| {
-        keyboard_modifier.on_keyboard_input(input)
-    });
 }
 
 fn run_keyboard_input_for_node<F>(
@@ -3210,46 +3319,11 @@ fn run_keyboard_input_for_node<F>(
         }
         let _ = profiler_guard.take();
     }
-    attach_ime_position_if_needed(dispatch_ctx.window_requests, transform);
-}
-
-fn run_ime_handler_for_node(
-    tree: &ComponentNodeTree,
-    metadatas: &ComponentNodeMetaDatas,
-    node_id: indextree::NodeId,
-    ime_handler: &ImeInputHandlerFn,
-    ime_events: &mut Vec<winit::event::Ime>,
-    window_requests: &mut WindowRequests,
-    focus_owner: &mut FocusOwner,
-) {
-    run_ime_input_for_node(
-        tree,
-        metadatas,
-        node_id,
-        ime_events,
-        window_requests,
-        focus_owner,
-        ime_handler,
-    );
-}
-
-fn run_ime_modifier_for_node(
-    tree: &ComponentNodeTree,
-    metadatas: &ComponentNodeMetaDatas,
-    node_id: indextree::NodeId,
-    ime_modifier: &dyn ImeInputModifierNode,
-    ime_events: &mut Vec<winit::event::Ime>,
-    window_requests: &mut WindowRequests,
-    focus_owner: &mut FocusOwner,
-) {
-    run_ime_input_for_node(
-        tree,
-        metadatas,
-        node_id,
-        ime_events,
-        window_requests,
-        focus_owner,
-        |input| ime_modifier.on_ime_input(input),
+    attach_ime_position_if_needed(
+        dispatch_ctx.window_requests,
+        transform,
+        dispatch_ctx.ime_client,
+        dispatch_ctx.focus_owner.active_handle_id(),
     );
 }
 
@@ -3260,6 +3334,7 @@ fn run_ime_input_for_node<F>(
     ime_events: &mut Vec<winit::event::Ime>,
     window_requests: &mut WindowRequests,
     focus_owner: &mut FocusOwner,
+    ime_client: Option<FocusHandleId>,
     dispatch: F,
 ) where
     F: FnOnce(ImeInput<'_>),
@@ -3309,7 +3384,12 @@ fn run_ime_input_for_node<F>(
         }
         let _ = profiler_guard.take();
     }
-    attach_ime_position_if_needed(window_requests, transform);
+    attach_ime_position_if_needed(
+        window_requests,
+        transform,
+        ime_client,
+        focus_owner.active_handle_id(),
+    );
 }
 
 fn dispatch_default_focus_keyboard_navigation(
@@ -4469,7 +4549,7 @@ mod tests {
             tree.has_pending_focus_reveal(),
             "post-layout scheduling must still retry an unconsumed reveal even after the barrier clears"
         );
-        assert!(tree.pending_keyboard_events.is_empty() && tree.pending_ime_events.is_empty());
+        assert!(tree.pending_focused_input.is_empty());
         assert!(dispatch_pending_focus_reveal_request(
             &tree.tree,
             &tree.metadatas,
@@ -5542,7 +5622,7 @@ mod tests {
         assert!(tree.focus_owner.move_focus(FocusDirection::Next));
         let mut events = VecDeque::from(["Tab", "Enter", "Shift+Tab", "Enter"]);
         let mut activations = Vec::new();
-        let retry = drain_pending_keyboard_events(&mut events, |event| {
+        let retry = drain_pending_focused_input(&mut events, |event| {
             match event {
                 "Tab" => assert!(tree.focus_owner.move_focus(FocusDirection::Next)),
                 "Shift+Tab" => assert!(tree.focus_owner.move_focus(FocusDirection::Previous)),
@@ -5772,7 +5852,7 @@ mod tests {
         let _runtime_scope = _runtime_session.enter();
         let mut events = VecDeque::from(["Tab into lazy content", "Enter", "Shift+Tab"]);
         let mut dispatched = Vec::new();
-        let retry = drain_pending_keyboard_events(&mut events, |event| {
+        let retry = drain_pending_focused_input(&mut events, |event| {
             dispatched.push(event);
             (Some(FocusDirection::Next), false)
         });
@@ -5780,7 +5860,7 @@ mod tests {
         assert_eq!(dispatched, ["Tab into lazy content"]);
         events.push_back("new input");
         assert_eq!(
-            drain_pending_keyboard_events(&mut events, |event| {
+            drain_pending_focused_input(&mut events, |event| {
                 dispatched.push(event);
                 (None, false)
             }),
@@ -5803,7 +5883,7 @@ mod tests {
         let mut events = VecDeque::from(["close popup", "Enter", "Tab"]);
         let mut delivered = Vec::new();
         assert_eq!(
-            drain_pending_keyboard_events(&mut events, |event| {
+            drain_pending_focused_input(&mut events, |event| {
                 delivered.push(event);
                 {
                     let _binding = bind_focus_owner(&mut owner);
@@ -5838,7 +5918,7 @@ mod tests {
         owner.finish_layout();
         assert!(!owner.keyboard_is_deferred());
         events.push_back("new input");
-        drain_pending_keyboard_events(&mut events, |event| {
+        drain_pending_focused_input(&mut events, |event| {
             delivered.push(event);
             (None, owner.keyboard_is_deferred())
         });
@@ -5865,24 +5945,25 @@ mod tests {
         );
         tree.focus_owner
             .retain_navigation_retry(Some(FocusDirection::Next));
-        tree.pending_ime_events
-            .push(winit::event::Ime::Commit("pending text".into()));
+        let mut ime = crate::ime_state::ImeState::default();
+        ime.push_event_for(None, winit::event::Ime::Commit("pending text".into()));
+        tree.queue_focused_input(Vec::new(), ime.take_events());
         clipboard::request_clipboard_action(
             crate::clipboard::ClipboardAction::Paste("pending paste".into()),
             |_| panic!("reset clipboard request must not execute"),
         );
-        tree.pending_keyboard_events.extend(
+        tree.pending_focused_input.extend(
             clipboard::take_requests()
                 .into_iter()
                 .map(QueuedFocusedInput::Clipboard),
         );
         tree.clear();
-        assert_eq!(tree.pending_keyboard_events.len(), 1);
+        assert_eq!(tree.pending_focused_input.len(), 2);
         assert!(tree.focus_owner.has_pending_navigation());
         assert!(tree.focus_owner.keyboard_is_deferred());
         assert!(matches!(
-            tree.pending_ime_events.as_slice(),
-            [winit::event::Ime::Commit(text)] if text == "pending text"
+            tree.pending_focused_input.front(),
+            Some(QueuedFocusedInput::Ime(QueuedInput { event: (None, winit::event::Ime::Commit(text)), .. })) if text == "pending text"
         ));
         tree.focus_owner.set_owner_focused(false);
         assert!(!tree.focus_owner.has_pending_navigation());
@@ -5898,12 +5979,11 @@ mod tests {
         tree.reset();
         assert!(!tree.focus_owner.has_pending_navigation());
         assert!(!tree.focus_owner.keyboard_is_deferred());
-        assert!(tree.pending_ime_events.is_empty());
-        assert!(tree.pending_keyboard_events.is_empty());
+        assert!(tree.pending_focused_input.is_empty());
     }
 
     #[test]
-    fn ime_commit_is_delivered_once_to_the_final_focused_control() {
+    fn ime_commit_is_delivered_once_to_its_focused_client() {
         let _runtime_session = crate::RuntimeSession::new();
         let _runtime_scope = _runtime_session.enter();
         use crate::focus::{FocusNode, FocusRegistration};
@@ -5914,6 +5994,12 @@ mod tests {
         for index in 0..2 {
             let mut input = node("input", index + 2, index + 2);
             input.focus_registration = Some(FocusRegistration::target(FocusNode::new()));
+            let keys = Arc::clone(&delivered);
+            input.keyboard_handlers.push(Box::new(move |input| {
+                for _ in input.keyboard_events.drain(..) {
+                    keys.lock().unwrap().push((index, "key".into()));
+                }
+            }));
             let delivered = Arc::clone(&delivered);
             input.ime_handlers.push(Box::new(move |input| {
                 for event in input.ime_events.drain(..) {
@@ -5922,7 +6008,21 @@ mod tests {
                     }
                 }
             }));
-            let id = tree.add_node(input);
+            tree.add_node(input);
+            if index == 1 {
+                let mut content = node("content", 10, 10);
+                content.pointer_handlers.push(Box::new(|mut input| {
+                    input
+                        .ime_session()
+                        .show(ImeRequest::new(PxSize::new(Px(1), Px(1))));
+                }));
+                tree.add_node(content);
+                tree.pop_node();
+            }
+            tree.pop_node();
+        }
+        tree.pop_node();
+        for id in root.descendants(&tree.tree) {
             let metadata = tree.metadatas.get_mut(&id).unwrap();
             metadata.base_abs_position = Some(PxPosition::ZERO);
             metadata.abs_position = Some(PxPosition::ZERO);
@@ -5930,17 +6030,128 @@ mod tests {
                 width: Px(100),
                 height: Px(40),
             });
-            tree.pop_node();
         }
-        tree.pop_node();
         tree.focus_owner.sync_from_component_tree(root, &tree.tree);
         assert!(tree.focus_owner.move_focus(FocusDirection::Next));
+        let stale_client = tree.focus_owner.active_handle_id();
         assert!(tree.focus_owner.move_focus(FocusDirection::Next));
-        let mut events = vec![winit::event::Ime::Commit("composed text".into())];
+        let requests = tree.dispatch_pointer_input(
+            root,
+            &mut [],
+            &mut Some(PxPosition::new(Px(5), Px(5))),
+            winit::keyboard::ModifiersState::empty(),
+        );
+        let request = requests.ime_request.unwrap();
+        assert_eq!(request.client_id, tree.focus_owner.active_handle_id());
+        assert!(request.show_keyboard);
+        let mut events = vec![
+            (stale_client, winit::event::Ime::Commit("stale text".into())),
+            (
+                tree.focus_owner.active_handle_id(),
+                winit::event::Ime::Commit("composed text".into()),
+            ),
+        ];
         let mut requests = WindowRequests::default();
         tree.dispatch_ime_input(root, &mut events, &mut requests);
         tree.dispatch_ime_input(root, &mut events, &mut requests);
         assert_eq!(*delivered.lock().unwrap(), [(1, "composed text".into())]);
+        let mut ime = crate::ime_state::ImeState::default();
+        let mut keyboard = crate::keyboard_state::KeyboardState::default();
+        ime.push_event_for(None, winit::event::Ime::Commit("before".into()));
+        keyboard.push_event(crate::KeyboardEvent::named(
+            winit::keyboard::NamedKey::Backspace,
+            winit::event::ElementState::Pressed,
+        ));
+        ime.push_event_for(None, winit::event::Ime::Commit("after".into()));
+        tree.flush_focused_input(
+            &mut crate::cursor::CursorState::default(),
+            winit::keyboard::ModifiersState::empty(),
+            keyboard.take_events(),
+            ime.take_events(),
+        );
+        assert_eq!(
+            &delivered.lock().unwrap()[1..],
+            [(1, "before".into()), (1, "key".into()), (1, "after".into())]
+        );
+        let inputs: Vec<_> = root.children(&tree.tree).collect();
+        tree.tree.get_mut(inputs[0]).unwrap().get_mut().ime_handlers =
+            vec![Box::new(|mut input| {
+                assert!(crate::FocusManager::current().move_focus(FocusDirection::Next));
+                input
+                    .ime_session()
+                    .update(ImeRequest::new(PxSize::new(Px(1), Px(1))));
+                input.block_ime();
+            })];
+        tree.tree
+            .get_mut(inputs[1])
+            .unwrap()
+            .get_mut()
+            .ime_handlers
+            .push(Box::new(|mut input| {
+                input
+                    .ime_session()
+                    .update(ImeRequest::new(PxSize::new(Px(1), Px(1))));
+            }));
+        assert!(tree.focus_owner.move_focus(FocusDirection::Previous));
+        events.push((
+            tree.focus_owner.active_handle_id(),
+            winit::event::Ime::Commit("switch".into()),
+        ));
+        tree.dispatch_ime_input(root, &mut events, &mut requests);
+        assert!(requests.ime_request.is_none());
+        events.push((
+            tree.focus_owner.active_handle_id(),
+            winit::event::Ime::Commit("next text".into()),
+        ));
+        tree.dispatch_ime_input(root, &mut events, &mut requests);
+        assert_eq!(
+            requests.ime_request.unwrap().client_id,
+            tree.focus_owner.active_handle_id()
+        );
+        assert_eq!(
+            delivered.lock().unwrap().last(),
+            Some(&(1, "next text".into()))
+        );
+        requests = WindowRequests::default();
+        tree.dispatch_ime_input(root, &mut events, &mut requests);
+        assert_eq!(
+            requests.ime_request.unwrap().client_id,
+            tree.focus_owner.active_handle_id()
+        );
+        for (source, expected) in [
+            (stale_client, winit::event::ImeChangeCause::Other),
+            (
+                tree.focus_owner.active_handle_id(),
+                winit::event::ImeChangeCause::InputMethod,
+            ),
+        ] {
+            let mut ime = crate::ime_state::ImeState::default();
+            ime.push_event_for(source, winit::event::Ime::Commit("source".into()));
+            let requests = tree.flush_focused_input(
+                &mut crate::cursor::CursorState::default(),
+                winit::keyboard::ModifiersState::empty(),
+                Vec::new(),
+                ime.take_events(),
+            );
+            assert_eq!(requests.ime_request.unwrap().change_cause, expected);
+        }
+        tree.tree.get_mut(inputs[0]).unwrap().get_mut().ime_handlers =
+            vec![Box::new(|mut input| {
+                input
+                    .ime_session()
+                    .update(ImeRequest::new(PxSize::new(Px(1), Px(1))));
+            })];
+        tree.tree
+            .get_mut(root)
+            .unwrap()
+            .get_mut()
+            .ime_preview_handlers = vec![Box::new(|_| {
+            assert!(crate::FocusManager::current().move_focus(FocusDirection::Next));
+        })];
+        assert!(tree.focus_owner.move_focus(FocusDirection::Previous));
+        requests = WindowRequests::default();
+        tree.dispatch_ime_input(root, &mut events, &mut requests);
+        assert!(requests.ime_request.is_none());
     }
 
     #[test]

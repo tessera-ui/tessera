@@ -13,7 +13,7 @@ members = [
     "tessera-mobile",
     "tessera-glyphon",
 ]
-exclude = ["tessera-cosmic-text"]
+exclude = ["tessera-android-activity", "tessera-accesskit", "tessera-cosmic-text", "tessera-winit"]
 
 [workspace.package]
 license = "MIT OR Apache-2.0"

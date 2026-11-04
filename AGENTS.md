@@ -206,6 +206,7 @@ programming contract; the guidelines below also govern framework implementation.
 
 - **Code Style**:
   - Keep general cleanup and style refactors within Tessera-owned crates; preserve submodule sources for upstream synchronization.
+  - Publish forks with distinct package names, upstream library names, and versioned path dependencies.
   - Enforce `rustfmt edition 2024` default rules
   - `use` imports must be grouped in four sections (standard library, third-party crates, crate root, submodules), separated by one blank line, sorted alphabetically within each group, and merged by root path
   - All code, comments, and documentation comments must be in English (except for rare functional clarifications)

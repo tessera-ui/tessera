@@ -2298,10 +2298,10 @@ impl Ordinary {
 pub fn helper() { let _ = Selected::new(|| {}); }
 "#,
         );
-        for directory in ["mini-ui/src", "schema-macro/src"] {
+        for directory in ["mini-ui/src", "schema-macro/src", "host-only/src"] {
             fs::create_dir_all(project.root().join(directory)).unwrap();
         }
-        fs::write(project.root().join("Cargo.toml"), "[package]\nname='fixture'\nversion='0.0.0'\nedition='2024'\n[workspace]\nmembers=['mini-ui','schema-macro']\n[dependencies]\ntessera-ui={path='mini-ui'}\nschema-macro={path='schema-macro'}\n").unwrap();
+        fs::write(project.root().join("Cargo.toml"), "[package]\nname='fixture'\nversion='0.0.0'\nedition='2024'\n[workspace]\nmembers=['mini-ui','schema-macro']\nexclude=['host-only']\n[dependencies]\ntessera-ui={path='mini-ui'}\nschema-macro={path='schema-macro'}\n").unwrap();
         fs::write(
             project.root().join(".cargo/config.toml"),
             format!(
@@ -2316,13 +2316,23 @@ pub fn helper() { let _ = Selected::new(|| {}); }
         )
         .unwrap();
         fs::write(project.root().join("mini-ui/src/lib.rs"), "pub mod prop { pub struct RenderSlot; impl RenderSlot { pub fn new(_: impl Fn() + Send + Sync + 'static) -> Self { Self } } }\npub use prop::RenderSlot;\n").unwrap();
-        fs::write(project.root().join("schema-macro/Cargo.toml"), "[package]\nname='schema-macro'\nversion='0.0.0'\nedition='2024'\n[lib]\nproc-macro=true\n").unwrap();
+        fs::write(project.root().join("schema-macro/Cargo.toml"), "[package]\nname='schema-macro'\nversion='0.0.0'\nedition='2024'\n[lib]\nproc-macro=true\n[target.'cfg(not(target_family = \"wasm\"))'.dependencies]\nhost-only={path='../host-only'}\n").unwrap();
+        fs::write(
+            project.root().join("host-only/Cargo.toml"),
+            "[package]\nname='host-only'\nversion='0.0.0'\nedition='2024'\n",
+        )
+        .unwrap();
+        fs::write(
+            project.root().join("host-only/src/lib.rs"),
+            "pub const SLOT: &str = \"tessera_ui::RenderSlot\";\n",
+        )
+        .unwrap();
         fs::write(project.root().join("schema-macro/src/lib.rs"), r#"
 use proc_macro::TokenStream;
 #[proc_macro_attribute]
 pub fn select(_: TokenStream, _: TokenStream) -> TokenStream {
     let path = std::path::PathBuf::from(std::env::var("CARGO_MANIFEST_DIR").unwrap()).join("src/schema.txt");
-    let target = if std::fs::read_to_string(path).unwrap() == "slot" { "tessera_ui::RenderSlot" } else { "crate::Ordinary" };
+    let target = if std::fs::read_to_string(path).unwrap() == "slot" { host_only::SLOT } else { "crate::Ordinary" };
     format!("pub type Selected = {target}; const _: &str = include_str!(\"schema.txt\");").parse().unwrap()
 }
 "#).unwrap();
@@ -2330,8 +2340,8 @@ pub fn select(_: TokenStream, _: TokenStream) -> TokenStream {
         fs::write(&schema, "ordinary").unwrap();
         fs::create_dir(project.root().join("examples")).unwrap();
         fs::write(project.root().join("examples/plain.rs"), "#[cfg(test)]\nfn inactive() { let _ = tessera_ui::RenderSlot::new(|| {}); }\nfn main() {}\n").unwrap();
-        let pass = || {
-            let mut options = CheckOptions::new(Some("fixture"), None);
+        let pass = |target| {
+            let mut options = CheckOptions::new(Some("fixture"), target);
             options.target_selection = TargetSelection {
                 all_targets: true,
                 ..TargetSelection::default()
@@ -2364,14 +2374,18 @@ pub fn select(_: TokenStream, _: TokenStream) -> TokenStream {
                 )
             })
         };
-        let cold = pass();
+        let cold = pass(None);
         assert!(cold.0 > 0 && !cold.1 && cold.2.is_empty());
-        assert_eq!(pass(), (0, true, Vec::new()));
+        assert_eq!(pass(None), (0, true, Vec::new()));
         fs::write(schema, "slot").unwrap();
-        let changed = pass();
+        let changed = pass(None);
         assert!(changed.0 > 0 && !changed.1);
         assert_eq!(changed.2, [super::super::ErrorCode::RuntimeCall.into()]);
-        assert_eq!(pass(), (0, true, changed.2));
+        assert_eq!(pass(None), (0, true, changed.2.clone()));
+        let cross = pass(Some("wasm32-unknown-unknown"));
+        assert_eq!(cross.2, changed.2);
+        assert!(cross.0 > 0 && !cross.1);
+        assert_eq!(pass(Some("wasm32-unknown-unknown")), (0, true, cross.2));
     }
 
     fn diagnostics_for(source: &str) -> Vec<String> {

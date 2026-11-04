@@ -934,7 +934,7 @@ fn build_android_template_data(
         .clone()
         .unwrap_or_default();
     if !android_plugin_modules.is_empty() {
-        let kotlin_plugin = "org.jetbrains.kotlin:kotlin-gradle-plugin:1.8.22".to_string();
+        let kotlin_plugin = "org.jetbrains.kotlin:kotlin-gradle-plugin:2.2.21".to_string();
         if !project_dependencies.iter().any(|dep| dep == &kotlin_plugin) {
             project_dependencies.push(kotlin_plugin);
         }
