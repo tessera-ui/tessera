@@ -35,10 +35,10 @@ use crate::{
     theme::{MaterialAlpha, MaterialTheme},
 };
 
-pub use appearance::{MenuColorStyle, MenuDefaults, MenuPosition, menu_group};
-
 use host::{MenuHost, MenuPopupLease, MenuPopupRequest, menu_host};
 use motion::{MenuShapeHover, MenuShapeMotion};
+
+pub use appearance::{MenuColorStyle, MenuDefaults, MenuPosition, menu_group};
 
 mod appearance;
 mod host;
@@ -563,6 +563,8 @@ impl PointerInputModifierNode for MenuKeyboardBoundary {
 ///
 /// - `anchor` — current anchor relative to the provider; takes precedence over
 ///   the controller's saved anchor and can follow layout changes
+/// - `window_anchor` — observed trigger coordinates, including ancestor transforms;
+///   takes precedence over `anchor`
 /// - `placement` — how the menu aligns relative to its anchor
 /// - `grouped` — render separate `menu_group` surfaces on a transparent panel
 /// - `color_style` — standard or vibrant colors, inherited by groups and items
@@ -623,6 +625,7 @@ impl PointerInputModifierNode for MenuKeyboardBoundary {
 #[tessera]
 pub fn menu_provider(
     anchor: Option<MenuAnchor>,
+    window_anchor: Option<State<tessera_ui::LayoutCoordinates>>,
     grouped: Option<bool>,
     color_style: Option<MenuColorStyle>,
     placement: Option<MenuPlacement>,
@@ -654,7 +657,7 @@ pub fn menu_provider(
     let mut provider_args = MenuProviderConfig {
         host: None,
         anchor,
-        window_anchor: None,
+        window_anchor,
         bounds: None,
         focus_scope: None,
         parent_request: None,
@@ -1668,14 +1671,16 @@ mod tests {
         start_layout_test_session,
     };
     use tessera_ui::{
-        CursorEventContent, GestureState, Modifier, PointerChange, PressKeyEventType, Px,
-        PxPosition, State, remember, tessera, testing::LayoutSnapshot,
+        CursorEventContent, Dp, FocusModifierExt as _, GestureState, LayoutCoordinates, Modifier,
+        PointerChange, PressKeyEventType, Px, PxPosition, State, remember, scaled_box, tessera,
+        testing::LayoutSnapshot,
     };
 
     use crate::{
         button::button,
         column::column,
         modifier::{ModifierExt as _, SemanticsArgs},
+        spacer::spacer,
         theme::material_theme,
     };
 
@@ -1951,6 +1956,65 @@ mod tests {
 
         let opened: LayoutSnapshot = pump_layout_test_session(&mut session, 16_666_667);
         opened.node("menu_content_tag").exists();
+    }
+
+    #[tessera]
+    fn window_anchor_fixture(observed: tessera_ui::testing::TestProbe<Option<State<Dp>>>) {
+        let anchor = remember(LayoutCoordinates::default);
+        let x = remember(|| Dp(40.0));
+        observed.set(Some(x));
+        material_theme().child(move || {
+            tessera_ui::layout::layout()
+                .modifier(Modifier::new().offset(Dp(12.0), Dp(18.0)))
+                .child(move || {
+                    scaled_box(0.5).child(move || {
+                        menu_provider()
+                            .window_anchor(anchor)
+                            .anchor(MenuAnchor::at(PxPosition::new(Px(999), Px(999))))
+                            .is_open(true)
+                            .placement(super::MenuPlacement::BelowStart)
+                            .offset([Dp::ZERO; 2])
+                            .modifier(Modifier::new().width(Dp(80.0)).semantics(SemanticsArgs {
+                                test_tag: Some("anchored-menu".into()),
+                                ..Default::default()
+                            }))
+                            .main_content(move || {
+                                spacer().modifier(
+                                    Modifier::new()
+                                        .size(Dp(80.0), Dp(40.0))
+                                        .offset(x.get(), Dp(30.0))
+                                        .on_layout_coordinates(move |coordinates| {
+                                            anchor.set_if_changed(coordinates);
+                                        }),
+                                );
+                            })
+                            .menu_content(|_| {
+                                spacer().modifier(Modifier::new().height(Dp(20.0)));
+                            });
+                    });
+                });
+        });
+    }
+
+    #[test]
+    fn window_anchor_follows_trigger_geometry_through_ancestor_transforms() {
+        let observed = tessera_ui::testing::TestProbe::default();
+        let mut session = start_layout_test_session(
+            layout_test({
+                let observed = observed.clone();
+                move || {
+                    window_anchor_fixture(observed.clone());
+                }
+            })
+            .viewport_px(400, 300),
+        );
+        pump_layout_test_session(&mut session, 0)
+            .node("anchored-menu")
+            .position(32, 53);
+        observed.get().expect("trigger position").set(Dp(100.0));
+        pump_layout_test_session(&mut session, 16_666_667)
+            .node("anchored-menu")
+            .position(62, 53);
     }
 
     #[test]

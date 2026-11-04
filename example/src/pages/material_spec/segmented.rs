@@ -235,9 +235,9 @@ fn segmented_row(
             if multi {
                 multi_choice_segmented_button_row()
                     .modifier(Modifier::new().fill_max_width())
-                    .content_shared({
+                    .content({
                         let segment_caption = caption.clone();
-                        tessera_ui::RenderSlotWith::new(move |selection_mode| {
+                        move |selection_mode| {
                             segments(
                                 segment_caption.clone(),
                                 selected,
@@ -248,14 +248,14 @@ fn segmented_row(
                                 height,
                                 selection_mode,
                             );
-                        })
+                        }
                     });
             } else {
                 single_choice_segmented_button_row()
                     .modifier(Modifier::new().fill_max_width())
-                    .content_shared({
+                    .content({
                         let segment_caption = caption.clone();
-                        tessera_ui::RenderSlotWith::new(move |selection_mode| {
+                        move |selection_mode| {
                             segments(
                                 segment_caption.clone(),
                                 selected,
@@ -266,7 +266,7 @@ fn segmented_row(
                                 height,
                                 selection_mode,
                             );
-                        })
+                        }
                     });
             }
             gap(Dp(16.0));

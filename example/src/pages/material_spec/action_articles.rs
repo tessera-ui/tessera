@@ -552,9 +552,9 @@ pub(super) fn action_article(
             },
         ]);
     if kind == Kind::Segmented {
-        article.intro_shared(RenderSlot::new(move || {
+        article.intro(move || {
             recommendation(kind).on_recommended_optional(on_recommended);
-        }));
+        });
     }
 }
 

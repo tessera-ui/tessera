@@ -454,12 +454,12 @@ fn color_specimen(rail: bool, initially_expanded: bool, dark: bool, backdrop: Co
                                                         });
                                                 });
                                             if index >= 2 {
-                                                item.badge_shared(RenderSlot::new(move || {
+                                                item.badge(move || {
                                                     navigation_badge(
                                                         if index == 2 { 1 } else { 2 },
                                                         geometry,
                                                     );
-                                                }));
+                                                });
                                             }
                                         }
                                     });
@@ -1230,9 +1230,9 @@ fn native_figure(rail: bool, expanded: bool, annotation: usize, badges: bool) {
                                                                 "New items"
                                                             },
                                                         )
-                                                        .badge_shared(RenderSlot::new(move || {
+                                                        .badge(move || {
                                                             navigation_badge(index, geometry);
-                                                        }));
+                                                        });
                                                     }
                                                 }
                                             });

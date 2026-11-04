@@ -9,7 +9,7 @@ use tessera_components::{
     alignment::CrossAxisAlignment, button::button, flow_row::flow_row, modifier::ModifierExt as _,
     row::row, text::text,
 };
-use tessera_ui::{Dp, Modifier, RenderSlot, remember, tessera};
+use tessera_ui::{Dp, Modifier, remember, tessera};
 
 use super::{gap, prose, spec_table, subheading, type_style};
 
@@ -147,9 +147,9 @@ pub(super) fn token_sets() {
                         if selected { ", selected" } else { "" }
                     ))
                     .on_click(move || variant.set(index))
-                    .child_shared(RenderSlot::new(move || {
+                    .child(move || {
                         text().content(name);
-                    }));
+                    });
             }
             let index = variant.get();
             let all_open = expanded.with(|state| state[index].iter().all(|open| *open));

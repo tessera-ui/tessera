@@ -11,14 +11,13 @@ use tessera_components::{
     column::column,
     icon::icon,
     material_icons::filled,
-    menus::{MenuAnchor, MenuController, MenuItemSelectionMode, menu_item, menu_provider},
+    menus::{MenuController, MenuItemSelectionMode, menu_item, menu_provider},
     modifier::ModifierExt as _,
     row::row,
     text::text,
 };
 use tessera_ui::{
-    Dp, Modifier, PxPosition, PxRect, PxSize, State, modifier::FocusModifierExt as _, remember,
-    tessera,
+    Dp, LayoutCoordinates, Modifier, State, modifier::FocusModifierExt as _, remember, tessera,
 };
 
 use super::{gap, spec_table, type_style};
@@ -74,32 +73,8 @@ pub(super) fn tokens() {
     let selected = remember(|| 0_usize);
     let expanded = remember(|| [[false; 4]; 2]);
     let controller = remember(MenuController::new);
-    let anchor = remember(PxRect::default);
-    let origin = remember(PxRect::default);
-    boxed()
-        .modifier(
-            Modifier::new()
-                .fill_max_width()
-                .on_globally_positioned(move |rect| {
-                    if origin.get() != rect {
-                        origin.set(rect);
-                    }
-                }),
-        )
-        .children(move || {
-            let anchor_rect = anchor.get();
-            let origin_rect = origin.get();
-            token_menu(
-                selected,
-                expanded,
-                controller,
-                anchor,
-                MenuAnchor::new(
-                    PxPosition::new(anchor_rect.x - origin_rect.x, anchor_rect.y - origin_rect.y),
-                    PxSize::new(anchor_rect.width, anchor_rect.height),
-                ),
-            );
-        });
+    let anchor = remember(LayoutCoordinates::default);
+    token_menu(selected, expanded, controller, anchor);
 }
 
 #[tessera]
@@ -107,12 +82,11 @@ fn token_menu(
     selected: State<usize>,
     expanded: State<[[bool; 4]; 2]>,
     controller: State<MenuController>,
-    anchor: State<PxRect>,
-    menu_anchor: MenuAnchor,
+    anchor: State<LayoutCoordinates>,
 ) {
     menu_provider()
         .controller(controller)
-        .anchor(menu_anchor)
+        .window_anchor(anchor)
         .modifier(Modifier::new().fill_max_width())
         .main_content(move || {
             column()
@@ -130,10 +104,8 @@ fn token_menu(
                             button()
                                 .tonal()
                                 .accessibility_label("Dialog token set selector")
-                                .modifier(Modifier::new().on_globally_positioned(move |rect| {
-                                    if anchor.get() != rect {
-                                        anchor.set(rect);
-                                    }
+                                .modifier(Modifier::new().on_layout_coordinates(move |coordinates| {
+                                    anchor.set_if_changed(coordinates);
                                 }))
                                 .on_click(move || controller.with_mut(MenuController::open))
                                 .child(move || {

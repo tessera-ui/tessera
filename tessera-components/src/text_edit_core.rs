@@ -2757,7 +2757,8 @@ impl TextEditorController {
         self.set_text_and_selection(text, TextSelection::collapsed(cursor));
     }
 
-    pub(crate) fn text(&self) -> String {
+    /// Returns the current text content.
+    pub fn text(&self) -> String {
         self.edit_state.text()
     }
 

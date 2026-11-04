@@ -1498,9 +1498,9 @@ fn date_figure(
     });
     let open = remember(|| true);
     let status = remember(|| String::new());
-    let draft = remember(|| "08/17/2025".to_owned());
+
     let committed = remember(|| illustration_date(2025, 17));
-    let committed_draft = remember(|| "08/17/2025".to_owned());
+
     let error = remember(String::new);
     let controller = remember(|| {
         let mut value = TextInputController::new(Dp(16.0), Some(Dp(24.0)));
@@ -1539,20 +1539,19 @@ fn date_figure(
                     column().modifier(Modifier::new().width(Dp(312.0))).children(move || {
                         text_field().outlined().controller(controller).label("Date").accessibility_label("Event date").accessibility_description(if error.with(String::is_empty) {"MM/DD/YYYY".to_owned()} else {error.get()}).is_error(!error.with(String::is_empty))
                             .modifier(watch_observed(geometry,"field").width(Dp(312.0)).height(Dp(56.0)).semantics(SemanticsArgs {test_tag:Some("docked-date-field".into()), merge_descendants:true,..Default::default()})).min_width(Dp::ZERO)
-                            .on_change(move |raw: String| {draft.set(raw.clone());raw})
-                            .on_submit(move || {submit_docked_date(state,controller,draft,committed,committed_draft,error);})
-                            .trailing_icon_shared(RenderSlot::new(move || {icon_button().standard().icon(filled::CALENDAR_TODAY_SVG).accessibility_label("Toggle event date calendar").on_click(move || {
-                                if open.get() {restore_docked_date(state,controller,draft,committed,committed_draft,error);}
+                            .on_submit(move || {submit_docked_date(state,controller,committed,error);})
+                            .trailing_icon(move || {icon_button().standard().icon(filled::CALENDAR_TODAY_SVG).accessibility_label("Toggle event date calendar").on_click(move || {
+                                if open.get() {restore_docked_date(state,controller,committed,error);}
                                 open.set(!open.get());FocusManager::current().defer_keyboard_until_layout();
-                            });}));
+                            });});
                         gap(Dp(4.0));text().content(if error.with(String::is_empty) {"MM/DD/YYYY".to_owned()} else {error.get()}).style(type_style(12.0,16.0)).color(if error.with(String::is_empty) {scheme.on_surface_variant} else {scheme.error});
                     });
                     if open.get() {
                         boxed().modifier(Modifier::new().offset(Dp::ZERO,Dp(84.0))).children(move || {
                             docked_date_picker().today(illustration_today()).state(state).view(view).first_day_of_week(Weekday::Sunday).modifier(watch_observed(geometry,"calendar"))
-                                .on_date_change(move |date:CalendarDate|{let formatted=format!("{:02}/{:02}/{:04}",date.month(),date.day(),date.year()); draft.set(formatted.clone());controller.with_mut(|value|value.set_text(&formatted));error.set(String::new());})
-                                .on_cancel(move || {restore_docked_date(state,controller,draft,committed,committed_draft,error);open.set(false);status.set("Date selection cancelled".into());FocusManager::current().defer_keyboard_until_layout();})
-                                .on_confirm(move || {if submit_docked_date(state,controller,draft,committed,committed_draft,error) {open.set(false);status.set("Event date confirmed".into());FocusManager::current().defer_keyboard_until_layout();}});
+                                .on_date_change(move |date:CalendarDate|{let formatted=format!("{:02}/{:02}/{:04}",date.month(),date.day(),date.year()); controller.with_mut(|value|value.set_text(&formatted));error.set(String::new());})
+                                .on_cancel(move || {restore_docked_date(state,controller,committed,error);open.set(false);status.set("Date selection cancelled".into());FocusManager::current().defer_keyboard_until_layout();})
+                                .on_confirm(move || {if submit_docked_date(state,controller,committed,error) {open.set(false);status.set("Event date confirmed".into());FocusManager::current().defer_keyboard_until_layout();}});
                         });
                     }
                 } else if open.get() {
@@ -2017,12 +2016,10 @@ fn parse_form_date(value: &str) -> Option<CalendarDate> {
 fn submit_docked_date(
     state: State<DatePickerState>,
     controller: State<TextInputController>,
-    draft: State<String>,
     committed: State<CalendarDate>,
-    committed_draft: State<String>,
     error: State<String>,
 ) -> bool {
-    let Some(date) = parse_form_date(&draft.get()) else {
+    let Some(date) = parse_form_date(&controller.with(TextInputController::text)) else {
         error.set("Enter a valid date (MM/DD/YYYY)".into());
         return false;
     };
@@ -2037,9 +2034,8 @@ fn submit_docked_date(
         return false;
     }
     let formatted = format!("{:02}/{:02}/{:04}", date.month(), date.day(), date.year());
-    draft.set(formatted.clone());
+
     committed.set(date);
-    committed_draft.set(formatted.clone());
     controller.with_mut(|controller| controller.set_text(&formatted));
     error.set(String::new());
     true
@@ -2048,15 +2044,14 @@ fn submit_docked_date(
 fn restore_docked_date(
     state: State<DatePickerState>,
     controller: State<TextInputController>,
-    draft: State<String>,
     committed: State<CalendarDate>,
-    committed_draft: State<String>,
     error: State<String>,
 ) {
-    state.with_mut(|state| state.set_selected_date(committed.get()));
-    let formatted = committed_draft.get();
+    let date = committed.get();
+    state.with_mut(|state| state.set_selected_date(date));
+    let formatted = format!("{:02}/{:02}/{:04}", date.month(), date.day(), date.year());
     controller.with_mut(|controller| controller.set_text(&formatted));
-    draft.set(formatted);
+
     error.set(String::new());
 }
 
@@ -3171,9 +3166,9 @@ fn docked_configuration(number: usize, initial_view: DockedDatePickerView) {
             DatePickerDisplayMode::Picker,
         )
     });
-    let draft = remember(|| "08/17/2025".to_owned());
+
     let committed = remember(|| illustration_date(2025, 17));
-    let committed_draft = remember(|| "08/17/2025".to_owned());
+
     let error = remember(String::new);
     let controller = remember(|| {
         let mut value = TextInputController::new(Dp(16.0), Some(Dp(24.0)));
@@ -3220,33 +3215,22 @@ fn docked_configuration(number: usize, initial_view: DockedDatePickerView) {
                     error.get()
                 })
                 .is_error(!error.with(String::is_empty))
-                .on_change(move |raw: String| {
-                    draft.set(raw.clone());
-                    raw
-                })
                 .on_submit(move || {
-                    submit_docked_date(state, controller, draft, committed, committed_draft, error);
+                    submit_docked_date(state, controller, committed, error);
                 })
-                .trailing_icon_shared(RenderSlot::new(move || {
+                .trailing_icon(move || {
                     icon_button()
                         .standard()
                         .icon(filled::CALENDAR_TODAY_SVG)
                         .accessibility_label(format!("Toggle configuration {number} calendar"))
                         .on_click(move || {
                             if open.get() {
-                                restore_docked_date(
-                                    state,
-                                    controller,
-                                    draft,
-                                    committed,
-                                    committed_draft,
-                                    error,
-                                );
+                                restore_docked_date(state, controller, committed, error);
                             }
                             open.set(!open.get());
                             FocusManager::current().defer_keyboard_until_layout();
                         });
-                }));
+                });
             gap(Dp(4.0));
             text()
                 .content(if error.with(String::is_empty) {
@@ -3265,31 +3249,17 @@ fn docked_configuration(number: usize, initial_view: DockedDatePickerView) {
                     .on_date_change(move |date: CalendarDate| {
                         let formatted =
                             format!("{:02}/{:02}/{:04}", date.month(), date.day(), date.year());
-                        draft.set(formatted.clone());
+
                         controller.with_mut(|controller| controller.set_text(&formatted));
                         error.set(String::new());
                     })
                     .on_cancel(move || {
-                        restore_docked_date(
-                            state,
-                            controller,
-                            draft,
-                            committed,
-                            committed_draft,
-                            error,
-                        );
+                        restore_docked_date(state, controller, committed, error);
                         open.set(false);
                         FocusManager::current().defer_keyboard_until_layout();
                     })
                     .on_confirm(move || {
-                        if submit_docked_date(
-                            state,
-                            controller,
-                            draft,
-                            committed,
-                            committed_draft,
-                            error,
-                        ) {
+                        if submit_docked_date(state, controller, committed, error) {
                             open.set(false);
                             FocusManager::current().defer_keyboard_until_layout();
                         }

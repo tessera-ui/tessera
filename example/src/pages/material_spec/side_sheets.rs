@@ -1052,12 +1052,12 @@ fn standard_demo(open: State<bool>) {
                 .accessibility_label("Information")
                 .is_open(open.get())
                 .on_close_request(move || open.set(false))
-                .main_content_shared(RenderSlot::new(move || {
+                .main_content(move || {
                     standard_body(open);
-                }))
-                .side_sheet_content_shared(RenderSlot::new(move || {
+                })
+                .side_sheet_content(move || {
                     standard_content(open);
-                }));
+                });
         });
 }
 

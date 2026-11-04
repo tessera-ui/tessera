@@ -9,7 +9,7 @@ use std::time::Duration;
 
 use tessera_ui::{
     Dp, HeadlessConfig, HeadlessRenderer, MOUSE_POINTER_ID, Modifier, PressKeyEventType,
-    PxPosition, RenderSlotWith, State,
+    PxPosition, State,
     accesskit::{Action, ActionRequest, Node, NodeId, Role, TreeId},
     remember, tessera,
 };
@@ -237,11 +237,11 @@ fn custom_slot_fixture(observed: tessera_ui::testing::TestProbe<FixtureHandles>)
     material_theme().child(move || {
         snackbar_host()
             .state(host)
-            .snackbar_shared(RenderSlotWith::new(|data: super::SnackbarData| {
+            .snackbar(|data: super::SnackbarData| {
                 text()
                     .content(data.message().to_owned())
                     .accessibility_label(format!("Custom notification: {}", data.message()));
-            }));
+            });
     });
 }
 

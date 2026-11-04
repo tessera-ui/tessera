@@ -26,8 +26,7 @@ use tessera_components::{
     theme::{MaterialTheme, material_theme},
 };
 use tessera_ui::{
-    Color, Dp, Modifier, RenderSlot, State, accesskit::Role, modifier::FocusModifierExt as _,
-    remember, tessera, use_context,
+    Color, Dp, Modifier, RenderSlot, State, accesskit::Role, remember, tessera, use_context,
 };
 
 use super::{
@@ -883,9 +882,9 @@ fn sample(#[prop(into)] label: String, primary: bool, controls: Option<bool>) {
                                 .enabled(available)
                                 .accessibility_label(format!("{name}, 3 new items"))
                                 .on_click(move || count.set(count.get() + 1))
-                                .title_shared(RenderSlot::new(move || {
+                                .title(move || {
                                     badge_title(name, icons.get() && primary, index);
-                                }));
+                                });
                         } else if icons.get() && primary {
                             tab(tab_row)
                                 .label(name)
@@ -1694,7 +1693,7 @@ fn native_tabs_figure(
                                                             unread.set(false);
                                                         }
                                                     })
-                                                    .title_shared(RenderSlot::new(move || {
+                                                    .title(move || {
                                                         native_tab_title(
                                                             index,
                                                             icons,
@@ -1704,7 +1703,7 @@ fn native_tabs_figure(
                                                             primary,
                                                             false,
                                                         );
-                                                    }));
+                                                    });
                                             }
                                         });
                                 });
@@ -2369,7 +2368,7 @@ fn secondary_measure_figure(inline_icons: bool) {
                                                     .accessibility_label(
                                                         figure_name(false, index).to_string(),
                                                     )
-                                                    .title_shared(RenderSlot::new(move || {
+                                                    .title(move || {
                                                         native_tab_title(
                                                             index,
                                                             inline_icons,
@@ -2379,7 +2378,7 @@ fn secondary_measure_figure(inline_icons: bool) {
                                                             false,
                                                             true,
                                                         );
-                                                    }));
+                                                    });
                                             }
                                         });
                                 });

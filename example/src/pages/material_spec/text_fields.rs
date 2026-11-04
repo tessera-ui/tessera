@@ -112,7 +112,7 @@ fn sample(
         controller.set_text(initial);
         controller
     });
-    let value = remember(|| initial.to_owned());
+
     let active = remember(|| enabled.unwrap_or(true));
     let read_only = remember(|| false);
     let invalid = remember(|| error.unwrap_or(false));
@@ -203,7 +203,6 @@ fn sample(
                             .on_click(move || {
                                 controller.with(|controller| controller.request_focus());
                                 controller.with_mut(|controller| controller.set_text(""));
-                                value.set(String::new());
                             })
                             .child(|| {
                                 text().content("Clear");
@@ -257,16 +256,12 @@ fn sample(
                         } else {
                             TextFieldLineLimit::SingleLine
                         })
-                        .on_change(move |next: String| {
-                            value.set(next.clone());
-                            next
-                        })
                         .on_submit(move || submitted.set(submitted.get() + 1));
                     if anatomy_geometry.is_some() && populated.unwrap_or(true) {
                         field.presentation_state(InteractionVisualState::Focus);
                     }
                     if icons.get() {
-                        field.leading_icon_shared(RenderSlot::new(move || {
+                        field.leading_icon(move || {
                             boxed()
                                 .modifier(Modifier::new().semantics(SemanticsArgs {
                                     role: Some(Role::Group),
@@ -277,9 +272,9 @@ fn sample(
                                 .children(|| {
                                     icon().painter(filled::SEARCH_SVG).size(Dp(24.0));
                                 });
-                        }));
-                        if value.with(|value| !value.is_empty()) {
-                            field.trailing_icon_shared(RenderSlot::new(move || {
+                        });
+                        if controller.with(|controller| !controller.text().is_empty()) {
+                            field.trailing_icon(move || {
                                 icon_button()
                                     .standard()
                                     .color_style(IconButtonColorStyle::Inherited)
@@ -289,19 +284,18 @@ fn sample(
                                     .on_click(move || {
                                         controller.with(|controller| controller.request_focus());
                                         controller.with_mut(|controller| controller.set_text(""));
-                                        value.set(String::new());
                                     });
-                            }));
+                            });
                         }
                     }
                     if affixes.get() {
                         field
-                            .prefix_shared(RenderSlot::new(|| {
+                            .prefix(|| {
                                 text().content("$");
-                            }))
-                            .suffix_shared(RenderSlot::new(|| {
+                            })
+                            .suffix(|| {
                                 text().content(".00");
-                            }));
+                            });
                     }
                     if secure.get() {
                         field
@@ -344,7 +338,7 @@ fn sample(
                         text()
                             .content(format!(
                                 "{} characters",
-                                value.with(|value| value.chars().count())
+                                controller.with(|controller| controller.text().chars().count())
                             ))
                             .style(type_style(12.0, 16.0));
                     }
@@ -356,9 +350,11 @@ fn sample(
                         "{} value: {}",
                         label.get(),
                         if secure.get() {
-                            "•".repeat(value.with(|value| value.chars().count()))
+                            "•".repeat(
+                                controller.with(|controller| controller.text().chars().count()),
+                            )
                         } else {
-                            value.get()
+                            controller.with(TextInputController::text)
                         }
                     ))
                     .style(type_style(14.0, 20.0));
@@ -647,8 +643,8 @@ fn field_figure(outlined: bool, error: bool, multiline: bool, measurements: bool
                 value.set_text("Input");
                 value
             });
-            let value = remember(|| "Input".to_owned());
-            let populated = value.with(|value| !value.is_empty());
+
+            let populated = controller.with(|controller| !controller.text().is_empty());
             let scheme = use_context::<MaterialTheme>().unwrap().get().color_scheme;
             boxed()
                 .alignment(Alignment::Center)
@@ -683,20 +679,16 @@ fn field_figure(outlined: bool, error: bool, multiline: bool, measurements: bool
                                     "Supporting text"
                                 })
                                 .is_error(error)
-                                .on_change(move |next: String| {
-                                    value.set(next.clone());
-                                    next
-                                })
                                 .line_limit(if multiline {
                                     TextFieldLineLimit::MultiLine
                                 } else {
                                     TextFieldLineLimit::SingleLine
                                 })
-                                .leading_icon_shared(RenderSlot::new(|| {
+                                .leading_icon(|| {
                                     icon().painter(filled::SEARCH_SVG).size(Dp(24.0));
-                                }));
+                                });
                             if error || populated {
-                                field.trailing_icon_shared(RenderSlot::new(move || {
+                                field.trailing_icon(move || {
                                     if error {
                                         boxed()
                                             .modifier(Modifier::new().semantics(SemanticsArgs {
@@ -717,10 +709,9 @@ fn field_figure(outlined: bool, error: bool, multiline: bool, measurements: bool
                                                     .with(|controller| controller.request_focus());
                                                 controller
                                                     .with_mut(|controller| controller.set_text(""));
-                                                value.set(String::new());
                                             });
                                     }
-                                }));
+                                });
                             }
                             gap(Dp(4.0));
                             text()
@@ -917,9 +908,9 @@ fn m2_difference_field(outlined: bool) {
         .min_width(Dp::ZERO)
         .presentation_state(InteractionVisualState::Focus)
         .modifier(Modifier::new().width(Dp(220.0)))
-        .trailing_icon_shared(RenderSlot::new(|| {
+        .trailing_icon(|| {
             icon().painter(filled::CANCEL_SVG).size(Dp(24.0));
-        }));
+        });
 }
 
 #[tessera]
@@ -1091,9 +1082,9 @@ fn form_field(label: String, outlined: bool, mode: u8) {
         });
         value
     });
-    let count = remember(|| 0_usize);
     let show = remember(|| false);
-    let overflow = mode == 6 && count.get() > 100;
+    let overflow =
+        mode == 6 && controller.with(|controller| controller.text().chars().count()) > 100;
     let scheme = use_context::<MaterialTheme>().unwrap().get().color_scheme;
     column()
         .modifier(Modifier::new().fill_max_width())
@@ -1128,11 +1119,7 @@ fn form_field(label: String, outlined: bool, mode: u8) {
                     }
                 })
                 .read_only(mode == 8)
-                .is_error(mode == 7 || overflow)
-                .on_change(move |value: String| {
-                    count.set(value.chars().count());
-                    value
-                });
+                .is_error(mode == 7 || overflow);
             if mode != 1 {
                 field.label(if mode == 2 {
                     format!("{label}*")
@@ -1146,7 +1133,7 @@ fn form_field(label: String, outlined: bool, mode: u8) {
                     .line_limit(TextFieldLineLimit::MultiLine);
             }
             if mode == 4 {
-                field.prefix_shared(RenderSlot::new(|| {
+                field.prefix(|| {
                     text()
                         .content("$")
                         .modifier(Modifier::new().semantics(SemanticsArgs {
@@ -1154,10 +1141,10 @@ fn form_field(label: String, outlined: bool, mode: u8) {
                             label: Some("US dollars".into()),
                             ..Default::default()
                         }));
-                }));
+                });
             }
             if mode == 5 {
-                field.suffix_shared(RenderSlot::new(|| {
+                field.suffix(|| {
                     text()
                         .content("@gmail.com")
                         .modifier(Modifier::new().semantics(SemanticsArgs {
@@ -1165,10 +1152,10 @@ fn form_field(label: String, outlined: bool, mode: u8) {
                             label: Some("at gmail dot com".into()),
                             ..Default::default()
                         }));
-                }));
+                });
             }
             if mode == 7 {
-                field.trailing_icon_shared(RenderSlot::new(|| {
+                field.trailing_icon(|| {
                     boxed()
                         .modifier(Modifier::new().semantics(SemanticsArgs {
                             role: Some(Role::Image),
@@ -1178,7 +1165,7 @@ fn form_field(label: String, outlined: bool, mode: u8) {
                         .children(|| {
                             icon().painter(filled::ERROR_SVG).size(Dp(24.0));
                         });
-                }));
+                });
             }
             if mode == 9 {
                 if !show.get() {
@@ -1186,7 +1173,7 @@ fn form_field(label: String, outlined: bool, mode: u8) {
                         .obfuscation_char('•')
                         .context_menu(TextFieldContextMenu::secure_default());
                 }
-                field.trailing_icon_shared(RenderSlot::new(move || {
+                field.trailing_icon(move || {
                     icon_button()
                         .standard()
                         .icon(if show.get() {
@@ -1200,7 +1187,7 @@ fn form_field(label: String, outlined: bool, mode: u8) {
                             "Show password"
                         })
                         .on_click(move || show.set(!show.get()));
-                }));
+                });
             }
             gap(Dp(4.0));
             row()
@@ -1238,9 +1225,10 @@ fn form_field(label: String, outlined: bool, mode: u8) {
                             ..Default::default()
                         }));
                     if mode == 6 {
+                        let count = controller.with(|controller| controller.text().chars().count());
                         spacer().modifier(Modifier::new().weight(1.0));
                         text()
-                            .content(format!("{} / 100", count.get()))
+                            .content(format!("{} / 100", count))
                             .color(if overflow {
                                 scheme.error
                             } else {
@@ -1249,7 +1237,7 @@ fn form_field(label: String, outlined: bool, mode: u8) {
                             .style(type_style(12.0, 16.0))
                             .modifier(Modifier::new().semantics(SemanticsArgs {
                                 role: Some(Role::Label),
-                                label: Some(format!("Character count: {} of 100", count.get())),
+                                label: Some(format!("Character count: {} of 100", count)),
                                 ..Default::default()
                             }));
                     }
@@ -1545,7 +1533,7 @@ fn field_error_icon_example(password: bool, scale: f64) {
                 )
                 .accessibility_label(if password { "Password" } else { "Username" })
                 .accessibility_description(support)
-                .trailing_icon_shared(RenderSlot::new(move || {
+                .trailing_icon(move || {
                     boxed()
                         .modifier(Modifier::new().semantics(SemanticsArgs {
                             role: Some(Role::Image),
@@ -1558,7 +1546,7 @@ fn field_error_icon_example(password: bool, scale: f64) {
                                 .size(Dp(24.0 * scale))
                                 .tint(scheme.error);
                         });
-                }));
+                });
             if password {
                 field
                     .obfuscation_char('•')
@@ -1635,11 +1623,7 @@ fn field_icon_example(kind: usize, scale: f64) {
         });
         controller
     });
-    let value = remember(|| match kind {
-        2 => "Input".to_owned(),
-        3 => "Input text".to_owned(),
-        _ => String::new(),
-    });
+
     let menu = remember(MenuController::new);
     let scheme = use_context::<MaterialTheme>().unwrap().get().color_scheme;
     boxed()
@@ -1650,7 +1634,7 @@ fn field_icon_example(kind: usize, scale: f64) {
         )
         .children(move || {
             let content = RenderSlot::new(move || {
-                field_icon_input(kind, scale, controller, value, menu);
+                field_icon_input(kind, scale, controller, menu);
             });
             if kind == 5 {
                 menu_provider()
@@ -1664,11 +1648,9 @@ fn field_icon_example(kind: usize, scale: f64) {
                     .menu_content(move |menu| {
                         menu_item().menu(menu).label("Personal").on_click(move || {
                             controller.with_mut(|controller| controller.set_text("Personal"));
-                            value.set("Personal".into());
                         });
                         menu_item().menu(menu).label("Work").on_click(move || {
                             controller.with_mut(|controller| controller.set_text("Work"));
-                            value.set("Work".into());
                         });
                     });
             } else {
@@ -1704,7 +1686,6 @@ fn field_icon_input(
     kind: usize,
     scale: f64,
     controller: State<TextInputController>,
-    value: State<String>,
     menu: State<MenuController>,
 ) {
     let scheme = use_context::<MaterialTheme>().unwrap().get().color_scheme;
@@ -1735,26 +1716,22 @@ fn field_icon_input(
             Modifier::new()
                 .width(Dp(180.0 * scale))
                 .height(Dp(56.0 * scale)),
-        )
-        .on_change(move |next: String| {
-            value.set(next.clone());
-            next
-        });
+        );
     if kind == 1 {
-        field.leading_icon_shared(RenderSlot::new(move || {
+        field.leading_icon(move || {
             icon()
                 .painter(filled::CALENDAR_TODAY_SVG)
                 .size(Dp(24.0 * scale));
-        }));
+        });
     } else if kind == 2 {
-        field.trailing_icon_shared(RenderSlot::new(move || {
+        field.trailing_icon(move || {
             icon()
                 .painter(filled::ERROR_SVG)
                 .size(Dp(24.0 * scale))
                 .tint(scheme.error);
-        }));
-    } else if kind == 3 && value.with(|value| !value.is_empty()) {
-        field.trailing_icon_shared(RenderSlot::new(move || {
+        });
+    } else if kind == 3 && controller.with(|controller| !controller.text().is_empty()) {
+        field.trailing_icon(move || {
             icon_button()
                 .standard()
                 .color_style(IconButtonColorStyle::Inherited)
@@ -1763,26 +1740,25 @@ fn field_icon_input(
                 .on_click(move || {
                     controller.with(|controller| controller.request_focus());
                     controller.with_mut(|controller| controller.set_text(""));
-                    value.set(String::new());
                 });
-        }));
+        });
     } else if kind == 4 {
-        field.trailing_icon_shared(RenderSlot::new(move || {
+        field.trailing_icon(move || {
             icon().painter(filled::MIC_SVG).size(Dp(24.0 * scale));
-        }));
+        });
     } else if kind == 5 {
-        field.trailing_icon_shared(RenderSlot::new(move || {
+        field.trailing_icon(move || {
             icon_button()
                 .standard()
                 .color_style(IconButtonColorStyle::Inherited)
                 .icon(filled::ARROW_DROP_DOWN_SVG)
                 .accessibility_label("Choose icon example category")
                 .on_click(move || menu.with_mut(MenuController::toggle));
-        }));
+        });
     } else if kind == 6 {
-        field.trailing_icon_shared(RenderSlot::new(move || {
+        field.trailing_icon(move || {
             field_payment_image(scale);
-        }));
+        });
     }
 }
 
@@ -1902,13 +1878,7 @@ fn field_anatomy_item(populated: bool, outlined: bool, geometry: State<SpaceGeom
         value.set_text(if populated { "Input text" } else { "" });
         value
     });
-    let value = remember(|| {
-        if populated {
-            "Input text".to_owned()
-        } else {
-            String::new()
-        }
-    });
+
     let scheme = use_context::<MaterialTheme>().unwrap().get().color_scheme;
     column()
         .modifier(Modifier::new().width(Dp(180.0)))
@@ -1928,15 +1898,11 @@ fn field_anatomy_item(populated: bool, outlined: bool, geometry: State<SpaceGeom
                 .label("Label text")
                 .accessibility_label("Label text")
                 .accessibility_description("Supporting text")
-                .on_change(move |next: String| {
-                    value.set(next.clone());
-                    next
-                })
-                .leading_icon_shared(RenderSlot::new(|| {
+                .leading_icon(|| {
                     icon().painter(filled::SEARCH_SVG).size(Dp(24.0));
-                }));
-            if value.with(|value| !value.is_empty()) {
-                field.trailing_icon_shared(RenderSlot::new(move || {
+                });
+            if controller.with(|controller| !controller.text().is_empty()) {
+                field.trailing_icon(move || {
                     icon_button()
                         .standard()
                         .icon(filled::CANCEL_SVG)
@@ -1944,9 +1910,8 @@ fn field_anatomy_item(populated: bool, outlined: bool, geometry: State<SpaceGeom
                         .on_click(move || {
                             controller.with(|controller| controller.request_focus());
                             controller.with_mut(|controller| controller.set_text(""));
-                            value.set(String::new());
                         });
-                }));
+                });
             }
             gap(Dp(4.0));
             text()
@@ -2589,14 +2554,14 @@ fn field_state_item(
                         .width(Dp(180.0 * scale))
                         .height(Dp(56.0 * scale)),
                 )
-                .leading_icon_shared(RenderSlot::new(move || {
+                .leading_icon(move || {
                     icon().painter(filled::SEARCH_SVG).size(Dp(24.0 * scale));
-                }));
+                });
             if error
                 || populated
                 || (state_example && presentation == InteractionVisualState::Focus)
             {
-                field.trailing_icon_shared(RenderSlot::new(move || {
+                field.trailing_icon(move || {
                     if error {
                         icon()
                             .painter(filled::ERROR_SVG)
@@ -2614,7 +2579,7 @@ fn field_state_item(
                                 controller.with_mut(|controller| controller.set_text(""));
                             });
                     }
-                }));
+                });
             }
             gap(Dp(4.0 * scale));
             text()
@@ -2717,7 +2682,7 @@ fn field_configuration_item(outlined: bool, row: usize, populated: bool, scale: 
         controller.set_text(initial);
         controller
     });
-    let value = remember(|| initial.to_owned());
+
     let name = format!(
         "{} configuration {} {}",
         if outlined { "Outlined" } else { "Filled" },
@@ -2729,6 +2694,7 @@ fn field_configuration_item(outlined: bool, row: usize, populated: bool, scale: 
     column()
         .modifier(Modifier::new().width(Dp(180.0 * scale)))
         .children(move || {
+            let nonempty = controller.with(|controller| !controller.text().is_empty());
             let field = if outlined {
                 text_field().outlined()
             } else {
@@ -2748,31 +2714,25 @@ fn field_configuration_item(outlined: bool, row: usize, populated: bool, scale: 
                 .font_size(Dp(16.0 * scale))
                 .line_height(Dp(24.0 * scale))
                 .padding(Dp(16.0 * scale))
-                .modifier(
-                    Modifier::new()
-                        .width(Dp(180.0 * scale))
-                        .height(Dp(if row == 6 && value.with(|value| !value.is_empty()) {
-                            if outlined { 136.0 } else { 156.0 }
-                        } else {
-                            56.0
-                        } * scale)),
-                )
+                .modifier(Modifier::new().width(Dp(180.0 * scale)).height(Dp(
+                    if row == 6 && nonempty {
+                        if outlined { 136.0 } else { 156.0 }
+                    } else {
+                        56.0
+                    } * scale,
+                )))
                 .line_limit(if row == 6 {
                     TextFieldLineLimit::MultiLine
                 } else {
                     TextFieldLineLimit::SingleLine
-                })
-                .on_change(move |next: String| {
-                    value.set(next.clone());
-                    next
                 });
             if row == 2 || row == 3 {
-                field.leading_icon_shared(RenderSlot::new(move || {
+                field.leading_icon(move || {
                     icon().painter(filled::SEARCH_SVG).size(Dp(24.0 * scale));
-                }));
+                });
             }
-            if (row == 1 || row == 3) && value.with(|value| !value.is_empty()) {
-                field.trailing_icon_shared(RenderSlot::new(move || {
+            if (row == 1 || row == 3) && nonempty {
+                field.trailing_icon(move || {
                     icon_button()
                         .standard()
                         .color_style(IconButtonColorStyle::Inherited)
@@ -2781,19 +2741,18 @@ fn field_configuration_item(outlined: bool, row: usize, populated: bool, scale: 
                         .on_click(move || {
                             controller.with(|controller| controller.request_focus());
                             controller.with_mut(|controller| controller.set_text(""));
-                            value.set(String::new());
                         });
-                }));
+                });
             }
             if row == 4 {
-                field.prefix_shared(RenderSlot::new(|| {
+                field.prefix(|| {
                     text().content("$");
-                }));
+                });
             }
             if row == 5 {
-                field.suffix_shared(RenderSlot::new(|| {
+                field.suffix(|| {
                     text().content("lbs");
-                }));
+                });
             }
             if row == 0 {
                 gap(Dp(4.0 * scale));
@@ -2828,10 +2787,14 @@ fn field_measurements(outlined: bool, variant: usize) {
         300.0,
         RenderSlot::new(move || {
             let geometry = remember(SpaceGeometry::new);
-            let display = remember(|| MeasurementDisplay {
-                nonempty: [false, variant != 2],
-                focused: [false; 2],
+            let empty = remember(|| TextInputController::new(Dp(16.0), Some(Dp(24.0))));
+            let populated = remember(|| {
+                let mut controller = TextInputController::new(Dp(16.0), Some(Dp(24.0)));
+                controller.set_text(if variant == 2 { "" } else { "Input text" });
+                controller
             });
+            let controllers = [empty, populated];
+            let focused = remember(|| [false; 2]);
             let scheme = use_context::<MaterialTheme>().unwrap().get().color_scheme;
             boxed()
                 .alignment(Alignment::Center)
@@ -2855,14 +2818,34 @@ fn field_measurements(outlined: bool, variant: usize) {
                                 .offset(Dp::ZERO, Dp(if variant == 2 { -22.0 } else { 0.0 })),
                         )
                         .children(move || {
-                            field_measurement_item(outlined, variant, false, geometry, display);
+                            field_measurement_item(
+                                outlined,
+                                variant,
+                                false,
+                                geometry,
+                                controllers[0],
+                                focused,
+                            );
                             spacer().modifier(Modifier::new().width(Dp(120.0)));
-                            field_measurement_item(outlined, variant, true, geometry, display);
+                            field_measurement_item(
+                                outlined,
+                                variant,
+                                true,
+                                geometry,
+                                controllers[1],
+                                focused,
+                            );
                         });
                     boxed()
                         .modifier(Modifier::new().fill_max_size())
                         .children(move || {
-                            field_measurement_annotations(geometry, outlined, variant, display);
+                            field_measurement_annotations(
+                                geometry,
+                                outlined,
+                                variant,
+                                controllers,
+                                focused,
+                            );
                         });
                 });
         }),
@@ -2875,19 +2858,9 @@ fn field_measurement_item(
     variant: usize,
     populated: bool,
     geometry: State<SpaceGeometry>,
-    display: State<MeasurementDisplay>,
+    controller: State<TextInputController>,
+    focused: State<[bool; 2]>,
 ) {
-    let initial = if populated && variant != 2 {
-        "Input text"
-    } else {
-        ""
-    };
-    let value = remember(|| initial.to_owned());
-    let controller = remember(|| {
-        let mut controller = TextInputController::new(Dp(16.0), Some(Dp(24.0)));
-        controller.set_text(initial);
-        controller
-    });
     let scheme = use_context::<MaterialTheme>().unwrap().get().color_scheme;
     column()
         .modifier(Modifier::new().width(Dp(240.0)))
@@ -2922,15 +2895,10 @@ fn field_measurement_item(
                             .focus_group()
                             .on_focus_changed(
                                 move |focus: FocusState| {
-                                    if display.is_alive()
-                                        && display
-                                            .with(|value| value.focused[usize::from(populated)])
-                                            != focus.has_focus()
-                                    {
-                                        display.with_mut(|value| {
-                                            value.focused[usize::from(populated)] =
-                                                focus.has_focus()
-                                        });
+                                    if focused.is_alive() {
+                                        let mut next = focused.get();
+                                        next[usize::from(populated)] = focus.has_focus();
+                                        focused.set_if_changed(next);
                                     }
                                 },
                             ),
@@ -2944,21 +2912,9 @@ fn field_measurement_item(
                         } else {
                             None
                         })
-                        .accessibility_label(measurement_name(outlined, variant, populated))
-                        .on_change(move |next: String| {
-                            let nonempty = !next.is_empty();
-                            value.set(next.clone());
-                            if display.with(|value| value.nonempty[usize::from(populated)])
-                                != nonempty
-                            {
-                                display.with_mut(|value| {
-                                    value.nonempty[usize::from(populated)] = nonempty
-                                });
-                            }
-                            next
-                        });
+                        .accessibility_label(measurement_name(outlined, variant, populated));
                     if variant == 1 {
-                        field.leading_icon_shared(RenderSlot::new(move || {
+                        field.leading_icon(move || {
                             boxed()
                                 .modifier(
                                     watch_in_space(
@@ -2981,9 +2937,9 @@ fn field_measurement_item(
                                 .children(|| {
                                     icon().painter(filled::SEARCH_SVG).size(Dp(24.0));
                                 });
-                        }));
-                        if value.with(|value| !value.is_empty()) {
-                            field.trailing_icon_shared(RenderSlot::new(move || {
+                        });
+                        if controller.with(|controller| !controller.text().is_empty()) {
+                            field.trailing_icon(move || {
                                 icon_button()
                                     .standard()
                                     .icon(filled::CANCEL_SVG)
@@ -2994,12 +2950,8 @@ fn field_measurement_item(
                                     .on_click(move || {
                                         controller.with(|controller| controller.request_focus());
                                         controller.with_mut(|controller| controller.set_text(""));
-                                        value.set(String::new());
-                                        display.with_mut(|value| {
-                                            value.nonempty[usize::from(populated)] = false
-                                        });
                                     });
-                            }));
+                            });
                         }
                     }
                 });
@@ -3036,13 +2988,12 @@ fn field_measurement_item(
                                 }),
                             );
                         if populated {
+                            let count =
+                                controller.with(|controller| controller.text().chars().count());
                             spacer()
                                 .modifier(watch_in_space(geometry, "counter-gap").width(Dp(16.0)));
                             text()
-                                .content(format!(
-                                    "{}/20",
-                                    value.with(|value| value.chars().count())
-                                ))
+                                .content(format!("{}/20", count))
                                 .style(type_style(12.0, 16.0))
                                 .color(scheme.on_surface_variant)
                                 .modifier(watch_in_space(geometry, "counter").semantics(
@@ -3050,7 +3001,7 @@ fn field_measurement_item(
                                         role: Some(Role::Label),
                                         label: Some(format!(
                                             "Measurement character count: {} of 20",
-                                            value.with(|value| value.chars().count())
+                                            count
                                         )),
                                         ..Default::default()
                                     },
@@ -3137,13 +3088,18 @@ fn field_measurement_annotations(
     geometry: State<SpaceGeometry>,
     outlined: bool,
     variant: usize,
-    display: State<MeasurementDisplay>,
+    controllers: [State<TextInputController>; 2],
+    focused: State<[bool; 2]>,
 ) {
     field_measurement_annotation_geometry(
         geometry.with(annotations::space_geometry),
         outlined,
         variant,
-        display.get(),
+        MeasurementDisplay {
+            nonempty: controllers
+                .map(|controller| controller.with(|controller| !controller.text().is_empty())),
+            focused: focused.get(),
+        },
     );
 }
 

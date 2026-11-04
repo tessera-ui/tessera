@@ -55,7 +55,7 @@ pub(super) fn slider_spec(route: Option<crate::pages::material_spec::article::Ar
         section("Color",RenderSlot::new(colors)),
         section("States",RenderSlot::new(states)),
         section("Measurements",RenderSlot::new(measurements)),
-    ]).route_optional(route.clone()).hero_shared(RenderSlot::new(hero)).pages(vec![
+    ]).route_optional(route.clone()).hero(hero).pages(vec![
         ArticlePage{title:"Overview",intro:Some(RenderSlot::new(||{
             prose("Sliders select a value or range along a track. Use standard, centered, or range variants, show the full available range, and apply changes immediately.");gap(Dp(32.0));variants();
         })),sections:vec![

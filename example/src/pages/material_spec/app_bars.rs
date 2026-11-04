@@ -713,7 +713,7 @@ fn specimen_bar(kind: usize, status: State<String>) {
                     .on_click(move || status.set("Back selected".to_owned()));
             }
         })
-        .action_shared(RenderSlot::new(move || {
+        .action(move || {
             let preset = preset_for(kind);
             let count = preset.actions.len();
             for (index, glyph) in preset.actions.iter().copied().enumerate() {
@@ -739,7 +739,7 @@ fn specimen_bar(kind: usize, status: State<String>) {
                         .on_click(move || status.set(selected.clone()));
                 }
             }
-        }));
+        });
 }
 
 #[tessera]
@@ -1557,7 +1557,7 @@ fn sample(
                                                 status.set("Back selected".to_owned())
                                             });
                                     })
-                                    .action_shared(RenderSlot::new(move || {
+                                    .action(move || {
                                         if filled_action.get() {
                                             icon_button()
                                                 .filled()
@@ -1582,7 +1582,7 @@ fn sample(
                                                     status.set("Search selected".to_owned())
                                                 });
                                         }
-                                    }));
+                                    });
                             });
                     });
                     if controls.unwrap_or(false) {
@@ -2644,21 +2644,21 @@ fn theme_sample_bar(scrolled: bool, geometry: Option<State<Geometry>>) {
                 .icon(filled::ARROW_BACK_SVG)
                 .accessibility_label("Color figure back");
         })
-        .action_shared(RenderSlot::new(move || {
+        .action(move || {
             icon_button()
                 .modifier(tracked("trailing"))
                 .standard()
                 .color_style(IconButtonColorStyle::Inherited)
                 .icon(filled::SEARCH_SVG)
                 .accessibility_label("Color figure search");
-        }))
-        .action_shared(RenderSlot::new(|| {
+        })
+        .action(|| {
             icon_button()
                 .standard()
                 .color_style(IconButtonColorStyle::Inherited)
                 .icon(filled::EVENT_SVG)
                 .accessibility_label("Color figure calendar");
-        }));
+        });
 }
 
 #[tessera]
@@ -2683,13 +2683,13 @@ fn scroll_state_column(scrolled: bool) {
                         .icon(filled::MENU_SVG)
                         .accessibility_label("Scroll state menu");
                 })
-                .action_shared(RenderSlot::new(|| {
+                .action(|| {
                     icon_button()
                         .standard()
                         .color_style(IconButtonColorStyle::Inherited)
                         .icon(filled::ACCOUNT_CIRCLE_SVG)
                         .accessibility_label("Scroll state account");
-                }));
+                });
             gap(Dp(16.0));
             search_sample()
                 .specimen(3)
@@ -2712,13 +2712,13 @@ fn scroll_state_column(scrolled: bool) {
                             .icon(filled::ARROW_BACK_SVG)
                             .accessibility_label("Scroll state back");
                     })
-                    .action_shared(RenderSlot::new(|| {
+                    .action(|| {
                         icon_button()
                             .standard()
                             .color_style(IconButtonColorStyle::Inherited)
                             .icon(filled::SEARCH_SVG)
                             .accessibility_label("Scroll state search");
-                    }));
+                    });
                 gap(Dp(16.0));
             }
         });
@@ -3288,7 +3288,7 @@ fn figure_bar(
                 .accessibility_label("Figure back")
                 .on_click(move || actions.set(actions.get() + 1));
         })
-        .action_shared(RenderSlot::new(move || {
+        .action(move || {
             if filled_action.unwrap_or(false) {
                 icon_button()
                     .modifier(watch(geometry, "trailing"))
@@ -3312,7 +3312,7 @@ fn figure_bar(
                 .icon(filled::CALENDAR_TODAY_SVG)
                 .accessibility_label("Figure calendar")
                 .on_click(move || actions.set(actions.get() + 1));
-        }))
+        })
         .subtitle_optional((!measurements).then(|| "Subtitle".to_owned()));
 }
 

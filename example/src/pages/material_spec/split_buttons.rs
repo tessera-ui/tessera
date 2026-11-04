@@ -11,7 +11,7 @@ use tessera_components::{
     flow_row::flow_row,
     icon::icon,
     material_icons::filled,
-    menus::{MenuAnchor, MenuController, menu_item, menu_provider},
+    menus::{MenuController, menu_item, menu_provider},
     modifier::{ModifierExt as _, Padding},
     row::row,
     shape_def::Shape,
@@ -24,8 +24,8 @@ use tessera_components::{
     theme::{MaterialTheme, material_theme},
 };
 use tessera_ui::{
-    Color, Dp, Modifier, PxPosition, PxRect, PxSize, RenderSlot, State,
-    modifier::FocusModifierExt as _, remember, tessera, use_context,
+    Color, Dp, LayoutCoordinates, Modifier, RenderSlot, State, modifier::FocusModifierExt as _,
+    remember, tessera, use_context,
 };
 
 use super::{
@@ -74,8 +74,7 @@ fn size_name(size: SplitButtonSize) -> &'static str {
 #[derive(Clone, Copy, PartialEq)]
 struct Menu {
     controller: State<MenuController>,
-    anchor: State<PxRect>,
-    origin: State<PxRect>,
+    anchor: State<LayoutCoordinates>,
     source: State<String>,
     result: State<String>,
     theme: State<MaterialTheme>,
@@ -87,33 +86,19 @@ pub(super) fn split_buttons_spec(
 ) {
     let menu = Menu {
         controller: remember(MenuController::new),
-        anchor: remember(PxRect::default),
-        origin: remember(PxRect::default),
+        anchor: remember(LayoutCoordinates::default),
         source: remember(String::new),
         result: remember(|| "No option selected".to_owned()),
         theme: remember(MaterialTheme::default),
     };
     boxed()
-        .modifier(
-            Modifier::new()
-                .fill_max_size()
-                .on_globally_positioned(move |rect| {
-                    if menu.origin.get() != rect {
-                        menu.origin.set(rect);
-                    }
-                }),
-        )
+        .modifier(Modifier::new().fill_max_size())
         .children(move || {
             let route = route.clone();
-            let anchor = menu.anchor.get();
-            let origin = menu.origin.get();
             menu_provider()
                 .controller(menu.controller)
                 .container_color(menu.theme.get().color_scheme.surface_container_low)
-                .anchor(MenuAnchor::new(
-                    PxPosition::new(anchor.x - origin.x, anchor.y - origin.y),
-                    PxSize::new(anchor.width, anchor.height),
-                ))
+                .window_anchor(menu.anchor)
                 .main_content(move || {
                     article(
                         "Split button",
@@ -368,7 +353,7 @@ fn demo(
     enabled: bool,
 ) {
     let count = remember(|| 0_u32);
-    let bounds = remember(PxRect::default);
+    let bounds = remember(LayoutCoordinates::default);
     let leading_label = label.clone();
     let trailing_label = label.clone();
     let caption_label = label.clone();
@@ -376,9 +361,9 @@ fn demo(
         .modifier(Modifier::new().fill_max_width())
         .children(move || {
             split_button_layout()
-                .leading_button_shared({
+                .leading_button({
                     let label = leading_label.clone();
-                    RenderSlot::new(move || {
+                    move || {
                         split_leading_button()
                             .size(size)
                             .variant(variant)
@@ -392,16 +377,15 @@ fn demo(
                                 );
                                 text().content("Edit");
                             });
-                    })
+                    }
                 })
-                .trailing_button_shared({
+                .trailing_button({
                     let label = trailing_label.clone();
                     let source = caption_label.clone();
-                    RenderSlot::new(move || {
+                    move || {
                         let name = label.clone();
                         let selected = source.clone();
-                        let theme_value =
-                            use_context::<MaterialTheme>().expect("MaterialTheme").get();
+                        let theme = use_context::<MaterialTheme>().expect("MaterialTheme");
                         split_trailing_button()
                             .size(size)
                             .variant(variant)
@@ -411,12 +395,10 @@ fn demo(
                                     && menu.source.get() == selected,
                             )
                             .accessibility_label(format!("{label} menu actions"))
-                            .modifier(Modifier::new().on_globally_positioned(move |rect| {
-                                if bounds.get() != rect {
-                                    bounds.set(rect);
-                                }
-                                if menu.source.get() == name && menu.anchor.get() != rect {
-                                    menu.anchor.set(rect);
+                            .modifier(Modifier::new().on_layout_coordinates(move |coordinates| {
+                                bounds.set_if_changed(coordinates);
+                                if menu.source.get() == name {
+                                    menu.anchor.set_if_changed(coordinates);
                                 }
                             }))
                             .on_click(move || {
@@ -425,7 +407,7 @@ fn demo(
                                 {
                                     menu.controller.with_mut(MenuController::close);
                                 } else {
-                                    menu.theme.set(theme_value.clone());
+                                    menu.theme.set(theme.get());
                                     menu.source.set(selected.clone());
                                     menu.anchor.set(bounds.get());
                                     menu.controller.with_mut(MenuController::open);
@@ -434,7 +416,7 @@ fn demo(
                             .content(|| {
                                 icon().painter(filled::ARROW_DROP_DOWN_SVG);
                             });
-                    })
+                    }
                 });
             gap(Dp(12.0));
             text()

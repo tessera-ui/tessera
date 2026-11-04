@@ -25,12 +25,22 @@ impl<'db> CallAnalyzer<'db> {
             return None;
         }
         let mut args = call.arg_list()?.args();
-        let ast::Expr::CallExpr(constructor) = args.next()? else {
-            return None;
-        };
+        let mut value = args.next()?;
         if args.next().is_some() {
             return None;
         }
+        while let ast::Expr::BlockExpr(block) = value {
+            if block.async_token().is_some()
+                || block.const_token().is_some()
+                || block.gen_token().is_some()
+            {
+                return None;
+            }
+            value = block.stmt_list()?.tail_expr()?;
+        }
+        let ast::Expr::CallExpr(constructor) = value else {
+            return None;
+        };
         let CallTarget::Resolved {
             kind: CallKind::RuntimeApi(kind),
             ..

@@ -21,8 +21,8 @@ use tessera_components::{
     theme::{MaterialTheme, material_theme},
 };
 use tessera_ui::{
-    Color, Dp, Modifier, RenderSlot, RenderSlotWith, accesskit::Role,
-    modifier::FocusModifierExt as _, remember, tessera, use_context,
+    Color, Dp, Modifier, RenderSlot, RenderSlotWith, accesskit::Role, remember, tessera,
+    use_context,
 };
 
 use super::{

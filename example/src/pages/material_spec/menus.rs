@@ -15,8 +15,8 @@ use tessera_components::{
     icon::icon,
     material_icons::filled,
     menus::{
-        MenuAnchor, MenuColorStyle, MenuController, MenuItemSelectionMode, MenuPosition,
-        menu_group, menu_item, menu_provider,
+        MenuColorStyle, MenuController, MenuItemSelectionMode, MenuPosition, menu_group, menu_item,
+        menu_provider,
     },
     modifier::{ModifierExt as _, SemanticsArgs},
     row::row,
@@ -26,8 +26,8 @@ use tessera_components::{
     theme::{MaterialTheme, material_theme},
 };
 use tessera_ui::{
-    Dp, Modifier, PxPosition, PxRect, PxSize, RenderSlot, State, accesskit::Role,
-    modifier::FocusModifierExt as _, remember, tessera, use_context,
+    Dp, Modifier, RenderSlot, State, accesskit::Role, modifier::FocusModifierExt as _, remember,
+    tessera, use_context,
 };
 
 use super::{
@@ -993,38 +993,21 @@ fn menu_sample(grouped: bool, style: MenuColorStyle) {
 #[tessera]
 fn launch() {
     let menu = remember(MenuController::new);
-    let anchor = remember(PxRect::default);
-    let origin = remember(PxRect::default);
+    let anchor = remember(tessera_ui::LayoutCoordinates::default);
     let notice = remember(|| "Choose an action".to_owned());
     boxed()
-        .modifier(
-            Modifier::new()
-                .fill_max_width()
-                .height(Dp(280.0))
-                .on_globally_positioned(move |rect| {
-                    if origin.get() != rect {
-                        origin.set(rect);
-                    }
-                }),
-        )
+        .modifier(Modifier::new().fill_max_width().height(Dp(280.0)))
         .children(move || {
-            let a = anchor.get();
-            let o = origin.get();
             menu_provider()
                 .controller(menu)
                 .grouped(true)
-                .anchor(MenuAnchor::new(
-                    PxPosition::new(a.x - o.x, a.y - o.y),
-                    PxSize::new(a.width, a.height),
-                ))
+                .window_anchor(anchor)
                 .main_content(move || {
                     column().children(move || {
                         button()
                             .outlined()
-                            .modifier(Modifier::new().on_globally_positioned(move |rect| {
-                                if anchor.get() != rect {
-                                    anchor.set(rect);
-                                }
+                            .modifier(Modifier::new().on_layout_coordinates(move |coordinates| {
+                                anchor.set_if_changed(coordinates);
                             }))
                             .on_click(move || menu.with_mut(MenuController::toggle))
                             .child(|| {

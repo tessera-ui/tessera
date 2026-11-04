@@ -263,7 +263,7 @@ fn state_menu(state: usize, baseline: bool, selected: bool) {
             .shape(Shape::rounded_rectangle(Dp(4.0)))
             .container_color(group_color);
     }
-    group.children_shared(RenderSlot::new(move || {
+    group.children(move || {
         for index in 0..4 {
             let is_marked = index == marked;
             let base = if selected && is_marked {
@@ -332,7 +332,7 @@ fn state_menu(state: usize, baseline: bool, selected: bool) {
                 );
             }
         }
-    }));
+    });
 }
 
 #[tessera]
@@ -1581,7 +1581,7 @@ pub(super) fn m2_comparison() {
                                         .shape(Shape::rounded_rectangle(Dp(4.0)))
                                         .container_color(gray_menu);
                                 }
-                                group.children_shared(RenderSlot::new(move || {
+                                group.children(move || {
                                     for label in ["Share", "Get link", "Edit name"] {
                                         let item = menu_item()
                                             .label(label)
@@ -1591,7 +1591,7 @@ pub(super) fn m2_comparison() {
                                             item.shape(Shape::RECTANGLE).height(Dp(48.0));
                                         }
                                     }
-                                }));
+                                });
                             });
                         gap(Dp(12.0));
                         caption(if m3 {

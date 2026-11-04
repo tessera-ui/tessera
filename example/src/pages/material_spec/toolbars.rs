@@ -3179,7 +3179,9 @@ fn slots() {
 
 #[tessera]
 fn search_toolbar(notice: State<String>, gallery_tag: Option<usize>) {
-    let query = remember(String::new);
+    let controller = remember(|| {
+        tessera_components::text_input::TextInputController::new(Dp(16.0), Some(Dp(24.0)))
+    });
     let selected = remember(|| false);
     let tag = gallery_tag;
     docked_toolbar()
@@ -3201,13 +3203,12 @@ fn search_toolbar(notice: State<String>, gallery_tag: Option<usize>) {
                                 .shape(Shape::CAPSULE)
                                 .min_width(Dp::ZERO)
                                 .min_height(Dp(40.0))
-                                .initial_text(query.get())
-                                .on_change(move |next: String| {
-                                    query.set(next.clone());
-                                    next
-                                })
+                                .controller(controller)
                                 .on_submit(move || {
-                                    notice.set(format!("Searched for \"{}\"", query.get()))
+                                    notice.set(format!(
+                                        "Searched for \"{}\"",
+                                        controller.with(|controller| controller.text())
+                                    ))
                                 })
                                 .modifier(Modifier::new().fill_max_width());
                         });

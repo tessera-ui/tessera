@@ -1689,6 +1689,10 @@ fn root() {
     if true {
         saved.slot_shared(Slot::new(|| child()));
     }
+    host().slot_shared({
+        let label = String::from("owned capture");
+        Slot::new(move || { let _ = &label; child(); })
+    }).slot_shared(Slot::new(|| child()));
     let shared = Slot::new(|| child());
     host().slot_shared(shared);
     Other.slot_shared(Slot::new(|| child()));
@@ -1697,7 +1701,7 @@ fn root() {
             |analyzer| {
                 use super::super::types::Applicability;
 
-                assert_eq!(analyzer.diagnostics.len(), 4);
+                assert_eq!(analyzer.diagnostics.len(), 6);
                 assert!(analyzer.diagnostics.iter().all(|diagnostic| diagnostic.code
                     == super::super::error_codes::DiagnosticCode::Lint(
                         super::super::error_codes::Lint::RedundantRenderSlot
@@ -1707,7 +1711,7 @@ fn root() {
                     .iter()
                     .flat_map(|diagnostic| &diagnostic.suggestions)
                     .collect();
-                assert_eq!(suggestions.len(), 2);
+                assert_eq!(suggestions.len(), 4);
                 assert!(suggestions.iter().all(|suggestion| suggestion.applicability
                     == Applicability::MaybeIncorrect
                     && suggestion.edits.len() == 3));

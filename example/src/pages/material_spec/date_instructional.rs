@@ -270,7 +270,7 @@ fn date_field(
         )
         .on_change_shared(on_change)
         .on_submit_shared(on_submit)
-        .trailing_icon_shared(RenderSlot::new(move || {
+        .trailing_icon(move || {
             if show_calendar {
                 icon_button()
                     .standard()
@@ -282,7 +282,7 @@ fn date_field(
                         FocusManager::current().defer_keyboard_until_layout();
                     });
             }
-        }));
+        });
     text()
         .content(if error.is_empty() {
             format

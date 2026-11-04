@@ -30,8 +30,7 @@ use tessera_components::{
     theme::{MaterialTheme, TextStyle, material_theme},
 };
 use tessera_ui::{
-    Color, Dp, Modifier, RenderSlot, RenderSlotWith, State, accesskit::Role, remember, tessera,
-    use_context,
+    Color, Dp, Modifier, RenderSlot, State, accesskit::Role, remember, tessera, use_context,
 };
 
 use super::{
@@ -1993,7 +1992,7 @@ fn queued() {
             gap(Dp(24.0));
             snackbar_host()
                 .state(state)
-                .snackbar_shared(RenderSlotWith::new(move |data: SnackbarData| {
+                .snackbar(move |data: SnackbarData| {
                     boxed()
                         .modifier(Modifier::new().width(Dp(360.0)).semantics(SemanticsArgs {
                             role: Some(Role::Group),
@@ -2036,7 +2035,7 @@ fn queued() {
                                     });
                             }
                         });
-                }));
+                });
             gap(Dp(16.0));
             text()
                 .content(format!("Snackbar result: {}", result.get()))
@@ -2800,7 +2799,7 @@ fn actionable_demo() {
                     snackbar_host()
                         .state(host)
                         .modifier(Modifier::new().width(Dp(360.0)))
-                        .snackbar_shared(RenderSlotWith::new(move |data: SnackbarData| {
+                        .snackbar(move |data: SnackbarData| {
                             let dismiss = data.clone();
                             snackbar()
                                 .message(data.message().to_owned())
@@ -2811,7 +2810,7 @@ fn actionable_demo() {
                                     data.perform_action();
                                     kept.set(true);
                                 });
-                        }));
+                        });
                 });
         });
 }

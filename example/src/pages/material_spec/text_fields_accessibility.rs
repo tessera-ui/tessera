@@ -298,7 +298,7 @@ fn password_diagram(scale: f64) {
                 .offset(Dp(26.5 * scale), Dp(122.0 * scale))
                 .size(Dp(327.0 * scale), Dp(56.0 * scale)),
         )
-        .trailing_icon_shared(RenderSlot::new(move || {
+        .trailing_icon(move || {
             icon_button()
                 .standard()
                 .color_style(IconButtonColorStyle::Inherited)
@@ -316,7 +316,7 @@ fn password_diagram(scale: f64) {
                     show.set(!show.get());
                     controller.with(|controller| controller.request_focus());
                 });
-        }));
+        });
     if !show.get() {
         field
             .obfuscation_char('•')
@@ -375,14 +375,14 @@ fn dropdown_field(scale: f64) {
                         .border_width(Dp(scale))
                         .focus_border_width(Dp(3.0 * scale))
                         .modifier(Modifier::new().size(Dp(327.0 * scale), Dp(56.0 * scale)))
-                        .trailing_icon_shared(RenderSlot::new(move || {
+                        .trailing_icon(move || {
                             icon_button()
                                 .standard()
                                 .color_style(IconButtonColorStyle::Inherited)
                                 .icon(filled::ARROW_DROP_DOWN_SVG)
                                 .accessibility_label("Choose label option")
                                 .on_click(move || menu.with_mut(MenuController::toggle));
-                        }));
+                        });
                 })
                 .menu_content(move |menu| {
                     menu_item().menu(menu).label("Personal").on_click(move || {
@@ -654,22 +654,20 @@ fn labeled_field(kind: usize, x: f64, y: f64, width: f64, scale: f64) {
         field.label(name);
     }
     if kind == 1 {
-        field
-            .placeholder("Email")
-            .suffix_shared(RenderSlot::new(move || {
-                text()
-                    .content("@gmail.com")
-                    .style(type_style(16.0 * scale, 24.0 * scale))
-                    .accessibility_label("At gmail dot com");
-            }));
+        field.placeholder("Email").suffix(move || {
+            text()
+                .content("@gmail.com")
+                .style(type_style(16.0 * scale, 24.0 * scale))
+                .accessibility_label("At gmail dot com");
+        });
     }
     if kind == 0 {
-        field.prefix_shared(RenderSlot::new(move || {
+        field.prefix(move || {
             text()
                 .content("€")
                 .style(type_style(16.0 * scale, 24.0 * scale))
                 .accessibility_label("Euro");
-        }));
+        });
     }
     if kind == 2 || kind == 3 {
         field.presentation_state(InteractionVisualState::Focus);

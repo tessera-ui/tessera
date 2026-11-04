@@ -12,14 +12,14 @@ use tessera_components::{
         IconButtonShape, IconButtonSize, IconButtonVariant, IconButtonWidth, icon_button,
     },
     material_icons::filled,
-    menus::{MenuAnchor, MenuController, MenuPlacement, menu_item, menu_provider},
+    menus::{MenuController, MenuPlacement, menu_item, menu_provider},
     modifier::{ModifierExt as _, SemanticsArgs},
     shape_def::Shape,
     text::text,
     theme::MaterialTheme,
 };
 use tessera_ui::{
-    Color, Dp, Modifier, PxPosition, PxRect, PxSize,
+    Color, Dp, Modifier,
     accesskit::{HasPopup, Role},
     modifier::FocusModifierExt as _,
     remember, tessera, use_context,
@@ -360,20 +360,15 @@ fn mail_scene() {
     let read = remember(|| false);
     let deleted = remember(|| false);
     let menu = remember(MenuController::new);
-    let anchor = remember(PxRect::default);
-    let origin = remember(PxRect::default);
+    let anchor = remember(tessera_ui::LayoutCoordinates::default);
     let scheme = use_context::<MaterialTheme>().unwrap().get().color_scheme;
     boxed()
-        .modifier(Modifier::new().fill_max_width().height(Dp(320.0)).on_globally_positioned(move |rect| {
-            if origin.get() != rect { origin.set(rect); }
-        }))
+        .modifier(Modifier::new().fill_max_width().height(Dp(320.0)))
         .children(move || {
-            let a = anchor.get();
-            let o = origin.get();
             menu_provider()
                 .controller(menu)
                 .placement(MenuPlacement::BelowEnd)
-                .anchor(MenuAnchor::new(PxPosition::new(a.x - o.x, a.y - o.y), PxSize::new(a.width, a.height)))
+                .window_anchor(anchor)
                 .main_content(move || {
                     column()
                         .modifier(Modifier::new().fill_max_width().padding_all(Dp(24.0)).background_with_shape(scheme.surface_container_low, Shape::rounded_rectangle(Dp(24.0))).semantics(SemanticsArgs { role: Some(Role::Group), label: Some("Message actions".into()), merge_descendants: true, ..Default::default() }))
@@ -397,9 +392,7 @@ fn mail_scene() {
                                     .shape(Shape::CAPSULE)
                                     .icon(filled::MORE_VERT_SVG)
                                     .accessibility_label("More message options")
-                                    .modifier(Modifier::new().on_globally_positioned(move |rect| {
-                                        if anchor.get() != rect { anchor.set(rect); }
-                                    }).semantics(SemanticsArgs { expanded: Some(menu.with(MenuController::is_open)), has_popup: Some(HasPopup::Menu), ..Default::default() }))
+                                    .modifier(Modifier::new().on_layout_coordinates(move |coordinates| { anchor.set_if_changed(coordinates); }).semantics(SemanticsArgs { expanded: Some(menu.with(MenuController::is_open)), has_popup: Some(HasPopup::Menu), ..Default::default() }))
                                     .on_click(move || menu.with_mut(MenuController::toggle));
                             });
                             gap(Dp(16.0));

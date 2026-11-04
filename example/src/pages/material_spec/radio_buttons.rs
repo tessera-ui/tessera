@@ -20,8 +20,7 @@ use tessera_components::{
     theme::{MaterialTheme, material_theme},
 };
 use tessera_ui::{
-    Callback, Dp, FocusRequester, Modifier, RenderSlot, modifier::FocusModifierExt as _, remember,
-    tessera, use_context,
+    Callback, Dp, FocusRequester, Modifier, RenderSlot, remember, tessera, use_context,
 };
 
 use super::{

@@ -20,10 +20,7 @@ use tessera_components::{
     theme::{MaterialTheme, material_theme},
     tooltip::{TooltipController, TooltipPlacement, tooltip_anchor, tooltip_provider},
 };
-use tessera_ui::{
-    Dp, Modifier, RenderSlot, State, modifier::FocusModifierExt as _, remember, tessera,
-    use_context,
-};
+use tessera_ui::{Dp, Modifier, RenderSlot, State, remember, tessera, use_context};
 
 use super::{
     ACCENT,
