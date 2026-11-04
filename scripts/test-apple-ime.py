@@ -16,7 +16,8 @@ def run(*args, timeout=120):
     try:
         return subprocess.run(args, check=True, text=True, stdout=subprocess.PIPE, timeout=timeout).stdout
     except (subprocess.CalledProcessError, subprocess.TimeoutExpired) as error:
-        print(error.stdout or "", flush=True)
+        output = error.stdout or ""
+        print(output.decode(errors="replace") if isinstance(output, bytes) else output, flush=True)
         raise
 
 
@@ -51,7 +52,7 @@ booted = phone["state"] == "Booted"
 try:
     if not booted:
         run("xcrun", "simctl", "boot", udid)
-    run("xcrun", "simctl", "bootstatus", udid, "-b")
+    run("xcrun", "simctl", "bootstatus", udid, "-b", timeout=600)
     with tempfile.TemporaryDirectory() as directory:
         app = Path(directory) / "ImeTest.app"
         app.mkdir()

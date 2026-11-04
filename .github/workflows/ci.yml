@@ -16,6 +16,7 @@ jobs:
   build_and_test:
     name: Desktop (${{ matrix.os }})
     strategy:
+      fail-fast: false
       matrix:
         os: [ubuntu-latest, macos-latest]
     runs-on: ${{ matrix.os }}
