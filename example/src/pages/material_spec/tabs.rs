@@ -1640,11 +1640,9 @@ fn native_tabs_figure(
                     watch(geometry, "figure")
                         .fill_max_width()
                         .height(Dp(300.0 * scale))
-                        .on_globally_positioned(move |bounds: tessera_ui::PxRect| {
-                            let next = Dp::from_pixels_f32(bounds.width.to_f32());
-                            if art_width.get() != next {
-                                art_width.set(next);
-                            }
+                        .on_layout_size_changed(move |size: tessera_ui::PxSize| {
+                            let next = Dp::from_pixels_f32(size.width.to_f32());
+                            art_width.set_if_changed(next);
                         })
                         .background_with_shape(
                             scheme.surface_container,
@@ -2344,11 +2342,9 @@ fn secondary_measure_figure(inline_icons: bool) {
                     watch(geometry, "figure")
                         .fill_max_width()
                         .height(Dp(300.0 * scale))
-                        .on_globally_positioned(move |bounds: tessera_ui::PxRect| {
-                            let next = Dp::from_pixels_f32(bounds.width.to_f32());
-                            if art_width.get() != next {
-                                art_width.set(next);
-                            }
+                        .on_layout_size_changed(move |size: tessera_ui::PxSize| {
+                            let next = Dp::from_pixels_f32(size.width.to_f32());
+                            art_width.set_if_changed(next);
                         })
                         .background_with_shape(stage, Shape::rounded_rectangle(Dp(24.0))),
                 )

@@ -753,6 +753,11 @@ impl<'db> CallAnalyzer<'db> {
     }
 
     fn analyze_method_call(&mut self, call: ast::MethodCallExpr, color: ContextColor) {
+        if color == ContextColor::Tessera
+            && let Some(diagnostic) = self.redundant_shared_render_slot(&call)
+        {
+            self.diagnostics.push(diagnostic);
+        }
         let function = self
             .method_call_variants(&call)
             .find_map(|call| self.sema.resolve_method_call(&call));
@@ -1653,6 +1658,59 @@ fn plain() { foreign_component(); }
                     assert_eq!(messages[1].len(), 1);
                     assert!(messages[1][0].contains("remember"));
                 }
+            },
+        );
+    }
+
+    #[test]
+    fn shared_setters_warn_only_for_new_slots_and_require_ownership_review() {
+        with_analyzer(
+            r#"
+use tessera_ui::{RenderSlot as Slot, RenderSlotWith};
+
+#[tessera_ui::tessera]
+fn child() {}
+
+#[tessera_ui::tessera]
+fn host(slot: Option<tessera_ui::RenderSlot>, value: Option<RenderSlotWith<usize>>, unit: Option<RenderSlotWith<()>>) {}
+
+struct Other;
+impl Other {
+    fn slot(&self, _: usize) {}
+    fn slot_shared(&self, _: Slot) {}
+}
+
+#[tessera_ui::tessera]
+fn root() {
+    host().slot_shared(Slot::new(|| child()));
+    host().value_shared(RenderSlotWith::new(|_: usize| child()));
+    host().unit_shared(RenderSlotWith::new(|()| child()));
+    let saved = host();
+    if true {
+        saved.slot_shared(Slot::new(|| child()));
+    }
+    let shared = Slot::new(|| child());
+    host().slot_shared(shared);
+    Other.slot_shared(Slot::new(|| child()));
+}
+"#,
+            |analyzer| {
+                use super::super::types::Applicability;
+
+                assert_eq!(analyzer.diagnostics.len(), 4);
+                assert!(analyzer.diagnostics.iter().all(|diagnostic| diagnostic.code
+                    == super::super::error_codes::DiagnosticCode::Lint(
+                        super::super::error_codes::Lint::RedundantRenderSlot
+                    )));
+                let suggestions: Vec<_> = analyzer
+                    .diagnostics
+                    .iter()
+                    .flat_map(|diagnostic| &diagnostic.suggestions)
+                    .collect();
+                assert_eq!(suggestions.len(), 2);
+                assert!(suggestions.iter().all(|suggestion| suggestion.applicability
+                    == Applicability::MaybeIncorrect
+                    && suggestion.edits.len() == 3));
             },
         );
     }

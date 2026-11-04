@@ -98,8 +98,8 @@ fn figure(base_width: f64, height: f64, content: RenderSlotWith<f64>) {
                     scheme.surface_container_low,
                     Shape::rounded_rectangle(Dp(24.0)),
                 )
-                .on_globally_positioned(move |rect: tessera_ui::PxRect| {
-                    let next = Dp::from_pixels_f32(rect.width.to_f32()).0;
+                .on_layout_size_changed(move |size: tessera_ui::PxSize| {
+                    let next = Dp::from_pixels_f32(size.width.to_f32()).0;
                     if (width.get() - next).abs() > 0.1 {
                         width.set(next);
                     }

@@ -31,7 +31,7 @@ fn capsule_shape_for_height(height: Dp) -> Shape {
 }
 
 #[tessera]
-fn glass_progress_fill(
+pub(crate) fn glass_progress_fill(
     value: Option<f32>,
     tint_color: Option<Color>,
     blur_radius: Option<Dp>,
@@ -180,5 +180,66 @@ impl tessera_ui::LayoutModifierNode for GlassProgressLayout {
         let track_measurement = track.measure(input, &constraint)?;
         result.place_child(track, PxPosition::new(Px(0), Px(0)));
         Ok(result.with_size(track_measurement.size()))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use tessera_ui::testing::{layout_test, pump_layout_test_session, start_layout_test_session};
+
+    use crate::{column::column, glass_slider::glass_slider};
+
+    use super::*;
+
+    #[tessera]
+    fn controls(value: f32) {
+        column().children(move || {
+            glass_slider()
+                .modifier(Modifier::new().width(Dp(200.0)))
+                .track_height(Dp(20.0))
+                .track_border_width(Dp::ZERO)
+                .value(value);
+            glass_progress()
+                .modifier(Modifier::new().width(Dp(200.0)))
+                .height(Dp(20.0))
+                .track_border_width(Dp::ZERO)
+                .value(value);
+        });
+    }
+
+    #[test]
+    fn glass_controls_measure_their_painted_fill_from_clamped_progress() {
+        for (value, width) in [(-0.5, 0), (0.25, 50), (0.75, 150), (1.5, 200)] {
+            let mut session = start_layout_test_session(
+                layout_test(move || {
+                    controls(value);
+                })
+                .viewport_px(220, 60),
+            );
+            pump_layout_test_session(&mut session, 0);
+            let snapshot = session.inspect_components();
+            let sizes: Vec<_> = snapshot
+                .nodes()
+                .iter()
+                .filter(|node| {
+                    std::iter::successors(snapshot.parent(node), |parent| snapshot.parent(parent))
+                        .take_while(|parent| parent.layout_coordinates().is_none())
+                        .any(|parent| parent.name() == "fluid_glass_inner")
+                })
+                .filter_map(|node| {
+                    node.layout_coordinates()
+                        .map(|coordinates| coordinates.local_size)
+                })
+                .collect();
+            assert_eq!(
+                sizes,
+                [
+                    tessera_ui::PxSize::new(Px(200), Px(20)),
+                    tessera_ui::PxSize::new(Px(width), Px(20)),
+                    tessera_ui::PxSize::new(Px(200), Px(20)),
+                    tessera_ui::PxSize::new(Px(width), Px(20)),
+                ]
+            );
+        }
     }
 }

@@ -241,10 +241,10 @@ fn overview_art() {
                     scheme.surface_container_low,
                     Shape::rounded_rectangle(Dp(24.0)),
                 )
-                .on_globally_positioned(move |bounds: tessera_ui::PxRect| {
-                    let next = Dp::from_pixels_f32(bounds.width.to_f32()).0;
-                    if width.is_alive() && width.get() != next {
-                        width.set(next);
+                .on_layout_size_changed(move |size: tessera_ui::PxSize| {
+                    let next = Dp::from_pixels_f32(size.width.to_f32()).0;
+                    if width.is_alive() {
+                        width.set_if_changed(next);
                     }
                 }),
         )
@@ -661,10 +661,10 @@ fn button_state_matrix(style: ButtonVariant, toggle: bool) {
                 .fill_max_width()
                 .height(Dp(600.0 * scale))
                 .clip_to_bounds()
-                .on_globally_positioned(move |bounds: tessera_ui::PxRect| {
-                    let next = Dp::from_pixels_f32(bounds.width.to_f32()).0;
-                    if width.is_alive() && width.get() != next {
-                        width.set(next);
+                .on_layout_size_changed(move |size: tessera_ui::PxSize| {
+                    let next = Dp::from_pixels_f32(size.width.to_f32()).0;
+                    if width.is_alive() {
+                        width.set_if_changed(next);
                     }
                 }),
         )

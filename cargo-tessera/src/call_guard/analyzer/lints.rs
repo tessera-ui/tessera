@@ -1,7 +1,7 @@
 use ra_ap_base_db::SourceDatabase;
 use ra_ap_hir::{Local, PathResolution};
 use ra_ap_syntax::{
-    AstNode,
+    AstNode, SyntaxNode,
     ast::{self, HasArgList},
 };
 
@@ -14,6 +14,69 @@ use super::{
 };
 
 impl<'db> CallAnalyzer<'db> {
+    pub(super) fn redundant_shared_render_slot(
+        &self,
+        call: &ast::MethodCallExpr,
+    ) -> Option<Diagnostic> {
+        let name = call.name_ref()?;
+        let setter = name.text().strip_suffix("_shared")?;
+        let owner = self.method_call_implementing_type_key(call)?;
+        if !self.setter_accepts_render_slot_at(&owner, setter, 0) {
+            return None;
+        }
+        let mut args = call.arg_list()?.args();
+        let ast::Expr::CallExpr(constructor) = args.next()? else {
+            return None;
+        };
+        if args.next().is_some() {
+            return None;
+        }
+        let CallTarget::Resolved {
+            kind: CallKind::RuntimeApi(kind),
+            ..
+        } = self.resolve_call_target(&constructor)?
+        else {
+            return None;
+        };
+        if !matches!(
+            kind,
+            TesseraRuntimeApi::RenderSlotNew | TesseraRuntimeApi::RenderSlotWithNew
+        ) {
+            return None;
+        }
+        let source = self.sema.original_range(constructor.syntax());
+        let file_id = source.file_id.file_id(self.db);
+        let mut suggestions = Vec::new();
+        if kind == TesseraRuntimeApi::RenderSlotNew
+            && let Some(content) = constructor.arg_list()?.args().next()
+            && let Some(mut suggestion) =
+                self.direct_slot_suggestion(constructor.syntax(), content.syntax())
+        {
+            let method = self.sema.original_range(name.syntax());
+            if method.file_id == source.file_id {
+                suggestion.applicability = Applicability::MaybeIncorrect;
+                suggestion.edits.push(Edit {
+                    file_id,
+                    range: method.range,
+                    replacement: setter.into(),
+                });
+                suggestions.push(suggestion);
+            }
+        }
+        Some(Diagnostic {
+            code: DiagnosticCode::Lint(Lint::RedundantRenderSlot),
+            severity: cargo_metadata::diagnostic::DiagnosticLevel::Warning,
+            file_id,
+            range: source.range,
+            message: "redundant render-slot construction for a closure setter".into(),
+            label: format!("`{setter}` already accepts build content directly"),
+            help: format!("pass the build content to `{setter}`; use `{}` for an existing shared slot", name.text()),
+            notes: vec!["the closure setter creates its slot in the component declaration's scope; review ownership when moving this construction".into()],
+            suggestions,
+            boundary: None,
+        })
+    }
+
     pub(super) fn redundant_render_slot(&self, closure: &ast::ClosureExpr) -> Option<Diagnostic> {
         let statements = closure.syntax().parent().and_then(ast::StmtList::cast)?;
         if statements.tail_expr()?.syntax() != closure.syntax() {
@@ -80,53 +143,10 @@ impl<'db> CallAnalyzer<'db> {
             return None;
         }
         let block = statements.syntax().parent()?;
-        let block_source = self.sema.original_range(&block);
-        let content_source = self.sema.original_range(content.syntax());
-        let mut suggestions = Vec::new();
-        if block_source.file_id == source.file_id
-            && content_source.file_id == source.file_id
-            && block_source.range.contains_range(content_source.range)
-        {
-            let snapshot = self.db.file_text(file_id);
-            let range = content_source.range;
-            let replacement = &snapshot.text(self.db)
-                [u32::from(range.start()) as usize..u32::from(range.end()) as usize];
-            if replacement == content.syntax().text().to_string() {
-                let loses_comments = block.descendants_with_tokens().any(|token| {
-                    token.kind() == ra_ap_syntax::SyntaxKind::COMMENT
-                        && !content
-                            .syntax()
-                            .text_range()
-                            .contains_range(token.text_range())
-                });
-                suggestions.push(Suggestion {
-                    message: "pass the build closure directly".into(),
-                    applicability: if loses_comments {
-                        Applicability::MaybeIncorrect
-                    } else {
-                        Applicability::MachineApplicable
-                    },
-                    edits: vec![
-                        Edit {
-                            file_id,
-                            range: ra_ap_span::TextRange::new(
-                                block_source.range.start(),
-                                content_source.range.start(),
-                            ),
-                            replacement: String::new(),
-                        },
-                        Edit {
-                            file_id,
-                            range: ra_ap_span::TextRange::new(
-                                content_source.range.end(),
-                                block_source.range.end(),
-                            ),
-                            replacement: String::new(),
-                        },
-                    ],
-                });
-            }
-        }
+        let suggestions: Vec<_> = self
+            .direct_slot_suggestion(&block, content.syntax())
+            .into_iter()
+            .collect();
         Some(Diagnostic {
             code: DiagnosticCode::Lint(Lint::RedundantRenderSlot),
             severity: cargo_metadata::diagnostic::DiagnosticLevel::Warning,
@@ -146,6 +166,52 @@ impl<'db> CallAnalyzer<'db> {
                 boundary.range,
                 "this closure only expands the local slot".into(),
             )),
+        })
+    }
+
+    fn direct_slot_suggestion(
+        &self,
+        wrapper: &SyntaxNode,
+        content: &SyntaxNode,
+    ) -> Option<Suggestion> {
+        let source = self.sema.original_range(wrapper);
+        let inner = self.sema.original_range(content);
+        let file_id = source.file_id.file_id(self.db);
+        if !self.local_files.contains(&file_id)
+            || source.file_id != inner.file_id
+            || !source.range.contains_range(inner.range)
+        {
+            return None;
+        }
+        let snapshot = self.db.file_text(file_id);
+        let text = snapshot.text(self.db);
+        if text[u32::from(inner.range.start()) as usize..u32::from(inner.range.end()) as usize]
+            != content.text().to_string()
+        {
+            return None;
+        }
+        let loses_comments = wrapper.descendants_with_tokens().any(|token| {
+            token.kind() == ra_ap_syntax::SyntaxKind::COMMENT
+                && !content.text_range().contains_range(token.text_range())
+        });
+        Some(Suggestion {
+            message: "pass the build closure directly".into(),
+            applicability: if loses_comments {
+                Applicability::MaybeIncorrect
+            } else {
+                Applicability::MachineApplicable
+            },
+            edits: [
+                ra_ap_span::TextRange::new(source.range.start(), inner.range.start()),
+                ra_ap_span::TextRange::new(inner.range.end(), source.range.end()),
+            ]
+            .into_iter()
+            .map(|range| Edit {
+                file_id,
+                range,
+                replacement: String::new(),
+            })
+            .collect(),
         })
     }
 
