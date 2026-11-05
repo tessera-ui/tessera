@@ -1,5 +1,30 @@
 use std::{env, process::Command};
 
+pub(crate) fn assert_restored_pixels(before: &[u8], after: &[u8], width: usize) {
+    assert_eq!(before.len(), after.len());
+    for (index, (before, after)) in before
+        .chunks_exact(4)
+        .zip(after.chunks_exact(4))
+        .enumerate()
+    {
+        // Shadow atlas resampling adds a rounding step to translucent coverage.
+        let tolerance = if before[3] == 255 && after[3] == 255 {
+            1
+        } else {
+            2
+        };
+        assert!(
+            before
+                .iter()
+                .zip(after)
+                .all(|(a, b)| a.abs_diff(*b) <= tolerance),
+            "restored pixel at ({}, {}): {before:?} != {after:?}",
+            index % width,
+            index / width
+        );
+    }
+}
+
 pub(crate) fn run_isolated_test(name: &str, test: impl FnOnce()) {
     if env::var("TESSERA_ISOLATED_TEST").as_deref() == Ok(name) {
         test();

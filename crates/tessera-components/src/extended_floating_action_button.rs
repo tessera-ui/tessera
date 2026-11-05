@@ -621,18 +621,6 @@ mod tests {
         probe.get().expanded.expect("fixture state").set(true);
         renderer.render_frames(120);
         let restored = renderer.read_pixels().expect("restored pixels");
-        for (index, (before, after)) in expanded
-            .chunks_exact(4)
-            .zip(restored.chunks_exact(4))
-            .enumerate()
-        {
-            assert_eq!(
-                before,
-                after,
-                "restored pixel at ({}, {})",
-                index % 500,
-                index / 500
-            );
-        }
+        crate::test_utils::assert_restored_pixels(&expanded, &restored, 500);
     }
 }
