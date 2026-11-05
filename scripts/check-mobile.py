@@ -29,7 +29,12 @@ def wait(read, predicate):
         if predicate(records):
             return records
         time.sleep(0.2)
-    raise RuntimeError("Application did not publish the expected frame or lifecycle event")
+    latest = frame(records) or {}
+    raise RuntimeError(
+        "Application did not publish the expected frame or lifecycle event; "
+        f"events={[(item.get('type'), item.get('kind'), item.get('frame')) for item in records[-5:]]}, "
+        f"render_time_ns={latest.get('render_time_ns')}, components={len(latest.get('components', []))}"
+    )
 
 
 def frame(records):
@@ -99,8 +104,11 @@ def ios(udid, bundle):
     container = Path(run("xcrun", "simctl", "get_app_container", udid, identifier, "data"))
     trace = container / "Documents/acceptance.jsonl"
     trace.unlink(missing_ok=True)
+    output = Path("target/mobile-acceptance").resolve()
+    output.mkdir(parents=True, exist_ok=True)
+    stdout, stderr = output / "ios.stdout.log", output / "ios.stderr.log"
     env = dict(os.environ, SIMCTL_CHILD_TESSERA_PROFILING_OUTPUT=str(trace))
-    launch = lambda: run("xcrun", "simctl", "launch", udid, identifier, env=env)
+    launch = lambda: run("xcrun", "simctl", "launch", f"--stdout={stdout}", f"--stderr={stderr}", udid, identifier, env=env)
     def read():
         return trace.read_text() if trace.exists() else ""
     pid = launch().split(":")[-1].strip()
@@ -108,11 +116,14 @@ def ios(udid, bundle):
         verify(read, lambda: run("xcrun", "simctl", "launch", udid, "com.apple.mobilesafari"), launch)
         assert launch().split(":")[-1].strip() == pid, "Application restarted instead of resuming"
         run("xcrun", "simctl", "terminate", udid, identifier)
-        output = Path("target/mobile-acceptance/ios.jsonl")
-        output.parent.mkdir(parents=True, exist_ok=True)
-        output.write_text(read())
+    except Exception:
+        for path in (stdout, stderr):
+            if path.exists():
+                print(path.read_text(errors="replace")[-12000:], flush=True)
+        raise
     finally:
         subprocess.run(["xcrun", "simctl", "terminate", udid, identifier], capture_output=True)
+        (output / "ios.jsonl").write_text(read())
 
 
 if __name__ == "__main__":
