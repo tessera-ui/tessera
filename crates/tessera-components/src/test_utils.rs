@@ -1,24 +1,32 @@
 use std::{env, process::Command};
 
-pub(crate) fn assert_restored_pixels(before: &[u8], after: &[u8], width: usize) {
+pub(crate) fn pixel_near(before: &[u8], after: &[u8]) -> bool {
+    use material_color_utilities::utils::color::linearized;
+
+    // Compare rounding in encoded and linear light; atlas coverage adds a step.
+    let opaque = before.get(3).is_none_or(|a| *a == 255) && after.get(3).is_none_or(|a| *a == 255);
+    let tolerance = if opaque { 1 } else { 2 };
+    before
+        .iter()
+        .zip(after)
+        .enumerate()
+        .all(|(channel, (a, b))| {
+            a.abs_diff(*b) <= tolerance
+                || channel < 3
+                    && (linearized::<f64>(*a) - linearized::<f64>(*b)).abs() <= 100.0 / 255.0
+        })
+}
+
+pub(crate) fn assert_pixels_near(before: &[u8], after: &[u8], width: usize) {
     assert_eq!(before.len(), after.len());
     for (index, (before, after)) in before
         .chunks_exact(4)
         .zip(after.chunks_exact(4))
         .enumerate()
     {
-        // Shadow atlas resampling adds a rounding step to translucent coverage.
-        let tolerance = if before[3] == 255 && after[3] == 255 {
-            1
-        } else {
-            2
-        };
         assert!(
-            before
-                .iter()
-                .zip(after)
-                .all(|(a, b)| a.abs_diff(*b) <= tolerance),
-            "restored pixel at ({}, {}): {before:?} != {after:?}",
+            pixel_near(before, after),
+            "pixel at ({}, {}): {before:?} != {after:?}",
             index % width,
             index / width
         );

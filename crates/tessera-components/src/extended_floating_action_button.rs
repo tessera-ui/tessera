@@ -621,6 +621,6 @@ mod tests {
         probe.get().expanded.expect("fixture state").set(true);
         renderer.render_frames(120);
         let restored = renderer.read_pixels().expect("restored pixels");
-        crate::test_utils::assert_restored_pixels(&expanded, &restored, 500);
+        crate::test_utils::assert_pixels_near(&expanded, &restored, 500);
     }
 }

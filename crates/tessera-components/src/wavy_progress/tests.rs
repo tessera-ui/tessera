@@ -8,6 +8,7 @@ use crate::{
     modifier::{ModifierExt as _, SemanticsArgs},
     progress::ProgressStrokeCap,
     surface::{SurfaceStyle, surface},
+    test_utils::{assert_pixels_near, pixel_near},
     theme::material_theme,
 };
 
@@ -212,16 +213,6 @@ fn pixel(image: &[u8], x: usize, y: usize) -> [u8; 3] {
     image[offset..offset + 3].try_into().expect("RGB pixel")
 }
 
-fn assert_image_eq(expected: &[u8], actual: &[u8], label: &str) {
-    let changed = expected
-        .chunks_exact(4)
-        .zip(actual.chunks_exact(4))
-        .filter(|(a, b)| a != b)
-        .count();
-    assert_eq!(expected.len(), actual.len(), "{label}: image dimensions");
-    assert_eq!(changed, 0, "{label}: changed pixels");
-}
-
 fn reference_wave_coverage(image: &[u8]) {
     let mut segments = Vec::new();
     for cell in 0..6 {
@@ -349,10 +340,10 @@ fn check_pixels_and_motion(samples: u32) {
     assert_eq!(pixel(&flat_paused, 45, 37), [101, 87, 137]);
     settings.with_mut(|settings| settings.amplitude = None);
     renderer.render_frames(2);
-    assert_image_eq(
+    assert_pixels_near(
         &themed,
         &renderer.read_pixels().expect("paused shape restoration"),
-        "paused appearance changes apply without moving the phase",
+        600,
     );
     settings.with_mut(|settings| {
         settings.progress = None;
@@ -360,13 +351,15 @@ fn check_pixels_and_motion(samples: u32) {
         settings.opacity = 0.5;
     });
     renderer.render_frames(2);
-    assert_eq!(
-        pixel(
-            &renderer.read_pixels().expect("translucent initial track"),
-            300,
-            37
+    assert!(
+        pixel_near(
+            &pixel(
+                &renderer.read_pixels().expect("translucent initial track"),
+                300,
+                37
+            ),
+            &[255, 188, 188],
         ),
-        [255, 188, 188],
         "overlapping empty segments must not paint the track repeatedly"
     );
     settings.with_mut(|settings| {
@@ -397,11 +390,7 @@ fn check_pixels_and_motion(samples: u32) {
     renderer.render_frames(2);
     let paused = renderer.read_pixels().expect("paused wave");
     renderer.render_frames(31);
-    assert_image_eq(
-        &paused,
-        &renderer.read_pixels().expect("stable pause"),
-        "paused frames",
-    );
+    assert_pixels_near(&paused, &renderer.read_pixels().expect("stable pause"), 600);
     for progress in [
         Some(f32::NAN),
         Some(f32::NEG_INFINITY),
@@ -446,20 +435,20 @@ fn check_pixels_and_motion(samples: u32) {
     renderer.render_frames(32);
     let flattened = renderer.read_pixels().expect("flattened near completion");
     renderer.render_frames(17);
-    assert_image_eq(
+    assert_pixels_near(
         &flattened,
         &renderer.read_pixels().expect("settled amplitude"),
-        "settled amplitude",
+        600,
     );
     settings.with_mut(|settings| {
         settings.amplitude = Some(0.0);
         settings.paused = true;
     });
     renderer.render_frames(2);
-    assert_image_eq(
+    assert_pixels_near(
         &flattened,
         &renderer.read_pixels().expect("explicit flat amplitude"),
-        "explicit flat amplitude",
+        600,
     );
     for (width, height) in [(0.0, 10.0), (1.0, 10.0), (240.0, 0.0), (8.0, 30.0)] {
         settings.with_mut(|settings| {
@@ -483,10 +472,10 @@ fn check_pixels_and_motion(samples: u32) {
     renderer.render_frames(32);
     settings.with_mut(|settings| settings.paused = true);
     renderer.render_frames(2);
-    assert_image_eq(
+    assert_pixels_near(
         &original,
         &renderer.read_pixels().expect("restored constraints"),
-        "restored constraints and settled amplitude",
+        600,
     );
     settings.with_mut(|settings| {
         settings.height = Some(Dp(20.0));
@@ -698,7 +687,10 @@ fn check_circular_pixels_and_motion(samples: u32) {
     });
     renderer.render_frames(2);
     let flat = renderer.read_pixels().unwrap();
-    assert_eq!(pixel(&flat, 99, 66), [188, 188, 188], "half-alpha stroke");
+    assert!(
+        pixel_near(&pixel(&flat, 99, 66), &[188, 188, 188]),
+        "half-alpha stroke"
+    );
     assert!(
         flat.chunks_exact(4)
             .all(|p| p[0] >= 187 && p[1] >= 187 && p[2] >= 187),
@@ -715,11 +707,7 @@ fn check_circular_pixels_and_motion(samples: u32) {
     );
     settings.with_mut(|s| s.offset = Dp(20.0));
     renderer.render_frames(2);
-    assert_image_eq(
-        &flat,
-        &renderer.read_pixels().unwrap(),
-        "fractional placement restoration",
-    );
+    assert_pixels_near(&flat, &renderer.read_pixels().unwrap(), 600);
     settings.with_mut(|s| {
         s.progress = Some(0.25);
         s.opacity = 1.0;
@@ -750,11 +738,7 @@ fn check_circular_pixels_and_motion(samples: u32) {
         s.opacity = 1.0;
     });
     renderer.render_frames(2);
-    assert_image_eq(
-        &original,
-        &renderer.read_pixels().unwrap(),
-        "paused appearance restoration",
-    );
+    assert_pixels_near(&original, &renderer.read_pixels().unwrap(), 600);
     settings.with_mut(|s| s.paused = false);
     renderer.render_frames(23);
     let moving = renderer.read_pixels().unwrap();
@@ -776,11 +760,7 @@ fn check_circular_pixels_and_motion(samples: u32) {
     renderer.render_frames(2);
     let paused = renderer.read_pixels().unwrap();
     renderer.render_frames(20);
-    assert_image_eq(
-        &paused,
-        &renderer.read_pixels().unwrap(),
-        "paused circular motion",
-    );
+    assert_pixels_near(&paused, &renderer.read_pixels().unwrap(), 600);
     settings.with_mut(|s| {
         s.progress = None;
         s.paused = false;

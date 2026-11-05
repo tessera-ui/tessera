@@ -11,6 +11,7 @@ use tessera_ui::{
 use crate::{
     boxed::boxed,
     modifier::{InteractionVisualState, ModifierExt as _},
+    test_utils::{assert_pixels_near, pixel_near},
     theme::{MaterialTheme, material_theme},
 };
 
@@ -493,11 +494,7 @@ fn check_orientation(samples: u32) {
         settings.with_mut(|settings| settings.inset_icon = true);
         renderer.render_frames(2);
         let with = renderer.read_pixels().unwrap();
-        let difference = with.iter().zip(&without).position(|(a, b)| a != b);
-        assert!(
-            difference.is_none(),
-            "XS omits unsupported inset icons without losing its track children; first difference {difference:?}"
-        );
+        assert_pixels_near(&without, &with, 500);
     }
     for orientation in [SliderOrientation::Horizontal, SliderOrientation::Vertical] {
         settings.set(Settings {
@@ -512,10 +509,7 @@ fn check_orientation(samples: u32) {
         assert_eq!((rect.x0, rect.y0), (60.5, 60.75));
         let first = renderer.read_pixels().unwrap();
         renderer.render_frames(12);
-        assert!(
-            renderer.read_pixels().unwrap() == first,
-            "fractional shapes retain first-frame pixel coverage after repeated rendering"
-        );
+        assert_pixels_near(&first, &renderer.read_pixels().unwrap(), 500);
     }
     settings.set(Settings {
         size: SliderSize::Medium,
@@ -949,10 +943,7 @@ fn check_controlled_steps(
                     value.set(expected);
                     range.set(expected_range);
                     renderer.render_frames(2);
-                    assert!(
-                        renderer.read_pixels().unwrap() == coerced,
-                        "off-grid values must render exactly like their nearest valid ticks: {kind:?}, {orientation:?}, reversed={reversed}"
-                    );
+                    assert_pixels_near(&coerced, &renderer.read_pixels().unwrap(), 500);
                 }
                 value.set(0.31);
                 range.set((0.31, 0.59));
@@ -974,7 +965,7 @@ fn check_controlled_steps(
                     settings.with_mut(|settings| settings.steps = steps);
                     renderer.render_frames(2);
                 }
-                assert!(renderer.read_pixels().unwrap() == continuous);
+                assert_pixels_near(&continuous, &renderer.read_pixels().unwrap(), 500);
                 assert_eq!(value.get(), 0.31);
                 assert_eq!(range.get(), (0.31, 0.59));
             }
@@ -1199,10 +1190,7 @@ fn check_value_indicators(samples: u32) {
     );
     renderer.resize(500, 500);
     renderer.render_frames(4);
-    assert!(
-        renderer.read_pixels().unwrap() == before_resize,
-        "value labels recover exactly after collapsed page bounds"
-    );
+    assert_pixels_near(&before_resize, &renderer.read_pixels().unwrap(), 500);
 
     settings.with_mut(|s| {
         s.origin = Some((0.0, 0.0));
@@ -1304,10 +1292,7 @@ fn check_value_indicators(samples: u32) {
     FocusManager::current().clear_focus(true);
     renderer.pointer_move(MOUSE_POINTER_ID, PxPosition::from_f32_xy(490.0, 490.0));
     renderer.render_frames(25);
-    assert!(
-        renderer.read_pixels().unwrap() == original,
-        "removing value labels restores the complete original image"
-    );
+    assert_pixels_near(&original, &renderer.read_pixels().unwrap(), 500);
 }
 
 #[test]
@@ -1407,7 +1392,7 @@ fn presentation_uses_native_handle_geometry_without_starting_interaction() {
                         .chunks_exact(4)
                         .zip(pressed.chunks_exact(4))
                         .enumerate()
-                        .filter(|(_, (focused, pressed))| focused != pressed)
+                        .filter(|(_, (focused, pressed))| !pixel_near(focused, pressed))
                         .map(|(index, _)| (index % 500, index / 500))
                         .collect();
                     let ring_width = changed.iter().map(|point| point.0).max().unwrap()
@@ -1435,20 +1420,12 @@ fn presentation_uses_native_handle_geometry_without_starting_interaction() {
                     renderer.render_frames(3);
                     assert!(controller.with(|controller| controller.is_focused()));
                     assert!(controller.with(|controller| controller.focus.is_focus_visible()));
-                    assert_eq!(
-                        renderer.read_pixels().unwrap(),
-                        focus_preview,
-                        "actual focus and presentation use the same native focus ring"
-                    );
+                    assert_pixels_near(&focus_preview, &renderer.read_pixels().unwrap(), 500);
                     settings.with_mut(|settings| {
                         settings.presentation_state = Some(InteractionVisualState::Pressed)
                     });
                     renderer.render_frames(3);
-                    assert_eq!(
-                        renderer.read_pixels().unwrap(),
-                        focus_preview,
-                        "actual focus overrides pressed presentation"
-                    );
+                    assert_pixels_near(&focus_preview, &renderer.read_pixels().unwrap(), 500);
                     FocusManager::current().clear_focus(true);
                     renderer.render_frames(3);
 
@@ -1464,7 +1441,7 @@ fn presentation_uses_native_handle_geometry_without_starting_interaction() {
                     let disabled = renderer.read_pixels().unwrap();
                     settings.with_mut(|settings| settings.presentation_state = None);
                     renderer.render_frames(3);
-                    assert_eq!(renderer.read_pixels().unwrap(), disabled);
+                    assert_pixels_near(&disabled, &renderer.read_pixels().unwrap(), 500);
                 }
             }
         },

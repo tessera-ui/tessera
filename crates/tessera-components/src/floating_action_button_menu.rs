@@ -1157,6 +1157,6 @@ mod tests {
             .with_mut(FloatingActionButtonMenuState::open);
         renderer.render_frames(120);
         let reopened = renderer.read_pixels().unwrap();
-        crate::test_utils::assert_restored_pixels(&expanded, &reopened, 400);
+        crate::test_utils::assert_pixels_near(&expanded, &reopened, 400);
     }
 }

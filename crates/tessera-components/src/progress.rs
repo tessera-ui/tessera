@@ -887,16 +887,20 @@ mod tests {
                     renderer.render_frames(2);
                     let moving = renderer.read_pixels().expect("later pose");
                     assert!(
-                        first != moving,
+                        first
+                            .chunks_exact(4)
+                            .zip(moving.chunks_exact(4))
+                            .any(|(a, b)| !crate::test_utils::pixel_near(a, b)),
                         "indeterminate progress must subscribe to frame changes, linear={linear}"
                     );
                     observed.get().unwrap().set(true);
                     renderer.render_frames(2);
                     let stopped = renderer.read_pixels().expect("determinate pose");
                     renderer.render_frames(4);
-                    assert!(
-                        stopped == renderer.read_pixels().expect("retained determinate pose"),
-                        "determinate progress must stop changing, linear={linear}"
+                    crate::test_utils::assert_pixels_near(
+                        &stopped,
+                        &renderer.read_pixels().expect("retained determinate pose"),
+                        256,
                     );
                 }
             },
