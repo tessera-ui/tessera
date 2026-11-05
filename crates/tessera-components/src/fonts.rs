@@ -4,20 +4,11 @@
 
 use std::{cell::RefCell, sync::Arc};
 
-use tessera_ui::{Asset, EntryRegistry, LoadState, Resource, TesseraPackage};
+use tessera_ui::{EntryRegistry, LoadState, Resource, TesseraPackage};
+
+pub use tessera_ui::FontAsset as Font;
 
 use crate::{res, text::write_font_system, theme::TextStyle};
-
-/// An application font and the Unicode ranges for which it supplies fallback.
-#[derive(Clone, Copy)]
-pub struct Font {
-    /// The generated font asset.
-    pub asset: Asset,
-    /// The family name used by text styles.
-    pub family: &'static str,
-    /// Inclusive fallback ranges, independent of the selected family.
-    pub fallback: &'static [(u32, u32)],
-}
 
 /// An entry package supplying fonts on demand.
 pub struct Fonts(
@@ -60,32 +51,25 @@ impl Default for FontRegistry {
                 Font {
                     asset: res::ROBOTO_REGULAR_TTF,
                     family: "Roboto",
+                    coverage: &[],
                     fallback: &[],
                 },
                 Font {
                     asset: res::ROBOTO_MEDIUM_TTF,
                     family: "Roboto",
+                    coverage: &[],
                     fallback: &[],
                 },
                 Font {
                     asset: res::ROBOTO_BOLD_TTF,
                     family: "Roboto",
+                    coverage: &[],
                     fallback: &[],
-                },
-                Font {
-                    asset: res::NOTOSANSSC_REGULAR_OTF,
-                    family: "Noto Sans SC",
-                    fallback: &[
-                        (0x2e80, 0x9fff),
-                        (0xac00, 0xd7af),
-                        (0xf900, 0xfaff),
-                        (0xff00, 0xffef),
-                        (0x20000, 0x323af),
-                    ],
                 },
                 Font {
                     asset: res::NOTOCOLOREMOJI_COLRV0_TTF,
                     family: "Noto Color Emoji",
+                    coverage: &[],
                     fallback: &[
                         (0x20e3, 0x20e3),
                         (0x2300, 0x27ff),
@@ -94,7 +78,10 @@ impl Default for FontRegistry {
                         (0x1f000, 0x1faff),
                     ],
                 },
-            ],
+            ]
+            .into_iter()
+            .chain(res::FONT_SUBSETS.iter().copied())
+            .collect(),
             requests: Vec::new(),
             revision: 0,
         }
@@ -113,13 +100,16 @@ pub(crate) fn prepare(text: &str, style: TextStyle) -> u64 {
             if !requests
                 .iter()
                 .any(|request| request.font.asset == font.asset)
-                && (font.family == family
-                    || !font.fallback.is_empty()
-                        && text.chars().any(|c| {
-                            font.fallback
+                && (font.family == family && font.coverage.is_empty()
+                    || text.chars().any(|c| {
+                        let contains = |ranges: &[(u32, u32)]| {
+                            ranges
                                 .iter()
                                 .any(|&(start, end)| (start..=end).contains(&(c as u32)))
-                        }))
+                        };
+                        (font.coverage.is_empty() || contains(font.coverage))
+                            && (font.family == family || contains(font.fallback))
+                    }))
             {
                 requests.push(FontRequest {
                     font: *font,

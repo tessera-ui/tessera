@@ -23,7 +23,7 @@
     - [x] Linux
     - [x] iOS
   - [x] Tree-shaking for assets
-  - [ ] Unicode font subsets
+  - [x] Unicode font subsets
 - [x] WindowInsets padding/size helpers
 - [x] lazy_column
 - [x] lazy_row

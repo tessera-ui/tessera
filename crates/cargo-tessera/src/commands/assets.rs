@@ -9,8 +9,8 @@ use anyhow::{Context, Result, anyhow, ensure};
 use cargo_metadata::MetadataCommand;
 use globset::{Glob, GlobSet, GlobSetBuilder};
 use tessera_build::{
-    asset_files, asset_namespace, load_tessera_config_from_dir, normalize_asset_path,
-    platform_asset_path, resolve_assets_dir,
+    asset_namespace, load_tessera_config_from_dir, platform_asset_path, prepare_assets,
+    resolve_assets_dir,
 };
 
 #[derive(Debug)]
@@ -83,12 +83,10 @@ pub(super) fn collect_platform_asset_candidates(
             &package.name,
         )?;
         let namespace = asset_namespace(&package.name, &package.version);
-        for source_path in asset_files(&assets_dir)? {
-            let relative = source_path
-                .strip_prefix(&assets_dir)
-                .with_context(|| format!("Failed to relativize {}", source_path.display()))?;
-            let relative_path = normalize_asset_path(relative);
-            if assets.embed.contains(&relative_path) {
+        for asset in prepare_assets(&assets_dir, assets)? {
+            let source_path = asset.source;
+            let relative_path = asset.relative;
+            if asset.embedded {
                 continue;
             }
             let platform_path =

@@ -25,6 +25,7 @@ use quote::{format_ident, quote};
 use serde::Deserialize;
 use sha2::{Digest, Sha256};
 
+mod fonts;
 mod localization;
 
 /// Environment variable selecting the asset backend (`embed` or `platform`).
@@ -106,6 +107,10 @@ pub struct AssetsConfig {
     /// Asset paths embedded for immediate availability on every target.
     #[serde(default)]
     pub embed: Vec<String>,
+    /// TrueType fonts split into on-demand Unicode subsets, keyed by relative asset path.
+    /// Values are inclusive fallback ranges; an empty list selects all supported characters.
+    #[serde(default, rename = "font-subsets")]
+    pub font_subsets: BTreeMap<String, Vec<(u32, u32)>>,
     /// Asset directory relative to the package root. Defaults to `assets`.
     pub dir: Option<String>,
     /// Tree-shaking rules for retaining matched platform assets.
@@ -154,6 +159,52 @@ struct AssetEntry {
     platform_path: String,
     module_segments: Vec<(String, String)>,
     const_name: String,
+    font: Option<FontSubset>,
+}
+
+/// An asset ready for embedding or platform delivery.
+pub struct PreparedAsset {
+    /// Whether this asset is embedded on every target.
+    pub embedded: bool,
+    /// Source file, including generated font subsets.
+    pub source: PathBuf,
+    /// Logical path relative to the configured asset directory.
+    pub relative: String,
+    /// Unicode coverage for generated font subsets.
+    pub font: Option<FontSubset>,
+}
+
+/// Family and fallback coverage of a generated font subset.
+#[derive(Debug, Clone)]
+pub struct FontSubset {
+    /// Font family name.
+    pub family: String,
+    /// Inclusive Unicode ranges.
+    pub ranges: Vec<(u32, u32)>,
+}
+
+/// Prepares configured assets for embedding or platform delivery.
+pub fn prepare_assets(root: &Path, config: &AssetsConfig) -> Result<Vec<PreparedAsset>> {
+    let mut assets = Vec::new();
+    for source in asset_files(root)? {
+        let relative = normalize_asset_path(source.strip_prefix(root)?);
+        if let Some(ranges) = config.font_subsets.get(&relative) {
+            assets.extend(fonts::prepare(
+                &source,
+                &relative,
+                ranges,
+                config.embed.contains(&relative),
+                &env::temp_dir().join("tessera-font-subsets"),
+            )?);
+        }
+        assets.push(PreparedAsset {
+            embedded: config.embed.contains(&relative),
+            source,
+            relative,
+            font: None,
+        });
+    }
+    Ok(assets)
 }
 
 #[derive(Debug, Default)]
@@ -286,7 +337,8 @@ pub fn build() -> Result<()> {
             config
                 .as_ref()
                 .and_then(|config| config.assets.as_ref())
-                .map_or(&[], |assets| assets.embed.as_slice()),
+                .context("Missing assets configuration")?,
+            &out_dir.join("font-subsets"),
         )?;
     }
 
@@ -329,16 +381,16 @@ pub fn asset_files(root: &Path) -> Result<Vec<PathBuf>> {
 fn collect_assets(
     assets_dir: &Path,
     namespace: &str,
-    embedded: &[String],
+    config: &AssetsConfig,
+    cache: &Path,
 ) -> Result<Vec<AssetEntry>> {
-    let file_paths = asset_files(assets_dir)?;
+    let files = prepare_assets(assets_dir, config)?;
 
-    let mut entries = Vec::with_capacity(file_paths.len());
-    for absolute_path in file_paths {
-        let relative = absolute_path
-            .strip_prefix(assets_dir)
-            .with_context(|| format!("Failed to relativize {}", absolute_path.display()))?;
-        let relative_path = normalize_asset_path(relative);
+    let mut entries = Vec::with_capacity(files.len());
+    for file in files {
+        let mut absolute_path = file.source;
+        let relative_path = file.relative;
+        let relative = Path::new(&relative_path);
         let file_name = relative
             .file_name()
             .ok_or_else(|| anyhow!("Missing file name for {}", absolute_path.display()))?
@@ -357,13 +409,20 @@ fn collect_assets(
 
         let platform_path =
             platform_asset_path(namespace, &relative_path, &fs::read(&absolute_path)?);
+        if file.font.is_some() {
+            let target = cache.join(&relative_path);
+            fs::create_dir_all(target.parent().context("Missing subset directory")?)?;
+            fs::copy(&absolute_path, &target)?;
+            absolute_path = target;
+        }
         entries.push(AssetEntry {
-            embedded: embedded.contains(&relative_path),
+            embedded: file.embedded,
             absolute_path,
             relative_path,
             platform_path,
             module_segments,
             const_name,
+            font: file.font,
         });
     }
     Ok(entries)
@@ -376,11 +435,27 @@ fn generate_asset_file(entries: &[AssetEntry], backend: AssetBackend) -> Result<
     }
 
     let module_body_tokens = generate_module_body_tokens(&root, entries, backend)?;
+    let fonts = entries.iter().filter_map(|entry| {
+        let font = entry.font.as_ref()?;
+        let asset = generate_asset_value_tokens(entry, backend);
+        let family = &font.family;
+        let ranges = font.ranges.iter().map(|(start, end)| quote! { (#start, #end) }).collect::<Vec<_>>();
+        Some(quote! { tessera_ui::FontAsset { asset: #asset, family: #family, fallback: &[#(#ranges),*], coverage: &[#(#ranges),*] } })
+    }).collect::<Vec<_>>();
+    if !fonts.is_empty() && root.assets.contains_key("FONT_SUBSETS") {
+        bail!("Asset name FONT_SUBSETS is reserved when generating font subsets");
+    }
+    let fonts = (!fonts.is_empty()).then(|| {
+        quote! {
+            pub const FONT_SUBSETS: &[tessera_ui::FontAsset] = &[#(#fonts),*];
+        }
+    });
 
     let file_tokens = quote! {
         pub use tessera_ui::Asset;
 
         #module_body_tokens
+        #fonts
     };
 
     let file = syn::parse2::<syn::File>(file_tokens)

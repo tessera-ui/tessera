@@ -2,5 +2,8 @@
 dir = "assets"
 embed = ["Roboto-Regular.ttf"]
 
+[assets.font-subsets]
+"NotoSansSC-Regular.ttf" = [[0x2e80, 0x9fff], [0xac00, 0xd7af], [0xf900, 0xfaff], [0xff00, 0xffef], [0x20000, 0x323af]]
+
 [i18n]
 fallback = "en"

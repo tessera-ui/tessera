@@ -32,31 +32,37 @@ pub(crate) const FONTS: Fonts = Fonts(&[
         asset: crate::res::material_spec::EXAMPLESANSDISPLAY_TTF,
         family: "Example Sans Display",
         fallback: &[],
+        coverage: &[],
     },
     Font {
         asset: crate::res::material_spec::EXAMPLESANSTEXT_TTF,
         family: "Example Sans Text",
         fallback: &[],
+        coverage: &[],
     },
     Font {
         asset: crate::res::material_spec::EXAMPLESANSTABS_TTF,
         family: "Example Sans Tabs",
         fallback: &[],
+        coverage: &[],
     },
     Font {
         asset: crate::res::material_spec::EXAMPLESANSTABSHOVER_TTF,
         family: "Example Sans Tabs Hover",
         fallback: &[],
+        coverage: &[],
     },
     Font {
         asset: crate::res::material_spec::EXAMPLESANSTABSSELECTED_TTF,
         family: "Example Sans Tabs Selected",
         fallback: &[],
+        coverage: &[],
     },
     Font {
         asset: crate::res::material_spec::EXAMPLESANSTABSPRESSED_TTF,
         family: "Example Sans Tabs Pressed",
         fallback: &[],
+        coverage: &[],
     },
 ]);
 

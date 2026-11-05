@@ -740,13 +740,28 @@ mod tests {
             );
             assert!(regular.size[0] > untracked.size[0]);
             let chinese = shape("中文", typography.body_large);
+            let named = shape(
+                "中文",
+                crate::theme::TextStyle {
+                    font_family: Some("Noto Sans SC"),
+                    ..typography.body_large
+                },
+            );
             let font_system = read_font_system();
-            let glyphs: Vec<_> = chinese
-                .text_buffer
-                .layout_runs()
-                .flat_map(|run| run.glyphs)
+            let chinese_faces = font_system
+                .db()
+                .faces()
+                .filter(|face| face.families.iter().any(|(name, _)| name == "Noto Sans SC"))
+                .count();
+            assert_eq!(
+                chinese_faces, 2,
+                "only the two requested Unicode blocks should load"
+            );
+            let glyphs: Vec<_> = [&chinese, &named]
+                .into_iter()
+                .flat_map(|data| data.text_buffer.layout_runs().flat_map(|run| run.glyphs))
                 .collect();
-            assert_eq!(glyphs.len(), 2);
+            assert_eq!(glyphs.len(), 4);
             for glyph in glyphs {
                 assert_ne!(glyph.glyph_id, 0);
                 assert!(
@@ -765,6 +780,16 @@ mod tests {
                 assert_eq!(face.weight.0, weight);
                 assert!(face.families.iter().any(|(family, _)| family == "Roboto"));
             }
+            drop(font_system);
+            let standard = shape("、", typography.body_large);
+            let variant = shape("、\u{fe01}", typography.body_large);
+            let first =
+                |data: &TextData| data.text_buffer.layout_runs().next().unwrap().glyphs[0].glyph_id;
+            assert_ne!(
+                first(&standard),
+                first(&variant),
+                "CJK variation sequences must retain their glyphs"
+            );
         });
     }
 }

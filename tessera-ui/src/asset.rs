@@ -39,6 +39,19 @@ pub struct Asset {
     bytes: Option<&'static [u8]>,
 }
 
+/// A font resource and the Unicode ranges that request it as a fallback.
+#[derive(Clone, Copy)]
+pub struct FontAsset {
+    /// Font data.
+    pub asset: Asset,
+    /// Family selected by text styles.
+    pub family: &'static str,
+    /// Inclusive Unicode ranges that trigger automatic fallback loading.
+    pub fallback: &'static [(u32, u32)],
+    /// Restricts requests to these supported ranges; empty means unrestricted.
+    pub coverage: &'static [(u32, u32)],
+}
+
 /// A shared resource lifetime. Retain it while observing its loading state.
 #[derive(Clone)]
 pub struct Resource<T: Send + Sync + 'static>(Arc<ResourceEntry<T>>);
