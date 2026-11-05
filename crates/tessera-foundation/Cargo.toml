@@ -8,4 +8,4 @@ homepage.workspace = true
 description = "Foundation primitives and shared UI building blocks for tessera-ui."
 
 [dependencies]
-tessera-ui = { path = "../../tessera-ui" }
+tessera-ui = { path = "../../tessera-ui", version = "2.5.0" }

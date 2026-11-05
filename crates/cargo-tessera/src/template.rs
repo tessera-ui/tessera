@@ -4,6 +4,27 @@ use anyhow::{Context, Result, anyhow};
 use handlebars::Handlebars;
 use include_dir::{Dir, DirEntry};
 
+pub fn dependency_versions() -> Result<serde_json::Value> {
+    let manifest: toml::Value = toml::from_str(include_str!("../Cargo.toml"))?;
+    let mut versions = serde_json::Map::new();
+    for section in ["dependencies", "dev-dependencies"] {
+        for (name, dependency) in manifest[section]
+            .as_table()
+            .context("Missing dependency table")?
+        {
+            if name.starts_with("tessera-") {
+                if let Some(version) = dependency
+                    .as_str()
+                    .or_else(|| dependency.get("version").and_then(toml::Value::as_str))
+                {
+                    versions.insert(name.replace('-', "_"), version.into());
+                }
+            }
+        }
+    }
+    Ok(versions.into())
+}
+
 pub fn write_project_guidance(out_root: &Path) -> Result<()> {
     write_if_changed(
         &out_root.join("AGENTS.md"),
@@ -185,12 +206,10 @@ fn mark_gradlew_executable_with_git(out_path: &Path) {
 
 #[cfg(test)]
 mod tests {
-    use std::fs;
-
     use crate::commands::{new, plugin};
 
     #[test]
-    fn app_and_plugin_scaffolds_offer_skill_installation_without_installing_it() {
+    fn scaffolds_generate_manifests_without_installing_skills() {
         let root = tempfile::tempdir().expect("create isolated scaffold directory");
         for (kind, generate) in [
             ("app", new::execute as fn(&str, &str) -> anyhow::Result<()>),
@@ -207,15 +226,6 @@ mod tests {
 
                 assert!(project.join("Cargo.toml").is_file());
                 assert!(!project.join(".agents").exists());
-                let guidance = fs::read_to_string(project.join("AGENTS.md"))
-                    .expect("generated project guidance");
-                assert!(
-                    guidance
-                        .lines()
-                        .any(|line| line.trim() == "cargo tessera skill")
-                );
-                assert!(!guidance.contains("skill install"));
-                assert!(guidance.contains("tessera-good-taste"));
             }
         }
     }

@@ -8,4 +8,6 @@ Preview the release plan:
 rust-script scripts/release-package.rs
 ```
 
-Add `--major <package>` to request a major release. Add `--execute` to publish the reviewed plan to crates.io and push release commits and tags.
+Run `rust-script scripts/release-package.rs --check` to verify packaged sources, scaffolds and installed resources without publishing. Publish versioned fork dependencies before releasing the workspace.
+
+Use `--major <package>` to request a major bump. Use `--prepare` to write versions, dependency requirements and changelogs for review. Use `--execute` from a clean checkout to verify packages, publish them, then push the release commit and tags.

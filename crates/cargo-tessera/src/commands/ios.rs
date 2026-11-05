@@ -8,7 +8,7 @@ use anyhow::{Context, Result, ensure};
 use clap::Args;
 use plist::{Dictionary, Value};
 use serde::Deserialize;
-use tessera_build::asset_files;
+use tessera_build::{AssetBackend, asset_files};
 
 use crate::output;
 
@@ -26,6 +26,9 @@ pub struct BuildOptions {
     package: Option<String>,
     #[arg(long)]
     bin: Option<String>,
+    /// Write frame profiling JSONL to this application path
+    #[arg(long)]
+    profiling_output: Option<PathBuf>,
     /// Code-signing certificate name; defaults to ad hoc signing
     #[arg(long)]
     signing_identity: Option<String>,
@@ -101,7 +104,12 @@ pub fn build(options: BuildOptions) -> Result<()> {
     };
     run(Command::new("xcrun").args(["--sdk", sdk, "--show-sdk-path"]))?;
     run(Command::new("rustup").args(["target", "add", target]))?;
-    let executable = app.build(options.release, Some(target))?;
+    let executable = app.build(
+        options.release,
+        Some(target),
+        options.profiling_output.as_deref(),
+        AssetBackend::Platform,
+    )?;
     let output = app.output_dir().join("ios").join(target);
     let root = if options.device {
         output.join(&app.binary).join("Payload")

@@ -833,9 +833,13 @@ dependencies = [
  "sha2",
  "tempfile",
  "tessera-build",
+ "tessera-components",
  "tessera-mobile",
+ "tessera-ui",
  "text-size",
  "toml",
+ "unicode-ident",
+ "unicode-properties",
  "unicode-width 0.2.3",
  "wasm-bindgen-cli-support",
  "windows-sys 0.61.2",
@@ -7168,6 +7172,8 @@ dependencies = [
  "parking_lot",
  "smallvec",
  "tessera-build",
+ "tessera-font-noto-color-emoji",
+ "tessera-font-noto-sans-sc",
  "tessera-foundation",
  "tessera-glyphon",
  "tessera-i18n",
@@ -7200,6 +7206,22 @@ dependencies = [
  "unicode-linebreak",
  "unicode-script",
  "unicode-segmentation",
+]
+
+[[package]]
+name = "tessera-font-noto-color-emoji"
+version = "0.1.0"
+dependencies = [
+ "tessera-build",
+ "tessera-ui",
+]
+
+[[package]]
+name = "tessera-font-noto-sans-sc"
+version = "0.1.0"
+dependencies = [
+ "tessera-build",
+ "tessera-ui",
 ]
 
 [[package]]
@@ -7259,6 +7281,7 @@ dependencies = [
  "heck 0.5.0",
  "home",
  "ignore",
+ "include_dir",
  "java-properties",
  "libc",
  "log",

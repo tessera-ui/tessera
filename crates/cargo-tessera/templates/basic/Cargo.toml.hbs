@@ -13,11 +13,11 @@ name = "{{project_name_snake}}"
 path = "src/main.rs"
 
 [dependencies]
-tessera-ui = "2"
-tessera-components = "2"
+tessera-ui = "{{versions.tessera_ui}}"
+tessera-components = "{{versions.tessera_components}}"
 
 [target.'cfg(target_family = "wasm")'.dependencies]
 wasm-bindgen = "0.2.105"
 
 [build-dependencies]
-tessera-build = "0.1"
+tessera-build = "{{versions.tessera_build}}"

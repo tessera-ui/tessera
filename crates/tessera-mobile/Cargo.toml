@@ -59,6 +59,7 @@ native-tls = ["ureq/native-tls"]
 default = ["cli", "native-tls"]
 
 [dependencies]
+include_dir = "0.7"
 handlebars = "6"
 serde_json = "1"
 colored = "3.1"

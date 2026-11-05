@@ -1,0 +1,5 @@
+[assets]
+dir = "assets"
+
+[assets.tree_shaking]
+exclude = ["*.LICENSE"]

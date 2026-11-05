@@ -67,7 +67,7 @@ impl Default for FontRegistry {
                     fallback: &[],
                 },
                 Font {
-                    asset: res::NOTOCOLOREMOJI_COLRV0_TTF,
+                    asset: tessera_font_noto_color_emoji::NOTOCOLOREMOJI_COLRV0_TTF,
                     family: "Noto Color Emoji",
                     coverage: &[],
                     fallback: &[
@@ -80,7 +80,7 @@ impl Default for FontRegistry {
                 },
             ]
             .into_iter()
-            .chain(res::FONT_SUBSETS.iter().copied())
+            .chain(tessera_font_noto_sans_sc::FONT_SUBSETS.iter().copied())
             .collect(),
             requests: Vec::new(),
             revision: 0,

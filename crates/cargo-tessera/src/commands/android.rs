@@ -11,7 +11,7 @@ use cargo_metadata::MetadataCommand;
 use cargo_mobile2::{
     ChildHandle,
     android::{
-        self,
+        self, PROJECT_TEMPLATE as ANDROID_TEMPLATE_DIR,
         config::{
             Config as AndroidConfig, DEFAULT_VULKAN_VALIDATION, Metadata as AndroidMetadata,
             Raw as RawAndroidConfig,
@@ -28,7 +28,6 @@ use cargo_mobile2::{
 };
 use clap::ValueEnum;
 use handlebars::{Handlebars, handlebars_helper};
-use include_dir::{Dir, include_dir};
 use notify::{Event, EventKind, RecursiveMode, Watcher};
 use serde::Deserialize;
 use serde_json::{Value, json};
@@ -51,8 +50,6 @@ const DEFAULT_ARCH: &str = "arm64";
 const DEFAULT_MIN_SDK_VERSION: u32 = 24;
 const DEFAULT_ANDROID_ACTIVITY: &str = ".TesseraGameActivity";
 const DEFAULT_ANDROID_THEME_PARENT: &str = "Theme.AppCompat.Light.NoActionBar";
-const ANDROID_TEMPLATE_DIR: Dir<'_> =
-    include_dir!("$CARGO_MANIFEST_DIR/../tessera-mobile/templates/platforms/android-studio");
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq, ValueEnum)]
 pub enum AndroidFormat {

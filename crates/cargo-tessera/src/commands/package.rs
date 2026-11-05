@@ -2,6 +2,7 @@ use std::process::Command;
 
 use anyhow::{Context, Result, bail, ensure};
 use serde_json::json;
+use tessera_build::AssetBackend;
 
 use crate::output;
 
@@ -36,7 +37,7 @@ pub fn execute(
     }) {
         bail!("Use the Android, iOS or Web build command for this target");
     }
-    let executable = app.build(release, target)?;
+    let executable = app.build(release, target, None, AssetBackend::Platform)?;
     let out = app.output_dir();
     let config = &mut app.config;
     config["binaries"] = json!([{ "path": app.binary, "main": true }]);

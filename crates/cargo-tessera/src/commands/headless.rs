@@ -20,9 +20,11 @@ use std::{
 };
 
 use anyhow::{Result, anyhow, bail};
-use cargo_metadata::{MetadataCommand, TargetKind};
 use serde::Deserialize;
 use serde_json::{Value, json};
+use tessera_build::AssetBackend;
+
+use super::application::Application;
 
 /// Runs the headless supervisor loop until stdin closes or `shutdown` arrives.
 pub fn execute(
@@ -441,9 +443,12 @@ fn launch_worker(
     frame_time_ms: u32,
     profiling_output: Option<&Path>,
 ) -> Result<Session> {
-    let profiling = profiling_output.is_some();
-    build_package(package, release, profiling)?;
-    let binary = resolve_binary(package, release)?;
+    let binary = Application::new(Some(package), None)?.build(
+        release,
+        None,
+        profiling_output,
+        AssetBackend::Embed,
+    )?;
 
     let mut child_command = Command::new(&binary);
     child_command
@@ -492,57 +497,6 @@ fn launch_worker(
         stdin,
         stdout,
     })
-}
-
-fn build_package(package: &str, release: bool, profiling: bool) -> Result<()> {
-    eprintln!("[headless] building package `{package}`");
-    let mut command = Command::new("cargo");
-    command.arg("build").arg("-p").arg(package);
-    if release {
-        command.arg("--release");
-    }
-    if profiling {
-        command.arg("--features").arg("tessera-ui/profiling");
-    }
-    let status = command
-        .status()
-        .map_err(|err| anyhow!("failed to run cargo build: {err}"))?;
-    if !status.success() {
-        bail!("cargo build -p {package} failed with status {status}");
-    }
-    Ok(())
-}
-
-fn resolve_binary(package: &str, release: bool) -> Result<PathBuf> {
-    let metadata = MetadataCommand::new().no_deps().exec()?;
-    let pkg = metadata
-        .packages
-        .iter()
-        .find(|pkg| pkg.name.as_str() == package)
-        .ok_or_else(|| anyhow!("package `{package}` not found in cargo metadata"))?;
-
-    let binary = pkg
-        .targets
-        .iter()
-        .filter(|target| {
-            target
-                .kind
-                .iter()
-                .any(|kind| matches!(kind, TargetKind::Bin))
-        })
-        .min_by_key(|target| usize::from(target.name.as_str() != package))
-        .ok_or_else(|| anyhow!("package `{package}` has no binary target"))?;
-
-    let profile = if release { "release" } else { "debug" };
-    let file_name = format!("{}{}", binary.name, std::env::consts::EXE_SUFFIX);
-    let path = metadata.target_directory.join(profile).join(file_name);
-    if !path.exists() {
-        bail!(
-            "expected worker binary at `{}`, but it does not exist",
-            path
-        );
-    }
-    Ok(path.into_std_path_buf())
 }
 
 fn resolve_out_path(path: &str) -> String {

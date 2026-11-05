@@ -1,5 +1,6 @@
 [package]
 name = "example"
+publish = false
 version = "0.1.0"
 edition.workspace = true
 license.workspace = true
@@ -20,17 +21,17 @@ path = "src/main.rs"
 md3-diagnostics = []
 
 [dependencies]
-tessera-shard = { path = "../crates/tessera-shard" }
-tessera-ui = { path = "../tessera-ui", features = ["headless"] }
-tessera-components = { path = "../crates/tessera-components" }
-tessera-platform = { path = "../crates/tessera-platform" }
-tessera-i18n = { path = "../crates/tessera-i18n" }
+tessera-shard = { path = "../crates/tessera-shard", version = "0.4.2" }
+tessera-ui = { path = "../tessera-ui", features = ["headless"], version = "2.5.0" }
+tessera-components = { path = "../crates/tessera-components", version = "2.7.0" }
+tessera-platform = { path = "../crates/tessera-platform", version = "0.1.0" }
+tessera-i18n = { path = "../crates/tessera-i18n", version = "0.1.0" }
 
 [target.'cfg(target_family = "wasm")'.dependencies]
 wasm-bindgen = "0.2.105"
 
 [build-dependencies]
-tessera-build = { path = "../crates/tessera-build" }
+tessera-build = { path = "../crates/tessera-build", version = "0.1.0" }
 
 [dev-dependencies]
-tessera-ui = { path = "../tessera-ui", features = ["testing"] }
+tessera-ui = { path = "../tessera-ui", features = ["testing"], version = "2.5.0" }

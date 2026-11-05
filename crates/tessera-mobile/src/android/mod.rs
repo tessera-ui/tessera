@@ -17,3 +17,7 @@ pub mod target;
 pub static NAME: &str = "android";
 pub static DEFAULT_ACTIVITY: &str = "android.app.NativeActivity";
 pub static DEFAULT_THEME_PARENT: &str = "android:Theme.Material.Light.DarkActionBar";
+
+/// Android Studio project files for application generators.
+pub static PROJECT_TEMPLATE: include_dir::Dir<'static> =
+    include_dir::include_dir!("$CARGO_MANIFEST_DIR/templates/platforms/android-studio");

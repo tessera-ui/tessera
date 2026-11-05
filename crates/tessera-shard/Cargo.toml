@@ -10,11 +10,11 @@ homepage.workspace = true
 [dependencies]
 futures-util = "0.3.31"
 parking_lot = "0.12.5"
-tessera-macros = { path = "../tessera-macros" }
-tessera-ui = { path = "../../tessera-ui" }
+tessera-macros = { path = "../tessera-macros", version = "0.4.4" }
+tessera-ui = { path = "../../tessera-ui", version = "2.5.0" }
 
 [dev-dependencies]
-tessera-ui = { path = "../../tessera-ui", features = ["testing"] }
+tessera-ui = { path = "../../tessera-ui", features = ["testing"], version = "2.5.0" }
 
 [target.'cfg(not(target_family = "wasm"))'.dependencies]
 tokio = { version = "1.51.1", features = ["full"] }

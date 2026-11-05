@@ -222,10 +222,13 @@ fn web_build_command(project_dir: &Path, release: bool, features: &[String]) -> 
         .arg(WASM_TARGET)
         .env("TESSERA_ASSET_BACKEND", AssetBackend::Platform.as_str());
     if release {
-        cmd.env(
-            "CARGO_PROFILE_RELEASE_OPT_LEVEL",
-            std::env::var("CARGO_PROFILE_RELEASE_OPT_LEVEL").unwrap_or_else(|_| "z".into()),
-        );
+        for (name, default) in [
+            ("CARGO_PROFILE_RELEASE_OPT_LEVEL", "z"),
+            ("CARGO_PROFILE_RELEASE_CODEGEN_UNITS", "1"),
+            ("CARGO_PROFILE_RELEASE_LTO", "true"),
+        ] {
+            cmd.env(name, std::env::var(name).unwrap_or_else(|_| default.into()));
+        }
         cmd.arg("--release");
     }
 

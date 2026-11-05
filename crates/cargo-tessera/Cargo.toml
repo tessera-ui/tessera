@@ -19,7 +19,7 @@ path = "src/main.rs"
 aho-corasick = "1.1"
 annotate-snippets = "0.12.17"
 anyhow = "1.0"
-cargo_mobile2 = { package = "tessera-mobile", path = "../tessera-mobile", default-features = false, features = [
+cargo_mobile2 = { package = "tessera-mobile", path = "../tessera-mobile", version = "0.1.0", default-features = false, features = [
     "native-tls",
 ] }
 cargo_metadata = "0.23"
@@ -57,8 +57,11 @@ serde = { version = "1.0", features = ["derive"] }
 serde_json = { version = "1", features = ["unbounded_depth"] }
 sha2 = "0.10"
 text-size = { version = "1.1", features = ["serde"] }
-tessera-build = { path = "../tessera-build" }
+tessera-build = { path = "../tessera-build", version = "0.1.0" }
 toml = "1.1.0"
+# The rust-analyzer lexer requires Unicode 17 in both Unicode dependencies.
+unicode-ident = "=1.0.24"
+unicode-properties = { version = "=0.1.4", default-features = false }
 unicode-width = "0.2"
 wasm-bindgen-cli-support = "0.2.114"
 interprocess = "2.4.4"
@@ -70,3 +73,7 @@ windows-sys = { version = "0.61", features = ["Win32_System_Pipes"] }
 
 [target.'cfg(unix)'.dependencies]
 libc = "0.2"
+
+[dev-dependencies]
+tessera-ui = { path = "../../tessera-ui", version = "2.5.0" }
+tessera-components = { path = "../tessera-components", version = "2.7.0" }

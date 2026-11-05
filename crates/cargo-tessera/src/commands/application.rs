@@ -1,4 +1,4 @@
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result, ensure};
 use cargo_metadata::{MetadataCommand, Package};
@@ -61,15 +61,21 @@ impl Application {
         })
     }
 
-    pub fn build(&self, release: bool, target: Option<&str>) -> Result<PathBuf> {
+    pub fn build(
+        &self,
+        release: bool,
+        target: Option<&str>,
+        profiling_output: Option<&Path>,
+        backend: AssetBackend,
+    ) -> Result<PathBuf> {
         build::execute(
             release,
             target,
             Some(self.package.name.as_str()),
             Some(&self.binary),
-            None,
+            profiling_output,
             false,
-            Some(AssetBackend::Platform),
+            Some(backend),
         )?
         .into_iter()
         .find(|path| {

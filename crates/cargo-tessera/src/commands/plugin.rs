@@ -8,7 +8,7 @@ use serde_json::json;
 
 use crate::{
     output,
-    template::{write_project_guidance, write_template_dir_at},
+    template::{dependency_versions, write_project_guidance, write_template_dir_at},
 };
 
 static TEMPLATES: Dir = include_dir!("$CARGO_MANIFEST_DIR/templates/plugin");
@@ -77,6 +77,7 @@ fn generate_from_template(project_dir: &Path, template: &str) -> Result<()> {
     handlebars.register_escape_fn(handlebars::no_escape);
 
     let data = json!({
+        "versions": dependency_versions()?,
         "project_name": project_name,
         "project_name_snake": project_name_snake,
         "android": {

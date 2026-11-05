@@ -9,7 +9,7 @@ description = "Platform services and plugins for Tessera."
 
 [dependencies]
 parking_lot = "0.12.5"
-tessera-ui = { path = "../../tessera-ui" }
+tessera-ui = { path = "../../tessera-ui", version = "2.5.0" }
 tracing = "0.1.44"
 
 [target.'cfg(not(any(target_os = "android", target_os = "ios", target_family = "wasm")))'.dependencies]

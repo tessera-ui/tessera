@@ -1,847 +1,789 @@
 #!/usr/bin/env rust-script
-//!
 //! ```cargo
 //! [package]
 //! edition = "2024"
-//!
 //! [dependencies]
-//! clap = { version = "4.0", features = ["derive"] }
-//! anyhow = "1.0"
-//! toml_edit = "0.22"
-//! chrono = "0.4"
-//! tabled = "0.15"
-//! diffy = "0.3"
-//! colored = "2.1"
+//! anyhow = "1"
+//! cargo_metadata = "0.23"
+//! clap = { version = "4", features = ["derive"] }
+//! semver = "1"
+//! serde_json = "1"
+//! flate2 = "1"
+//! tar = "0.4"
+//! tempfile = "3"
+//! toml_edit = "0.25"
 //! ```
-//! release-package.rs
-//! A release tool for tessera, similar to cargo-release but project-specific.
 
 use std::{
-    collections::{HashMap, HashSet},
+    collections::BTreeMap,
     fs,
-    path::Path,
-    process::Command,
+    io::Write,
+    process::{Command, Stdio},
 };
 
-use anyhow::{Result, bail};
-use clap::{Parser, ValueEnum};
-use colored::*;
-use tabled::Tabled;
-use toml_edit::{DocumentMut, value};
+use anyhow::{Context, Result, ensure};
+use cargo_metadata::{Metadata, MetadataCommand};
+use clap::Parser;
+use semver::Version;
+use serde_json::{Value, json};
+use toml_edit::{DocumentMut, Item, Table, value};
 
-#[derive(Parser, Debug)]
-#[command(
-    author,
-    version,
-    about,
-    long_about = None,
-    bin_name = "rust-script scripts/release-package.rs"
-)]
+#[derive(Parser)]
 struct Cli {
-    /// Specify a package for a major version bump.
+    /// Verify packaged sources, install the CLI, and exercise generated applications.
+    #[arg(long, conflicts_with_all = ["prepare", "execute", "major"])]
+    check: bool,
+    /// Force a major bump for a package; repeat for multiple packages.
     #[arg(long)]
-    major: Option<String>,
-
-    /// Actually perform the release
+    major: Vec<String>,
+    /// Write the reviewed versions, dependency requirements and changelogs.
+    #[arg(long, conflicts_with = "execute")]
+    prepare: bool,
+    /// Prepare, verify, publish, then push the release commit and tags.
     #[arg(long)]
     execute: bool,
 }
 
-#[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord, ValueEnum, Debug)]
-enum BumpType {
-    Major,
-    Minor,
-    Patch,
+#[derive(Clone)]
+struct Release {
+    version: Version,
+    changes: Vec<String>,
 }
 
-const GITHUB_OWNER: &str = "tessera-ui";
-const GITHUB_REPO: &str = "tessera";
-const PUBLISHABLE_PACKAGES: &[&str] = &[
-    "tessera-ui",
-    "tessera-foundation",
-    "tessera-components",
-    "tessera-macros",
-    "tessera-shard",
-    "cargo-tessera",
-    "tessera-mobile",
-    "tessera-platform",
-    "tessera-build",
-    "tessera-i18n",
-];
+fn output(command: &mut Command) -> Result<String> {
+    let result = command
+        .output()
+        .with_context(|| format!("Failed to run {command:?}"))?;
+    ensure!(
+        result.status.success(),
+        "{command:?}: {}",
+        String::from_utf8_lossy(&result.stderr)
+    );
+    Ok(String::from_utf8(result.stdout)?)
+}
 
-fn release_package(
-    package_name: &str,
-    bump: BumpType,
-    execute: bool,
-    workspace: &mut Workspace,
-) -> Result<()> {
-    // Thin wrapper to keep cognitive complexity low: delegate the heavy work.
-    let (files_to_add, modified_files, release_commit_msg, tag) =
-        prepare_and_collect_release_data(package_name, bump, execute, workspace)?;
-    let dry_run = !execute;
-
-    // Run prepublish git steps and publish using existing helpers.
-    perform_git_prepublish_steps(dry_run, &files_to_add, &release_commit_msg, &tag)?;
-    perform_publish_with_modified_files(dry_run, &modified_files, package_name, &tag)?;
+fn run(command: &mut Command) -> Result<()> {
+    ensure!(
+        command
+            .status()
+            .with_context(|| format!("Failed to run {command:?}"))?
+            .success(),
+        "Command failed: {command:?}"
+    );
     Ok(())
 }
 
-// Extracted helper to reduce complexity in `release_package`.
-//
-// This file-level helper performs the small, focused steps of creating the
-// changelog file and updating Cargo.toml. Returning the computed `new_version`
-// keeps the remaining logic in `prepare_and_collect_release_data` simple.
-fn prepare_changelog_and_update_cargo(
-    package_name: &str,
-    package_path: &std::path::Path,
-    cargo_toml_path: &std::path::Path,
-    bump: BumpType,
-    execute: bool,
-) -> Result<(String, String, String)> {
-    // Read current version and compute new version.
-    let mut doc = read_toml(cargo_toml_path)?;
-    let old_version = doc["package"]["version"].as_str().unwrap_or("").to_string();
-    let new_version = bump_version(&old_version, bump)?;
-
-    // Print short summary for user.
-    print_release_summary(
-        package_name,
-        &cargo_toml_path.to_path_buf(),
-        &old_version,
-        &new_version,
-    );
-
-    // Build changelog and write (or preview).
-    let changelog = build_changelog_for_package(package_name, package_path, &new_version)?;
-    let changelog_path = package_path.join("CHANGELOG.md");
-    let changelog_path_str = changelog_path.to_str().unwrap().to_string();
-    let old_changelog = fs::read_to_string(&changelog_path).unwrap_or_default();
-    let new_changelog = format!("{}\n{}", changelog, old_changelog);
-    let dry_run = !execute;
-    write_or_preview_file(
-        dry_run,
-        &changelog_path_str,
-        &new_changelog,
-        Some(&old_changelog),
-    )?;
-
-    // Update Cargo.toml version and run cargo check (or preview).
-    update_cargo_version_and_check(dry_run, &mut doc, cargo_toml_path, &new_version)?;
-
-    Ok((
-        changelog_path_str,
-        cargo_toml_path.to_str().unwrap().to_string(),
-        new_version,
-    ))
+fn latest(package: &str, root: &std::path::Path) -> Result<Option<(String, Version)>> {
+    let prefix = format!("{package}-v");
+    Ok(output(Command::new("git").current_dir(root).args([
+        "tag",
+        "--list",
+        &format!("{prefix}*"),
+    ]))?
+    .lines()
+    .filter_map(|tag| {
+        Some((
+            tag.to_owned(),
+            Version::parse(tag.strip_prefix(&prefix)?).ok()?,
+        ))
+    })
+    .max_by(|a, b| a.1.cmp(&b.1)))
 }
 
-fn prepare_and_collect_release_data(
-    package_name: &str,
-    bump: BumpType,
-    execute: bool,
-    workspace: &mut Workspace,
-) -> Result<(Vec<String>, Vec<(String, String, String)>, String, String)> {
-    // Locate package and read Cargo.toml path
-    let package_path = workspace.find_package(package_name)?;
-    let cargo_toml_path = package_path.join("Cargo.toml");
-
-    // Perform small focused I/O operations (changelog + Cargo write/check).
-    let (changelog_path_str, cargo_toml_path_str, new_version) =
-        prepare_changelog_and_update_cargo(
-            package_name,
-            &package_path,
-            &cargo_toml_path,
-            bump,
-            execute,
-        )?;
-
-    // Prepare files list required for commit/tag.
-    let mut files_to_add = vec![
-        changelog_path_str.clone(),
-        cargo_toml_path_str.clone(),
-        "Cargo.lock".to_string(),
-    ];
-
-    let release_commit_msg = format!("release({}): v{}", package_name, new_version);
-    let tag = format!("{}-v{}", package_name, new_version);
-
-    // Replace path deps with versions across the workspace.
-    let package_versions = workspace.collect_versions()?;
-    let modified_files =
-        replace_path_with_version_in_workspace(workspace, package_name, &package_versions)?;
-
-    for (file, _, _) in &modified_files {
-        files_to_add.push(file.clone());
+fn next(mut version: Version, major: bool, minor: bool) -> Version {
+    if version.pre.is_empty() {
+        if major {
+            version.major += 1;
+            version.minor = 0;
+            version.patch = 0;
+        } else if minor {
+            version.minor += 1;
+            version.patch = 0;
+        } else {
+            version.patch += 1;
+        }
     }
-
-    // Update version in workspace state for next package release.
-    workspace.packages.get_mut(package_name).unwrap().version = new_version.clone();
-
-    Ok((files_to_add, modified_files, release_commit_msg, tag))
+    version.pre = semver::Prerelease::EMPTY;
+    version.build = semver::BuildMetadata::EMPTY;
+    version
 }
 
-// Helper: update Cargo.toml version and run cargo check (or preview).
-fn update_cargo_version_and_check(
-    dry_run: bool,
-    doc: &mut DocumentMut,
-    cargo_toml_path: &std::path::Path,
-    new_version: &str,
-) -> Result<()> {
-    doc["package"]["version"] = value(new_version.to_string());
-    write_or_preview_file(
-        dry_run,
-        cargo_toml_path.to_str().unwrap(),
-        &doc.to_string(),
-        Some(&fs::read_to_string(&cargo_toml_path)?),
-    )?;
-    run_or_preview_cmd(dry_run, "cargo", &["check", "--workspace"])?;
-    Ok(())
+fn owned_packages(metadata: &Metadata) -> Vec<&cargo_metadata::Package> {
+    metadata
+        .workspace_packages()
+        .into_iter()
+        .filter(|package| {
+            !package
+                .manifest_path
+                .parent()
+                .unwrap()
+                .ancestors()
+                .take_while(|path| *path != metadata.workspace_root)
+                .any(|path| path.join(".git").exists())
+        })
+        .collect()
 }
 
-// Helper extracted to reduce cognitive complexity inside release_package.
-fn build_changelog_for_package(
-    package_name: &str,
-    package_path: &std::path::Path,
-    new_version: &str,
-) -> Result<String> {
-    let latest_tag = find_latest_tag(package_name)?;
-    let rel_path = package_path.to_string_lossy();
-    let commits = if let Some(tag) = &latest_tag {
-        collect_commits_since_tag(tag, &rel_path)?
-    } else {
-        collect_commits_since_tag("", &rel_path)?
-    };
-    Ok(generate_changelog(
-        new_version,
-        &commits,
-        latest_tag.as_deref(),
-        package_name,
-    ))
-}
-
-fn print_release_summary(
-    package_name: &str,
-    cargo_toml_path: &std::path::PathBuf,
-    old_version: &str,
-    new_version: &str,
-) {
-    println!(
-        "\n{} {}",
-        "📦",
-        format!("Releasing Package: {}", package_name)
-            .yellow()
-            .bold()
+fn plan(metadata: &Metadata, major: &[String]) -> Result<BTreeMap<String, Release>> {
+    let packages = owned_packages(metadata)
+        .into_iter()
+        .filter(|package| {
+            package
+                .publish
+                .as_ref()
+                .is_none_or(|registries| !registries.is_empty())
+        })
+        .map(|package| (package.name.to_string(), package))
+        .collect::<BTreeMap<_, _>>();
+    ensure!(
+        major.iter().all(|name| packages.contains_key(name)),
+        "Unknown or unpublished --major package"
     );
-    println!(
-        "{} {}",
-        "📄",
-        format!("Path: {}", cargo_toml_path.display()).cyan()
-    );
-    println!(
-        "{} {}",
-        "🕓",
-        format!("Old version: {}", old_version).blue()
-    );
-    println!(
-        "{} {}",
-        "🆕",
-        format!("New version: {}", new_version).green()
-    );
-}
-
-fn build_release_plan(
-    workspace: &Workspace,
-    cli: &Cli,
-) -> Result<(Vec<String>, HashMap<String, BumpType>)> {
-    // Determine initial bumps for publishable packages.
-    let mut release_plan: HashMap<String, BumpType> = HashMap::new();
-    for pkg_name in PUBLISHABLE_PACKAGES {
-        if let Some(package) = workspace.packages.get(*pkg_name) {
-            if let Some(bump) = determine_bump_type(package, workspace, cli.major.as_ref())? {
-                release_plan.insert(package.name.clone(), bump);
+    let mut releases = BTreeMap::new();
+    let mut previous = BTreeMap::new();
+    for (name, package) in &packages {
+        let tag = latest(name, metadata.workspace_root.as_std_path())?;
+        let range = tag
+            .as_ref()
+            .map_or_else(|| "HEAD".to_owned(), |(tag, _)| format!("{tag}..HEAD"));
+        let directory = package
+            .manifest_path
+            .parent()
+            .context("Missing package directory")?;
+        let log = output(
+            Command::new("git")
+                .current_dir(&metadata.workspace_root)
+                .args([
+                    "log",
+                    "--format=%s%n%b%x00",
+                    &range,
+                    "--",
+                    directory.as_str(),
+                ]),
+        )?;
+        let commits = log
+            .split('\0')
+            .map(str::trim)
+            .filter(|message| !message.is_empty())
+            .collect::<Vec<_>>();
+        let initial = tag.is_none();
+        let forced = major.contains(name);
+        let breaking = commits.iter().any(|message| {
+            message.contains("BREAKING CHANGE:")
+                || message
+                    .lines()
+                    .next()
+                    .is_some_and(|subject| subject.contains("!:"))
+        });
+        let feature = commits.iter().any(|message| message.starts_with("feat"));
+        previous.insert(
+            name.clone(),
+            tag.as_ref().map(|(_, version)| version.clone()),
+        );
+        if tag.is_none() || !commits.is_empty() || forced {
+            let version = if let Some((_, version)) = tag {
+                next(version, forced || breaking, feature).max(package.version.clone())
+            } else if forced {
+                next(package.version.clone(), true, false)
+            } else {
+                package.version.clone()
+            };
+            releases.insert(
+                name.clone(),
+                Release {
+                    version,
+                    changes: if initial {
+                        vec!["Initial release.".into()]
+                    } else {
+                        commits
+                            .iter()
+                            .filter_map(|message| message.lines().next())
+                            .filter(|subject| !subject.starts_with("release:"))
+                            .map(str::to_owned)
+                            .collect()
+                    },
+                },
+            );
+        }
+    }
+    loop {
+        let mut changed = false;
+        for (name, package) in &packages {
+            if releases.contains_key(name) {
+                continue;
+            }
+            if package
+                .dependencies
+                .iter()
+                .any(|dep| dep.path.is_some() && releases.contains_key(&dep.name))
+            {
+                let version = previous[name].as_ref().map_or_else(
+                    || package.version.clone(),
+                    |version| next(version.clone(), false, false).max(package.version.clone()),
+                );
+                releases.insert(
+                    name.clone(),
+                    Release {
+                        version,
+                        changes: vec!["Update workspace dependencies.".into()],
+                    },
+                );
+                changed = true;
             }
         }
-    }
-
-    // Propagate bumps to dependents within the publishable set.
-    let publishable_set: HashSet<&_> = PUBLISHABLE_PACKAGES.iter().cloned().collect();
-    let mut final_release_plan = release_plan.clone();
-    let all_packages_sorted = workspace.topological_sort()?;
-    for package_name in &all_packages_sorted {
-        if !publishable_set.contains(package_name.as_str()) {
-            continue;
+        if !changed {
+            break;
         }
-        if let Some(package) = workspace.packages.get(package_name) {
-            for dep in &package.dependencies {
-                if release_plan.contains_key(dep) {
-                    final_release_plan
-                        .entry(package_name.clone())
-                        .or_insert(BumpType::Patch);
+    }
+    Ok(releases)
+}
+
+fn visit_dependencies(
+    item: &mut Item,
+    action: &mut impl FnMut(&str, &mut Item) -> Result<()>,
+) -> Result<()> {
+    let Some(table) = item.as_table_like_mut() else {
+        return Ok(());
+    };
+    for (name, item) in table.iter_mut() {
+        match name.get() {
+            "dependencies" | "dev-dependencies" | "build-dependencies" => {
+                if let Some(dependencies) = item.as_table_like_mut() {
+                    for (alias, dependency) in dependencies.iter_mut() {
+                        action(&alias, dependency)?;
+                    }
+                }
+            }
+            "workspace" => visit_dependencies(item, action)?,
+            "target" => {
+                if let Some(targets) = item.as_table_like_mut() {
+                    for (_, target) in targets.iter_mut() {
+                        visit_dependencies(target, action)?;
+                    }
+                }
+            }
+            _ => {}
+        }
+    }
+    Ok(())
+}
+
+fn update_dependencies(item: &mut Item, versions: &BTreeMap<String, Version>) -> Result<()> {
+    visit_dependencies(item, &mut |alias, item| {
+        if let Some(dependency) = item.as_table_like_mut() {
+            if dependency.get("path").is_some() {
+                let name = dependency
+                    .get("package")
+                    .and_then(Item::as_str)
+                    .unwrap_or(alias);
+                if let Some(version) = versions.get(name) {
+                    dependency.insert("version", value(version.to_string()));
                 }
             }
         }
+        Ok(())
+    })
+}
+
+fn prepare(metadata: &Metadata, releases: &BTreeMap<String, Release>) -> Result<Vec<String>> {
+    let mut versions = metadata
+        .packages
+        .iter()
+        .filter(|package| package.source.is_none())
+        .map(|package| (package.name.to_string(), package.version.clone()))
+        .collect::<BTreeMap<_, _>>();
+    versions.extend(
+        releases
+            .iter()
+            .map(|(name, release)| (name.clone(), release.version.clone())),
+    );
+    let mut files = Vec::new();
+    for package in owned_packages(metadata) {
+        let path = package.manifest_path.as_std_path();
+        let original = fs::read_to_string(path)?;
+        let mut doc = original.parse::<DocumentMut>()?;
+        if let Some(release) = releases.get(package.name.as_str()) {
+            doc["package"]["version"] = value(release.version.to_string());
+            let changelog = path.with_file_name("CHANGELOG.md");
+            let old = fs::read_to_string(&changelog).unwrap_or_default();
+            let header = format!("## [v{}]", release.version);
+            if !old.starts_with(&header) {
+                let changes = release
+                    .changes
+                    .iter()
+                    .map(|change| format!("- {change}\n"))
+                    .collect::<String>();
+                fs::write(&changelog, format!("{header}\n\n{changes}\n{old}"))?;
+                files.push(changelog.to_string_lossy().into_owned());
+            }
+        }
+        update_dependencies(doc.as_item_mut(), &versions)?;
+        if original != doc.to_string() {
+            fs::write(path, doc.to_string())?;
+            files.push(path.to_string_lossy().into_owned());
+        }
     }
+    let root_path = metadata.workspace_root.join("Cargo.toml");
+    let original = fs::read_to_string(&root_path)?;
+    let mut root = original.parse::<DocumentMut>()?;
+    update_dependencies(root.as_item_mut(), &versions)?;
+    if original != root.to_string() {
+        fs::write(&root_path, root.to_string())?;
+        files.push(root_path.to_string());
+    }
+    Ok(files)
+}
 
-    // Build ordered list of packages to release.
-    let mut final_release_order = all_packages_sorted;
-    final_release_order.retain(|pkg| final_release_plan.contains_key(pkg));
+fn publish(releases: &BTreeMap<String, Release>, dry_run: bool) -> Result<()> {
+    let mut command = Command::new("cargo");
+    command.arg("publish");
+    if dry_run {
+        command.args(["--dry-run", "--allow-dirty"]);
+    }
+    for name in releases.keys() {
+        command.args(["--package", name]);
+    }
+    run(&mut command)
+}
 
-    Ok((final_release_order, final_release_plan))
+fn rendered_label(value: &Value) -> bool {
+    value["accessibility"]["label"] == "Hello Tessera!"
+        && value["bounds"]["width"]
+            .as_f64()
+            .is_some_and(|width| width > 0.0)
+        || value
+            .as_array()
+            .is_some_and(|values| values.iter().any(rendered_label))
+        || value
+            .as_object()
+            .is_some_and(|values| values.values().any(rendered_label))
+}
+
+fn render_check(command: &mut Command, requests: &[Value]) -> Result<()> {
+    let mut child = command
+        .env("TESSERA_HEADLESS", "1")
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()?;
+    let mut input = child.stdin.take().context("Missing worker stdin")?;
+    for request in requests {
+        writeln!(input, "{request}")?;
+    }
+    drop(input);
+    let result = child.wait_with_output()?;
+    let errors = String::from_utf8_lossy(&result.stderr);
+    ensure!(
+        result.status.success() && !errors.contains("resource loading failed"),
+        "Worker failed: {errors}"
+    );
+    let records = String::from_utf8(result.stdout)?
+        .lines()
+        .map(serde_json::from_str::<Value>)
+        .collect::<std::result::Result<Vec<_>, _>>()?;
+    ensure!(
+        records
+            .iter()
+            .all(|record| record.get("ok") != Some(&Value::Bool(false)))
+            && records.iter().any(rendered_label),
+        "Generated app did not publish its rendered text: {records:?}"
+    );
+    Ok(())
+}
+
+fn verify(metadata: &Metadata) -> Result<()> {
+    let artifacts = metadata.target_directory.join("release-candidates");
+    fs::create_dir_all(&artifacts)?;
+    let packages = metadata
+        .packages
+        .iter()
+        .filter(|package| {
+            package.source.is_none()
+                && package
+                    .publish
+                    .as_ref()
+                    .is_none_or(|registries| !registries.is_empty())
+        })
+        .collect::<Vec<_>>();
+    let mut jobs = vec![Vec::new()];
+    for package in &packages {
+        if metadata.workspace_members.contains(&package.id) {
+            jobs[0].extend(["--package", package.name.as_str()]);
+        } else {
+            jobs.push(vec!["--manifest-path", package.manifest_path.as_str()]);
+        }
+    }
+    for job in jobs {
+        run(Command::new("cargo")
+            .args([
+                "package",
+                "--no-verify",
+                "--exclude-lockfile",
+                "--allow-dirty",
+                "--target-dir",
+            ])
+            .arg(&artifacts)
+            .args(job))?;
+    }
+    let staging = tempfile::tempdir()?;
+    let sources = packages
+        .iter()
+        .map(|package| {
+            (
+                package.name.to_string(),
+                staging
+                    .path()
+                    .join(format!("{}-{}", package.name, package.version)),
+            )
+        })
+        .collect::<BTreeMap<_, _>>();
+    for package in &packages {
+        let archive = artifacts
+            .join("package")
+            .join(format!("{}-{}.crate", package.name, package.version));
+        ensure!(
+            fs::metadata(&archive)?.len() <= 10_000_000,
+            "Package exceeds the default upload limit: {archive}"
+        );
+        tar::Archive::new(flate2::read::GzDecoder::new(fs::File::open(archive)?))
+            .unpack(staging.path())?;
+    }
+    let wire = |document: &mut DocumentMut| {
+        visit_dependencies(document.as_item_mut(), &mut |alias, item| {
+            let name = item
+                .get("package")
+                .and_then(Item::as_str)
+                .unwrap_or(alias)
+                .to_owned();
+            if let Some(path) = sources.get(&name) {
+                let requirement = item
+                    .as_str()
+                    .or_else(|| item.get("version").and_then(Item::as_str))
+                    .context("Missing packaged dependency version")?
+                    .to_owned();
+                let version = &packages
+                    .iter()
+                    .find(|package| package.name.as_str() == name)
+                    .context("Missing candidate")?
+                    .version;
+                ensure!(
+                    semver::VersionReq::parse(&requirement)?.matches(version),
+                    "{name} {version} does not match {requirement}"
+                );
+                if item.is_str() {
+                    *item = Item::Table(Table::new());
+                    item["version"] = value(requirement);
+                }
+                item.as_table_like_mut()
+                    .context("Invalid dependency")?
+                    .insert("path", value(path.to_string_lossy().as_ref()));
+            }
+            Ok(())
+        })
+    };
+    for path in sources.values() {
+        let manifest = path.join("Cargo.toml");
+        let mut document = fs::read_to_string(&manifest)?.parse::<DocumentMut>()?;
+        wire(&mut document)?;
+        fs::write(manifest, document.to_string())?;
+    }
+    let mut workspace = DocumentMut::new();
+    workspace["workspace"]["resolver"] = value("3");
+    workspace["workspace"]["members"] = value(toml_edit::Array::new());
+    workspace["workspace"]["exclude"] = value(
+        sources
+            .values()
+            .map(|path| path.file_name().unwrap().to_string_lossy().into_owned())
+            .collect::<toml_edit::Array>(),
+    );
+    workspace["profile"]["dev"]["debug"] = value(0);
+    let manifest = staging.path().join("Cargo.toml");
+    fs::write(&manifest, workspace.to_string())?;
+    let cli_root = staging.path().join("installed");
+    run(Command::new("cargo")
+        .args(["install", "--debug", "--path"])
+        .arg(&sources["cargo-tessera"])
+        .arg("--root")
+        .arg(&cli_root)
+        .env("CARGO_TARGET_DIR", metadata.target_directory.as_str())
+        .env("CARGO_INCREMENTAL", "0")
+        .env("CARGO_PROFILE_DEV_DEBUG", "0")
+        .env("CARGO_PROFILE_DEV_OPT_LEVEL", "1"))?;
+    let cli = cli_root
+        .join("bin")
+        .join(format!("cargo-tessera{}", std::env::consts::EXE_SUFFIX));
+    for (kind, templates) in [
+        ("app", ["basic", "blank"]),
+        ("plugin", ["basic", "android"]),
+    ] {
+        for template in templates {
+            let project = staging.path().join(format!("{kind}-{template}"));
+            let mut command = Command::new(&cli);
+            command.arg("tessera");
+            if kind == "plugin" {
+                command.arg("plugin");
+            }
+            run(command
+                .arg("new")
+                .arg(&project)
+                .args(["--template", template])
+                .current_dir(staging.path()))?;
+            let path = project.join("Cargo.toml");
+            let mut document = fs::read_to_string(&path)?.parse::<DocumentMut>()?;
+            wire(&mut document)?;
+            if kind == "app" {
+                document["dependencies"]["tessera-ui"]["features"] =
+                    value(["headless"].into_iter().collect::<toml_edit::Array>());
+            }
+            fs::write(path, document.to_string())?;
+            if kind == "app" && template == "basic" {
+                fs::write(project.join("assets/acceptance.txt"), "Hello Tessera!")?;
+                let source = project.join("src/app.rs");
+                fs::write(&source, fs::read_to_string(&source)?.replace(
+                    "text(\"Hello Tessera!\");",
+                    r#"let resource = tessera_ui::remember(|| crate::res::ACCEPTANCE_TXT.load()).get();
+                    text(match resource.get() {
+                        tessera_ui::LoadState::Ready(bytes) => String::from_utf8(bytes.to_vec()).expect("UTF-8 asset"),
+                        _ => "Loading asset".to_owned(),
+                    });"#,
+                ))?;
+            }
+            workspace["workspace"]["members"]
+                .as_array_mut()
+                .context("Missing workspace members")?
+                .push(format!("{kind}-{template}"));
+        }
+    }
+    fs::write(&manifest, workspace.to_string())?;
+    run(Command::new(&cli)
+        .args(["tessera", "check", "--workspace", "--all-targets"])
+        .current_dir(staging.path())
+        .env("CARGO_TARGET_DIR", metadata.target_directory.as_str())
+        .env("CARGO_INCREMENTAL", "0")
+        .env("CARGO_PROFILE_DEV_DEBUG", "0"))?;
+    render_check(
+        Command::new(&cli)
+            .args(["tessera", "headless", "-p", "app-basic"])
+            .current_dir(staging.path())
+            .env("CARGO_TARGET_DIR", metadata.target_directory.as_str())
+            .env("CARGO_INCREMENTAL", "0")
+            .env("CARGO_PROFILE_DEV_DEBUG", "0"),
+        &[
+            json!({"cmd":"spawn","name":"check"}),
+            json!({"cmd":"render","session":"check","frames":60}),
+            json!({"cmd":"snapshot","session":"check"}),
+            json!({"cmd":"shutdown"}),
+        ],
+    )?;
+    let format = if cfg!(target_os = "windows") {
+        "nsis"
+    } else if cfg!(target_os = "macos") {
+        "app"
+    } else {
+        "deb"
+    };
+    run(Command::new(&cli)
+        .args(["tessera", "package", "-p", "app-basic", "--formats", format])
+        .current_dir(staging.path())
+        .env("CARGO_TARGET_DIR", metadata.target_directory.as_str())
+        .env("CARGO_INCREMENTAL", "0")
+        .env("CARGO_PROFILE_DEV_DEBUG", "0"))?;
+    let output = metadata.target_directory.join("packages/app-basic");
+    let installed = staging.path().join("application");
+    fs::create_dir_all(&installed)?;
+    if cfg!(target_os = "linux") {
+        let archive = fs::read_dir(&output)?
+            .filter_map(std::result::Result::ok)
+            .find(|entry| entry.path().extension().is_some_and(|ext| ext == "deb"))
+            .context("Missing Debian package")?
+            .path();
+        run(Command::new("dpkg-deb")
+            .arg("-x")
+            .arg(archive)
+            .arg(&installed))?;
+    } else if cfg!(target_os = "windows") {
+        let archive = fs::read_dir(&output)?
+            .filter_map(std::result::Result::ok)
+            .find(|entry| entry.path().extension().is_some_and(|ext| ext == "exe"))
+            .context("Missing Windows installer")?
+            .path();
+        run(Command::new("7z")
+            .args(["x", "-y"])
+            .arg(format!("-o{}", installed.display()))
+            .arg(archive))?;
+    }
+    let executable = if cfg!(target_os = "linux") {
+        installed.join("usr/bin/app_basic")
+    } else if cfg!(target_os = "macos") {
+        output
+            .join("app-basic.app/Contents/MacOS/app_basic")
+            .into_std_path_buf()
+    } else {
+        installed.join("app_basic.exe")
+    };
+    render_check(
+        Command::new(executable).current_dir(staging.path()),
+        &[
+            json!({"cmd":"render","frames":60}),
+            json!({"cmd":"snapshot"}),
+            json!({"cmd":"shutdown"}),
+        ],
+    )?;
+    println!("Verified packaged CLI, four scaffolds, headless rendering and installed resources.");
+    Ok(())
 }
 
 fn main() -> Result<()> {
     let cli = Cli::parse();
-    let mut workspace = Workspace::load("Cargo.toml")?;
-
-    println!("Analyzing packages to determine version bumps...");
-
-    let (final_release_order, final_release_plan) = build_release_plan(&workspace, &cli)?;
-
-    if final_release_plan.is_empty() {
-        println!("✅ No packages need to be released.");
+    let metadata = MetadataCommand::new().exec()?;
+    std::env::set_current_dir(&metadata.workspace_root)?;
+    if cli.check {
+        return verify(&metadata);
+    }
+    let releases = plan(&metadata, &cli.major)?;
+    for (name, release) in &releases {
+        println!("{name}: {}", release.version);
+    }
+    if releases.is_empty() {
         return Ok(());
     }
-
-    println!("\n📝 Release Plan:");
-    print_release_plan(&final_release_order, &final_release_plan);
-
-    if !cli.execute {
-        println!("\nThis is a dry run. To execute the release, run with --execute");
+    if !cli.prepare && !cli.execute {
+        return Ok(());
     }
-
-    for package_name in &final_release_order {
-        let bump = *final_release_plan.get(package_name).unwrap();
-        release_package(package_name, bump, cli.execute, &mut workspace)?;
-    }
-
     if cli.execute {
-        println!("\n✅ All packages released successfully!");
-    } else {
-        println!("\n✅ Dry run completed successfully.");
+        ensure!(
+            output(Command::new("git").args(["status", "--porcelain"]))?
+                .trim()
+                .is_empty(),
+            "Commit or stash tracked changes before publishing"
+        );
     }
-
-    Ok(())
+    let mut files = prepare(&metadata, &releases)?;
+    run(Command::new("cargo").args([
+        "run",
+        "--package",
+        "cargo-tessera",
+        "--",
+        "tessera",
+        "check",
+        "--workspace",
+        "--all-targets",
+    ]))?;
+    if !cli.execute {
+        return Ok(());
+    }
+    publish(&releases, true)?;
+    files.push(metadata.workspace_root.join("Cargo.lock").to_string());
+    run(Command::new("git").arg("add").arg("--").args(&files))?;
+    let changed = Command::new("git")
+        .args(["diff", "--cached", "--quiet"])
+        .status()?;
+    if !changed.success() {
+        run(Command::new("git").args(["commit", "-m", "release: prepare workspace versions"]))?;
+    }
+    publish(&releases, false)?;
+    let mut push = Command::new("git");
+    push.args(["push", "--atomic", "origin", "HEAD"]);
+    for (name, release) in &releases {
+        let tag = format!("{name}-v{}", release.version);
+        run(Command::new("git").args(["tag", &tag]))?;
+        push.arg(tag);
+    }
+    run(&mut push)
 }
 
-fn print_release_plan(
-    final_release_order: &[String],
-    final_release_plan: &HashMap<String, BumpType>,
-) {
-    #[derive(Tabled)]
-    struct PlanEntry {
-        package: String,
-        bump: String,
-    }
-    let mut plan_entries = Vec::new();
-    for package_name in final_release_order {
-        plan_entries.push(PlanEntry {
-            package: package_name.clone(),
-            bump: format!("{:?}", final_release_plan.get(package_name).unwrap()),
-        });
-    }
-    let mut table = tabled::Table::new(plan_entries);
-    table.with(tabled::settings::Style::rounded());
-    println!("{}", table);
-}
+#[cfg(test)]
+mod tests {
+    use super::*;
 
-fn determine_bump_type(
-    package: &Package,
-    _workspace: &Workspace,
-    major_bump_pkg: Option<&String>,
-) -> Result<Option<BumpType>> {
-    if Some(&package.name) == major_bump_pkg {
-        return Ok(Some(BumpType::Major));
-    }
-
-    let latest_tag = find_latest_tag(&package.name)?;
-    let tag_str = latest_tag.as_deref().unwrap_or("");
-    let pkg_path_str = package.path.to_string_lossy();
-
-    // Check for BREAKING CHANGE footer or body using git log --grep
-    let range = if tag_str.is_empty() {
-        "HEAD".to_string()
-    } else {
-        format!("{}..HEAD", tag_str)
-    };
-
-    let grep_output = Command::new("git")
-        .args([
-            "log",
-            &range,
-            "--grep=BREAKING CHANGE",
-            "--oneline",
-            "--",
-            &pkg_path_str,
-        ])
-        .output()?;
-
-    if !grep_output.stdout.is_empty() {
-        return Ok(Some(BumpType::Major));
-    }
-
-    let commits = collect_commits_since_tag(tag_str, &pkg_path_str)?;
-
-    if commits.is_empty() {
-        return Ok(None);
-    }
-
-    let mut bump_type = BumpType::Patch;
-    for commit in commits {
-        if let Some(msg) = commit.split_once(' ').map(|(_, m)| m) {
-            // Check for !: in subject (e.g. feat!: or feat(scope)!:)
-            if msg.contains("!:") {
-                return Ok(Some(BumpType::Major));
-            }
-            if msg.contains("BREAKING CHANGE") {
-                return Ok(Some(BumpType::Major));
-            }
-            if msg.starts_with("feat") {
-                bump_type = BumpType::Minor;
-            }
+    #[test]
+    fn release_plans_follow_build_and_target_dependencies_and_preserve_paths() {
+        let directory = tempfile::tempdir().unwrap();
+        let root = directory.path();
+        fs::write(
+            root.join("Cargo.toml"),
+            "[workspace]\nmembers=['leaf','middle','app','new','vendor']\nresolver='3'\n",
+        )
+        .unwrap();
+        for (name, version, dependencies) in [
+            ("leaf", "1.3.0-rc.1", ""),
+            (
+                "middle",
+                "1.0.0",
+                "[build-dependencies]\nrenamed={package='leaf',path='../leaf',version='1.3.0-rc.1'}\n",
+            ),
+            (
+                "app",
+                "1.0.0",
+                "[target.'cfg(unix)'.dependencies]\nmiddle={path='../middle',version='1'}\n",
+            ),
+            ("new", "0.4.0", ""),
+            ("vendor", "0.2.0", ""),
+        ] {
+            let package = root.join(name);
+            fs::create_dir_all(package.join("src")).unwrap();
+            fs::write(package.join("src/lib.rs"), "pub fn value() {}\n").unwrap();
+            fs::write(
+                package.join("Cargo.toml"),
+                format!(
+                    "[package]\nname='{name}'\nversion='{version}'\nedition='2024'\n{dependencies}"
+                ),
+            )
+            .unwrap();
         }
-    }
-    Ok(Some(bump_type))
-}
-
-fn is_git_commit_msg(program: &str, args: &[&str], i: usize) -> bool {
-    program == "git" && args.get(0) == Some(&"commit") && args.get(i.wrapping_sub(1)) == Some(&"-m")
-}
-
-/// Colorize a single dry-run argument. Kept intentionally small and
-/// readable to reduce cognitive complexity.
-fn color_arg(program: &str, args: &[&str], i: usize, arg: &str) -> String {
-    if i == 0 || (arg.starts_with("tessera-") && arg.contains('v')) {
-        return arg.yellow().to_string();
-    }
-    if arg.ends_with(".toml") {
-        return arg.cyan().to_string();
-    }
-    if is_git_commit_msg(program, args, i) {
-        return format!("\"{}\"", arg).blue().to_string();
-    }
-    if arg.starts_with('-') {
-        return arg.blue().to_string();
-    }
-    arg.normal().to_string()
-}
-
-fn format_dry_run_command(program: &str, args: &[&str]) -> String {
-    let mut out = format!("{} {}", "[dry-run]".dimmed(), program.green().bold());
-    if args.is_empty() {
-        return out;
-    }
-
-    // Build colored argument list with a small iterator to keep logic compact.
-    let colored: Vec<String> = args
-        .iter()
-        .enumerate()
-        .map(|(i, &a)| color_arg(program, args, i, a))
-        .collect();
-
-    out.push(' ');
-    out.push_str(&colored.join(" "));
-    out
-}
-
-fn run_or_preview_cmd(dry_run: bool, program: &str, args: &[&str]) -> Result<()> {
-    if dry_run {
-        println!("{}", format_dry_run_command(program, args));
-        Ok(())
-    } else {
-        let status = Command::new(program).args(args).status()?;
-        if !status.success() {
-            bail!("{} command failed: {} {}", program, program, args.join(" "));
+        let git = |args: &[&str]| output(Command::new("git").current_dir(root).args(args)).unwrap();
+        git(&["init", "-q"]);
+        git(&["config", "user.name", "Release test"]);
+        git(&["config", "user.email", "release@example.invalid"]);
+        git(&["add", "."]);
+        git(&["commit", "-qm", "feat!: initialize"]);
+        for tag in [
+            "leaf-v1.2.3",
+            "leaf-v1.3.0-rc.1",
+            "middle-v1.0.0",
+            "app-v1.0.0",
+        ] {
+            git(&["tag", tag]);
         }
-        Ok(())
-    }
-}
-
-fn perform_git_prepublish_steps(
-    dry_run: bool,
-    files_to_add: &[String],
-    release_commit_msg: &str,
-    tag: &str,
-) -> Result<()> {
-    let add_args: Vec<&str> = files_to_add.iter().map(|s| s.as_str()).collect();
-    let mut cmd: Vec<&str> = vec!["add"];
-    cmd.extend(add_args.into_iter());
-    run_or_preview_cmd(dry_run, "git", &cmd)?;
-    run_or_preview_cmd(dry_run, "git", &["commit", "-m", release_commit_msg])?;
-    run_or_preview_cmd(dry_run, "git", &["tag", tag])?;
-    run_or_preview_cmd(dry_run, "git", &["push"])?;
-    run_or_preview_cmd(dry_run, "git", &["push", "origin", tag])?;
-    Ok(())
-}
-
-fn perform_publish_with_modified_files(
-    dry_run: bool,
-    modified_files: &[(String, String, String)],
-    package_name: &str,
-    tag: &str,
-) -> Result<()> {
-    // Write modified Cargo.toml files (or preview), commit them temporarily for
-    // publish, publish the target package, and finally reset the workspace to
-    // the created tag.
-    if !modified_files.is_empty() {
-        for (file, old, new) in modified_files {
-            write_or_preview_file(dry_run, file, new, Some(old))?;
+        fs::write(root.join("leaf/src/lib.rs"), "pub fn changed() {}\n").unwrap();
+        git(&["add", "."]);
+        git(&["commit", "-qm", "fix: update leaf"]);
+        git(&["-C", "vendor", "init", "-q"]);
+        let metadata = MetadataCommand::new()
+            .manifest_path(root.join("Cargo.toml"))
+            .exec()
+            .unwrap();
+        let releases = plan(&metadata, &[]).unwrap();
+        for (name, version) in [
+            ("leaf", "1.3.0"),
+            ("middle", "1.0.1"),
+            ("app", "1.0.1"),
+            ("new", "0.4.0"),
+        ] {
+            assert_eq!(releases[name].version, Version::parse(version).unwrap());
         }
-        let temp_commit_msg = "chore: replace path dependencies with version for publish";
-        run_or_preview_cmd(dry_run, "git", &["add", "."])?;
-        run_or_preview_cmd(dry_run, "git", &["commit", "-m", temp_commit_msg])?;
+        assert!(!releases.contains_key("vendor"));
+        prepare(&metadata, &releases).unwrap();
+        assert!(!root.join("vendor/CHANGELOG.md").exists());
+        let read = |name| {
+            fs::read_to_string(root.join(name))
+                .unwrap()
+                .parse::<DocumentMut>()
+                .unwrap()
+        };
+        let middle = read("middle/Cargo.toml");
+        assert_eq!(
+            middle["build-dependencies"]["renamed"]["version"].as_str(),
+            Some("1.3.0")
+        );
+        assert_eq!(
+            middle["build-dependencies"]["renamed"]["path"].as_str(),
+            Some("../leaf")
+        );
+        let app = read("app/Cargo.toml");
+        assert_eq!(
+            app["target"]["cfg(unix)"]["dependencies"]["middle"]["version"].as_str(),
+            Some("1.0.1")
+        );
     }
-    run_or_preview_cmd(dry_run, "cargo", &["publish", "-p", package_name])?;
-    if !modified_files.is_empty() {
-        run_or_preview_cmd(dry_run, "git", &["reset", "--hard", tag])?;
-    }
-    Ok(())
-}
-
-fn write_or_preview_file(
-    dry_run: bool,
-    path: &str,
-    new_content: &str,
-    old_content: Option<&str>,
-) -> Result<()> {
-    if dry_run {
-        use diffy::{PatchFormatter, create_patch};
-        use tabled::settings::Style;
-        #[derive(Tabled)]
-        struct DiffLine {
-            line: String,
-        }
-        let old = old_content.unwrap_or("");
-        let patch = create_patch(old, new_content);
-        let diff_str = format!("{}", PatchFormatter::new().fmt_patch(&patch));
-        let diff_lines: Vec<DiffLine> = diff_str
-            .lines()
-            .map(|l| DiffLine {
-                line: l.to_string(),
-            })
-            .collect();
-        let table = tabled::Table::new(diff_lines)
-            .with(Style::rounded())
-            .to_string();
-        println!("{}", path.cyan());
-        println!("{}", table);
-        Ok(())
-    } else {
-        std::fs::write(path, new_content)?;
-        Ok(())
-    }
-}
-
-fn read_toml(path: &Path) -> Result<DocumentMut> {
-    let content = fs::read_to_string(path)?;
-    let doc = content.parse::<DocumentMut>()?;
-    Ok(doc)
-}
-
-fn dependency_target_name(dep_name: &str, item: &toml_edit::Item) -> String {
-    item.as_table_like()
-        .and_then(|dep_table| dep_table.get("package"))
-        .and_then(|package| package.as_str())
-        .unwrap_or(dep_name)
-        .to_string()
-}
-
-#[derive(Debug, Clone)]
-struct Package {
-    name: String,
-    path: std::path::PathBuf,
-    version: String,
-    dependencies: Vec<String>,
-}
-
-struct Workspace {
-    members: Vec<String>,
-    packages: HashMap<String, Package>,
-}
-
-impl Workspace {
-    fn load(root: &str) -> Result<Self> {
-        let doc = read_toml(Path::new(root))?;
-        let members: Vec<String> = doc["workspace"]["members"]
-            .as_array()
-            .ok_or_else(|| anyhow::anyhow!("No [workspace] members found"))?
-            .iter()
-            .filter_map(|v| v.as_str().map(String::from))
-            .collect();
-
-        let member_names = Self::collect_member_names(&members)?;
-        let packages = Self::collect_packages(&members, &member_names)?;
-        Ok(Self { members, packages })
-    }
-
-    fn collect_member_names(members: &[String]) -> Result<HashSet<String>> {
-        let mut set = HashSet::new();
-        for m in members {
-            let path = Path::new(m);
-            let name = read_toml(&path.join("Cargo.toml"))
-                .ok()
-                .and_then(|d| d["package"]["name"].as_str().map(|s| s.to_string()))
-                .unwrap_or_else(|| path.file_name().unwrap().to_str().unwrap().to_string());
-            set.insert(name);
-        }
-        Ok(set)
-    }
-
-    fn collect_packages(
-        members: &[String],
-        member_names: &HashSet<String>,
-    ) -> Result<HashMap<String, Package>> {
-        let mut packages = HashMap::new();
-        for member_path in members {
-            let cargo_toml_path = Path::new(member_path).join("Cargo.toml");
-            if !cargo_toml_path.exists() {
-                continue;
-            }
-
-            let doc = read_toml(&cargo_toml_path)?;
-            if !doc.contains_key("package") {
-                continue;
-            }
-            let pkg_info = &doc["package"];
-            let name = pkg_info["name"].as_str().unwrap().to_string();
-            let version = pkg_info["version"].as_str().unwrap().to_string();
-
-            let mut dependencies = Vec::new();
-            if let Some(deps) = doc.get("dependencies").and_then(|d| d.as_table_like()) {
-                for (dep_name, item) in deps.iter() {
-                    let target_name = dependency_target_name(dep_name, item);
-                    if member_names.contains(&target_name) {
-                        dependencies.push(target_name);
-                    }
-                }
-            }
-
-            packages.insert(
-                name.clone(),
-                Package {
-                    name,
-                    version,
-                    path: Path::new(member_path).to_path_buf(),
-                    dependencies,
-                },
-            );
-        }
-        Ok(packages)
-    }
-
-    fn find_package(&self, name: &str) -> Result<std::path::PathBuf> {
-        self.packages
-            .get(name)
-            .map(|p| p.path.clone())
-            .ok_or_else(|| anyhow::anyhow!("Package '{}' not found in workspace members", name))
-    }
-
-    fn collect_versions(&self) -> Result<HashMap<String, String>> {
-        let mut map = HashMap::new();
-        for (name, package) in &self.packages {
-            map.insert(name.clone(), package.version.clone());
-        }
-        Ok(map)
-    }
-
-    fn topological_sort(&self) -> Result<Vec<String>> {
-        let mut sorted = Vec::new();
-        let mut visited = HashSet::new();
-        let mut recursion_stack = HashSet::new();
-
-        let mut package_names: Vec<_> = self.packages.keys().cloned().collect();
-        package_names.sort();
-
-        for package_name in &package_names {
-            if !visited.contains(package_name) {
-                self.topological_sort_util(
-                    package_name,
-                    &mut visited,
-                    &mut recursion_stack,
-                    &mut sorted,
-                )?;
-            }
-        }
-
-        Ok(sorted)
-    }
-
-    fn topological_sort_util(
-        &self,
-        package_name: &str,
-        visited: &mut HashSet<String>,
-        recursion_stack: &mut HashSet<String>,
-        sorted: &mut Vec<String>,
-    ) -> Result<()> {
-        visited.insert(package_name.to_string());
-        recursion_stack.insert(package_name.to_string());
-
-        if let Some(package) = self.packages.get(package_name) {
-            let mut deps = package.dependencies.clone();
-            deps.sort();
-            for dep_name in &deps {
-                if !visited.contains(dep_name) {
-                    self.topological_sort_util(dep_name, visited, recursion_stack, sorted)?;
-                } else if recursion_stack.contains(dep_name) {
-                    bail!("Circular dependency detected in workspace");
-                }
-            }
-        }
-
-        recursion_stack.remove(package_name);
-        sorted.push(package_name.to_string());
-
-        Ok(())
-    }
-}
-
-fn replace_paths_in_doc(
-    doc: &mut DocumentMut,
-    package_versions: &HashMap<String, String>,
-    target_package: &str,
-) -> Result<bool> {
-    // Return true if the document was modified.
-    let mut changed = false;
-    for section in ["dependencies", "dev-dependencies", "build-dependencies"] {
-        if let Some(table) = doc.get_mut(section).and_then(|t| t.as_table_like_mut()) {
-            // Collect keys up-front to avoid borrowing issues while mutating
-            // the table.
-            let keys: Vec<_> = table.iter().map(|(k, _)| k.to_string()).collect();
-            for dep in keys {
-                let Some(item) = table.get(&dep) else {
-                    continue;
-                };
-                let target_name = dependency_target_name(&dep, item);
-                // Skip replacing the package itself.
-                if target_name == target_package {
-                    continue;
-                }
-                if let Some(ver) = package_versions.get(&target_name) {
-                    if let Some(item) = table.get_mut(&dep) {
-                        if let Some(dep_table) = item.as_table_like_mut() {
-                            if dep_table.remove("path").is_some() {
-                                dep_table.insert("version", value(ver.clone()));
-                                changed = true;
-                            }
-                        }
-                    }
-                }
-            }
-        }
-    }
-    Ok(changed)
-}
-
-fn replace_path_with_version_in_workspace(
-    workspace: &Workspace,
-    target_package: &str,
-    package_versions: &HashMap<String, String>,
-) -> Result<Vec<(String, String, String)>> {
-    let mut modified = Vec::new();
-    for member in &workspace.members {
-        let path = Path::new(member);
-        let cargo_toml = path.join("Cargo.toml");
-        if !cargo_toml.exists() {
-            continue;
-        }
-        let mut doc = read_toml(&cargo_toml)?;
-        let changed = replace_paths_in_doc(&mut doc, package_versions, target_package)?;
-        if changed {
-            let old = std::fs::read_to_string(&cargo_toml)?;
-            let new = doc.to_string();
-            modified.push((cargo_toml.display().to_string(), old, new));
-        }
-    }
-    Ok(modified)
-}
-
-fn bump_version(old: &str, bump: BumpType) -> Result<String> {
-    let mut parts: Vec<u64> = old.split('.').map(|s| s.parse().unwrap_or(0)).collect();
-    while parts.len() < 3 {
-        parts.push(0);
-    }
-    match bump {
-        BumpType::Major => {
-            parts[0] += 1;
-            parts[1] = 0;
-            parts[2] = 0;
-        }
-        BumpType::Minor => {
-            parts[1] += 1;
-            parts[2] = 0;
-        }
-        BumpType::Patch => {
-            parts[2] += 1;
-        }
-    }
-    Ok(format!("{}.{}.{}", parts[0], parts[1], parts[2]))
-}
-
-fn find_latest_tag(package: &str) -> Result<Option<String>> {
-    let pat = format!("{}-v*", package);
-    let output = Command::new("git").args(["tag", "--list", &pat]).output()?;
-    if !output.status.success() {
-        bail!("Failed to list git tags");
-    }
-    let tags = String::from_utf8_lossy(&output.stdout)
-        .lines()
-        .map(|s| s.trim().to_string())
-        .filter(|s| !s.is_empty())
-        .collect::<Vec<_>>();
-    let latest = tags.into_iter().max_by(|a, b| version_cmp(a, b));
-    Ok(latest)
-}
-
-fn version_cmp(a: &str, b: &str) -> std::cmp::Ordering {
-    let va = a.rsplit_once("-v").map(|(_, v)| v).unwrap_or("");
-    let vb = b.rsplit_once("-v").map(|(_, v)| v).unwrap_or("");
-    let pa: Vec<u64> = va.split('.').filter_map(|s| s.parse().ok()).collect();
-    let pb: Vec<u64> = vb.split('.').filter_map(|s| s.parse().ok()).collect();
-    pa.cmp(&pb)
-}
-
-fn collect_commits_since_tag(tag: &str, package_path: &str) -> Result<Vec<String>> {
-    let range = if tag.is_empty() {
-        "HEAD".to_string()
-    } else {
-        format!("{}..HEAD", tag)
-    };
-    let output = Command::new("git")
-        .args(["log", &range, "--oneline", "--", package_path])
-        .output()?;
-    if !output.status.success() {
-        bail!("Failed to get git log");
-    }
-    let commits = String::from_utf8_lossy(&output.stdout)
-        .lines()
-        .map(|line| line.trim().to_string())
-        .filter(|s| !s.is_empty())
-        .collect();
-    Ok(commits)
-}
-
-fn generate_changelog(
-    new_version: &str,
-    commits: &[String],
-    last_tag: Option<&str>,
-    package: &str,
-) -> String {
-    use chrono::Local;
-    let now = Local::now();
-    let date = now.format("%Y-%m-%d %:z");
-    let new_tag = format!("{}-v{}", package, new_version);
-    let mut s = format!("## [v{}] - {}\n\n### Changes\n\n", new_version, date);
-    for c in commits {
-        if let Some((_, msg)) = c.split_once(' ') {
-            s.push_str(&format!("- {}\n", msg));
-        } else {
-            s.push_str(&format!("- {}\n", c));
-        }
-    }
-    if let Some(last) = last_tag {
-        s.push_str(&format!(
-            "\n[Compare with previous release](https://github.com/{}/{}/compare/{}...{})\n",
-            GITHUB_OWNER, GITHUB_REPO, last, new_tag
-        ));
-    }
-    s
 }
