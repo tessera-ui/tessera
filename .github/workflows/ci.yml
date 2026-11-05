@@ -59,8 +59,8 @@ jobs:
         if: runner.os == 'macOS'
         run: |
           cargo tessera ios build -p example --profiling-output acceptance.jsonl
-          cargo tessera package -p example --formats app
           python3 scripts/test-apple-ime.py target/packages/example/ios/*/example.app
+          cargo tessera package -p example --formats app
 
   check_web:
     name: Check Web
@@ -100,7 +100,9 @@ jobs:
         env:
           ANDROID_NDK_HOME: ${{ steps.setup-ndk.outputs.ndk-path }}
           NDK_HOME: ${{ steps.setup-ndk.outputs.ndk-path }}
-        run: cargo tessera android build --format apk -p example --arch arm64
+        run: |
+          cargo tessera android build --format apk -p example --arch arm64
+          cargo tessera android build --format apk -p example --arch x86_64 --profiling-output files/acceptance.jsonl
       - name: Enable KVM
         run: |
           echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
@@ -116,6 +118,4 @@ jobs:
           arch: x86_64
           target: google_apis
           disable-animations: true
-          script: |
-            cargo tessera android build --format apk -p example --arch x86_64 --profiling-output files/acceptance.jsonl
-            python3 scripts/check-mobile.py --android example/gen/android/app/build/outputs/apk
+          script: python3 scripts/check-mobile.py --android example/gen/android/app/build/outputs/apk
