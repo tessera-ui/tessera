@@ -4,6 +4,7 @@ import platform
 import plistlib
 import shutil
 import subprocess
+import sys
 import tempfile
 from pathlib import Path
 
@@ -53,6 +54,8 @@ try:
     if not booted:
         run("xcrun", "simctl", "boot", udid)
     run("xcrun", "simctl", "bootstatus", udid, "-b", timeout=600)
+    if len(sys.argv) > 1:
+        run(sys.executable, str(ROOT / "scripts/check-mobile.py"), "--ios", udid, sys.argv[1], timeout=240)
     with tempfile.TemporaryDirectory() as directory:
         app = Path(directory) / "ImeTest.app"
         app.mkdir()

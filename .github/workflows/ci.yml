@@ -18,7 +18,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, macos-latest]
+        os: [ubuntu-latest, macos-latest, windows-latest]
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
@@ -31,26 +31,36 @@ jobs:
           target: wasm32-unknown-unknown
       - name: Check all targets
         run: cargo tessera check --workspace --all-targets --verbose
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-nextest,rust-script,cargo-packager
       - name: Test and package example
         if: runner.os == 'Linux'
         run: |
-          cargo test --workspace --verbose
-          cargo install cargo-packager --locked
+          sudo apt-get update && sudo apt-get install -y mesa-vulkan-drivers
+          export XDG_RUNTIME_DIR="$RUNNER_TEMP"
+          cargo nextest run --workspace --run-ignored all --test-threads 2
+          cargo test --workspace --doc
+          rust-script scripts/release-package.rs --check
           cargo tessera package -p example --formats deb
       - name: Check scripts and formatting
         if: runner.os == 'Linux'
         run: |
-          cargo install rust-script --locked
           rust-script --test scripts/analyze-profiler.rs
           rust-script --test scripts/check-imports.rs
+          rust-script --test scripts/release-package.rs
           rust-script scripts/check-imports.rs --check
+      - name: Test and package Windows example
+        if: runner.os == 'Windows'
+        run: |
+          cargo test -p tessera-ui -p tessera-components --lib
+          cargo tessera package -p example --formats nsis
       - name: Package example and verify Apple IME
         if: runner.os == 'macOS'
         run: |
-          cargo tessera ios build -p example
-          cargo install cargo-packager --locked
+          cargo tessera ios build -p example --profiling-output acceptance.jsonl
           cargo tessera package -p example --formats app
-          python3 scripts/test-apple-ime.py
+          python3 scripts/test-apple-ime.py target/packages/example/ios/*/example.app
 
   check_web:
     name: Check Web
@@ -80,7 +90,7 @@ jobs:
         with:
           toolchain: stable
           components: rust-src, rust-analyzer
-          target: aarch64-linux-android
+          target: aarch64-linux-android,x86_64-linux-android
       - name: Setup Android NDK
         uses: nttld/setup-ndk@v1
         id: setup-ndk
@@ -90,4 +100,17 @@ jobs:
         env:
           ANDROID_NDK_HOME: ${{ steps.setup-ndk.outputs.ndk-path }}
           NDK_HOME: ${{ steps.setup-ndk.outputs.ndk-path }}
-        run: cargo tessera android build --format apk -p example
+        run: cargo tessera android build --format apk -p example --arch arm64
+      - name: Run Android example
+        uses: reactivecircus/android-emulator-runner@v2
+        env:
+          ANDROID_NDK_HOME: ${{ steps.setup-ndk.outputs.ndk-path }}
+          NDK_HOME: ${{ steps.setup-ndk.outputs.ndk-path }}
+        with:
+          api-level: 35
+          arch: x86_64
+          target: google_apis
+          disable-animations: true
+          script: |
+            cargo tessera android build --format apk -p example --arch x86_64 --profiling-output files/acceptance.jsonl
+            python3 scripts/check-mobile.py --android example/gen/android/app/build/outputs/apk
