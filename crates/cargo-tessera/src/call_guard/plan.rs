@@ -258,13 +258,18 @@ fn target_is_selected(target: &Target, selection: &TargetSelection) -> bool {
     if selection.all_targets {
         return true;
     }
-    let explicit = selection.lib
+    let explicit = selection.bin.is_some()
+        || selection.lib
         || selection.bins
         || selection.examples
         || selection.tests
         || selection.benches;
     if explicit {
-        return selection.lib && target_is_library(target)
+        return (selection.lib || selection.bin.is_some()) && target_is_library(target)
+            || selection
+                .bin
+                .as_ref()
+                .is_some_and(|name| target.is_bin() && target.name == *name)
             || selection.bins && target.is_bin()
             || selection.examples && target.is_example()
             || selection.tests && target.is_test()
@@ -315,6 +320,21 @@ mod tests {
                 fixture.root.join("app/src/lib.rs"),
                 fixture.root.join("app/src/main.rs")
             ])
+        );
+        let mut binary_options = CheckOptions::new(Some("app"), None);
+        binary_options.target_selection.bin = Some("app".into());
+        let binary_plan = Plan::resolve_at(&binary_options, &fixture.root).expect("binary plan");
+        assert_eq!(
+            binary_plan
+                .jobs
+                .iter()
+                .find(|job| job.name == "app")
+                .unwrap()
+                .target_roots
+                .iter()
+                .cloned()
+                .collect::<BTreeSet<_>>(),
+            app.target_roots.iter().cloned().collect::<BTreeSet<_>>()
         );
         let mut library_options = CheckOptions::new(Some("app"), None);
         library_options.target_selection = TargetSelection::lib_only();

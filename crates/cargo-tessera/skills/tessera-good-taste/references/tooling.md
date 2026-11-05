@@ -8,6 +8,7 @@
 | Apply compiler and safe Tessera fixes | `cargo tessera fix -p my-app` |
 | Develop on desktop | `cargo tessera dev -p my-app` |
 | Build a native release | `cargo tessera build -p my-app --release` |
+| Package a desktop app | `cargo tessera package -p my-app --release` (requires cargo-packager) |
 | Develop on web | `cargo tessera web dev` |
 | Build a web release | `cargo tessera web build --release` (requires Binaryen) |
 | Initialize Android | `cargo tessera android init` |

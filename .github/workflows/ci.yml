@@ -31,9 +31,12 @@ jobs:
           target: wasm32-unknown-unknown
       - name: Check all targets
         run: cargo tessera check --workspace --all-targets --verbose
-      - name: Run tests
+      - name: Test and package example
         if: runner.os == 'Linux'
-        run: cargo test --workspace --verbose
+        run: |
+          cargo test --workspace --verbose
+          cargo install cargo-packager --locked
+          cargo tessera package -p example --formats deb
       - name: Check scripts and formatting
         if: runner.os == 'Linux'
         run: |
@@ -41,13 +44,14 @@ jobs:
           rust-script --test scripts/analyze-profiler.rs
           rust-script --test scripts/check-imports.rs
           rust-script scripts/check-imports.rs --check
-      - name: Verify Apple IME and build example
+      - name: Package example and verify Apple IME
         if: runner.os == 'macOS'
         run: |
           rustup target add aarch64-apple-ios-sim
           cargo check -p tessera-ui --target aarch64-apple-ios-sim
+          cargo install cargo-packager --locked
+          cargo tessera package -p example --formats app
           python3 scripts/test-apple-ime.py
-          cargo tessera build -p example
 
   check_web:
     name: Check Web

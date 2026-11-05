@@ -88,6 +88,9 @@ enum TesseraCommands {
         /// Specify package to build
         #[arg(short, long)]
         package: Option<String>,
+        /// Select an executable
+        #[arg(long)]
+        bin: Option<String>,
         /// Enable profiling output and write records to this JSONL file
         /// (desktop only)
         #[arg(long, value_name = "FILE")]
@@ -98,6 +101,19 @@ enum TesseraCommands {
         /// Override asset backend
         #[arg(long, value_enum)]
         asset_backend: Option<AssetBackendArg>,
+    },
+    /// Build an application installer or desktop bundle
+    Package {
+        #[arg(short, long)]
+        release: bool,
+        #[arg(short, long)]
+        target: Option<String>,
+        #[arg(short, long)]
+        package: Option<String>,
+        #[arg(long)]
+        bin: Option<String>,
+        #[arg(short, long, value_delimiter = ',', value_parser = ["default", "all", "nsis", "wix", "app", "dmg", "deb", "appimage", "pacman"])]
+        formats: Vec<String>,
     },
     /// Check compilation and Tessera call boundaries
     Check {
@@ -152,6 +168,9 @@ pub(crate) struct CheckArgs {
     /// Select only this package's library
     #[arg(long)]
     lib: bool,
+    /// Select one executable
+    #[arg(long)]
+    bin: Option<String>,
     /// Select all binaries
     #[arg(long)]
     bins: bool,
@@ -607,6 +626,7 @@ fn run() -> Result<()> {
                 release,
                 target,
                 package,
+                bin,
                 profiling_output,
                 debug_dirty_overlay,
                 asset_backend,
@@ -615,9 +635,25 @@ fn run() -> Result<()> {
                     release,
                     target.as_deref(),
                     package.as_deref(),
+                    bin.as_deref(),
                     profiling_output.as_deref(),
                     debug_dirty_overlay,
                     asset_backend.map(AssetBackendArg::to_backend),
+                )?;
+            }
+            TesseraCommands::Package {
+                release,
+                target,
+                package,
+                bin,
+                formats,
+            } => {
+                commands::package::execute(
+                    release,
+                    target.as_deref(),
+                    package.as_deref(),
+                    bin.as_deref(),
+                    &formats,
                 )?;
             }
             TesseraCommands::Check { args, explain } => {

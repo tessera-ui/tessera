@@ -48,6 +48,7 @@ impl<'a> CheckOptions<'a> {
 
 #[derive(Clone, Debug, Default)]
 pub struct TargetSelection {
+    pub bin: Option<String>,
     pub lib: bool,
     pub bins: bool,
     pub examples: bool,

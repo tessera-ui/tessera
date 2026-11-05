@@ -805,6 +805,7 @@ dependencies = [
  "dirs",
  "globset",
  "handlebars",
+ "heck 0.5.0",
  "include_dir",
  "indicatif",
  "inquire",

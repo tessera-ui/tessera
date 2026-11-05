@@ -112,13 +112,27 @@ Enable dirty replay overlay in desktop build artifacts:
 cargo tessera build -p example --debug-dirty-overlay
 ```
 
+### Package a desktop application
+
+```sh
+cargo install cargo-packager --locked
+cargo tessera package -p my-app --release
+```
+
+Choose formats with `--formats nsis,wix` (Windows), `app,dmg` (macOS), or
+`deb,appimage,pacman` (Linux). Use `--bin` for packages with multiple executables.
+Set application metadata in `[package.metadata.packager]`; binary and resource
+paths are supplied automatically. Packages are written to `target/packages/<package>`.
+See the [packager configuration](https://docs.crabnebula.dev/packager/configuration/)
+for icons, signing, installer settings, and additional resources.
+
 ### Fix diagnostics
 
 ```bash
 cargo tessera fix -p my-app
 ```
 
-Runs `cargo fix`, applies machine-applicable Tessera suggestions, and checks the
+Applies machine-applicable Tessera suggestions, runs `cargo fix`, and checks the
 result. Review uncertain suggestions manually. Cargo fix options such as
 `--allow-dirty`, `--allow-staged`, and `--allow-no-vcs` are supported.
 

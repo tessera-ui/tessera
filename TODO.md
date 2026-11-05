@@ -8,10 +8,10 @@
   - [x] Android Plugins
   - [ ] iOS Plugins
   - [x] Android Package Support
-  - [ ] Windows Package Support
+  - [x] Windows Package Support
   - [ ] iOS Package Support
-  - [ ] macOS Package Support
-  - [ ] Linux Package Support
+  - [x] macOS Package Support
+  - [x] Linux Package Support
 - [x] Asset management system
   - [x] Embedded backend (available for all targets)
   - [x] On-demand loading and shared resource lifetimes

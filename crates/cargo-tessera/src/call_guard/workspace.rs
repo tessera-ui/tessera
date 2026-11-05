@@ -153,6 +153,9 @@ fn build_script_command(options: &CheckOptions<'_>) -> Vec<String> {
         command.push("--all-targets".to_string());
     } else {
         let selection = &options.target_selection;
+        if let Some(binary) = &selection.bin {
+            command.extend(["--bin".to_string(), binary.clone()]);
+        }
         for (selected, flag) in [
             (selection.lib, "--lib"),
             (selection.bins, "--bins"),

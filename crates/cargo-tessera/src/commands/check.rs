@@ -11,13 +11,19 @@ pub fn execute(
 ) -> Result<()> {
     let all_targets = args.all_targets
         || (fix.is_some()
-            && !(args.lib || args.bins || args.examples || args.tests || args.benches));
+            && !(args.bin.is_some()
+                || args.lib
+                || args.bins
+                || args.examples
+                || args.tests
+                || args.benches));
     let command = |action| {
         let mut command = Command::new("cargo");
         command.arg(action);
         for (flag, value) in [
             ("--package", args.package.as_deref()),
             ("--target", args.target.as_deref()),
+            ("--bin", args.bin.as_deref()),
             ("--jobs", args.jobs.as_deref()),
             ("--message-format", args.message_format.as_deref()),
         ] {
@@ -58,6 +64,7 @@ pub fn execute(
             target_selection: call_guard::TargetSelection {
                 lib: args.lib,
                 bins: args.bins,
+                bin: args.bin.clone(),
                 examples: args.examples,
                 tests: args.tests,
                 benches: args.benches,

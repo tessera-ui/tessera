@@ -22,6 +22,7 @@ pub fn execute(
     release: bool,
     target: Option<&str>,
     package: Option<&str>,
+    binary: Option<&str>,
     profiling_output: Option<&Path>,
     debug_dirty_overlay: bool,
     asset_backend_override: Option<AssetBackend>,
@@ -42,6 +43,10 @@ pub fn execute(
             no_default_features: false,
         },
         release,
+        target_selection: call_guard::TargetSelection {
+            bin: binary.map(str::to_owned),
+            ..Default::default()
+        },
         ..call_guard::CheckOptions::new(package, target)
     })?;
     output::status("Building", package.unwrap_or("project"));
@@ -56,6 +61,9 @@ pub fn execute(
     }
     if let Some(package) = package {
         command.args(["-p", package]);
+    }
+    if let Some(binary) = binary {
+        command.args(["--bin", binary]);
     }
     configure_tessera_ui_features(&mut command, &features, profiling_output, None);
     command
