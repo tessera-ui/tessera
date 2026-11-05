@@ -621,14 +621,18 @@ mod tests {
         probe.get().expanded.expect("fixture state").set(true);
         renderer.render_frames(120);
         let restored = renderer.read_pixels().expect("restored pixels");
-        let different_pixels = expanded
+        for (index, (before, after)) in expanded
             .chunks_exact(4)
             .zip(restored.chunks_exact(4))
-            .filter(|(before, after)| before != after)
-            .count();
-        assert_eq!(
-            different_pixels, 0,
-            "expanded pixels must return after the animation settles"
-        );
+            .enumerate()
+        {
+            assert_eq!(
+                before,
+                after,
+                "restored pixel at ({}, {})",
+                index % 500,
+                index / 500
+            );
+        }
     }
 }

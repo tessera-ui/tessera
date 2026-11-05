@@ -1157,12 +1157,17 @@ mod tests {
             .with_mut(FloatingActionButtonMenuState::open);
         renderer.render_frames(120);
         let reopened = renderer.read_pixels().unwrap();
-        assert!(
-            expanded
-                .iter()
-                .zip(&reopened)
-                .all(|(before, after)| before.abs_diff(*after) <= 1),
-            "menu labels and shapes must recover within one channel step after a complete animation cycle"
-        );
+        for (index, (before, after)) in expanded
+            .chunks_exact(4)
+            .zip(reopened.chunks_exact(4))
+            .enumerate()
+        {
+            assert!(
+                before.iter().zip(after).all(|(a, b)| a.abs_diff(*b) <= 1),
+                "restored pixel at ({}, {}): {before:?} != {after:?}",
+                index % 400,
+                index / 400
+            );
+        }
     }
 }
