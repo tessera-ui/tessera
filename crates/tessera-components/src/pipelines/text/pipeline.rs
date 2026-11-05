@@ -278,6 +278,8 @@ impl PartialEq for TextData {
             && self.font == other.font
             && self.styled_identity == other.styled_identity
             && self.span_opacity == other.span_opacity
+            && self.text_buffer.wrap() == other.text_buffer.wrap()
+            && self.text_buffer.ellipsize() == other.text_buffer.ellipsize()
             && self.text_buffer.scroll() == other.text_buffer.scroll()
     }
 }
@@ -462,10 +464,20 @@ impl TextData {
             &mut write_font_system(),
             glyphon::Metrics::new(size, line_height),
         );
-        text_buffer.set_wrap(glyphon::Wrap::WordOrGlyph);
+        if constraint.single_line {
+            text_buffer.set_wrap(glyphon::Wrap::None);
+            text_buffer.set_ellipsize(glyphon::cosmic_text::Ellipsize::End(
+                glyphon::cosmic_text::EllipsizeHeightLimit::Lines(1),
+            ));
+        } else {
+            text_buffer.set_wrap(glyphon::Wrap::WordOrGlyph);
+        }
+        let single_line = constraint
+            .single_line
+            .then(|| text.replace(['\r', '\n'], " "));
         text_buffer.set_size(constraint.max_width, constraint.max_height);
         text_buffer.set_text(
-            text,
+            single_line.as_deref().unwrap_or(text),
             &glyphon::Attrs::new()
                 .family(
                     font.family
@@ -565,10 +577,7 @@ mod tests {
             "Shared shaped glyphs".into(),
             Color::BLACK,
             MaterialTypography::default().body_large,
-            TextConstraint {
-                max_width: None,
-                max_height: None,
-            },
+            TextConstraint::default(),
         );
         let origin = tessera_ui::PxPosition::from_f32_xy(20.0, 30.0);
         let mut buffer = (*shaped.text_area(origin, 1.0).buffer).clone();
@@ -621,6 +630,7 @@ mod tests {
             TextConstraint {
                 max_width: Some(60.0),
                 max_height: Some(24.0),
+                ..Default::default()
             },
         );
         let before = TextData::from_buffer(shaped.text_buffer.as_ref().clone());
@@ -650,19 +660,13 @@ mod tests {
             "alpha ".to_string(),
             Color::BLACK,
             style,
-            TextConstraint {
-                max_width: None,
-                max_height: None,
-            },
+            TextConstraint::default(),
         );
         let beta = TextData::shape(
             "beta".to_string(),
             Color::BLACK,
             style,
-            TextConstraint {
-                max_width: None,
-                max_height: None,
-            },
+            TextConstraint::default(),
         );
         let width = alpha.size[0] as f32 + beta.size[0] as f32 / 2.0;
         let phrase = TextData::shape(
@@ -672,6 +676,7 @@ mod tests {
             TextConstraint {
                 max_width: Some(width),
                 max_height: None,
+                ..Default::default()
             },
         );
         let runs: Vec<_> = phrase.text_buffer.layout_runs().collect();
@@ -685,6 +690,7 @@ mod tests {
             TextConstraint {
                 max_width: Some(width),
                 max_height: None,
+                ..Default::default()
             },
         );
         let runs: Vec<_> = long.text_buffer.layout_runs().collect();
@@ -713,10 +719,7 @@ mod tests {
                     content.to_owned(),
                     Color::BLACK,
                     style,
-                    TextConstraint {
-                        max_width: None,
-                        max_height: None,
-                    },
+                    TextConstraint::default(),
                 )
             };
             let regular = shape("Material typography", typography.body_large);

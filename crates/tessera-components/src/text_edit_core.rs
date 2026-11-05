@@ -3490,6 +3490,7 @@ impl tessera_ui::LayoutModifierNode for TextEditLayout {
         let text_constraint = TextConstraint {
             max_width: max_width_pixels.map(|px: Px| px.to_f32()),
             max_height: max_height_pixels.map(|px: Px| px.to_f32()),
+            ..Default::default()
         };
         if input.is_intrinsic() {
             let cached = self
@@ -3807,6 +3808,7 @@ mod tests {
             let normal = TextConstraint {
                 max_width: Some(200.0),
                 max_height: Some(80.0),
+                ..Default::default()
             };
             let before = controller.with(|controller| {
                 (
@@ -4075,6 +4077,7 @@ mod tests {
         let constraint = TextConstraint {
             max_width: Some(240.0),
             max_height: Some(max_height),
+            ..Default::default()
         };
         let (metrics, scroll) = controller
             .editor()
@@ -4104,6 +4107,7 @@ mod tests {
             TextConstraint {
                 max_width: Some(200.0),
                 max_height: Some(24.0),
+                ..Default::default()
             },
             controller.prepare_display(),
         );
@@ -4116,6 +4120,7 @@ mod tests {
             TextConstraint {
                 max_width: Some(350.0),
                 max_height: Some(42.0),
+                ..Default::default()
             },
             controller.prepare_display(),
         );
@@ -4136,6 +4141,7 @@ mod tests {
         let constraint = TextConstraint {
             max_width: Some(240.0),
             max_height: Some(80.0),
+            ..Default::default()
         };
         controller.text_data(constraint.clone(), controller.prepare_display());
         let text_cache_key = controller.text_cache_key().expect("initial text layout");
@@ -4195,6 +4201,7 @@ mod tests {
         let constraint = TextConstraint {
             max_width: Some(60.0),
             max_height: Some(40.0),
+            ..Default::default()
         };
 
         controller.text_data(constraint.clone(), controller.prepare_display());
@@ -4232,6 +4239,7 @@ mod tests {
             TextConstraint {
                 max_width: Some(60.0),
                 max_height: Some(40.0),
+                ..Default::default()
             },
             controller.prepare_display(),
         );
@@ -4253,6 +4261,7 @@ mod tests {
             TextConstraint {
                 max_width: Some(120.0),
                 max_height: Some(20.0),
+                ..Default::default()
             },
             controller.prepare_display(),
         );
@@ -4268,6 +4277,7 @@ mod tests {
             TextConstraint {
                 max_width: Some(120.0),
                 max_height: Some(20.0),
+                ..Default::default()
             },
             controller.prepare_display(),
         );
@@ -4288,6 +4298,7 @@ mod tests {
             TextConstraint {
                 max_width: Some(60.0),
                 max_height: Some(40.0),
+                ..Default::default()
             },
             controller.prepare_display(),
         );
@@ -4308,6 +4319,7 @@ mod tests {
         let constraint = TextConstraint {
             max_width: Some(120.0),
             max_height: Some(20.0),
+            ..Default::default()
         };
 
         controller.text_data(constraint.clone(), controller.prepare_display());
@@ -4338,6 +4350,7 @@ mod tests {
             TextConstraint {
                 max_width: Some(120.0),
                 max_height: Some(40.0),
+                ..Default::default()
             },
             controller.prepare_display(),
         );
@@ -4911,6 +4924,7 @@ mod tests {
         let constraint = TextConstraint {
             max_width: Some(240.0),
             max_height: Some(80.0),
+            ..Default::default()
         };
         controller.text_data(constraint, controller.prepare_display());
         let buffer = controller.editor().with_buffer(|buffer| buffer.clone());
@@ -5023,6 +5037,7 @@ mod tests {
         let constraint = TextConstraint {
             max_width: Some(240.0),
             max_height: Some(80.0),
+            ..Default::default()
         };
         let (metrics, scroll) = controller
             .editor()
@@ -5117,6 +5132,7 @@ mod tests {
         let constraint = TextConstraint {
             max_width: Some(240.0),
             max_height: Some(80.0),
+            ..Default::default()
         };
         let (metrics, scroll) = controller
             .editor()
@@ -5294,6 +5310,7 @@ mod tests {
         let constraint = TextConstraint {
             max_width: Some(240.0),
             max_height: Some(24.0),
+            ..Default::default()
         };
         let buffer = build_display_buffer(
             transformed.text(),
@@ -5381,6 +5398,7 @@ mod tests {
         let constraint = TextConstraint {
             max_width: Some(1000.0),
             max_height: None,
+            ..Default::default()
         };
         let before = controller.text_data(constraint.clone(), controller.prepare_display());
         let style = crate::theme::TextStyle {

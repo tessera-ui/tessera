@@ -44,6 +44,7 @@ pub use crate::pipelines::text::pipeline::{read_font_system, write_font_system};
 /// - `style` — optional text style override for typography presets.
 /// - `size` — optional font size override.
 /// - `line_height` — optional line height override.
+/// - `single_line` — keep text on one line and ellipsize overflow.
 /// - `accessibility_label` — optional label override, taking precedence over
 ///   modifier semantics and displayed content.
 /// - `accessibility_description` — optional description override, taking
@@ -76,6 +77,7 @@ pub fn text(
     style: Option<TextStyle>,
     size: Option<Dp>,
     line_height: Option<Dp>,
+    single_line: Option<bool>,
     #[prop(into)] accessibility_label: Option<String>,
     #[prop(into)] accessibility_description: Option<String>,
 ) {
@@ -102,6 +104,7 @@ pub fn text(
 
     let policy = TextLayout {
         text: content,
+        single_line: single_line.unwrap_or(false),
         color,
         style: TextStyle {
             font_size: size,
@@ -148,6 +151,7 @@ impl SemanticsModifierNode for TextSemantics {
 #[derive(Clone)]
 struct TextLayout {
     text: String,
+    single_line: bool,
     color: Color,
     style: TextStyle,
     shaped: Arc<Mutex<Option<CachedText>>>,
@@ -197,7 +201,9 @@ impl TextLayout {
 
 impl tessera_ui::LayoutModifierNode for TextLayout {
     fn measure_eq(&self, other: &Self) -> bool {
-        self.text == other.text && self.style == other.style
+        self.text == other.text
+            && self.style == other.style
+            && self.single_line == other.single_line
     }
 
     fn placement_eq(&self, other: &Self) -> bool {
@@ -212,6 +218,7 @@ impl tessera_ui::LayoutModifierNode for TextLayout {
             .shaped_text(TextConstraint {
                 max_width: max_width.map(|px: Px| px.to_f32()),
                 max_height: max_height.map(|px: Px| px.to_f32()),
+                single_line: self.single_line,
             })
             .measure_info();
 

@@ -347,10 +347,7 @@ fn shaped_width(content: &str, style: TextStyle) -> i32 {
         content.to_owned(),
         Color::BLACK,
         style,
-        TextConstraint {
-            max_width: None,
-            max_height: None,
-        },
+        TextConstraint::default(),
     )
     .measure_info()
     .size[0];

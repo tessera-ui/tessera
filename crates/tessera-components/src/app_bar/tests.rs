@@ -316,6 +316,16 @@ fn check_bar(samples: u32) {
     assert!(title.x0 >= 24.0 && title.x1 <= 216.0);
     assert!(title.y1 - title.y0 > 54.0);
     near(toolbar(&renderer).y1 - title.y1, 18.0);
+    settings.with_mut(|values| values.variant = TopAppBarVariant::Small);
+    renderer.render_frames(5);
+    let title = bounds(
+        &renderer,
+        "A longer screen title that wraps on narrow windows",
+        Role::Label,
+    );
+    near(title.height(), 42.0);
+    assert!(title.x0 >= 24.0 && title.x1 <= 216.0);
+    assert!(title.y0 >= 0.0 && title.y1 <= toolbar(&renderer).y1);
 
     settings.set(Settings::default());
     FocusManager::current().clear_focus(true);

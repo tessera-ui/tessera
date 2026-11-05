@@ -489,11 +489,13 @@ pub fn top_app_bar(
                             content.render();
                         } else if !compact_title.is_empty() {
                             text(compact_title.clone())
+                                .single_line(true)
                                 .style(theme.typography.title_large)
                                 .color(title_color);
                         }
                         if let Some(subtitle) = &compact_subtitle {
                             text(subtitle.clone())
+                                .single_line(true)
                                 .style(theme.typography.label_medium)
                                 .color(scheme.on_surface_variant);
                         }

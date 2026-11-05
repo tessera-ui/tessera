@@ -18,7 +18,7 @@ impl DrawCommand for TextCommand {
 }
 
 /// Describes size constraints for a text draw
-#[derive(Debug, PartialEq, Clone)]
+#[derive(Debug, PartialEq, Clone, Default)]
 pub struct TextConstraint {
     /// Maximum width of the text
     /// If None, it will be calculated by the text renderer
@@ -26,10 +26,13 @@ pub struct TextConstraint {
     /// Maximum height of the text
     /// If None, it will be calculated by the text renderer
     pub max_height: Option<f32>,
+    /// Keep text on one line and ellipsize horizontal overflow.
+    pub single_line: bool,
 }
 
 impl std::hash::Hash for TextConstraint {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.single_line.hash(state);
         if let Some(w) = self.max_width {
             w.to_bits().hash(state);
         } else {

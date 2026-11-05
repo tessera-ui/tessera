@@ -351,6 +351,7 @@ impl tessera_ui::LayoutModifierNode for ParagraphLayout {
                 .height()
                 .resolve_max()
                 .map(|size| size.to_f32()),
+            ..Default::default()
         });
         let mut result = LayoutResult::default();
         for (index, child) in input.children().into_iter().enumerate() {
