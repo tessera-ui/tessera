@@ -24,7 +24,7 @@
     - [x] iOS
   - [x] Tree-shaking for assets
   - [ ] Unicode font subsets
-- [ ] WindowInsets padding/size helpers
+- [x] WindowInsets padding/size helpers
 - [x] lazy_column
 - [x] lazy_row
 - [x] [Material Design components](https://m3.material.io/components)

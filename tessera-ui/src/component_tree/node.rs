@@ -923,10 +923,12 @@ fn relayout_base_layout(
         .iter()
         .copied()
         .zip(entry.child_constraints.iter().zip(entry.child_sizes.iter()))
-        .map(|(node_id, (constraint, size))| {
+        .enumerate()
+        .map(|(index, (node_id, (constraint, size)))| {
             (
                 node_id,
                 crate::layout::ChildMeasure {
+                    consumed_insets: entry.child_insets[index],
                     constraint: *constraint,
                     size: *size,
                     consistent: true,
@@ -1026,9 +1028,10 @@ pub(crate) fn measure_node(
         if let Some(entry) = layout_ctx.snapshot(node_data.instance_key) {
             let deferred = layout_ctx.deferred_invalidation(node_data.instance_key);
             let same_constraint = entry.constraint_key == *parent_constraint;
-            let node_self_measure_dirty = layout_ctx
-                .measure_self_nodes
-                .contains(&node_data.instance_key)
+            let node_self_measure_dirty = entry.consumed_insets != layout_ctx.consumed_insets.get()
+                || layout_ctx
+                    .measure_self_nodes
+                    .contains(&node_data.instance_key)
                 || deferred.as_ref().is_some_and(|pending| pending.measure);
             let node_self_placement_dirty = layout_ctx
                 .placement_self_nodes
@@ -1092,13 +1095,16 @@ pub(crate) fn measure_node(
 
                 let mut child_size_changed = false;
                 for (index, child_id) in dirty_children {
-                    let size = measure_node(
-                        child_id,
-                        &cached_child_constraints[index],
-                        tree,
-                        component_node_metadatas,
-                        Some(layout_ctx),
-                    )?;
+                    let size =
+                        layout_ctx.with_consumed_insets(entry.child_insets[index], || {
+                            measure_node(
+                                child_id,
+                                &cached_child_constraints[index],
+                                tree,
+                                component_node_metadatas,
+                                Some(layout_ctx),
+                            )
+                        })?;
                     if size != cached_child_sizes[index] {
                         child_size_changed = true;
                         break;
@@ -1187,6 +1193,8 @@ pub(crate) fn measure_node(
                                 node_data.instance_key,
                                 LayoutSnapshotEntry {
                                     constraint_key: *parent_constraint,
+                                    consumed_insets: layout_ctx.consumed_insets.get(),
+                                    child_insets: entry.child_insets.clone(),
                                     layout_result: LayoutResult {
                                         size: cached_result.size,
                                         placements,
@@ -1286,6 +1294,12 @@ pub(crate) fn measure_node(
                 node_data.instance_key,
                 LayoutSnapshotEntry {
                     constraint_key: *parent_constraint,
+                    consumed_insets: layout_ctx.consumed_insets.get(),
+                    child_insets: children
+                        .iter()
+                        .map(|id| measured_children[id].consumed_insets)
+                        .collect::<Vec<_>>()
+                        .into(),
                     layout_result,
                     base_placements: measured.base_placements,
                     child_indices: Arc::new(

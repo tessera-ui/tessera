@@ -33,9 +33,11 @@ pub(crate) struct ChildMeasure {
     pub constraint: Constraint,
     pub size: ComputedData,
     pub consistent: bool,
+    pub consumed_insets: crate::Insets,
 }
 
 pub(crate) struct ChildProbe {
+    consumed_insets: crate::Insets,
     constraint: Constraint,
     size: ComputedData,
 }
@@ -120,7 +122,13 @@ impl LayoutChild {
         let mut snapshots = LayoutSnapshotMap::default();
         let mut diagnostics = LayoutDiagnosticsCollector::default();
         let empty = Default::default();
+        let consumed_insets = std::cell::Cell::new(
+            scope
+                .layout_ctx
+                .map_or_else(Default::default, |context| context.consumed_insets.get()),
+        );
         let context = LayoutContext::intrinsic_probe(
+            &consumed_insets,
             &mut snapshots,
             &empty,
             &mut diagnostics,
@@ -335,8 +343,11 @@ impl<'a> MeasureScope<'a> {
             .get()
             .instance_key;
 
+        let consumed_insets = self
+            .layout_ctx
+            .map_or_else(Default::default, |context| context.consumed_insets.get());
         if let Some(probe) = self.probes.get(&node_id) {
-            if probe.constraint == *constraint {
+            if probe.constraint == *constraint && probe.consumed_insets == consumed_insets {
                 let size = probe.size;
                 if record {
                     self.record_measure(node_id, *constraint, size);
@@ -359,6 +370,7 @@ impl<'a> MeasureScope<'a> {
         self.probes.insert(
             node_id,
             ChildProbe {
+                consumed_insets,
                 constraint: *constraint,
                 size,
             },
@@ -379,16 +391,23 @@ impl<'a> MeasureScope<'a> {
         constraint: Constraint,
         size: ComputedData,
     ) {
+        let consumed_insets = self
+            .layout_ctx
+            .map_or_else(Default::default, |context| context.consumed_insets.get());
         if let Some(entry) = self.measured_children.get_mut(&node_id) {
-            let consistent =
-                entry.consistent && entry.constraint == constraint && entry.size == size;
+            let consistent = entry.consistent
+                && entry.constraint == constraint
+                && entry.size == size
+                && entry.consumed_insets == consumed_insets;
             entry.constraint = constraint;
             entry.size = size;
             entry.consistent = consistent;
+            entry.consumed_insets = consumed_insets;
         } else {
             self.measured_children.insert(
                 node_id,
                 ChildMeasure {
+                    consumed_insets,
                     constraint,
                     size,
                     consistent: true,
@@ -459,6 +478,26 @@ impl<'a> PlacementScope<'a> {
 }
 
 impl<'a> LayoutInput<'a> {
+    /// Returns window inset space already occupied by enclosing layout modifiers.
+    pub fn consumed_window_insets(&self) -> crate::Insets {
+        self.layout_ctx
+            .map_or_else(Default::default, |context| context.consumed_insets.get())
+    }
+
+    /// Measures nested content while marking the supplied edge lengths as occupied.
+    /// The enclosing consumption is restored before returning.
+    pub fn with_consumed_window_insets<R>(
+        &self,
+        insets: crate::Insets,
+        measure: impl FnOnce() -> R,
+    ) -> R {
+        if let Some(context) = self.layout_ctx {
+            context.with_consumed_insets(self.consumed_window_insets().union(insets), measure)
+        } else {
+            measure()
+        }
+    }
+
     pub(crate) fn new(
         tree: &'a ComponentNodeTree,
         parent_constraint: ParentConstraint<'a>,
@@ -503,9 +542,11 @@ impl<'a> LayoutInput<'a> {
                 let consistent = entry.consistent
                     && entry.constraint == measurement.constraint
                     && entry.size == measurement.size
+                    && entry.consumed_insets == measurement.consumed_insets
                     && measurement.consistent;
                 entry.constraint = measurement.constraint;
                 entry.size = measurement.size;
+                entry.consumed_insets = measurement.consumed_insets;
                 entry.consistent = consistent;
             } else {
                 self.measured_children.insert(child_id, measurement);

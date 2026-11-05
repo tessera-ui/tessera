@@ -4,6 +4,8 @@
 //!
 //! Attach layout and drawing behavior like padding and opacity to any subtree.
 
+#[cfg(test)]
+mod insets_tests;
 mod interaction;
 mod shadow;
 mod visual;
@@ -43,6 +45,24 @@ pub(crate) use interaction::{
 /// Extensions for composing reusable wrapper behavior around component
 /// subtrees.
 pub trait ModifierExt {
+    /// Pads and consumes the space not already occupied by enclosing inset modifiers.
+    fn window_insets_padding(self, insets: tessera_ui::WindowInsets) -> Modifier;
+
+    /// Marks inset space as occupied for nested padding and size modifiers.
+    fn consume_window_insets(self, insets: tessera_ui::WindowInsets) -> Modifier;
+
+    /// Sets width to the remaining left window inset.
+    fn window_insets_left_width(self, insets: tessera_ui::WindowInsets) -> Modifier;
+
+    /// Sets height to the remaining top window inset.
+    fn window_insets_top_height(self, insets: tessera_ui::WindowInsets) -> Modifier;
+
+    /// Sets width to the remaining right window inset.
+    fn window_insets_right_width(self, insets: tessera_ui::WindowInsets) -> Modifier;
+
+    /// Sets height to the remaining bottom window inset.
+    fn window_insets_bottom_height(self, insets: tessera_ui::WindowInsets) -> Modifier;
+
     /// Adds padding around the content.
     fn padding(self, padding: Padding) -> Modifier;
 
@@ -200,6 +220,25 @@ pub trait ModifierExt {
 }
 
 impl ModifierExt for Modifier {
+    fn window_insets_padding(self, insets: tessera_ui::WindowInsets) -> Modifier {
+        FoundationModifierExt::window_insets_padding(self, insets)
+    }
+    fn consume_window_insets(self, insets: tessera_ui::WindowInsets) -> Modifier {
+        FoundationModifierExt::consume_window_insets(self, insets)
+    }
+    fn window_insets_left_width(self, insets: tessera_ui::WindowInsets) -> Modifier {
+        FoundationModifierExt::window_insets_left_width(self, insets)
+    }
+    fn window_insets_top_height(self, insets: tessera_ui::WindowInsets) -> Modifier {
+        FoundationModifierExt::window_insets_top_height(self, insets)
+    }
+    fn window_insets_right_width(self, insets: tessera_ui::WindowInsets) -> Modifier {
+        FoundationModifierExt::window_insets_right_width(self, insets)
+    }
+    fn window_insets_bottom_height(self, insets: tessera_ui::WindowInsets) -> Modifier {
+        FoundationModifierExt::window_insets_bottom_height(self, insets)
+    }
+
     fn padding(self, padding: Padding) -> Modifier {
         FoundationModifierExt::padding(self, padding)
     }

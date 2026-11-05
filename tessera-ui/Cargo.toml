@@ -68,7 +68,7 @@ parking_lot = "0.12.5"
 console_error_panic_hook = "0.1.7"
 js-sys = "0.3.93"
 wasm-bindgen = "0.2.116"
-web-sys = { version = "0.3.93", features = ["console", "CssStyleDeclaration", "Document", "Element", "HtmlCanvasElement", "Window", "Response", "Url"] }
+web-sys = { version = "0.3.93", features = ["console", "CssStyleDeclaration", "Document", "Element", "HtmlCanvasElement", "Window", "Response", "Url", "HtmlElement", "Event", "EventTarget", "DomRect", "VisualViewport"] }
 wasm-bindgen-futures = "0.4.55"
 web-time = "1.1.0"
 
@@ -80,3 +80,7 @@ ndk-context = "0.1.1"
 
 [dev-dependencies]
 tempfile = "3.27"
+
+[target.'cfg(target_os = "ios")'.dependencies]
+objc2 = { version = "0.6.3", default-features = false }
+objc2-ui-kit = { version = "0.3.2", default-features = false, features = ["UIView", "UIResponder", "UIKeyboardLayoutGuide", "UILayoutGuide", "UITrackingLayoutGuide", "objc2-core-foundation"] }

@@ -167,3 +167,7 @@ pub use crate::headless::{
 
 #[cfg(target_os = "android")]
 pub use {jni, ndk_context, ndk_sys};
+
+/// Window safe areas and keyboard occlusion.
+pub mod window_insets;
+pub use window_insets::{Insets, WindowInsets, WindowInsetsController};

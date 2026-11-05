@@ -4,6 +4,7 @@
 //!
 //! Attach reusable layout and semantics behavior to any component subtree.
 
+mod insets;
 mod interaction;
 mod layout;
 mod semantics;
@@ -31,6 +32,24 @@ pub use semantics::SemanticsArgs;
 
 /// Shared modifier extensions that are not tied to a specific design system.
 pub trait ModifierExt {
+    /// Pads and consumes the space not already occupied by enclosing inset modifiers.
+    fn window_insets_padding(self, insets: tessera_ui::WindowInsets) -> Modifier;
+
+    /// Marks inset space as occupied for nested padding and size modifiers.
+    fn consume_window_insets(self, insets: tessera_ui::WindowInsets) -> Modifier;
+
+    /// Sets width to the remaining left window inset.
+    fn window_insets_left_width(self, insets: tessera_ui::WindowInsets) -> Modifier;
+
+    /// Sets height to the remaining top window inset.
+    fn window_insets_top_height(self, insets: tessera_ui::WindowInsets) -> Modifier;
+
+    /// Sets width to the remaining right window inset.
+    fn window_insets_right_width(self, insets: tessera_ui::WindowInsets) -> Modifier;
+
+    /// Sets height to the remaining bottom window inset.
+    fn window_insets_bottom_height(self, insets: tessera_ui::WindowInsets) -> Modifier;
+
     /// Adds padding around the content.
     fn padding(self, padding: Padding) -> Modifier;
 
@@ -111,6 +130,31 @@ pub trait ModifierExt {
 }
 
 impl ModifierExt for Modifier {
+    fn window_insets_padding(self, insets: tessera_ui::WindowInsets) -> Modifier {
+        self.push_layout(insets::InsetPadding {
+            insets,
+            consume_only: false,
+        })
+    }
+    fn consume_window_insets(self, insets: tessera_ui::WindowInsets) -> Modifier {
+        self.push_layout(insets::InsetPadding {
+            insets,
+            consume_only: true,
+        })
+    }
+    fn window_insets_left_width(self, insets: tessera_ui::WindowInsets) -> Modifier {
+        self.push_layout(insets::InsetSize { insets, edge: 0 })
+    }
+    fn window_insets_top_height(self, insets: tessera_ui::WindowInsets) -> Modifier {
+        self.push_layout(insets::InsetSize { insets, edge: 1 })
+    }
+    fn window_insets_right_width(self, insets: tessera_ui::WindowInsets) -> Modifier {
+        self.push_layout(insets::InsetSize { insets, edge: 2 })
+    }
+    fn window_insets_bottom_height(self, insets: tessera_ui::WindowInsets) -> Modifier {
+        self.push_layout(insets::InsetSize { insets, edge: 3 })
+    }
+
     fn padding(self, padding: Padding) -> Modifier {
         self.push_layout(PaddingModifierNode { padding })
     }

@@ -4,7 +4,7 @@ mod pointer;
 mod replay;
 mod scene;
 
-use std::{collections::VecDeque, num::NonZero, sync::Arc};
+use std::{cell::Cell, collections::VecDeque, num::NonZero, sync::Arc};
 
 use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
 use smallvec::SmallVec;
@@ -49,6 +49,8 @@ use crate::profiler::{NodeMeta, Phase as ProfilerPhase, ScopeGuard as ProfilerSc
 #[derive(Clone)]
 pub(crate) struct LayoutSnapshotEntry {
     pub constraint_key: Constraint,
+    pub consumed_insets: crate::Insets,
+    pub child_insets: Arc<[crate::Insets]>,
     pub layout_result: LayoutResult,
     pub base_placements: Arc<[(u64, PxPosition)]>,
     pub child_constraints: Arc<[Constraint]>,
@@ -170,6 +172,7 @@ pub(crate) fn flush_pending_globally_positioned_callbacks() {
 
 #[derive(Clone, Copy)]
 pub(crate) struct LayoutContext<'a> {
+    pub consumed_insets: &'a Cell<crate::Insets>,
     pub state_reader_instance_key: Option<u64>,
     snapshots: *mut LayoutSnapshotMap,
     pub measure_self_nodes: &'a HashSet<u64>,
@@ -314,7 +317,23 @@ impl LayoutDiagnosticsCollector {
 }
 
 impl LayoutContext<'_> {
+    pub(crate) fn with_consumed_insets<R>(
+        &self,
+        insets: crate::Insets,
+        measure: impl FnOnce() -> R,
+    ) -> R {
+        struct Restore<'a>(&'a Cell<crate::Insets>, crate::Insets);
+        impl Drop for Restore<'_> {
+            fn drop(&mut self) {
+                self.0.set(self.1);
+            }
+        }
+        let _restore = Restore(self.consumed_insets, self.consumed_insets.replace(insets));
+        measure()
+    }
+
     pub(crate) fn new<'a>(
+        consumed_insets: &'a Cell<crate::Insets>,
         snapshots: &'a mut LayoutSnapshotMap,
         measure_self_nodes: &'a HashSet<u64>,
         placement_self_nodes: &'a HashSet<u64>,
@@ -323,6 +342,7 @@ impl LayoutContext<'_> {
         diagnostics: &'a mut LayoutDiagnosticsCollector,
     ) -> LayoutContext<'a> {
         LayoutContext {
+            consumed_insets,
             state_reader_instance_key: None,
             snapshots,
             measure_self_nodes,
@@ -335,12 +355,14 @@ impl LayoutContext<'_> {
     }
 
     pub(crate) fn intrinsic_probe<'a>(
+        consumed_insets: &'a Cell<crate::Insets>,
         snapshots: &'a mut LayoutSnapshotMap,
         empty: &'a HashSet<u64>,
         diagnostics: &'a mut LayoutDiagnosticsCollector,
         parent: Option<&'a LayoutContext<'_>>,
     ) -> LayoutContext<'a> {
         LayoutContext {
+            consumed_insets,
             state_reader_instance_key: crate::runtime::current_measured_node_instance_key(),
             snapshots,
             measure_self_nodes: empty,
@@ -2357,7 +2379,9 @@ impl ComponentTree {
         record_frame_stage(&mut stage_timer, "consumer_attachments");
         measure_self_nodes.extend(structural_dirty_nodes);
         {
+            let consumed_insets = Cell::new(crate::Insets::default());
             let layout_ctx = LayoutContext::new(
+                &consumed_insets,
                 &mut self.layout_snapshots,
                 &measure_self_nodes,
                 &placement_dirty_nodes,

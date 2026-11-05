@@ -7268,6 +7268,7 @@ dependencies = [
  "objc2 0.6.4",
  "objc2-app-kit 0.3.2",
  "objc2-quartz-core 0.3.2",
+ "objc2-ui-kit 0.3.2",
  "parking_lot",
  "pollster",
  "rustc-hash 2.1.3",

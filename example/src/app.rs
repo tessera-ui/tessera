@@ -20,8 +20,8 @@ use tessera_components::{
 use tessera_i18n::{I18n, langid};
 use tessera_shard::{RouterController, RouterDestination, shard_home};
 use tessera_ui::{
-    Color, Dp, FrameNanosControl, Modifier, RenderSlotWith, State, current_frame_nanos,
-    receive_frame_nanos, remember, tessera, use_context,
+    Color, Dp, FrameNanosControl, Modifier, RenderSlotWith, State, WindowInsets,
+    current_frame_nanos, receive_frame_nanos, remember, tessera, use_context,
 };
 
 use crate::{
@@ -75,6 +75,7 @@ pub(crate) fn app(
                 });
             }
             scaffold()
+                .modifier(Modifier::new().window_insets_padding(WindowInsets::SafeDrawing))
                 .top_bar(move || {
                     let _app_bar = top_app_bar()
                         .title(

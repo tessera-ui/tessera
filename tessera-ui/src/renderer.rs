@@ -1755,6 +1755,7 @@ where
             None => return,
         };
 
+        crate::window_insets::platform::refresh(app.window());
         app.resize_if_needed();
         let accessibility_enabled =
             self.accessibility_adapter.is_some() && self.accessibility_active;
@@ -2051,6 +2052,13 @@ where
         crate::runtime::reset_component_slots();
         #[cfg(feature = "profiling")]
         self.pending_redraw_reasons.clear();
+    }
+
+    fn about_to_wait(&mut self, _event_loop: &ActiveEventLoop) {
+        let _session = self.session.enter();
+        if let Some(app) = self.app.as_ref() {
+            crate::window_insets::platform::refresh(app.window());
+        }
     }
 
     #[tracing::instrument(level = "debug", skip(self, event_loop))]
