@@ -22,6 +22,8 @@ use tessera_ui::{
     modifier::FocusModifierExt as _, remember, scaled_box, tessera, use_context,
 };
 
+use crate::res::I18N;
+
 fn style(size: f64, height: f64, weight: u16, tracking: f64) -> TextStyle {
     TextStyle {
         font_size: Dp(size),
@@ -62,10 +64,22 @@ fn canvas(is_switch: bool) {
                 .clip_to_bounds()
                 .semantics(SemanticsArgs {
                     role: Some(Role::Group),
-                    label: Some(format!(
-                        "{} adjacent label colors",
-                        if is_switch { "Switch" } else { "Checkbox" }
-                    )),
+                    label: Some(
+                        I18N.format(
+                            "ui-value-adjacent-label-colors",
+                            [(
+                                "v0",
+                                I18N.text(
+                                    &(if is_switch {
+                                        "ui-switch"
+                                    } else {
+                                        "ui-checkbox"
+                                    }),
+                                )
+                                .into(),
+                            )],
+                        ),
+                    ),
                     merge_descendants: true,
                     ..Default::default()
                 }),
@@ -88,7 +102,7 @@ fn canvas(is_switch: bool) {
                         .clip_to_bounds()
                         .semantics(SemanticsArgs {
                             role: Some(Role::Group),
-                            label: Some("Adjacent labels app viewport".into()),
+                            label: Some(I18N.text("ui-adjacent-labels-app-viewport")),
                             merge_descendants: true,
                             ..Default::default()
                         }),
@@ -108,7 +122,11 @@ fn canvas(is_switch: bool) {
                         })
                         .title_content(move || {
                             text()
-                                .content(if is_switch { "Privacy" } else { "Meal options" })
+                                .content(I18N.text(if is_switch {
+                                    "ui-privacy"
+                                } else {
+                                    "ui-meal-options"
+                                }))
                                 .style(style(22.0, 28.0, 400, 0.0))
                                 .color(scheme.on_surface);
                         });
@@ -121,7 +139,7 @@ fn canvas(is_switch: bool) {
                             .modifier(Modifier::new().offset(Dp(16.0), Dp(80.0)))
                             .children(move || {
                                 text()
-                                    .content("Extras")
+                                    .content(I18N.text("ui-extras"))
                                     .style(style(14.0, 20.0, 500, 0.1))
                                     .color(scheme.on_surface_variant);
                             });
@@ -153,13 +171,13 @@ fn extra(index: usize) {
     let checked = remember(|| index < 2);
     let focus = remember(FocusRequester::new).get();
     let scheme = use_context::<MaterialTheme>().unwrap().get().color_scheme;
-    let label = ["Pickles", "Tomato", "Lettuce", "Cheese"][index];
+    let label = ["ui-pickles", "ui-tomato", "ui-lettuce", "ui-cheese"][index];
     let top = Dp(112.0 + index as f64 * 56.0);
     checkbox()
         .modifier(Modifier::new().offset(Dp(4.0), top))
         .checked(checked.get())
         .focus_requester(focus)
-        .accessibility_label(label)
+        .accessibility_label(I18N.text(label))
         .on_toggle(move |value| checked.set(value));
     boxed()
         .alignment(Alignment::CenterStart)
@@ -172,7 +190,7 @@ fn extra(index: usize) {
         ))
         .children(move || {
             text()
-                .content(label)
+                .content(I18N.text(label))
                 .style(style(16.0, 24.0, 400, 0.5))
                 .color(scheme.on_surface);
         });
@@ -183,10 +201,14 @@ fn setting(index: usize) {
     let checked = remember(|| index < 2);
     let focus = remember(FocusRequester::new).get();
     let scheme = use_context::<MaterialTheme>().unwrap().get().color_scheme;
-    let label = ["Permission manager", "Camera access", "Show password"][index];
+    let label = [
+        "ui-permission-manager",
+        "ui-camera-access",
+        "ui-show-password",
+    ][index];
     let supporting = [
-        Some("App has access to your data"),
-        Some("App has access to your camera"),
+        Some("ui-app-has-access-to-your-data"),
+        Some("ui-app-has-access-to-your-camera"),
         None,
     ][index];
     let top = Dp([104.0, 176.0, 240.0][index]);
@@ -194,7 +216,7 @@ fn setting(index: usize) {
         .modifier(Modifier::new().offset(Dp(344.0), top))
         .checked(checked.get())
         .focus_requester(focus)
-        .accessibility_label(label)
+        .accessibility_label(I18N.text(label))
         .on_toggle(move |value| checked.set(value))
         .child_optional(if checked.get() {
             Some(tessera_ui::RenderSlot::new(|| {
@@ -215,12 +237,12 @@ fn setting(index: usize) {
         .children(move || {
             column().children(move || {
                 text()
-                    .content(label)
+                    .content(I18N.text(label))
                     .style(style(16.0, 24.0, 400, 0.5))
                     .color(scheme.on_surface);
                 if let Some(supporting) = supporting {
                     text()
-                        .content(supporting)
+                        .content(I18N.text(supporting))
                         .style(style(14.0, 20.0, 400, 0.2))
                         .color(scheme.on_surface_variant);
                 }

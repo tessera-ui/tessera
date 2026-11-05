@@ -18,6 +18,8 @@ use tessera_ui::{
     Callback, Dp, Modifier, State, modifier::FocusModifierExt as _, remember, tessera,
 };
 
+use crate::res::I18N;
+
 use super::{
     BACKGROUND, INK, PANEL,
     article::{ArticleDestination, ArticleRoute},
@@ -34,218 +36,218 @@ struct Component {
 
 const COMPONENTS: &[Component] = &[
     Component {
-        title: "Button groups",
-        description: "Button groups organize buttons and add interactions between them",
+        title: "ui-button-groups",
+        description: "ui-button-groups-organize-buttons-and-add-interactions-between-them",
         category: 0,
         demo: 18,
     },
     Component {
-        title: "Buttons",
-        description: "Buttons prompt most actions in a UI",
+        title: "ui-buttons",
+        description: "ui-buttons-prompt-most-actions-in-a-ui",
         category: 0,
         demo: 36,
     },
     Component {
-        title: "Extended FABs",
-        description: "Extended floating action buttons (extended FABs) help people take primary actions",
+        title: "ui-extended-fabs",
+        description: "ui-extended-floating-action-buttons-extended-fabs-help-people-take-primary-actions",
         category: 0,
         demo: 9,
     },
     Component {
-        title: "FAB menu",
-        description: "The floating action button (FAB) menu opens from a FAB to display multiple related actions",
+        title: "ui-fab-menu",
+        description: "ui-the-floating-action-button-fab-menu-opens-from-a-fab-to-display-multiple-related-actions",
         category: 0,
         demo: 8,
     },
     Component {
-        title: "Floating action buttons (FABs)",
-        description: "Floating action buttons (FABs) help people take primary actions",
+        title: "ui-floating-action-buttons-fabs",
+        description: "ui-floating-action-buttons-fabs-help-people-take-primary-actions",
         category: 0,
         demo: 19,
     },
     Component {
-        title: "Icon buttons",
-        description: "Icon buttons help people take actions with a single tap",
+        title: "ui-icon-buttons",
+        description: "ui-icon-buttons-help-people-take-actions-with-a-single-tap",
         category: 0,
         demo: 3,
     },
     Component {
-        title: "Segmented buttons",
-        description: "Segmented buttons help people select options, switch views, or sort elements",
+        title: "ui-segmented-buttons",
+        description: "ui-segmented-buttons-help-people-select-options-switch-views-or-sort-elements",
         category: 0,
         demo: 20,
     },
     Component {
-        title: "Split buttons",
-        description: "Split buttons open a menu to give people more options related to an action",
+        title: "ui-split-buttons",
+        description: "ui-split-buttons-open-a-menu-to-give-people-more-options-related-to-an-action",
         category: 0,
         demo: 22,
     },
     Component {
-        title: "Date pickers",
-        description: "Date pickers let people select a date, or a range of dates",
+        title: "ui-date-pickers",
+        description: "ui-date-pickers-let-people-select-a-date-or-a-range-of-dates",
         category: 1,
         demo: 28,
     },
     Component {
-        title: "Time pickers",
-        description: "Time pickers help people select and set a specific time",
+        title: "ui-time-pickers",
+        description: "ui-time-pickers-help-people-select-and-set-a-specific-time",
         category: 1,
         demo: 30,
     },
     Component {
-        title: "Loading indicator",
-        description: "Loading indicators show the progress of a process for a short wait time",
+        title: "ui-loading-indicator",
+        description: "ui-loading-indicators-show-the-progress-of-a-process-for-a-short-wait-time",
         category: 2,
         demo: 6,
     },
     Component {
-        title: "Progress indicators",
-        description: "Progress indicators show the status of a process in real time",
+        title: "ui-progress-indicators",
+        description: "ui-progress-indicators-show-the-status-of-a-process-in-real-time",
         category: 2,
         demo: 7,
     },
     Component {
-        title: "Navigation bar",
-        description: "Navigation bars let people switch between UI views on smaller devices",
+        title: "ui-navigation-bar",
+        description: "ui-navigation-bars-let-people-switch-between-ui-views-on-smaller-devices",
         category: 3,
         demo: 31,
     },
     Component {
-        title: "Navigation drawer",
-        description: "Navigation drawers let people switch between UI views on larger devices",
+        title: "ui-navigation-drawer",
+        description: "ui-navigation-drawers-let-people-switch-between-ui-views-on-larger-devices",
         category: 3,
         demo: 11,
     },
     Component {
-        title: "Navigation rail",
-        description: "Navigation rails let people switch between UI views on mid-sized devices",
+        title: "ui-navigation-rail",
+        description: "ui-navigation-rails-let-people-switch-between-ui-views-on-mid-sized-devices",
         category: 3,
         demo: 32,
     },
     Component {
-        title: "Bottom sheets",
-        description: "Bottom sheets show secondary content anchored to the bottom of the screen",
+        title: "ui-bottom-sheets",
+        description: "ui-bottom-sheets-show-secondary-content-anchored-to-the-bottom-of-the-screen",
         category: 4,
         demo: 33,
     },
     Component {
-        title: "Side sheets",
-        description: "Side sheets show secondary content anchored to the side of the screen",
+        title: "ui-side-sheets",
+        description: "ui-side-sheets-show-secondary-content-anchored-to-the-side-of-the-screen",
         category: 4,
         demo: 34,
     },
     Component {
-        title: "App bars",
-        description: "App bars are placed at the top of the screen to help people navigate through a product ",
+        title: "ui-app-bars",
+        description: "ui-app-bars-are-placed-at-the-top-of-the-screen-to-help-people-navigate-through-a-product",
         category: 5,
         demo: 1,
     },
     Component {
-        title: "Badges",
-        description: "Badges show notifications, counts, or status information on navigation items and icons",
+        title: "ui-badges",
+        description: "ui-badges-show-notifications-counts-or-status-information-on-navigation-items-and-icons-1606",
         category: 5,
         demo: 12,
     },
     Component {
-        title: "Cards",
-        description: "Cards display content and actions about a single subject",
+        title: "ui-cards",
+        description: "ui-cards-display-content-and-actions-about-a-single-subject",
         category: 5,
         demo: 16,
     },
     Component {
-        title: "Carousel",
-        description: "Carousels show a collection of items that can be scrolled on and off the screen",
+        title: "ui-carousel",
+        description: "ui-carousels-show-a-collection-of-items-that-can-be-scrolled-on-and-off-the-screen",
         category: 5,
         demo: 2,
     },
     Component {
-        title: "Checkbox",
-        description: "Checkboxes let users select one or more items from a list, or turn an item on or off",
+        title: "ui-checkbox",
+        description: "ui-checkboxes-let-users-select-one-or-more-items-from-a-list-or-turn-an-item-on-or-off",
         category: 5,
         demo: 37,
     },
     Component {
-        title: "Chips",
-        description: "Chips help people enter information, make selections, filter content, or trigger actions",
+        title: "ui-chips",
+        description: "ui-chips-help-people-enter-information-make-selections-filter-content-or-trigger-actions",
         category: 5,
         demo: 17,
     },
     Component {
-        title: "Dialogs",
-        description: "Dialogs provide important prompts in a user flow",
+        title: "ui-dialogs",
+        description: "ui-dialogs-provide-important-prompts-in-a-user-flow",
         category: 5,
         demo: 13,
     },
     Component {
-        title: "Divider",
-        description: "Dividers are thin lines that group content in lists or other containers",
+        title: "ui-divider",
+        description: "ui-dividers-are-thin-lines-that-group-content-in-lists-or-other-containers",
         category: 5,
         demo: 14,
     },
     Component {
-        title: "Lists",
-        description: "Lists are continuous, vertical indexes of text and images",
+        title: "ui-lists",
+        description: "ui-lists-are-continuous-vertical-indexes-of-text-and-images",
         category: 5,
         demo: 15,
     },
     Component {
-        title: "Menus",
-        description: "Menus display a list of choices on a temporary surface",
+        title: "ui-menus",
+        description: "ui-menus-display-a-list-of-choices-on-a-temporary-surface",
         category: 5,
         demo: 26,
     },
     Component {
-        title: "Radio button",
-        description: "Radio buttons let people select one option from a set of options",
+        title: "ui-radio-button",
+        description: "ui-radio-buttons-let-people-select-one-option-from-a-set-of-options",
         category: 5,
         demo: 23,
     },
     Component {
-        title: "Search",
-        description: "Search lets people enter a keyword or phrase to get relevant information",
+        title: "ui-search",
+        description: "ui-search-lets-people-enter-a-keyword-or-phrase-to-get-relevant-information",
         category: 5,
         demo: 27,
     },
     Component {
-        title: "Sliders",
-        description: "Sliders allow users to make selections from a range of values",
+        title: "ui-sliders",
+        description: "ui-sliders-allow-users-to-make-selections-from-a-range-of-values",
         category: 5,
         demo: 5,
     },
     Component {
-        title: "Snackbar",
-        description: "Snackbars show short updates about app processes at the bottom of the screen",
+        title: "ui-snackbar",
+        description: "ui-snackbars-show-short-updates-about-app-processes-at-the-bottom-of-the-screen",
         category: 5,
         demo: 25,
     },
     Component {
-        title: "Switch",
-        description: "Switches toggle the selection of an item on and off",
+        title: "ui-switch",
+        description: "ui-switches-toggle-the-selection-of-an-item-on-and-off",
         category: 5,
         demo: 38,
     },
     Component {
-        title: "Tabs",
-        description: "Tabs organize content across different screens and views",
+        title: "ui-tabs",
+        description: "ui-tabs-organize-content-across-different-screens-and-views",
         category: 5,
         demo: 21,
     },
     Component {
-        title: "Text fields",
-        description: "Text fields let users enter text into a UI",
+        title: "ui-text-fields",
+        description: "ui-text-fields-let-users-enter-text-into-a-ui",
         category: 5,
         demo: 24,
     },
     Component {
-        title: "Toolbars",
-        description: "Toolbars display frequently used actions relevant to the current page",
+        title: "ui-toolbars",
+        description: "ui-toolbars-display-frequently-used-actions-relevant-to-the-current-page",
         category: 5,
         demo: 10,
     },
     Component {
-        title: "Tooltips",
-        description: "Tooltips display brief labels or messages",
+        title: "ui-tooltips",
+        description: "ui-tooltips-display-brief-labels-or-messages",
         category: 5,
         demo: 4,
     },
@@ -283,7 +285,7 @@ pub(super) fn component_pages(
         let route = ArticleRoute {
             // Component pages open on Overview, matching the landing article of
             // the official Material Design 3 component pages.
-            initial_page: "Overview",
+            initial_page: "ui-overview",
             previous: index.checked_sub(1).map(|index| ArticleDestination {
                 title: COMPONENTS[index].title,
                 on_open: previous_article,
@@ -306,7 +308,10 @@ pub(super) fn component_pages(
                             SemanticsArgs {
                                 test_tag: Some(format!("component-article-{}", component.demo)),
                                 role: Some(tessera_ui::accesskit::Role::Group),
-                                label: Some(format!("{} specifications", component.title)),
+                                label: Some(I18N.format(
+                                    "ui-value-specifications",
+                                    [("v0", I18N.text(&component.title).into())],
+                                )),
                                 merge_descendants: true,
                                 ..Default::default()
                             },
@@ -402,7 +407,7 @@ pub(super) fn component_pages(
                                     .session_optional(sessions.map(|sessions| sessions.side_sheet))
                                     .route(route.clone());
                             } else {
-                                unreachable!("unregistered component article");
+                                unreachable!("ui-unregistered-component-article");
                             }
                         });
                 });
@@ -424,14 +429,14 @@ pub(super) fn component_pages(
                     },
                 ))
                 .children(move || {
-                    super::media::page_header("Components", "", width.get());
+                    super::media::page_header("ui-components", "", width.get());
                     for (category, title) in [
-                        "Buttons",
-                        "Date & time pickers",
-                        "Loading & progress",
-                        "Navigation",
-                        "Sheets",
-                        "All other components",
+                        "ui-buttons",
+                        "ui-date-time-pickers",
+                        "ui-loading-progress",
+                        "ui-navigation",
+                        "ui-sheets",
+                        "ui-all-other-components",
                     ]
                     .into_iter()
                     .enumerate()
@@ -498,7 +503,10 @@ fn component_card(component: Component, index: usize, selected: State<Option<usi
             ..Default::default()
         }))
         .on_click(move || selected.set(Some(index)))
-        .accessibility_label(format!("Open {} specifications", component.title))
+        .accessibility_label(I18N.format(
+            "ui-open-value-specifications",
+            [("v0", I18N.text(&component.title).into())],
+        ))
         .child(move || {
             column()
                 .modifier(Modifier::new().fill_max_width())
@@ -509,12 +517,12 @@ fn component_card(component: Component, index: usize, selected: State<Option<usi
                         .modifier(Modifier::new().fill_max_width().padding_all(Dp(24.0)))
                         .children(move || {
                             text()
-                                .content(component.title)
+                                .content(I18N.text(component.title))
                                 .style(type_style(24.0, 32.0))
                                 .color(INK);
                             gap(Dp(8.0));
                             text()
-                                .content(component.description)
+                                .content(I18N.text(component.description))
                                 .style(type_style(16.0, 24.0))
                                 .color(INK);
                         });

@@ -2,7 +2,7 @@
 //!
 //! ## Usage
 //!
-//! Load `tessera-config.toml` and generate compiled asset bindings in build
+//! Load `tessera-config.toml` and generate resource bindings in build
 //! scripts.
 
 #![deny(
@@ -29,6 +29,7 @@ use backend_platform::generate_platform_backend_tokens;
 
 mod backend_embed;
 mod backend_platform;
+mod localization;
 
 /// Environment variable selecting the asset backend (`embed` or `platform`).
 pub const ASSET_BACKEND_ENV: &str = "TESSERA_ASSET_BACKEND";
@@ -91,6 +92,17 @@ pub struct TesseraConfig {
     pub assets: Option<AssetsConfig>,
     /// Plugin wrapper generation settings.
     pub plugin: Option<PluginConfig>,
+    /// Localization catalog settings.
+    pub i18n: Option<I18nConfig>,
+}
+
+/// Embedded localization catalogs and their fallback language.
+#[derive(Debug, Clone, Deserialize)]
+pub struct I18nConfig {
+    /// Catalog directory relative to the package root. Defaults to `locales`.
+    pub dir: Option<String>,
+    /// Fallback language and default language for the entry package.
+    pub fallback: String,
 }
 
 /// Asset directory and filtering configuration.
@@ -220,10 +232,23 @@ pub fn resolve_assets_dir(manifest_dir: &Path, config: Option<&TesseraConfig>) -
     Some(manifest_dir.join(dir))
 }
 
-/// Generates the asset bindings source file during build.
+/// Lists configured asset and localization directories for development watching.
+pub fn resolve_resource_dirs(
+    manifest_dir: &Path,
+    config: Option<&TesseraConfig>,
+) -> impl Iterator<Item = PathBuf> {
+    let locales = config
+        .and_then(|config| config.i18n.as_ref())
+        .map(|config| manifest_dir.join(config.dir.as_deref().unwrap_or("locales")));
+    resolve_assets_dir(manifest_dir, config)
+        .into_iter()
+        .chain(locales)
+}
+
+/// Generates bindings for configured assets and localization catalogs.
 ///
 /// The generated file is written to `OUT_DIR/tessera_assets.rs`.
-pub fn generate_assets() -> Result<()> {
+pub fn build() -> Result<()> {
     let manifest_dir = PathBuf::from(
         env::var("CARGO_MANIFEST_DIR").context("Missing CARGO_MANIFEST_DIR for build script")?,
     );
@@ -253,7 +278,12 @@ pub fn generate_assets() -> Result<()> {
         entries = collect_assets(dir, &asset_namespace(&package_name, &package_version))?;
     }
 
-    let generated = generate_asset_file(&entries, backend)?;
+    let mut generated = generate_asset_file(&entries, backend)?;
+    let catalogs = localization::generate(
+        &manifest_dir,
+        config.as_ref().and_then(|config| config.i18n.as_ref()),
+    )?;
+    generated.push_str(&prettyplease::unparse(&syn::parse2::<syn::File>(catalogs)?));
     fs::write(out_dir.join(GENERATED_ASSET_FILE), generated)
         .with_context(|| "Failed to write generated asset file")?;
     Ok(())

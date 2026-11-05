@@ -31,6 +31,8 @@ use tessera_ui::{
     accesskit::Role, modifier::FocusModifierExt as _, remember, scaled_box, tessera, use_context,
 };
 
+use crate::res::I18N;
+
 use super::{
     ACCENT, BACKGROUND, INK,
     annotations::{self, Rect, SpaceGeometry, watch_in_space},
@@ -41,42 +43,42 @@ use super::{
 #[tessera]
 pub(super) fn text_fields_spec(route: Option<crate::pages::material_spec::article::ArticleRoute>) {
     article(
-        "Text fields",
-        "Enter and edit text in filled or outlined fields.",
+        "ui-text-fields",
+        "ui-enter-and-edit-text-in-filled-or-outlined-fields",
         vec![
             SpecSection {
-                title: "Tokens & specs",
+                title: "ui-tokens-specs",
                 content: RenderSlot::new(tokens),
             },
             SpecSection {
-                title: "Filled text field",
+                title: "ui-filled-text-field",
                 content: RenderSlot::new(|| {
                     detail(false);
                 }),
             },
             SpecSection {
-                title: "Outlined text field",
+                title: "ui-outlined-text-field",
                 content: RenderSlot::new(|| {
                     detail(true);
                 }),
             },
         ],
     ).route_optional(route.clone()).pages(vec![
-        ArticlePage{title:"Overview",intro:Some(RenderSlot::new(overview_variants)),sections:vec![
-            SpecSection{title:"Availability & resources",content:RenderSlot::new(availability)},
-            SpecSection{title:"Differences from M2",content:RenderSlot::new(differences)},
+        ArticlePage{title:"ui-overview",intro:Some(RenderSlot::new(overview_variants)),sections:vec![
+            SpecSection{title:"ui-availability-resources",content:RenderSlot::new(availability)},
+            SpecSection{title:"ui-differences-from-m2",content:RenderSlot::new(differences)},
         ]},
-        ArticlePage{title:"Guidelines",intro:Some(RenderSlot::new(field_variants)),sections:vec![
-            SpecSection{title:"Usage",content:RenderSlot::new(|| {prose("Use a text field when someone needs to enter text into a UI, such as filling in contact or payment information. Both variants of text fields use a container to provide a visual cue for interaction and provide the same functionality.");gap(Dp(24.0));contact_form(false);gap(Dp(24.0));subheading("Outlined text fields".into());prose("Outlined text fields have less visual emphasis than filled text fields. When they appear in places like forms, where many text fields are placed together, their reduced emphasis helps simplify the layout.");gap(Dp(24.0));contact_form(true);})},
-            SpecSection{title:"Choosing text fields",content:RenderSlot::new(|| {subheading("Choosing text fields".into());prose("Both variants of text field provide the same functionality. The variant used can depend on style alone. Choose the variant that works best with an app's visual style, best accommodates the UI's goals, and is most distinct from other components and surrounding content.");gap(Dp(24.0));field_variants();gap(Dp(24.0));subheading("Using both text field variants on the same screen".into());prose("If both variants of text field are used in a UI, they should be used consistently within different sections, and not intermixed within the same region.");gap(Dp(24.0));guidance::variant_regions();})},
-            SpecSection{title:"Anatomy",content:RenderSlot::new(field_guideline_anatomy)},
-            SpecSection{title:"Adaptive design",content:RenderSlot::new(|| {prose("For compact breakpoints, text fields can span the full width of the display. For medium and expanded breakpoints, text fields should be bound by flexible margins or other containers, and should not span the full width of a large screen.");gap(Dp(24.0));contact_form(true);gap(Dp(24.0));subheading("Density".into());prose("Dense text fields enable people to scan and take action on large amounts of information.");gap(Dp(24.0));subheading("Avoid applying density by default".into());prose("Don't apply density to text fields by default. This lowers their targets below the recommended 48 × 48 CSS pixels. Instead, give people a way to choose a higher density. Keep all targets that revert the density setting at a minimum of 48 × 48 CSS pixels each.");gap(Dp(24.0));field_figure(true,false,false,true);})},
+        ArticlePage{title:"ui-guidelines",intro:Some(RenderSlot::new(field_variants)),sections:vec![
+            SpecSection{title:"ui-usage",content:RenderSlot::new(|| {prose("ui-use-a-text-field-when-someone-needs-to-enter-text-into-a-ui-such-as-filling-in-contact-or");gap(Dp(24.0));contact_form(false);gap(Dp(24.0));subheading("ui-outlined-text-fields".into());prose("ui-outlined-text-fields-have-less-visual-emphasis-than-filled-text-fields-when-they-appear-in");gap(Dp(24.0));contact_form(true);})},
+            SpecSection{title:"ui-choosing-text-fields",content:RenderSlot::new(|| {subheading("ui-choosing-text-fields".into());prose("ui-both-variants-of-text-field-provide-the-same-functionality-the-variant-used-can-depend-on");gap(Dp(24.0));field_variants();gap(Dp(24.0));subheading("ui-using-both-text-field-variants-on-the-same-screen".into());prose("ui-if-both-variants-of-text-field-are-used-in-a-ui-they-should-be-used-consistently-within-di");gap(Dp(24.0));guidance::variant_regions();})},
+            SpecSection{title:"ui-anatomy",content:RenderSlot::new(field_guideline_anatomy)},
+            SpecSection{title:"ui-adaptive-design",content:RenderSlot::new(|| {prose("ui-for-compact-breakpoints-text-fields-can-span-the-full-width-of-the-display-for-medium-and");gap(Dp(24.0));contact_form(true);gap(Dp(24.0));subheading("ui-density".into());prose("ui-dense-text-fields-enable-people-to-scan-and-take-action-on-large-amounts-of-information");gap(Dp(24.0));subheading("ui-avoid-applying-density-by-default".into());prose("ui-don-t-apply-density-to-text-fields-by-default-this-lowers-their-targets-below-the-recommen");gap(Dp(24.0));field_figure(true,false,false,true);})},
         ]},
-        ArticlePage{title:"Accessibility",intro:None,sections:vec![
-            SpecSection{title:"Use cases",content:RenderSlot::new(|| {prose("User should be able to:");gap(Dp(16.0));bullets(vec!["Navigate to and activate a text field with assistive technology".into(),"Input information into the text field".into(),"Receive and understand supporting text and error messages".into(),"Navigate to and select interactive icons".into()]);gap(Dp(24.0));panel(RenderSlot::new(|| {form_field("Password".into(),true,9);}));})},
-            SpecSection{title:"Interaction & style",content:RenderSlot::new(|| {prose("The containers for both filled and outlined text fields provide the same functionality. Changes to color and thickness of stroke help provide clear visual cues for interaction. Make sure the container outline has a minimum contrast of 3:1 to the background.");gap(Dp(24.0));field_figure(false,false,false,true);gap(Dp(24.0));field_figure(true,false,false,true);gap(Dp(24.0));guidance::outline_contrast();})},
-            SpecSection{title:"Keyboard navigation",content:RenderSlot::new(|| {spec_table(vec!["Key".into(),"Action".into()],vec![vec!["Tab".into(),"Focus lands on (non-disabled) text field".into()]]);gap(Dp(24.0));contact_form(true);})},
-            SpecSection{title:"Labeling elements",content:RenderSlot::new(field_accessibility_labels)},
+        ArticlePage{title:"ui-accessibility",intro:None,sections:vec![
+            SpecSection{title:"ui-use-cases",content:RenderSlot::new(|| {prose("ui-user-should-be-able-to");gap(Dp(16.0));bullets(vec!["ui-navigate-to-and-activate-a-text-field-with-assistive-technology".into(),"ui-input-information-into-the-text-field".into(),"ui-receive-and-understand-supporting-text-and-error-messages".into(),"ui-navigate-to-and-select-interactive-icons".into()]);gap(Dp(24.0));panel(RenderSlot::new(|| {form_field("ui-password".into(),true,9);}));})},
+            SpecSection{title:"ui-interaction-style",content:RenderSlot::new(|| {prose("ui-the-containers-for-both-filled-and-outlined-text-fields-provide-the-same-functionality-cha");gap(Dp(24.0));field_figure(false,false,false,true);gap(Dp(24.0));field_figure(true,false,false,true);gap(Dp(24.0));guidance::outline_contrast();})},
+            SpecSection{title:"ui-keyboard-navigation",content:RenderSlot::new(|| {spec_table(vec!["ui-key".into(),"ui-action".into()],vec![vec!["ui-tab".into(),"ui-focus-lands-on-non-disabled-text-field".into()]]);gap(Dp(24.0));contact_form(true);})},
+            SpecSection{title:"ui-labeling-elements",content:RenderSlot::new(field_accessibility_labels)},
         ]},
     ]);
 }
@@ -94,22 +96,22 @@ fn sample(
     anatomy_geometry: Option<State<SpaceGeometry>>,
 ) {
     let visible_label = if anatomy_geometry.is_some() {
-        "Label text"
+        "ui-label-text"
     } else {
-        "Label"
+        "ui-label"
     };
     let initial = if populated.unwrap_or(true) {
         if anatomy_geometry.is_some() {
-            "Input text"
+            "ui-input-text"
         } else {
-            "Input"
+            "ui-input"
         }
     } else {
         ""
     };
     let controller = remember(|| {
         let mut controller = TextInputController::new(Dp(16.0), Some(Dp(24.0)));
-        controller.set_text(initial);
+        controller.set_text(&I18N.text(initial));
         controller
     });
 
@@ -130,7 +132,7 @@ fn sample(
     column()
         .modifier(modifier.semantics(SemanticsArgs {
             role: Some(Role::Group),
-            label: Some(format!("{name} field preview")),
+            label: Some(I18N.format("ui-value-field-preview", [("v0", I18N.text(&name).into())])),
             merge_descendants: true,
             ..Default::default()
         }))
@@ -143,69 +145,99 @@ fn sample(
                         button()
                             .tonal()
                             .selected(active.get())
-                            .accessibility_label(format!("{} enabled", label.get()))
+                            .accessibility_label(I18N.format(
+                                "ui-value-enabled",
+                                [("v0", I18N.text(&label.get()).into())],
+                            ))
                             .on_click(move || active.set(!active.get()))
-                            .child(|| {
-                                text().content("Enabled");
+                            .child(move || {
+                                text().content(I18N.text("ui-enabled"));
                             });
                         button()
                             .tonal()
                             .selected(read_only.get())
-                            .accessibility_label(format!("{} read only", label.get()))
+                            .accessibility_label(I18N.format(
+                                "ui-value-read-only",
+                                [("v0", I18N.text(&label.get()).into())],
+                            ))
                             .on_click(move || read_only.set(!read_only.get()))
-                            .child(|| {
-                                text().content("Read only");
+                            .child(move || {
+                                text().content(I18N.text("ui-read-only"));
                             });
                         button()
                             .tonal()
                             .selected(invalid.get())
-                            .accessibility_label(format!("{} error", label.get()))
+                            .accessibility_label(
+                                I18N.format(
+                                    "ui-value-error",
+                                    [("v0", I18N.text(&label.get()).into())],
+                                ),
+                            )
                             .on_click(move || invalid.set(!invalid.get()))
-                            .child(|| {
-                                text().content("Error");
+                            .child(move || {
+                                text().content(I18N.text("ui-error"));
                             });
                         button()
                             .tonal()
                             .selected(icons.get())
-                            .accessibility_label(format!("{} icons", label.get()))
+                            .accessibility_label(
+                                I18N.format(
+                                    "ui-value-icons",
+                                    [("v0", I18N.text(&label.get()).into())],
+                                ),
+                            )
                             .on_click(move || icons.set(!icons.get()))
-                            .child(|| {
-                                text().content("Icons");
+                            .child(move || {
+                                text().content(I18N.text("ui-icons"));
                             });
                         button()
                             .tonal()
                             .selected(affixes.get())
-                            .accessibility_label(format!("{} affixes", label.get()))
+                            .accessibility_label(I18N.format(
+                                "ui-value-affixes",
+                                [("v0", I18N.text(&label.get()).into())],
+                            ))
                             .on_click(move || affixes.set(!affixes.get()))
-                            .child(|| {
-                                text().content("Prefix and suffix");
+                            .child(move || {
+                                text().content(I18N.text("ui-prefix-and-suffix"));
                             });
                         button()
                             .tonal()
                             .selected(multiline.get())
-                            .accessibility_label(format!("{} multiline", label.get()))
+                            .accessibility_label(I18N.format(
+                                "ui-value-multiline",
+                                [("v0", I18N.text(&label.get()).into())],
+                            ))
                             .on_click(move || multiline.set(!multiline.get()))
-                            .child(|| {
-                                text().content("Multiline");
+                            .child(move || {
+                                text().content(I18N.text("ui-multiline"));
                             });
                         button()
                             .tonal()
                             .selected(secure.get())
-                            .accessibility_label(format!("{} secure", label.get()))
+                            .accessibility_label(I18N.format(
+                                "ui-value-secure",
+                                [("v0", I18N.text(&label.get()).into())],
+                            ))
                             .on_click(move || secure.set(!secure.get()))
-                            .child(|| {
-                                text().content("Secure");
+                            .child(move || {
+                                text().content(I18N.text("ui-secure"));
                             });
                         button()
                             .text()
-                            .accessibility_label(format!("Clear {}", label.get()))
+                            .accessibility_label(
+                                I18N.format(
+                                    "ui-clear-value",
+                                    [("v0", I18N.text(&label.get()).into())],
+                                ),
+                            )
                             .enabled(active.get() && !read_only.get())
                             .on_click(move || {
                                 controller.with(|controller| controller.request_focus());
                                 controller.with_mut(|controller| controller.set_text(""));
                             })
-                            .child(|| {
-                                text().content("Clear");
+                            .child(move || {
+                                text().content(I18N.text("ui-clear"));
                             });
                     });
                 gap(Dp(24.0));
@@ -213,7 +245,10 @@ fn sample(
             boxed()
                 .modifier(Modifier::new().fill_max_width().semantics(SemanticsArgs {
                     role: Some(Role::Group),
-                    label: Some(format!("{} container", label.get())),
+                    label: Some(I18N.format(
+                        "ui-value-container",
+                        [("v0", I18N.text(&label.get()).into())],
+                    )),
                     merge_descendants: true,
                     ..Default::default()
                 }))
@@ -240,14 +275,14 @@ fn sample(
                         .min_width(Dp::ZERO)
                         .min_height(Dp(if multiline.get() { 96.0 } else { 56.0 }))
                         .controller(controller)
-                        .label(visible_label)
-                        .placeholder("Placeholder")
-                        .accessibility_label(visible_label)
-                        .accessibility_description(if invalid.get() {
-                            "Please check your input"
+                        .label(I18N.text(visible_label))
+                        .placeholder(I18N.text("ui-placeholder"))
+                        .accessibility_label(I18N.text(visible_label))
+                        .accessibility_description(I18N.text(if invalid.get() {
+                            "ui-please-check-your-input"
                         } else {
-                            "Supporting text"
-                        })
+                            "ui-supporting-text"
+                        }))
                         .enabled(active.get())
                         .read_only(read_only.get())
                         .is_error(invalid.get())
@@ -265,7 +300,10 @@ fn sample(
                             boxed()
                                 .modifier(Modifier::new().semantics(SemanticsArgs {
                                     role: Some(Role::Group),
-                                    label: Some(format!("{} leading icon", label.get())),
+                                    label: Some(I18N.format(
+                                        "ui-value-leading-icon",
+                                        [("v0", I18N.text(&label.get()).into())],
+                                    )),
                                     merge_descendants: true,
                                     ..Default::default()
                                 }))
@@ -279,7 +317,10 @@ fn sample(
                                     .standard()
                                     .color_style(IconButtonColorStyle::Inherited)
                                     .icon(filled::CANCEL_SVG)
-                                    .accessibility_label(format!("Clear {} icon", label.get()))
+                                    .accessibility_label(I18N.format(
+                                        "ui-clear-value-icon",
+                                        [("v0", I18N.text(&label.get()).into())],
+                                    ))
                                     .enabled(active.get() && !read_only.get())
                                     .on_click(move || {
                                         controller.with(|controller| controller.request_focus());
@@ -290,11 +331,11 @@ fn sample(
                     }
                     if affixes.get() {
                         field
-                            .prefix(|| {
-                                text().content("$");
+                            .prefix(move || {
+                                text().content(I18N.text("$"));
                             })
-                            .suffix(|| {
-                                text().content(".00");
+                            .suffix(move || {
+                                text().content(I18N.text(".00"));
                             });
                     }
                     if secure.get() {
@@ -314,11 +355,11 @@ fn sample(
                 .children(move || {
                     let scheme = use_context::<MaterialTheme>().unwrap().get().color_scheme;
                     text()
-                        .content(if invalid.get() {
-                            "Please check your input"
+                        .content(I18N.text(if invalid.get() {
+                            "ui-please-check-your-input"
                         } else {
-                            "Supporting text"
-                        })
+                            "ui-supporting-text"
+                        }))
                         .style(type_style(12.0, 16.0))
                         .color(if invalid.get() {
                             scheme.error
@@ -336,30 +377,55 @@ fn sample(
                     if controls.unwrap_or(false) {
                         spacer().modifier(Modifier::new().weight(1.0).width(Dp(16.0)));
                         text()
-                            .content(format!(
-                                "{} characters",
-                                controller.with(|controller| controller.text().chars().count())
-                            ))
+                            .content(
+                                I18N.format(
+                                    "ui-value-characters",
+                                    [(
+                                        "v0",
+                                        (controller
+                                            .with(|controller| controller.text().chars().count()))
+                                        .into(),
+                                    )],
+                                ),
+                            )
                             .style(type_style(12.0, 16.0));
                     }
                 });
             if controls.unwrap_or(false) {
                 gap(Dp(16.0));
                 text()
-                    .content(format!(
-                        "{} value: {}",
-                        label.get(),
-                        if secure.get() {
-                            "•".repeat(
-                                controller.with(|controller| controller.text().chars().count()),
-                            )
-                        } else {
-                            controller.with(TextInputController::text)
-                        }
-                    ))
+                    .content(
+                        I18N.format(
+                            "ui-value-value-value",
+                            [
+                                ("v0", I18N.text(&label.get()).into()),
+                                (
+                                    "v1",
+                                    ((if secure.get() {
+                                        "•".repeat(
+                                            controller.with(|controller| {
+                                                controller.text().chars().count()
+                                            }),
+                                        )
+                                    } else {
+                                        controller.with(TextInputController::text)
+                                    })
+                                    .to_string())
+                                    .to_string()
+                                    .into(),
+                                ),
+                            ],
+                        ),
+                    )
                     .style(type_style(14.0, 20.0));
                 text()
-                    .content(format!("{} submissions: {}", label.get(), submitted.get()))
+                    .content(I18N.format(
+                        "ui-value-submissions-value",
+                        [
+                            ("v0", I18N.text(&label.get()).into()),
+                            ("v1", (submitted.get()).into()),
+                        ],
+                    ))
                     .style(type_style(14.0, 20.0));
             }
         });
@@ -371,41 +437,41 @@ fn detail(outlined: bool) {
         .modifier(Modifier::new().fill_max_width())
         .children(move || {
             let title = if outlined {
-                "Outlined text field"
+                "ui-outlined-text-field"
             } else {
-                "Filled text field"
+                "ui-filled-text-field"
             };
             specs_anatomy(outlined);
             gap(Dp(24.0));
             anatomy_legend(if outlined {
                 vec![
-                    "Enabled container outline",
-                    "Leading icon (optional)",
-                    "Label text in empty field",
-                    "Label text in populated field",
-                    "Trailing icon (optional)",
-                    "Focused container outline",
-                    "Caret",
-                    "Input text",
-                    "Supporting text (optional)",
+                    "ui-enabled-container-outline",
+                    "ui-leading-icon-optional",
+                    "ui-label-text-in-empty-field",
+                    "ui-label-text-in-populated-field",
+                    "ui-trailing-icon-optional",
+                    "ui-focused-container-outline",
+                    "ui-caret",
+                    "ui-input-text",
+                    "ui-supporting-text-optional",
                 ]
             } else {
                 vec![
-                    "Container",
-                    "Leading icon (optional)",
-                    "Label text in empty field",
-                    "Label text in populated field",
-                    "Trailing icon (optional)",
-                    "Focused active indicator",
-                    "Caret",
-                    "Input text",
-                    "Supporting text (optional)",
-                    "Enabled active indicator",
+                    "ui-container",
+                    "ui-leading-icon-optional",
+                    "ui-label-text-in-empty-field",
+                    "ui-label-text-in-populated-field",
+                    "ui-trailing-icon-optional",
+                    "ui-focused-active-indicator",
+                    "ui-caret",
+                    "ui-input-text",
+                    "ui-supporting-text-optional",
+                    "ui-enabled-active-indicator",
                 ]
             });
             gap(Dp(112.0));
-            subheading(format!("{title} color"));
-            prose("Color values are implemented through design tokens. For design, this means working with color values that correspond with tokens. For implementation, a color value will be a token that references a value.");
+            subheading(I18N.format("ui-value-color", [("v0", I18N.text(&title).into())]));
+            prose("ui-color-values-are-implemented-through-design-tokens-for-design-this-means-working-with-colo");
             gap(Dp(24.0));
             for dark in [false, true] {
                 field_color_scheme(outlined, dark);
@@ -413,151 +479,148 @@ fn detail(outlined: bool) {
             gap(Dp(24.0));
             anatomy_legend(if outlined {
                 vec![
-                    "Outline",
-                    "On surface variant",
-                    "On surface variant",
-                    "Primary",
-                    "On surface variant",
-                    "Primary",
-                    "Primary",
-                    "On surface",
-                    "On surface variant",
+                    "ui-outline",
+                    "ui-on-surface-variant",
+                    "ui-on-surface-variant",
+                    "ui-primary",
+                    "ui-on-surface-variant",
+                    "ui-primary",
+                    "ui-primary",
+                    "ui-on-surface",
+                    "ui-on-surface-variant",
                 ]
             } else {
                 vec![
-                    "Surface container highest",
-                    "On surface variant",
-                    "On surface variant",
-                    "Primary",
-                    "On surface variant",
-                    "Primary",
-                    "Primary",
-                    "On surface",
-                    "On surface variant",
-                    "On surface",
+                    "ui-surface-container-highest",
+                    "ui-on-surface-variant",
+                    "ui-on-surface-variant",
+                    "ui-primary",
+                    "ui-on-surface-variant",
+                    "ui-primary",
+                    "ui-primary",
+                    "ui-on-surface",
+                    "ui-on-surface-variant",
+                    "ui-on-surface",
                 ]
             });
             gap(Dp(88.0));
-            subheading(format!("{title} states"));
-            prose("States are visual representations used to communicate the status of a component or interactive element.");
+            subheading(I18N.format("ui-value-states", [("v0", I18N.text(&title).into())]));
+            prose("ui-states-are-visual-representations-used-to-communicate-the-status-of-a-component-or-interac");
             gap(Dp(24.0));
             for dark in [false, true] {
                 field_state_matrix(outlined, false, dark);
             }
             gap(Dp(24.0));
             anatomy_legend(vec![
-                "Enabled (empty)",
-                "Focused (empty)",
-                "Hovered (empty)",
-                "Disabled (empty)",
-                "Enabled (populated)",
-                "Focused (populated)",
-                "Hovered (populated)",
-                "Disabled (populated)",
+                "ui-enabled-empty",
+                "ui-focused-empty",
+                "ui-hovered-empty",
+                "ui-disabled-empty",
+                "ui-enabled-populated",
+                "ui-focused-populated",
+                "ui-hovered-populated",
+                "ui-disabled-populated",
             ]);
             gap(Dp(112.0));
-            subheading(format!("{title} error states"));
-            prose("Error states are visual representations used to communicate the status of a component or interactive element. An error message can display instructions on how to fix it. Error messages are displayed below the text field as supporting text until fixed.");
+            subheading(I18N.format("ui-value-error-states", [("v0", I18N.text(&title).into())]));
+            prose("ui-error-states-are-visual-representations-used-to-communicate-the-status-of-a-component-or-i");
             gap(Dp(24.0));
             for dark in [false, true] {
                 field_state_matrix(outlined, true, dark);
             }
             gap(Dp(24.0));
             anatomy_legend(vec![
-                "Enabled (empty)",
-                "Focused (empty)",
-                "Hovered (empty)",
-                "Enabled (populated)",
-                "Focused (populated)",
-                "Hovered (populated)",
+                "ui-enabled-empty",
+                "ui-focused-empty",
+                "ui-hovered-empty",
+                "ui-enabled-populated",
+                "ui-focused-populated",
+                "ui-hovered-populated",
             ]);
             gap(Dp(112.0));
-            subheading(format!("{title} measurements"));
+            subheading(I18N.format("ui-value-measurements", [("v0", I18N.text(&title).into())]));
             gap(Dp(24.0));
             for variant in 0..3 {
                 field_measurements(outlined, variant);
                 gap(Dp(16.0));
                 text()
                     .content(
-                        [
-                            "Padding and size measurements without icons",
-                            "Padding and size measurements with icons",
-                            "Padding and size measurements with supporting text and character count",
-                        ][variant],
+                        I18N.text([
+                            "ui-padding-and-size-measurements-without-icons",
+                            "ui-padding-and-size-measurements-with-icons",
+                            "ui-padding-and-size-measurements-with-supporting-text-and-character-count",
+                        ][variant]),
                     )
                     .style(type_style(14.0, 20.0));
                 gap(Dp(32.0));
             }
             spec_table(
-                vec!["Attribute".into(), "Value".into()],
+                vec!["ui-attribute".into(), "ui-value".into()],
                 if outlined {
                     vec![
-                        vec!["Container height".into(), "56dp".into()],
-                        vec!["Left/right padding without icons".into(), "16dp".into()],
-                        vec!["Left/right padding with icons".into(), "12dp".into()],
-                        vec!["Padding between icons and text".into(), "16dp".into()],
-                        vec!["Icon alignment".into(), "Vertically centered".into()],
+                        vec!["ui-container-height".into(), "56dp".into()],
+                        vec!["ui-left-right-padding-without-icons".into(), "16dp".into()],
+                        vec!["ui-left-right-padding-with-icons".into(), "12dp".into()],
+                        vec!["ui-padding-between-icons-and-text".into(), "16dp".into()],
+                        vec!["ui-icon-alignment".into(), "ui-vertically-centered".into()],
                         vec![
-                            "Supporting text and character counter top padding".into(),
+                            "ui-supporting-text-and-character-counter-top-padding".into(),
                             "4dp".into(),
                         ],
                         vec![
-                            "Padding between supporting text and character counter".into(),
+                            "ui-padding-between-supporting-text-and-character-counter".into(),
                             "16dp".into(),
                         ],
-                        vec!["Label alignment".into(), "Vertically centered".into()],
+                        vec!["ui-label-alignment".into(), "ui-vertically-centered".into()],
                         vec![
-                            "Left/right padding populated label text".into(),
+                            "ui-left-right-padding-populated-label-text".into(),
                             "4dp".into(),
                         ],
-                        vec!["Target size".into(), "56dp".into()],
+                        vec!["ui-target-size".into(), "56dp".into()],
                     ]
                 } else {
                     vec![
-                        vec!["Default container height".into(), "56dp".into()],
+                        vec!["ui-default-container-height".into(), "56dp".into()],
                         vec![
-                            "Label alignment (unpopulated)".into(),
-                            "Vertically centered".into(),
+                            "ui-label-alignment-unpopulated".into(),
+                            "ui-vertically-centered".into(),
                         ],
-                        vec!["Top/bottom padding".into(), "8dp".into()],
-                        vec!["Left/right padding without icons".into(), "16dp".into()],
-                        vec!["Left/right padding with icons".into(), "12dp".into()],
-                        vec!["Icon alignment".into(), "Vertically centered".into()],
-                        vec!["Padding between icons and text".into(), "16dp".into()],
+                        vec!["ui-top-bottom-padding".into(), "8dp".into()],
+                        vec!["ui-left-right-padding-without-icons".into(), "16dp".into()],
+                        vec!["ui-left-right-padding-with-icons".into(), "12dp".into()],
+                        vec!["ui-icon-alignment".into(), "ui-vertically-centered".into()],
+                        vec!["ui-padding-between-icons-and-text".into(), "16dp".into()],
                         vec![
-                            "Supporting text and character counter top padding".into(),
+                            "ui-supporting-text-and-character-counter-top-padding".into(),
                             "4dp".into(),
                         ],
                         vec![
-                            "Padding between supporting text and character counter".into(),
+                            "ui-padding-between-supporting-text-and-character-counter".into(),
                             "16dp".into(),
                         ],
-                        vec!["Target size".into(), "56dp".into()],
+                        vec!["ui-target-size".into(), "56dp".into()],
                     ]
                 },
             );
             gap(Dp(112.0));
-            subheading(format!("{title} configurations"));
+            subheading(I18N.format("ui-value-configurations", [("v0", I18N.text(&title).into())]));
             gap(Dp(24.0));
             field_configurations(outlined);
             gap(Dp(24.0));
             anatomy_legend(vec![
-                "Supporting text",
-                "Trailing icon",
-                "Leading icon",
-                "Leading and trailing icons",
-                "Prefix",
-                "Suffix",
-                "Multi-line text field",
+                "ui-supporting-text",
+                "ui-trailing-icon",
+                "ui-leading-icon",
+                "ui-leading-and-trailing-icons",
+                "ui-prefix",
+                "ui-suffix",
+                "ui-multi-line-text-field",
             ]);
             gap(Dp(48.0));
-            subheading("Try the configuration options".into());
+            subheading("ui-try-the-configuration-options".into());
             panel(RenderSlot::new(move || {
                 sample(
-                    format!(
-                        "Configured {}",
-                        if outlined { "Outlined" } else { "Filled" }
-                    ),
+                    I18N.format("ui-configured-value", [("v0", I18N.text(&(if outlined { "ui-outlined" } else { "ui-filled" })).into())]),
                     outlined,
                 )
                 .controls(true);
@@ -590,7 +653,7 @@ fn anatomy_legend(items: Vec<&'static str>) {
                         });
                     spacer().modifier(Modifier::new().width(Dp(12.0)));
                     text()
-                        .content(item)
+                        .content(I18N.text(item))
                         .style(type_style(16.0, 24.0))
                         .modifier(Modifier::new().weight(1.0));
                 });
@@ -608,27 +671,32 @@ mod token_sets;
 fn tokens() {
     token_sets::token_sets();
     spec_table(
-        vec!["Element".into(), "Token value".into()],
+        vec!["ui-element".into(), "ui-token-value".into()],
         vec![
             vec![
-                "Filled container".into(),
-                "Surface container highest".into(),
+                "ui-filled-container".into(),
+                "ui-surface-container-highest".into(),
             ],
-            vec!["Input text".into(), "On surface".into()],
+            vec!["ui-input-text".into(), "ui-on-surface".into()],
             vec![
-                "Resting label and icons".into(),
-                "On surface variant".into(),
+                "ui-resting-label-and-icons".into(),
+                "ui-on-surface-variant".into(),
             ],
-            vec!["Focused label, outline and caret".into(), "Primary".into()],
-            vec!["Error label and indicator".into(), "Error".into()],
-            vec!["Outlined resting border".into(), "Outline".into()],
+            vec![
+                "ui-focused-label-outline-and-caret".into(),
+                "ui-primary".into(),
+            ],
+            vec!["ui-error-label-and-indicator".into(), "ui-error".into()],
+            vec!["ui-outlined-resting-border".into(), "ui-outline".into()],
         ],
     );
 }
 
 #[tessera]
 fn prose(#[prop(into)] value: String) {
-    text().content(value).style(type_style(16.0, 24.0));
+    text()
+        .content(I18N.text(value))
+        .style(type_style(16.0, 24.0));
 }
 
 #[tessera]
@@ -640,7 +708,7 @@ fn field_figure(outlined: bool, error: bool, multiline: bool, measurements: bool
             let geometry = remember(SpaceGeometry::new);
             let controller = remember(|| {
                 let mut value = TextInputController::new(Dp(16.0), Some(Dp(24.0)));
-                value.set_text("Input");
+                value.set_text(&I18N.text("ui-input"));
                 value
             });
 
@@ -671,13 +739,13 @@ fn field_figure(outlined: bool, error: bool, multiline: bool, measurements: bool
                                 .min_width(Dp::ZERO)
                                 .min_height(Dp(if multiline { 96.0 } else { 56.0 }))
                                 .controller(controller)
-                                .label("Label")
-                                .accessibility_label("Label")
-                                .accessibility_description(if error {
-                                    "Error message"
+                                .label(I18N.text("ui-label"))
+                                .accessibility_label(I18N.text("ui-label"))
+                                .accessibility_description(I18N.text(if error {
+                                    "ui-error-message"
                                 } else {
-                                    "Supporting text"
-                                })
+                                    "ui-supporting-text"
+                                }))
                                 .is_error(error)
                                 .line_limit(if multiline {
                                     TextFieldLineLimit::MultiLine
@@ -693,7 +761,7 @@ fn field_figure(outlined: bool, error: bool, multiline: bool, measurements: bool
                                         boxed()
                                             .modifier(Modifier::new().semantics(SemanticsArgs {
                                                 role: Some(Role::Image),
-                                                label: Some("Error".into()),
+                                                label: Some(I18N.text("ui-error")),
                                                 ..Default::default()
                                             }))
                                             .children(|| {
@@ -703,7 +771,9 @@ fn field_figure(outlined: bool, error: bool, multiline: bool, measurements: bool
                                         icon_button()
                                             .standard()
                                             .icon(filled::CANCEL_SVG)
-                                            .accessibility_label("Clear illustrated text field")
+                                            .accessibility_label(
+                                                I18N.text("ui-clear-illustrated-text-field"),
+                                            )
                                             .on_click(move || {
                                                 controller
                                                     .with(|controller| controller.request_focus());
@@ -715,11 +785,11 @@ fn field_figure(outlined: bool, error: bool, multiline: bool, measurements: bool
                             }
                             gap(Dp(4.0));
                             text()
-                                .content(if error {
-                                    "Error message"
+                                .content(I18N.text(if error {
+                                    "ui-error-message"
                                 } else {
-                                    "Supporting text"
-                                })
+                                    "ui-supporting-text"
+                                }))
                                 .color(if error {
                                     scheme.error
                                 } else {
@@ -810,11 +880,11 @@ fn bullets(items: Vec<String>) {
     for item in items {
         row().children(move || {
             text()
-                .content("•")
+                .content(I18N.text("•"))
                 .style(type_style(16.0, 24.0))
                 .modifier(Modifier::new().width(Dp(24.0)));
             text()
-                .content(item.clone())
+                .content(I18N.text(&(item)))
                 .style(type_style(16.0, 24.0))
                 .modifier(Modifier::new().weight(1.0));
         });
@@ -825,45 +895,48 @@ fn bullets(items: Vec<String>) {
 #[tessera]
 fn overview_variants() {
     bullets(vec![
-        "Make sure text fields look interactive".into(),
-        "Two variants: filled and outlined".into(),
-        "The text field's state (blank, with input, error, etc) should be visible at a glance"
-            .into(),
-        "Keep labels and error messages brief and easy to act on".into(),
-        "Text fields commonly appear in forms and dialogs".into(),
+        "ui-make-sure-text-fields-look-interactive".into(),
+        "ui-two-variants-filled-and-outlined".into(),
+        "ui-the-text-field-s-state-blank-with-input-error-etc-should-be-visible-at-a-glance".into(),
+        "ui-keep-labels-and-error-messages-brief-and-easy-to-act-on".into(),
+        "ui-text-fields-commonly-appear-in-forms-and-dialogs".into(),
     ]);
     gap(Dp(48.0));
     field_variant_hero(true);
     gap(Dp(16.0));
-    anatomy_legend(vec!["Filled text field", "Outlined text field"]);
+    anatomy_legend(vec!["ui-filled-text-field", "ui-outlined-text-field"]);
 }
 
 #[tessera]
 fn availability() {
     spec_table(
-        vec!["Type".into(), "Resource".into(), "Status".into()],
+        vec!["ui-type".into(), "ui-resource".into(), "ui-status".into()],
         vec![
             vec![
-                "Design".into(),
-                "Design Kit (Figma)".into(),
-                "Available".into(),
+                "ui-design".into(),
+                "ui-design-kit-figma".into(),
+                "ui-available".into(),
             ],
             vec![
-                "Implementation".into(),
-                "Flutter".into(),
-                "Available".into(),
+                "ui-implementation".into(),
+                "ui-flutter".into(),
+                "ui-available".into(),
             ],
             vec![
-                "Implementation".into(),
-                "Jetpack Compose".into(),
-                "Available".into(),
+                "ui-implementation".into(),
+                "ui-jetpack-compose".into(),
+                "ui-available".into(),
             ],
             vec![
-                "Implementation".into(),
-                "Android Views (MDC-Android)".into(),
-                "Available".into(),
+                "ui-implementation".into(),
+                "ui-android-views-mdc-android".into(),
+                "ui-available".into(),
             ],
-            vec!["Implementation".into(), "Web".into(), "Available".into()],
+            vec![
+                "ui-implementation".into(),
+                "ui-web".into(),
+                "ui-available".into(),
+            ],
         ],
     );
 }
@@ -871,7 +944,7 @@ fn availability() {
 #[tessera]
 fn differences() {
     bullets(vec![
-        "Color: New color mappings and compatibility with dynamic color".into(),
+        "ui-color-new-color-mappings-and-compatibility-with-dynamic-color".into(),
     ]);
     gap(Dp(24.0));
     panel(RenderSlot::new(|| {
@@ -886,7 +959,7 @@ fn differences() {
     }));
     gap(Dp(16.0));
     text()
-        .content("Text fields have new color mappings")
+        .content(I18N.text("ui-text-fields-have-new-color-mappings"))
         .style(type_style(14.0, 20.0));
 }
 
@@ -898,13 +971,13 @@ fn m2_difference_field(outlined: bool) {
         text_field().filled()
     };
     field
-        .label("Name")
-        .initial_text("Pietersen")
-        .accessibility_label(if outlined {
-            "Outlined name"
+        .label(I18N.text("ui-name"))
+        .initial_text(I18N.text("ui-pietersen"))
+        .accessibility_label(I18N.text(if outlined {
+            "ui-outlined-name"
         } else {
-            "Filled name"
-        })
+            "ui-filled-name"
+        }))
         .min_width(Dp::ZERO)
         .presentation_state(InteractionVisualState::Focus)
         .modifier(Modifier::new().width(Dp(220.0)))
@@ -958,7 +1031,7 @@ fn field_variant_hero(numbered: bool) {
 
 #[tessera]
 fn overview_variant(outlined: bool, scale: f64, numbered: bool) {
-    let title = if outlined { "Outlined" } else { "Filled" };
+    let title = if outlined { "ui-outlined" } else { "ui-filled" };
     let x = if outlined { 552.0 } else { 192.0 };
     let scheme = use_context::<MaterialTheme>().unwrap().get().color_scheme;
     column()
@@ -974,10 +1047,13 @@ fn overview_variant(outlined: bool, scale: f64, numbered: bool) {
                 text_field().filled()
             };
             field
-                .label("Text field")
-                .initial_text(title)
-                .accessibility_label(format!("Overview {title} text field"))
-                .accessibility_description("Supporting text")
+                .label(I18N.text("ui-text-field"))
+                .initial_text(I18N.text(title))
+                .accessibility_label(I18N.format(
+                    "ui-overview-value-text-field",
+                    [("v0", I18N.text(&title).into())],
+                ))
+                .accessibility_description(I18N.text("ui-supporting-text"))
                 .min_width(Dp::ZERO)
                 .min_height(Dp(56.0 * scale))
                 .padding(Dp(16.0 * scale))
@@ -995,7 +1071,7 @@ fn overview_variant(outlined: bool, scale: f64, numbered: bool) {
             }
             gap(Dp(4.0 * scale));
             text()
-                .content("Supporting text")
+                .content(I18N.text("ui-supporting-text"))
                 .style(type_style(12.0 * scale, 16.0 * scale))
                 .color(scheme.on_surface_variant)
                 .modifier(Modifier::new().padding_symmetric(Dp(16.0 * scale), Dp::ZERO));
@@ -1013,16 +1089,19 @@ fn overview_variant(outlined: bool, scale: f64, numbered: bool) {
                     )
                     .semantics(SemanticsArgs {
                         role: Some(Role::Note),
-                        label: Some(format!(
-                            "{} {title} text field",
-                            if outlined { 2 } else { 1 }
+                        label: Some(I18N.format(
+                            "ui-value-value-text-field",
+                            [
+                                ("v0", (if outlined { 2 } else { 1 }).into()),
+                                ("v1", I18N.text(&title).into()),
+                            ],
                         )),
                         ..Default::default()
                     }),
             )
             .children(move || {
                 text()
-                    .content(if outlined { "2" } else { "1" })
+                    .content(I18N.text(if outlined { "2" } else { "1" }))
                     .style(type_style(16.0 * scale, 24.0 * scale))
                     .color(scheme.surface);
             });
@@ -1032,7 +1111,7 @@ fn overview_variant(outlined: bool, scale: f64, numbered: bool) {
 #[tessera]
 fn field_variants() {
     prose(
-        "Text fields let people enter and edit text. Choose filled or outlined fields consistently within a form.",
+        "ui-text-fields-let-people-enter-and-edit-text-choose-filled-or-outlined-fields-consistently-w",
     );
     gap(Dp(24.0));
     field_variant_hero(false);
@@ -1057,14 +1136,14 @@ fn contact_form(outlined: bool) {
                 .modifier(Modifier::new().width(Dp(320.0)))
                 .children(move || {
                     text()
-                        .content("Contact information")
+                        .content(I18N.text("ui-contact-information"))
                         .style(type_style(24.0, 32.0));
                     gap(Dp(32.0));
-                    form_field("Name".into(), outlined, 0);
+                    form_field("ui-name".into(), outlined, 0);
                     gap(Dp(24.0));
-                    form_field("Email".into(), outlined, 5);
+                    form_field("ui-email".into(), outlined, 5);
                     gap(Dp(24.0));
-                    form_field("Phone".into(), outlined, 0);
+                    form_field("ui-phone".into(), outlined, 0);
                 });
         });
 }
@@ -1073,13 +1152,13 @@ fn contact_form(outlined: bool) {
 fn form_field(label: String, outlined: bool, mode: u8) {
     let controller = remember(|| {
         let mut value = TextInputController::new(Dp(16.0), Some(Dp(24.0)));
-        value.set_text(if mode == 8 {
-            "Read-only value"
+        value.set_text(&I18N.text(if mode == 8 {
+            "ui-read-only-value"
         } else if mode == 7 {
-            "Invalid input"
+            "ui-invalid-input"
         } else {
             ""
-        });
+        }));
         value
     });
     let show = remember(|| false);
@@ -1091,7 +1170,9 @@ fn form_field(label: String, outlined: bool, mode: u8) {
         .children(move || {
             let label = label.clone();
             if mode == 1 {
-                text().content(label.clone()).style(type_style(16.0, 24.0));
+                text()
+                    .content(I18N.text(&(label)))
+                    .style(type_style(16.0, 24.0));
                 gap(Dp(8.0));
             }
             let field = if outlined {
@@ -1103,29 +1184,29 @@ fn form_field(label: String, outlined: bool, mode: u8) {
                 .modifier(Modifier::new().fill_max_width())
                 .min_width(Dp::ZERO)
                 .controller(controller)
-                .accessibility_label(if mode == 2 {
+                .accessibility_label(I18N.text(if mode == 2 {
                     format!("{label}*")
                 } else {
                     label.clone()
-                })
-                .accessibility_description(if overflow {
-                    "Use 100 characters or fewer"
+                }))
+                .accessibility_description(I18N.text(if overflow {
+                    "ui-use-100-characters-or-fewer"
                 } else {
                     match mode {
-                        2 => "Required",
-                        7 => "Enter a valid value",
-                        8 => "Read only",
-                        _ => "Supporting text",
+                        2 => "ui-required",
+                        7 => "ui-enter-a-valid-value",
+                        8 => "ui-read-only",
+                        _ => "ui-supporting-text",
                     }
-                })
+                }))
                 .read_only(mode == 8)
                 .is_error(mode == 7 || overflow);
             if mode != 1 {
-                field.label(if mode == 2 {
+                field.label(I18N.text(if mode == 2 {
                     format!("{label}*")
                 } else {
                     label
-                });
+                }));
             }
             if mode == 3 {
                 field
@@ -1133,33 +1214,33 @@ fn form_field(label: String, outlined: bool, mode: u8) {
                     .line_limit(TextFieldLineLimit::MultiLine);
             }
             if mode == 4 {
-                field.prefix(|| {
+                field.prefix(move || {
                     text()
-                        .content("$")
+                        .content(I18N.text("$"))
                         .modifier(Modifier::new().semantics(SemanticsArgs {
                             role: Some(Role::Label),
-                            label: Some("US dollars".into()),
+                            label: Some(I18N.text("ui-us-dollars")),
                             ..Default::default()
                         }));
                 });
             }
             if mode == 5 {
-                field.suffix(|| {
+                field.suffix(move || {
                     text()
-                        .content("@gmail.com")
+                        .content(I18N.text("@gmail.com"))
                         .modifier(Modifier::new().semantics(SemanticsArgs {
                             role: Some(Role::Label),
-                            label: Some("at gmail dot com".into()),
+                            label: Some(I18N.text("ui-at-gmail-dot-com")),
                             ..Default::default()
                         }));
                 });
             }
             if mode == 7 {
-                field.trailing_icon(|| {
+                field.trailing_icon(move || {
                     boxed()
                         .modifier(Modifier::new().semantics(SemanticsArgs {
                             role: Some(Role::Image),
-                            label: Some("Error".into()),
+                            label: Some(I18N.text("ui-error")),
                             ..Default::default()
                         }))
                         .children(|| {
@@ -1181,11 +1262,11 @@ fn form_field(label: String, outlined: bool, mode: u8) {
                         } else {
                             filled::VISIBILITY_SVG
                         })
-                        .accessibility_label(if show.get() {
-                            "Hide password"
+                        .accessibility_label(I18N.text(if show.get() {
+                            "ui-hide-password"
                         } else {
-                            "Show password"
-                        })
+                            "ui-show-password"
+                        }))
                         .on_click(move || show.set(!show.get()));
                 });
             }
@@ -1198,17 +1279,17 @@ fn form_field(label: String, outlined: bool, mode: u8) {
                 )
                 .children(move || {
                     let support = if overflow {
-                        "Use 100 characters or fewer"
+                        "ui-use-100-characters-or-fewer"
                     } else {
                         match mode {
-                            2 => "* Required",
-                            7 => "Enter a valid value",
-                            8 => "Read only",
-                            _ => "Supporting text",
+                            2 => "ui-required-5883",
+                            7 => "ui-enter-a-valid-value",
+                            8 => "ui-read-only",
+                            _ => "ui-supporting-text",
                         }
                     };
                     text()
-                        .content(support)
+                        .content(I18N.text(support))
                         .style(type_style(12.0, 16.0))
                         .color(if mode == 7 || overflow {
                             scheme.error
@@ -1221,14 +1302,14 @@ fn form_field(label: String, outlined: bool, mode: u8) {
                             } else {
                                 Role::Label
                             }),
-                            label: Some(support.into()),
+                            label: Some(I18N.text(support)),
                             ..Default::default()
                         }));
                     if mode == 6 {
                         let count = controller.with(|controller| controller.text().chars().count());
                         spacer().modifier(Modifier::new().weight(1.0));
                         text()
-                            .content(format!("{} / 100", count))
+                            .content(I18N.format("ui-value-100", [("v0", (count).into())]))
                             .color(if overflow {
                                 scheme.error
                             } else {
@@ -1237,7 +1318,10 @@ fn form_field(label: String, outlined: bool, mode: u8) {
                             .style(type_style(12.0, 16.0))
                             .modifier(Modifier::new().semantics(SemanticsArgs {
                                 role: Some(Role::Label),
-                                label: Some(format!("Character count: {} of 100", count)),
+                                label: Some(I18N.format(
+                                    "ui-character-count-value-of-100",
+                                    [("v0", (count).into())],
+                                )),
                                 ..Default::default()
                             }));
                     }
@@ -1247,108 +1331,108 @@ fn form_field(label: String, outlined: bool, mode: u8) {
 
 #[tessera]
 fn field_guideline_anatomy() {
-    subheading("Filled text field".into());
+    subheading("ui-filled-text-field".into());
     field_anatomy_pair(false);
     gap(Dp(24.0));
-    subheading("Outlined text field".into());
+    subheading("ui-outlined-text-field".into());
     field_anatomy_pair(true);
     gap(Dp(24.0));
-    subheading("Containers".into());
+    subheading("ui-containers".into());
     prose(
-        "Containers improve the discoverability of text fields by creating contrast between the text field and surrounding content. The container of an outlined text field has rounded corners, while the container of a filled text field has rounded top corners and square bottom corners.",
+        "ui-containers-improve-the-discoverability-of-text-fields-by-creating-contrast-between-the-tex",
     );
     gap(Dp(24.0));
     field_container_diagram();
     gap(Dp(24.0));
-    subheading("Label text".into());
+    subheading("ui-label-text".into());
     prose(
-        "Label text tells people what information is requested. Every text field should have a label. Label text should be aligned with the input text and always visible. It shouldn't be truncated or take up multiple lines.",
+        "ui-label-text-tells-people-what-information-is-requested-every-text-field-should-have-a-label",
     );
     gap(Dp(24.0));
     panel(RenderSlot::new(|| {
-        form_field("Label".into(), false, 0);
+        form_field("ui-label".into(), false, 0);
     }));
     gap(Dp(24.0));
     guidance::label_misuse();
     gap(Dp(24.0));
-    subheading("Adjacent label".into());
+    subheading("ui-adjacent-label".into());
     prose(
-        "A text field doesn't require a label if the field's purpose is indicated by a separate, adjacent label. Adjacent labels should be aligned to the leading edge of the text field container.",
+        "ui-a-text-field-doesn-t-require-a-label-if-the-field-s-purpose-is-indicated-by-a-separate-adj",
     );
     gap(Dp(24.0));
     panel(RenderSlot::new(|| {
-        form_field("Full name".into(), true, 1);
+        form_field("ui-full-name".into(), true, 1);
     }));
     gap(Dp(24.0));
-    subheading("Required text indicator".into());
+    subheading("ui-required-text-indicator".into());
     prose(
-        "To show a field is required, display an asterisk (*) next to the label text, and explain that asterisks indicate required fields in supporting text or a single note at the beginning of the form. Indicate all required fields.",
+        "ui-to-show-a-field-is-required-display-an-asterisk-next-to-the-label-text-and-explain-that-as",
     );
     gap(Dp(24.0));
     panel(RenderSlot::new(|| {
-        form_field("Full name".into(), false, 2);
+        form_field("ui-full-name".into(), false, 2);
     }));
     gap(Dp(24.0));
-    subheading("Input text".into());
+    subheading("ui-input-text".into());
     prose(
-        "Input text is text a person has entered into a text field. Single-line fields display only one line of text, multi-line fields grow to accommodate multiple lines, and text areas are fixed-height fields.",
+        "ui-input-text-is-text-a-person-has-entered-into-a-text-field-single-line-fields-display-only",
     );
     gap(Dp(24.0));
     guidance::input_modes();
     gap(Dp(24.0));
-    subheading("Prefix text".into());
+    subheading("ui-prefix-text".into());
     panel(RenderSlot::new(|| {
-        form_field("Amount".into(), false, 4);
+        form_field("ui-amount".into(), false, 4);
     }));
     gap(Dp(24.0));
-    subheading("Suffix text".into());
+    subheading("ui-suffix-text".into());
     panel(RenderSlot::new(|| {
-        form_field("Email".into(), true, 5);
+        form_field("ui-email".into(), true, 5);
     }));
     gap(Dp(24.0));
-    subheading("Supporting text & character counter".into());
+    subheading("ui-supporting-text-character-counter".into());
     prose(
-        "Supporting text conveys additional information about the input field, such as how it will be used. If there is a character or word limit, include a counter that displays the ratio of characters used and the total limit.",
+        "ui-supporting-text-conveys-additional-information-about-the-input-field-such-as-how-it-will-b",
     );
     gap(Dp(24.0));
     panel(RenderSlot::new(|| {
-        form_field("Description".into(), false, 6);
+        form_field("ui-description".into(), false, 6);
     }));
     gap(Dp(24.0));
-    subheading("Error text".into());
+    subheading("ui-error-text".into());
     prose(
-        "For text fields that validate their content, such as passwords, replace supporting text with error text. Swapping supporting text with error text prevents new lines of text from bumping content and changing the layout.",
+        "ui-for-text-fields-that-validate-their-content-such-as-passwords-replace-supporting-text-with",
     );
     gap(Dp(24.0));
     panel(RenderSlot::new(|| {
-        form_field("Email".into(), true, 7);
+        form_field("ui-email".into(), true, 7);
     }));
     gap(Dp(24.0));
     guidance::error_swap();
     gap(Dp(24.0));
-    subheading("Error icon".into());
+    subheading("ui-error-icon".into());
     prose(
-        "It's strongly recommended to show an error icon when the text field is in the error state. This highlights the error for people with visual impairments and provides an additional sensory indicator.",
+        "ui-it-s-strongly-recommended-to-show-an-error-icon-when-the-text-field-is-in-the-error-state",
     );
     gap(Dp(24.0));
     field_error_icon_diagram();
     gap(Dp(24.0));
-    subheading("Icons & images".into());
+    subheading("ui-icons-images".into());
     prose(
-        "Use optional 24dp images or icons to clarify input or expose an actual action, such as clearing entered text. The microphone below is a non-interactive icon illustration; this example does not record or transcribe audio.",
+        "ui-use-optional-24dp-images-or-icons-to-clarify-input-or-expose-an-actual-action-such-as-clea",
     );
     gap(Dp(24.0));
     field_icons_diagram();
     gap(Dp(24.0));
-    subheading("Read-only fields".into());
+    subheading("ui-read-only-fields".into());
     prose(
-        "Read-only text fields display pre-filled text that people cannot edit. A read-only text field is styled the same as a regular text field and is clearly labeled as read-only.",
+        "ui-read-only-text-fields-display-pre-filled-text-that-people-cannot-edit-a-read-only-text-fie",
     );
     gap(Dp(24.0));
     panel(RenderSlot::new(|| {
-        form_field("Read-only label".into(), false, 8);
+        form_field("ui-read-only-label".into(), false, 8);
         gap(Dp(24.0));
-        form_field("Read-only label".into(), true, 8);
+        form_field("ui-read-only-label".into(), true, 8);
     }));
 }
 
@@ -1407,7 +1491,7 @@ fn field_container_diagram() {
                                 )
                                 .semantics(SemanticsArgs {
                                     role: Some(Role::Group),
-                                    label: Some("Filled text field container".into()),
+                                    label: Some(I18N.text("ui-filled-text-field-container")),
                                     ..Default::default()
                                 }),
                         )
@@ -1430,7 +1514,7 @@ fn field_container_diagram() {
                             )
                             .semantics(SemanticsArgs {
                                 role: Some(Role::Group),
-                                label: Some("Outlined text field container".into()),
+                                label: Some(I18N.text("ui-outlined-text-field-container")),
                                 ..Default::default()
                             }),
                     );
@@ -1491,14 +1575,14 @@ fn field_error_icon_diagram() {
 fn field_error_icon_example(password: bool, scale: f64) {
     let controller = remember(|| {
         let mut controller = TextInputController::new(Dp(16.0 * scale), Some(Dp(24.0 * scale)));
-        controller.set_text(if password { "Password" } else { "Sam" });
+        controller.set_text(&I18N.text(if password { "ui-password" } else { "Sam" }));
         controller
     });
     let scheme = use_context::<MaterialTheme>().unwrap().get().color_scheme;
     let support = if password {
-        "Include an uppercase letter, a lowercase letter, and a numeric character"
+        "ui-include-an-uppercase-letter-a-lowercase-letter-and-a-numeric-character"
     } else {
-        "Use at least 6 characters"
+        "ui-use-at-least-6-characters"
     };
     column()
         .modifier(
@@ -1531,13 +1615,17 @@ fn field_error_icon_example(password: bool, scale: f64) {
                         .width(Dp(364.0 * scale))
                         .height(Dp(56.0 * scale)),
                 )
-                .accessibility_label(if password { "Password" } else { "Username" })
-                .accessibility_description(support)
+                .accessibility_label(I18N.text(if password {
+                    "ui-password"
+                } else {
+                    "ui-username"
+                }))
+                .accessibility_description(I18N.text(support))
                 .trailing_icon(move || {
                     boxed()
                         .modifier(Modifier::new().semantics(SemanticsArgs {
                             role: Some(Role::Image),
-                            label: Some("Error".into()),
+                            label: Some(I18N.text("ui-error")),
                             ..Default::default()
                         }))
                         .children(move || {
@@ -1553,11 +1641,11 @@ fn field_error_icon_example(password: bool, scale: f64) {
                     .text_color(scheme.error)
                     .context_menu(TextFieldContextMenu::secure_default());
             } else {
-                field.label("Username");
+                field.label(I18N.text("ui-username"));
             }
             gap(Dp(4.0 * scale));
             text()
-                .content(support)
+                .content(I18N.text(support))
                 .style(type_style(12.0 * scale, 16.0 * scale))
                 .color(scheme.error)
                 .modifier(
@@ -1565,7 +1653,7 @@ fn field_error_icon_example(password: bool, scale: f64) {
                         .padding_symmetric(Dp(16.0 * scale), Dp::ZERO)
                         .semantics(SemanticsArgs {
                             role: Some(Role::Alert),
-                            label: Some(support.into()),
+                            label: Some(I18N.text(support)),
                             ..Default::default()
                         }),
                 );
@@ -1616,11 +1704,11 @@ fn field_icon_example(kind: usize, scale: f64) {
     let y = 36.0 + row as f64 * 96.0;
     let controller = remember(|| {
         let mut controller = TextInputController::new(Dp(16.0 * scale), Some(Dp(24.0 * scale)));
-        controller.set_text(match kind {
-            2 => "Input",
-            3 => "Input text",
+        controller.set_text(&I18N.text(match kind {
+            2 => "ui-input",
+            3 => "ui-input-text",
             _ => "",
-        });
+        }));
         controller
     });
 
@@ -1646,12 +1734,22 @@ fn field_icon_example(kind: usize, scale: f64) {
                     .modifier(Modifier::new().size(Dp(180.0 * scale), Dp(56.0 * scale)))
                     .main_content_shared(content)
                     .menu_content(move |menu| {
-                        menu_item().menu(menu).label("Personal").on_click(move || {
-                            controller.with_mut(|controller| controller.set_text("Personal"));
-                        });
-                        menu_item().menu(menu).label("Work").on_click(move || {
-                            controller.with_mut(|controller| controller.set_text("Work"));
-                        });
+                        menu_item()
+                            .menu(menu)
+                            .label(I18N.text("ui-personal"))
+                            .on_click(move || {
+                                controller.with_mut(|controller| {
+                                    controller.set_text(&I18N.text("ui-personal"))
+                                });
+                            });
+                        menu_item()
+                            .menu(menu)
+                            .label(I18N.text("ui-work"))
+                            .on_click(move || {
+                                controller.with_mut(|controller| {
+                                    controller.set_text(&I18N.text("ui-work"))
+                                });
+                            });
                     });
             } else {
                 content.render();
@@ -1669,13 +1767,15 @@ fn field_icon_example(kind: usize, scale: f64) {
                 )
                 .semantics(SemanticsArgs {
                     role: Some(Role::Note),
-                    label: Some(format!("Text field icon example {kind}")),
+                    label: Some(
+                        I18N.format("ui-text-field-icon-example-value", [("v0", (kind).into())]),
+                    ),
                     ..Default::default()
                 }),
         )
         .children(move || {
             text()
-                .content(kind.to_string())
+                .content((kind).to_string())
                 .style(type_style(16.0 * scale, 24.0 * scale))
                 .color(scheme.surface);
         });
@@ -1697,15 +1797,19 @@ fn field_icon_input(
         .font_size(Dp(16.0 * scale))
         .line_height(Dp(24.0 * scale))
         .padding(Dp(16.0 * scale))
-        .label(if kind == 2 { "Focused" } else { "Label text" })
-        .accessibility_label(match kind {
-            1 => "Calendar icon example",
-            2 => "Error icon example",
-            3 => "Clear icon example",
-            4 => "Voice input icon example",
-            5 => "Dropdown icon example",
-            _ => "Payment image example",
-        })
+        .label(I18N.text(if kind == 2 {
+            "ui-focused"
+        } else {
+            "ui-label-text"
+        }))
+        .accessibility_label(I18N.text(match kind {
+            1 => "ui-calendar-icon-example",
+            2 => "ui-error-icon-example",
+            3 => "ui-clear-icon-example",
+            4 => "ui-voice-input-icon-example",
+            5 => "ui-dropdown-icon-example",
+            _ => "ui-payment-image-example",
+        }))
         .is_error(kind == 2)
         .presentation_state_optional(if matches!(kind, 2 | 3 | 6) {
             Some(InteractionVisualState::Focus)
@@ -1736,7 +1840,7 @@ fn field_icon_input(
                 .standard()
                 .color_style(IconButtonColorStyle::Inherited)
                 .icon(filled::CANCEL_SVG)
-                .accessibility_label("Clear icon example text")
+                .accessibility_label(I18N.text("ui-clear-icon-example-text"))
                 .on_click(move || {
                     controller.with(|controller| controller.request_focus());
                     controller.with_mut(|controller| controller.set_text(""));
@@ -1752,7 +1856,7 @@ fn field_icon_input(
                 .standard()
                 .color_style(IconButtonColorStyle::Inherited)
                 .icon(filled::ARROW_DROP_DOWN_SVG)
-                .accessibility_label("Choose icon example category")
+                .accessibility_label(I18N.text("ui-choose-icon-example-category"))
                 .on_click(move || menu.with_mut(MenuController::toggle));
         });
     } else if kind == 6 {
@@ -1771,7 +1875,7 @@ fn field_payment_image(scale: f64) {
                 .background(srgb(0, 0, 0))
                 .semantics(SemanticsArgs {
                     role: Some(Role::Image),
-                    label: Some("Payment card".into()),
+                    label: Some(I18N.text("ui-payment-card")),
                     ..Default::default()
                 }),
         )
@@ -1845,28 +1949,28 @@ fn field_anatomy_pair(outlined: bool) {
     gap(Dp(24.0));
     anatomy_legend(if outlined {
         vec![
-            "Enabled container outline",
-            "Leading icon (optional)",
-            "Label text in empty field",
-            "Label text in populated field",
-            "Trailing icon (optional)",
-            "Focused container outline",
-            "Caret",
-            "Input text",
-            "Supporting text (optional)",
+            "ui-enabled-container-outline",
+            "ui-leading-icon-optional",
+            "ui-label-text-in-empty-field",
+            "ui-label-text-in-populated-field",
+            "ui-trailing-icon-optional",
+            "ui-focused-container-outline",
+            "ui-caret",
+            "ui-input-text",
+            "ui-supporting-text-optional",
         ]
     } else {
         vec![
-            "Container",
-            "Leading icon (optional)",
-            "Label text in empty field",
-            "Label text in populated field",
-            "Trailing icon (optional)",
-            "Focused active indicator",
-            "Caret",
-            "Input text",
-            "Supporting text (optional)",
-            "Enabled active indicator",
+            "ui-container",
+            "ui-leading-icon-optional",
+            "ui-label-text-in-empty-field",
+            "ui-label-text-in-populated-field",
+            "ui-trailing-icon-optional",
+            "ui-focused-active-indicator",
+            "ui-caret",
+            "ui-input-text",
+            "ui-supporting-text-optional",
+            "ui-enabled-active-indicator",
         ]
     });
 }
@@ -1875,7 +1979,7 @@ fn field_anatomy_pair(outlined: bool) {
 fn field_anatomy_item(populated: bool, outlined: bool, geometry: State<SpaceGeometry>) {
     let controller = remember(|| {
         let mut value = TextInputController::new(Dp(16.0), Some(Dp(24.0)));
-        value.set_text(if populated { "Input text" } else { "" });
+        value.set_text(&I18N.text(if populated { "ui-input-text" } else { "" }));
         value
     });
 
@@ -1895,9 +1999,9 @@ fn field_anatomy_item(populated: bool, outlined: bool, geometry: State<SpaceGeom
                 )
                 .min_width(Dp::ZERO)
                 .controller(controller)
-                .label("Label text")
-                .accessibility_label("Label text")
-                .accessibility_description("Supporting text")
+                .label(I18N.text("ui-label-text"))
+                .accessibility_label(I18N.text("ui-label-text"))
+                .accessibility_description(I18N.text("ui-supporting-text"))
                 .leading_icon(|| {
                     icon().painter(filled::SEARCH_SVG).size(Dp(24.0));
                 });
@@ -1906,7 +2010,7 @@ fn field_anatomy_item(populated: bool, outlined: bool, geometry: State<SpaceGeom
                     icon_button()
                         .standard()
                         .icon(filled::CANCEL_SVG)
-                        .accessibility_label("Clear anatomy input")
+                        .accessibility_label(I18N.text("ui-clear-anatomy-input"))
                         .on_click(move || {
                             controller.with(|controller| controller.request_focus());
                             controller.with_mut(|controller| controller.set_text(""));
@@ -1915,7 +2019,7 @@ fn field_anatomy_item(populated: bool, outlined: bool, geometry: State<SpaceGeom
             }
             gap(Dp(4.0));
             text()
-                .content("Supporting text")
+                .content(I18N.text("ui-supporting-text"))
                 .color(scheme.on_surface_variant)
                 .style(type_style(12.0, 16.0))
                 .modifier(Modifier::new().padding_symmetric(Dp(16.0), Dp::ZERO));
@@ -2168,11 +2272,29 @@ fn specs_anatomy_panel(outlined: bool, dark: bool) {
                         .background(scheme.surface_container_low)
                         .semantics(SemanticsArgs {
                             role: Some(Role::Group),
-                            label: Some(format!(
-                                "{} {} anatomy panel",
-                                if dark { "Dark" } else { "Light" },
-                                if outlined { "outlined" } else { "filled" }
-                            )),
+                            label: Some(
+                                I18N.format(
+                                    "ui-value-value-anatomy-panel",
+                                    [
+                                        (
+                                            "v0",
+                                            I18N.text(&(if dark { "ui-dark" } else { "ui-light" }))
+                                                .into(),
+                                        ),
+                                        (
+                                            "v1",
+                                            I18N.text(
+                                                &(if outlined {
+                                                    "ui-outlined-7110"
+                                                } else {
+                                                    "ui-filled-7111"
+                                                }),
+                                            )
+                                            .into(),
+                                        ),
+                                    ],
+                                ),
+                            ),
                             merge_descendants: true,
                             ..Default::default()
                         }),
@@ -2192,11 +2314,37 @@ fn specs_anatomy_panel(outlined: bool, dark: bool) {
                                     spacer().modifier(Modifier::new().width(Dp(80.0)));
                                 }
                                 sample(
-                                    format!(
-                                        "{}{} {} anatomy",
-                                        if dark { "Dark " } else { "" },
-                                        if outlined { "Outlined" } else { "Filled" },
-                                        if populated { "populated" } else { "empty" }
+                                    I18N.format(
+                                        "ui-valuevalue-value-anatomy",
+                                        [
+                                            (
+                                                "v0",
+                                                I18N.text(&(if dark { "Dark " } else { "" }))
+                                                    .into(),
+                                            ),
+                                            (
+                                                "v1",
+                                                I18N.text(
+                                                    &(if outlined {
+                                                        "ui-outlined"
+                                                    } else {
+                                                        "ui-filled"
+                                                    }),
+                                                )
+                                                .into(),
+                                            ),
+                                            (
+                                                "v2",
+                                                I18N.text(
+                                                    &(if populated {
+                                                        "ui-populated"
+                                                    } else {
+                                                        "ui-empty"
+                                                    }),
+                                                )
+                                                .into(),
+                                            ),
+                                        ],
                                     ),
                                     outlined,
                                 )
@@ -2240,11 +2388,35 @@ fn field_color_scheme(outlined: bool, dark: bool) {
                                 .height(Dp(240.0 * scale))
                                 .semantics(SemanticsArgs {
                                     role: Some(Role::Group),
-                                    label: Some(format!(
-                                        "{} {} color panel",
-                                        if dark { "Dark" } else { "Light" },
-                                        if outlined { "outlined" } else { "filled" }
-                                    )),
+                                    label: Some(
+                                        I18N.format(
+                                            "ui-value-value-color-panel",
+                                            [
+                                                (
+                                                    "v0",
+                                                    I18N.text(
+                                                        &(if dark {
+                                                            "ui-dark"
+                                                        } else {
+                                                            "ui-light"
+                                                        }),
+                                                    )
+                                                    .into(),
+                                                ),
+                                                (
+                                                    "v1",
+                                                    I18N.text(
+                                                        &(if outlined {
+                                                            "ui-outlined-7110"
+                                                        } else {
+                                                            "ui-filled-7111"
+                                                        }),
+                                                    )
+                                                    .into(),
+                                                ),
+                                            ],
+                                        ),
+                                    ),
                                     merge_descendants: true,
                                     ..Default::default()
                                 }),
@@ -2272,19 +2444,43 @@ fn field_color_scheme(outlined: bool, dark: bool) {
                                                     false,
                                                     false,
                                                     scale,
-                                                    format!(
-                                                        "{} {} color {}",
-                                                        if dark { "Dark" } else { "Light" },
-                                                        if outlined {
-                                                            "outlined"
-                                                        } else {
-                                                            "filled"
-                                                        },
-                                                        if populated {
-                                                            "populated"
-                                                        } else {
-                                                            "empty"
-                                                        }
+                                                    I18N.format(
+                                                        "ui-value-value-color-value",
+                                                        [
+                                                            (
+                                                                "v0",
+                                                                I18N.text(
+                                                                    &(if dark {
+                                                                        "ui-dark"
+                                                                    } else {
+                                                                        "ui-light"
+                                                                    }),
+                                                                )
+                                                                .into(),
+                                                            ),
+                                                            (
+                                                                "v1",
+                                                                I18N.text(
+                                                                    &(if outlined {
+                                                                        "ui-outlined-7110"
+                                                                    } else {
+                                                                        "ui-filled-7111"
+                                                                    }),
+                                                                )
+                                                                .into(),
+                                                            ),
+                                                            (
+                                                                "v2",
+                                                                I18N.text(
+                                                                    &(if populated {
+                                                                        "ui-populated"
+                                                                    } else {
+                                                                        "ui-empty"
+                                                                    }),
+                                                                )
+                                                                .into(),
+                                                            ),
+                                                        ],
                                                     ),
                                                 );
                                             });
@@ -2303,28 +2499,28 @@ fn field_color_callouts(outlined: bool, scale: f64) {
     let scheme = use_context::<MaterialTheme>().unwrap().get().color_scheme;
     let roles = if outlined {
         vec![
-            "Outline",
-            "On surface variant",
-            "On surface variant",
-            "Primary",
-            "On surface variant",
-            "Primary",
-            "Primary",
-            "On surface",
-            "On surface variant",
+            "ui-outline",
+            "ui-on-surface-variant",
+            "ui-on-surface-variant",
+            "ui-primary",
+            "ui-on-surface-variant",
+            "ui-primary",
+            "ui-primary",
+            "ui-on-surface",
+            "ui-on-surface-variant",
         ]
     } else {
         vec![
-            "Surface container highest",
-            "On surface variant",
-            "On surface variant",
-            "Primary",
-            "On surface variant",
-            "Primary",
-            "Primary",
-            "On surface",
-            "On surface variant",
-            "On surface",
+            "ui-surface-container-highest",
+            "ui-on-surface-variant",
+            "ui-on-surface-variant",
+            "ui-primary",
+            "ui-on-surface-variant",
+            "ui-primary",
+            "ui-primary",
+            "ui-on-surface",
+            "ui-on-surface-variant",
+            "ui-on-surface",
         ]
     };
     let anchors = [
@@ -2377,7 +2573,10 @@ fn field_color_callouts(outlined: bool, scale: f64) {
                     .background_with_shape(scheme.on_surface, Shape::CAPSULE)
                     .semantics(SemanticsArgs {
                         role: Some(Role::Note),
-                        label: Some(format!("Color role {}: {role}", index + 1)),
+                        label: Some(I18N.format(
+                            "ui-color-role-value-value",
+                            [("v0", (index + 1).into()), ("v1", I18N.text(&role).into())],
+                        )),
                         ..Default::default()
                     }),
             )
@@ -2459,7 +2658,7 @@ fn field_state_matrix(outlined: bool, error: bool, dark: bool) {
                                                 )
                                                 .children(move || {
                                                     text()
-                                                        .content(number.to_string())
+                                                        .content((number).to_string())
                                                         .style(type_style(
                                                             14.0 * scale,
                                                             20.0 * scale,
@@ -2484,16 +2683,44 @@ fn field_state_matrix(outlined: bool, error: bool, dark: bool) {
                                                         error,
                                                         true,
                                                         scale,
-                                                        format!(
-                                                            "{} {} {} state {}",
-                                                            if dark { "Dark" } else { "Light" },
-                                                            if outlined {
-                                                                "outlined"
-                                                            } else {
-                                                                "filled"
-                                                            },
-                                                            if error { "error" } else { "normal" },
-                                                            number
+                                                        I18N.format(
+                                                            "ui-value-value-value-state-value",
+                                                            [
+                                                                (
+                                                                    "v0",
+                                                                    I18N.text(
+                                                                        &(if dark {
+                                                                            "ui-dark"
+                                                                        } else {
+                                                                            "ui-light"
+                                                                        }),
+                                                                    )
+                                                                    .into(),
+                                                                ),
+                                                                (
+                                                                    "v1",
+                                                                    I18N.text(
+                                                                        &(if outlined {
+                                                                            "ui-outlined-7110"
+                                                                        } else {
+                                                                            "ui-filled-7111"
+                                                                        }),
+                                                                    )
+                                                                    .into(),
+                                                                ),
+                                                                (
+                                                                    "v2",
+                                                                    I18N.text(
+                                                                        &(if error {
+                                                                            "ui-error-7114"
+                                                                        } else {
+                                                                            "ui-normal"
+                                                                        }),
+                                                                    )
+                                                                    .into(),
+                                                                ),
+                                                                ("v3", (number).into()),
+                                                            ],
                                                         ),
                                                     );
                                                 });
@@ -2520,7 +2747,7 @@ fn field_state_item(
 ) {
     let controller = remember(|| {
         let mut controller = TextInputController::new(Dp(16.0 * scale), Some(Dp(24.0 * scale)));
-        controller.set_text(if populated { "Input text" } else { "" });
+        controller.set_text(&I18N.text(if populated { "ui-input-text" } else { "" }));
         controller
     });
     let name = remember(|| name);
@@ -2535,12 +2762,12 @@ fn field_state_item(
             };
             field
                 .controller(controller)
-                .label(if !enabled && populated {
-                    "Label"
+                .label(I18N.text(if !enabled && populated {
+                    "ui-label"
                 } else {
-                    "Label text"
-                })
-                .accessibility_label(name.get())
+                    "ui-label-text"
+                }))
+                .accessibility_label(I18N.text(name.get()))
                 .enabled(enabled)
                 .is_error(error)
                 .presentation_state(presentation)
@@ -2573,7 +2800,12 @@ fn field_state_item(
                             .color_style(IconButtonColorStyle::Inherited)
                             .icon(filled::CANCEL_SVG)
                             .enabled(enabled)
-                            .accessibility_label(format!("Clear {}", name.get()))
+                            .accessibility_label(
+                                I18N.format(
+                                    "ui-clear-value",
+                                    [("v0", I18N.text(&name.get()).into())],
+                                ),
+                            )
                             .on_click(move || {
                                 controller.with(|controller| controller.request_focus());
                                 controller.with_mut(|controller| controller.set_text(""));
@@ -2583,7 +2815,7 @@ fn field_state_item(
             }
             gap(Dp(4.0 * scale));
             text()
-                .content("Supporting text")
+                .content(I18N.text("ui-supporting-text"))
                 .style(type_style(12.0 * scale, 16.0 * scale))
                 .color(if error {
                     scheme.error
@@ -2633,7 +2865,10 @@ fn field_configurations(outlined: bool) {
                                             )
                                             .semantics(SemanticsArgs {
                                                 role: Some(Role::Note),
-                                                label: Some(format!("Configuration {}", row + 1)),
+                                                label: Some(I18N.format(
+                                                    "ui-configuration-value",
+                                                    [("v0", (row + 1).into())],
+                                                )),
                                                 ..Default::default()
                                             }),
                                     )
@@ -2672,22 +2907,38 @@ fn field_configuration_item(outlined: bool, row: usize, populated: bool, scale: 
             4 => "1.43",
             5 => "25",
             6 => {
-                "This is a long input in a multi-line text field that wraps overflow text onto a new line"
+                "ui-this-is-a-long-input-in-a-multi-line-text-field-that-wraps-overflow-text-onto-a-new-line"
             }
-            _ => "Input",
+            _ => "ui-input",
         }
     };
     let controller = remember(|| {
         let mut controller = TextInputController::new(Dp(16.0 * scale), Some(Dp(24.0 * scale)));
-        controller.set_text(initial);
+        controller.set_text(&I18N.text(initial));
         controller
     });
 
-    let name = format!(
-        "{} configuration {} {}",
-        if outlined { "Outlined" } else { "Filled" },
-        row + 1,
-        if populated { "populated" } else { "empty" }
+    let name = I18N.format(
+        "ui-value-configuration-value-value",
+        [
+            (
+                "v0",
+                I18N.text(&(if outlined { "ui-outlined" } else { "ui-filled" }))
+                    .into(),
+            ),
+            ("v1", (row + 1).into()),
+            (
+                "v2",
+                I18N.text(
+                    &(if populated {
+                        "ui-populated"
+                    } else {
+                        "ui-empty"
+                    }),
+                )
+                .into(),
+            ),
+        ],
     );
     let name = remember(|| name);
     let scheme = use_context::<MaterialTheme>().unwrap().get().color_scheme;
@@ -2702,8 +2953,8 @@ fn field_configuration_item(outlined: bool, row: usize, populated: bool, scale: 
             };
             field
                 .controller(controller)
-                .label("Label")
-                .accessibility_label(name.get())
+                .label(I18N.text("ui-label"))
+                .accessibility_label(I18N.text(name.get()))
                 .presentation_state(if populated {
                     InteractionVisualState::Focus
                 } else {
@@ -2737,7 +2988,9 @@ fn field_configuration_item(outlined: bool, row: usize, populated: bool, scale: 
                         .standard()
                         .color_style(IconButtonColorStyle::Inherited)
                         .icon(filled::CANCEL_SVG)
-                        .accessibility_label(format!("Clear {}", name.get()))
+                        .accessibility_label(
+                            I18N.format("ui-clear-value", [("v0", I18N.text(&name.get()).into())]),
+                        )
                         .on_click(move || {
                             controller.with(|controller| controller.request_focus());
                             controller.with_mut(|controller| controller.set_text(""));
@@ -2745,19 +2998,19 @@ fn field_configuration_item(outlined: bool, row: usize, populated: bool, scale: 
                 });
             }
             if row == 4 {
-                field.prefix(|| {
-                    text().content("$");
+                field.prefix(move || {
+                    text().content(I18N.text("$"));
                 });
             }
             if row == 5 {
-                field.suffix(|| {
-                    text().content("lbs");
+                field.suffix(move || {
+                    text().content(I18N.text("ui-lbs"));
                 });
             }
             if row == 0 {
                 gap(Dp(4.0 * scale));
                 text()
-                    .content("Supporting text")
+                    .content(I18N.text("ui-supporting-text"))
                     .style(type_style(12.0 * scale, 16.0 * scale))
                     .color(scheme.on_surface_variant)
                     .modifier(Modifier::new().padding_symmetric(Dp(16.0 * scale), Dp::ZERO));
@@ -2766,11 +3019,37 @@ fn field_configuration_item(outlined: bool, row: usize, populated: bool, scale: 
 }
 
 fn measurement_name(outlined: bool, variant: usize, populated: bool) -> String {
-    format!(
-        "{} measurement {} {}",
-        if outlined { "Outlined" } else { "Filled" },
-        ["without icons", "with icons", "support and counter"][variant],
-        if populated { "populated" } else { "empty" }
+    I18N.format(
+        "ui-value-measurement-value-value",
+        [
+            (
+                "v0",
+                I18N.text(&(if outlined { "ui-outlined" } else { "ui-filled" }))
+                    .into(),
+            ),
+            (
+                "v1",
+                I18N.text(
+                    &([
+                        "ui-without-icons-7001",
+                        "ui-with-icons",
+                        "ui-support-and-counter",
+                    ][variant]),
+                )
+                .into(),
+            ),
+            (
+                "v2",
+                I18N.text(
+                    &(if populated {
+                        "ui-populated"
+                    } else {
+                        "ui-empty"
+                    }),
+                )
+                .into(),
+            ),
+        ],
     )
 }
 
@@ -2790,7 +3069,7 @@ fn field_measurements(outlined: bool, variant: usize) {
             let empty = remember(|| TextInputController::new(Dp(16.0), Some(Dp(24.0))));
             let populated = remember(|| {
                 let mut controller = TextInputController::new(Dp(16.0), Some(Dp(24.0)));
-                controller.set_text(if variant == 2 { "" } else { "Input text" });
+                controller.set_text(&I18N.text(if variant == 2 { "" } else { "ui-input-text" }));
                 controller
             });
             let controllers = [empty, populated];
@@ -2866,15 +3145,23 @@ fn field_measurement_item(
         .modifier(Modifier::new().width(Dp(240.0)))
         .children(move || {
             boxed()
-                .modifier(Modifier::new().fill_max_width().semantics(SemanticsArgs {
-                    role: Some(Role::Group),
-                    label: Some(format!(
-                        "{} container",
-                        measurement_name(outlined, variant, populated)
-                    )),
-                    merge_descendants: true,
-                    ..Default::default()
-                }))
+                .modifier(
+                    Modifier::new().fill_max_width().semantics(SemanticsArgs {
+                        role: Some(Role::Group),
+                        label: Some(
+                            I18N.format(
+                                "ui-value-container",
+                                [(
+                                    "v0",
+                                    I18N.text(&measurement_name(outlined, variant, populated))
+                                        .into(),
+                                )],
+                            ),
+                        ),
+                        merge_descendants: true,
+                        ..Default::default()
+                    }),
+                )
                 .children(move || {
                     let field = if outlined {
                         text_field().outlined()
@@ -2906,13 +3193,15 @@ fn field_measurement_item(
                         .min_width(Dp::ZERO)
                         .min_height(Dp(56.0))
                         .controller(controller)
-                        .label("Label text")
+                        .label(I18N.text("ui-label-text"))
                         .presentation_state_optional(if populated {
                             Some(InteractionVisualState::Focus)
                         } else {
                             None
                         })
-                        .accessibility_label(measurement_name(outlined, variant, populated));
+                        .accessibility_label(
+                            I18N.text(measurement_name(outlined, variant, populated)),
+                        );
                     if variant == 1 {
                         field.leading_icon(move || {
                             boxed()
@@ -2927,10 +3216,18 @@ fn field_measurement_item(
                                     )
                                     .semantics(SemanticsArgs {
                                         role: Some(Role::Image),
-                                        label: Some(format!(
-                                            "{} leading icon",
-                                            measurement_name(outlined, variant, populated)
-                                        )),
+                                        label: Some(
+                                            I18N.format(
+                                                "ui-value-leading-icon",
+                                                [(
+                                                    "v0",
+                                                    I18N.text(&measurement_name(
+                                                        outlined, variant, populated,
+                                                    ))
+                                                    .into(),
+                                                )],
+                                            ),
+                                        ),
                                         ..Default::default()
                                     }),
                                 )
@@ -2943,10 +3240,18 @@ fn field_measurement_item(
                                 icon_button()
                                     .standard()
                                     .icon(filled::CANCEL_SVG)
-                                    .accessibility_label(format!(
-                                        "Clear {}",
-                                        measurement_name(outlined, variant, populated)
-                                    ))
+                                    .accessibility_label(
+                                        I18N.format(
+                                            "ui-clear-value",
+                                            [(
+                                                "v0",
+                                                I18N.text(&measurement_name(
+                                                    outlined, variant, populated,
+                                                ))
+                                                .into(),
+                                            )],
+                                        ),
+                                    )
                                     .on_click(move || {
                                         controller.with(|controller| controller.request_focus());
                                         controller.with_mut(|controller| controller.set_text(""));
@@ -2965,7 +3270,7 @@ fn field_measurement_item(
                     )
                     .children(move || {
                         text()
-                            .content("Supporting text")
+                            .content(I18N.text("ui-supporting-text"))
                             .style(type_style(12.0, 16.0))
                             .color(scheme.on_surface_variant)
                             .modifier(
@@ -2980,10 +3285,18 @@ fn field_measurement_item(
                                 .weight(1.0)
                                 .semantics(SemanticsArgs {
                                     role: Some(Role::Label),
-                                    label: Some(format!(
-                                        "{} supporting text",
-                                        measurement_name(outlined, variant, populated)
-                                    )),
+                                    label: Some(
+                                        I18N.format(
+                                            "ui-value-supporting-text",
+                                            [(
+                                                "v0",
+                                                I18N.text(&measurement_name(
+                                                    outlined, variant, populated,
+                                                ))
+                                                .into(),
+                                            )],
+                                        ),
+                                    ),
                                     ..Default::default()
                                 }),
                             );
@@ -2993,15 +3306,15 @@ fn field_measurement_item(
                             spacer()
                                 .modifier(watch_in_space(geometry, "counter-gap").width(Dp(16.0)));
                             text()
-                                .content(format!("{}/20", count))
+                                .content(format!("{count}/20"))
                                 .style(type_style(12.0, 16.0))
                                 .color(scheme.on_surface_variant)
                                 .modifier(watch_in_space(geometry, "counter").semantics(
                                     SemanticsArgs {
                                         role: Some(Role::Label),
-                                        label: Some(format!(
-                                            "Measurement character count: {} of 20",
-                                            count
+                                        label: Some(I18N.format(
+                                            "ui-measurement-character-count-value-of-20",
+                                            [("v0", (count).into())],
                                         )),
                                         ..Default::default()
                                     },
@@ -3333,9 +3646,13 @@ fn field_measurement_native_annotations(
         field.y + (field.h - 24.0) / 2.0,
         24.0,
         24.0,
-        format!(
-            "{} trailing icon annotation",
-            measurement_name(outlined, variant, populated)
+        I18N.format(
+            "ui-value-trailing-icon-annotation",
+            [(
+                "v0",
+                I18N.text(&measurement_name(outlined, variant, populated))
+                    .into(),
+            )],
         ),
     );
     measurement_status_note(
@@ -3344,9 +3661,13 @@ fn field_measurement_native_annotations(
         field.y,
         field.w,
         8.0,
-        format!(
-            "{} floating inset annotation",
-            measurement_name(outlined, variant, populated)
+        I18N.format(
+            "ui-value-floating-inset-annotation",
+            [(
+                "v0",
+                I18N.text(&measurement_name(outlined, variant, populated))
+                    .into(),
+            )],
         ),
     );
     let edge = if variant == 1 { 12.0 } else { 16.0 };
@@ -3401,7 +3722,7 @@ fn measurement_status_note(enabled: bool, x: f64, y: f64, width: f64, height: f6
                 .size(Dp(width), Dp(height))
                 .semantics(SemanticsArgs {
                     role: Some(Role::Note),
-                    label: Some(label),
+                    label: Some(I18N.text(label)),
                     ..Default::default()
                 }),
         );
@@ -3485,10 +3806,19 @@ fn field_anatomy_marker(number: usize, x: Dp, y: Dp) {
                 .size(Dp(24.0), Dp(32.0))
                 .semantics(SemanticsArgs {
                     role: Some(Role::Note),
-                    label: Some(format!(
-                        "{}Anatomy marker {number}",
-                        if scheme.is_dark { "Dark " } else { "" }
-                    )),
+                    label: Some(
+                        I18N.format(
+                            "ui-valueanatomy-marker-value",
+                            [
+                                (
+                                    "v0",
+                                    I18N.text(&(if scheme.is_dark { "Dark " } else { "" }))
+                                        .into(),
+                                ),
+                                ("v1", (number).into()),
+                            ],
+                        ),
+                    ),
                     merge_descendants: true,
                     ..Default::default()
                 })
@@ -3497,7 +3827,7 @@ fn field_anatomy_marker(number: usize, x: Dp, y: Dp) {
         )
         .children(move || {
             text()
-                .content(number.to_string())
+                .content((number).to_string())
                 .style(type_style(14.0, 20.0))
                 .color(scheme.on_surface);
         });

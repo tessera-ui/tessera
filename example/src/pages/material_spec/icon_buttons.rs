@@ -22,6 +22,8 @@ use tessera_components::{
 };
 use tessera_ui::{Dp, Modifier, RenderSlot, State, remember, tessera, use_context};
 
+use crate::res::I18N;
+
 use super::{
     ACCENT,
     action_articles::{Kind, action_article},
@@ -64,10 +66,10 @@ const SIZES: [IconButtonSize; 5] = [
 
 fn name(style: IconButtonVariant) -> &'static str {
     match style {
-        IconButtonVariant::Filled => "Filled",
-        IconButtonVariant::FilledTonal => "Tonal",
-        IconButtonVariant::Outlined => "Outlined",
-        IconButtonVariant::Standard => "Standard",
+        IconButtonVariant::Filled => "ui-filled",
+        IconButtonVariant::FilledTonal => "ui-tonal",
+        IconButtonVariant::Outlined => "ui-outlined",
+        IconButtonVariant::Standard => "ui-standard",
     }
 }
 
@@ -77,39 +79,39 @@ pub(super) fn icon_buttons_spec(route: Option<crate::pages::material_spec::artic
         Kind::Icons,
         vec![
             SpecSection {
-                title: "Variants",
+                title: "ui-variants",
                 content: RenderSlot::new(variants),
             },
             SpecSection {
-                title: "Configurations",
+                title: "ui-configurations",
                 content: RenderSlot::new(configurations),
             },
             SpecSection {
-                title: "Tokens & specs",
+                title: "ui-tokens-specs",
                 content: RenderSlot::new(tokens),
             },
             SpecSection {
-                title: "Anatomy",
+                title: "ui-anatomy",
                 content: RenderSlot::new(anatomy),
             },
             SpecSection {
-                title: "Color",
+                title: "ui-color",
                 content: RenderSlot::new(colors),
             },
             SpecSection {
-                title: "States",
+                title: "ui-states",
                 content: RenderSlot::new(states),
             },
             SpecSection {
-                title: "Shape morph",
+                title: "ui-shape-morph",
                 content: RenderSlot::new(shape_morph),
             },
             SpecSection {
-                title: "Measurements",
+                title: "ui-measurements",
                 content: RenderSlot::new(measurements::figures),
             },
             SpecSection {
-                title: "Baseline tokens",
+                title: "ui-baseline-tokens",
                 content: RenderSlot::new(baseline::figure),
             },
         ],
@@ -156,8 +158,10 @@ fn sample(
         } else {
             filled::ADD_SVG
         })
-        .accessibility_label(label)
-        .accessibility_description(format!("Activations: {}", actions.get()))
+        .accessibility_label(I18N.text(label))
+        .accessibility_description(
+            I18N.format("ui-activations-value", [("v0", (actions.get()).into())]),
+        )
         .on_click(move || {
             actions.set(actions.get() + 1);
             if toggle {
@@ -203,9 +207,9 @@ fn overview_art() {
         });
     gap(Dp(24.0));
     text()
-        .content(
-            "Standard, filled unselected, filled selected, filled tonal, and outlined icon buttons",
-        )
+        .content(I18N.text(
+            "ui-standard-filled-unselected-filled-selected-filled-tonal-and-outlined-icon-buttons",
+        ))
         .style(type_style(16.0, 24.0));
 }
 
@@ -218,25 +222,25 @@ fn overview_icon(index: usize) {
             IconButtonVariant::Standard,
             IconButtonSize::Small,
             IconButtonWidth::Uniform,
-            "More options",
+            "ui-more-options",
         ),
         1 | 2 => (
             IconButtonVariant::Filled,
             IconButtonSize::Large,
             IconButtonWidth::Uniform,
-            "Settings",
+            "ui-settings",
         ),
         3 => (
             IconButtonVariant::FilledTonal,
             IconButtonSize::Medium,
             IconButtonWidth::Wide,
-            "Download",
+            "ui-download",
         ),
         _ => (
             IconButtonVariant::Outlined,
             IconButtonSize::Medium,
             IconButtonWidth::Narrow,
-            "Delete",
+            "ui-delete",
         ),
     };
     icon_button()
@@ -260,8 +264,13 @@ fn overview_icon(index: usize) {
             3 => filled::DOWNLOAD_SVG,
             _ => outlined::DELETE_SVG,
         })
-        .accessibility_label(format!("Overview {label} {}", index + 1))
-        .accessibility_description(format!("Activations: {}", actions.get()))
+        .accessibility_label(I18N.format(
+            "ui-overview-value-value",
+            [("v0", I18N.text(&label).into()), ("v1", (index + 1).into())],
+        ))
+        .accessibility_description(
+            I18N.format("ui-activations-value", [("v0", (actions.get()).into())]),
+        )
         .on_click(move || {
             actions.set(actions.get() + 1);
             if index == 1 || index == 2 {
@@ -278,7 +287,7 @@ fn hover_preview() {
         column()
             .modifier(Modifier::new().fill_max_width())
             .children(move || {
-                tooltip_provider("Add to favorites")
+                tooltip_provider("ui-add-to-favorites")
                     .controller(controller)
                     .placement(TooltipPlacement::Above)
                     .child(move |_| {
@@ -290,13 +299,16 @@ fn hover_preview() {
                                     icon_button()
                                         .standard()
                                         .icon(filled::FAVORITE_SVG)
-                                        .accessibility_label("Hover favorite action")
+                                        .accessibility_label(I18N.text("ui-hover-favorite-action"))
                                         .on_click(move || count.set(count.get() + 1));
                                 });
                             });
                     });
                 text()
-                    .content(format!("Hover example actions: {}", count.get()))
+                    .content(I18N.format(
+                        "ui-hover-example-actions-value",
+                        [("v0", (count.get()).into())],
+                    ))
                     .style(type_style(14.0, 20.0));
             });
     }));
@@ -304,12 +316,12 @@ fn hover_preview() {
 
 #[tessera]
 fn variants() {
-    panel(RenderSlot::new(|| {
+    panel(RenderSlot::new(move || {
         flow_row()
             .item_spacing(Dp(64.0))
             .line_spacing(Dp(24.0))
-            .children(|| {
-                column().children(|| {
+            .children(move || {
+                column().children(move || {
                     sample(
                         IconButtonVariant::Filled,
                         IconButtonSize::Medium,
@@ -318,12 +330,12 @@ fn variants() {
                         false,
                         false,
                         true,
-                        "Default icon action",
+                        "ui-default-icon-action",
                     );
                     gap(Dp(16.0));
-                    text().content("1  Default icon button");
+                    text().content(I18N.text("ui-1-default-icon-button"));
                 });
-                column().children(|| {
+                column().children(move || {
                     sample(
                         IconButtonVariant::Filled,
                         IconButtonSize::Medium,
@@ -332,10 +344,10 @@ fn variants() {
                         true,
                         false,
                         true,
-                        "Toggle favorite",
+                        "ui-toggle-favorite",
                     );
                     gap(Dp(16.0));
-                    text().content("2  Toggle icon button");
+                    text().content(I18N.text("ui-2-toggle-icon-button"));
                 });
             });
     }));
@@ -347,53 +359,53 @@ fn configurations() {
     gap(Dp(24.0));
     spec_table(
         vec![
-            "Category".into(),
-            "Options".into(),
+            "ui-category".into(),
+            "ui-options".into(),
             "M3".into(),
-            "M3 Expressive".into(),
+            "ui-m3-expressive".into(),
         ],
         vec![
             vec![
-                "Size".into(),
-                "Small (default)".into(),
-                "Available".into(),
-                "Available".into(),
+                "ui-size".into(),
+                "ui-small-default".into(),
+                "ui-available".into(),
+                "ui-available".into(),
             ],
             vec![
-                "Size".into(),
-                "Extra small, medium, large, extra large".into(),
+                "ui-size".into(),
+                "ui-extra-small-medium-large-extra-large".into(),
                 "—".into(),
-                "Available".into(),
+                "ui-available".into(),
             ],
             vec![
-                "Shape".into(),
-                "Round (default)".into(),
-                "Available".into(),
-                "Available".into(),
+                "ui-shape".into(),
+                "ui-round-default".into(),
+                "ui-available".into(),
+                "ui-available".into(),
             ],
             vec![
-                "Shape".into(),
-                "Square".into(),
+                "ui-shape".into(),
+                "ui-square".into(),
                 "—".into(),
-                "Available".into(),
+                "ui-available".into(),
             ],
             vec![
-                "Color style".into(),
-                "Filled (default), tonal, outlined, standard".into(),
-                "Available".into(),
-                "Available".into(),
+                "ui-color-style".into(),
+                "ui-filled-default-tonal-outlined-standard".into(),
+                "ui-available".into(),
+                "ui-available".into(),
             ],
             vec![
-                "Width".into(),
-                "Default".into(),
-                "Available".into(),
-                "Available".into(),
+                "ui-width".into(),
+                "ui-default".into(),
+                "ui-available".into(),
+                "ui-available".into(),
             ],
             vec![
-                "Width".into(),
-                "Narrow, wide".into(),
+                "ui-width".into(),
+                "ui-narrow-wide".into(),
                 "—".into(),
-                "Available".into(),
+                "ui-available".into(),
             ],
         ],
     );
@@ -422,7 +434,7 @@ fn anatomy() {
                             false,
                             false,
                             true,
-                            "Anatomy add action",
+                            "ui-anatomy-add-action",
                         );
                     });
                     boxed()
@@ -432,8 +444,8 @@ fn anatomy() {
                         });
                 });
             gap(Dp(24.0));
-            text().content("1  Icon");
-            text().content("2  Container");
+            text().content(I18N.text("ui-1-icon"));
+            text().content(I18N.text("ui-2-container"));
         });
     }));
 }
@@ -485,9 +497,9 @@ fn style_examples(enabled: bool) {
                 .line_spacing(Dp(16.0))
                 .children(move || {
                     for (toggle, initial, label) in [
-                        (false, false, "Default"),
-                        (true, false, "Toggle off"),
-                        (true, true, "Toggle on"),
+                        (false, false, "ui-default"),
+                        (true, false, "ui-toggle-off"),
+                        (true, true, "ui-toggle-on"),
                     ] {
                         column().children(move || {
                             sample(
@@ -498,10 +510,18 @@ fn style_examples(enabled: bool) {
                                 toggle,
                                 initial,
                                 enabled,
-                                format!("{} {label}", name(style)),
+                                I18N.format(
+                                    "ui-value-value-format-2",
+                                    [
+                                        ("v0", I18N.text(&name(style)).into()),
+                                        ("v1", I18N.text(&label).into()),
+                                    ],
+                                ),
                             );
                             gap(Dp(12.0));
-                            text().content(label).style(type_style(16.0, 24.0));
+                            text()
+                                .content(I18N.text(label))
+                                .style(type_style(16.0, 24.0));
                         });
                     }
                 });
@@ -523,7 +543,14 @@ fn scheme(dark: bool) {
                 .modifier(Modifier::new().fill_max_width().padding_all(Dp(24.0)))
                 .child(move || {
                     column().children(move || {
-                        subheading(if dark { "Dark theme" } else { "Light theme" }.to_owned());
+                        subheading(
+                            if dark {
+                                "ui-dark-theme"
+                            } else {
+                                "ui-light-theme"
+                            }
+                            .to_owned(),
+                        );
                         gap(Dp(24.0));
                         style_examples(true);
                     });
@@ -541,10 +568,13 @@ fn colors() {
 #[tessera]
 fn states() {
     for style in STYLES {
-        subheading(format!("{} button states", name(style)));
+        subheading(I18N.format(
+            "ui-value-button-states",
+            [("v0", I18N.text(&name(style)).into())],
+        ));
         for toggle in [false, true] {
             gap(Dp(24.0));
-            subheading(if toggle { "Toggle" } else { "Default" }.into());
+            subheading(if toggle { "ui-toggle" } else { "ui-default" }.into());
             gap(Dp(24.0));
             icon_state_matrix(style, toggle);
         }
@@ -629,20 +659,57 @@ fn icon_state_matrix(style: IconButtonVariant, toggle: bool) {
                                                     selected,
                                                     state,
                                                     scale,
-                                                    format!(
-                                                        "{} {} {} {} {} icon",
-                                                        if dark { "Dark" } else { "Light" },
-                                                        name(style),
-                                                        if toggle { "toggle" } else { "default" },
-                                                        if selected {
-                                                            "selected"
-                                                        } else {
-                                                            "unselected"
-                                                        },
+                                                    I18N.format(
+                                                        "ui-value-value-value-value-value-icon",
                                                         [
-                                                            "enabled", "disabled", "hovered",
-                                                            "focused", "pressed"
-                                                        ][state]
+                                                            (
+                                                                "v0",
+                                                                I18N.text(
+                                                                    &(if dark {
+                                                                        "ui-dark"
+                                                                    } else {
+                                                                        "ui-light"
+                                                                    }),
+                                                                )
+                                                                .into(),
+                                                            ),
+                                                            ("v1", I18N.text(&name(style)).into()),
+                                                            (
+                                                                "v2",
+                                                                I18N.text(
+                                                                    &(if toggle {
+                                                                        "ui-toggle-7073"
+                                                                    } else {
+                                                                        "ui-default-7074"
+                                                                    }),
+                                                                )
+                                                                .into(),
+                                                            ),
+                                                            (
+                                                                "v3",
+                                                                I18N.text(
+                                                                    &(if selected {
+                                                                        "ui-selected-7075"
+                                                                    } else {
+                                                                        "ui-unselected-7076"
+                                                                    }),
+                                                                )
+                                                                .into(),
+                                                            ),
+                                                            (
+                                                                "v4",
+                                                                I18N.text(
+                                                                    &([
+                                                                        "ui-enabled-7077",
+                                                                        "ui-disabled-7078",
+                                                                        "ui-hovered-7079",
+                                                                        "ui-focused-7080",
+                                                                        "ui-pressed-7081",
+                                                                    ][state]),
+                                                                )
+                                                                .into(),
+                                                            ),
+                                                        ],
                                                     ),
                                                 );
                                             });
@@ -669,15 +736,24 @@ fn icon_state_matrix(style: IconButtonVariant, toggle: bool) {
     gap(Dp(24.0));
     if toggle {
         text()
-            .content("A: Unselected. B: Selected")
+            .content(I18N.text("ui-a-unselected-b-selected-3245"))
             .style(type_style(16.0, 24.0));
     }
-    for (index, label) in ["Enabled", "Disabled", "Hovered", "Focused", "Pressed"]
-        .into_iter()
-        .enumerate()
+    for (index, label) in [
+        "ui-enabled",
+        "ui-disabled",
+        "ui-hovered",
+        "ui-focused",
+        "ui-pressed",
+    ]
+    .into_iter()
+    .enumerate()
     {
         text()
-            .content(format!("{}  {label}", index + 1))
+            .content(I18N.format(
+                "ui-value-value",
+                [("v0", (index + 1).into()), ("v1", I18N.text(&label).into())],
+            ))
             .style(type_style(16.0, 24.0));
     }
 }
@@ -695,7 +771,7 @@ fn icon_state_marker(label: String, x: f64, y: f64, scale: f64) {
         )
         .children(move || {
             text()
-                .content(label.clone())
+                .content(I18N.text(&(label)))
                 .style(type_style(14.0 * scale, 20.0 * scale))
                 .color(scheme.surface);
         });
@@ -729,8 +805,10 @@ fn icon_state_item(
         } else {
             filled::SETTINGS_SVG
         })
-        .accessibility_label(label.get())
-        .accessibility_description(format!("Activations: {}", actions.get()))
+        .accessibility_label(I18N.text(label.get()))
+        .accessibility_description(
+            I18N.format("ui-activations-value", [("v0", (actions.get()).into())]),
+        )
         .on_click(move || {
             actions.set(actions.get() + 1);
             if toggle {

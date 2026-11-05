@@ -28,6 +28,8 @@ use tessera_ui::{
     remember, tessera, use_context,
 };
 
+use crate::res::I18N;
+
 use super::{
     ACCENT, INK,
     article::{ArticlePage, SpecSection, article},
@@ -54,20 +56,20 @@ const SIZES: [SplitButtonSize; 5] = [
 
 fn variant_name(variant: SplitButtonVariant) -> &'static str {
     match variant {
-        SplitButtonVariant::Elevated => "Elevated",
-        SplitButtonVariant::Filled => "Filled",
-        SplitButtonVariant::Tonal => "Tonal",
-        SplitButtonVariant::Outlined => "Outlined",
+        SplitButtonVariant::Elevated => "ui-elevated",
+        SplitButtonVariant::Filled => "ui-filled",
+        SplitButtonVariant::Tonal => "ui-tonal",
+        SplitButtonVariant::Outlined => "ui-outlined",
     }
 }
 
 fn size_name(size: SplitButtonSize) -> &'static str {
     match size {
-        SplitButtonSize::ExtraSmall => "Extra small",
-        SplitButtonSize::Small => "Small",
-        SplitButtonSize::Medium => "Medium",
-        SplitButtonSize::Large => "Large",
-        SplitButtonSize::ExtraLarge => "Extra large",
+        SplitButtonSize::ExtraSmall => "ui-extra-small",
+        SplitButtonSize::Small => "ui-small",
+        SplitButtonSize::Medium => "ui-medium",
+        SplitButtonSize::Large => "ui-large",
+        SplitButtonSize::ExtraLarge => "ui-extra-large",
     }
 }
 
@@ -88,7 +90,7 @@ pub(super) fn split_buttons_spec(
         controller: remember(MenuController::new),
         anchor: remember(LayoutCoordinates::default),
         source: remember(String::new),
-        result: remember(|| "No option selected".to_owned()),
+        result: remember(|| "ui-no-option-selected".to_owned()),
         theme: remember(MaterialTheme::default),
     };
     boxed()
@@ -101,45 +103,45 @@ pub(super) fn split_buttons_spec(
                 .window_anchor(menu.anchor)
                 .main_content(move || {
                     article(
-                        "Split button",
-                        "Split buttons pair a main action with a menu of related actions",
+                        "ui-split-button",
+                        "ui-split-buttons-pair-a-main-action-with-a-menu-of-related-actions",
                         vec![
                             SpecSection {
-                                title: "Variants",
+                                title: "ui-variants",
                                 content: RenderSlot::new(move || {
                                     variants(menu);
                                 }),
                             },
                             SpecSection {
-                                title: "Configurations",
+                                title: "ui-configurations",
                                 content: RenderSlot::new(move || {
                                     configurations(menu);
                                 }),
                             },
                             SpecSection {
-                                title: "Tokens & specs",
+                                title: "ui-tokens-specs",
                                 content: RenderSlot::new(tokens),
                             },
                             SpecSection {
-                                title: "Anatomy",
+                                title: "ui-anatomy",
                                 content: RenderSlot::new(move || {
                                     anatomy(menu);
                                 }),
                             },
                             SpecSection {
-                                title: "Color",
+                                title: "ui-color",
                                 content: RenderSlot::new(move || {
                                     colors(menu);
                                 }),
                             },
                             SpecSection {
-                                title: "States",
+                                title: "ui-states",
                                 content: RenderSlot::new(move || {
                                     states(menu);
                                 }),
                             },
                             SpecSection {
-                                title: "Measurements",
+                                title: "ui-measurements",
                                 content: RenderSlot::new(measurements),
                             },
                         ],
@@ -147,17 +149,17 @@ pub(super) fn split_buttons_spec(
                     .route_optional(route.clone())
                     .pages(vec![
                         ArticlePage {
-                            title: "Overview",
+                            title: "ui-overview",
                             intro: Some(RenderSlot::new(move || {
                                 overview(menu);
                             })),
                             sections: vec![
                                 SpecSection {
-                                    title: "Availability & resources",
+                                    title: "ui-availability-resources",
                                     content: RenderSlot::new(availability),
                                 },
                                 SpecSection {
-                                    title: "M3 Expressive update",
+                                    title: "ui-m3-expressive-update",
                                     content: RenderSlot::new(move || {
                                         expressive_update(menu);
                                     }),
@@ -165,35 +167,35 @@ pub(super) fn split_buttons_spec(
                             ],
                         },
                         ArticlePage {
-                            title: "Guidelines",
+                            title: "ui-guidelines",
                             intro: None,
                             sections: vec![
                                 SpecSection {
-                                    title: "Usage",
+                                    title: "ui-usage",
                                     content: RenderSlot::new(move || {
                                         usage(menu);
                                     }),
                                 },
                                 SpecSection {
-                                    title: "Anatomy",
+                                    title: "ui-anatomy",
                                     content: RenderSlot::new(move || {
                                         guide_anatomy(menu);
                                     }),
                                 },
                                 SpecSection {
-                                    title: "Color",
+                                    title: "ui-color",
                                     content: RenderSlot::new(move || {
                                         guide_color(menu);
                                     }),
                                 },
                                 SpecSection {
-                                    title: "Adaptive design",
+                                    title: "ui-adaptive-design",
                                     content: RenderSlot::new(move || {
                                         adaptive_design(menu);
                                     }),
                                 },
                                 SpecSection {
-                                    title: "Behavior",
+                                    title: "ui-behavior",
                                     content: RenderSlot::new(move || {
                                         behavior(menu);
                                     }),
@@ -201,27 +203,27 @@ pub(super) fn split_buttons_spec(
                             ],
                         },
                         ArticlePage {
-                            title: "Accessibility",
+                            title: "ui-accessibility",
                             intro: None,
                             sections: vec![
                                 SpecSection {
-                                    title: "Use cases",
+                                    title: "ui-use-cases",
                                     content: RenderSlot::new(use_cases),
                                 },
                                 SpecSection {
-                                    title: "Interaction & style",
+                                    title: "ui-interaction-style",
                                     content: RenderSlot::new(interaction_style),
                                 },
                                 SpecSection {
-                                    title: "Initial focus",
+                                    title: "ui-initial-focus",
                                     content: RenderSlot::new(initial_focus),
                                 },
                                 SpecSection {
-                                    title: "Keyboard navigation",
+                                    title: "ui-keyboard-navigation",
                                     content: RenderSlot::new(keyboard),
                                 },
                                 SpecSection {
-                                    title: "Labeling elements",
+                                    title: "ui-labeling-elements",
                                     content: RenderSlot::new(labeling),
                                 },
                             ],
@@ -234,17 +236,17 @@ pub(super) fn split_buttons_spec(
                         .child(move || {
                             menu_item()
                                 .menu(scope)
-                                .label("Schedule send")
+                                .label(I18N.text("ui-schedule-send"))
                                 .leading_icon(filled::SCHEDULE_SVG)
                                 .on_click(move || {
-                                    menu.result.set("Schedule send".into());
+                                    menu.result.set("ui-schedule-send".into());
                                 });
                             menu_item()
                                 .menu(scope)
-                                .label("Save draft")
+                                .label(I18N.text("ui-save-draft"))
                                 .leading_icon(filled::EDIT_SVG)
                                 .on_click(move || {
-                                    menu.result.set("Save draft".into());
+                                    menu.result.set("ui-save-draft".into());
                                 });
                         });
                 });
@@ -253,14 +255,16 @@ pub(super) fn split_buttons_spec(
 
 #[tessera]
 fn prose(#[prop(into)] value: String) {
-    text().content(value).style(type_style(16.0, 24.0));
+    text()
+        .content(I18N.text(value))
+        .style(type_style(16.0, 24.0));
 }
 
 #[tessera]
 fn caption(#[prop(into)] value: String) {
     let scheme = use_context::<MaterialTheme>().unwrap().get().color_scheme;
     text()
-        .content(value)
+        .content(I18N.text(value))
         .color(scheme.on_surface_variant)
         .style(type_style(14.0, 20.0));
 }
@@ -270,7 +274,7 @@ fn bullets(items: Vec<String>) {
     column().children(move || {
         for item in items.clone() {
             text()
-                .content(format!("•  {item}"))
+                .content(format!("•  {}", I18N.text(item)))
                 .style(type_style(16.0, 24.0));
             gap(Dp(8.0));
         }
@@ -288,7 +292,7 @@ fn badge(number: usize) {
         )
         .children(move || {
             text()
-                .content(number.to_string())
+                .content((number).to_string())
                 .style(type_style(12.0, 16.0))
                 .color(Color::WHITE);
         });
@@ -302,7 +306,9 @@ fn legend(number: usize, #[prop(into)] label: String) {
         .children(move || {
             badge(number);
             spacer().modifier(Modifier::new().width(Dp(12.0)));
-            text().content(label.clone()).style(type_style(16.0, 24.0));
+            text()
+                .content(I18N.text(&(label)))
+                .style(type_style(16.0, 24.0));
         });
 }
 
@@ -323,13 +329,13 @@ fn guidance_line(#[prop(into)] mark: String, #[prop(into)] note: String, color: 
                 )
                 .children(move || {
                     text()
-                        .content(mark.clone())
+                        .content(I18N.text(&(mark)))
                         .style(type_style(14.0, 20.0))
                         .color(Color::WHITE);
                 });
             spacer().modifier(Modifier::new().width(Dp(12.0)));
             text()
-                .content(note.clone())
+                .content(I18N.text(&(note)))
                 .color(scheme.on_surface_variant)
                 .style(type_style(14.0, 20.0));
         });
@@ -368,14 +374,19 @@ fn demo(
                             .size(size)
                             .variant(variant)
                             .enabled(enabled)
-                            .accessibility_label(format!("{label} main action"))
+                            .accessibility_label(
+                                I18N.format(
+                                    "ui-value-main-action",
+                                    [("v0", I18N.text(&label).into())],
+                                ),
+                            )
                             .on_click(move || count.set(count.get() + 1))
                             .content(move || {
                                 icon().painter(filled::EDIT_SVG);
                                 spacer().modifier(
                                     Modifier::new().width(SplitButtonDefaults::icon_spacing(size)),
                                 );
-                                text().content("Edit");
+                                text().content(I18N.text("ui-edit"));
                             });
                     }
                 })
@@ -394,7 +405,10 @@ fn demo(
                                 menu.controller.with(MenuController::is_open)
                                     && menu.source.get() == selected,
                             )
-                            .accessibility_label(format!("{label} menu actions"))
+                            .accessibility_label(I18N.format(
+                                "ui-value-menu-actions",
+                                [("v0", I18N.text(&label).into())],
+                            ))
                             .modifier(Modifier::new().on_layout_coordinates(move |coordinates| {
                                 bounds.set_if_changed(coordinates);
                                 if menu.source.get() == name {
@@ -420,11 +434,20 @@ fn demo(
                 });
             gap(Dp(12.0));
             text()
-                .content(format!("{caption_label}: {} main actions", count.get()))
+                .content(I18N.format(
+                    "ui-main-action-count",
+                    [
+                        ("caption", I18N.text(&caption_label).into()),
+                        ("count", count.get().into()),
+                    ],
+                ))
                 .style(type_style(14.0, 20.0));
             if menu.source.get() == caption_label {
                 text()
-                    .content(format!("Menu choice: {}", menu.result.get()))
+                    .content(I18N.format(
+                        "ui-menu-choice-value",
+                        [("v0", I18N.text(&menu.result.get()).into())],
+                    ))
                     .style(type_style(14.0, 20.0));
             }
         });
@@ -433,95 +456,95 @@ fn demo(
 #[tessera]
 fn overview(menu: Menu) {
     bullets(vec![
-        "Use to show an action with a menu of related actions".into(),
-        "Same size range as buttons and icon buttons: XS, S, M, L, XL".into(),
+        "ui-use-to-show-an-action-with-a-menu-of-related-actions".into(),
+        "ui-same-size-range-as-buttons-and-icon-buttons-xs-s-m-l-xl".into(),
     ]);
     gap(Dp(32.0));
     panel(RenderSlot::new(move || {
         demo(
             menu,
-            "Overview",
+            "ui-overview",
             SplitButtonVariant::Filled,
             SplitButtonSize::Medium,
             true,
         );
     }));
     gap(Dp(16.0));
-    caption("Split buttons are made of a common button and a menu icon button");
+    caption("ui-split-buttons-are-made-of-a-common-button-and-a-menu-icon-button");
 }
 
 #[tessera]
 fn availability() {
     spec_table(
-        vec!["Type".into(), "Resource".into(), "Status".into()],
+        vec!["ui-type".into(), "ui-resource".into(), "ui-status".into()],
         vec![
             vec![
-                "Design".into(),
-                "Design Kit (Figma)".into(),
-                "Available".into(),
+                "ui-design".into(),
+                "ui-design-kit-figma".into(),
+                "ui-available".into(),
             ],
             vec![
-                "Implementation".into(),
-                "Jetpack Compose: Expressive".into(),
-                "Available".into(),
+                "ui-implementation".into(),
+                "ui-jetpack-compose-expressive".into(),
+                "ui-available".into(),
             ],
             vec![
-                "Implementation".into(),
-                "Android Views (MDC-Android): Expressive".into(),
-                "Available".into(),
+                "ui-implementation".into(),
+                "ui-android-views-mdc-android-expressive".into(),
+                "ui-available".into(),
             ],
             vec![
-                "Implementation".into(),
-                "Web: Expressive".into(),
-                "Unavailable".into(),
+                "ui-implementation".into(),
+                "ui-web-expressive".into(),
+                "ui-unavailable".into(),
             ],
         ],
     );
     gap(Dp(24.0));
     prose(
-        "Tessera examples on this page use the native split_button_layout with its leading and trailing segments, five sizes and four color variants.",
+        "ui-tessera-examples-on-this-page-use-the-native-split-button-layout-with-its-leading-and",
     );
 }
 
 #[tessera]
 fn expressive_update(menu: Menu) {
-    subheading("May 2025".into());
+    subheading("ui-may-2025".into());
     prose(
-        "The split button has a separate menu button that spins and changes shape when activated. It can be used alongside other buttons of the same size.",
+        "ui-the-split-button-has-a-separate-menu-button-that-spins-and-changes-shape-when-activated-it",
     );
     gap(Dp(24.0));
-    prose("New component added to catalog.");
+    prose("ui-new-component-added-to-catalog");
     gap(Dp(16.0));
     prose("Sizes:");
     gap(Dp(8.0));
     bullets(vec![
-        "Extra small".into(),
-        "Small".into(),
-        "Medium".into(),
-        "Large".into(),
-        "Extra large".into(),
+        "ui-extra-small".into(),
+        "ui-small".into(),
+        "ui-medium".into(),
+        "ui-large".into(),
+        "ui-extra-large".into(),
     ]);
     gap(Dp(16.0));
-    prose("Color styles:");
+    prose("ui-color-styles-3705");
     gap(Dp(8.0));
     bullets(vec![
-        "Elevated".into(),
-        "Filled".into(),
-        "Tonal".into(),
-        "Outlined".into(),
+        "ui-elevated".into(),
+        "ui-filled".into(),
+        "ui-tonal".into(),
+        "ui-outlined".into(),
     ]);
     gap(Dp(24.0));
     panel(RenderSlot::new(move || {
         demo(
             menu,
-            "Expressive",
+            "ui-expressive",
             SplitButtonVariant::Filled,
             SplitButtonSize::Medium,
             true,
         );
     }));
     gap(Dp(16.0));
-    caption("Split buttons have the same five recommended sizes as label and icon buttons");
+    caption("ui-split-buttons-have-the-same-five-recommended-sizes-as-label-and-icon-buttons");
 }
 
 #[tessera]
@@ -529,25 +552,29 @@ fn variants(menu: Menu) {
     panel(RenderSlot::new(move || {
         demo(
             menu,
-            "Variant",
+            "ui-variant",
             SplitButtonVariant::Filled,
             SplitButtonSize::Medium,
             true,
         );
     }));
     gap(Dp(16.0));
-    caption("A split button pairs a leading action with a trailing menu segment");
+    caption("ui-a-split-button-pairs-a-leading-action-with-a-trailing-menu-segment");
     gap(Dp(32.0));
     spec_table(
-        vec!["Variant".into(), "M3".into(), "M3 Expressive".into()],
-        vec![vec!["Split button".into(), "--".into(), "Available".into()]],
+        vec!["ui-variant".into(), "M3".into(), "ui-m3-expressive".into()],
+        vec![vec![
+            "ui-split-button".into(),
+            "--".into(),
+            "ui-available".into(),
+        ]],
     );
 }
 
 #[tessera]
 fn configurations(menu: Menu) {
-    subheading("Color".into());
-    prose("Split buttons come in four color configurations.");
+    subheading("ui-color".into());
+    prose("ui-split-buttons-come-in-four-color-configurations");
     gap(Dp(24.0));
     column().children(move || {
         for (index, variant) in VARIANTS.into_iter().enumerate() {
@@ -566,9 +593,9 @@ fn configurations(menu: Menu) {
         }
     });
     gap(Dp(16.0));
-    subheading("Size".into());
+    subheading("ui-size".into());
     prose(
-        "Split buttons use the same five sizes as buttons and icon buttons. Small is the default.",
+        "ui-split-buttons-use-the-same-five-sizes-as-buttons-and-icon-buttons-small-is-the-default",
     );
     gap(Dp(24.0));
     panel(RenderSlot::new(move || {
@@ -616,23 +643,23 @@ fn configurations(menu: Menu) {
     gap(Dp(24.0));
     spec_table(
         vec![
-            "Category".into(),
-            "Configuration".into(),
+            "ui-category".into(),
+            "ui-configuration".into(),
             "M3".into(),
-            "M3 Expressive".into(),
+            "ui-m3-expressive".into(),
         ],
         vec![
             vec![
-                "Size".into(),
+                "ui-size".into(),
                 "XS, S, M, L, XL".into(),
                 "--".into(),
-                "Available".into(),
+                "ui-available".into(),
             ],
             vec![
-                "Color".into(),
-                "Elevated, filled, tonal, outlined".into(),
+                "ui-color".into(),
+                "ui-elevated-filled-tonal-outlined".into(),
                 "--".into(),
-                "Available".into(),
+                "ui-available".into(),
             ],
         ],
     );
@@ -641,7 +668,7 @@ fn configurations(menu: Menu) {
 #[tessera]
 fn tokens() {
     prose(
-        "Split button token sets are organized by size. Each size defines the container height, the inner and outer corner, the content padding and the trailing icon size.",
+        "ui-split-button-token-sets-are-organized-by-size-each-size-defines-the-container-height-the-i",
     );
     gap(Dp(24.0));
     column().children(|| {
@@ -652,26 +679,30 @@ fn tokens() {
     gap(Dp(32.0));
     spec_table(
         vec![
-            "Variant".into(),
-            "Container".into(),
-            "Label and icon".into(),
+            "ui-variant".into(),
+            "ui-container".into(),
+            "ui-label-and-icon".into(),
         ],
         vec![
-            vec!["Filled".into(), "Primary".into(), "On primary".into()],
             vec![
-                "Tonal".into(),
-                "Secondary container".into(),
-                "On secondary container".into(),
+                "ui-filled".into(),
+                "ui-primary".into(),
+                "ui-on-primary".into(),
             ],
             vec![
-                "Elevated".into(),
-                "Surface container low".into(),
-                "Primary".into(),
+                "ui-tonal".into(),
+                "ui-secondary-container".into(),
+                "ui-on-secondary-container".into(),
             ],
             vec![
-                "Outlined".into(),
-                "Transparent".into(),
-                "On surface variant".into(),
+                "ui-elevated".into(),
+                "ui-surface-container-low".into(),
+                "ui-primary".into(),
+            ],
+            vec![
+                "ui-outlined".into(),
+                "ui-transparent".into(),
+                "ui-on-surface-variant".into(),
             ],
         ],
     );
@@ -684,27 +715,27 @@ fn size_token_table(size: SplitButtonSize) {
     subheading(size_name(size).to_owned());
     gap(Dp(12.0));
     spec_table(
-        vec!["Size attribute".into(), "Value".into()],
+        vec!["ui-size-attribute".into(), "ui-value".into()],
         vec![
             vec![
-                "Container height".into(),
+                "ui-container-height".into(),
                 format!("{}dp", SplitButtonDefaults::container_height(size).0),
             ],
             vec![
-                "Inner corner".into(),
+                "ui-inner-corner".into(),
                 format!("{}dp", SplitButtonDefaults::inner_corner_size(size).0),
             ],
-            vec!["Outer corner".into(), "50% (full capsule)".into()],
+            vec!["ui-outer-corner".into(), "ui-50-full-capsule".into()],
             vec![
-                "Leading padding".into(),
+                "ui-leading-padding".into(),
                 format!("{}/{}dp", leading.left.0, leading.right.0),
             ],
             vec![
-                "Trailing padding".into(),
+                "ui-trailing-padding".into(),
                 format!("{}/{}dp", trailing.left.0, trailing.right.0),
             ],
             vec![
-                "Trailing icon".into(),
+                "ui-trailing-icon".into(),
                 format!("{}dp", SplitButtonDefaults::trailing_icon_size(size).0),
             ],
         ],
@@ -717,7 +748,7 @@ fn anatomy(menu: Menu) {
     panel(RenderSlot::new(move || {
         demo(
             menu,
-            "Anatomy",
+            "ui-anatomy",
             SplitButtonVariant::Filled,
             SplitButtonSize::Medium,
             true,
@@ -725,21 +756,21 @@ fn anatomy(menu: Menu) {
     }));
     gap(Dp(24.0));
     column().children(|| {
-        legend(1, "Leading button");
-        legend(2, "Icon");
-        legend(3, "Label text");
-        legend(4, "Trailing button");
+        legend(1, "ui-leading-button");
+        legend(2, "ui-icon");
+        legend(3, "ui-label-text");
+        legend(4, "ui-trailing-button");
     });
     gap(Dp(16.0));
     caption(
-        "The leading button holds the main action; the trailing button opens its related actions",
+        "ui-the-leading-button-holds-the-main-action-the-trailing-button-opens-its-related-actions",
     );
 }
 
 #[tessera]
 fn colors(menu: Menu) {
     prose(
-        "Split buttons use the same color schemes as standard buttons. Unlike toggle buttons, the split button color doesn’t change when selected — only a state layer is applied.",
+        "ui-split-buttons-use-the-same-color-schemes-as-standard-buttons-unlike-toggle-buttons-the-spl",
     );
     gap(Dp(24.0));
     panel(RenderSlot::new(move || {
@@ -750,7 +781,10 @@ fn colors(menu: Menu) {
                 for variant in VARIANTS {
                     demo(
                         menu,
-                        format!("Light {}", variant_name(variant)),
+                        I18N.format(
+                            "ui-light-value",
+                            [("v0", I18N.text(&variant_name(variant)).into())],
+                        ),
                         variant,
                         SplitButtonSize::Small,
                         true,
@@ -770,7 +804,10 @@ fn colors(menu: Menu) {
                         for variant in VARIANTS {
                             demo(
                                 menu,
-                                format!("Dark {}", variant_name(variant)),
+                                I18N.format(
+                                    "ui-dark-value",
+                                    [("v0", I18N.text(&variant_name(variant)).into())],
+                                ),
                                 variant,
                                 SplitButtonSize::Small,
                                 true,
@@ -782,26 +819,30 @@ fn colors(menu: Menu) {
     gap(Dp(24.0));
     spec_table(
         vec![
-            "Variant".into(),
-            "Container color".into(),
-            "Label color".into(),
+            "ui-variant".into(),
+            "ui-container-color".into(),
+            "ui-label-color".into(),
         ],
         vec![
-            vec!["Filled".into(), "Primary".into(), "On primary".into()],
             vec![
-                "Tonal".into(),
-                "Secondary container".into(),
-                "On secondary container".into(),
+                "ui-filled".into(),
+                "ui-primary".into(),
+                "ui-on-primary".into(),
             ],
             vec![
-                "Elevated".into(),
-                "Surface container low".into(),
-                "Primary".into(),
+                "ui-tonal".into(),
+                "ui-secondary-container".into(),
+                "ui-on-secondary-container".into(),
             ],
             vec![
-                "Outlined".into(),
-                "Transparent".into(),
-                "On surface variant".into(),
+                "ui-elevated".into(),
+                "ui-surface-container-low".into(),
+                "ui-primary".into(),
+            ],
+            vec![
+                "ui-outlined".into(),
+                "ui-transparent".into(),
+                "ui-on-surface-variant".into(),
             ],
         ],
     );
@@ -811,32 +852,32 @@ fn colors(menu: Menu) {
 fn states(menu: Menu) {
     let enabled = remember(|| true);
     prose(
-        "States are visual representations used to communicate the status of a component or interactive element.",
+        "ui-states-are-visual-representations-used-to-communicate-the-status-of-a-component-or-interac",
     );
     gap(Dp(16.0));
     prose(
-        "Split button states use the same colors and state layers as buttons and icon buttons. The inner corners change shape for hovered, focused and pressed states, and the menu icon spins when the menu is expanded.",
+        "ui-split-button-states-use-the-same-colors-and-state-layers-as-buttons-and-icon-buttons-the-i",
     );
     gap(Dp(24.0));
     column().children(move || {
         button()
             .tonal()
             .selected(!enabled.get())
-            .accessibility_label("Disable split button")
+            .accessibility_label(I18N.text("ui-disable-split-button"))
             .on_click(move || {
                 enabled.set(!enabled.get());
                 if !enabled.get() {
                     menu.controller.with_mut(MenuController::close);
                 }
             })
-            .child(|| {
-                text().content("Disabled");
+            .child(move || {
+                text().content(I18N.text("ui-disabled"));
             });
         gap(Dp(24.0));
         panel(RenderSlot::new(move || {
             demo(
                 menu,
-                "States",
+                "ui-states",
                 SplitButtonVariant::Filled,
                 SplitButtonSize::Medium,
                 enabled.get(),
@@ -844,46 +885,62 @@ fn states(menu: Menu) {
         }));
     });
     gap(Dp(16.0));
-    caption("Enabled, hovered, focused, pressed and disabled states keep the same color roles");
+    caption("ui-enabled-hovered-focused-pressed-and-disabled-states-keep-the-same-color-roles");
 }
 
 #[tessera]
 fn measurements() {
     prose(
-        "Text and icons are optically centered when the segments are asymmetrical. They’re centered normally when symmetrical.",
+        "ui-text-and-icons-are-optically-centered-when-the-segments-are-asymmetrical-they-re-centered",
     );
     gap(Dp(24.0));
     spec_table(
-        vec!["Element".into(), "Attribute".into(), "Value".into()],
+        vec![
+            "ui-element".into(),
+            "ui-attribute".into(),
+            "ui-value".into(),
+        ],
         vec![
             vec![
-                "Split button".into(),
-                "Container height (default S)".into(),
+                "ui-split-button".into(),
+                "ui-container-height-default-s".into(),
                 "40dp".into(),
             ],
             vec![
-                "Each segment".into(),
-                "Minimum target".into(),
+                "ui-each-segment".into(),
+                "ui-minimum-target".into(),
                 "48 × 48dp".into(),
             ],
             vec![
-                "Container".into(),
-                "Outer corner".into(),
-                "50% (full capsule)".into(),
+                "ui-container".into(),
+                "ui-outer-corner".into(),
+                "ui-50-full-capsule".into(),
             ],
             vec![
-                "Container".into(),
-                "Inner corner".into(),
-                "4dp · 12dp active".into(),
+                "ui-container".into(),
+                "ui-inner-corner".into(),
+                "ui-4dp-12dp-active".into(),
             ],
-            vec!["Outlined".into(), "Divider / outline".into(), "1dp".into()],
-            vec!["Segments".into(), "Space between".into(), "2dp".into()],
             vec![
-                "Trailing segment".into(),
-                "Minimum width".into(),
+                "ui-outlined".into(),
+                "ui-divider-outline".into(),
+                "1dp".into(),
+            ],
+            vec![
+                "ui-segments".into(),
+                "ui-space-between".into(),
+                "2dp".into(),
+            ],
+            vec![
+                "ui-trailing-segment".into(),
+                "ui-minimum-width".into(),
                 "48dp".into(),
             ],
-            vec!["Trailing segment".into(), "Icon size".into(), "22dp".into()],
+            vec![
+                "ui-trailing-segment".into(),
+                "ui-icon-size".into(),
+                "22dp".into(),
+            ],
         ],
     );
     gap(Dp(24.0));
@@ -891,7 +948,7 @@ fn measurements() {
         measurements_figure();
     }));
     gap(Dp(16.0));
-    caption("The trailing segment keeps a 48dp target even when the container is 40dp tall");
+    caption("ui-the-trailing-segment-keeps-a-48dp-target-even-when-the-container-is-40dp-tall");
 }
 
 #[tessera]
@@ -905,12 +962,12 @@ fn measurements_figure() {
                     split_leading_button()
                         .size(SplitButtonSize::Medium)
                         .variant(SplitButtonVariant::Filled)
-                        .accessibility_label("Publish")
+                        .accessibility_label(I18N.text("ui-publish"))
                         .on_click(|| {})
-                        .content(|| {
+                        .content(move || {
                             icon().painter(filled::PUBLISH_SVG);
                             spacer().modifier(Modifier::new().width(Dp(8.0)));
-                            text().content("Publish");
+                            text().content(I18N.text("ui-publish"));
                         });
                 })
                 .trailing_button(move || {
@@ -918,66 +975,68 @@ fn measurements_figure() {
                         .size(SplitButtonSize::Medium)
                         .variant(SplitButtonVariant::Filled)
                         .expanded(controller.with(MenuController::is_open))
-                        .accessibility_label("Publish options")
+                        .accessibility_label(I18N.text("ui-publish-options"))
                         .on_click(move || controller.with_mut(MenuController::toggle))
                         .content(|| {
                             icon().painter(filled::ARROW_DROP_DOWN_SVG);
                         });
                 });
             gap(Dp(12.0));
-            caption("Medium split button: 56dp container, 24/24dp inner padding, 26dp menu icon");
+            caption("ui-medium-split-button-56dp-container-24-24dp-inner-padding-26dp-menu-icon");
         });
 }
 
 #[tessera]
 fn usage(menu: Menu) {
     prose(
-        "Split buttons are used to add a menu of actions alongside a main action. This reduces visual complexity by hiding extra options. Split buttons work well alone or alongside common buttons and icon buttons.",
+        "ui-split-buttons-are-used-to-add-a-menu-of-actions-alongside-a-main-action-this-reduces-visua",
     );
     gap(Dp(24.0));
     panel(RenderSlot::new(move || {
         demo(
             menu,
-            "Usage",
+            "ui-usage",
             SplitButtonVariant::Filled,
             SplitButtonSize::Small,
             true,
         );
     }));
     gap(Dp(16.0));
-    caption("Split buttons on their own can grab attention");
+    caption("ui-split-buttons-on-their-own-can-grab-attention");
     gap(Dp(24.0));
     prose(
-        "Split buttons have five recommended sizes. Scale up the split button in large breakpoints, or to create more emphasis in smaller windows.",
+        "ui-split-buttons-have-five-recommended-sizes-scale-up-the-split-button-in-large-breakpoints-o",
     );
     gap(Dp(24.0));
     do_dont(
-        "Open a menu from a split button",
-        "Avoid modifying the menu in unusual ways",
+        "ui-open-a-menu-from-a-split-button",
+        "ui-avoid-modifying-the-menu-in-unusual-ways",
     );
     gap(Dp(32.0));
     prose(
-        "The main action stays on the leading segment; the trailing segment only opens the menu of related actions, so people always know which part they are about to trigger.",
+        "ui-the-main-action-stays-on-the-leading-segment-the-trailing-segment-only-opens-the-menu-of-r",
     );
     gap(Dp(16.0));
     do_dont(
-        "Keep the leading segment for the primary action",
-        "Don’t put a menu on the leading segment and an action on the trailing segment",
+        "ui-keep-the-leading-segment-for-the-primary-action",
+        "ui-don-t-put-a-menu-on-the-leading-segment-and-an-action-on-the-trailing-segment",
     );
     gap(Dp(32.0));
     prose(
-        "Split buttons can be used alongside other buttons and button groups, and can be a different size from them, especially since they take up more space.",
+        "ui-split-buttons-can-be-used-alongside-other-buttons-and-button-groups-and-can-be-a-different",
     );
 }
 
 #[tessera]
 fn guide_anatomy(menu: Menu) {
-    prose("The split button has a leading button and a trailing button separated by a small gap.");
+    prose(
+        "ui-the-split-button-has-a-leading-button-and-a-trailing-button-separated-by-a-small-gap",
+    );
     gap(Dp(24.0));
     panel(RenderSlot::new(move || {
         demo(
             menu,
-            "Anatomy",
+            "ui-anatomy",
             SplitButtonVariant::Filled,
             SplitButtonSize::Medium,
             true,
@@ -985,19 +1044,19 @@ fn guide_anatomy(menu: Menu) {
     }));
     gap(Dp(24.0));
     column().children(|| {
-        legend(1, "Leading button");
-        legend(2, "Icon");
-        legend(3, "Label text");
-        legend(4, "Trailing button");
+        legend(1, "ui-leading-button");
+        legend(2, "ui-icon");
+        legend(3, "ui-label-text");
+        legend(4, "ui-trailing-button");
     });
     gap(Dp(16.0));
-    caption("The trailing button contains the menu icon; the leading button carries the label");
+    caption("ui-the-trailing-button-contains-the-menu-icon-the-leading-button-carries-the-label");
 }
 
 #[tessera]
 fn guide_color(menu: Menu) {
     prose(
-        "Use the split button color that matches the page emphasis: filled for the highest emphasis, tonal for medium emphasis, elevated when the button sits on imagery, and outlined on plain surfaces.",
+        "ui-use-the-split-button-color-that-matches-the-page-emphasis-filled-for-the-highest-emphasis",
     );
     gap(Dp(24.0));
     panel(RenderSlot::new(move || {
@@ -1017,20 +1076,20 @@ fn guide_color(menu: Menu) {
             });
     }));
     gap(Dp(16.0));
-    caption("Filled, tonal, elevated and outlined split buttons share the button color roles");
+    caption("ui-filled-tonal-elevated-and-outlined-split-buttons-share-the-button-color-roles");
 }
 
 #[tessera]
 fn adaptive_design(menu: Menu) {
     prose(
-        "Split buttons scale with the layout. Keep the leading and trailing segments together, and let the pair wrap below other controls rather than splitting the two segments apart.",
+        "ui-split-buttons-scale-with-the-layout-keep-the-leading-and-trailing-segments-together-and-le",
     );
     gap(Dp(24.0));
     panel(RenderSlot::new(move || {
         column().children(move || {
             demo(
                 menu,
-                "Small",
+                "ui-small",
                 SplitButtonVariant::Tonal,
                 SplitButtonSize::Small,
                 true,
@@ -1038,7 +1097,7 @@ fn adaptive_design(menu: Menu) {
             gap(Dp(16.0));
             demo(
                 menu,
-                "Large",
+                "ui-large",
                 SplitButtonVariant::Tonal,
                 SplitButtonSize::Large,
                 true,
@@ -1046,129 +1105,132 @@ fn adaptive_design(menu: Menu) {
         });
     }));
     gap(Dp(16.0));
-    caption("Small and large split buttons keep the same leading/trailing structure");
+    caption("ui-small-and-large-split-buttons-keep-the-same-leading-trailing-structure");
     gap(Dp(24.0));
     prose(
-        "Each segment keeps a minimum 48 × 48dp target, so a 32dp or 40dp container still exposes a full-size target for both the action and the menu.",
+        "ui-each-segment-keeps-a-minimum-48-48dp-target-so-a-32dp-or-40dp-container-still-exposes-a-fu",
     );
 }
 
 #[tessera]
 fn behavior(menu: Menu) {
     prose(
-        "Activating the leading segment runs the main action immediately and leaves the menu untouched. Activating the trailing segment opens the menu anchored to the trailing edge, and the menu icon spins to indicate the expanded state.",
+        "ui-activating-the-leading-segment-runs-the-main-action-immediately-and-leaves-the-menu-untouc",
     );
     gap(Dp(16.0));
     prose(
-        "Choosing a menu item closes the menu and reports the choice here. Pressing Escape, activating the trailing segment again, or clicking outside the menu also closes it.",
+        "ui-choosing-a-menu-item-closes-the-menu-and-reports-the-choice-here-pressing-escape-activatin",
     );
     gap(Dp(24.0));
     panel(RenderSlot::new(move || {
         demo(
             menu,
-            "Behavior",
+            "ui-behavior",
             SplitButtonVariant::Filled,
             SplitButtonSize::Medium,
             true,
         );
     }));
     gap(Dp(16.0));
-    caption("Run the main action on the left, then open the menu to choose a related action");
+    caption("ui-run-the-main-action-on-the-left-then-open-the-menu-to-choose-a-related-action");
 }
 
 #[tessera]
 fn use_cases() {
-    prose("People should be able to do the following using assistive technology:");
+    prose("ui-people-should-be-able-to-do-the-following-using-assistive-technology");
     gap(Dp(16.0));
     bullets(vec![
-        "Navigate to each button and interact with them".into(),
-        "Navigate to any element opened by the trailing button".into(),
-        "Understand the current selection state of the button".into(),
+        "ui-navigate-to-each-button-and-interact-with-them".into(),
+        "ui-navigate-to-any-element-opened-by-the-trailing-button".into(),
+        "ui-understand-the-current-selection-state-of-the-button".into(),
     ]);
 }
 
 #[tessera]
 fn interaction_style() {
     prose(
-        "Each button in the split button needs a minimum target area of 48 × 48dp. Extra small and small split buttons are shorter than 48dp, so the target areas around them need to be at least 48dp tall.",
+        "ui-each-button-in-the-split-button-needs-a-minimum-target-area-of-48-48dp-extra-small-and-sma",
     );
     gap(Dp(16.0));
-    caption("Target areas should be at least 48 × 48dp");
+    caption("ui-target-areas-should-be-at-least-48-48dp");
     gap(Dp(24.0));
     column().children(|| {
-        legend(1, "Extra small");
-        legend(2, "Small");
+        legend(1, "ui-extra-small");
+        legend(2, "ui-small");
     });
 }
 
 #[tessera]
 fn initial_focus() {
     prose(
-        "Focus should land on the leading button, then move to the trailing button. This can depend on the operating system’s settings.",
+        "ui-focus-should-land-on-the-leading-button-then-move-to-the-trailing-button-this-can-depend-o",
     );
     gap(Dp(16.0));
     prose(
-        "In right-to-left layouts the order is mirrored, so focus starts on the leading segment at the right edge.",
+        "ui-in-right-to-left-layouts-the-order-is-mirrored-so-focus-starts-on-the-leading-segment-at-t",
     );
     gap(Dp(24.0));
-    caption("Left to right: leading then trailing. Right to left: mirrored");
+    caption("ui-left-to-right-leading-then-trailing-right-to-left-mirrored");
 }
 
 #[tessera]
 fn keyboard() {
     spec_table(
-        vec!["Keys".into(), "Actions".into()],
+        vec!["ui-keys".into(), "ui-actions".into()],
         vec![
-            vec!["Tab".into(), "Navigate between the two buttons".into()],
             vec![
-                "Space or Enter".into(),
-                "Activate the focused button".into(),
+                "ui-tab".into(),
+                "ui-navigate-between-the-two-buttons".into(),
             ],
             vec![
-                "Tab in the menu".into(),
-                "Move between the open menu items".into(),
+                "ui-space-or-enter".into(),
+                "ui-activate-the-focused-button".into(),
             ],
-            vec!["Escape".into(), "Close the menu".into()],
+            vec![
+                "ui-tab-in-the-menu".into(),
+                "ui-move-between-the-open-menu-items".into(),
+            ],
+            vec!["ui-escape".into(), "ui-close-the-menu".into()],
         ],
     );
     gap(Dp(24.0));
     prose(
-        "The native sample follows this table: Tab reaches the leading segment and then the trailing segment, Space or Enter activates whichever segment has focus, and Escape dismisses the open menu.",
+        "ui-the-native-sample-follows-this-table-tab-reaches-the-leading-segment-and-then-the-trailing",
     );
 }
 
 #[tessera]
 fn labeling() {
     prose(
-        "The accessibility label for the leading button is the same as buttons: it should describe the main action people trigger.",
+        "ui-the-accessibility-label-for-the-leading-button-is-the-same-as-buttons-it-should-describe-t",
     );
     gap(Dp(16.0));
     prose(
-        "The trailing icon button should have an extra state or similar label indicating that the menu is expanded or collapsed.",
+        "ui-the-trailing-icon-button-should-have-an-extra-state-or-similar-label-indicating-that-the-m",
     );
     gap(Dp(24.0));
     spec_table(
         vec![
-            "Element".into(),
-            "Label".into(),
-            "Role".into(),
-            "State".into(),
+            "ui-element".into(),
+            "ui-label".into(),
+            "ui-role".into(),
+            "ui-state".into(),
         ],
         vec![
             vec![
-                "Leading button".into(),
-                "Match the main action".into(),
-                "Button".into(),
+                "ui-leading-button".into(),
+                "ui-match-the-main-action".into(),
+                "ui-button".into(),
                 "—".into(),
             ],
             vec![
-                "Trailing button".into(),
-                "More {main action} options".into(),
-                "Button".into(),
-                "Expanded or collapsed".into(),
+                "ui-trailing-button".into(),
+                "ui-more-main-action-options".into(),
+                "ui-button".into(),
+                "ui-expanded-or-collapsed".into(),
             ],
         ],
     );
     gap(Dp(24.0));
-    caption("Leading buttons should have the same labels as common buttons");
+    caption("ui-leading-buttons-should-have-the-same-labels-as-common-buttons");
 }

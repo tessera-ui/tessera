@@ -13,6 +13,8 @@ use tessera_components::{
 };
 use tessera_ui::{Dp, remember, tessera};
 
+use crate::res::I18N;
+
 use super::{
     super::{gap, spec_table, subheading, type_style},
     SIZES, STYLES, name,
@@ -23,15 +25,15 @@ use super::{
 mod tests;
 
 const SETS: [&str; 9] = [
-    "Filled color",
-    "Tonal color",
-    "Outlined color",
-    "Standard color",
-    "Extra small size",
-    "Small size",
-    "Medium size",
-    "Large size",
-    "Extra large size",
+    "ui-filled-color",
+    "ui-tonal-color",
+    "ui-outlined-color",
+    "ui-standard-color",
+    "ui-extra-small-size",
+    "ui-small-size",
+    "ui-medium-size",
+    "ui-large-size",
+    "ui-extra-large-size",
 ];
 
 #[tessera]
@@ -39,10 +41,10 @@ pub(super) fn figure() {
     let selected = remember(|| 0_usize);
     let shared = remember(|| false);
     text()
-        .content("Icon button tokens are organized by common behavior, color style, and size. Choose a token set to inspect its values. Color roles resolve through the current theme.")
+        .content(I18N.text("ui-icon-button-tokens-are-organized-by-common-behavior-color-style-and-size-choose-a-token-se"))
         .style(type_style(16.0, 24.0));
     gap(Dp(24.0));
-    subheading("Color".into());
+    subheading("ui-color".into());
     gap(Dp(8.0));
     flow_row()
         .item_spacing(Dp(8.0))
@@ -52,15 +54,18 @@ pub(super) fn figure() {
                 button()
                     .tonal()
                     .selected(selected.get() == index)
-                    .accessibility_label(format!("Show {} tokens", SETS[index]))
+                    .accessibility_label(I18N.format(
+                        "ui-show-value-tokens",
+                        [("v0", I18N.text(&(SETS[index])).into())],
+                    ))
                     .on_click(move || selected.set(index))
                     .child(move || {
-                        text().content(name(STYLES[index]));
+                        text().content(I18N.text(name(STYLES[index])));
                     });
             }
         });
     gap(Dp(16.0));
-    subheading("Size".into());
+    subheading("ui-size".into());
     gap(Dp(8.0));
     flow_row()
         .item_spacing(Dp(8.0))
@@ -70,10 +75,13 @@ pub(super) fn figure() {
                 button()
                     .tonal()
                     .selected(selected.get() == index + 4)
-                    .accessibility_label(format!("Show {} tokens", SETS[index + 4]))
+                    .accessibility_label(I18N.format(
+                        "ui-show-value-tokens",
+                        [("v0", I18N.text(&(SETS[index + 4])).into())],
+                    ))
                     .on_click(move || selected.set(index + 4))
                     .child(move || {
-                        text().content(["XS", "S", "M", "L", "XL"][index]);
+                        text().content(I18N.text(["ui-xs", "S", "M", "L", "ui-xl"][index]));
                     });
             }
         });
@@ -84,28 +92,31 @@ pub(super) fn figure() {
         0..=3 => color_rows(STYLES[selected.get()]),
         index => size_rows(SIZES[index - 4]),
     };
-    spec_table(vec!["Token".into(), "Value".into()], rows);
+    spec_table(vec!["ui-token".into(), "ui-value".into()], rows);
     gap(Dp(24.0));
     preview(selected.get());
     gap(Dp(24.0));
     button()
         .text()
-        .accessibility_label(if shared.get() {
-            "Hide shared icon button values"
+        .accessibility_label(I18N.text(if shared.get() {
+            "ui-hide-shared-icon-button-values"
         } else {
-            "Show shared icon button values"
-        })
+            "ui-show-shared-icon-button-values"
+        }))
         .on_click(move || shared.set(!shared.get()))
         .child(move || {
-            text().content(if shared.get() {
-                "Hide shared behavior summary"
+            text().content(I18N.text(if shared.get() {
+                "ui-hide-shared-behavior-summary"
             } else {
-                "Show shared behavior summary"
-            });
+                "ui-show-shared-behavior-summary"
+            }));
         });
     if shared.get() {
         gap(Dp(16.0));
-        spec_table(vec!["Shared value".into(), "Value".into()], common_rows());
+        spec_table(
+            vec!["ui-shared-value".into(), "ui-value".into()],
+            common_rows(),
+        );
     }
 }
 
@@ -118,79 +129,105 @@ fn rows(values: Vec<(&str, String)>) -> Vec<Vec<String>> {
 
 fn common_rows() -> Vec<Vec<String>> {
     rows(vec![
-        ("Minimum target width", "48dp".into()),
-        ("Minimum target height", "48dp".into()),
-        ("Round container shape", "Full".into()),
+        ("ui-minimum-target-width", "48dp".into()),
+        ("ui-minimum-target-height", "48dp".into()),
+        ("ui-round-container-shape", "ui-full".into()),
         (
-            "Selected shape",
-            "Opposite of the resting round or square shape".into(),
+            "ui-selected-shape",
+            "ui-opposite-of-the-resting-round-or-square-shape".into(),
         ),
-        ("Hovered state layer opacity", "8%".into()),
-        ("Focused state layer opacity", "10%".into()),
-        ("Pressed state layer opacity", "10%".into()),
-        ("Disabled icon opacity", "38%".into()),
-        ("Disabled filled / tonal container opacity", "10%".into()),
-        ("Disabled outline opacity", "38%".into()),
-        ("Disabled content role", "On surface".into()),
+        ("ui-hovered-state-layer-opacity", "8%".into()),
+        ("ui-focused-state-layer-opacity", "10%".into()),
+        ("ui-pressed-state-layer-opacity", "10%".into()),
+        ("ui-disabled-icon-opacity", "38%".into()),
+        ("ui-disabled-filled-tonal-container-opacity", "10%".into()),
+        ("ui-disabled-outline-opacity", "38%".into()),
+        ("ui-disabled-content-role", "ui-on-surface".into()),
     ])
 }
 
 fn size_rows(size: IconButtonSize) -> Vec<Vec<String>> {
     use tessera_components::icon_button::IconButtonWidth;
     rows(vec![
-        ("Container height", format!("{}dp", size.height().0)),
-        ("Icon size", format!("{}dp", size.icon_size().0)),
+        ("ui-container-height", format!("{}dp", size.height().0)),
+        ("ui-icon-size", format!("{}dp", size.icon_size().0)),
         (
-            "Narrow container width",
+            "ui-narrow-container-width",
             format!("{}dp", size.width(IconButtonWidth::Narrow).0),
         ),
         (
-            "Default container width",
+            "ui-default-container-width",
             format!("{}dp", size.width(IconButtonWidth::Uniform).0),
         ),
         (
-            "Wide container width",
+            "ui-wide-container-width",
             format!("{}dp", size.width(IconButtonWidth::Wide).0),
         ),
         (
-            "Narrow leading / trailing space",
-            format!(
-                "{}dp / {}dp",
-                (size.width(IconButtonWidth::Narrow).0 - size.icon_size().0) * 0.5,
-                (size.width(IconButtonWidth::Narrow).0 - size.icon_size().0) * 0.5
+            "ui-narrow-leading-trailing-space",
+            I18N.format(
+                "ui-valuedp-valuedp",
+                [
+                    (
+                        "v0",
+                        ((size.width(IconButtonWidth::Narrow).0 - size.icon_size().0) * 0.5).into(),
+                    ),
+                    (
+                        "v1",
+                        ((size.width(IconButtonWidth::Narrow).0 - size.icon_size().0) * 0.5).into(),
+                    ),
+                ],
             ),
         ),
         (
-            "Default leading / trailing space",
-            format!(
-                "{}dp / {}dp",
-                (size.width(IconButtonWidth::Uniform).0 - size.icon_size().0) * 0.5,
-                (size.width(IconButtonWidth::Uniform).0 - size.icon_size().0) * 0.5
+            "ui-default-leading-trailing-space",
+            I18N.format(
+                "ui-valuedp-valuedp",
+                [
+                    (
+                        "v0",
+                        ((size.width(IconButtonWidth::Uniform).0 - size.icon_size().0) * 0.5)
+                            .into(),
+                    ),
+                    (
+                        "v1",
+                        ((size.width(IconButtonWidth::Uniform).0 - size.icon_size().0) * 0.5)
+                            .into(),
+                    ),
+                ],
             ),
         ),
         (
-            "Wide leading / trailing space",
-            format!(
-                "{}dp / {}dp",
-                (size.width(IconButtonWidth::Wide).0 - size.icon_size().0) * 0.5,
-                (size.width(IconButtonWidth::Wide).0 - size.icon_size().0) * 0.5
+            "ui-wide-leading-trailing-space",
+            I18N.format(
+                "ui-valuedp-valuedp",
+                [
+                    (
+                        "v0",
+                        ((size.width(IconButtonWidth::Wide).0 - size.icon_size().0) * 0.5).into(),
+                    ),
+                    (
+                        "v1",
+                        ((size.width(IconButtonWidth::Wide).0 - size.icon_size().0) * 0.5).into(),
+                    ),
+                ],
             ),
         ),
-        ("Round container shape", "Full".into()),
-        ("Selected round resting shape", "Square".into()),
-        ("Selected square resting shape", "Round".into()),
-        ("MD3 shape spring damping ratio", "0.9".into()),
-        ("MD3 shape spring stiffness", "1400".into()),
+        ("ui-round-container-shape", "ui-full".into()),
+        ("ui-selected-round-resting-shape", "ui-square".into()),
+        ("ui-selected-square-resting-shape", "ui-round".into()),
+        ("ui-md3-shape-spring-damping-ratio", "0.9".into()),
+        ("ui-md3-shape-spring-stiffness", "1400".into()),
         (
-            "Square container corner radius",
+            "ui-square-container-corner-radius",
             format!("{}dp", size.square_radius().0),
         ),
         (
-            "Pressed container corner radius",
+            "ui-pressed-container-corner-radius",
             format!("{}dp", size.pressed_radius().0),
         ),
         (
-            "Outlined container outline width",
+            "ui-outlined-container-outline-width",
             format!("{}dp", size.outline_width().0),
         ),
     ])
@@ -199,73 +236,73 @@ fn size_rows(size: IconButtonSize) -> Vec<Vec<String>> {
 fn color_rows(style: IconButtonVariant) -> Vec<Vec<String>> {
     let (container, icon, off_container, off_icon, on_container, on_icon) = match style {
         IconButtonVariant::Filled => (
-            "Primary",
-            "On primary",
-            "Surface container",
-            "On surface variant",
-            "Primary",
-            "On primary",
+            "ui-primary",
+            "ui-on-primary",
+            "ui-surface-container",
+            "ui-on-surface-variant",
+            "ui-primary",
+            "ui-on-primary",
         ),
         IconButtonVariant::FilledTonal => (
-            "Secondary container",
-            "On secondary container",
-            "Secondary container",
-            "On secondary container",
-            "Secondary",
-            "On secondary",
+            "ui-secondary-container",
+            "ui-on-secondary-container",
+            "ui-secondary-container",
+            "ui-on-secondary-container",
+            "ui-secondary",
+            "ui-on-secondary",
         ),
         IconButtonVariant::Outlined => (
-            "Transparent",
-            "On surface variant",
-            "Transparent",
-            "On surface variant",
-            "Inverse surface",
-            "Inverse on surface",
+            "ui-transparent",
+            "ui-on-surface-variant",
+            "ui-transparent",
+            "ui-on-surface-variant",
+            "ui-inverse-surface",
+            "ui-inverse-on-surface",
         ),
         IconButtonVariant::Standard => (
-            "Transparent",
-            "On surface variant",
-            "Transparent",
-            "On surface variant",
-            "Transparent",
-            "Primary",
+            "ui-transparent",
+            "ui-on-surface-variant",
+            "ui-transparent",
+            "ui-on-surface-variant",
+            "ui-transparent",
+            "ui-primary",
         ),
     };
     let mut values = vec![
-        ("Default container color", container.into()),
-        ("Default icon color", icon.into()),
-        ("Unselected container color", off_container.into()),
-        ("Unselected icon color", off_icon.into()),
-        ("Selected container color", on_container.into()),
-        ("Selected icon color", on_icon.into()),
+        ("ui-default-container-color", container.into()),
+        ("ui-default-icon-color", icon.into()),
+        ("ui-unselected-container-color", off_container.into()),
+        ("ui-unselected-icon-color", off_icon.into()),
+        ("ui-selected-container-color", on_container.into()),
+        ("ui-selected-icon-color", on_icon.into()),
         (
-            "Default hovered / focused / pressed state layer color",
+            "ui-default-hovered-focused-pressed-state-layer-color",
             icon.into(),
         ),
         (
-            "Unselected hovered / focused / pressed state layer color",
+            "ui-unselected-hovered-focused-pressed-state-layer-color",
             off_icon.into(),
         ),
         (
-            "Selected hovered / focused / pressed state layer color",
+            "ui-selected-hovered-focused-pressed-state-layer-color",
             on_icon.into(),
         ),
-        ("Disabled icon color", "On surface · 38%".into()),
+        ("ui-disabled-icon-color", "ui-on-surface-38".into()),
     ];
     if matches!(
         style,
         IconButtonVariant::Filled | IconButtonVariant::FilledTonal
     ) {
-        values.push(("Disabled container color", "On surface · 10%".into()));
+        values.push(("ui-disabled-container-color", "ui-on-surface-10".into()));
     }
     if style == IconButtonVariant::Outlined {
         values.extend([
             (
-                "Default / unselected outline color",
-                "Outline variant".into(),
+                "ui-default-unselected-outline-color",
+                "ui-outline-variant".into(),
             ),
-            ("Selected outline color", "None".into()),
-            ("Disabled outline color", "Outline variant · 38%".into()),
+            ("ui-selected-outline-color", "ui-none".into()),
+            ("ui-disabled-outline-color", "ui-outline-variant-38".into()),
         ]);
     }
     rows(values)
@@ -300,7 +337,7 @@ fn preview(set: usize) {
                 } else {
                     filled::FAVORITE_BORDER_SVG
                 })
-                .accessibility_label("Token preview favorite")
+                .accessibility_label(I18N.text("ui-token-preview-favorite"))
                 .on_click(move || {
                     selected.set(!selected.get());
                     actions.set(actions.get() + 1);
@@ -311,14 +348,14 @@ fn preview(set: usize) {
                 .shape_style(shape.get())
                 .enabled(false)
                 .icon(filled::FAVORITE_SVG)
-                .accessibility_label("Token preview disabled favorite");
+                .accessibility_label(I18N.text("ui-token-preview-disabled-favorite"));
             button()
                 .text()
-                .accessibility_label(if shape.get() == IconButtonShape::Round {
-                    "Use square resting shape"
+                .accessibility_label(I18N.text(if shape.get() == IconButtonShape::Round {
+                    "ui-use-square-resting-shape"
                 } else {
-                    "Use round resting shape"
-                })
+                    "ui-use-round-resting-shape"
+                }))
                 .on_click(move || {
                     shape.set(if shape.get() == IconButtonShape::Round {
                         IconButtonShape::Square
@@ -327,24 +364,34 @@ fn preview(set: usize) {
                     });
                 })
                 .child(move || {
-                    text().content(if shape.get() == IconButtonShape::Round {
-                        "Use square resting shape"
+                    text().content(I18N.text(if shape.get() == IconButtonShape::Round {
+                        "ui-use-square-resting-shape"
                     } else {
-                        "Use round resting shape"
-                    });
+                        "ui-use-round-resting-shape"
+                    }));
                 });
         });
     gap(Dp(16.0));
     text()
-        .content(format!(
-            "{} preview · {} · Activations: {}",
-            name(style),
-            if selected.get() {
-                "Selected"
-            } else {
-                "Unselected"
-            },
-            actions.get()
-        ))
+        .content(
+            I18N.format(
+                "ui-value-preview-value-activations-value",
+                [
+                    ("v0", I18N.text(&name(style)).into()),
+                    (
+                        "v1",
+                        I18N.text(
+                            &(if selected.get() {
+                                "ui-selected"
+                            } else {
+                                "ui-unselected"
+                            }),
+                        )
+                        .into(),
+                    ),
+                    ("v2", (actions.get()).into()),
+                ],
+            ),
+        )
         .style(type_style(16.0, 24.0));
 }

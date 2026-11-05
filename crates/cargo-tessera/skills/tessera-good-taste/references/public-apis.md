@@ -13,6 +13,7 @@ gates, and platform support. Use `cargo doc --open` in the application workspace
 | Visuals and assets | `tessera_components::{theme, painter, image, image_vector, icon, material_icons, shadow}`; `tessera_ui::{color, asset}`; `tessera_build` asset generation |
 | Input, focus, and semantics | `tessera_ui::{PointerInput, KeyboardInput, ImeInput, ClipboardInput, focus, accessibility}`; `tessera_components::modifier` interaction and semantics extensions |
 | Text editing | `tessera_components::{text, text_input, text_field}`; editor controllers and documented transforms |
+| Localization | `tessera_i18n::{Catalog, I18n, FluentValue, LanguageIdentifier, langid}`; generated `res::{I18N, i18n}` |
 | Overlays and navigation | `tessera_components::{dialog, menus, tooltip, bottom_sheet, side_sheet, snackbar, navigation_bar, navigation_rail, navigation_drawer}`; `tessera_shard::{shard, router, ShardState, ShardStateLifeCycle}` |
 | Tasks and animation | `tessera_shard::task_handles`; `tessera_ui::{receive_frame_nanos, FrameNanosControl, current_frame_nanos, current_frame_time, frame_delta}` |
 | Platform integration | `tessera_platform::{PlatformPackage, clipboard, window}`; `tessera_ui::{plugin, with_plugin, with_plugin_mut}` |

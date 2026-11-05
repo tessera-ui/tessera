@@ -24,6 +24,8 @@ use tessera_ui::{
     remember, scaled_box, tessera, use_context,
 };
 
+use crate::res::I18N;
+
 use super::super::{
     INK,
     annotations::{self, SpaceGeometry, watch_in_space},
@@ -125,7 +127,7 @@ impl Mock {
             divider: true,
             start: false,
             focus: false,
-            title: "Headline",
+            title: "ui-headline",
             body: Body::Empty,
             backdrop: Backdrop::Plain,
             sheet_width,
@@ -142,7 +144,7 @@ impl Mock {
             divider: true,
             start: false,
             focus: false,
-            title: "Headline",
+            title: "ui-headline",
             body: Body::Empty,
             backdrop: Backdrop::Plain,
             sheet_width,
@@ -246,7 +248,7 @@ fn stage_canvas(width: f64, height: f64, label: String, dotted: bool, child: Opt
                             .clip_shape(Shape::rounded_rectangle(Dp(24.0)))
                             .semantics(SemanticsArgs {
                                 role: Some(Role::Image),
-                                label: Some(label),
+                                label: Some(I18N.text(label)),
                                 ..Default::default()
                             }),
                     )
@@ -290,7 +292,9 @@ pub(super) fn marker(number: usize, x: f64, y: f64, tag: Option<String>) {
                 .background_with_shape(scheme.inverse_surface, Shape::CAPSULE)
                 .semantics(SemanticsArgs {
                     role: Some(Role::Note),
-                    label: Some(format!("Side sheet marker {number}")),
+                    label: Some(
+                        I18N.format("ui-side-sheet-marker-value", [("v0", (number).into())]),
+                    ),
                     test_tag: tag.clone(),
                     merge_descendants: true,
                     ..Default::default()
@@ -298,7 +302,7 @@ pub(super) fn marker(number: usize, x: f64, y: f64, tag: Option<String>) {
         )
         .children(move || {
             text()
-                .content(number.to_string())
+                .content((number).to_string())
                 .style(type_style(14.0, 20.0))
                 .color(scheme.inverse_on_surface);
         });
@@ -358,7 +362,7 @@ pub(super) fn legend(entries: Vec<(usize, String)>) {
                         });
                     spacer().modifier(Modifier::new().width(Dp(16.0)));
                     text()
-                        .content(label.clone())
+                        .content(I18N.text(&(label)))
                         .style(type_style(16.0, 24.0))
                         .color(INK);
                 });
@@ -437,13 +441,13 @@ pub(super) fn guidance_card(good: bool, #[prop(into)] note: String, figure: Opti
                         .tint(color);
                     spacer().modifier(Modifier::new().width(Dp(8.0)));
                     text()
-                        .content(if good { "Do" } else { "Don't" })
+                        .content(I18N.text(if good { "ui-do" } else { "ui-dont" }))
                         .style(type_style(16.0, 24.0))
                         .color(color);
                 });
             gap(Dp(8.0));
             text()
-                .content(note.clone())
+                .content(I18N.text(&(note)))
                 .style(type_style(14.0, 20.0))
                 .color(INK);
         });
@@ -659,7 +663,7 @@ pub(super) fn sheet_panel(mock: Mock, x: f64, y: f64, width: f64, height: f64) {
                 ))
                 .children(move || {
                     text()
-                        .content(mock.title)
+                        .content(I18N.text(mock.title))
                         .style(type_style(22.0, 28.0))
                         .color(scheme.on_surface_variant);
                 });
@@ -685,8 +689,8 @@ pub(super) fn sheet_panel(mock: Mock, x: f64, y: f64, width: f64, height: f64) {
                         at(0.0, body_bottom, width, 1.0).background(scheme.outline_variant),
                     );
                 }
-                mock_button(true, "Save", 24.0, body_bottom + 16.0, 72.0);
-                mock_button(false, "Cancel", 104.0, body_bottom + 16.0, 88.0);
+                mock_button(true, "ui-save", 24.0, body_bottom + 16.0, 72.0);
+                mock_button(false, "ui-cancel", 104.0, body_bottom + 16.0, 88.0);
             }
             if mock.focus {
                 let ring = |rx: f64, ry: f64, rw: f64, rh: f64| {
@@ -747,7 +751,7 @@ fn mock_button(filled: bool, #[prop(into)] label: String, x: f64, y: f64, width:
         .modifier(modifier)
         .children(move || {
             text()
-                .content(label.clone())
+                .content(I18N.text(&(label)))
                 .style(type_style(14.0, 20.0))
                 .color(if filled {
                     scheme.on_primary
@@ -760,7 +764,7 @@ fn mock_button(filled: bool, #[prop(into)] label: String, x: f64, y: f64, width:
 #[tessera]
 fn label(#[prop(into)] value: String, x: f64, y: f64, size: f64, color: Color) {
     text()
-        .content(value)
+        .content(I18N.text(value))
         .style(type_style(size, size + 6.0))
         .color(color)
         .modifier(Modifier::new().offset(Dp(x), Dp(y)));
@@ -772,13 +776,13 @@ fn sheet_body(body: Body, start: bool, width: f64, height: f64) {
     let ink = scheme.on_surface_variant;
     match body {
         Body::Filters => {
-            label("Labels", 24.0, 4.0, 14.0, ink);
+            label("ui-labels", 24.0, 4.0, 14.0, ink);
             for (index, (name, checked)) in [
-                ("Events", false),
-                ("Personal", false),
-                ("Projects", true),
-                ("Reminders", true),
-                ("Family", false),
+                ("ui-events", false),
+                ("ui-personal", false),
+                ("ui-projects", true),
+                ("ui-reminders", true),
+                ("ui-family", false),
             ]
             .into_iter()
             .enumerate()
@@ -807,8 +811,11 @@ fn sheet_body(body: Body, start: bool, width: f64, height: f64) {
                 }
                 label(name, 64.0, y, 16.0, scheme.on_surface);
             }
-            label("Format", 24.0, 264.0, 14.0, ink);
-            for (index, name) in ["Any", "Documents", "Images"].into_iter().enumerate() {
+            label("ui-format", 24.0, 264.0, 14.0, ink);
+            for (index, name) in ["ui-any", "ui-documents", "ui-images"]
+                .into_iter()
+                .enumerate()
+            {
                 radio(28.0, 296.0 + index as f64 * 44.0, index == 0, name);
             }
         }
@@ -826,12 +833,14 @@ fn sheet_body(body: Body, start: bool, width: f64, height: f64) {
                         .size(Dp(40.0))
                         .tint(scheme.on_tertiary_container);
                 });
-            label("Festival concert", 24.0, 176.0, 16.0, scheme.on_surface);
-            label("Albums", 24.0, 212.0, 14.0, ink);
-            for (index, (name, items)) in
-                [("Home space", "64 items"), ("Favorite sights", "18 items")]
-                    .into_iter()
-                    .enumerate()
+            label("ui-festival-concert", 24.0, 176.0, 16.0, scheme.on_surface);
+            label("ui-albums", 24.0, 212.0, 14.0, ink);
+            for (index, (name, items)) in [
+                ("ui-home-space", "ui-64-items"),
+                ("ui-favorite-sights", "ui-18-items"),
+            ]
+            .into_iter()
+            .enumerate()
             {
                 let y = 244.0 + index as f64 * 64.0;
                 boxed().modifier(at(24.0, y, 48.0, 48.0).background_with_shape(
@@ -843,15 +852,15 @@ fn sheet_body(body: Body, start: bool, width: f64, height: f64) {
             }
         }
         Body::Settings => {
-            label("Density", 24.0, 4.0, 14.0, ink);
-            for (index, name) in ["Default", "Comfortable", "Compact"]
+            label("ui-density", 24.0, 4.0, 14.0, ink);
+            for (index, name) in ["ui-default", "ui-comfortable", "ui-compact"]
                 .into_iter()
                 .enumerate()
             {
                 radio(28.0, 36.0 + index as f64 * 44.0, index == 0, name);
             }
-            label("Theme", 24.0, 176.0, 14.0, ink);
-            for (index, name) in ["System", "Light", "Dark"].into_iter().enumerate() {
+            label("ui-theme", 24.0, 176.0, 14.0, ink);
+            for (index, name) in ["ui-system", "ui-light", "ui-dark"].into_iter().enumerate() {
                 radio(28.0, 208.0 + index as f64 * 44.0, index == 0, name);
             }
         }
@@ -877,13 +886,13 @@ fn sheet_body(body: Body, start: bool, width: f64, height: f64) {
             );
         }
         Body::Chips => {
-            label("Tags", 24.0, 4.0, 14.0, ink);
+            label("ui-tags", 24.0, 4.0, 14.0, ink);
             let mut chip_x = 24.0;
             for (name, chip_w) in [
-                ("Travel", 84.0),
-                ("Family", 84.0),
-                ("Concerts", 100.0),
-                ("Archive", 92.0),
+                ("ui-travel", 84.0),
+                ("ui-family", 84.0),
+                ("ui-concerts", 100.0),
+                ("ui-archive", 92.0),
             ] {
                 boxed()
                     .alignment(Alignment::Center)
@@ -894,7 +903,7 @@ fn sheet_body(body: Body, start: bool, width: f64, height: f64) {
                     ))
                     .children(move || {
                         text()
-                            .content(name)
+                            .content(I18N.text(name))
                             .style(type_style(14.0, 20.0))
                             .color(ink);
                     });
@@ -944,7 +953,7 @@ pub(super) fn hero() {
     stage(
         1000.0,
         480.0,
-        "Side by side comparison of a standard and a modal side sheet",
+        "ui-side-by-side-comparison-of-a-standard-and-a-modal-side-sheet",
     )
     .child(|| {
         let scheme = use_context::<MaterialTheme>().unwrap().get().color_scheme;
@@ -972,9 +981,9 @@ pub(super) fn usage_figure(modal: bool) {
         640.0,
         440.0,
         if modal {
-            "Modal side sheet showing filter controls"
+            "ui-modal-side-sheet-showing-filter-controls"
         } else {
-            "Standard side sheet showing supplementary information about a photo"
+            "ui-standard-side-sheet-showing-supplementary-information-about-a-photo"
         },
     )
     .child(move || {
@@ -983,12 +992,12 @@ pub(super) fn usage_figure(modal: bool) {
                 back: false,
                 actions: false,
                 ..Mock::modal(240.0)
-                    .body(Body::Filters, "Filters")
+                    .body(Body::Filters, "ui-filters")
                     .backdrop(Backdrop::Files)
             }
         } else {
             Mock::standard(240.0)
-                .body(Body::Info, "Info")
+                .body(Body::Info, "ui-info")
                 .backdrop(Backdrop::Gallery)
         };
         device(mock, 40.0, 40.0, 560.0, 440.0);
@@ -998,7 +1007,7 @@ pub(super) fn usage_figure(modal: bool) {
 /// The M3 modal side sheet with its scrim and 16dp leading corners.
 #[tessera]
 pub(super) fn differences_figure() {
-    stage(640.0, 300.0, "Modal side sheet with new color mappings").child(|| {
+    stage(640.0, 300.0, "ui-modal-side-sheet-with-new-color-mappings").child(|| {
         device(Mock::modal(300.0), -40.0, 52.0, 593.0, 400.0);
     });
 }
@@ -1049,9 +1058,9 @@ pub(super) fn anatomy(modal: bool, #[prop(into)] figure: String) {
         1000.0,
         height,
         if modal {
-            "7 elements of a modal side sheet"
+            "ui-7-elements-of-a-modal-side-sheet"
         } else {
-            "4 elements of a standard side sheet"
+            "ui-4-elements-of-a-standard-side-sheet"
         },
     )
     .child(move || {
@@ -1067,20 +1076,20 @@ pub(super) fn anatomy(modal: bool, #[prop(into)] figure: String) {
 pub(super) fn anatomy_legend(modal: bool) -> Vec<(usize, String)> {
     let labels: &[&str] = if modal {
         &[
-            "Back icon button (optional)",
-            "Headline",
-            "Container",
-            "Close icon button",
-            "Divider (optional)",
-            "Action buttons (optional)",
-            "Scrim",
+            "ui-back-icon-button-optional",
+            "ui-headline",
+            "ui-container",
+            "ui-close-icon-button",
+            "ui-divider-optional",
+            "ui-action-buttons-optional",
+            "ui-scrim",
         ]
     } else {
         &[
-            "Divider (optional)",
-            "Headline",
-            "Container",
-            "Close icon button",
+            "ui-divider-optional",
+            "ui-headline",
+            "ui-container",
+            "ui-close-icon-button",
         ]
     };
     labels
@@ -1098,9 +1107,9 @@ pub(super) fn color_roles(modal: bool) {
             1000.0,
             460.0,
             if dark {
-                "Side sheet color roles in the dark theme"
+                "ui-side-sheet-color-roles-in-the-dark-theme"
             } else {
-                "Side sheet color roles in the light theme"
+                "ui-side-sheet-color-roles-in-the-light-theme"
             },
         )
         .dark(dark)
@@ -1126,17 +1135,17 @@ pub(super) fn color_roles(modal: bool) {
 pub(super) fn color_legend(modal: bool) -> Vec<(usize, String)> {
     let roles: [&str; 4] = if modal {
         [
-            "On surface variant",
-            "On surface variant",
-            "Surface container low",
-            "On surface variant",
+            "ui-on-surface-variant",
+            "ui-on-surface-variant",
+            "ui-surface-container-low",
+            "ui-on-surface-variant",
         ]
     } else {
         [
-            "Outline variant",
-            "On surface variant",
-            "Surface",
-            "On surface variant",
+            "ui-outline-variant",
+            "ui-on-surface-variant",
+            "ui-surface",
+            "ui-on-surface-variant",
         ]
     };
     roles
@@ -1267,25 +1276,25 @@ fn measurement_sheet(modal: bool, geometry: State<SpaceGeometry>) {
                         icon_button()
                             .standard()
                             .icon(filled::ARROW_BACK_SVG)
-                            .accessibility_label("Side sheet figure back")
+                            .accessibility_label(I18N.text("ui-side-sheet-figure-back"))
                             .modifier(part(geometry, modal, "back"))
                             .on_click(|| {});
                     }
                     text()
-                        .content("Headline")
+                        .content(I18N.text("ui-headline"))
                         .style(type_style(22.0, 28.0))
                         .color(scheme.on_surface_variant)
                         .modifier(part(geometry, modal, "headline").weight(1.0));
                     icon_button()
                         .standard()
                         .icon(filled::CLOSE_SVG)
-                        .accessibility_label("Side sheet figure close")
+                        .accessibility_label(I18N.text("ui-side-sheet-figure-close"))
                         .modifier(part(geometry, modal, "close"))
                         .on_click(|| {});
                 });
-            for name in ["Labels", "Events", "Personal", "Projects"] {
+            for name in ["ui-labels", "ui-events", "ui-personal", "ui-projects"] {
                 text()
-                    .content(name)
+                    .content(I18N.text(name))
                     .style(type_style(14.0, 20.0))
                     .color(scheme.on_surface_variant)
                     .modifier(Modifier::new().padding_symmetric(Dp(24.0), Dp(6.0)));
@@ -1307,23 +1316,23 @@ fn measurement_sheet(modal: bool, geometry: State<SpaceGeometry>) {
                             .height(Dp(ACTIONS_HEIGHT))
                             .padding(Padding::new(Dp(24.0), Dp(16.0), Dp(24.0), Dp(24.0))),
                     )
-                    .children(|| {
+                    .children(move || {
                         button()
                             .filled()
                             .size(ButtonSize::ExtraSmall)
-                            .accessibility_label("Save filters")
+                            .accessibility_label(I18N.text("ui-save-filters"))
                             .on_click(|| {})
-                            .child(|| {
-                                text().content("Save");
+                            .child(move || {
+                                text().content(I18N.text("ui-save"));
                             });
                         spacer().modifier(Modifier::new().width(Dp(8.0)));
                         button()
                             .outlined()
                             .size(ButtonSize::ExtraSmall)
-                            .accessibility_label("Cancel filters")
+                            .accessibility_label(I18N.text("ui-cancel-filters"))
                             .on_click(|| {})
-                            .child(|| {
-                                text().content("Cancel");
+                            .child(move || {
+                                text().content(I18N.text("ui-cancel"));
                             });
                     });
             }
@@ -1421,9 +1430,9 @@ pub(super) fn inset_figure(inset: f64) {
         480.0,
         320.0,
         if inset > 16.0 {
-            "A modal side sheet at the right of the screen with the wrong inset"
+            "ui-a-modal-side-sheet-at-the-right-of-the-screen-with-the-wrong-inset"
         } else {
-            "A modal sheet at the right of a screen, with the correct inset"
+            "ui-a-modal-sheet-at-the-right-of-a-screen-with-the-correct-inset"
         },
     )
     .child(move || {
@@ -1432,7 +1441,7 @@ pub(super) fn inset_figure(inset: f64) {
             actions: false,
             inset,
             ..Mock::modal(176.0)
-                .body(Body::Filters, "Filters")
+                .body(Body::Filters, "ui-filters")
                 .backdrop(Backdrop::Files)
         };
         device(mock, 24.0, 24.0, 432.0, 360.0);
@@ -1447,19 +1456,19 @@ pub(super) fn element_figure(#[prop(into)] element: String) {
     let (sx, sy, sw, sh) = sheet_frame(ELEMENT_MOCK, 80.0, 72.0, 640.0, 528.0);
     let (title, item) = match element.as_str() {
         "back" => (
-            "Back icon button on the upper left of a modal side sheet",
+            "ui-back-icon-button-on-the-upper-left-of-a-modal-side-sheet",
             callout(1, (sx - 56.0, 32.0), (sx + 28.0, sy + 36.0)),
         ),
         "close" => (
-            "Close icon button on the upper right of a modal side sheet",
+            "ui-close-icon-button-on-the-upper-right-of-a-modal-side-sheet",
             callout(4, (sx + sw + 8.0, 32.0), (sx + sw - 36.0, sy + 36.0)),
         ),
         "actions" => (
-            "Save and cancel buttons at the bottom of a modal side sheet",
+            "ui-save-and-cancel-buttons-at-the-bottom-of-a-modal-side-sheet",
             callout(6, (sx - 72.0, sy + sh - 56.0), (sx + 24.0, sy + sh - 40.0)),
         ),
         "divider" => (
-            "Horizontal divider on a modal side sheet",
+            "ui-horizontal-divider-on-a-modal-side-sheet",
             callout(
                 5,
                 (sx - 72.0, sy + sh - 104.0),
@@ -1467,7 +1476,7 @@ pub(super) fn element_figure(#[prop(into)] element: String) {
             ),
         ),
         _ => (
-            "A modal side sheet's container",
+            "ui-a-modal-side-sheet-s-container",
             callout(3, (sx - 72.0, sy + 180.0), (sx + 40.0, sy + 200.0)),
         ),
     };
@@ -1483,11 +1492,11 @@ pub(super) fn content_figure() {
     stage(
         800.0,
         520.0,
-        "2 side sheets with different content displayed side by side",
+        "ui-2-side-sheets-with-different-content-displayed-side-by-side",
     )
     .child(|| {
-        let settings = Mock::standard(320.0).body(Body::Settings, "Settings");
-        let info = Mock::standard(320.0).body(Body::Info, "Info");
+        let settings = Mock::standard(320.0).body(Body::Settings, "ui-settings");
+        let info = Mock::standard(320.0).body(Body::Info, "ui-info");
         sheet_panel(
             Mock {
                 divider: false,
@@ -1514,13 +1523,13 @@ pub(super) fn content_figure() {
 /// A modal sheet on a phone becoming a standard sheet on a tablet.
 #[tessera]
 pub(super) fn transition_figure() {
-    stage(1000.0, 520.0, "Modal side sheets on smaller screens can transition to standard side sheets at larger screen sizes").child(|| {
+    stage(1000.0, 520.0, "ui-modal-side-sheets-on-smaller-screens-can-transition-to-standard-side-sheets-at-larger-scre").child(|| {
         let scheme = use_context::<MaterialTheme>().unwrap().get().color_scheme;
         let phone = Mock {
             back: false,
-            ..Mock::modal(208.0).body(Body::Filters, "Filters").backdrop(Backdrop::Files)
+            ..Mock::modal(208.0).body(Body::Filters, "ui-filters").backdrop(Backdrop::Files)
         };
-        let tablet = Mock::standard(256.0).body(Body::Filters, "Filters").backdrop(Backdrop::Files);
+        let tablet = Mock::standard(256.0).body(Body::Filters, "ui-filters").backdrop(Backdrop::Files);
         device(phone, 48.0, 48.0, 288.0, 424.0);
         boxed()
             .alignment(Alignment::Center)
@@ -1538,7 +1547,7 @@ pub(super) fn rtl_figure() {
     stage(
         800.0,
         520.0,
-        "Side sheet along the left edge of a screen. All buttons and icons are reversed",
+        "ui-side-sheet-along-the-left-edge-of-a-screen-all-buttons-and-icons-are-reversed",
     )
     .child(|| {
         let mock = Mock {
@@ -1560,15 +1569,15 @@ pub(super) fn scroll_figure(good: bool) {
         480.0,
         360.0,
         if good {
-            "A side sheet scrolling vertically"
+            "ui-a-side-sheet-scrolling-vertically"
         } else {
-            "A side sheet appears to scroll horizontally"
+            "ui-a-side-sheet-appears-to-scroll-horizontally"
         },
     )
     .child(move || {
         let mock = Mock::standard(208.0).body(
             if good { Body::Scroll } else { Body::Chips },
-            if good { "Library" } else { "Tags" },
+            if good { "ui-library" } else { "ui-tags" },
         );
         device(mock, 24.0, 24.0, 432.0, 400.0);
     });
@@ -1577,12 +1586,12 @@ pub(super) fn scroll_figure(good: bool) {
 /// A detached sheet scaling with the predictive back gesture.
 #[tessera]
 pub(super) fn predictive_back_figure() {
-    stage(800.0, 480.0, "Preview of the predictive back gesture on a side sheet").child(|| {
+    stage(800.0, 480.0, "ui-preview-of-the-predictive-back-gesture-on-a-side-sheet").child(|| {
         let scheme = use_context::<MaterialTheme>().unwrap().get().color_scheme;
         let mock = Mock {
             inset: 24.0,
             actions: false,
-            ..Mock::modal(256.0).body(Body::Filters, "Filters").backdrop(Backdrop::Files)
+            ..Mock::modal(256.0).body(Body::Filters, "ui-filters").backdrop(Backdrop::Files)
         };
         device(mock, 80.0, 48.0, 640.0, 480.0);
         let mut svg = String::new();
@@ -1603,9 +1612,9 @@ pub(super) fn close_figure(good: bool) {
         480.0,
         360.0,
         if good {
-            "Side sheet correctly designed with close icon in upper right corner"
+            "ui-side-sheet-correctly-designed-with-close-icon-in-upper-right-corner"
         } else {
-            "Side sheet incorrectly designed with no close icon button"
+            "ui-side-sheet-incorrectly-designed-with-no-close-icon-button"
         },
     )
     .child(move || {
@@ -1614,7 +1623,7 @@ pub(super) fn close_figure(good: bool) {
             actions: false,
             close: good,
             ..Mock::modal(208.0)
-                .body(Body::Filters, "Filters")
+                .body(Body::Filters, "ui-filters")
                 .backdrop(Backdrop::Files)
         };
         device(mock, 24.0, 24.0, 432.0, 400.0);
@@ -1624,7 +1633,7 @@ pub(super) fn close_figure(good: bool) {
 const FOCUS_MOCK: Mock = Mock {
     back: false,
     focus: true,
-    ..Mock::modal(296.0).body(Body::Filters, "Filters")
+    ..Mock::modal(296.0).body(Body::Filters, "ui-filters")
 };
 
 /// Visible focus on the headline, close and action buttons.
@@ -1634,7 +1643,7 @@ pub(super) fn focus_figure() {
     stage(
         1000.0,
         600.0,
-        "Side sheet diagram showing the focus order of headline, close, save, cancel",
+        "ui-side-sheet-diagram-showing-the-focus-order-of-headline-close-save-cancel",
     )
     .child(move || {
         device(FOCUS_MOCK, 100.0, 48.0, 800.0, 528.0);
@@ -1658,11 +1667,11 @@ pub(super) fn role_figure() {
     let mock = Mock {
         back: false,
         ..Mock::modal(296.0)
-            .body(Body::Filters, "Filters")
+            .body(Body::Filters, "ui-filters")
             .backdrop(Backdrop::Files)
     };
     let (sx, sy, _, _) = sheet_frame(mock, 100.0, 48.0, 800.0, 528.0);
-    stage(1000.0, 600.0, "Side sheet showing the accessibility role as dialog").child(move || {
+    stage(1000.0, 600.0, "ui-side-sheet-showing-the-accessibility-role-as-dialog").child(move || {
         let scheme = use_context::<MaterialTheme>().unwrap().get().color_scheme;
         device(mock, 100.0, 48.0, 800.0, 528.0);
         let stroke = hex(scheme.on_surface_variant);
@@ -1686,7 +1695,7 @@ pub(super) fn role_figure() {
             )
             .children(move || {
                 text()
-                    .content("Role: Dialog")
+                    .content(I18N.text("ui-role-dialog"))
                     .style(type_style(14.0, 20.0))
                     .color(scheme.inverse_on_surface);
             });

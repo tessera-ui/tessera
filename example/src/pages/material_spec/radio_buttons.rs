@@ -22,6 +22,8 @@ use tessera_ui::{
     Callback, Dp, FocusRequester, Modifier, RenderSlot, remember, tessera, use_context,
 };
 
+use crate::res::I18N;
+
 use super::{
     article::{ArticlePage, SpecSection, article},
     gap,
@@ -41,29 +43,29 @@ pub(super) fn radio_buttons_spec(
     route: Option<crate::pages::material_spec::article::ArticleRoute>,
 ) {
     article(
-        "Radio button",
-        "Radio buttons let people select one option from a set of options",
+        "ui-radio-button",
+        "ui-radio-buttons-let-people-select-one-option-from-a-set-of-options",
         vec![
             SpecSection {
-                title: "Anatomy",
+                title: "ui-anatomy",
                 content: RenderSlot::new(|| {
                     page_figures::anatomy(false);
                 }),
             },
             SpecSection {
-                title: "Tokens & specs",
+                title: "ui-tokens-specs",
                 content: RenderSlot::new(tokens),
             },
             SpecSection {
-                title: "Color",
+                title: "ui-color",
                 content: RenderSlot::new(colors),
             },
             SpecSection {
-                title: "States",
+                title: "ui-states",
                 content: RenderSlot::new(states),
             },
             SpecSection {
-                title: "Measurements",
+                title: "ui-measurements",
                 content: RenderSlot::new(measurements),
             },
         ],
@@ -71,16 +73,16 @@ pub(super) fn radio_buttons_spec(
     .route_optional(route.clone())
     .pages(vec![
         ArticlePage {
-            title: "Overview",
+            title: "ui-overview",
             intro: Some(RenderSlot::new(page_figures::overview_article)),
             sections: vec![],
         },
         ArticlePage {
-            title: "Guidelines",
+            title: "ui-guidelines",
             intro: None,
             sections: vec![
                 SpecSection {
-                    title: "Usage",
+                    title: "ui-usage",
                     content: RenderSlot::new(|| {
                         page_figures::usage();
                         gap(Dp(24.0));
@@ -88,53 +90,53 @@ pub(super) fn radio_buttons_spec(
                     }),
                 },
                 SpecSection {
-                    title: "Anatomy",
+                    title: "ui-anatomy",
                     content: RenderSlot::new(|| {
                         page_figures::anatomy(true);
                     }),
                 },
                 SpecSection {
-                    title: "Placement",
+                    title: "ui-placement",
                     content: RenderSlot::new(page_figures::placement),
                 },
                 SpecSection {
-                    title: "Behavior",
+                    title: "ui-behavior",
                     content: RenderSlot::new(page_figures::behavior),
                 },
             ],
         },
         ArticlePage {
-            title: "Accessibility",
+            title: "ui-accessibility",
             intro: None,
             sections: vec![
                 SpecSection {
-                    title: "Use cases",
+                    title: "ui-use-cases",
                     content: RenderSlot::new(|| {
-                        page_figures::accessibility("Use cases".into());
+                        page_figures::accessibility("ui-use-cases".into());
                     }),
                 },
                 SpecSection {
-                    title: "Interaction & style",
+                    title: "ui-interaction-style",
                     content: RenderSlot::new(|| {
-                        page_figures::accessibility("Interaction & style".into());
+                        page_figures::accessibility("ui-interaction-style".into());
                     }),
                 },
                 SpecSection {
-                    title: "Initial focus",
+                    title: "ui-initial-focus",
                     content: RenderSlot::new(|| {
-                        page_figures::accessibility("Initial focus".into());
+                        page_figures::accessibility("ui-initial-focus".into());
                     }),
                 },
                 SpecSection {
-                    title: "Keyboard navigation",
+                    title: "ui-keyboard-navigation",
                     content: RenderSlot::new(|| {
-                        page_figures::accessibility("Keyboard navigation".into());
+                        page_figures::accessibility("ui-keyboard-navigation".into());
                     }),
                 },
                 SpecSection {
-                    title: "Labeling elements",
+                    title: "ui-labeling-elements",
                     content: RenderSlot::new(|| {
-                        page_figures::accessibility("Labeling elements".into());
+                        page_figures::accessibility("ui-labeling-elements".into());
                     }),
                 },
             ],
@@ -144,7 +146,9 @@ pub(super) fn radio_buttons_spec(
 
 #[tessera]
 fn prose(#[prop(into)] value: String) {
-    text().content(value).style(type_style(16.0, 24.0));
+    text()
+        .content(I18N.text(value))
+        .style(type_style(16.0, 24.0));
 }
 
 #[tessera]
@@ -167,7 +171,7 @@ fn overview() {
         )
         .children(move || {
             radio_group()
-                .accessibility_label("Radio button selection example")
+                .accessibility_label(I18N.text("ui-radio-button-selection-example"))
                 .content(move |group| {
                     row()
                         .modifier(Modifier::new().offset(Dp(-7.0 * scale), Dp::ZERO))
@@ -184,11 +188,11 @@ fn overview() {
                                     .size(Dp(20.0 * scale))
                                     .stroke_width(Dp(2.0 * scale))
                                     .dot_size(Dp(10.0 * scale))
-                                    .accessibility_label(if index == 0 {
-                                        "First option"
+                                    .accessibility_label(I18N.text(if index == 0 {
+                                        "ui-first-option"
                                     } else {
-                                        "Second option"
-                                    })
+                                        "ui-second-option"
+                                    }))
                                     .on_select(move |_| selected.set(index));
                             }
                         });
@@ -257,7 +261,7 @@ fn ringtone() {
                         )
                         .children(move || {
                             text()
-                                .content("9:30")
+                                .content(I18N.text("9:30"))
                                 .style(type_style(14.0 * scale, 20.0 * scale))
                                 .modifier(Modifier::new().weight(1.0));
                             icon().vector(filled::WIFI_SVG).size(Dp(16.0 * scale));
@@ -279,7 +283,7 @@ fn ringtone() {
                             icon().vector(filled::ARROW_BACK_SVG).size(Dp(24.0 * scale));
                             spacer().modifier(Modifier::new().width(Dp(20.0 * scale)));
                             text()
-                                .content("Ringtone")
+                                .content(I18N.text("ui-ringtone"))
                                 .style(type_style(22.0 * scale, 28.0 * scale))
                                 .modifier(Modifier::new().weight(1.0));
                             icon().vector(filled::MORE_VERT_SVG).size(Dp(24.0 * scale));
@@ -292,11 +296,11 @@ fn ringtone() {
                         )
                         .children(move || {
                             radio_group()
-                                .accessibility_label("Ringtone")
+                                .accessibility_label(I18N.text("ui-ringtone"))
                                 .content(move |group| {
                                     column().children(move || {
                                         for (index, label) in
-                                            ["None", "Callisto", "Ganymede", "Luna"]
+                                            ["ui-none", "ui-callisto", "ui-ganymede", "ui-luna"]
                                                 .into_iter()
                                                 .enumerate()
                                         {
@@ -312,7 +316,7 @@ fn ringtone() {
                                                         .size(Dp(20.0 * scale))
                                                         .stroke_width(Dp(2.0 * scale))
                                                         .dot_size(Dp(10.0 * scale))
-                                                        .accessibility_label(label)
+                                                        .accessibility_label(I18N.text(label))
                                                         .on_select(move |_| selected.set(index));
                                                     spacer().modifier(
                                                         Modifier::new().width(Dp(4.0 * scale)),
@@ -338,28 +342,36 @@ fn ringtone() {
 #[tessera]
 fn tokens() {
     spec_table(
-        vec!["Element".into(), "Selected".into(), "Unselected".into()],
         vec![
-            vec!["Icon".into(), "Primary".into(), "On surface variant".into()],
+            "ui-element".into(),
+            "ui-selected".into(),
+            "ui-unselected".into(),
+        ],
+        vec![
             vec![
-                "Disabled icon".into(),
-                "On surface · 38%".into(),
-                "On surface · 38%".into(),
+                "ui-icon".into(),
+                "ui-primary".into(),
+                "ui-on-surface-variant".into(),
             ],
             vec![
-                "Hovered state layer".into(),
-                "Primary · 8%".into(),
-                "On surface · 8%".into(),
+                "ui-disabled-icon".into(),
+                "ui-on-surface-38".into(),
+                "ui-on-surface-38".into(),
             ],
             vec![
-                "Focused / pressed state layer".into(),
-                "Primary · 10%".into(),
-                "On surface · 10%".into(),
+                "ui-hovered-state-layer".into(),
+                "ui-primary-8".into(),
+                "ui-on-surface-8".into(),
             ],
             vec![
-                "Adjacent label".into(),
-                "On surface".into(),
-                "On surface".into(),
+                "ui-focused-pressed-state-layer".into(),
+                "ui-primary-10".into(),
+                "ui-on-surface-10".into(),
+            ],
+            vec![
+                "ui-adjacent-label".into(),
+                "ui-on-surface".into(),
+                "ui-on-surface".into(),
             ],
         ],
     );

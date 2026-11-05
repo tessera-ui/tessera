@@ -30,6 +30,8 @@ use tessera_ui::{
     modifier::FocusModifierExt as _, remember, scaled_box, tessera, use_context,
 };
 
+use crate::res::I18N;
+
 use super::{
     INK,
     annotations::{self, PreciseGeometry as Geometry},
@@ -40,7 +42,7 @@ use super::{
 #[tessera]
 fn prose(#[prop(into)] value: String) {
     text()
-        .content(value)
+        .content(I18N.text(value))
         .style(type_style(16.0, 24.0))
         .color(INK);
 }
@@ -53,7 +55,7 @@ pub(super) fn sheets_spec(
     // The side sheet article lives in its own module; this page always presents
     // the bottom sheet specification.
     let _ = side;
-    let action = remember(|| String::from("No action selected"));
+    let action = remember(|| String::from("ui-no-action-selected"));
     let controller = remember(|| BottomSheetController::new(false));
     let main = RenderSlot::new(move || {
         sheet_article(action, controller).route_optional(route.clone());
@@ -63,7 +65,7 @@ pub(super) fn sheets_spec(
     });
     bottom_sheet_provider()
         .controller(controller)
-        .accessibility_label("Share this place")
+        .accessibility_label(I18N.text("ui-share-this-place"))
         .partial_height(Dp(360.0))
         .on_close_request(move || close_sheet(controller))
         .main_content_shared(main)
@@ -81,23 +83,23 @@ fn sheet_article(
     route: Option<crate::pages::material_spec::article::ArticleRoute>,
 ) {
     article(
-        "Bottom sheets",
-        "Bottom sheets show secondary content anchored to the bottom of the screen",
+        "ui-bottom-sheets",
+        "ui-bottom-sheets-show-secondary-content-anchored-to-the-bottom-of-the-screen",
         vec![
             SpecSection {
-                title: "Tokens and specs",
+                title: "ui-tokens-and-specs",
                 content: RenderSlot::new(|| {
                     tokens();
                 }),
             },
             SpecSection {
-                title: "Color",
+                title: "ui-color",
                 content: RenderSlot::new(|| {
                     sheet_colors_section();
                 }),
             },
             SpecSection {
-                title: "Measurements",
+                title: "ui-measurements",
                 content: RenderSlot::new(|| {
                     sheet_measurements_section();
                 }),
@@ -105,64 +107,64 @@ fn sheet_article(
         ],
     ).route_optional(route.clone())
     .intro(|| {
-        prose("Modal bottom sheets are above a scrim while standard bottom sheets don't have a scrim. Besides this, both variants of bottom sheets have the same specs.");
+        prose("ui-modal-bottom-sheets-are-above-a-scrim-while-standard-bottom-sheets-don-t-have-a-scrim-besi");
         gap(Dp(32.0));
         figures::anatomy_figure(false);
         figures::badge_legend(vec![
-            "Container".into(),
-            "Drag handle (optional)".into(),
-            "Scrim".into(),
+            "ui-container".into(),
+            "ui-drag-handle-optional".into(),
+            "ui-scrim".into(),
         ]);
     })
     .pages(vec![
         ArticlePage {
-            title: "Overview",
+            title: "ui-overview",
             intro: Some(RenderSlot::new(|| { overview_intro(); })),
             sections: vec![
                 SpecSection {
-                    title: "Availability & resources",
+                    title: "ui-availability-resources",
                     content: RenderSlot::new(|| { availability(); }),
                 },
                 SpecSection {
-                    title: "Differences from M2",
+                    title: "ui-differences-from-m2",
                     content: RenderSlot::new(|| { differences_from_m2(); }),
                 },
             ],
         },
         ArticlePage {
-            title: "Guidelines",
+            title: "ui-guidelines",
             intro: Some(RenderSlot::new(|| {
                 figures::variants_figure();
                 figures::badge_legend(vec![
-                    "Standard bottom sheets".into(),
-                    "Modal bottom sheets".into(),
+                    "ui-standard-bottom-sheets".into(),
+                    "ui-modal-bottom-sheets".into(),
                 ]);
             })),
             sections: vec![
                 SpecSection {
-                    title: "Usage",
+                    title: "ui-usage",
                     content: RenderSlot::new(|| { usage(); }),
                 },
                 SpecSection {
-                    title: "Anatomy",
+                    title: "ui-anatomy",
                     content: RenderSlot::new(|| { guide_anatomy(); }),
                 },
                 SpecSection {
-                    title: "Standard bottom sheets",
+                    title: "ui-standard-bottom-sheets",
                     content: RenderSlot::new(|| { standard_sheets(); }),
                 },
                 SpecSection {
-                    title: "Modal bottom sheets",
+                    title: "ui-modal-bottom-sheets",
                     content: RenderSlot::new(move || {
                         modal_sheets(controller);
                     }),
                 },
                 SpecSection {
-                    title: "Responsive layout",
+                    title: "ui-responsive-layout",
                     content: RenderSlot::new(|| { responsive_layout(); }),
                 },
                 SpecSection {
-                    title: "Behavior",
+                    title: "ui-behavior",
                     content: RenderSlot::new(move || {
                         behavior_section(action, controller);
                     }),
@@ -170,23 +172,23 @@ fn sheet_article(
             ],
         },
         ArticlePage {
-            title: "Accessibility",
+            title: "ui-accessibility",
             intro: None,
             sections: vec![
                 SpecSection {
-                    title: "Use cases",
+                    title: "ui-use-cases",
                     content: RenderSlot::new(|| { use_cases(); }),
                 },
                 SpecSection {
-                    title: "Interaction & style",
+                    title: "ui-interaction-style",
                     content: RenderSlot::new(|| { interaction_style(); }),
                 },
                 SpecSection {
-                    title: "Keyboard navigation",
+                    title: "ui-keyboard-navigation",
                     content: RenderSlot::new(|| { keyboard_navigation(); }),
                 },
                 SpecSection {
-                    title: "Labeling",
+                    title: "ui-labeling",
                     content: RenderSlot::new(|| { labeling(); }),
                 },
             ],
@@ -198,7 +200,7 @@ fn sheet_article(
 fn caption(#[prop(into)] value: String) {
     let scheme = use_context::<MaterialTheme>().unwrap().get().color_scheme;
     text()
-        .content(value)
+        .content(I18N.text(value))
         .color(scheme.on_surface_variant)
         .style(type_style(14.0, 20.0));
 }
@@ -208,7 +210,7 @@ fn bullets(items: Vec<String>) {
     column().children(move || {
         for item in items.clone() {
             text()
-                .content(format!("•  {item}"))
+                .content(format!("•  {}", I18N.text(item)))
                 .style(type_style(16.0, 24.0))
                 .color(INK);
             gap(Dp(8.0));
@@ -219,45 +221,49 @@ fn bullets(items: Vec<String>) {
 #[tessera]
 fn overview_intro() {
     bullets(vec![
-        "Use bottom sheets in compact and medium breakpoints".into(),
-        "Two variants: standard and modal".into(),
-        "Content should be additional or secondary (not the app's main content)".into(),
-        "Bottom sheets can be dismissed in order to interact with the main content".into(),
+        "ui-use-bottom-sheets-in-compact-and-medium-breakpoints".into(),
+        "ui-two-variants-standard-and-modal".into(),
+        "ui-content-should-be-additional-or-secondary-not-the-app-s-main-content".into(),
+        "ui-bottom-sheets-can-be-dismissed-in-order-to-interact-with-the-main-content".into(),
     ]);
     gap(Dp(32.0));
     figures::variants_figure();
     figures::badge_legend(vec![
-        "Standard bottom sheet".into(),
-        "Modal bottom sheet".into(),
+        "ui-standard-bottom-sheet".into(),
+        "ui-modal-bottom-sheet".into(),
     ]);
 }
 
 #[tessera]
 fn availability() {
     spec_table(
-        vec!["Type".into(), "Resource".into(), "Status".into()],
+        vec!["ui-type".into(), "ui-resource".into(), "ui-status".into()],
         vec![
             vec![
-                "Design".into(),
-                "Design Kit (Figma)".into(),
-                "Available".into(),
+                "ui-design".into(),
+                "ui-design-kit-figma".into(),
+                "ui-available".into(),
             ],
             vec![
-                "Implementation".into(),
-                "Flutter".into(),
-                "Available".into(),
+                "ui-implementation".into(),
+                "ui-flutter".into(),
+                "ui-available".into(),
             ],
             vec![
-                "Implementation".into(),
-                "Android Views (MDC-Android)".into(),
-                "Available".into(),
+                "ui-implementation".into(),
+                "ui-android-views-mdc-android".into(),
+                "ui-available".into(),
             ],
             vec![
-                "Implementation".into(),
-                "Jetpack Compose".into(),
-                "Available".into(),
+                "ui-implementation".into(),
+                "ui-jetpack-compose".into(),
+                "ui-available".into(),
             ],
-            vec!["Implementation".into(), "Web".into(), "Unavailable".into()],
+            vec![
+                "ui-implementation".into(),
+                "ui-web".into(),
+                "ui-unavailable".into(),
+            ],
         ],
     );
 }
@@ -267,9 +273,9 @@ fn differences_from_m2() {
     figures::split()
         .start(|| {
             bullets(vec![
-                "Color: New color mappings and compatibility with dynamic color".into(),
-                "Shape: Bottom sheets have a 28dp top corner radius".into(),
-                "Layout: New max-width of 640dp and an optional drag handle with an accessible 48dp hit target".into(),
+                "ui-color-new-color-mappings-and-compatibility-with-dynamic-color".into(),
+                "ui-shape-bottom-sheets-have-a-28dp-top-corner-radius".into(),
+                "ui-layout-new-max-width-of-640dp-and-an-optional-drag-handle-with-an-accessible-48dp-hit-targ".into(),
             ]);
         })
         .end(|| {
@@ -281,20 +287,20 @@ fn differences_from_m2() {
 fn usage() {
     figures::split()
         .start(|| {
-            prose("Bottom sheets display supplementary content and actions on a mobile screen.");
+            prose("ui-bottom-sheets-display-supplementary-content-and-actions-on-a-mobile-screen");
         })
         .end(|| {
             figures::captioned(
                 RenderSlot::new(|| {
                     figures::share_figure();
                 }),
-                "Bottom sheet containing contacts and applications",
+                "ui-bottom-sheet-containing-contacts-and-applications",
             );
         });
     figures::split()
         .start(|| {
             prose(
-                "Bottom sheets are a versatile component that can contain a wide variety of information and layouts, including menu items (in list or grid layouts), actions, and supplemental content.",
+                "ui-bottom-sheets-are-a-versatile-component-that-can-contain-a-wide-variety-of-information-and",
             );
         })
         .end(|| {
@@ -302,7 +308,7 @@ fn usage() {
                 RenderSlot::new(|| {
                     figures::menu_figure(false);
                 }),
-                "Bottom sheet with menu items in a list",
+                "ui-bottom-sheet-with-menu-items-in-a-list",
             );
         });
 }
@@ -310,57 +316,57 @@ fn usage() {
 #[tessera]
 fn guide_anatomy() {
     prose(
-        "A container is the only required element of a bottom sheet. Bottom sheet layouts can vary widely to support the kinds of content they contain.",
+        "ui-a-container-is-the-only-required-element-of-a-bottom-sheet-bottom-sheet-layouts-can-vary-w",
     );
     gap(Dp(32.0));
     figures::anatomy_figure(true);
     figures::badge_legend(vec![
-        "Container".into(),
-        "Drag handle (optional)".into(),
-        "Scrim (modal only)".into(),
+        "ui-container".into(),
+        "ui-drag-handle-optional".into(),
+        "ui-scrim-modal-only".into(),
     ]);
     gap(Dp(32.0));
-    subheading("Container".into());
+    subheading("ui-container".into());
     prose(
-        "Bottom sheets are flexible containers that adapt to their content and available space. The container is the only required element.",
+        "ui-bottom-sheets-are-flexible-containers-that-adapt-to-their-content-and-available-space-the",
     );
     gap(Dp(24.0));
-    subheading("Drag handle (optional)".into());
+    subheading("ui-drag-handle-optional".into());
     prose(
-        "The drag handle shows that the sheet can move between heights. It keeps a 48 × 48dp target and toggles the preset heights when it is selected.",
+        "ui-the-drag-handle-shows-that-the-sheet-can-move-between-heights-it-keeps-a-48-48dp-target-an",
     );
     gap(Dp(24.0));
-    subheading("Scrim (modal only)".into());
+    subheading("ui-scrim-modal-only".into());
     prose(
-        "A modal sheet appears above a scrim that blocks the rest of the app. Selecting the scrim always dismisses the sheet.",
+        "ui-a-modal-sheet-appears-above-a-scrim-that-blocks-the-rest-of-the-app-selecting-the-scrim-al",
     );
     gap(Dp(24.0));
-    subheading("List items (optional)".into());
+    subheading("ui-list-items-optional".into());
     prose(
-        "Lists are a continuous group of text or images. List items can include label text, icons and text buttons.",
+        "ui-lists-are-a-continuous-group-of-text-or-images-list-items-can-include-label-text-icons-and",
     );
     gap(Dp(24.0));
-    subheading("Dividers (optional)".into());
-    prose("Dividers can be used to separate related content in bottom sheets.");
+    subheading("ui-dividers-optional".into());
+    prose("ui-dividers-can-be-used-to-separate-related-content-in-bottom-sheets");
     gap(Dp(24.0));
-    subheading("Media (optional)".into());
-    prose("Bottom sheets can contain thumbnails, images, and video.");
+    subheading("ui-media-optional".into());
+    prose("ui-bottom-sheets-can-contain-thumbnails-images-and-video");
 }
 
 #[tessera]
 fn standard_sheets() {
     prose(
-        "Standard bottom sheets co-exist with the screen's main UI region and allow for simultaneously viewing and interacting with both regions, especially when the main UI region is frequently scrolled or panned.",
+        "ui-standard-bottom-sheets-co-exist-with-the-screen-s-main-ui-region-and-allow-for-simultaneou",
     );
     gap(Dp(24.0));
     prose(
-        "Use a standard bottom sheet to display content that complements the screen's primary content, such as an audio player in a music app.",
+        "ui-use-a-standard-bottom-sheet-to-display-content-that-complements-the-screen-s-primary-conte",
     );
     gap(Dp(24.0));
     music_context();
     gap(Dp(24.0));
     prose(
-        "A bottom sheet can have preset positions from full-screen height to preview. At full-screen height, standard bottom sheets contain a collapse icon in an app bar to return to their initial position.",
+        "ui-a-bottom-sheet-can-have-preset-positions-from-full-screen-height-to-preview-at-full-screen",
     );
 }
 
@@ -369,7 +375,7 @@ fn modal_sheets(controller: State<BottomSheetController>) {
     figures::split()
         .start(|| {
             prose(
-                "Like dialogs, modal bottom sheets appear in front of app content, disabling all other app functionality when they appear, and remaining on screen until confirmed, dismissed, or a required action has been taken.",
+                "ui-like-dialogs-modal-bottom-sheets-appear-in-front-of-app-content-disabling-all-other-app-fu",
             );
         })
         .end(|| {
@@ -377,13 +383,13 @@ fn modal_sheets(controller: State<BottomSheetController>) {
                 RenderSlot::new(|| {
                     figures::files_figure();
                 }),
-                "A modal bottom sheet must be interacted with or dismissed. Its blocking behavior makes it suitable for a menu, such as in this files app, to help people focus on their available choices.",
+                "ui-a-modal-bottom-sheet-must-be-interacted-with-or-dismissed-its-blocking-behavior-makes-it-s",
             );
         });
     figures::split()
         .start(move || {
             prose(
-                "Use a modal bottom sheet as an alternative to inline menus or simple dialogs on mobile, especially when offering a long list of action items, or when items require longer descriptions and icons.",
+                "ui-use-a-modal-bottom-sheet-as-an-alternative-to-inline-menus-or-simple-dialogs-on-mobile-esp",
             );
             gap(Dp(24.0));
             launch(controller);
@@ -393,18 +399,18 @@ fn modal_sheets(controller: State<BottomSheetController>) {
                 RenderSlot::new(|| {
                     figures::menu_figure(true);
                 }),
-                "Modal bottom sheets can be used instead of menus to present additional actions",
+                "ui-modal-bottom-sheets-can-be-used-instead-of-menus-to-present-additional-actions",
             );
         });
-    subheading("Visibility".into());
+    subheading("ui-visibility".into());
     figures::split()
         .start(|| {
             prose(
-                "To provide access to its top actions, the initial vertical position of modal bottom sheets is capped at 50% of the screen height.",
+                "ui-to-provide-access-to-its-top-actions-the-initial-vertical-position-of-modal-bottom-sheets",
             );
             gap(Dp(16.0));
             prose(
-                "Modal bottom sheets whose contents exceed 50% of the screen height can then be pulled across the full screen and scrolled internally to access their remaining items.",
+                "ui-modal-bottom-sheets-whose-contents-exceed-50-of-the-screen-height-can-then-be-pulled-acros",
             );
         })
         .end(|| {
@@ -412,33 +418,33 @@ fn modal_sheets(controller: State<BottomSheetController>) {
                 RenderSlot::new(|| {
                     figures::photo_actions_figure(314.0);
                 }),
-                "The initial vertical position of modal bottom sheets can't exceed 50% of the screen height",
+                "ui-the-initial-vertical-position-of-modal-bottom-sheets-can-t-exceed-50-of-the-screen-height",
             );
         });
     figures::split()
         .start(|| {
             prose(
-                "Modal bottom sheets appear when triggered by a user action, such as tapping a button or an overflow icon. They can be dismissed by:",
+                "ui-modal-bottom-sheets-appear-when-triggered-by-a-user-action-such-as-tapping-a-button-or-an",
             );
             gap(Dp(12.0));
             bullets(vec![
-                "Tapping a menu item or action within the bottom sheet".into(),
-                "Tapping the scrim".into(),
-                "Swiping the sheet down".into(),
-                "Using a close affordance within the bottom sheet's app bar, if available".into(),
+                "ui-tapping-a-menu-item-or-action-within-the-bottom-sheet".into(),
+                "ui-tapping-the-scrim".into(),
+                "ui-swiping-the-sheet-down".into(),
+                "ui-using-a-close-affordance-within-the-bottom-sheet-s-app-bar-if-available".into(),
             ]);
-            prose("Display a close affordance in a full-screen modal bottom sheet.");
+            prose("ui-display-a-close-affordance-in-a-full-screen-modal-bottom-sheet");
         })
         .end(|| {
             figures::figure_pair(
                 RenderSlot::new(|| {
                     figures::dismiss_scrim_figure();
                 }),
-                "Tapping the scrim dismisses a modal bottom sheet",
+                "ui-tapping-the-scrim-dismisses-a-modal-bottom-sheet",
                 RenderSlot::new(|| {
                     figures::dismiss_swipe_figure();
                 }),
-                "A modal bottom sheet can be dismissed by swiping the sheet down",
+                "ui-a-modal-bottom-sheet-can-be-dismissed-by-swiping-the-sheet-down",
             );
         });
 }
@@ -447,9 +453,9 @@ fn modal_sheets(controller: State<BottomSheetController>) {
 fn responsive_layout() {
     figures::split()
         .start(|| {
-            subheading("Compact breakpoint".into());
+            subheading("ui-compact-breakpoint".into());
             prose(
-                "In compact breakpoints, like mobile devices, bottom sheets extend across the width of a screen and are elevated above the primary content.",
+                "ui-in-compact-breakpoints-like-mobile-devices-bottom-sheets-extend-across-the-width-of-a-scre",
             );
         })
         .end(|| {
@@ -457,14 +463,14 @@ fn responsive_layout() {
                 RenderSlot::new(|| {
                     figures::files_figure();
                 }),
-                "Bottom sheets should extend to the width of the screen on mobile",
+                "ui-bottom-sheets-should-extend-to-the-width-of-the-screen-on-mobile",
             );
         });
     figures::split()
         .start(|| {
-            subheading("Medium and expanded breakpoints".into());
+            subheading("ui-medium-and-expanded-breakpoints".into());
             prose(
-                "For larger screens with medium and expanded breakpoints, bottom sheets have a default max-width to prevent undesired layouts and awkward spacing. However, this can be overridden if needed. For more complex tasks and flows, consider using a non-transient surface such as a floating sheet.",
+                "ui-for-larger-screens-with-medium-and-expanded-breakpoints-bottom-sheets-have-a-default-max-w",
             );
         })
         .end(|| {
@@ -472,13 +478,13 @@ fn responsive_layout() {
                 RenderSlot::new(|| {
                     figures::tablet_figure();
                 }),
-                "Bottom sheets on larger screens like tablet have a max width that can be overridden",
+                "ui-bottom-sheets-on-larger-screens-like-tablet-have-a-max-width-that-can-be-overridden",
             );
         });
     figures::split()
         .start(|| {
             prose(
-                "On larger expanded breakpoints, like desktop, a bottom sheet can be swapped for a side sheet that shows similar content.",
+                "ui-on-larger-expanded-breakpoints-like-desktop-a-bottom-sheet-can-be-swapped-for-a-side-sheet",
             );
         })
         .end(|| {
@@ -488,55 +494,58 @@ fn responsive_layout() {
 
 #[tessera]
 fn behavior_section(action: State<String>, controller: State<BottomSheetController>) {
-    subheading("Expansion".into());
+    subheading("ui-expansion".into());
     prose(
-        "Bottom sheets can offer an expansion option where the sheet is fully raised and toggled between a collapsed and expanded state. This provides a more predictable footprint of the sheet, and can be set by the system or toggled by the user.",
+        "ui-bottom-sheets-can-offer-an-expansion-option-where-the-sheet-is-fully-raised-and-toggled-be",
     );
     gap(Dp(24.0));
     figures::figure_pair(
         RenderSlot::new(|| {
             figures::photo_actions_figure(48.0);
         }),
-        "A bottom sheet for sharing can appear fully raised if needed",
+        "ui-a-bottom-sheet-for-sharing-can-appear-fully-raised-if-needed",
         RenderSlot::new(|| {
             figures::photo_actions_figure(470.0);
         }),
-        "Alternately, a bottom sheet for sharing can appear collapsed for a more focused set of actions",
+        "ui-alternately-a-bottom-sheet-for-sharing-can-appear-collapsed-for-a-more-focused-set-of-acti",
     );
     expansion_controls(controller);
     gap(Dp(32.0));
-    subheading("Custom positioning".into());
+    subheading("ui-custom-positioning".into());
     prose(
-        "The drag handle can be dragged or selected to change the bottom sheet height. Sheets should be able to cycle through preset heights and close completely without dragging, while selecting the scrim should always close the bottom sheet.",
+        "ui-the-drag-handle-can-be-dragged-or-selected-to-change-the-bottom-sheet-height-sheets-should",
     );
     gap(Dp(16.0));
     prose(
-        "If the bottom sheet has multiple preset heights but can't use a drag handle, Material requires the inclusion of a single-pointer alternative to change height.",
+        "ui-if-the-bottom-sheet-has-multiple-preset-heights-but-can-t-use-a-drag-handle-material-requi",
     );
     gap(Dp(24.0));
     figures::figure_pair(
         RenderSlot::new(|| {
             figures::drag_figure(false);
         }),
-        "Interacting with the drag handle can quickly move a bottom sheet through preset heights",
+        "ui-interacting-with-the-drag-handle-can-quickly-move-a-bottom-sheet-through-preset-heights",
         RenderSlot::new(|| {
             figures::drag_figure(true);
         }),
-        "A bottom sheet can automatically resize to another height after interacting with the drag handle",
+        "ui-a-bottom-sheet-can-automatically-resize-to-another-height-after-interacting-with-the-drag",
     );
-    subheading("Scrolling".into());
+    subheading("ui-scrolling".into());
     prose(
-        "Bottom sheets should be scrollable when their content exceeds the initial viewable height.",
+        "ui-bottom-sheets-should-be-scrollable-when-their-content-exceeds-the-initial-viewable-height",
     );
     gap(Dp(24.0));
-    subheading("Back".into());
+    subheading("ui-back".into());
     prose(
-        "A predictive back gesture previews the result of the gesture: release to commit, fling to commit, or cancel. Where a gesture is not available, Escape and the close action dismiss the sheet.",
+        "ui-a-predictive-back-gesture-previews-the-result-of-the-gesture-release-to-commit-fling-to-co",
     );
     gap(Dp(24.0));
     launch(controller);
     gap(Dp(16.0));
-    caption(format!("Last sheet action: {}", action.get()));
+    caption(I18N.format(
+        "ui-last-sheet-action-value",
+        [("v0", I18N.text(&action.get()).into())],
+    ));
 }
 
 #[tessera]
@@ -549,47 +558,57 @@ fn expansion_controls(controller: State<BottomSheetController>) {
         .children(move || {
             button()
                 .outlined()
-                .accessibility_label("Open expanded bottom sheet")
+                .accessibility_label(I18N.text("ui-open-expanded-bottom-sheet"))
                 .on_click(move || {
                     controller.with_mut(|sheet: &mut BottomSheetController| {
                         sheet.open();
                         sheet.expand();
                     });
                 })
-                .child(|| {
-                    text().content("Open expanded");
+                .child(move || {
+                    text().content(I18N.text("ui-open-expanded"));
                 });
             spacer().modifier(Modifier::new().width(Dp(12.0)));
             button()
                 .outlined()
-                .accessibility_label("Open partially expanded bottom sheet")
+                .accessibility_label(I18N.text("ui-open-partially-expanded-bottom-sheet"))
                 .on_click(move || {
                     controller.with_mut(|sheet: &mut BottomSheetController| {
                         sheet.open();
                         sheet.partially_expand();
                     });
                 })
-                .child(|| {
-                    text().content("Open partial");
+                .child(move || {
+                    text().content(I18N.text("ui-open-partial"));
                 });
         });
     gap(Dp(16.0));
-    caption(format!(
-        "Sheet: {}",
-        match (open, expansion) {
-            (false, _) => "closed",
-            (true, BottomSheetExpansion::Expanded) => "open, expanded",
-            (true, BottomSheetExpansion::PartiallyExpanded) => "open, partially expanded",
-        }
-    ));
+    caption(
+        I18N.format(
+            "ui-sheet-value",
+            [(
+                "v0",
+                I18N.text(
+                    &(match (open, expansion) {
+                        (false, _) => "ui-closed",
+                        (true, BottomSheetExpansion::Expanded) => "ui-open-expanded-6986",
+                        (true, BottomSheetExpansion::PartiallyExpanded) => {
+                            "ui-open-partially-expanded"
+                        }
+                    }),
+                )
+                .into(),
+            )],
+        ),
+    );
 }
 
 #[tessera]
 fn use_cases() {
-    prose("Users should be able to:");
+    prose("ui-users-should-be-able-to");
     gap(Dp(16.0));
     bullets(vec![
-        "Resize bottom sheets without having to rely on touch gestures".into(),
+        "ui-resize-bottom-sheets-without-having-to-rely-on-touch-gestures".into(),
     ]);
 }
 
@@ -597,9 +616,9 @@ fn use_cases() {
 fn interaction_style() {
     figures::split()
         .start(|| {
-            subheading("Touch target area".into());
+            subheading("ui-touch-target-area".into());
             prose(
-                "The top 48dp portion of the bottom sheet is interactive when user-initiated resizing is available and the drag handle is present.",
+                "ui-the-top-48dp-portion-of-the-bottom-sheet-is-interactive-when-user-initiated-resizing-is-av",
             );
         })
         .end(|| {
@@ -607,18 +626,18 @@ fn interaction_style() {
                 RenderSlot::new(|| {
                     figures::touch_area_figure();
                 }),
-                "To ensure touch target accessibility, the top portion of a bottom sheet can be reserved for resize interactions",
+                "ui-to-ensure-touch-target-accessibility-the-top-portion-of-a-bottom-sheet-can-be-reserved-for",
             );
         });
     figures::split()
         .start(|| {
-            subheading("Initial focus".into());
+            subheading("ui-initial-focus".into());
             prose(
-                "The optional drag handle can be focused in the tab order and interacted with using non-touch inputs, such as keyboard or switch controls.",
+                "ui-the-optional-drag-handle-can-be-focused-in-the-tab-order-and-interacted-with-using-non-tou",
             );
             gap(Dp(16.0));
             prose(
-                "When a modal bottom sheet opens, focus moves into the sheet and returns to the control that opened it after the sheet closes.",
+                "ui-when-a-modal-bottom-sheet-opens-focus-moves-into-the-sheet-and-returns-to-the-control-that",
             );
         })
         .end(|| {
@@ -626,18 +645,18 @@ fn interaction_style() {
                 RenderSlot::new(|| {
                     figures::focus_figure();
                 }),
-                "Visible focus shown on the drag handle affordance",
+                "ui-visible-focus-shown-on-the-drag-handle-affordance",
             );
         });
     figures::split()
         .start(|| {
-            subheading("Dragging".into());
+            subheading("ui-dragging".into());
             prose(
-                "Include a single-pointer alternative for any action that can be completed by dragging.",
+                "ui-include-a-single-pointer-alternative-for-any-action-that-can-be-completed-by-dragging",
             );
             gap(Dp(16.0));
             prose(
-                "Drag handles should cycle the bottom sheet through available heights when selected. If a drag handle can't be used, add a button to do this action.",
+                "ui-drag-handles-should-cycle-the-bottom-sheet-through-available-heights-when-selected-if-a-dr",
             );
         })
         .end(|| {
@@ -645,11 +664,11 @@ fn interaction_style() {
                 RenderSlot::new(|| {
                     figures::drag_figure(false);
                 }),
-                "Interacting with the drag handle can quickly move a bottom sheet through preset heights",
+                "ui-interacting-with-the-drag-handle-can-quickly-move-a-bottom-sheet-through-preset-heights",
                 RenderSlot::new(|| {
                     figures::drag_figure(true);
                 }),
-                "A bottom sheet can automatically resize to another height after interacting with the drag handle",
+                "ui-a-bottom-sheet-can-automatically-resize-to-another-height-after-interacting-with-the-drag",
             );
         });
     touch_target();
@@ -658,18 +677,18 @@ fn interaction_style() {
 #[tessera]
 fn keyboard_navigation() {
     spec_table(
-        vec!["Keys".into(), "Actions".into()],
+        vec!["ui-keys".into(), "ui-actions".into()],
         vec![
-            vec!["Tab".into(), "Focus lands on drag handle".into()],
+            vec!["ui-tab".into(), "ui-focus-lands-on-drag-handle".into()],
             vec![
-                "Space / Enter".into(),
-                "Toggles between available heights".into(),
+                "ui-space-enter".into(),
+                "ui-toggles-between-available-heights".into(),
             ],
         ],
     );
     gap(Dp(16.0));
     prose(
-        "In the modal sheet, Escape or selecting the scrim dismisses the sheet without changing the page behind it.",
+        "ui-in-the-modal-sheet-escape-or-selecting-the-scrim-dismisses-the-sheet-without-changing-the",
     );
 }
 
@@ -678,7 +697,7 @@ fn labeling() {
     figures::split()
         .start(|| {
             prose(
-                "Label only the drag handle. The accessibility role for the drag handle is \"button.\"",
+                "ui-label-only-the-drag-handle-the-accessibility-role-for-the-drag-handle-is-button",
             );
         })
         .end(|| {
@@ -686,7 +705,7 @@ fn labeling() {
                 RenderSlot::new(|| {
                     figures::label_figure();
                 }),
-                "Label the drag handle",
+                "ui-label-the-drag-handle",
             );
         });
 }
@@ -694,19 +713,19 @@ fn labeling() {
 #[tessera]
 fn sheet_colors_section() {
     prose(
-        "Color values are implemented through design tokens. For design, this means working with color values that correspond with tokens. For implementation, a color value will be a token that references a value.",
+        "ui-color-values-are-implemented-through-design-tokens-for-design-this-means-working-with-colo",
     );
     gap(Dp(24.0));
     color::sheet_colors(false, true);
     gap(Dp(16.0));
-    caption("Bottom sheet color roles used for both light and dark schemes:");
+    caption("ui-bottom-sheet-color-roles-used-for-both-light-and-dark-schemes");
     figures::badge_legend(vec![
         "Scrim*".into(),
-        "On surface variant".into(),
-        "Surface container low".into(),
+        "ui-on-surface-variant".into(),
+        "ui-surface-container-low".into(),
     ]);
     caption(
-        "*On Android platforms, the scrim color and opacity is automatically handled by the system UI.",
+        "ui-on-android-platforms-the-scrim-color-and-opacity-is-automatically-handled-by-the-system-ui",
     );
 }
 
@@ -716,25 +735,31 @@ fn sheet_measurements_section() {
         RenderSlot::new(|| {
             figures::measurements_figure();
         }),
-        "Bottom sheet padding and size measurements",
+        "ui-bottom-sheet-padding-and-size-measurements",
     );
     prose(
-        "Bottom sheets span the full window width up to 640dp. When the window width exceeds 640dp, bottom sheets adjust to have a top margin of 56dp and side margins of 56dp.",
+        "ui-bottom-sheets-span-the-full-window-width-up-to-640dp-when-the-window-width-exceeds-640dp-b",
     );
     gap(Dp(24.0));
     spec_table(
-        vec!["Attribute".into(), "Value".into()],
+        vec!["ui-attribute".into(), "ui-value".into()],
         vec![
-            vec!["Drag handle alignment (horizontal)".into(), "Center".into()],
-            vec!["Drag handle padding top/bottom".into(), "22dp".into()],
-            vec!["Top margin".into(), "72dp".into()],
-            vec!["Top margin (window width > 640dp)".into(), "56dp".into()],
             vec![
-                "Start/end margin (window width > 640dp)".into(),
+                "ui-drag-handle-alignment-horizontal".into(),
+                "ui-center".into(),
+            ],
+            vec!["ui-drag-handle-padding-top-bottom".into(), "22dp".into()],
+            vec!["ui-top-margin".into(), "72dp".into()],
+            vec!["ui-top-margin-window-width-640dp".into(), "56dp".into()],
+            vec![
+                "ui-start-end-margin-window-width-640dp".into(),
                 "56dp".into(),
             ],
-            vec!["Width".into(), "Full width, up to max-width 640dp".into()],
-            vec!["Height".into(), "Variable".into()],
+            vec![
+                "ui-width".into(),
+                "ui-full-width-up-to-max-width-640dp".into(),
+            ],
+            vec!["ui-height".into(), "ui-variable".into()],
         ],
     );
 }
@@ -743,12 +768,12 @@ fn sheet_measurements_section() {
 fn launch(controller: State<BottomSheetController>) {
     button()
         .outlined()
-        .accessibility_label("Open modal bottom sheet")
+        .accessibility_label(I18N.text("ui-open-modal-bottom-sheet"))
         .on_click(move || {
             controller.with_mut(BottomSheetController::open);
         })
-        .child(|| {
-            text().content("Open modal bottom sheet");
+        .child(move || {
+            text().content(I18N.text("ui-open-modal-bottom-sheet"));
         });
 }
 
@@ -763,20 +788,25 @@ fn sheet_content(close: Callback, action: State<String>) {
                 .modifier(Modifier::new().fill_max_width())
                 .children(move || {
                     text()
-                        .content("Share this place")
+                        .content(I18N.text("ui-share-this-place"))
                         .style(theme.typography.title_large)
                         .modifier(Modifier::new().weight(1.0));
                     icon_button()
                         .standard()
                         .icon(filled::CLOSE_SVG)
-                        .accessibility_label("Close bottom sheet")
+                        .accessibility_label(I18N.text("ui-close-bottom-sheet"))
                         .on_click_shared(close);
                 });
             gap(Dp(16.0));
-            for (index, label) in ["Share", "Get link", "Save"].into_iter().enumerate() {
+            for (index, label) in ["ui-share", "ui-get-link", "ui-save"]
+                .into_iter()
+                .enumerate()
+            {
                 list_item()
-                    .headline(label)
-                    .accessibility_label(format!("Bottom sheet {label}"))
+                    .headline(I18N.text(label))
+                    .accessibility_label(
+                        I18N.format("ui-bottom-sheet-value", [("v0", I18N.text(&label).into())]),
+                    )
                     .leading(move || {
                         icon()
                             .vector(match index {
@@ -787,22 +817,24 @@ fn sheet_content(close: Callback, action: State<String>) {
                             .size(Dp(24.0));
                     })
                     .on_click(move || {
-                        action.set(format!("{label} selected"));
+                        action.set(
+                            I18N.format("ui-value-selected", [("v0", I18N.text(&label).into())]),
+                        );
                         close.call();
                     });
             }
             gap(Dp(24.0));
             button()
                 .text()
-                .accessibility_label("Dismiss sheet")
+                .accessibility_label(I18N.text("ui-dismiss-sheet"))
                 .on_click_shared(close)
-                .child(|| {
-                    text().content("Cancel");
+                .child(move || {
+                    text().content(I18N.text("ui-cancel"));
                 });
         });
 }
 
-const TOKEN_GROUPS: [&str; 3] = ["Container", "Drag handle", "Focus indicator"];
+const TOKEN_GROUPS: [&str; 3] = ["ui-container", "ui-drag-handle", "ui-focus-indicator"];
 
 fn token_values(
     group: usize,
@@ -811,61 +843,61 @@ fn token_values(
     match group {
         0 => vec![
             (
-                "Docked container color",
+                "ui-docked-container-color",
                 "md.sys.color.surface-container-low".into(),
                 Some(scheme.surface_container_low),
             ),
             (
-                "Surface tint layer color",
+                "ui-surface-tint-layer-color",
                 "md.sys.color.surface-tint".into(),
                 Some(scheme.surface_tint),
             ),
             (
-                "Modal container elevation",
+                "ui-modal-container-elevation",
                 "md.sys.elevation.level1".into(),
                 None,
             ),
             (
-                "Standard container elevation",
+                "ui-standard-container-elevation",
                 "md.sys.elevation.level1".into(),
                 None,
             ),
             (
-                "Container shape",
+                "ui-container-shape",
                 "md.sys.shape.corner.extra-large.top (28dp)".into(),
                 None,
             ),
             (
-                "Minimized container shape",
+                "ui-minimized-container-shape",
                 "md.sys.shape.corner.none".into(),
                 None,
             ),
         ],
         1 => vec![
             (
-                "Drag handle color",
+                "ui-drag-handle-color",
                 "md.sys.color.on-surface-variant".into(),
                 Some(scheme.on_surface_variant),
             ),
-            ("Drag handle opacity", "0.4".into(), None),
-            ("Drag handle width", "32dp".into(), None),
-            ("Drag handle height", "4dp".into(), None),
+            ("ui-drag-handle-opacity", "0.4".into(), None),
+            ("ui-drag-handle-width", "32dp".into(), None),
+            ("ui-drag-handle-height", "4dp".into(), None),
         ],
         _ => vec![
             (
-                "Focus indicator color",
+                "ui-focus-indicator-color",
                 "md.sys.color.secondary".into(),
                 Some(scheme.secondary),
             ),
-            ("Focus indicator thickness", "3dp".into(), None),
-            ("Focus indicator outline offset", "2dp".into(), None),
+            ("ui-focus-indicator-thickness", "3dp".into(), None),
+            ("ui-focus-indicator-outline-offset", "2dp".into(), None),
         ],
     }
 }
 
 #[tessera]
 fn tokens() {
-    prose("Browse the component elements, attributes, tokens, and their values.");
+    prose("ui-browse-the-component-elements-attributes-tokens-and-their-values");
     gap(Dp(24.0));
     token_browser();
 }
@@ -910,17 +942,17 @@ fn token_browser() {
                         )
                         .children(move || {
                             text()
-                                .content("Sheets - Bottom")
+                                .content(I18N.text("ui-sheets-bottom"))
                                 .style(type_style(14.0, 20.0))
                                 .color(scheme.on_secondary_container);
                         });
                     spacer().modifier(Modifier::new().weight(1.0));
                     text()
-                        .content("Default, Light")
+                        .content(I18N.text("ui-default-light"))
                         .style(type_style(14.0, 20.0))
                         .color(scheme.on_surface_variant);
                 });
-            token_folder("Enabled", 0, 0, open);
+            token_folder("ui-enabled", 0, 0, open);
             if open.get()[0] {
                 for (index, name) in TOKEN_GROUPS.into_iter().enumerate() {
                     token_folder(name, index + 1, 1, open);
@@ -945,9 +977,13 @@ fn token_browser() {
 fn token_folder(#[prop(into)] name: String, index: usize, depth: usize, open: State<[bool; 4]>) {
     let expanded = open.get()[index];
     list_item()
-        .headline(name.clone())
-        .accessibility_label(format!("{name} tokens"))
-        .accessibility_description(if expanded { "Expanded" } else { "Collapsed" })
+        .headline(I18N.text(&(name)))
+        .accessibility_label(I18N.format("ui-value-tokens", [("v0", I18N.text(&name).into())]))
+        .accessibility_description(I18N.text(if expanded {
+            "ui-expanded"
+        } else {
+            "ui-collapsed"
+        }))
         .content_padding(tessera_components::modifier::Padding::new(
             Dp(16.0 + depth as f64 * 24.0),
             Dp(8.0),
@@ -982,14 +1018,20 @@ fn token_row(#[prop(into)] name: String, value: String, swatch: Option<Color>) {
                 .padding_symmetric(Dp(64.0), Dp(10.0))
                 .semantics(SemanticsArgs {
                     role: Some(Role::ListItem),
-                    label: Some(format!("{name}: {value}")),
+                    label: Some(I18N.format(
+                        "ui-value-value-format-1",
+                        [
+                            ("v0", I18N.text(&name).into()),
+                            ("v1", I18N.text(&value).into()),
+                        ],
+                    )),
                     merge_descendants: true,
                     ..Default::default()
                 }),
         )
         .children(move || {
             text()
-                .content(name.clone())
+                .content(I18N.text(&(name)))
                 .style(type_style(14.0, 20.0))
                 .color(INK)
                 .modifier(Modifier::new().weight(1.0));
@@ -1003,7 +1045,7 @@ fn token_row(#[prop(into)] name: String, value: String, swatch: Option<Color>) {
                 spacer().modifier(Modifier::new().width(Dp(8.0)));
             }
             text()
-                .content(value.clone())
+                .content(I18N.text(&(value)))
                 .style(type_style(14.0, 20.0))
                 .color(scheme.on_surface_variant)
                 .modifier(Modifier::new().weight(1.0));
@@ -1023,12 +1065,12 @@ fn touch_target() {
             .modifier(Modifier::new().fill_max_size())
             .children(move || {
                 button()
-                    .accessibility_label("Open native bottom sheet handle")
+                    .accessibility_label(I18N.text("ui-open-native-bottom-sheet-handle"))
                     .on_click(move || {
                         controller.with_mut(BottomSheetController::open);
                     })
-                    .child(|| {
-                        text().content("Open bottom sheet");
+                    .child(move || {
+                        text().content(I18N.text("ui-open-bottom-sheet"));
                     });
             });
     });
@@ -1041,22 +1083,22 @@ fn touch_target() {
                     .modifier(Modifier::new().fill_max_width())
                     .children(move || {
                         text()
-                            .content("Sheet controls")
+                            .content(I18N.text("ui-sheet-controls"))
                             .style(type_style(20.0, 28.0))
                             .modifier(Modifier::new().weight(1.0));
                         icon_button()
                             .standard()
                             .icon(filled::CLOSE_SVG)
-                            .accessibility_label("Close native bottom sheet controls")
+                            .accessibility_label(I18N.text("ui-close-native-bottom-sheet-controls"))
                             .on_click_shared(close);
                     });
                 gap(Dp(8.0));
                 text()
-                    .content("Select the drag handle to change height.")
+                    .content(I18N.text("ui-select-the-drag-handle-to-change-height"))
                     .style(type_style(14.0, 20.0));
             });
     });
-    subheading("Try it".into());
+    subheading("ui-try-it".into());
     super::panel(RenderSlot::new(move || {
         boxed()
             .modifier(
@@ -1069,23 +1111,20 @@ fn touch_target() {
                 bottom_sheet_provider()
                     .controller(controller)
                     .partial_height(Dp(192.0))
-                    .accessibility_label("Native bottom sheet controls")
+                    .accessibility_label(I18N.text("ui-native-bottom-sheet-controls"))
                     .on_close_request_shared(close)
                     .main_content_shared(main)
                     .bottom_sheet_content_shared(body);
             });
         gap(Dp(12.0));
         text()
-            .content(format!(
-                "48dp drag handle · {} · Tab to the handle, then Space or Enter changes height",
-                if controller.with(BottomSheetController::expansion)
+            .content(I18N.format("ui-48dp-drag-handle-value-tab-to-the-handle-then-space-or-enter-changes-height", [("v0", I18N.text(&(if controller.with(BottomSheetController::expansion)
                     == BottomSheetExpansion::Expanded
                 {
-                    "Expanded"
+                    "ui-expanded"
                 } else {
-                    "Partially expanded"
-                }
-            ))
+                    "ui-partially-expanded"
+                })).into())]))
             .color(scheme.on_surface);
     }));
 }
@@ -1111,7 +1150,7 @@ fn sheet_context_text(
     color: Color,
 ) {
     text()
-        .content(content)
+        .content(I18N.text(content))
         .style(type_style(size * scale, line * scale))
         .color(color)
         .modifier(Modifier::new().offset(Dp(x * scale), Dp(y * scale)));
@@ -1187,7 +1226,7 @@ fn music_context() {
                                                         ))),
                                                 );
                                             sheet_context_text(
-                                                "Cassette Futurism".into(),
+                                                "ui-cassette-futurism".into(),
                                                 80.0,
                                                 15.0,
                                                 14.0,
@@ -1196,7 +1235,7 @@ fn music_context() {
                                                 scheme.on_surface,
                                             );
                                             sheet_context_text(
-                                                "Various artists".into(),
+                                                "ui-various-artists".into(),
                                                 80.0,
                                                 35.0,
                                                 12.0,
@@ -1211,11 +1250,11 @@ fn music_context() {
                                                     filled::PLAY_ARROW_SVG
                                                 })
                                                 .content_color(scheme.on_surface)
-                                                .accessibility_label(if playing.get() {
-                                                    "Pause"
+                                                .accessibility_label(I18N.text(if playing.get() {
+                                                    "ui-pause"
                                                 } else {
-                                                    "Play"
-                                                })
+                                                    "ui-play"
+                                                }))
                                                 .modifier(
                                                     Modifier::new().offset(
                                                         Dp(315.0 * scale),
@@ -1226,7 +1265,7 @@ fn music_context() {
                                             icon_button()
                                                 .icon(filled::SKIP_NEXT_SVG)
                                                 .content_color(scheme.on_surface)
-                                                .accessibility_label("Next track")
+                                                .accessibility_label(I18N.text("ui-next-track"))
                                                 .modifier(
                                                     Modifier::new().offset(
                                                         Dp(353.0 * scale),
@@ -1251,7 +1290,7 @@ fn music_context() {
     );
     gap(Dp(16.0));
     prose(
-        "The music player in this standard bottom sheet allows people to control their music while browsing albums.",
+        "ui-the-music-player-in-this-standard-bottom-sheet-allows-people-to-control-their-music-while",
     );
 }
 
@@ -1307,7 +1346,7 @@ fn filter_context() {
                                         .children(move || {
                                             icon_button()
                                                 .icon(filled::TUNE_SVG)
-                                                .accessibility_label("Open filters")
+                                                .accessibility_label(I18N.text("ui-open-filters"))
                                                 .modifier(
                                                     Modifier::new()
                                                         .offset(Dp(170.0 * scale), Dp(4.0 * scale)),
@@ -1315,7 +1354,7 @@ fn filter_context() {
                                                 .on_click(move || open.set(true));
                                         });
                                     sheet_context_text(
-                                        "Last modified".into(),
+                                        "ui-last-modified".into(),
                                         112.0,
                                         140.0,
                                         14.0,
@@ -1324,12 +1363,12 @@ fn filter_context() {
                                         scheme.on_surface_variant,
                                     );
                                     for (index, label) in [
-                                        "2 hours ago",
-                                        "5 hours ago",
-                                        "Yesterday",
-                                        "November 8",
-                                        "November 5",
-                                        "September 26",
+                                        "ui-2-hours-ago",
+                                        "ui-5-hours-ago",
+                                        "ui-yesterday",
+                                        "ui-november-8",
+                                        "ui-november-5",
+                                        "ui-september-26",
                                     ]
                                     .into_iter()
                                     .enumerate()
@@ -1371,7 +1410,7 @@ fn filter_context() {
                                             )
                                             .children(move || {
                                                 sheet_context_text(
-                                                    "Filters".into(),
+                                                    "ui-filters".into(),
                                                     24.0,
                                                     17.0,
                                                     22.0,
@@ -1381,7 +1420,9 @@ fn filter_context() {
                                                 );
                                                 icon_button()
                                                     .icon(filled::CLOSE_SVG)
-                                                    .accessibility_label("Close filters")
+                                                    .accessibility_label(
+                                                        I18N.text("ui-close-filters"),
+                                                    )
                                                     .modifier(
                                                         Modifier::new().offset(
                                                             Dp(260.0 * scale),
@@ -1390,7 +1431,7 @@ fn filter_context() {
                                                     )
                                                     .on_click(move || open.set(false));
                                                 sheet_context_text(
-                                                    "Labels".into(),
+                                                    "ui-labels".into(),
                                                     26.0,
                                                     91.0,
                                                     12.0,
@@ -1399,18 +1440,18 @@ fn filter_context() {
                                                     scheme.on_surface_variant,
                                                 );
                                                 for (index, label) in [
-                                                    "Events",
-                                                    "Personal",
-                                                    "Projects",
-                                                    "Reminders",
-                                                    "Family",
+                                                    "ui-events",
+                                                    "ui-personal",
+                                                    "ui-projects",
+                                                    "ui-reminders",
+                                                    "ui-family",
                                                 ]
                                                 .into_iter()
                                                 .enumerate()
                                                 {
                                                     checkbox()
                                                         .checked(labels.get()[index])
-                                                        .accessibility_label(label)
+                                                        .accessibility_label(I18N.text(label))
                                                         .modifier(Modifier::new().offset(
                                                             Dp(18.0 * scale),
                                                             Dp((123.0 + index as f64 * 56.0)
@@ -1432,7 +1473,7 @@ fn filter_context() {
                                                     );
                                                 }
                                                 sheet_context_text(
-                                                    "Format".into(),
+                                                    "ui-format".into(),
                                                     26.0,
                                                     418.0,
                                                     12.0,
@@ -1441,9 +1482,9 @@ fn filter_context() {
                                                     scheme.on_surface_variant,
                                                 );
                                                 text_field()
-                                                    .initial_text("All")
+                                                    .initial_text(I18N.text("ui-all"))
                                                     .read_only(true)
-                                                    .accessibility_label("Format")
+                                                    .accessibility_label(I18N.text("ui-format"))
                                                     .modifier(
                                                         Modifier::new()
                                                             .offset(
@@ -1461,7 +1502,7 @@ fn filter_context() {
     );
     gap(Dp(16.0));
     caption(
-        "Side sheets can contain the same content as bottom sheets and may be more suitable for desktop",
+        "ui-side-sheets-can-contain-the-same-content-as-bottom-sheets-and-may-be-more-suitable-for-des",
     );
 }
 

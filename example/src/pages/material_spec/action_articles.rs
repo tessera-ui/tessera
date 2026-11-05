@@ -14,6 +14,8 @@ use tessera_components::{
 };
 use tessera_ui::{Callback, Dp, Modifier, RenderSlot, accesskit::Role, tessera, use_context};
 
+use crate::res::I18N;
+
 use super::{
     INK,
     article::{ArticlePage, SpecSection, article},
@@ -63,30 +65,30 @@ fn chapter(
 
 fn title(kind: Kind) -> &'static str {
     match kind {
-        Kind::Buttons => "Buttons",
-        Kind::Groups => "Button groups",
-        Kind::Icons => "Icon buttons",
-        Kind::ExtendedFab => "Extended FABs",
-        Kind::Segmented => "Segmented buttons",
+        Kind::Buttons => "ui-buttons",
+        Kind::Groups => "ui-button-groups",
+        Kind::Icons => "ui-icon-buttons",
+        Kind::ExtendedFab => "ui-extended-fabs",
+        Kind::Segmented => "ui-segmented-buttons",
     }
 }
 
 fn summary(kind: Kind) -> &'static str {
     match kind {
         Kind::Buttons => {
-            "Represent actions with default or toggle buttons. Choose among five sizes, two shapes and five color styles. Keep the label short and clear."
+            "ui-represent-actions-with-default-or-toggle-buttons-choose-among-five-sizes-two-shapes-and-fi"
         }
         Kind::Groups => {
-            "Group related buttons using standard or connected layouts. Coordinated shapes communicate pressing and selection. Groups support single, multiple and required selection."
+            "ui-group-related-buttons-using-standard-or-connected-layouts-coordinated-shapes-communicate-p"
         }
         Kind::Icons => {
-            "Use recognizable icons for common actions. Default buttons perform actions; toggle buttons communicate selection through icon and shape changes."
+            "ui-use-recognizable-icons-for-common-actions-default-buttons-perform-actions-toggle-buttons-c"
         }
         Kind::ExtendedFab => {
-            "Keep a primary action visible with a concise text label and optional icon. Small, medium and large sizes provide different emphasis."
+            "ui-keep-a-primary-action-visible-with-a-concise-text-label-and-optional-icon-small-medium-and"
         }
         Kind::Segmented => {
-            "Compare single and multiple selection among two to five related options. Connected button groups are recommended for current Expressive interfaces."
+            "ui-compare-single-and-multiple-selection-among-two-to-five-related-options-connected-button-g"
         }
     }
 }
@@ -96,184 +98,189 @@ fn guidelines(kind: Kind) -> Vec<Chapter> {
     match kind {
         Kind::Buttons => vec![
             chapter(
-                "Usage",
-                "Make important actions prominent without crowding the screen. Let width accommodate the label.",
+                "ui-usage",
+                "ui-make-important-actions-prominent-without-crowding-the-screen-let-width-accommodate-the-lab",
                 &[],
                 Example,
             ),
             chapter(
-                "Toggle buttons",
-                "Use toggles for binary choices. Communicate selection through shape, color and an appropriate icon; keep changing labels similar in length.",
+                "ui-toggle-buttons",
+                "ui-use-toggles-for-binary-choices-communicate-selection-through-shape-color-and-an-appropriat",
                 &[],
                 Behavior,
             ),
             chapter(
-                "Anatomy",
-                "Use concise sentence-case labels, sufficient container width and at most one leading icon.",
-                &["Label text", "Container", "Icon (optional)"],
+                "ui-anatomy",
+                "ui-use-concise-sentence-case-labels-sufficient-container-width-and-at-most-one-leading-icon",
+                &["ui-label-text", "ui-container", "ui-icon-optional"],
                 Anatomy,
             ),
             chapter(
-                "Color styles",
-                "Use filled for primary actions, tonal or outlined for secondary actions, and text for lower emphasis. Reserve elevation for needed separation.",
+                "ui-color-styles",
+                "ui-use-filled-for-primary-actions-tonal-or-outlined-for-secondary-actions-and-text-for-lower",
                 &[
-                    "Elevated style",
-                    "Filled style",
-                    "Tonal style",
-                    "Outlined style",
-                    "Text style",
+                    "ui-elevated-style",
+                    "ui-filled-style",
+                    "ui-tonal-style",
+                    "ui-outlined-style",
+                    "ui-text-style",
                 ],
                 Example,
             ),
             chapter(
-                "Adaptive design",
-                "Preserve action hierarchy as size and arrangement change. Keep the icon and text grouped and centered.",
-                &["Resizing", "Presentation"],
+                "ui-adaptive-design",
+                "ui-preserve-action-hierarchy-as-size-and-arrangement-change-keep-the-icon-and-text-grouped-an",
+                &["ui-resizing", "ui-presentation"],
                 Example,
             ),
         ],
         Kind::Groups => vec![
             chapter(
-                "Usage",
-                "Use consistent sizes and shapes in a group. Connected groups support related toggle choices; keep their color styles consistent.",
-                &["Color"],
+                "ui-usage",
+                "ui-use-consistent-sizes-and-shapes-in-a-group-connected-groups-support-related-toggle-choices",
+                &["ui-color"],
                 Example,
             ),
             chapter(
-                "Anatomy",
-                "Standard groups accommodate motion around their contents. Connected groups expand within their container.",
-                &["Container"],
+                "ui-anatomy",
+                "ui-standard-groups-accommodate-motion-around-their-contents-connected-groups-expand-within-th",
+                &["ui-container"],
                 Anatomy,
             ),
             chapter(
-                "Adaptive design",
-                "Keep each group on one line. Adjust size and width while preserving emphasis; move secondary trailing actions into overflow when necessary.",
-                &["Resizing", "Presentation"],
+                "ui-adaptive-design",
+                "ui-keep-each-group-on-one-line-adjust-size-and-width-while-preserving-emphasis-move-secondary",
+                &["ui-resizing", "ui-presentation"],
                 Example,
             ),
             chapter(
-                "Behavior",
-                "Pressing changes shape. Standard groups also adjust neighboring widths; selection changes round and square shapes.",
-                &["Pressed", "Selected"],
+                "ui-behavior",
+                "ui-pressing-changes-shape-standard-groups-also-adjust-neighboring-widths-selection-changes-ro",
+                &["ui-pressed", "ui-selected"],
                 Behavior,
             ),
         ],
         Kind::Icons => vec![
             chapter(
-                "Usage",
-                "Use default icon buttons for actions and toggle icon buttons for binary choices.",
+                "ui-usage",
+                "ui-use-default-icon-buttons-for-actions-and-toggle-icon-buttons-for-binary-choices",
                 &[],
                 Example,
             ),
             chapter(
-                "Anatomy",
-                "Use recognizable icons and distinguish selection through filled and outlined symbols.",
+                "ui-anatomy",
+                "ui-use-recognizable-icons-and-distinguish-selection-through-filled-and-outlined-symbols",
                 &[],
                 Anatomy,
             ),
             chapter(
-                "Color",
-                "Choose filled, tonal, outlined or standard emphasis for the surrounding content.",
+                "ui-color",
+                "ui-choose-filled-tonal-outlined-or-standard-emphasis-for-the-surrounding-content",
                 &[],
                 Example,
             ),
             chapter(
-                "Size",
-                "Choose among five sizes according to action hierarchy, not the available gap.",
+                "ui-size",
+                "ui-choose-among-five-sizes-according-to-action-hierarchy-not-the-available-gap",
                 &[],
                 Example,
             ),
             chapter(
-                "Width",
-                "Use narrow, default and wide proportions while preserving minimum targets.",
+                "ui-width",
+                "ui-use-narrow-default-and-wide-proportions-while-preserving-minimum-targets",
                 &[],
                 Example,
             ),
             chapter(
-                "Shape",
-                "Use round and square resting shapes with clear pressed and selected transformations.",
+                "ui-shape",
+                "ui-use-round-and-square-resting-shapes-with-clear-pressed-and-selected-transformations",
                 &[],
                 Behavior,
             ),
             chapter(
-                "Placement",
-                "Group meaningful actions in app bars, cards and toolbars.",
+                "ui-placement",
+                "ui-group-meaningful-actions-in-app-bars-cards-and-toolbars",
                 &[],
                 Example,
             ),
             chapter(
-                "Behavior",
-                "Default actions perform a command; toggles retain selection and expose a useful hover label.",
+                "ui-behavior",
+                "ui-default-actions-perform-a-command-toggles-retain-selection-and-expose-a-useful-hover-label",
                 &[],
                 Behavior,
             ),
         ],
         Kind::ExtendedFab => vec![
             chapter(
-                "Usage",
-                "Use one extended FAB when a primary action needs additional clarity. Choose small, medium or large according to emphasis.",
-                &["Additional emphasis", "Choosing a size"],
+                "ui-usage",
+                "ui-use-one-extended-fab-when-a-primary-action-needs-additional-clarity-choose-small-medium-or",
+                &["ui-additional-emphasis", "ui-choosing-a-size"],
                 Example,
             ),
             chapter(
-                "Anatomy",
-                "Let the rounded container hug its contents. Keep the label concise and visible; an icon is optional.",
-                &["Container", "Icon (optional)", "Label text"],
+                "ui-anatomy",
+                "ui-let-the-rounded-container-hug-its-contents-keep-the-label-concise-and-visible-an-icon-is-o",
+                &["ui-container", "ui-icon-optional", "ui-label-text"],
                 Anatomy,
             ),
             chapter(
-                "Placement",
-                "Keep the action above the page content. Avoid covering other actions or placing it inside cards.",
+                "ui-placement",
+                "ui-keep-the-action-above-the-page-content-avoid-covering-other-actions-or-placing-it-inside-c",
                 &[],
                 Example,
             ),
             chapter(
-                "Responsive layout",
-                "Adapt between FAB and extended FAB as space changes. Mirror icon and label ordering in right-to-left layouts.",
-                &["Right-to-left languages", "Breakpoints"],
+                "ui-responsive-layout",
+                "ui-adapt-between-fab-and-extended-fab-as-space-changes-mirror-icon-and-label-ordering-in-righ",
+                &["ui-right-to-left-languages", "ui-breakpoints"],
                 Example,
             ),
             chapter(
-                "Behavior",
-                "Expansion reveals the label; collapsing reduces occupied space. Scrolling can drive the transition.",
-                &["Appearing", "Expanding", "Transforming", "Scrolling"],
+                "ui-behavior",
+                "ui-expansion-reveals-the-label-collapsing-reduces-occupied-space-scrolling-can-drive-the-tran",
+                &[
+                    "ui-appearing",
+                    "ui-expanding",
+                    "ui-transforming",
+                    "ui-scrolling",
+                ],
                 Behavior,
             ),
         ],
         Kind::Segmented => vec![
             chapter(
-                "Usage",
-                "Use a small set of related choices to switch views or filters.",
+                "ui-usage",
+                "ui-use-a-small-set-of-related-choices-to-switch-views-or-filters",
                 &[],
                 Example,
             ),
             chapter(
-                "Anatomy",
-                "Keep two to five segments on one line with consistent label types and short text.",
-                &["Segments", "Container", "Icons", "Label text"],
+                "ui-anatomy",
+                "ui-keep-two-to-five-segments-on-one-line-with-consistent-label-types-and-short-text",
+                &["ui-segments", "ui-container", "ui-icons", "ui-label-text"],
                 Anatomy,
             ),
             chapter(
-                "Single-select",
-                "Select one option from the set.",
+                "ui-single-select-7063",
+                "ui-select-one-option-from-the-set",
                 &[],
                 Example,
             ),
             chapter(
-                "Multi-select",
-                "Allow independent choices, including selecting all or clearing the entire set.",
+                "ui-multi-select-7064",
+                "ui-allow-independent-choices-including-selecting-all-or-clearing-the-entire-set",
                 &[],
                 Behavior,
             ),
             chapter(
-                "Placement",
-                "Retain margins and avoid excessive stretching in larger windows.",
+                "ui-placement",
+                "ui-retain-margins-and-avoid-excessive-stretching-in-larger-windows",
                 &[],
                 Example,
             ),
             chapter(
-                "Behavior",
-                "A selected icon can become a checkmark. Selection remains distinguishable beyond color.",
+                "ui-behavior",
+                "ui-a-selected-icon-can-become-a-checkmark-selection-remains-distinguishable-beyond-color",
                 &[],
                 Behavior,
             ),
@@ -286,38 +293,38 @@ fn accessibility(kind: Kind) -> Vec<Chapter> {
     if kind == Kind::Segmented {
         return vec![
             chapter(
-                "Use cases",
-                "People need to understand the choices, navigate between segments and change selection.",
+                "ui-use-cases",
+                "ui-people-need-to-understand-the-choices-navigate-between-segments-and-change-selection",
                 &[],
                 Example,
             ),
             chapter(
-                "Interaction & style",
-                "Use Tab to enter the group, arrows to move between choices, and activation keys to select.",
+                "ui-interaction-style",
+                "ui-use-tab-to-enter-the-group-arrows-to-move-between-choices-and-activation-keys-to-select",
                 &[],
                 Behavior,
             ),
             chapter(
-                "Color contrast",
-                "Keep outlines distinguishable from the surface and communicate selection with a non-color cue.",
+                "ui-color-contrast",
+                "ui-keep-outlines-distinguishable-from-the-surface-and-communicate-selection-with-a-non-color",
                 &[],
                 Anatomy,
             ),
             chapter(
-                "Initial focus",
-                "Start at the first segment in reading order.",
+                "ui-initial-focus",
+                "ui-start-at-the-first-segment-in-reading-order",
                 &[],
                 Example,
             ),
             chapter(
-                "Keyboard navigation",
-                "Try traversal and activation in the live example.",
+                "ui-keyboard-navigation",
+                "ui-try-traversal-and-activation-in-the-live-example",
                 &[],
                 Keyboard,
             ),
             chapter(
-                "Labeling elements",
-                "Name each choice from its visible label or the meaning of its icon.",
+                "ui-labeling-elements",
+                "ui-name-each-choice-from-its-visible-label-or-the-meaning-of-its-icon",
                 &[],
                 Example,
             ),
@@ -325,33 +332,33 @@ fn accessibility(kind: Kind) -> Vec<Chapter> {
     }
     let mut pages = vec![
         chapter(
-            "Use cases",
-            "People need to reach the action, understand its purpose, activate it and identify any selected or expanded state.",
+            "ui-use-cases",
+            "ui-people-need-to-reach-the-action-understand-its-purpose-activate-it-and-identify-any-select",
             &[],
             Example,
         ),
         chapter(
-            "Interaction & style",
+            "ui-interaction-style",
             match kind {
                 Kind::Buttons => {
-                    "Maintain readable contrast and concise labels at enlarged text sizes. Motion should remain clear during repeated activation."
+                    "ui-maintain-readable-contrast-and-concise-labels-at-enlarged-text-sizes-motion-should-remain"
                 }
                 Kind::Groups => {
-                    "Retain at least 48dp targets, including the smaller sizes. The group container is not a keyboard stop."
+                    "ui-retain-at-least-48dp-targets-including-the-smaller-sizes-the-group-container-is-not-a-keyb"
                 }
                 Kind::Icons => {
-                    "Keep the icon distinguishable from its surface with sufficient contrast."
+                    "ui-keep-the-icon-distinguishable-from-its-surface-with-sufficient-contrast"
                 }
                 Kind::ExtendedFab => {
-                    "Place the primary action where it is easy to reach without obscuring other targets."
+                    "ui-place-the-primary-action-where-it-is-easy-to-reach-without-obscuring-other-targets"
                 }
                 Kind::Segmented => {
-                    "Use keyboard traversal and a checkmark or other non-color cue for selection."
+                    "ui-use-keyboard-traversal-and-a-checkmark-or-other-non-color-cue-for-selection"
                 }
             },
             match kind {
-                Kind::Buttons => &["Color contrast", "200% text size", "Rapid clicks"],
-                Kind::Groups => &["Initial focus"],
+                Kind::Buttons => &["ui-color-contrast", "ui-200-text-size", "ui-rapid-clicks"],
+                Kind::Groups => &["ui-initial-focus"],
                 _ => &[],
             },
             Anatomy,
@@ -359,27 +366,27 @@ fn accessibility(kind: Kind) -> Vec<Chapter> {
     ];
     if kind == Kind::ExtendedFab {
         pages.push(chapter(
-            "Initial focus",
-            "Treat the icon and visible label as one target and prioritize the primary action in the page order.",
+            "ui-initial-focus",
+            "ui-treat-the-icon-and-visible-label-as-one-target-and-prioritize-the-primary-action-in-the-pa",
             &[],
             Behavior,
         ));
     }
     pages.push(chapter(
-        "Keyboard navigation",
-        "Try keyboard traversal and activation in the live example.",
+        "ui-keyboard-navigation",
+        "ui-try-keyboard-traversal-and-activation-in-the-live-example",
         &[],
         Keyboard,
     ));
-    pages.push(chapter("Labeling elements",match kind {
-        Kind::Icons=>"Name the action rather than the appearance of the icon.",
-        _=>"Use names consistent with visible labels and provide useful context without repeating the control role.",
+    pages.push(chapter("ui-labeling-elements",match kind {
+        Kind::Icons=>"ui-name-the-action-rather-than-the-appearance-of-the-icon",
+        _=>"ui-use-names-consistent-with-visible-labels-and-provide-useful-context-without-repeating-the",
     },&[],Example));
     if kind == Kind::Icons {
-        pages.push(chapter("Layout & density","Retain default 48dp targets; denser presentation should be an explicit, reversible preference.",&["Avoid applying density by default"],Example));
+        pages.push(chapter("ui-layout-density","ui-retain-default-48dp-targets-denser-presentation-should-be-an-explicit-reversible-preferenc",&["ui-avoid-applying-density-by-default"],Example));
         pages.push(chapter(
-            "Hover",
-            "Show a concise tooltip that describes the action.",
+            "ui-hover",
+            "ui-show-a-concise-tooltip-that-describes-the-action",
             &[],
             Behavior,
         ));
@@ -389,73 +396,75 @@ fn accessibility(kind: Kind) -> Vec<Chapter> {
 
 fn detail(kind: Kind, title: &str) -> &'static str {
     match title {
-        "Color" | "Color sets" => {
+        "ui-color" | "ui-color-sets" => {
             if kind == Kind::Groups {
-                "Keep connected choices in one consistent color style."
+                "ui-keep-connected-choices-in-one-consistent-color-style"
             } else {
-                "Choose emphasis and color appropriate to the surrounding actions."
+                "ui-choose-emphasis-and-color-appropriate-to-the-surrounding-actions"
             }
         }
-        "Label text" => {
+        "ui-label-text" => {
             if kind == Kind::ExtendedFab {
-                "Prefer one or two words without wrapping or truncation."
+                "ui-prefer-one-or-two-words-without-wrapping-or-truncation"
             } else {
-                "Use short, clear labels in sentence case."
+                "ui-use-short-clear-labels-in-sentence-case"
             }
         }
-        "Container" => {
+        "ui-container" => {
             if kind == Kind::Groups {
-                "Standard groups hug contents; connected groups expand within available space."
+                "ui-standard-groups-hug-contents-connected-groups-expand-within-available-space"
             } else {
-                "Allow enough room for the complete icon and label."
+                "ui-allow-enough-room-for-the-complete-icon-and-label"
             }
         }
-        "Icon" | "Icons" | "Icon (optional)" => {
-            "Use a recognizable symbol that communicates the action or selection."
+        "ui-icon" | "ui-icons" | "ui-icon-optional" => {
+            "ui-use-a-recognizable-symbol-that-communicates-the-action-or-selection"
         }
-        "Size & width" | "Choosing a size" => {
-            "Choose size and width according to the action's visual priority."
+        "ui-size-width" | "ui-choosing-a-size" => {
+            "ui-choose-size-and-width-according-to-the-action-s-visual-priority"
         }
-        "Elevated style" => {
-            "Use a shadow when separation from a prominent background is necessary."
+        "ui-elevated-style" => {
+            "ui-use-a-shadow-when-separation-from-a-prominent-background-is-necessary"
         }
-        "Filled style" => "Reserve strong visual emphasis for important primary actions.",
-        "Tonal style" => "Use tonal fills for secondary actions needing moderate emphasis.",
-        "Outlined style" => "Use on simple backgrounds for supporting actions.",
-        "Text style" => "Use for low-emphasis actions, including dialog and snackbar actions.",
-        "Resizing" | "Breakpoints" => {
-            "Adapt dimensions while preserving the hierarchy of primary and secondary actions."
+        "ui-filled-style" => "ui-reserve-strong-visual-emphasis-for-important-primary-actions",
+        "ui-tonal-style" => "ui-use-tonal-fills-for-secondary-actions-needing-moderate-emphasis",
+        "ui-outlined-style" => "ui-use-on-simple-backgrounds-for-supporting-actions",
+        "ui-text-style" => "ui-use-for-low-emphasis-actions-including-dialog-and-snackbar-actions",
+        "ui-resizing" | "ui-breakpoints" => {
+            "ui-adapt-dimensions-while-preserving-the-hierarchy-of-primary-and-secondary-actions"
         }
-        "Presentation" => "Rearrange secondary actions when the available space changes.",
-        "Pressed" => "Pressing changes shape; standard groups also adjust neighboring widths.",
-        "Selected" | "Selection" => {
-            "Communicate selection using shape and icon changes as well as color."
+        "ui-presentation" => "ui-rearrange-secondary-actions-when-the-available-space-changes",
+        "ui-pressed" => "ui-pressing-changes-shape-standard-groups-also-adjust-neighboring-widths",
+        "ui-selected" | "ui-selection" => {
+            "ui-communicate-selection-using-shape-and-icon-changes-as-well-as-color"
         }
-        "Additional emphasis" => "Use a label when an icon alone would be ambiguous.",
-        "Right-to-left languages" => {
-            "Mirror the icon and label ordering for right-to-left reading."
+        "ui-additional-emphasis" => "ui-use-a-label-when-an-icon-alone-would-be-ambiguous",
+        "ui-right-to-left-languages" => {
+            "ui-mirror-the-icon-and-label-ordering-for-right-to-left-reading"
         }
-        "Appearing" => "Animate the action from its anchor without moving unrelated content.",
-        "Expanding" => "A container transform can connect the action to its destination.",
-        "Transforming" => "The extended action can reduce to an icon-only FAB.",
-        "Scrolling" => match kind {
+        "ui-appearing" => "ui-animate-the-action-from-its-anchor-without-moving-unrelated-content",
+        "ui-expanding" => "ui-a-container-transform-can-connect-the-action-to-its-destination",
+        "ui-transforming" => "ui-the-extended-action-can-reduce-to-an-icon-only-fab",
+        "ui-scrolling" => match kind {
             Kind::ExtendedFab => {
-                "Collapse the label on downward scrolling and restore it on return."
+                "ui-collapse-the-label-on-downward-scrolling-and-restore-it-on-return"
             }
-            _ => "Keep the floating action above the scrolling content.",
+            _ => "ui-keep-the-floating-action-above-the-scrolling-content",
         },
-        "Moving across tabs" => "Hide and reintroduce the FAB as the new page settles.",
-        "Menu placement" => "Align to a button edge and retain a 4dp gap.",
-        "Segments" => "Keep two to five related choices on one line.",
-        "Hover" => "Describe the action in a concise tooltip.",
-        "Color contrast" => "Keep enabled actions visually distinguishable from their background.",
-        "200% text size" => "Choose concise labels that remain readable when text is enlarged.",
-        "Rapid clicks" => "Motion should settle clearly during repeated presses.",
-        "Initial focus" => "Focus enters the buttons rather than stopping on their container.",
-        "Avoid applying density by default" => {
-            "Keep 48dp default targets and make denser layouts an explicit preference."
+        "ui-moving-across-tabs" => "ui-hide-and-reintroduce-the-fab-as-the-new-page-settles",
+        "ui-menu-placement" => "ui-align-to-a-button-edge-and-retain-a-4dp-gap",
+        "ui-segments" => "ui-keep-two-to-five-related-choices-on-one-line",
+        "ui-hover" => "ui-describe-the-action-in-a-concise-tooltip",
+        "ui-color-contrast" => {
+            "ui-keep-enabled-actions-visually-distinguishable-from-their-background"
         }
-        _ => unreachable!("unregistered action article subheading"),
+        "ui-200-text-size" => "ui-choose-concise-labels-that-remain-readable-when-text-is-enlarged",
+        "ui-rapid-clicks" => "ui-motion-should-settle-clearly-during-repeated-presses",
+        "ui-initial-focus" => "ui-focus-enters-the-buttons-rather-than-stopping-on-their-container",
+        "ui-avoid-applying-density-by-default" => {
+            "ui-keep-48dp-default-targets-and-make-denser-layouts-an-explicit-preference"
+        }
+        _ => unreachable!("ui-unregistered-action-article-subheading"),
     }
 }
 
@@ -488,7 +497,7 @@ pub(super) fn action_article(
     let mut access = Vec::new();
     if kind == Kind::Segmented {
         access.push(SpecSection {
-            title: "Use cases",
+            title: "ui-use-cases",
             content: RenderSlot::new(move || {
                 column()
                     .modifier(Modifier::new().fill_max_width())
@@ -519,7 +528,7 @@ pub(super) fn action_article(
         .route_optional(route)
         .pages(vec![
             ArticlePage {
-                title: "Overview",
+                title: "ui-overview",
                 intro: Some(RenderSlot::new(move || {
                     recommendation(kind).on_recommended_optional(on_recommended);
                     paragraph(summary(kind));
@@ -529,7 +538,7 @@ pub(super) fn action_article(
                 sections: vec![],
             },
             ArticlePage {
-                title: "Guidelines",
+                title: "ui-guidelines",
                 intro: if kind == Kind::Segmented {
                     Some(RenderSlot::new(move || {
                         recommendation(kind).on_recommended_optional(on_recommended);
@@ -540,7 +549,7 @@ pub(super) fn action_article(
                 sections: guide,
             },
             ArticlePage {
-                title: "Accessibility",
+                title: "ui-accessibility",
                 intro: if kind == Kind::Segmented {
                     Some(RenderSlot::new(move || {
                         recommendation(kind).on_recommended_optional(on_recommended);
@@ -576,7 +585,7 @@ fn segmented_access_chapter(
 #[tessera]
 fn paragraph(#[prop(into)] value: String) {
     text()
-        .content(value)
+        .content(I18N.text(value))
         .style(type_style(16.0, 24.0))
         .color(INK);
 }
@@ -591,20 +600,20 @@ fn chapter_content(
 ) {
     if kind == Kind::Icons {
         match chapter.title {
-            title @ ("Usage" | "Anatomy" | "Color" | "Size" | "Width" | "Shape" | "Placement"
-            | "Behavior") => {
+            title @ ("ui-usage" | "ui-anatomy" | "ui-color" | "ui-size" | "ui-width"
+            | "ui-shape" | "ui-placement" | "ui-behavior") => {
                 super::icon_buttons::articles::guidance(title.into());
                 return;
             }
-            "Interaction & style" => {
+            "ui-interaction-style" => {
                 super::icon_buttons::articles::contrast();
                 return;
             }
-            "Labeling elements" => {
+            "ui-labeling-elements" => {
                 super::icon_buttons::context::labeling();
                 return;
             }
-            "Layout & density" => {
+            "ui-layout-density" => {
                 super::icon_buttons::context::density();
                 return;
             }
@@ -628,18 +637,21 @@ fn chapter_content(
                 Figure::Keyboard => {
                     let mut rows = vec![
                         vec![
-                            "Tab / Shift + Tab".into(),
-                            "Move between available actions".into(),
+                            "ui-tab-shift-tab".into(),
+                            "ui-move-between-available-actions".into(),
                         ],
-                        vec!["Space / Enter".into(), "Activate the focused action".into()],
+                        vec![
+                            "ui-space-enter".into(),
+                            "ui-activate-the-focused-action".into(),
+                        ],
                     ];
                     if matches!(kind, Kind::Groups | Kind::Segmented) {
                         rows.push(vec![
-                            "Arrow keys".into(),
-                            "Move between items in the group".into(),
+                            "ui-arrow-keys".into(),
+                            "ui-move-between-items-in-the-group".into(),
                         ]);
                     }
-                    spec_table(vec!["Keys".into(), "Action".into()], rows);
+                    spec_table(vec!["ui-keys".into(), "ui-action".into()], rows);
                     gap(Dp(32.0));
                     behavior.render();
                 }
@@ -653,10 +665,10 @@ fn recommendation(kind: Kind, on_recommended: Option<Callback>) {
         return;
     }
     let scheme = use_context::<MaterialTheme>().unwrap().get().color_scheme;
-    column().modifier(Modifier::new().fill_max_width().background_with_shape(scheme.secondary_container,Shape::rounded_rectangle(Dp(16.0))).padding_all(Dp(24.0)).semantics(SemanticsArgs {role:Some(Role::Note),label:Some("M3 Expressive recommendation".into()),merge_descendants:true,..Default::default()})).children(move || {
-        paragraph("Segmented buttons are no longer recommended for M3 Expressive. Use a connected button group for new interfaces.");
+    column().modifier(Modifier::new().fill_max_width().background_with_shape(scheme.secondary_container,Shape::rounded_rectangle(Dp(16.0))).padding_all(Dp(24.0)).semantics(SemanticsArgs {role:Some(Role::Note),label:Some(I18N.text("ui-m3-expressive-recommendation")),merge_descendants:true,..Default::default()})).children(move || {
+        paragraph("ui-segmented-buttons-are-no-longer-recommended-for-m3-expressive-use-a-connected-button-group");
         if let Some(on_recommended)=on_recommended {
-            gap(Dp(16.0)); button().text().accessibility_label("Open recommended button groups").on_click_shared(on_recommended).child(|| { text().content("Explore button groups"); });
+            gap(Dp(16.0)); button().text().accessibility_label(I18N.text("ui-open-recommended-button-groups")).on_click_shared(on_recommended).child(move || { text().content(I18N.text("ui-explore-button-groups")); });
         }
     });
     gap(Dp(32.0));

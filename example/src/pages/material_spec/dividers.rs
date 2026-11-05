@@ -23,6 +23,8 @@ use tessera_ui::{
     modifier::FocusModifierExt as _, remember, tessera, use_context,
 };
 
+use crate::res::I18N;
+
 use super::{
     ACCENT, INK,
     annotations::{self, SpaceGeometry, space_geometry, watch_in_space},
@@ -101,12 +103,12 @@ fn open_external(_url: &str) {}
 fn external_link(#[prop(into)] label: String, #[prop(into)] url: String) {
     let scheme = use_context::<MaterialTheme>().unwrap().get().color_scheme;
     text()
-        .content(label.clone())
+        .content(I18N.text(&(label)))
         .style(type_style(16.0, 24.0))
         .color(scheme.primary)
         .modifier(Modifier::new().clickable_with(ClickableArgs {
             role: Some(Role::Link),
-            label: Some(label.clone()),
+            label: Some(I18N.text(&(label))),
             on_click: Callback::new(move || open_external(&url)),
             ..Default::default()
         }));
@@ -168,19 +170,19 @@ fn frame() -> Color {
 #[tessera]
 pub(super) fn divider_spec(route: Option<crate::pages::material_spec::article::ArticleRoute>) {
     article(
-        "Divider",
-        "Dividers are thin lines that group content in lists or other containers",
+        "ui-divider",
+        "ui-dividers-are-thin-lines-that-group-content-in-lists-or-other-containers",
         vec![
             SpecSection {
-                title: "Tokens and specs",
+                title: "ui-tokens-and-specs",
                 content: RenderSlot::new(tokens),
             },
             SpecSection {
-                title: "Color",
+                title: "ui-color",
                 content: RenderSlot::new(colors),
             },
             SpecSection {
-                title: "Measurements",
+                title: "ui-measurements",
                 content: RenderSlot::new(measurements),
             },
         ],
@@ -189,51 +191,51 @@ pub(super) fn divider_spec(route: Option<crate::pages::material_spec::article::A
     .intro(divider_anatomy)
     .pages(vec![
         ArticlePage {
-            title: "Overview",
+            title: "ui-overview",
             intro: Some(RenderSlot::new(overview)),
             sections: vec![
                 SpecSection {
-                    title: "Availability & resources",
+                    title: "ui-availability-resources",
                     content: RenderSlot::new(resources),
                 },
                 SpecSection {
-                    title: "Differences from M2",
+                    title: "ui-differences-from-m2",
                     content: RenderSlot::new(differences),
                 },
             ],
         },
         ArticlePage {
-            title: "Guidelines",
+            title: "ui-guidelines",
             intro: Some(RenderSlot::new(guidelines_intro)),
             sections: vec![
                 SpecSection {
-                    title: "Usage",
+                    title: "ui-usage",
                     content: RenderSlot::new(usage),
                 },
                 SpecSection {
-                    title: "Anatomy",
+                    title: "ui-anatomy",
                     content: RenderSlot::new(|| {
-                        prose("A divider is a simple line.");
+                        prose("ui-a-divider-is-a-simple-line");
                         gap(Dp(48.0));
                         divider_anatomy();
                     }),
                 },
                 SpecSection {
-                    title: "Full-width dividers",
+                    title: "ui-full-width-dividers",
                     content: RenderSlot::new(full_width_guidelines),
                 },
                 SpecSection {
-                    title: "Inset dividers",
+                    title: "ui-inset-dividers",
                     content: RenderSlot::new(inset_guidelines),
                 },
                 SpecSection {
-                    title: "Vertical divider",
+                    title: "ui-vertical-divider",
                     content: RenderSlot::new(vertical_guidelines),
                 },
             ],
         },
         ArticlePage {
-            title: "Accessibility",
+            title: "ui-accessibility",
             intro: Some(RenderSlot::new(accessibility)),
             sections: vec![],
         },
@@ -242,14 +244,16 @@ pub(super) fn divider_spec(route: Option<crate::pages::material_spec::article::A
 
 #[tessera]
 fn prose(#[prop(into)] value: String) {
-    text().content(value).style(type_style(16.0, 24.0));
+    text()
+        .content(I18N.text(value))
+        .style(type_style(16.0, 24.0));
 }
 
 #[tessera]
 fn caption(#[prop(into)] value: String) {
     let scheme = use_context::<MaterialTheme>().unwrap().get().color_scheme;
     text()
-        .content(value)
+        .content(I18N.text(value))
         .color(scheme.on_surface_variant)
         .style(type_style(16.0, 24.0));
 }
@@ -259,11 +263,11 @@ fn bullets(items: Vec<String>) {
     for item in items {
         row().children(move || {
             text()
-                .content("•")
+                .content(I18N.text("•"))
                 .style(type_style(16.0, 24.0))
                 .modifier(Modifier::new().width(Dp(20.0)));
             text()
-                .content(item.clone())
+                .content(I18N.text(&(item)))
                 .style(type_style(16.0, 24.0))
                 .modifier(Modifier::new().weight(1.0));
         });
@@ -282,7 +286,7 @@ fn badge(number: usize) {
         )
         .children(move || {
             text()
-                .content(number.to_string())
+                .content((number).to_string())
                 .style(type_style(12.0, 16.0))
                 .color(srgb(255, 255, 255));
         });
@@ -297,7 +301,7 @@ fn numbered(items: Vec<String>) {
                 badge(index + 1);
                 spacer().modifier(Modifier::new().width(Dp(12.0)));
                 text()
-                    .content(item.clone())
+                    .content(I18N.text(&(item)))
                     .style(type_style(16.0, 24.0))
                     .modifier(Modifier::new().weight(1.0));
             });
@@ -315,7 +319,7 @@ fn legend(number: usize, #[prop(into)] label: String) {
             badge(number);
             spacer().modifier(Modifier::new().width(Dp(12.0)));
             text()
-                .content(label.clone())
+                .content(I18N.text(&(label)))
                 .style(type_style(14.0, 20.0))
                 .color(scheme.on_surface_variant);
         });
@@ -470,7 +474,7 @@ fn stage(
     } else {
         modifier.semantics(SemanticsArgs {
             role: Some(Role::Image),
-            label: Some(label),
+            label: Some(I18N.text(label)),
             merge_descendants: true,
             ..Default::default()
         })
@@ -530,7 +534,7 @@ fn header(#[prop(into)] title: String, search: Option<bool>) {
         )
         .children(move || {
             text()
-                .content("9:30")
+                .content(I18N.text("9:30"))
                 .style(type_style(11.0, 16.0))
                 .modifier(Modifier::new().padding(Padding::new(
                     Dp(20.0),
@@ -551,7 +555,7 @@ fn header(#[prop(into)] title: String, search: Option<bool>) {
                     icon().vector(filled::MENU_SVG).size(Dp(18.0));
                     spacer().modifier(Modifier::new().width(Dp(14.0)));
                     text()
-                        .content(title.clone())
+                        .content(I18N.text(&(title)))
                         .style(type_style(16.0, 24.0))
                         .modifier(Modifier::new().weight(1.0));
                     if search.unwrap_or(true) {
@@ -565,36 +569,40 @@ fn header(#[prop(into)] title: String, search: Option<bool>) {
 
 fn entry(kind: u8, index: usize) -> (&'static str, &'static str, &'static str) {
     const INBOX_ROWS: [(&str, &str, &str); 4] = [
-        ("Cumpleaños de mamá", "Hola, en mi casa if you…", ""),
-        ("Graduación de Inés", "Aquí tienes unas fotos…", ""),
-        ("Pre-sale concert tickets", "I just saw there are a…", ""),
-        ("Console ideas", "Do you remember that cafe…", ""),
+        ("ui-cumplea-os-de-mam", "ui-hola-en-mi-casa-if-you", ""),
+        ("ui-graduaci-n-de-in-s", "ui-aqu-tienes-unas-fotos", ""),
+        (
+            "ui-pre-sale-concert-tickets",
+            "ui-i-just-saw-there-are-a",
+            "",
+        ),
+        ("ui-console-ideas", "ui-do-you-remember-that-cafe", ""),
     ];
     const MAIL_ROWS: [(&str, &str, &str); 4] = [
-        ("Brunch this weekend?", "I’ll be in your area…", ""),
-        ("Oui Oui", "Do you have Paris recs?", ""),
-        ("Graduación de Inés", "Aquí tienes unas fotos…", ""),
-        ("Recipe to try", "We should eat this…", ""),
+        ("ui-brunch-this-weekend", "ui-i-ll-be-in-your-area", ""),
+        ("ui-oui-oui", "ui-do-you-have-paris-recs", ""),
+        ("ui-graduaci-n-de-in-s", "ui-aqu-tienes-unas-fotos", ""),
+        ("ui-recipe-to-try", "ui-we-should-eat-this", ""),
     ];
     const PLAYLIST_ROWS: [(&str, &str, &str); 4] = [
-        ("Glass & Grace", "Sound Check", ""),
-        ("The Fortnightly", "Live sets", ""),
-        ("The Breakdown", "Approaches", ""),
-        ("Song Histories", "38 episodes", ""),
+        ("ui-glass-grace", "ui-sound-check", ""),
+        ("ui-the-fortnightly", "ui-live-sets", ""),
+        ("ui-the-breakdown", "ui-approaches", ""),
+        ("ui-song-histories", "ui-38-episodes", ""),
     ];
     const PODCAST_ROWS: [(&str, &str, &str); 6] = [
-        ("A Year in Ecuador", "10 episodes", "68 min"),
-        ("Wizards & Winona", "56 episodes", "109 min"),
-        ("Gamer Course", "79 episodes", "57 min"),
-        ("Song Histories", "38 episodes", "46 min"),
-        ("The Breakdown", "58 episodes", "73 min"),
-        ("Approaches", "10 episodes", "68 min"),
+        ("ui-a-year-in-ecuador", "ui-10-episodes", "ui-68-min"),
+        ("ui-wizards-winona", "ui-56-episodes", "ui-109-min"),
+        ("ui-gamer-course", "ui-79-episodes", "ui-57-min"),
+        ("ui-song-histories", "ui-38-episodes", "ui-46-min"),
+        ("ui-the-breakdown", "ui-58-episodes", "ui-73-min"),
+        ("ui-approaches", "ui-10-episodes", "ui-68-min"),
     ];
     const CONTACT_ROWS: [(&str, &str, &str); 4] = [
-        ("Sofia Saachi", "she/her, coworker", ""),
-        ("Alejandro Ortega", "he/him, partner", ""),
-        ("Ines Villaneuva", "she/her, child", ""),
-        ("Oli Ortega", "he/him, child", ""),
+        ("ui-sofia-saachi", "ui-she-her-coworker", ""),
+        ("ui-alejandro-ortega", "ui-he-him-partner", ""),
+        ("ui-ines-villaneuva", "ui-she-her-child", ""),
+        ("ui-oli-ortega", "ui-he-him-child", ""),
     ];
     match kind {
         INBOX => INBOX_ROWS[index % 4],
@@ -656,15 +664,17 @@ fn row_item(kind: u8, index: usize) {
             column()
                 .modifier(Modifier::new().weight(1.0))
                 .children(move || {
-                    text().content(title).style(type_style(14.0, 20.0));
                     text()
-                        .content(body)
+                        .content(I18N.text(title))
+                        .style(type_style(14.0, 20.0));
+                    text()
+                        .content(I18N.text(body))
                         .style(type_style(12.0, 16.0))
                         .color(scheme.on_surface_variant);
                 });
             if !trailing.is_empty() {
                 text()
-                    .content(trailing)
+                    .content(I18N.text(trailing))
                     .style(type_style(11.0, 16.0))
                     .color(scheme.on_surface_variant);
             }
@@ -721,7 +731,7 @@ fn list_screen(kind: u8, rules: u8, count: Option<usize>) {
 #[tessera]
 fn section_title(#[prop(into)] label: String) {
     text()
-        .content(label)
+        .content(I18N.text(label))
         .style(type_style(18.0, 24.0))
         .modifier(Modifier::new().padding(Padding::new(Dp(16.0), Dp(14.0), Dp(16.0), Dp(6.0))));
 }
@@ -735,7 +745,7 @@ fn advice(tone: u8) {
             srgb(255, 207, 36),
             srgb(36, 26, 0),
             filled::PRIORITY_HIGH_SVG,
-            "Caution",
+            "ui-caution",
         )
     };
     row()
@@ -751,7 +761,7 @@ fn advice(tone: u8) {
             icon().vector(asset).size(Dp(18.0)).tint(ink);
             spacer().modifier(Modifier::new().width(Dp(8.0)));
             text()
-                .content(label)
+                .content(I18N.text(label))
                 .style(type_style(14.0, 20.0))
                 .color(ink);
         });
@@ -778,7 +788,7 @@ fn guidance(
             }
             gap(Dp(16.0));
             text()
-                .content(note.clone())
+                .content(I18N.text(&(note)))
                 .style(type_style(16.0, 24.0))
                 .color(
                     use_context::<MaterialTheme>()
@@ -806,7 +816,7 @@ fn pin(tone: u8, number: usize, #[prop(into)] label: String, background: Color) 
                 .size(Dp(18.0), Dp(24.0))
                 .semantics(SemanticsArgs {
                     role: Some(Role::Note),
-                    label: Some(label.clone()),
+                    label: Some(I18N.text(&(label))),
                     merge_descendants: true,
                     ..Default::default()
                 })
@@ -821,7 +831,7 @@ fn pin(tone: u8, number: usize, #[prop(into)] label: String, background: Color) 
                 .modifier(pill)
                 .children(move || {
                     text()
-                        .content(number.to_string())
+                        .content((number).to_string())
                         .style(type_style(11.0, 16.0))
                         .color(ink);
                 });
@@ -866,22 +876,22 @@ fn divider_anatomy() {
                 Dp::ZERO,
             )))
             .children(|| {
-                pinned_line(OUTLINED, 1, "Anatomy marker 1", 224.0, rose());
+                pinned_line(OUTLINED, 1, "ui-anatomy-marker-1", 224.0, rose());
             });
     });
     gap(Dp(12.0));
-    legend(1, "Divider");
+    legend(1, "ui-divider");
 }
 
 #[tessera]
 fn tokens() {
-    prose("Browse the component elements, attributes, tokens, and their values.");
+    prose("ui-browse-the-component-elements-attributes-tokens-and-their-values");
     gap(Dp(48.0));
     spec_table(
-        vec!["Token".into(), "Value".into()],
+        vec!["ui-token".into(), "ui-value".into()],
         vec![
-            vec!["Divider thickness".into(), "1dp".into()],
-            vec!["Divider color".into(), "Outline variant".into()],
+            vec!["ui-divider-thickness".into(), "1dp".into()],
+            vec!["ui-divider-color".into(), "ui-outline-variant".into()],
         ],
     );
 }
@@ -908,9 +918,9 @@ fn scheme_half(dark: bool) {
                                 if dark { LIGHT } else { DARK },
                                 1,
                                 if dark {
-                                    "Dark theme outline variant"
+                                    "ui-dark-theme-outline-variant"
                                 } else {
-                                    "Light theme outline variant"
+                                    "ui-light-theme-outline-variant"
                                 },
                                 276.0,
                                 scheme.surface,
@@ -971,41 +981,41 @@ fn color_figure() {
 #[tessera]
 fn colors() {
     prose(
-        "Color values are implemented through design tokens. For design, this means working with color values that correspond with tokens. For implementation, a color value will be a token that references a value.",
+        "ui-color-values-are-implemented-through-design-tokens-for-design-this-means-working-with-colo",
     );
-    external_link("Learn more about design tokens", DESIGN_TOKENS_URL);
+    external_link("ui-learn-more-about-design-tokens", DESIGN_TOKENS_URL);
     gap(Dp(48.0));
     color_figure();
     gap(Dp(16.0));
-    caption("Divider color roles used for light and dark schemes:");
+    caption("ui-divider-color-roles-used-for-light-and-dark-schemes");
     gap(Dp(12.0));
-    legend(1, "Outline variant");
+    legend(1, "ui-outline-variant");
 }
 
 #[tessera]
 fn measure_figure() {
-    stage(218.0, rose(), "").content(|| {
+    stage(218.0, rose(), "").content(move || {
         boxed()
             .alignment(Alignment::Center)
             .modifier(Modifier::new().fill_max_size())
-            .children(|| {
-                column().children(|| {
+            .children(move || {
+                column().children(move || {
                     row()
                         .cross_axis_alignment(CrossAxisAlignment::Center)
-                        .children(|| {
+                        .children(move || {
                             row()
                                 .cross_axis_alignment(CrossAxisAlignment::Center)
                                 .modifier(Modifier::new().width(Dp(24.0)).semantics(
                                     SemanticsArgs {
                                         role: Some(Role::Note),
-                                        label: Some("Dimension 1dp thickness".into()),
+                                        label: Some(I18N.text("ui-dimension-1dp-thickness")),
                                         merge_descendants: true,
                                         ..Default::default()
                                     },
                                 ))
-                                .children(|| {
+                                .children(move || {
                                     text()
-                                        .content("1")
+                                        .content(I18N.text("1"))
                                         .style(type_style(12.0, 16.0))
                                         .color(INK);
                                     spacer().modifier(Modifier::new().width(Dp(5.0)));
@@ -1023,13 +1033,13 @@ fn measure_figure() {
                                 });
                         });
                     gap(Dp(12.0));
-                    row().children(|| {
+                    row().children(move || {
                         spacer().modifier(Modifier::new().width(Dp(24.0)));
                         column()
                             .cross_axis_alignment(CrossAxisAlignment::Center)
                             .modifier(Modifier::new().width(Dp(236.0)).semantics(SemanticsArgs {
                                 role: Some(Role::Note),
-                                label: Some("Dimension available width".into()),
+                                label: Some(I18N.text("ui-dimension-available-width")),
                                 merge_descendants: true,
                                 ..Default::default()
                             }))
@@ -1059,7 +1069,7 @@ fn measurements() {
     measure_figure();
     gap(Dp(12.0));
     text()
-        .content("Measurements")
+        .content(I18N.text("ui-measurements"))
         .style(type_style(14.0, 20.0))
         .color(
             use_context::<MaterialTheme>()
@@ -1071,19 +1081,19 @@ fn measurements() {
         .modifier(Modifier::new().padding_symmetric(Dp(8.0), Dp::ZERO));
     gap(Dp(48.0));
     spec_table(
-        vec!["Attribute".into(), "Value".into()],
+        vec!["ui-attribute".into(), "ui-value".into()],
         vec![
-            vec!["Divider full-width".into(), "100%".into()],
-            vec!["Divider inset left margin".into(), "16dp".into()],
-            vec!["Divider inset right margin".into(), "0dp".into()],
-            vec!["Divider middle-inset left margin".into(), "16dp".into()],
-            vec!["Divider middle-inset right margin".into(), "16dp".into()],
+            vec!["ui-divider-full-width".into(), "100%".into()],
+            vec!["ui-divider-inset-left-margin".into(), "16dp".into()],
+            vec!["ui-divider-inset-right-margin".into(), "0dp".into()],
+            vec!["ui-divider-middle-inset-left-margin".into(), "16dp".into()],
+            vec!["ui-divider-middle-inset-right-margin".into(), "16dp".into()],
             vec![
-                "Space between divider & supporting-text".into(),
+                "ui-space-between-divider-supporting-text".into(),
                 "4dp".into(),
             ],
-            vec!["Divider right margin".into(), "8dp".into()],
-            vec!["Divider bottom margin".into(), "8dp".into()],
+            vec!["ui-divider-right-margin".into(), "8dp".into()],
+            vec!["ui-divider-bottom-margin".into(), "8dp".into()],
         ],
     );
 }
@@ -1091,15 +1101,15 @@ fn measurements() {
 #[tessera]
 fn overview() {
     bullets(vec![
-        "Make dividers visible but not bold".into(),
-        "Only use dividers if items can’t be grouped with open space".into(),
-        "Use dividers to group things, not separate individual items".into(),
+        "ui-make-dividers-visible-but-not-bold".into(),
+        "ui-only-use-dividers-if-items-can-t-be-grouped-with-open-space".into(),
+        "ui-use-dividers-to-group-things-not-separate-individual-items".into(),
     ]);
     gap(Dp(48.0));
     stage(
         240.0,
         blush(),
-        "Podcast list with inset dividers between items",
+        "ui-podcast-list-with-inset-dividers-between-items",
     )
     .content(|| {
         phone(312.0, 18.0, 360.0).content(|| {
@@ -1108,31 +1118,35 @@ fn overview() {
         });
     });
     gap(Dp(16.0));
-    caption("Dividers separating items in a list");
+    caption("ui-dividers-separating-items-in-a-list");
 }
 
 #[tessera]
 fn resources() {
     spec_table(
-        vec!["Type".into(), "Resource".into(), "Status".into()],
+        vec!["ui-type".into(), "ui-resource".into(), "ui-status".into()],
         vec![
             vec![
-                "Design".into(),
-                "Design Kit (Figma)".into(),
-                "Available".into(),
+                "ui-design".into(),
+                "ui-design-kit-figma".into(),
+                "ui-available".into(),
             ],
             vec![
-                "Implementation".into(),
-                "Flutter".into(),
-                "Available".into(),
+                "ui-implementation".into(),
+                "ui-flutter".into(),
+                "ui-available".into(),
             ],
-            vec!["".into(), "Jetpack Compose".into(), "Available".into()],
             vec![
                 "".into(),
-                "Android Views (MDC-Android)".into(),
-                "Available".into(),
+                "ui-jetpack-compose".into(),
+                "ui-available".into(),
             ],
-            vec!["".into(), "Web".into(), "Available".into()],
+            vec![
+                "".into(),
+                "ui-android-views-mdc-android".into(),
+                "ui-available".into(),
+            ],
+            vec!["".into(), "ui-web".into(), "ui-available".into()],
         ],
     );
 }
@@ -1142,20 +1156,20 @@ fn differences() {
     split()
         .lead(|| {
             bullets(vec![
-                "Color: New color mappings and compatibility with dynamic color".into(),
-                "Configurations: Ability to have vertical dividers".into(),
+                "ui-color-new-color-mappings-and-compatibility-with-dynamic-color".into(),
+                "ui-configurations-ability-to-have-vertical-dividers".into(),
             ]);
         })
         .figure(|| {
             stage(
                 218.0,
                 blush(),
-                "Inbox using inset dividers with new color mappings",
+                "ui-inbox-using-inset-dividers-with-new-color-mappings",
             )
             .content(|| {
                 phone(312.0, 58.0, 360.0).content(|| {
-                    header("Inbox");
-                    section_title("Today");
+                    header("ui-inbox");
+                    section_title("ui-today");
                     for index in 0..3 {
                         row_item(MAIL, index);
                         rule(64.0, 16.0);
@@ -1163,15 +1177,15 @@ fn differences() {
                 });
             });
             gap(Dp(16.0));
-            caption("Dividers have new color mappings");
+            caption("ui-dividers-have-new-color-mappings");
         });
 }
 
 #[tessera]
 fn inbox_phone(width: f64, crop: f64, rules: u8) {
     phone(width, crop, 420.0).content(move || {
-        header("Inbox");
-        section_title("Today");
+        header("ui-inbox");
+        section_title("ui-today");
         list_screen(INBOX, rules);
     });
 }
@@ -1181,7 +1195,7 @@ fn guidelines_intro() {
     stage(
         292.0,
         lavender(),
-        "Inbox app using full-width dividers to separate messages",
+        "ui-inbox-app-using-full-width-dividers-to-separate-messages",
     )
     .content(|| {
         boxed()
@@ -1191,7 +1205,7 @@ fn guidelines_intro() {
             });
     });
     gap(Dp(16.0));
-    caption("Full-width dividers");
+    caption("ui-full-width-dividers");
 }
 
 #[tessera]
@@ -1199,12 +1213,12 @@ fn usage() {
     split()
         .lead(|| {
             prose(
-                "Dividers are one way to visually group components and create hierarchy. They can also be used to imply nested parent/child relationships.",
+                "ui-dividers-are-one-way-to-visually-group-components-and-create-hierarchy-they-can-also-be-us",
             );
             gap(Dp(20.0));
-            prose("The divider can be used in two ways:");
+            prose("ui-the-divider-can-be-used-in-two-ways");
             gap(Dp(16.0));
-            numbered(vec!["Full width".into(), "Inset".into()]);
+            numbered(vec!["ui-full-width".into(), "ui-inset".into()]);
         })
         .figure(|| {
             pair()
@@ -1214,8 +1228,8 @@ fn usage() {
                         NONE,
                         216.0,
                         lavender(),
-                        "Inbox app using full-width dividers to separate messages",
-                        "Full-width divider",
+                        "ui-inbox-app-using-full-width-dividers-to-separate-messages",
+                        "ui-full-width-divider",
                     )
                     .figure(|| {
                         boxed()
@@ -1227,7 +1241,7 @@ fn usage() {
                             )))
                             .children(|| {
                                 phone(212.0, 0.0, 360.0).content(|| {
-                                    header("Inbox").search(false);
+                                    header("ui-inbox").search(false);
                                     list_screen(INBOX, FULL);
                                 });
                             });
@@ -1238,8 +1252,8 @@ fn usage() {
                         NONE,
                         216.0,
                         lavender(),
-                        "Music app using inset dividers to separate songs in a playlist",
-                        "Inset divider",
+                        "ui-music-app-using-inset-dividers-to-separate-songs-in-a-playlist",
+                        "ui-inset-divider",
                     )
                     .figure(|| {
                         boxed()
@@ -1251,7 +1265,7 @@ fn usage() {
                             )))
                             .children(|| {
                                 phone(212.0, 0.0, 360.0).content(|| {
-                                    header("Playlist").search(false);
+                                    header("ui-playlist").search(false);
                                     list_screen(PLAYLIST, INSET);
                                 });
                             });
@@ -1264,9 +1278,9 @@ fn usage() {
 fn order_row(index: usize) {
     let scheme = use_context::<MaterialTheme>().unwrap().get().color_scheme;
     let (title, body) = [
-        ("Succulents", "Nursery"),
-        ("Watering can", "Medium, brass finish"),
-        ("Subtotal", "incl tax"),
+        ("ui-succulents", "ui-nursery"),
+        ("ui-watering-can", "ui-medium-brass-finish"),
+        ("ui-subtotal", "ui-incl-tax"),
     ][index];
     row()
         .cross_axis_alignment(CrossAxisAlignment::Center)
@@ -1281,9 +1295,11 @@ fn order_row(index: usize) {
                 spacer().modifier(Modifier::new().width(Dp(12.0)));
             }
             column().children(move || {
-                text().content(title).style(type_style(13.0, 18.0));
                 text()
-                    .content(body)
+                    .content(I18N.text(title))
+                    .style(type_style(13.0, 18.0));
+                text()
+                    .content(I18N.text(body))
                     .style(type_style(11.0, 16.0))
                     .color(scheme.on_surface_variant);
             });
@@ -1311,18 +1327,18 @@ fn article_card() {
                         .modifier(Modifier::new().weight(1.0))
                         .children(move || {
                             text()
-                                .content("The fortnightly")
+                                .content(I18N.text("ui-the-fortnightly-2589"))
                                 .style(type_style(18.0, 24.0));
                             gap(Dp(4.0));
                             text()
-                                .content("How to farm with less water: lessons from…")
+                                .content(I18N.text("ui-how-to-farm-with-less-water-lessons-from"))
                                 .style(type_style(11.0, 16.0))
                                 .color(scheme.on_surface_variant);
                         });
                 });
             horizontal_divider();
             text()
-                .content("Read more")
+                .content(I18N.text("ui-read-more"))
                 .style(type_style(11.0, 16.0))
                 .color(scheme.primary)
                 .modifier(Modifier::new().padding_symmetric(Dp(12.0), Dp(12.0)));
@@ -1354,9 +1370,9 @@ fn order_list() {
                         .fill_max_height()
                         .background(scheme.surface),
                 )
-                .children(|| {
+                .children(move || {
                     text()
-                        .content("Your order")
+                        .content(I18N.text("ui-your-order"))
                         .style(type_style(18.0, 24.0))
                         .modifier(Modifier::new().padding(Padding::new(
                             Dp(16.0),
@@ -1378,26 +1394,26 @@ fn full_width_guidelines() {
     split()
         .lead(|| {
             prose(
-                "Use full-width dividers to separate larger sections of unrelated content. They can be used directly on a surface or inside other components like cards or lists.",
+                "ui-use-full-width-dividers-to-separate-larger-sections-of-unrelated-content-they-can-be-used",
             );
             gap(Dp(20.0));
-            prose("Full-width dividers can also separate interactive areas from non-interactive areas.");
+            prose("ui-full-width-dividers-can-also-separate-interactive-areas-from-non-interactive-areas");
             gap(Dp(20.0));
             prose(
-                "They are used to group visual elements together, and indicate when elements are related to each other from an interaction perspective.",
+                "ui-they-are-used-to-group-visual-elements-together-and-indicate-when-elements-are-related-to",
             );
         })
         .figure(|| {
             stage(
                 232.0,
                 lavender(),
-                "Inbox messages visually separated by full-width dividers for improved readability",
+                "ui-inbox-messages-visually-separated-by-full-width-dividers-for-improved-readability",
             )
             .content(|| {
                 inbox_phone(312.0, 92.0, FULL);
             });
             gap(Dp(16.0));
-            caption("Full-width dividers to indicate separation of content");
+            caption("ui-full-width-dividers-to-indicate-separation-of-content");
         });
     gap(Dp(64.0));
     pair()
@@ -1406,8 +1422,8 @@ fn full_width_guidelines() {
                 DO,
                 216.0,
                 blush(),
-                "Non-interactive information on a card and a clickable read more link separated by a full-width divider",
-                "Use full-width divider lines to separate interactive and non-interactive areas of a container such as a card",
+                "ui-non-interactive-information-on-a-card-and-a-clickable-read-more-link-separated-by-a-full-w",
+                "ui-use-full-width-divider-lines-to-separate-interactive-and-non-interactive-areas-of-a-contai",
             )
             .figure(|| {
                 dot_grid("#ead7e8");
@@ -1419,8 +1435,8 @@ fn full_width_guidelines() {
                 CAUTION,
                 216.0,
                 lavender(),
-                "Full-width dividers used after every piece of content on a page",
-                "Use full-width dividers sparingly. Too many divider lines will make an interface look cluttered.",
+                "ui-full-width-dividers-used-after-every-piece-of-content-on-a-page",
+                "ui-use-full-width-dividers-sparingly-too-many-divider-lines-will-make-an-interface-look-clutt",
             )
             .figure(|| {
                 order_list();
@@ -1452,7 +1468,7 @@ fn chip(#[prop(into)] label: String, selected: bool) {
                 spacer().modifier(Modifier::new().width(Dp(6.0)));
             }
             text()
-                .content(label.clone())
+                .content(I18N.text(&(label)))
                 .style(type_style(11.0, 16.0))
                 .color(if selected {
                     scheme.on_secondary_container
@@ -1482,7 +1498,7 @@ fn plant_copy() {
     let scheme = use_context::<MaterialTheme>().unwrap().get().color_scheme;
     text()
         .content(
-            "Hand selected from a variety of rare and exotic desert plants presented in a locally crafted ceramics. Choose your preference between succulent or cacti only or a combination arrangement of both.",
+            I18N.text("ui-hand-selected-from-a-variety-of-rare-and-exotic-desert-plants-presented-in-a-locally-craft"),
         )
         .style(type_style(11.0, 17.0))
         .color(scheme.on_surface)
@@ -1519,7 +1535,7 @@ fn product_detail() {
                     plant_copy();
                     rule(INSET_MARGIN, INSET_MARGIN);
                     text()
-                        .content("Select Size")
+                        .content(I18N.text("ui-select-size"))
                         .style(type_style(12.0, 16.0))
                         .modifier(Modifier::new().padding(Padding::new(
                             Dp(16.0),
@@ -1527,7 +1543,10 @@ fn product_detail() {
                             Dp(16.0),
                             Dp(10.0),
                         )));
-                    chips(vec!["Small".into(), "Medium".into(), "Large".into()], 1);
+                    chips(
+                        vec!["ui-small".into(), "ui-medium".into(), "ui-large".into()],
+                        1,
+                    );
                     gap(Dp(14.0));
                     boxed()
                         .alignment(Alignment::Center)
@@ -1540,7 +1559,7 @@ fn product_detail() {
                         )
                         .children(move || {
                             text()
-                                .content("Add to cart")
+                                .content(I18N.text("ui-add-to-cart"))
                                 .style(type_style(11.0, 16.0))
                                 .color(scheme.primary);
                         });
@@ -1559,18 +1578,18 @@ fn product_detail() {
 fn inset_guidelines() {
     split()
         .lead(|| {
-            prose("Use inset dividers to separate related content within a section.");
+            prose("ui-use-inset-dividers-to-separate-related-content-within-a-section");
             gap(Dp(20.0));
-            prose("Inset dividers are equally indented from both sides of the screen by default.");
+            prose("ui-inset-dividers-are-equally-indented-from-both-sides-of-the-screen-by-default");
         })
         .figure(|| {
-            stage(240.0, lavender(), "2 different content sections separated by an inset divider")
+            stage(240.0, lavender(), "ui-2-different-content-sections-separated-by-an-inset-divider")
                 .content(|| {
                     product_detail();
                 });
             gap(Dp(16.0));
             caption(
-                "Inset dividers separate related content, such as emails in a list. They should be used with anchoring elements such as icons or avatars, and align with the leading edge of the screen.",
+                "ui-inset-dividers-separate-related-content-such-as-emails-in-a-list-they-should-be-used-with",
             );
         });
     gap(Dp(64.0));
@@ -1580,8 +1599,8 @@ fn inset_guidelines() {
                 NONE,
                 218.0,
                 lavender(),
-                "3 types of related content separated by inset dividers on a mobile screen",
-                "Inset dividers in a list of related items",
+                "ui-3-types-of-related-content-separated-by-inset-dividers-on-a-mobile-screen",
+                "ui-inset-dividers-in-a-list-of-related-items",
             )
             .figure(|| {
                 phone(312.0, 150.0, 368.0).content(|| {
@@ -1590,21 +1609,21 @@ fn inset_guidelines() {
                 });
             });
         })
-        .second(|| {
+        .second(move || {
             guidance(
                 NONE,
                 218.0,
                 lavender(),
-                "Inset divider separating body text and selection chips",
-                "Inset dividers can be placed in the middle of a layout to separate elements such as body text from selection chips",
+                "ui-inset-divider-separating-body-text-and-selection-chips",
+                "ui-inset-dividers-can-be-placed-in-the-middle-of-a-layout-to-separate-elements-such-as-body-t",
             )
-            .figure(|| {
-                phone(312.0, 40.0, 360.0).content(|| {
+            .figure(move || {
+                phone(312.0, 40.0, 360.0).content(move || {
                     media(76.0, srgb(214, 196, 176));
                     plant_copy();
                     rule(INSET_MARGIN, INSET_MARGIN);
                     text()
-                        .content("Select Type")
+                        .content(I18N.text("ui-select-type"))
                         .style(type_style(12.0, 16.0))
                         .modifier(Modifier::new().padding(Padding::new(
                             Dp(16.0),
@@ -1613,7 +1632,7 @@ fn inset_guidelines() {
                             Dp(10.0),
                         )));
                     chips(
-                        vec!["Succulent".into(), "Cactus".into(), "Blend".into()],
+                        vec!["ui-succulent".into(), "ui-cactus".into(), "ui-blend".into()],
                         1,
                     );
                 });
@@ -1622,15 +1641,15 @@ fn inset_guidelines() {
     gap(Dp(64.0));
     split()
         .lead(|| {
-            subheading("Using dividers both ways on the same screen".into());
+            subheading("ui-using-dividers-both-ways-on-the-same-screen".into());
             gap(Dp(16.0));
             prose(
-                "If dividers are used both ways in a UI, they must reinforce the hierarchy of information within different sections.",
+                "ui-if-dividers-are-used-both-ways-in-a-ui-they-must-reinforce-the-hierarchy-of-information-wi",
             );
             gap(Dp(16.0));
             numbered(vec![
-                "To separate a different kind of content, use a full-width divider".into(),
-                "To separate nested content items, use inset dividers".into(),
+                "ui-to-separate-a-different-kind-of-content-use-a-full-width-divider".into(),
+                "ui-to-separate-nested-content-items-use-inset-dividers".into(),
             ]);
         })
         .figure(|| {
@@ -1638,8 +1657,8 @@ fn inset_guidelines() {
                 DO,
                 216.0,
                 blush(),
-                "Dividers used to show content hierarchy: full-width for sections, inset for related items",
-                "Use a combination of inset and full-width dividers to reflect the hierarchy of information",
+                "ui-dividers-used-to-show-content-hierarchy-full-width-for-sections-inset-for-related-items",
+                "ui-use-a-combination-of-inset-and-full-width-dividers-to-reflect-the-hierarchy-of-information",
             )
             .figure(|| {
                 hierarchy_figure();
@@ -1649,7 +1668,7 @@ fn inset_guidelines() {
     split()
         .lead(|| {
             prose(
-                "List items with repetitive formats may not require an inset divider, in which using only the margin between items is acceptable.",
+                "ui-list-items-with-repetitive-formats-may-not-require-an-inset-divider-in-which-using-only-th",
             );
         })
         .figure(|| {
@@ -1657,8 +1676,8 @@ fn inset_guidelines() {
                 DO,
                 220.0,
                 lavender(),
-                "List with repetitive item formats. Visual separation achieved through margins only",
-                "Content may not require a divider line",
+                "ui-list-with-repetitive-item-formats-visual-separation-achieved-through-margins-only",
+                "ui-content-may-not-require-a-divider-line",
             )
             .figure(|| {
                 let scheme = use_context::<MaterialTheme>().unwrap().get().color_scheme;
@@ -1719,9 +1738,9 @@ fn pointer(geometry: State<SpaceGeometry>, #[prop(into)] target: String, number:
                             .background_with_shape(srgb(43, 41, 48), Shape::CAPSULE)
                             .padding_symmetric(Dp(12.0), Dp::ZERO),
                     )
-                    .children(|| {
+                    .children(move || {
                         text()
-                            .content("Decorative")
+                            .content(I18N.text("ui-decorative"))
                             .style(type_style(13.0, 18.0))
                             .color(srgb(255, 255, 255));
                     });
@@ -1751,7 +1770,7 @@ fn hierarchy_figure() {
             phone(300.0, 26.0, 360.0).content(move || {
                 row_item(CONTACTS, 0);
                 rule(0.0, 0.0).modifier(watch_in_space(geometry, "full"));
-                section_title("Family");
+                section_title("ui-family");
                 row_item(CONTACTS, 1);
                 rule(INSET_MARGIN, INSET_MARGIN).modifier(watch_in_space(geometry, "inset"));
                 row_item(CONTACTS, 2);
@@ -1770,15 +1789,15 @@ fn hierarchy_figure() {
 #[tessera]
 fn vertical_guidelines() {
     prose(
-        "A vertical divider can be used to arrange content on a larger screen, such as separating paragraph text from video or imagery media.",
+        "ui-a-vertical-divider-can-be-used-to-arrange-content-on-a-larger-screen-such-as-separating-pa",
     );
     gap(Dp(48.0));
     stage(
         268.0,
         lavender(),
-        "Image and text side-by-side, separated by a vertical divider on a large screen",
+        "ui-image-and-text-side-by-side-separated-by-a-vertical-divider-on-a-large-screen",
     )
-    .content(|| {
+    .content(move || {
         let scheme = use_context::<MaterialTheme>().unwrap().get().color_scheme;
         row()
             .modifier(Modifier::new().fill_max_size().padding(Padding::new(
@@ -1817,7 +1836,7 @@ fn vertical_guidelines() {
                             .children(move || {
                                 row()
                                     .cross_axis_alignment(CrossAxisAlignment::Center)
-                                    .children(|| {
+                                    .children(move || {
                                         boxed().modifier(
                                             Modifier::new()
                                                 .size(Dp(28.0), Dp(28.0))
@@ -1825,12 +1844,12 @@ fn vertical_guidelines() {
                                         );
                                         spacer().modifier(Modifier::new().width(Dp(10.0)));
                                         text()
-                                            .content("by Selen Zeynep")
+                                            .content(I18N.text("ui-by-selen-zeynep"))
                                             .style(type_style(11.0, 16.0));
                                     });
                                 gap(Dp(16.0));
                                 text()
-                                    .content("What Buttons are Artists Pushing When They Perform Live")
+                                    .content(I18N.text("ui-what-buttons-are-artists-pushing-when-they-perform-live"))
                                     .style(TextStyle {
                                         font_weight: 500,
                                         ..type_style(12.0, 18.0)
@@ -1838,7 +1857,7 @@ fn vertical_guidelines() {
                                 gap(Dp(10.0));
                                 text()
                                     .content(
-                                        "The general consensus is that artists using digital turntables are just pushing random buttons when they perform live. But is that true?",
+                                        I18N.text("ui-the-general-consensus-is-that-artists-using-digital-turntables-are-just-pushing-random-but"),
                                     )
                                     .style(type_style(11.0, 16.0))
                                     .color(scheme.on_surface_variant);
@@ -1847,7 +1866,7 @@ fn vertical_guidelines() {
             });
     });
     gap(Dp(16.0));
-    caption("Vertical divider in a large screen context");
+    caption("ui-vertical-divider-in-a-large-screen-context");
 }
 
 #[tessera]
@@ -1856,7 +1875,7 @@ fn decorative_figure() {
     stage(
         222.0,
         lavender(),
-        "Decorative divider between two inbox messages",
+        "ui-decorative-divider-between-two-inbox-messages",
     )
     .modifier(watch_in_space(geometry, "figure"))
     .content(move || {
@@ -1870,7 +1889,7 @@ fn decorative_figure() {
             )))
             .children(move || {
                 phone(236.0, 0.0, 360.0).content(move || {
-                    header("Inbox").search(false);
+                    header("ui-inbox").search(false);
                     row_item(INBOX, 0);
                     rule(0.0, 0.0).modifier(watch_in_space(geometry, "line"));
                     row_item(INBOX, 1);
@@ -1889,11 +1908,11 @@ fn decorative_figure() {
 fn accessibility() {
     split()
         .lead(|| {
-            prose("Dividers are decorative elements, which have no contrast minimums.");
+            prose("ui-dividers-are-decorative-elements-which-have-no-contrast-minimums");
         })
         .figure(|| {
             decorative_figure();
             gap(Dp(16.0));
-            caption("Decorative elements have no contrast minimums");
+            caption("ui-decorative-elements-have-no-contrast-minimums");
         });
 }

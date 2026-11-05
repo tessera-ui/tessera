@@ -27,6 +27,8 @@ use tessera_ui::{
     modifier::FocusModifierExt as _, remember, scaled_box, tessera, use_context,
 };
 
+use crate::res::I18N;
+
 use super::super::{
     annotations::{SpaceGeometry, space_geometry, watch_observed},
     gap, media, srgb, subheading, type_style,
@@ -37,30 +39,30 @@ pub(in crate::pages::material_spec) fn placement() {
     context_row(
         RenderSlot::new(|| {
             paragraph(
-                "Icon buttons are commonly used in other components, such as app bars and cards.",
+                "ui-icon-buttons-are-commonly-used-in-other-components-such-as-app-bars-and-cards",
             );
             gap(Dp(16.0));
-            paragraph("These buttons should be used for common, easily understandable actions.");
+            paragraph("ui-these-buttons-should-be-used-for-common-easily-understandable-actions");
             gap(Dp(16.0));
-            paragraph("Only use a few icon buttons at once.");
+            paragraph("ui-only-use-a-few-icon-buttons-at-once");
         }),
         RenderSlot::new(|| {
             app_bar_figure();
-            caption("App bars often contain icon buttons");
+            caption("ui-app-bars-often-contain-icon-buttons");
         }),
     );
     gap(Dp(72.0));
     context_row(
         RenderSlot::new(|| {
             paragraph(
-                "In dense layouts, group popular actions by placing many icon buttons next to each other in components like a toolbar or button group.",
+                "ui-in-dense-layouts-group-popular-actions-by-placing-many-icon-buttons-next-to-each-other-in",
             );
             gap(Dp(16.0));
-            paragraph("These components draw attention or add interaction between buttons.");
+            paragraph("ui-these-components-draw-attention-or-add-interaction-between-buttons");
         }),
         RenderSlot::new(|| {
             toolbar_figure();
-            caption("A toolbar is a collection of icon buttons and other components");
+            caption("ui-a-toolbar-is-a-collection-of-icon-buttons-and-other-components");
         }),
     );
 }
@@ -70,13 +72,13 @@ pub(in crate::pages::material_spec) fn labeling() {
     context_row(
         RenderSlot::new(|| {
             paragraph(
-                "The accessibility label for icon buttons describes the action the button is executing, such as Add to favorites, Bookmark, or Send message.",
+                "ui-the-accessibility-label-for-icon-buttons-describes-the-action-the-button-is-executing-such",
             );
         }),
         RenderSlot::new(|| {
             labeling_figure();
             caption(
-                "The icon button label describes the action, such as Add to favorites for the heart icon",
+                "ui-the-icon-button-label-describes-the-action-such-as-add-to-favorites-for-the-heart-icon",
             );
         }),
     );
@@ -87,40 +89,42 @@ pub(in crate::pages::material_spec) fn density() {
     context_row(
         RenderSlot::new(|| {
             paragraph(
-                "Groups of similar components can be nested together inside a component, or they can stand alone.",
+                "ui-groups-of-similar-components-can-be-nested-together-inside-a-component-or-they-can-stand-a",
             );
             gap(Dp(24.0));
             paragraph(
-                "The target size of each icon button should be at least 48dp, even when nested.",
+                "ui-the-target-size-of-each-icon-button-should-be-at-least-48dp-even-when-nested",
             );
         }),
         RenderSlot::new(|| {
             density_figure();
-            caption("Icon buttons can be used within other components, such as an app bar");
+            caption("ui-icon-buttons-can-be-used-within-other-components-such-as-an-app-bar");
         }),
     );
     gap(Dp(48.0));
-    subheading("Avoid applying density by default".into());
+    subheading("ui-avoid-applying-density-by-default".into());
     gap(Dp(16.0));
     paragraph(
-        "Don't apply density to icon buttons by default. This lowers their targets below the required 48x48 CSS pixels minimum size.",
+        "ui-don-t-apply-density-to-icon-buttons-by-default-this-lowers-their-targets-below-the-require",
     );
     gap(Dp(16.0));
     paragraph(
-        "Provide density options that allow people to choose a higher density, such as selecting a denser layout or changing the theme. Controls for adjusting density must maintain a target size of at least 48x48 CSS pixels.",
+        "ui-provide-density-options-that-allow-people-to-choose-a-higher-density-such-as-selecting-a-d",
     );
 }
 
 #[tessera]
 fn paragraph(#[prop(into)] value: String) {
-    text().content(value).style(type_style(16.0, 24.0));
+    text()
+        .content(I18N.text(value))
+        .style(type_style(16.0, 24.0));
 }
 
 #[tessera]
 fn caption(#[prop(into)] value: String) {
     gap(Dp(24.0));
     text()
-        .content(value)
+        .content(I18N.text(value))
         .style(type_style(16.0, 24.0))
         .modifier(Modifier::new().padding_symmetric(Dp(8.0), Dp::ZERO));
 }
@@ -198,7 +202,7 @@ fn canvas(height: f64, geometry: State<SpaceGeometry>, child: RenderSlot) {
 #[tessera]
 fn placed_text(#[prop(into)] value: String, x: f64, y: f64, width: f64, size: f64, line: f64) {
     text()
-        .content(value)
+        .content(I18N.text(value))
         .style(type_style(size, line))
         .modifier(Modifier::new().offset(Dp(x), Dp(y)).width(Dp(width)));
 }
@@ -223,8 +227,10 @@ fn action(#[prop(into)] label: String, index: usize) {
         .standard()
         .icon(action_icon(index))
         .shape(Shape::CAPSULE)
-        .accessibility_label(label)
-        .accessibility_description(format!("Activations: {}", activations.get()))
+        .accessibility_label(I18N.text(label))
+        .accessibility_description(
+            I18N.format("ui-activations-value", [("v0", (activations.get()).into())]),
+        )
         .on_click(move || activations.set(activations.get() + 1));
 }
 
@@ -257,11 +263,11 @@ fn favorite(selected: State<bool>, tonal: bool) {
         } else {
             filled::FAVORITE_BORDER_SVG
         })
-        .accessibility_label(if selected.get() {
-            "Remove from favorites"
+        .accessibility_label(I18N.text(if selected.get() {
+            "ui-remove-from-favorites"
         } else {
-            "Add to favorites"
-        })
+            "ui-add-to-favorites"
+        }))
         .on_click(move || selected.set(!selected.get()));
 }
 
@@ -308,14 +314,11 @@ fn photo_region(source: usize, x: f64, y: f64, width: f64, height: f64) {
                 .clip_to_bounds()
                 .semantics(SemanticsArgs {
                     role: Some(Role::Image),
-                    label: Some(
-                        if source == 2 && height < 45.0 && width < 45.0 {
-                            "So Duri profile photograph"
-                        } else {
-                            "Restaurant photograph"
-                        }
-                        .into(),
-                    ),
+                    label: Some(I18N.text(if source == 2 && height < 45.0 && width < 45.0 {
+                        "ui-so-duri-profile-photograph"
+                    } else {
+                        "ui-restaurant-photograph"
+                    })),
                     ..Default::default()
                 }),
         )
@@ -352,10 +355,10 @@ fn app_bar_figure() {
                         icon().vector(vector).size(Dp(16.0));
                     });
             }
-            placed_action("Back to restaurants", 0, 136.0, 155.0);
-            placed_text("Terracotta", 184.0, 164.0, 224.0, 22.0, 28.0);
-            placed_action("Share restaurant", 1, 434.0, 155.0);
-            placed_action("More restaurant options", 2, 482.0, 155.0);
+            placed_action("ui-back-to-restaurants", 0, 136.0, 155.0);
+            placed_text("ui-terracotta", 184.0, 164.0, 224.0, 22.0, 28.0);
+            placed_action("ui-share-restaurant", 1, 434.0, 155.0);
+            placed_action("ui-more-restaurant-options", 2, 482.0, 155.0);
             row()
                 .modifier(Modifier::new().offset(Dp(148.0), Dp(210.0)))
                 .children(|| {
@@ -370,7 +373,7 @@ fn app_bar_figure() {
                     }
                 });
             placed_text(
-                "American · $$ · 2.3 miles away",
+                "ui-american-2-3-miles-away",
                 148.0,
                 236.0,
                 380.0,
@@ -378,7 +381,7 @@ fn app_bar_figure() {
                 20.0,
             );
             placed_text(
-                "Farm-to-table fare with a Southern twist",
+                "ui-farm-to-table-fare-with-a-southern-twist",
                 148.0,
                 256.0,
                 380.0,
@@ -406,18 +409,18 @@ fn toolbar_figure() {
             floating_toolbar()
                 .modifier(Modifier::new().offset(Dp(166.0), Dp(168.0)))
                 .elevation(Dp(1.0))
-                .accessibility_label("Mail actions")
+                .accessibility_label(I18N.text("ui-mail-actions"))
                 .content(|| {
                     row()
                         .modifier(Modifier::new().padding_symmetric(Dp(4.0), Dp::ZERO))
                         .cross_axis_alignment(CrossAxisAlignment::Center)
                         .children(|| {
                             for (position, (index, label)) in [
-                                (3, "Archive message"),
-                                (4, "Delete message"),
-                                (5, "Mark unread"),
-                                (6, "Snooze message"),
-                                (2, "More message options"),
+                                (3, "ui-archive-message"),
+                                (4, "ui-delete-message"),
+                                (5, "ui-mark-unread"),
+                                (6, "ui-snooze-message"),
+                                (2, "ui-more-message-options"),
                             ]
                             .into_iter()
                             .enumerate()
@@ -431,8 +434,10 @@ fn toolbar_figure() {
                 });
             floating_action_button()
                 .modifier(Modifier::new().offset(Dp(454.0), Dp(172.0)))
-                .accessibility_label("Undo message action")
-                .accessibility_description(format!("Activations: {}", undo.get()))
+                .accessibility_label(I18N.text("ui-undo-message-action"))
+                .accessibility_description(
+                    I18N.format("ui-activations-value", [("v0", (undo.get()).into())]),
+                )
                 .on_click(move || undo.set(undo.get() + 1))
                 .content(|| {
                     icon().vector(filled::UNDO_SVG);
@@ -451,8 +456,8 @@ fn labeling_figure() {
         RenderSlot::new(move || {
             device(22.0, -160.0, 520.0);
             photo_region(1, 54.0, 0.0, 364.0, 79.0);
-            placed_text("New Tyrrhenia", 54.0, 96.0, 300.0, 24.0, 32.0);
-            placed_text("Mediterranean", 54.0, 134.0, 300.0, 16.0, 24.0);
+            placed_text("ui-new-tyrrhenia", 54.0, 96.0, 300.0, 24.0, 32.0);
+            placed_text("ui-mediterranean", 54.0, 134.0, 300.0, 16.0, 24.0);
             boxed()
                 .alignment(Alignment::Center)
                 .modifier(
@@ -470,21 +475,21 @@ fn labeling_figure() {
                     .size(Dp(364.0), Dp(1.0))
                     .background(scheme.outline_variant),
             );
-            placed_text("Dinner", 54.0, 204.0, 100.0, 14.0, 20.0);
+            placed_text("ui-dinner", 54.0, 204.0, 100.0, 14.0, 20.0);
             boxed()
                 .modifier(
                     Modifier::new()
                         .required_size(Dp(442.0), Dp(258.0))
                         .clip_to_bounds(),
                 )
-                .children(|| {
+                .children(move || {
                     row()
                         .modifier(Modifier::new().offset(Dp(54.0), Dp(239.0)))
-                        .children(|| {
+                        .children(move || {
                             for label in ["5:30pm", "6:00pm", "6:30pm", "7:00pm", "7:30pm"] {
                                 let selected = remember(|| false);
                                 chip()
-                                    .label(label)
+                                    .label(I18N.text(label))
                                     .selected(selected.get())
                                     .on_click(move || selected.set(!selected.get()));
                                 spacer().modifier(Modifier::new().width(Dp(8.0)));
@@ -532,34 +537,37 @@ fn labeling_annotation(geometry: State<SpaceGeometry>, selected: State<bool>) {
                 .padding_all(Dp(16.0))
                 .semantics(SemanticsArgs {
                     role: Some(Role::Note),
-                    label: Some("Icon button label and role".into()),
+                    label: Some(I18N.text("ui-icon-button-label-and-role")),
                     merge_descendants: true,
                     ..Default::default()
                 }),
         )
         .children(move || {
             column().children(move || {
-                text().content("Label").style(type_style(14.0, 20.0));
                 text()
-                    .content(if selected.get() {
-                        "Remove from favorites"
+                    .content(I18N.text("ui-label"))
+                    .style(type_style(14.0, 20.0));
+                text()
+                    .content(I18N.text(if selected.get() {
+                        "ui-remove-from-favorites"
                     } else {
-                        "Add to favorites"
-                    })
+                        "ui-add-to-favorites"
+                    }))
                     .color(tint)
                     .style(tessera_components::theme::TextStyle {
                         font_weight: 700,
                         ..type_style(16.0, 20.0)
                     });
                 gap(Dp(8.0));
-                text().content("Role").style(type_style(14.0, 20.0));
                 text()
-                    .content("Button")
-                    .color(tint)
-                    .style(tessera_components::theme::TextStyle {
+                    .content(I18N.text("ui-role"))
+                    .style(type_style(14.0, 20.0));
+                text().content(I18N.text("ui-button")).color(tint).style(
+                    tessera_components::theme::TextStyle {
                         font_weight: 700,
                         ..type_style(16.0, 20.0)
-                    });
+                    },
+                );
             });
         });
 }
@@ -585,8 +593,8 @@ fn density_figure() {
                     ),
             );
             photo_region(2, 238.0, 55.0, 40.0, 40.0);
-            placed_text("So Duri", 290.0, 58.0, 180.0, 14.0, 20.0);
-            placed_text("4 hours ago", 290.0, 78.0, 180.0, 12.0, 16.0);
+            placed_text("ui-so-duri", 290.0, 58.0, 180.0, 14.0, 20.0);
+            placed_text("ui-4-hours-ago", 290.0, 78.0, 180.0, 12.0, 16.0);
             boxed()
                 .modifier(Modifier::new().offset(Dp(534.0), Dp(49.0)))
                 .children(move || {
@@ -598,16 +606,16 @@ fn density_figure() {
                         } else {
                             filled::STAR_BORDER_SVG
                         })
-                        .accessibility_label(if starred.get() {
-                            "Remove message star"
+                        .accessibility_label(I18N.text(if starred.get() {
+                            "ui-remove-message-star"
                         } else {
-                            "Star message"
-                        })
+                            "ui-star-message"
+                        }))
                         .on_click(move || starred.set(!starred.get()));
                 });
-            placed_text("Dinner Club", 238.0, 105.0, 340.0, 24.0, 32.0);
+            placed_text("ui-dinner-club", 238.0, 105.0, 340.0, 24.0, 32.0);
             placed_text(
-                "I think it’s time we finally get a reservation for that new spot downtown that does Northern Kyoto stuff.",
+                "ui-i-think-it-s-time-we-finally-get-a-reservation-for-that-new-spot-downtown-that-does-northe",
                 238.0,
                 143.0,
                 340.0,
@@ -618,16 +626,16 @@ fn density_figure() {
             });
             floating_toolbar()
                 .modifier(Modifier::new().offset(Dp(280.0), Dp(159.0)))
-                .accessibility_label("Nested message actions")
+                .accessibility_label(I18N.text("ui-nested-message-actions"))
                 .content(move || {
                     row()
                         .cross_axis_alignment(CrossAxisAlignment::Center)
                         .children(move || {
                             for (index, label, name) in [
-                                (4, "Delete dinner message", "delete"),
-                                (3, "Archive dinner message", "archive"),
-                                (5, "Mark dinner message unread", "mail"),
-                                (2, "More dinner message options", "more"),
+                                (4, "ui-delete-dinner-message", "delete"),
+                                (3, "ui-archive-dinner-message", "archive"),
+                                (5, "ui-mark-dinner-message-unread", "mail"),
+                                (2, "ui-more-dinner-message-options", "more"),
                             ] {
                                 boxed()
                                     .modifier(
@@ -644,8 +652,13 @@ fn density_figure() {
                                 .filled()
                                 .width(IconButtonWidth::Wide)
                                 .icon(filled::UNDO_SVG)
-                                .accessibility_label("Undo dinner message action")
-                                .accessibility_description(format!("Activations: {}", undo.get()))
+                                .accessibility_label(I18N.text("ui-undo-dinner-message-action"))
+                                .accessibility_description(
+                                    I18N.format(
+                                        "ui-activations-value",
+                                        [("v0", (undo.get()).into())],
+                                    ),
+                                )
                                 .on_click(move || undo.set(undo.get() + 1));
                         });
                 });
@@ -676,9 +689,9 @@ fn density_annotation(geometry: State<SpaceGeometry>) {
                     ..Default::default()
                 }),
         )
-        .children(|| {
+        .children(move || {
             text()
-                .content("Target size 48")
+                .content(I18N.text("ui-target-size-48"))
                 .style(type_style(16.0, 24.0))
                 .color(Color::WHITE);
         });

@@ -22,6 +22,8 @@ use tessera_ui::{
     modifier::ModifierCapabilityExt as _, remember, tessera, use_context,
 };
 
+use crate::res::I18N;
+
 use super::{
     super::{ACCENT, type_style},
     annotations::{self, PreciseGeometry, Rect, dotted},
@@ -162,15 +164,21 @@ fn color_half(side: bool, modal: bool, dark: bool, notice: State<String>) {
                                 .standard()
                                 .icon(filled::ARROW_BACK_SVG)
                                 .content_color(scheme.on_surface_variant)
-                                .accessibility_label(format!(
-                                    "{} sheet color back",
-                                    if dark { "Dark" } else { "Light" }
-                                ))
+                                .accessibility_label(
+                                    I18N.format(
+                                        "ui-value-sheet-color-back",
+                                        [(
+                                            "v0",
+                                            I18N.text(&(if dark { "ui-dark" } else { "ui-light" }))
+                                                .into(),
+                                        )],
+                                    ),
+                                )
                                 .modifier(at(4.0, 12.0).then(watch_color(geometry, dark, "back")))
-                                .on_click(move || notice.set("Back action selected".into()));
+                                .on_click(move || notice.set("ui-back-action-selected".into()));
                         }
                         text()
-                            .content("Headline")
+                            .content(I18N.text("ui-headline"))
                             .style(type_style(22.0, 28.0))
                             .color(scheme.on_surface_variant)
                             .modifier(
@@ -181,12 +189,18 @@ fn color_half(side: bool, modal: bool, dark: bool, notice: State<String>) {
                             .standard()
                             .icon(filled::CLOSE_SVG)
                             .content_color(scheme.on_surface_variant)
-                            .accessibility_label(format!(
-                                "{} sheet color close",
-                                if dark { "Dark" } else { "Light" }
-                            ))
+                            .accessibility_label(
+                                I18N.format(
+                                    "ui-value-sheet-color-close",
+                                    [(
+                                        "v0",
+                                        I18N.text(&(if dark { "ui-dark" } else { "ui-light" }))
+                                            .into(),
+                                    )],
+                                ),
+                            )
                             .modifier(at(260.0, 12.0).then(watch_color(geometry, dark, "close")))
-                            .on_click(move || notice.set("Sheet close action selected".into()));
+                            .on_click(move || notice.set("ui-sheet-close-action-selected".into()));
                     });
             } else {
                 boxed()
@@ -409,18 +423,31 @@ fn marker(number: usize, side: bool, dark: bool, x: f64, y: f64) {
                 .background_with_shape(scheme.inverse_surface, Shape::CAPSULE)
                 .semantics(SemanticsArgs {
                     role: Some(Role::Note),
-                    label: Some(format!(
-                        "{} {} sheet color marker {number}",
-                        if dark { "Dark" } else { "Light" },
-                        if side { "side" } else { "bottom" }
-                    )),
+                    label: Some(
+                        I18N.format(
+                            "ui-value-value-sheet-color-marker-value",
+                            [
+                                (
+                                    "v0",
+                                    I18N.text(&(if dark { "ui-dark" } else { "ui-light" }))
+                                        .into(),
+                                ),
+                                (
+                                    "v1",
+                                    I18N.text(&(if side { "ui-side" } else { "ui-bottom" }))
+                                        .into(),
+                                ),
+                                ("v2", (number).into()),
+                            ],
+                        ),
+                    ),
                     merge_descendants: true,
                     ..Default::default()
                 }),
         )
         .children(move || {
             text()
-                .content(number.to_string())
+                .content((number).to_string())
                 .style(type_style(16.0, 24.0))
                 .color(scheme.inverse_on_surface);
         });

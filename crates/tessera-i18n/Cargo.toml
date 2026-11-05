@@ -1,0 +1,16 @@
+[package]
+name = "tessera-i18n"
+version = "0.1.0"
+description = "Reactive Fluent localization for Tessera applications"
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+
+[dependencies]
+fluent-bundle = "0.16"
+fluent-templates = { version = "0.15.1", default-features = false, features = ["macros", "walkdir"] }
+tessera-ui = { path = "../../tessera-ui", version = "2.5.0" }
+
+[dev-dependencies]
+tessera-ui = { path = "../../tessera-ui", features = ["testing"] }

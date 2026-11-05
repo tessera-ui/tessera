@@ -25,6 +25,8 @@ use tessera_components::{
 };
 use tessera_ui::{CallbackWith, Color, Dp, Modifier, RenderSlot, remember, tessera, use_context};
 
+use crate::res::I18N;
+
 use super::{
     INK,
     article::{ArticlePage, SpecSection, article},
@@ -44,15 +46,21 @@ const SIZES: [ButtonGroupsSize; 5] = [
     ButtonGroupsSize::ExtraLarge,
 ];
 
-const STATES: [&str; 5] = ["Enabled", "Disabled", "Hovered", "Focused", "Pressed"];
+const STATES: [&str; 5] = [
+    "ui-enabled",
+    "ui-disabled",
+    "ui-hovered",
+    "ui-focused",
+    "ui-pressed",
+];
 
 fn size_name(size: ButtonGroupsSize) -> &'static str {
     match size {
-        ButtonGroupsSize::ExtraSmall => "Extra small",
-        ButtonGroupsSize::Small => "Small",
-        ButtonGroupsSize::Medium => "Medium",
-        ButtonGroupsSize::Large => "Large",
-        ButtonGroupsSize::ExtraLarge => "Extra large",
+        ButtonGroupsSize::ExtraSmall => "ui-extra-small",
+        ButtonGroupsSize::Small => "ui-small",
+        ButtonGroupsSize::Medium => "ui-medium",
+        ButtonGroupsSize::Large => "ui-large",
+        ButtonGroupsSize::ExtraLarge => "ui-extra-large",
     }
 }
 
@@ -68,8 +76,8 @@ fn token_size_name(size: ButtonGroupsSize) -> &'static str {
 
 fn style_name(style: ButtonGroupsStyle) -> &'static str {
     match style {
-        ButtonGroupsStyle::Standard => "Standard",
-        ButtonGroupsStyle::Connected => "Connected",
+        ButtonGroupsStyle::Standard => "ui-standard",
+        ButtonGroupsStyle::Connected => "ui-connected",
     }
 }
 
@@ -126,17 +134,17 @@ fn icon_only(icon: Asset, description: &'static str) -> Item {
 
 fn mixed_items() -> Vec<Item> {
     vec![
-        icon_only(filled::EDIT_SVG, "Edit"),
-        icon_label(filled::EDIT_SVG, "Label"),
-        icon_only(filled::EDIT_SVG, "Draw"),
+        icon_only(filled::EDIT_SVG, "ui-edit"),
+        icon_label(filled::EDIT_SVG, "ui-label"),
+        icon_only(filled::EDIT_SVG, "ui-draw"),
     ]
 }
 
 fn label_items() -> Vec<Item> {
     vec![
-        icon_label(filled::STAR_SVG, "Label"),
-        icon_label(filled::STAR_SVG, "Label 2"),
-        icon_label(filled::STAR_SVG, "Label 3"),
+        icon_label(filled::STAR_SVG, "ui-label"),
+        icon_label(filled::STAR_SVG, "ui-label-2"),
+        icon_label(filled::STAR_SVG, "ui-label-3"),
     ]
 }
 
@@ -145,39 +153,39 @@ pub(super) fn button_groups_spec(
     route: Option<crate::pages::material_spec::article::ArticleRoute>,
 ) {
     article(
-        "Button groups",
-        "Button groups organize buttons and add interactions between them",
+        "ui-button-groups",
+        "ui-button-groups-organize-buttons-and-add-interactions-between-them",
         vec![
             SpecSection {
-                title: "Variants",
+                title: "ui-variants",
                 content: RenderSlot::new(variants),
             },
             SpecSection {
-                title: "Configurations",
+                title: "ui-configurations",
                 content: RenderSlot::new(configurations),
             },
             SpecSection {
-                title: "Tokens & specs",
+                title: "ui-tokens-specs",
                 content: RenderSlot::new(tokens),
             },
             SpecSection {
-                title: "Anatomy",
+                title: "ui-anatomy",
                 content: RenderSlot::new(anatomy),
             },
             SpecSection {
-                title: "Selection & activation",
+                title: "ui-selection-activation",
                 content: RenderSlot::new(selection_and_activation),
             },
             SpecSection {
-                title: "States",
+                title: "ui-states",
                 content: RenderSlot::new(states),
             },
             SpecSection {
-                title: "Measurements",
+                title: "ui-measurements",
                 content: RenderSlot::new(measurements),
             },
             SpecSection {
-                title: "Density",
+                title: "ui-density",
                 content: RenderSlot::new(density),
             },
         ],
@@ -185,59 +193,59 @@ pub(super) fn button_groups_spec(
     .route_optional(route)
     .pages(vec![
         ArticlePage {
-            title: "Overview",
+            title: "ui-overview",
             intro: Some(RenderSlot::new(overview)),
             sections: vec![
                 SpecSection {
-                    title: "Availability & resources",
+                    title: "ui-availability-resources",
                     content: RenderSlot::new(resources),
                 },
                 SpecSection {
-                    title: "M3 Expressive update",
+                    title: "ui-m3-expressive-update",
                     content: RenderSlot::new(expressive),
                 },
             ],
         },
         ArticlePage {
-            title: "Guidelines",
+            title: "ui-guidelines",
             intro: None,
             sections: vec![
                 SpecSection {
-                    title: "Usage",
+                    title: "ui-usage",
                     content: RenderSlot::new(usage),
                 },
                 SpecSection {
-                    title: "Anatomy",
+                    title: "ui-anatomy",
                     content: RenderSlot::new(guidelines_anatomy),
                 },
                 SpecSection {
-                    title: "Adaptive design",
+                    title: "ui-adaptive-design",
                     content: RenderSlot::new(adaptive),
                 },
                 SpecSection {
-                    title: "Behavior",
+                    title: "ui-behavior",
                     content: RenderSlot::new(behavior),
                 },
             ],
         },
         ArticlePage {
-            title: "Accessibility",
+            title: "ui-accessibility",
             intro: None,
             sections: vec![
                 SpecSection {
-                    title: "Use cases",
+                    title: "ui-use-cases",
                     content: RenderSlot::new(use_cases),
                 },
                 SpecSection {
-                    title: "Interaction & style",
+                    title: "ui-interaction-style",
                     content: RenderSlot::new(interaction_style),
                 },
                 SpecSection {
-                    title: "Keyboard navigation",
+                    title: "ui-keyboard-navigation",
                     content: RenderSlot::new(keyboard_navigation),
                 },
                 SpecSection {
-                    title: "Labeling elements",
+                    title: "ui-labeling-elements",
                     content: RenderSlot::new(labeling),
                 },
             ],
@@ -258,7 +266,9 @@ fn legend(items: Vec<String>) {
                     .children(move || {
                         badge(index + 1);
                         spacer().modifier(Modifier::new().width(Dp(12.0)));
-                        text().content(item.clone()).style(type_style(16.0, 24.0));
+                        text()
+                            .content(I18N.text(&(item)))
+                            .style(type_style(16.0, 24.0));
                     });
             }
         });
@@ -284,13 +294,13 @@ fn guidance(#[prop(into)] mark: String, #[prop(into)] note: String, color: Color
                 )
                 .children(move || {
                     text()
-                        .content(mark.clone())
+                        .content(I18N.text(&(mark)))
                         .style(type_style(14.0, 20.0))
                         .color(Color::WHITE);
                 });
             spacer().modifier(Modifier::new().width(Dp(12.0)));
             text()
-                .content(note.clone())
+                .content(I18N.text(&(note)))
                 .color(scheme.on_surface_variant)
                 .style(type_style(14.0, 20.0));
         });
@@ -321,7 +331,7 @@ fn group(
     });
     let builder = button_groups()
         .modifier(Modifier::new().semantics(SemanticsArgs {
-            label: label.or_else(|| Some("Button group".into())),
+            label: Some(I18N.text(label.as_deref().unwrap_or("ui-button-group"))),
             ..Default::default()
         }))
         .style(style)
@@ -340,7 +350,7 @@ fn group(
                 row()
                     .cross_axis_alignment(CrossAxisAlignment::Center)
                     .modifier(Modifier::new().semantics(SemanticsArgs {
-                        label: Some(item.description.into()),
+                        label: Some(I18N.text(item.description)),
                         ..Default::default()
                     }))
                     .children(move || {
@@ -351,7 +361,7 @@ fn group(
                             spacer().modifier(Modifier::new().width(Dp(8.0)));
                         }
                         if let Some(label) = item.label {
-                            text().content(label);
+                            text().content(I18N.text(label));
                         }
                     });
             }),
@@ -363,30 +373,30 @@ fn group(
 #[tessera]
 fn overview() {
     bullets(vec![
-        "Two variants: standard and connected".into(),
-        "Applies shape morph when pressed and selected".into(),
-        "Connected button groups replace the segmented button".into(),
-        "Works with all button sizes: XS, S, M, L, and XL".into(),
-        "Support for single-select, multi-select, and selection-required".into(),
+        "ui-two-variants-standard-and-connected".into(),
+        "ui-applies-shape-morph-when-pressed-and-selected".into(),
+        "ui-connected-button-groups-replace-the-segmented-button".into(),
+        "ui-works-with-all-button-sizes-xs-s-m-l-and-xl".into(),
+        "ui-support-for-single-select-multi-select-and-selection-required".into(),
     ]);
     gap(Dp(32.0));
-    panel(RenderSlot::new(|| {
+    panel(RenderSlot::new(move || {
         column()
             .cross_axis_alignment(CrossAxisAlignment::Center)
-            .children(|| {
+            .children(move || {
                 group(
                     vec![
-                        icon_only(filled::BLUETOOTH_SVG, "Bluetooth"),
-                        icon_only(filled::ALARM_SVG, "Alarm"),
-                        icon_label(filled::MOOD_SVG, "Focus"),
-                        icon_only(filled::FLASHLIGHT_ON_SVG, "Flashlight"),
+                        icon_only(filled::BLUETOOTH_SVG, "ui-bluetooth"),
+                        icon_only(filled::ALARM_SVG, "ui-alarm"),
+                        icon_label(filled::MOOD_SVG, "ui-focus"),
+                        icon_only(filled::FLASHLIGHT_ON_SVG, "ui-flashlight"),
                         icon_only(filled::WIFI_SVG, "Wi-Fi"),
                     ],
                     ButtonGroupsStyle::Standard,
                 )
                 .size(ButtonGroupsSize::Medium)
                 .selected(vec![4])
-                .label("Quick settings");
+                .label(I18N.text("ui-quick-settings"));
                 gap(Dp(24.0));
                 group(
                     vec![
@@ -400,33 +410,37 @@ fn overview() {
                 .mode(ButtonGroupsSelectionMode::Single)
                 .required(true)
                 .selected(vec![0])
-                .label("Cup size");
+                .label(I18N.text("ui-cup-size"));
             });
     }));
-    caption("Button groups can contain buttons and icon buttons");
+    caption("ui-button-groups-can-contain-buttons-and-icon-buttons");
 }
 
 #[tessera]
 fn resources() {
     spec_table(
-        vec!["Type".into(), "Resource".into(), "Status".into()],
+        vec!["ui-type".into(), "ui-resource".into(), "ui-status".into()],
         vec![
             vec![
-                "Design".into(),
-                "Design Kit (Figma)".into(),
-                "Available".into(),
+                "ui-design".into(),
+                "ui-design-kit-figma".into(),
+                "ui-available".into(),
             ],
             vec![
-                "Implementation".into(),
-                "Jetpack Compose: Expressive".into(),
-                "Available".into(),
+                "ui-implementation".into(),
+                "ui-jetpack-compose-expressive".into(),
+                "ui-available".into(),
             ],
             vec![
                 "".into(),
-                "Android Views (MDC-Android): Expressive".into(),
-                "Available".into(),
+                "ui-android-views-mdc-android-expressive".into(),
+                "ui-available".into(),
             ],
-            vec!["".into(), "Web: Expressive".into(), "Unavailable".into()],
+            vec![
+                "".into(),
+                "ui-web-expressive".into(),
+                "ui-unavailable".into(),
+            ],
         ],
     );
 }
@@ -434,30 +448,30 @@ fn resources() {
 #[tessera]
 fn expressive() {
     prose(
-        "Button groups apply shape, motion, and width changes to buttons and icon buttons to make them more interactive.",
+        "ui-button-groups-apply-shape-motion-and-width-changes-to-buttons-and-icon-buttons-to-make-the",
     );
     gap(Dp(32.0));
-    subheading("May 2025".into());
+    subheading("ui-may-2025".into());
     gap(Dp(8.0));
-    prose("New component added to catalog.");
+    prose("ui-new-component-added-to-catalog");
     gap(Dp(16.0));
-    prose("Variants and naming:");
+    prose("ui-variants-and-naming-921");
     bullets(vec![
-        "Added standard button group".into(),
-        "Added connected button group".into(),
-        "Use instead of segmented button, which is no longer recommended".into(),
+        "ui-added-standard-button-group".into(),
+        "ui-added-connected-button-group".into(),
+        "ui-use-instead-of-segmented-button-which-is-no-longer-recommended".into(),
     ]);
     gap(Dp(16.0));
     prose("Configurations:");
     bullets(vec![
-        "Works with all button sizes: XS, S, M, L, and XL".into(),
-        "Applies default shape to all buttons: round or square".into(),
+        "ui-works-with-all-button-sizes-xs-s-m-l-and-xl".into(),
+        "ui-applies-default-shape-to-all-buttons-round-or-square".into(),
     ]);
     gap(Dp(32.0));
-    panel(RenderSlot::new(|| {
+    panel(RenderSlot::new(move || {
         column()
             .cross_axis_alignment(CrossAxisAlignment::Center)
-            .children(|| {
+            .children(move || {
                 for size in [
                     ButtonGroupsSize::ExtraSmall,
                     ButtonGroupsSize::Small,
@@ -466,77 +480,84 @@ fn expressive() {
                     group(mixed_items(), ButtonGroupsStyle::Standard)
                         .size(size)
                         .selected(vec![1])
-                        .label(format!("{} standard group", size_name(size)));
+                        .label(I18N.format(
+                            "ui-value-standard-group",
+                            [("v0", I18N.text(&size_name(size)).into())],
+                        ));
                     gap(Dp(12.0));
                 }
                 gap(Dp(12.0));
                 group(label_items(), ButtonGroupsStyle::Connected)
                     .selected(vec![0])
-                    .label("Connected group");
+                    .label(I18N.text("ui-connected-group"));
             });
     }));
-    caption("Button groups are containers that hold buttons of many shapes and sizes");
+    caption("ui-button-groups-are-containers-that-hold-buttons-of-many-shapes-and-sizes");
 }
 
 #[tessera]
 fn variants() {
-    panel(RenderSlot::new(|| {
+    panel(RenderSlot::new(move || {
         row()
             .cross_axis_alignment(CrossAxisAlignment::Center)
-            .children(|| {
+            .children(move || {
                 column()
                     .cross_axis_alignment(CrossAxisAlignment::Center)
-                    .children(|| {
+                    .children(move || {
                         group(
                             vec![
-                                icon_only(filled::BLUETOOTH_SVG, "Bluetooth"),
-                                icon_only(filled::ALARM_SVG, "Alarm"),
-                                icon_only(filled::LINK_SVG, "Link"),
+                                icon_only(filled::BLUETOOTH_SVG, "ui-bluetooth"),
+                                icon_only(filled::ALARM_SVG, "ui-alarm"),
+                                icon_only(filled::LINK_SVG, "ui-link"),
                                 icon_only(filled::WIFI_SVG, "Wi-Fi"),
                             ],
                             ButtonGroupsStyle::Standard,
                         )
                         .size(ButtonGroupsSize::ExtraSmall)
                         .selected(vec![2])
-                        .label("Standard icon buttons");
+                        .label(I18N.text("ui-standard-icon-buttons"));
                         gap(Dp(12.0));
                         group(
-                            vec![labelled("Label"), labelled("Label"), labelled("Label")],
+                            vec![
+                                labelled("ui-label"),
+                                labelled("ui-label"),
+                                labelled("ui-label"),
+                            ],
                             ButtonGroupsStyle::Standard,
                         )
                         .size(ButtonGroupsSize::ExtraSmall)
                         .selected(vec![1])
-                        .label("Standard label buttons");
+                        .label(I18N.text("ui-standard-label-buttons"));
                         gap(Dp(12.0));
                         group(mixed_items(), ButtonGroupsStyle::Standard)
                             .size(ButtonGroupsSize::ExtraSmall)
-                            .label("Standard mixed buttons");
+                            .label(I18N.text("ui-standard-mixed-buttons"));
                         gap(Dp(16.0));
                         badge(1);
                     });
                 spacer().modifier(Modifier::new().width(Dp(48.0)));
                 column()
                     .cross_axis_alignment(CrossAxisAlignment::Center)
-                    .children(|| {
+                    .children(move || {
                         group(
                             vec![
-                                icon_only(filled::STAR_SVG, "Favorites"),
-                                icon_only(filled::HOME_SVG, "Home"),
-                                icon_only(filled::SEARCH_SVG, "Search"),
-                                icon_only(filled::SETTINGS_SVG, "Settings"),
+                                icon_only(filled::STAR_SVG, "ui-favorites"),
+                                icon_only(filled::HOME_SVG, "ui-home"),
+                                icon_only(filled::SEARCH_SVG, "ui-search"),
+                                icon_only(filled::SETTINGS_SVG, "ui-settings"),
                             ],
                             ButtonGroupsStyle::Connected,
                         )
                         .size(ButtonGroupsSize::ExtraSmall)
                         .mode(ButtonGroupsSelectionMode::Single)
                         .selected(vec![1])
-                        .label("Connected icon buttons");
+                        .label(I18N.text("ui-connected-icon-buttons"));
                         gap(Dp(12.0));
                         group(label_items(), ButtonGroupsStyle::Connected)
                             .size(ButtonGroupsSize::ExtraSmall)
                             .mode(ButtonGroupsSelectionMode::Single)
                             .selected(vec![0])
-                            .label("Connected label buttons");
+                            .label(I18N.text("ui-connected-label-buttons"));
                         gap(Dp(16.0));
                         badge(2);
                     });
@@ -544,22 +565,22 @@ fn variants() {
     }));
     gap(Dp(16.0));
     legend(vec![
-        "Standard button group".into(),
-        "Connected button group".into(),
+        "ui-standard-button-group".into(),
+        "ui-connected-button-group".into(),
     ]);
     gap(Dp(32.0));
     spec_table(
-        vec!["Variant".into(), "M3".into(), "M3 Expressive".into()],
+        vec!["ui-variant".into(), "M3".into(), "ui-m3-expressive".into()],
         vec![
             vec![
-                "Standard button group".into(),
+                "ui-standard-button-group".into(),
                 "--".into(),
-                "Available".into(),
+                "ui-available".into(),
             ],
             vec![
-                "Connected button group".into(),
-                "Available as segmented button".into(),
-                "Available".into(),
+                "ui-connected-button-group".into(),
+                "ui-available-as-segmented-button".into(),
+                "ui-available".into(),
             ],
         ],
     );
@@ -567,107 +588,110 @@ fn variants() {
 
 #[tessera]
 fn configurations() {
-    panel(RenderSlot::new(|| {
+    panel(RenderSlot::new(move || {
         column()
             .cross_axis_alignment(CrossAxisAlignment::Center)
-            .children(|| {
+            .children(move || {
                 for (index, size) in SIZES.into_iter().enumerate() {
                     marked(
                         index + 1,
                         RenderSlot::new(move || {
                             group(
                                 vec![
-                                    icon_only(filled::STAR_SVG, "Favorites"),
-                                    icon_only(filled::ALARM_SVG, "Alarm"),
-                                    icon_only(filled::LINK_SVG, "Link"),
+                                    icon_only(filled::STAR_SVG, "ui-favorites"),
+                                    icon_only(filled::ALARM_SVG, "ui-alarm"),
+                                    icon_only(filled::LINK_SVG, "ui-link"),
                                 ],
                                 ButtonGroupsStyle::Standard,
                             )
                             .size(size)
                             .selected(vec![1])
-                            .label(format!("{} group", size_name(size)));
+                            .label(I18N.format(
+                                "ui-value-group",
+                                [("v0", I18N.text(&size_name(size)).into())],
+                            ));
                         }),
                     );
                     gap(Dp(16.0));
                 }
                 marked(
                     6,
-                    RenderSlot::new(|| {
-                        column().children(|| {
+                    RenderSlot::new(move || {
+                        column().children(move || {
                             group(label_items(), ButtonGroupsStyle::Connected)
                                 .mode(ButtonGroupsSelectionMode::Single)
                                 .selected(vec![0])
-                                .label("Single-select group");
+                                .label(I18N.text("ui-single-select-group"));
                             gap(Dp(8.0));
                             group(label_items(), ButtonGroupsStyle::Connected)
                                 .selected(vec![0, 2])
-                                .label("Multi-select group");
+                                .label(I18N.text("ui-multi-select-group"));
                         });
                     }),
                 );
                 gap(Dp(16.0));
                 marked(
                     7,
-                    RenderSlot::new(|| {
-                        column().children(|| {
+                    RenderSlot::new(move || {
+                        column().children(move || {
                             group(mixed_items(), ButtonGroupsStyle::Standard)
                                 .shape(ButtonShape::Round)
-                                .label("Round group");
+                                .label(I18N.text("ui-round-group"));
                             gap(Dp(8.0));
                             group(mixed_items(), ButtonGroupsStyle::Standard)
                                 .shape(ButtonShape::Square)
-                                .label("Square group");
+                                .label(I18N.text("ui-square-group"));
                         });
                     }),
                 );
             });
     }));
     gap(Dp(16.0));
-    prose("Configurations for both variants of button groups:");
+    prose("ui-configurations-for-both-variants-of-button-groups");
     gap(Dp(8.0));
     legend(vec![
-        "Extra small".into(),
-        "Small".into(),
-        "Medium".into(),
-        "Large".into(),
-        "Extra large".into(),
-        "Single-select and multi-select".into(),
-        "Round and square".into(),
+        "ui-extra-small".into(),
+        "ui-small".into(),
+        "ui-medium".into(),
+        "ui-large".into(),
+        "ui-extra-large".into(),
+        "ui-single-select-and-multi-select".into(),
+        "ui-round-and-square".into(),
     ]);
     gap(Dp(32.0));
     spec_table(
         vec![
-            "Category".into(),
-            "Configuration".into(),
+            "ui-category".into(),
+            "ui-configuration".into(),
             "M3".into(),
-            "M3 Expressive".into(),
+            "ui-m3-expressive".into(),
         ],
         vec![
             vec![
-                "Size".into(),
+                "ui-size".into(),
                 "XS, S, M, L, XL".into(),
                 "--".into(),
-                "Available".into(),
+                "ui-available".into(),
             ],
             vec![
-                "Default shape".into(),
-                "Round, square".into(),
+                "ui-default-shape".into(),
+                "ui-round-square".into(),
                 "--".into(),
-                "Available".into(),
+                "ui-available".into(),
             ],
             vec![
-                "Selection".into(),
-                "Single-select, multi-select, selection-required".into(),
-                "Available as segmented button".into(),
-                "Available".into(),
+                "ui-selection".into(),
+                "ui-single-select-multi-select-selection-required".into(),
+                "ui-available-as-segmented-button".into(),
+                "ui-available".into(),
             ],
         ],
     );
     gap(Dp(48.0));
-    subheading("Live configuration".into());
+    subheading("ui-live-configuration".into());
     gap(Dp(8.0));
     prose(
-        "Change the configuration, then click a choice. Focus enters the group's first button and the horizontal traversal policy wraps at the edges.",
+        "ui-change-the-configuration-then-click-a-choice-focus-enters-the-group-s-first-button-and-the",
     );
     gap(Dp(24.0));
     playground();
@@ -694,7 +718,7 @@ fn playground() {
                         button()
                             .tonal()
                             .selected(style.get() == ButtonGroupsStyle::Connected)
-                            .accessibility_label("Connected layout")
+                            .accessibility_label(I18N.text("ui-connected-layout"))
                             .on_click(move || {
                                 style.set(if style.get() == ButtonGroupsStyle::Connected {
                                     ButtonGroupsStyle::Standard
@@ -702,61 +726,64 @@ fn playground() {
                                     ButtonGroupsStyle::Connected
                                 });
                             })
-                            .child(|| {
-                                text().content("Connected");
+                            .child(move || {
+                                text().content(I18N.text("ui-connected"));
                             });
                         button()
                             .text()
-                            .accessibility_label("Cycle size")
+                            .accessibility_label(I18N.text("ui-cycle-size"))
                             .on_click(move || size.set(next_size(size.get())))
                             .child(move || {
-                                text().content(format!("Size: {}", size_name(size.get())));
+                                text().content(I18N.format(
+                                    "ui-size-value",
+                                    [("v0", I18N.text(&size_name(size.get())).into())],
+                                ));
                             });
                         button()
                             .tonal()
                             .selected(square.get())
-                            .accessibility_label("Square shape")
+                            .accessibility_label(I18N.text("ui-square-shape"))
                             .on_click(move || square.set(!square.get()))
-                            .child(|| {
-                                text().content("Square");
+                            .child(move || {
+                                text().content(I18N.text("ui-square"));
                             });
                         button()
                             .tonal()
                             .selected(multiple.get())
-                            .accessibility_label("Multiple selection")
+                            .accessibility_label(I18N.text("ui-multiple-selection"))
                             .on_click(move || multiple.set(!multiple.get()))
-                            .child(|| {
-                                text().content("Multiple");
+                            .child(move || {
+                                text().content(I18N.text("ui-multiple"));
                             });
                         button()
                             .tonal()
                             .selected(required.get())
-                            .accessibility_label("Selection required")
+                            .accessibility_label(I18N.text("ui-selection-required"))
                             .on_click(move || required.set(!required.get()))
-                            .child(|| {
-                                text().content("Required");
+                            .child(move || {
+                                text().content(I18N.text("ui-required"));
                             });
                         button()
                             .tonal()
                             .selected(!enabled.get())
-                            .accessibility_label("Disabled group")
+                            .accessibility_label(I18N.text("ui-disabled-group"))
                             .on_click(move || enabled.set(!enabled.get()))
-                            .child(|| {
-                                text().content("Disabled");
+                            .child(move || {
+                                text().content(I18N.text("ui-disabled"));
                             });
                         button()
                             .tonal()
                             .selected(icons.get())
-                            .accessibility_label("Item icons")
+                            .accessibility_label(I18N.text("ui-item-icons"))
                             .on_click(move || icons.set(!icons.get()))
-                            .child(|| {
-                                text().content("Icons");
+                            .child(move || {
+                                text().content(I18N.text("ui-icons"));
                             });
                     });
                 gap(Dp(32.0));
                 button_groups()
                     .modifier(Modifier::new().semantics(SemanticsArgs {
-                        label: Some("Configured group".into()),
+                        label: Some(I18N.text("ui-configured-group")),
                         ..Default::default()
                     }))
                     .style(style.get())
@@ -780,10 +807,10 @@ fn playground() {
                                 row().children(move || {
                                     icon().painter(filled::EDIT_SVG);
                                     spacer().modifier(Modifier::new().width(Dp(8.0)));
-                                    text().content("One");
+                                    text().content(I18N.text("ui-one"));
                                 });
                             } else {
-                                text().content("One");
+                                text().content(I18N.text("ui-one"));
                             }
                         }),
                         CallbackWith::new(|_| {}),
@@ -794,10 +821,10 @@ fn playground() {
                                 row().children(move || {
                                     icon().painter(filled::EDIT_SVG);
                                     spacer().modifier(Modifier::new().width(Dp(8.0)));
-                                    text().content("Two");
+                                    text().content(I18N.text("ui-two"));
                                 });
                             } else {
-                                text().content("Two");
+                                text().content(I18N.text("ui-two"));
                             }
                         }),
                         CallbackWith::new(|_| {}),
@@ -808,27 +835,47 @@ fn playground() {
                                 row().children(move || {
                                     icon().painter(filled::EDIT_SVG);
                                     spacer().modifier(Modifier::new().width(Dp(8.0)));
-                                    text().content("Three");
+                                    text().content(I18N.text("ui-three"));
                                 });
                             } else {
-                                text().content("Three");
+                                text().content(I18N.text("ui-three"));
                             }
                         }),
                         CallbackWith::new(|_| {}),
                     );
                 gap(Dp(24.0));
                 text()
-                    .content(format!(
-                        "{} · {} · {} · selection: {}",
-                        style_name(style.get()),
-                        size_name(size.get()),
-                        if multiple.get() { "multiple" } else { "single" },
-                        (0..3)
-                            .filter(|index| state.with(|state| state.is_selected(*index)))
-                            .map(|index| (index + 1).to_string())
-                            .collect::<Vec<_>>()
-                            .join(", ")
-                    ))
+                    .content(
+                        I18N.format(
+                            "ui-value-value-value-selection-value",
+                            [
+                                ("v0", I18N.text(&style_name(style.get())).into()),
+                                ("v1", I18N.text(&size_name(size.get())).into()),
+                                (
+                                    "v2",
+                                    I18N.text(
+                                        &(if multiple.get() {
+                                            "ui-multiple-7083"
+                                        } else {
+                                            "ui-single-7084"
+                                        }),
+                                    )
+                                    .into(),
+                                ),
+                                (
+                                    "v3",
+                                    (0..3)
+                                        .filter(|index| {
+                                            state.with(|state| state.is_selected(*index))
+                                        })
+                                        .map(|index| (index + 1).to_string())
+                                        .collect::<Vec<_>>()
+                                        .join(", ")
+                                        .into(),
+                                ),
+                            ],
+                        ),
+                    )
                     .style(type_style(14.0, 20.0));
             });
     }));
@@ -839,7 +886,7 @@ fn tokens() {
     let connected = remember(|| false);
     let size = remember(|| ButtonGroupsSize::ExtraSmall);
     prose(
-        "Standard and connected button group tokens are organized by size. Select the variant and size from the token set menu. Go to the button and icon button pages to view their tokens.",
+        "ui-standard-and-connected-button-group-tokens-are-organized-by-size-select-the-variant-and-si",
     );
     gap(Dp(24.0));
     flow_row()
@@ -849,17 +896,20 @@ fn tokens() {
             button()
                 .tonal()
                 .selected(connected.get())
-                .accessibility_label("Connected token set")
+                .accessibility_label(I18N.text("ui-connected-token-set"))
                 .on_click(move || connected.set(!connected.get()))
-                .child(|| {
-                    text().content("Connected");
+                .child(move || {
+                    text().content(I18N.text("ui-connected"));
                 });
             button()
                 .text()
-                .accessibility_label("Cycle token set size")
+                .accessibility_label(I18N.text("ui-cycle-token-set-size"))
                 .on_click(move || size.set(next_size(size.get())))
                 .child(move || {
-                    text().content(format!("Size: {}", size_name(size.get())));
+                    text().content(I18N.format(
+                        "ui-size-value",
+                        [("v0", I18N.text(&size_name(size.get())).into())],
+                    ));
                 });
         });
     gap(Dp(16.0));
@@ -870,69 +920,124 @@ fn tokens() {
     let token = token_size_name(size.get());
     let height = ["32dp", "40dp", "56dp", "96dp", "136dp"][index];
     if connected.get() {
-        subheading(format!("Button group connected - Size - {}", {
-            let mut name = token.to_string();
-            name[..1].make_ascii_uppercase();
-            name
-        }));
+        subheading(
+            I18N.format(
+                "ui-button-group-connected-size-value",
+                [(
+                    "v0",
+                    I18N.text(
+                        &({
+                            let mut name = token.to_string();
+                            name[..1].make_ascii_uppercase();
+                            name
+                        }),
+                    )
+                    .into(),
+                )],
+            ),
+        );
         gap(Dp(16.0));
         spec_table(
-            vec!["Token".into(), "Value".into()],
+            vec!["ui-token".into(), "ui-value".into()],
             vec![
                 vec![
-                    format!("Button group connected {token} container height"),
+                    I18N.format(
+                        "ui-button-group-connected-value-container-height",
+                        [("v0", I18N.text(&token).into())],
+                    ),
                     height.into(),
                 ],
                 vec![
-                    format!("Button group connected {token} space between buttons"),
+                    I18N.format(
+                        "ui-button-group-connected-value-space-between-buttons",
+                        [("v0", I18N.text(&token).into())],
+                    ),
                     "2dp".into(),
                 ],
                 vec![
-                    format!("Button group connected {token} container shape"),
-                    "Full".into(),
+                    I18N.format(
+                        "ui-button-group-connected-value-container-shape",
+                        [("v0", I18N.text(&token).into())],
+                    ),
+                    "ui-full".into(),
                 ],
                 vec![
-                    format!("Button group connected {token} inner corner size"),
+                    I18N.format(
+                        "ui-button-group-connected-value-inner-corner-size",
+                        [("v0", I18N.text(&token).into())],
+                    ),
                     ["8dp", "8dp", "8dp", "16dp", "20dp"][index].into(),
                 ],
                 vec![
-                    format!("Button group connected {token} pressed inner corner size"),
+                    I18N.format(
+                        "ui-button-group-connected-value-pressed-inner-corner-size",
+                        [("v0", I18N.text(&token).into())],
+                    ),
                     ["4dp", "4dp", "4dp", "12dp", "16dp"][index].into(),
                 ],
                 vec![
-                    format!("Button group connected {token} selected inner corner size"),
+                    I18N.format(
+                        "ui-button-group-connected-value-selected-inner-corner-size",
+                        [("v0", I18N.text(&token).into())],
+                    ),
                     "50%".into(),
                 ],
             ],
         );
     } else {
-        subheading(format!("Button group standard - Size - {}", {
-            let mut name = token.to_string();
-            name[..1].make_ascii_uppercase();
-            name
-        }));
+        subheading(
+            I18N.format(
+                "ui-button-group-standard-size-value",
+                [(
+                    "v0",
+                    I18N.text(
+                        &({
+                            let mut name = token.to_string();
+                            name[..1].make_ascii_uppercase();
+                            name
+                        }),
+                    )
+                    .into(),
+                )],
+            ),
+        );
         gap(Dp(16.0));
         spec_table(
-            vec!["Token".into(), "Value".into()],
+            vec!["ui-token".into(), "ui-value".into()],
             vec![
                 vec![
-                    format!("Button group {token} container height"),
+                    I18N.format(
+                        "ui-button-group-value-container-height",
+                        [("v0", I18N.text(&token).into())],
+                    ),
                     height.into(),
                 ],
                 vec![
-                    format!("Button group {token} between space"),
+                    I18N.format(
+                        "ui-button-group-value-between-space",
+                        [("v0", I18N.text(&token).into())],
+                    ),
                     ["18dp", "12dp", "8dp", "8dp", "8dp"][index].into(),
                 ],
                 vec![
-                    format!("Button group {token} pressed motion spring dampening"),
+                    I18N.format(
+                        "ui-button-group-value-pressed-motion-spring-dampening",
+                        [("v0", I18N.text(&token).into())],
+                    ),
                     "0.9".into(),
                 ],
                 vec![
-                    format!("Button group {token} pressed motion spring stiffness"),
+                    I18N.format(
+                        "ui-button-group-value-pressed-motion-spring-stiffness",
+                        [("v0", I18N.text(&token).into())],
+                    ),
                     "1400".into(),
                 ],
                 vec![
-                    format!("Button group {token} pressed width multiplier"),
+                    I18N.format(
+                        "ui-button-group-value-pressed-width-multiplier",
+                        [("v0", I18N.text(&token).into())],
+                    ),
                     "15%".into(),
                 ],
             ],
@@ -943,16 +1048,16 @@ fn tokens() {
 #[tessera]
 fn anatomy() {
     prose(
-        "Button groups are invisible containers that add padding between buttons and modify button shape. They don't contain any buttons by default.",
+        "ui-button-groups-are-invisible-containers-that-add-padding-between-buttons-and-modify-button",
     );
     gap(Dp(24.0));
-    panel(RenderSlot::new(|| {
+    panel(RenderSlot::new(move || {
         column()
             .cross_axis_alignment(CrossAxisAlignment::Center)
-            .children(|| {
+            .children(move || {
                 marked(
                     1,
-                    RenderSlot::new(|| {
+                    RenderSlot::new(move || {
                         boxed()
                             .modifier(
                                 Modifier::new()
@@ -963,27 +1068,27 @@ fn anatomy() {
                                     )
                                     .padding_all(Dp(4.0)),
                             )
-                            .children(|| {
+                            .children(move || {
                                 group(
                                     vec![
-                                        icon_only(filled::EDIT_SVG, "Edit"),
-                                        icon_only(filled::EDIT_SVG, "Draw"),
-                                        icon_label(filled::EDIT_SVG, "Label"),
-                                        icon_only(filled::EDIT_SVG, "Sketch"),
-                                        icon_only(filled::EDIT_SVG, "Write"),
+                                        icon_only(filled::EDIT_SVG, "ui-edit"),
+                                        icon_only(filled::EDIT_SVG, "ui-draw"),
+                                        icon_label(filled::EDIT_SVG, "ui-label"),
+                                        icon_only(filled::EDIT_SVG, "ui-sketch"),
+                                        icon_only(filled::EDIT_SVG, "ui-write"),
                                     ],
                                     ButtonGroupsStyle::Standard,
                                 )
                                 .size(ButtonGroupsSize::ExtraSmall)
                                 .variant(ButtonVariant::Tonal)
-                                .label("Standard container");
+                                .label(I18N.text("ui-standard-container"));
                             });
                     }),
                 );
                 gap(Dp(24.0));
                 marked(
                     1,
-                    RenderSlot::new(|| {
+                    RenderSlot::new(move || {
                         boxed()
                             .modifier(
                                 Modifier::new()
@@ -994,122 +1099,122 @@ fn anatomy() {
                                     )
                                     .padding_all(Dp(4.0)),
                             )
-                            .children(|| {
+                            .children(move || {
                                 group(
                                     vec![
-                                        icon_label(filled::STAR_SVG, "Label"),
-                                        icon_label(filled::STAR_SVG, "Label 2"),
-                                        icon_label(filled::STAR_SVG, "Label 3"),
-                                        icon_label(filled::STAR_SVG, "Label 4"),
+                                        icon_label(filled::STAR_SVG, "ui-label"),
+                                        icon_label(filled::STAR_SVG, "ui-label-2"),
+                                        icon_label(filled::STAR_SVG, "ui-label-3"),
+                                        icon_label(filled::STAR_SVG, "ui-label-4"),
                                     ],
                                     ButtonGroupsStyle::Connected,
                                 )
                                 .size(ButtonGroupsSize::ExtraSmall)
                                 .variant(ButtonVariant::Tonal)
-                                .label("Connected container");
+                                .label(I18N.text("ui-connected-container"));
                             });
                     }),
                 );
             });
     }));
     gap(Dp(16.0));
-    legend(vec!["Container".into()]);
+    legend(vec!["ui-container".into()]);
     gap(Dp(48.0));
-    subheading("Common layouts".into());
+    subheading("ui-common-layouts".into());
     gap(Dp(8.0));
-    prose("Mix and match buttons and icon buttons for different scenarios.");
+    prose("ui-mix-and-match-buttons-and-icon-buttons-for-different-scenarios");
     gap(Dp(24.0));
-    panel(RenderSlot::new(|| {
+    panel(RenderSlot::new(move || {
         column()
             .cross_axis_alignment(CrossAxisAlignment::Center)
-            .children(|| {
+            .children(move || {
                 marked(
                     1,
-                    RenderSlot::new(|| {
+                    RenderSlot::new(move || {
                         group(
                             vec![
-                                icon_label(filled::STAR_SVG, "Start"),
-                                icon_label(filled::DIRECTIONS_SVG, "Directions"),
-                                icon_label(filled::SHARE_SVG, "Share"),
+                                icon_label(filled::STAR_SVG, "ui-start"),
+                                icon_label(filled::DIRECTIONS_SVG, "ui-directions"),
+                                icon_label(filled::SHARE_SVG, "ui-share"),
                             ],
                             ButtonGroupsStyle::Standard,
                         )
                         .size(ButtonGroupsSize::ExtraSmall)
                         .variant(ButtonVariant::Tonal)
-                        .label("Label buttons");
+                        .label(I18N.text("ui-label-buttons"));
                     }),
                 );
                 gap(Dp(16.0));
                 marked(
                     2,
-                    RenderSlot::new(|| {
+                    RenderSlot::new(move || {
                         group(
                             vec![
-                                icon_only(filled::SKIP_PREVIOUS_SVG, "Previous"),
-                                icon_label(filled::PLAY_ARROW_SVG, "Play"),
-                                icon_only(filled::SKIP_NEXT_SVG, "Next"),
+                                icon_only(filled::SKIP_PREVIOUS_SVG, "ui-previous"),
+                                icon_label(filled::PLAY_ARROW_SVG, "ui-play"),
+                                icon_only(filled::SKIP_NEXT_SVG, "ui-next"),
                             ],
                             ButtonGroupsStyle::Standard,
                         )
                         .selected(vec![1])
-                        .label("Label buttons and icon buttons");
+                        .label(I18N.text("ui-label-buttons-and-icon-buttons"));
                     }),
                 );
                 gap(Dp(16.0));
                 marked(
                     3,
-                    RenderSlot::new(|| {
+                    RenderSlot::new(move || {
                         group(
                             vec![
-                                icon_only(filled::FORMAT_BOLD_SVG, "Bold"),
-                                icon_only(filled::FORMAT_ITALIC_SVG, "Italic"),
-                                icon_only(filled::FORMAT_UNDERLINED_SVG, "Underline"),
-                                icon_only(filled::FORMAT_COLOR_TEXT_SVG, "Text color"),
+                                icon_only(filled::FORMAT_BOLD_SVG, "ui-bold"),
+                                icon_only(filled::FORMAT_ITALIC_SVG, "ui-italic"),
+                                icon_only(filled::FORMAT_UNDERLINED_SVG, "ui-underline"),
+                                icon_only(filled::FORMAT_COLOR_TEXT_SVG, "ui-text-color"),
                             ],
                             ButtonGroupsStyle::Standard,
                         )
                         .size(ButtonGroupsSize::ExtraSmall)
                         .selected(vec![0])
-                        .label("Extra small icon buttons");
+                        .label(I18N.text("ui-extra-small-icon-buttons"));
                     }),
                 );
                 gap(Dp(16.0));
                 marked(
                     4,
-                    RenderSlot::new(|| {
+                    RenderSlot::new(move || {
                         group(
                             vec![
-                                icon_only(filled::ALARM_SVG, "Alarm"),
-                                icon_only(filled::VOLUME_OFF_SVG, "Mute"),
+                                icon_only(filled::ALARM_SVG, "ui-alarm"),
+                                icon_only(filled::VOLUME_OFF_SVG, "ui-mute"),
                                 icon_only(filled::WIFI_SVG, "Wi-Fi"),
                             ],
                             ButtonGroupsStyle::Standard,
                         )
                         .size(ButtonGroupsSize::Large)
                         .variant(ButtonVariant::Tonal)
-                        .label("Large icon buttons");
+                        .label(I18N.text("ui-large-icon-buttons"));
                     }),
                 );
             });
     }));
     gap(Dp(16.0));
     legend(vec![
-        "Label buttons".into(),
-        "Label buttons and icon buttons".into(),
-        "Extra small icon buttons".into(),
-        "Large icon buttons".into(),
+        "ui-label-buttons".into(),
+        "ui-label-buttons-and-icon-buttons".into(),
+        "ui-extra-small-icon-buttons".into(),
+        "ui-large-icon-buttons".into(),
     ]);
     gap(Dp(48.0));
-    subheading("Color".into());
+    subheading("ui-color".into());
     gap(Dp(8.0));
     prose(
-        "Button groups have no color properties. They can use the default button or toggle button color styles, like filled, tonal, and outlined. Avoid using standard icon buttons or text buttons, as they have no container treatment.",
+        "ui-button-groups-have-no-color-properties-they-can-use-the-default-button-or-toggle-button-co",
     );
     gap(Dp(24.0));
-    panel(RenderSlot::new(|| {
+    panel(RenderSlot::new(move || {
         column()
             .cross_axis_alignment(CrossAxisAlignment::Center)
-            .children(|| {
+            .children(move || {
                 for (index, variant) in [
                     ButtonVariant::Filled,
                     ButtonVariant::Tonal,
@@ -1127,7 +1232,7 @@ fn anatomy() {
                                 .children(move || {
                                     if variant == ButtonVariant::Elevated {
                                         text()
-                                            .content("Elevated style not recommended")
+                                            .content(I18N.text("ui-elevated-style-not-recommended"))
                                             .color(INK)
                                             .style(type_style(14.0, 20.0));
                                     } else {
@@ -1135,7 +1240,7 @@ fn anatomy() {
                                             .size(ButtonGroupsSize::ExtraSmall)
                                             .variant(variant)
                                             .selected(vec![1])
-                                            .label("Standard color sample");
+                                            .label(I18N.text("ui-standard-color-sample"));
                                     }
                                     spacer().modifier(Modifier::new().width(Dp(40.0)));
                                     group(label_items(), ButtonGroupsStyle::Connected)
@@ -1143,7 +1248,7 @@ fn anatomy() {
                                         .variant(variant)
                                         .mode(ButtonGroupsSelectionMode::Single)
                                         .selected(vec![0])
-                                        .label("Connected color sample");
+                                        .label(I18N.text("ui-connected-color-sample"));
                                 });
                         }),
                     );
@@ -1153,29 +1258,29 @@ fn anatomy() {
     }));
     gap(Dp(16.0));
     legend(vec![
-        "Filled".into(),
-        "Tonal".into(),
-        "Outlined".into(),
-        "Elevated".into(),
+        "ui-filled".into(),
+        "ui-tonal".into(),
+        "ui-outlined".into(),
+        "ui-elevated".into(),
     ]);
 }
 
 #[tessera]
 fn selection_and_activation() {
     prose(
-        "Standard button groups add interaction between adjacent buttons when a button is selected or activated.",
+        "ui-standard-button-groups-add-interaction-between-adjacent-buttons-when-a-button-is-selected",
     );
     gap(Dp(8.0));
     prose(
-        "This interaction changes the width, shape, and padding of the selected or activated button, which adjusts the width of buttons directly next to it.",
+        "ui-this-interaction-changes-the-width-shape-and-padding-of-the-selected-or-activated-button-w",
     );
     gap(Dp(24.0));
-    panel(RenderSlot::new(|| {
+    panel(RenderSlot::new(move || {
         group(
             vec![
-                icon_only(filled::BLUETOOTH_SVG, "Bluetooth"),
-                icon_only(filled::ALARM_SVG, "Alarm"),
-                icon_only(filled::LINK_SVG, "Link"),
+                icon_only(filled::BLUETOOTH_SVG, "ui-bluetooth"),
+                icon_only(filled::ALARM_SVG, "ui-alarm"),
+                icon_only(filled::LINK_SVG, "ui-link"),
                 icon_only(filled::WIFI_SVG, "Wi-Fi"),
             ],
             ButtonGroupsStyle::Standard,
@@ -1183,28 +1288,32 @@ fn selection_and_activation() {
         .size(ButtonGroupsSize::Large)
         .variant(ButtonVariant::Tonal)
         .selected(vec![2])
-        .label("Standard activation");
+        .label(I18N.text("ui-standard-activation"));
     }));
     caption(
-        "A selected button changes shape, and briefly changes the width of itself and adjacent buttons",
+        "ui-a-selected-button-changes-shape-and-briefly-changes-the-width-of-itself-and-adjacent-butto",
     );
     gap(Dp(32.0));
     prose(
-        "Connected button groups don't add any interaction between buttons when selected or activated.",
+        "ui-connected-button-groups-don-t-add-any-interaction-between-buttons-when-selected-or-activat",
     );
     gap(Dp(8.0));
-    prose("They only affect the shape of the button being selected or activated.");
+    prose("ui-they-only-affect-the-shape-of-the-button-being-selected-or-activated");
     gap(Dp(24.0));
-    panel(RenderSlot::new(|| {
+    panel(RenderSlot::new(move || {
         group(
-            vec![labelled("Label"), labelled("Label"), labelled("Label")],
+            vec![
+                labelled("ui-label"),
+                labelled("ui-label"),
+                labelled("ui-label"),
+            ],
             ButtonGroupsStyle::Connected,
         )
         .variant(ButtonVariant::Tonal)
         .selected(vec![2])
-        .label("Connected selection");
+        .label(I18N.text("ui-connected-selection"));
     }));
-    caption("A selected button changes shape without affecting adjacent buttons");
+    caption("ui-a-selected-button-changes-shape-without-affecting-adjacent-buttons");
 }
 
 /// One labelled state row; `state` indexes [`STATES`], `number` is its legend
@@ -1219,8 +1328,8 @@ fn state_row(style: ButtonGroupsStyle, state: usize, number: usize, selected: bo
             group(
                 vec![
                     icon_label(filled::EDIT_SVG, STATES[state]),
-                    icon_label(filled::EDIT_SVG, "Label"),
-                    icon_label(filled::EDIT_SVG, "Label"),
+                    icon_label(filled::EDIT_SVG, "ui-label"),
+                    icon_label(filled::EDIT_SVG, "ui-label"),
                 ],
                 style,
             )
@@ -1229,7 +1338,10 @@ fn state_row(style: ButtonGroupsStyle, state: usize, number: usize, selected: bo
             .enabled(state != 1)
             .presentation(presentation)
             .selected(if selected { vec![1] } else { Vec::new() })
-            .label(format!("{} state", STATES[state]));
+            .label(I18N.format(
+                "ui-value-state",
+                [("v0", I18N.text(&(STATES[state])).into())],
+            ));
         }),
     );
     gap(Dp(12.0));
@@ -1252,67 +1364,70 @@ fn state_figure(style: ButtonGroupsStyle, selected: bool, states: Vec<usize>) {
 
 #[tessera]
 fn states() {
-    subheading("Standard button group".into());
+    subheading("ui-standard-button-group".into());
     gap(Dp(16.0));
     prose(
-        "When a button is pressed, standard button groups modify the width and shape of that button and adjacent buttons.",
+        "ui-when-a-button-is-pressed-standard-button-groups-modify-the-width-and-shape-of-that-button",
     );
     gap(Dp(24.0));
     state_figure(ButtonGroupsStyle::Standard, false, vec![0, 1, 2, 3, 4]);
     legend(STATES.iter().map(|state| (*state).to_string()).collect());
     gap(Dp(32.0));
     prose(
-        "When a toggle button is selected in a standard button group, its shape should change between square and round. The color should change according to the button specs.",
+        "ui-when-a-toggle-button-is-selected-in-a-standard-button-group-its-shape-should-change-betwee",
     );
     gap(Dp(24.0));
     state_figure(ButtonGroupsStyle::Standard, true, vec![0, 1, 2, 3, 4]);
     legend(STATES.iter().map(|state| (*state).to_string()).collect());
     gap(Dp(48.0));
-    subheading("Connected button group".into());
+    subheading("ui-connected-button-group".into());
     gap(Dp(16.0));
     prose(
-        "Connected button groups have different shape changes than standard button groups. Selecting a button does not affect adjacent buttons.",
+        "ui-connected-button-groups-have-different-shape-changes-than-standard-button-groups-selecting",
     );
     gap(Dp(24.0));
-    prose("Connected button group unselected states:");
+    prose("ui-connected-button-group-unselected-states");
     gap(Dp(16.0));
     state_figure(ButtonGroupsStyle::Connected, false, vec![0, 1, 2, 3, 4]);
     legend(STATES.iter().map(|state| (*state).to_string()).collect());
     gap(Dp(32.0));
-    prose("Connected button group selected states:");
+    prose("ui-connected-button-group-selected-states");
     gap(Dp(16.0));
     state_figure(ButtonGroupsStyle::Connected, true, vec![0, 2, 3, 4]);
     legend(vec![
-        "Enabled".into(),
-        "Hovered".into(),
-        "Focused".into(),
-        "Pressed".into(),
+        "ui-enabled".into(),
+        "ui-hovered".into(),
+        "ui-focused".into(),
+        "ui-pressed".into(),
     ]);
 }
 
 #[tessera]
 fn measurements() {
-    subheading("Standard button group".into());
+    subheading("ui-standard-button-group".into());
     gap(Dp(16.0));
     prose(
-        "Standard groups apply padding between all buttons. The amount of padding changes based on button size to ensure a minimum accessible target size of 48dp.",
+        "ui-standard-groups-apply-padding-between-all-buttons-the-amount-of-padding-changes-based-on-b",
     );
     gap(Dp(24.0));
-    panel(RenderSlot::new(|| {
+    panel(RenderSlot::new(move || {
         column()
             .cross_axis_alignment(CrossAxisAlignment::Center)
-            .children(|| {
+            .children(move || {
                 for size in SIZES {
                     group(mixed_items(), ButtonGroupsStyle::Standard)
                         .size(size)
                         .variant(ButtonVariant::Tonal)
-                        .label(format!("{} padding", size_name(size)));
+                        .label(I18N.format(
+                            "ui-value-padding",
+                            [("v0", I18N.text(&size_name(size)).into())],
+                        ));
                     gap(Dp(16.0));
                 }
             });
     }));
     gap(Dp(16.0));
-    prose("Standard button group inner padding:");
+    prose("ui-standard-button-group-inner-padding");
     bullets(vec![
         "XS: 18dp".into(),
         "S: 12dp".into(),
@@ -1321,28 +1436,31 @@ fn measurements() {
         "XL: 8dp".into(),
     ]);
     gap(Dp(48.0));
-    subheading("Connected button group".into());
+    subheading("ui-connected-button-group".into());
     gap(Dp(16.0));
     prose(
-        "For all connected button groups, use 2dp padding. This provides visual consistency at scale.",
+        "ui-for-all-connected-button-groups-use-2dp-padding-this-provides-visual-consistency-at-scale",
     );
     gap(Dp(24.0));
-    panel(RenderSlot::new(|| {
+    panel(RenderSlot::new(move || {
         column()
             .cross_axis_alignment(CrossAxisAlignment::Center)
-            .children(|| {
+            .children(move || {
                 for size in SIZES {
                     group(label_items(), ButtonGroupsStyle::Connected)
                         .size(size)
                         .variant(ButtonVariant::Tonal)
-                        .label(format!("{} round connected", size_name(size)));
+                        .label(I18N.format(
+                            "ui-value-round-connected",
+                            [("v0", I18N.text(&size_name(size)).into())],
+                        ));
                     gap(Dp(16.0));
                 }
             });
     }));
     gap(Dp(16.0));
     prose(
-        "Round connected button group inner padding is 2dp at every size. The outer shape is fully round, and the inner shape remains square with the following corner sizes:",
+        "ui-round-connected-button-group-inner-padding-is-2dp-at-every-size-the-outer-shape-is-fully-r",
     );
     bullets(vec![
         "XS: 4dp".into(),
@@ -1352,23 +1470,26 @@ fn measurements() {
         "XL: 20dp".into(),
     ]);
     gap(Dp(32.0));
-    panel(RenderSlot::new(|| {
+    panel(RenderSlot::new(move || {
         column()
             .cross_axis_alignment(CrossAxisAlignment::Center)
-            .children(|| {
+            .children(move || {
                 for size in SIZES {
                     group(label_items(), ButtonGroupsStyle::Connected)
                         .size(size)
                         .shape(ButtonShape::Square)
                         .variant(ButtonVariant::Tonal)
-                        .label(format!("{} square connected", size_name(size)));
+                        .label(I18N.format(
+                            "ui-value-square-connected",
+                            [("v0", I18N.text(&size_name(size)).into())],
+                        ));
                     gap(Dp(16.0));
                 }
             });
     }));
     gap(Dp(16.0));
     prose(
-        "Square connected button group inner padding is 2dp at every size. The outer shape has the following corner sizes:",
+        "ui-square-connected-button-group-inner-padding-is-2dp-at-every-size-the-outer-shape-has-the-f",
     );
     bullets(vec![
         "XS: 4dp".into(),
@@ -1378,34 +1499,37 @@ fn measurements() {
         "XL: 20dp".into(),
     ]);
     gap(Dp(48.0));
-    subheading("Minimum widths".into());
+    subheading("ui-minimum-widths".into());
     gap(Dp(16.0));
     prose(
-        "Extra small and small connected button groups have 48dp target areas and a minimum width of 48dp.",
+        "ui-extra-small-and-small-connected-button-groups-have-48dp-target-areas-and-a-minimum-width-o",
     );
     gap(Dp(24.0));
-    panel(RenderSlot::new(|| {
+    panel(RenderSlot::new(move || {
         row()
             .cross_axis_alignment(CrossAxisAlignment::Center)
-            .children(|| {
+            .children(move || {
                 for size in [ButtonGroupsSize::ExtraSmall, ButtonGroupsSize::Small] {
                     column()
                         .cross_axis_alignment(CrossAxisAlignment::Center)
                         .children(move || {
                             group(
                                 vec![
-                                    icon_only(filled::STAR_SVG, "Favorites"),
-                                    icon_only(filled::ALARM_SVG, "Alarm"),
-                                    icon_only(filled::LINK_SVG, "Link"),
+                                    icon_only(filled::STAR_SVG, "ui-favorites"),
+                                    icon_only(filled::ALARM_SVG, "ui-alarm"),
+                                    icon_only(filled::LINK_SVG, "ui-link"),
                                 ],
                                 ButtonGroupsStyle::Connected,
                             )
                             .size(size)
                             .variant(ButtonVariant::Tonal)
-                            .label(format!("{} minimum width", size_name(size)));
+                            .label(I18N.format(
+                                "ui-value-minimum-width",
+                                [("v0", I18N.text(&size_name(size)).into())],
+                            ));
                             gap(Dp(12.0));
                             text()
-                                .content(size_name(size))
+                                .content(I18N.text(size_name(size)))
                                 .color(INK)
                                 .style(type_style(14.0, 20.0));
                         });
@@ -1417,235 +1541,243 @@ fn measurements() {
 
 #[tessera]
 fn density() {
-    prose("Button groups adapt to density of the buttons inside.");
+    prose("ui-button-groups-adapt-to-density-of-the-buttons-inside");
     gap(Dp(24.0));
-    panel(RenderSlot::new(|| {
+    panel(RenderSlot::new(move || {
         column()
             .cross_axis_alignment(CrossAxisAlignment::Center)
-            .children(|| {
+            .children(move || {
                 group(label_items(), ButtonGroupsStyle::Connected)
                     .size(ButtonGroupsSize::Small)
                     .variant(ButtonVariant::Tonal)
-                    .label("Default density");
+                    .label(I18N.text("ui-default-density"));
                 gap(Dp(16.0));
                 group(label_items(), ButtonGroupsStyle::Connected)
                     .size(ButtonGroupsSize::ExtraSmall)
                     .variant(ButtonVariant::Tonal)
-                    .label("Reduced height");
+                    .label(I18N.text("ui-reduced-height"));
             });
     }));
     caption(
-        "Button groups adapt to the height of the buttons inside, including when density is applied",
+        "ui-button-groups-adapt-to-the-height-of-the-buttons-inside-including-when-density-is-applied",
     );
 }
 
 #[tessera]
 fn usage() {
-    prose("There are two variants of button groups: standard and connected.");
+    prose("ui-there-are-two-variants-of-button-groups-standard-and-connected");
     gap(Dp(16.0));
     prose(
-        "Standard button groups add interaction between adjacent buttons so they respond to each other. When a button in a standard group is selected:",
+        "ui-standard-button-groups-add-interaction-between-adjacent-buttons-so-they-respond-to-each-ot",
     );
     bullets(vec![
-        "The selected button changes shape and width".into(),
-        "A selected toggle button also changes color".into(),
-        "Adjacent buttons move and temporarily change width".into(),
+        "ui-the-selected-button-changes-shape-and-width".into(),
+        "ui-a-selected-toggle-button-also-changes-color".into(),
+        "ui-adjacent-buttons-move-and-temporarily-change-width".into(),
     ]);
     gap(Dp(24.0));
-    panel(RenderSlot::new(|| {
+    panel(RenderSlot::new(move || {
         group(
             vec![
-                icon_only(filled::MIC_SVG, "Microphone"),
-                icon_only(filled::VIDEOCAM_SVG, "Camera"),
-                icon_only(filled::MOOD_SVG, "Reactions"),
-                icon_only(filled::MORE_VERT_SVG, "More"),
+                icon_only(filled::MIC_SVG, "ui-microphone"),
+                icon_only(filled::VIDEOCAM_SVG, "ui-camera"),
+                icon_only(filled::MOOD_SVG, "ui-reactions"),
+                icon_only(filled::MORE_VERT_SVG, "ui-more"),
             ],
             ButtonGroupsStyle::Standard,
         )
         .size(ButtonGroupsSize::Medium)
         .variant(ButtonVariant::Tonal)
         .selected(vec![1])
-        .label("Call controls");
+        .label(I18N.text("ui-call-controls"));
     }));
-    caption("Standard button groups add interaction between adjacent buttons");
+    caption("ui-standard-button-groups-add-interaction-between-adjacent-buttons");
     gap(Dp(48.0));
-    subheading("Button groups add more expression to a product".into());
+    subheading("ui-button-groups-add-more-expression-to-a-product".into());
     gap(Dp(16.0));
     prose(
-        "Mix and match the different button variants, widths, and colors to emphasize what's important, and to visually group related buttons.",
+        "ui-mix-and-match-the-different-button-variants-widths-and-colors-to-emphasize-what-s-importan",
     );
     gap(Dp(16.0));
     prose(
-        "By default, all buttons in a standard group should be the same size (XS to XL) and shape (round or square).",
+        "ui-by-default-all-buttons-in-a-standard-group-should-be-the-same-size-xs-to-xl-and-shape-roun",
     );
     bullets(vec![
-        "Only use multiple sizes in a group for hero moments".into(),
-        "Avoid mixing sizes frequently".into(),
-        "Only use a different shape in a group when a button is selected, or to add meaning or contrast".into(),
+        "ui-only-use-multiple-sizes-in-a-group-for-hero-moments".into(),
+        "ui-avoid-mixing-sizes-frequently".into(),
+        "ui-only-use-a-different-shape-in-a-group-when-a-button-is-selected-or-to-add-meaning-or-contr".into(),
     ]);
     guidance(
         "Do",
-        "Use the same shapes for buttons in a group, but change other properties like width and color",
+        "ui-use-the-same-shapes-for-buttons-in-a-group-but-change-other-properties-like-width-and-colo",
         DO_COLOR,
     );
     guidance(
-        "Caution",
-        "Reserve shape differences in button groups for key interactions",
+        "ui-caution",
+        "ui-reserve-shape-differences-in-button-groups-for-key-interactions",
         CAUTION_COLOR,
     );
     gap(Dp(48.0));
-    subheading("Connected button groups".into());
+    subheading("ui-connected-button-groups".into());
     gap(Dp(16.0));
     prose(
-        "Connected button groups help people select options, switch views, or sort elements in a page.",
+        "ui-connected-button-groups-help-people-select-options-switch-views-or-sort-elements-in-a-page",
     );
     gap(Dp(8.0));
-    prose("They behave similarly to standard groups, except they don't affect adjacent buttons.");
+    prose("ui-they-behave-similarly-to-standard-groups-except-they-don-t-affect-adjacent-buttons");
     gap(Dp(8.0));
     prose(
-        "Connected groups should replace the baseline segmented button, which is no longer recommended.",
+        "ui-connected-groups-should-replace-the-baseline-segmented-button-which-is-no-longer-recommend",
     );
     gap(Dp(24.0));
-    panel(RenderSlot::new(|| {
+    panel(RenderSlot::new(move || {
         group(
-            vec![labelled("Recent"), labelled("Starred"), labelled("Shared")],
+            vec![
+                labelled("ui-recent"),
+                labelled("ui-starred"),
+                labelled("ui-shared"),
+            ],
             ButtonGroupsStyle::Connected,
         )
         .mode(ButtonGroupsSelectionMode::Single)
         .required(true)
         .selected(vec![0])
-        .label("Views");
+        .label(I18N.text("ui-views"));
     }));
-    caption("Connected button groups can be used to toggle between similar actions");
+    caption("ui-connected-button-groups-can-be-used-to-toggle-between-similar-actions");
     gap(Dp(32.0));
     prose(
-        "Use connected button groups when the button content is related, and buttons can be selected.",
+        "ui-use-connected-button-groups-when-the-button-content-is-related-and-buttons-can-be-selected",
     );
-    caption("Closely related actions work well in a connected button group");
+    caption("ui-closely-related-actions-work-well-in-a-connected-button-group");
     gap(Dp(32.0));
     prose(
-        "Connected button groups should be used for single or multi-select patterns that use toggle buttons.",
+        "ui-connected-button-groups-should-be-used-for-single-or-multi-select-patterns-that-use-toggle",
     );
     gap(Dp(8.0));
-    prose("Avoid using a connected group when none of the buttons can be toggled.");
+    prose("ui-avoid-using-a-connected-group-when-none-of-the-buttons-can-be-toggled");
     gap(Dp(24.0));
-    panel(RenderSlot::new(|| {
+    panel(RenderSlot::new(move || {
         group(
             vec![
                 labelled("Wi-Fi"),
-                labelled("Cellular"),
-                labelled("Ethernet"),
+                labelled("ui-cellular"),
+                labelled("ui-ethernet"),
             ],
             ButtonGroupsStyle::Connected,
         )
         .selected(vec![0, 2])
-        .label("Networks");
+        .label(I18N.text("ui-networks"));
     }));
-    caption("Use the connected button group with single or multi-select patterns");
+    caption("ui-use-the-connected-button-group-with-single-or-multi-select-patterns");
     gap(Dp(48.0));
-    subheading("Color".into());
+    subheading("ui-color".into());
     gap(Dp(16.0));
     prose(
-        "Avoid mixing color styles in connected button groups; it can make selection and emphasis unclear.",
+        "ui-avoid-mixing-color-styles-in-connected-button-groups-it-can-make-selection-and-emphasis-un",
     );
     guidance(
         "Don't",
-        "Don't mix color styles in connected button groups",
+        "ui-don-t-mix-color-styles-in-connected-button-groups",
         DONT_COLOR,
     );
 }
 
 #[tessera]
 fn guidelines_anatomy() {
-    subheading("Container".into());
+    subheading("ui-container".into());
     gap(Dp(16.0));
     prose(
-        "The standard button group container has padding between buttons so they can animate width and shape without disrupting the product layout.",
+        "ui-the-standard-button-group-container-has-padding-between-buttons-so-they-can-animate-width",
     );
     gap(Dp(8.0));
-    prose("The standard button group hugs the width of the buttons inside.");
+    prose("ui-the-standard-button-group-hugs-the-width-of-the-buttons-inside");
     gap(Dp(24.0));
-    panel(RenderSlot::new(|| {
+    panel(RenderSlot::new(move || {
         group(
-            vec![labelled("Button"), labelled("Button"), labelled("Button")],
+            vec![
+                labelled("ui-button"),
+                labelled("ui-button"),
+                labelled("ui-button"),
+            ],
             ButtonGroupsStyle::Standard,
         )
         .variant(ButtonVariant::Tonal)
-        .label("Hugging group");
+        .label(I18N.text("ui-hugging-group"));
     }));
-    caption("Button groups can animate without affecting their surroundings");
+    caption("ui-button-groups-can-animate-without-affecting-their-surroundings");
     gap(Dp(32.0));
     prose(
-        "The connected button group should span the width of the page or surface it's placed on, increasing the button widths inside.",
+        "ui-the-connected-button-group-should-span-the-width-of-the-page-or-surface-it-s-placed-on-inc",
     );
     gap(Dp(8.0));
     prose(
-        "In larger windows, consider adding a maximum width to the connected group to avoid it growing too wide.",
+        "ui-in-larger-windows-consider-adding-a-maximum-width-to-the-connected-group-to-avoid-it-growi",
     );
     gap(Dp(24.0));
-    panel(RenderSlot::new(|| {
+    panel(RenderSlot::new(move || {
         boxed()
             .modifier(Modifier::new().fill_max_width())
-            .children(|| {
+            .children(move || {
                 button_groups()
                     .modifier(Modifier::new().fill_max_width().semantics(SemanticsArgs {
-                        label: Some("Full width group".into()),
+                        label: Some(I18N.text("ui-full-width-group")),
                         ..Default::default()
                     }))
                     .style(ButtonGroupsStyle::Connected)
                     .size(ButtonGroupsSize::Small)
                     .selection_mode(ButtonGroupsSelectionMode::Single)
                     .child_shared(
-                        RenderSlot::new(|| {
-                            text().content("Day");
+                        RenderSlot::new(move || {
+                            text().content(I18N.text("ui-day"));
                         }),
                         CallbackWith::new(|_| {}),
                     )
                     .child_shared(
-                        RenderSlot::new(|| {
-                            text().content("Week");
+                        RenderSlot::new(move || {
+                            text().content(I18N.text("ui-week"));
                         }),
                         CallbackWith::new(|_| {}),
                     )
                     .child_shared(
-                        RenderSlot::new(|| {
-                            text().content("Month");
+                        RenderSlot::new(move || {
+                            text().content(I18N.text("ui-month"));
                         }),
                         CallbackWith::new(|_| {}),
                     );
             });
     }));
     caption(
-        "Connected button groups increase the widths of each button inside and expand to their container width",
+        "ui-connected-button-groups-increase-the-widths-of-each-button-inside-and-expand-to-their-cont",
     );
 }
 
 #[tessera]
 fn adaptive() {
     prose(
-        "Adaptive design allows an interface to respond or change based on context, such as the user, device, and usage.",
+        "ui-adaptive-design-allows-an-interface-to-respond-or-change-based-on-context-such-as-the-user",
     );
     gap(Dp(32.0));
-    subheading("Resizing".into());
+    subheading("ui-resizing".into());
     gap(Dp(16.0));
     prose(
-        "Button groups should move through layouts together in a single line. They shouldn't wrap to a second line. Multiple button groups can be stacked to keep items close together. However, button groups don't interact vertically.",
+        "ui-button-groups-should-move-through-layouts-together-in-a-single-line-they-shouldn-t-wrap-to",
     );
     gap(Dp(16.0));
-    prose("Button groups and individual buttons can be set to fixed or flexible resizing:");
+    prose("ui-button-groups-and-individual-buttons-can-be-set-to-fixed-or-flexible-resizing");
     bullets(vec![
-        "Fixed: Manually define the button width (narrow to wide), size (XS to XL), or padding at each breakpoint.".into(),
-        "Flexible: Automatically increase or decrease the width of buttons and the button group. Button groups grow until all flexible buttons are at their largest width.".into(),
+        "ui-fixed-manually-define-the-button-width-narrow-to-wide-size-xs-to-xl-or-padding-at-each-bre".into(),
+        "ui-flexible-automatically-increase-or-decrease-the-width-of-buttons-and-the-button-group-butt".into(),
     ]);
     gap(Dp(16.0));
     prose(
-        "If adjusting button width manually, avoid stretching icon buttons beyond the wide setting.",
+        "ui-if-adjusting-button-width-manually-avoid-stretching-icon-buttons-beyond-the-wide-setting",
     );
     gap(Dp(24.0));
-    panel(RenderSlot::new(|| {
+    panel(RenderSlot::new(move || {
         column()
             .cross_axis_alignment(CrossAxisAlignment::Center)
-            .children(|| {
+            .children(move || {
                 for size in [
                     ButtonGroupsSize::ExtraSmall,
                     ButtonGroupsSize::Small,
@@ -1655,87 +1787,90 @@ fn adaptive() {
                         .size(size)
                         .variant(ButtonVariant::Tonal)
                         .selected(vec![1])
-                        .label(format!("{} breakpoint", size_name(size)));
+                        .label(I18N.format(
+                            "ui-value-breakpoint",
+                            [("v0", I18N.text(&size_name(size)).into())],
+                        ));
                     gap(Dp(16.0));
                 }
             });
     }));
     caption(
-        "Buttons can have width, size, and padding manually adjusted to fit different breakpoints",
+        "ui-buttons-can-have-width-size-and-padding-manually-adjusted-to-fit-different-breakpoints",
     );
     gap(Dp(32.0));
     prose(
-        "In compact windows, consider using smaller, narrower buttons so all buttons in the button group can fit. In large and extra large windows, consider using larger, wider buttons to better fill in the available space.",
+        "ui-in-compact-windows-consider-using-smaller-narrower-buttons-so-all-buttons-in-the-button-gr",
     );
     gap(Dp(8.0));
-    prose("Flexible buttons or button groups will automatically adjust width.");
+    prose("ui-flexible-buttons-or-button-groups-will-automatically-adjust-width");
     gap(Dp(32.0));
     prose(
-        "When scaling to larger breakpoints, make sure that the visual hierarchy of each button is preserved using qualities like color and size.",
+        "ui-when-scaling-to-larger-breakpoints-make-sure-that-the-visual-hierarchy-of-each-button-is-p",
     );
     gap(Dp(8.0));
     prose(
-        "For example, the primary action should remain the largest, widest, or most visually prominent button at all breakpoints.",
+        "ui-for-example-the-primary-action-should-remain-the-largest-widest-or-most-visually-prominent",
     );
     gap(Dp(48.0));
-    subheading("Presentation".into());
+    subheading("ui-presentation".into());
     gap(Dp(16.0));
     prose(
-        "Buttons at the trailing edge of the button group can be customized to collapse into an overflow menu at smaller breakpoints, and become visible again at larger sizes. Place the overflow menu at the trailing end of the group.",
+        "ui-buttons-at-the-trailing-edge-of-the-button-group-can-be-customized-to-collapse-into-an-ove",
     );
     gap(Dp(8.0));
-    prose("Buttons outside the group aren't affected by button group behavior.");
+    prose("ui-buttons-outside-the-group-aren-t-affected-by-button-group-behavior");
     gap(Dp(24.0));
-    panel(RenderSlot::new(|| {
+    panel(RenderSlot::new(move || {
         column()
             .cross_axis_alignment(CrossAxisAlignment::Center)
-            .children(|| {
+            .children(move || {
                 group(
                     vec![
-                        icon_only(filled::MIC_SVG, "Microphone"),
-                        icon_only(filled::VIDEOCAM_SVG, "Camera"),
-                        icon_only(filled::MOOD_SVG, "Reactions"),
-                        icon_only(filled::PRESENT_TO_ALL_SVG, "Present"),
-                        icon_only(filled::MORE_VERT_SVG, "More"),
+                        icon_only(filled::MIC_SVG, "ui-microphone"),
+                        icon_only(filled::VIDEOCAM_SVG, "ui-camera"),
+                        icon_only(filled::MOOD_SVG, "ui-reactions"),
+                        icon_only(filled::PRESENT_TO_ALL_SVG, "ui-present"),
+                        icon_only(filled::MORE_VERT_SVG, "ui-more"),
                     ],
                     ButtonGroupsStyle::Standard,
                 )
                 .variant(ButtonVariant::Tonal)
-                .label("Expanded call controls");
+                .label(I18N.text("ui-expanded-call-controls"));
                 gap(Dp(16.0));
                 group(
                     vec![
-                        icon_only(filled::MIC_SVG, "Microphone"),
-                        icon_only(filled::VIDEOCAM_SVG, "Camera"),
-                        icon_only(filled::MORE_VERT_SVG, "More"),
+                        icon_only(filled::MIC_SVG, "ui-microphone"),
+                        icon_only(filled::VIDEOCAM_SVG, "ui-camera"),
+                        icon_only(filled::MORE_VERT_SVG, "ui-more"),
                     ],
                     ButtonGroupsStyle::Standard,
                 )
                 .variant(ButtonVariant::Tonal)
-                .label("Collapsed call controls");
+                .label(I18N.text("ui-collapsed-call-controls"));
             });
     }));
     caption(
-        "Buttons should become hidden in an overflow menu or visible again, depending on screen size. Buttons outside the button group, like the end call button, will not be affected.",
+        "ui-buttons-should-become-hidden-in-an-overflow-menu-or-visible-again-depending-on-screen-size",
     );
 }
 
 #[tessera]
 fn behavior() {
-    subheading("Pressed".into());
+    subheading("ui-pressed".into());
     gap(Dp(16.0));
-    prose("When a button is pressed, it changes width and shape.");
+    prose("ui-when-a-button-is-pressed-it-changes-width-and-shape");
     gap(Dp(8.0));
     prose(
-        "In a standard button group, pressing a button also affects the width of adjacent buttons.",
+        "ui-in-a-standard-button-group-pressing-a-button-also-affects-the-width-of-adjacent-buttons",
     );
     gap(Dp(8.0));
-    prose("In a connected button group, only the shape of the pressed button changes.");
+    prose("ui-in-a-connected-button-group-only-the-shape-of-the-pressed-button-changes");
     gap(Dp(24.0));
-    panel(RenderSlot::new(|| {
+    panel(RenderSlot::new(move || {
         column()
             .cross_axis_alignment(CrossAxisAlignment::Center)
-            .children(|| {
+            .children(move || {
                 group(
                     vec![
                         labelled("AC"),
@@ -1753,7 +1888,7 @@ fn behavior() {
                     InteractionVisualState::Rest,
                     InteractionVisualState::Rest,
                 ])
-                .label("Pressed standard group");
+                .label(I18N.text("ui-pressed-standard-group"));
                 gap(Dp(16.0));
                 group(
                     vec![labelled("7"), labelled("8"), labelled("9")],
@@ -1766,109 +1901,115 @@ fn behavior() {
                     InteractionVisualState::Pressed,
                     InteractionVisualState::Rest,
                 ])
-                .label("Pressed connected group");
+                .label(I18N.text("ui-pressed-connected-group"));
             });
     }));
-    caption("Pressing buttons in a standard group changes the width of adjacent buttons");
+    caption("ui-pressing-buttons-in-a-standard-group-changes-the-width-of-adjacent-buttons");
     gap(Dp(48.0));
-    subheading("Selected".into());
+    subheading("ui-selected".into());
     gap(Dp(16.0));
-    prose("A selected button should change shape from round to square, or square to round.");
+    prose("ui-a-selected-button-should-change-shape-from-round-to-square-or-square-to-round");
     gap(Dp(24.0));
-    panel(RenderSlot::new(|| {
+    panel(RenderSlot::new(move || {
         column()
             .cross_axis_alignment(CrossAxisAlignment::Center)
-            .children(|| {
+            .children(move || {
                 group(mixed_items(), ButtonGroupsStyle::Standard)
                     .size(ButtonGroupsSize::Medium)
                     .selected(vec![1])
-                    .label("Round group with selection");
+                    .label(I18N.text("ui-round-group-with-selection"));
                 gap(Dp(16.0));
                 group(mixed_items(), ButtonGroupsStyle::Standard)
                     .size(ButtonGroupsSize::Medium)
                     .shape(ButtonShape::Square)
                     .selected(vec![1])
-                    .label("Square group with selection");
+                    .label(I18N.text("ui-square-group-with-selection"));
             });
     }));
-    caption("Selected buttons should change shape");
+    caption("ui-selected-buttons-should-change-shape");
 }
 
 #[tessera]
 fn use_cases() {
-    prose("People should be able to do the following with assistive technology:");
+    prose("ui-people-should-be-able-to-do-the-following-with-assistive-technology");
     gap(Dp(16.0));
     bullets(vec![
-        "Navigate to and interact with each button in the group".into(),
-        "Identify when buttons are selected".into(),
+        "ui-navigate-to-and-interact-with-each-button-in-the-group".into(),
+        "ui-identify-when-buttons-are-selected".into(),
     ]);
 }
 
 #[tessera]
 fn interaction_style() {
-    prose("Each button in a group should have a minimum 48x48dp target.");
+    prose("ui-each-button-in-a-group-should-have-a-minimum-48x48dp-target");
     gap(Dp(8.0));
     prose(
-        "Extra small and small button groups have larger inner padding to ensure accessible targets. Avoid reducing the padding in these sizes.",
+        "ui-extra-small-and-small-button-groups-have-larger-inner-padding-to-ensure-accessible-targets",
     );
     gap(Dp(24.0));
-    panel(RenderSlot::new(|| {
+    panel(RenderSlot::new(move || {
         column()
             .cross_axis_alignment(CrossAxisAlignment::Center)
-            .children(|| {
+            .children(move || {
                 group(mixed_items(), ButtonGroupsStyle::Standard)
                     .size(ButtonGroupsSize::ExtraSmall)
                     .variant(ButtonVariant::Tonal)
-                    .label("Extra small button group");
+                    .label(I18N.text("ui-extra-small-button-group"));
                 gap(Dp(8.0));
                 text()
-                    .content("Extra small button group")
+                    .content(I18N.text("ui-extra-small-button-group"))
                     .style(type_style(14.0, 20.0));
                 gap(Dp(24.0));
                 group(mixed_items(), ButtonGroupsStyle::Standard)
                     .size(ButtonGroupsSize::Small)
                     .variant(ButtonVariant::Tonal)
-                    .label("Small button group");
+                    .label(I18N.text("ui-small-button-group"));
                 gap(Dp(8.0));
                 text()
-                    .content("Small button group")
+                    .content(I18N.text("ui-small-button-group"))
                     .style(type_style(14.0, 20.0));
             });
     }));
     gap(Dp(48.0));
-    subheading("Initial focus".into());
+    subheading("ui-initial-focus".into());
     gap(Dp(16.0));
     prose(
-        "The button group container is not a focusable element. Initial focus should land on the first button in the group and then move to each button.",
+        "ui-the-button-group-container-is-not-a-focusable-element-initial-focus-should-land-on-the-fir",
     );
     gap(Dp(24.0));
-    panel(RenderSlot::new(|| {
+    panel(RenderSlot::new(move || {
         group(mixed_items(), ButtonGroupsStyle::Standard)
             .size(ButtonGroupsSize::Medium)
             .presentation(vec![InteractionVisualState::Focus])
-            .label("Focus order");
+            .label(I18N.text("ui-focus-order"));
     }));
-    caption("Initial focus should land on the first button, not on the container");
+    caption("ui-initial-focus-should-land-on-the-first-button-not-on-the-container");
     gap(Dp(32.0));
     prose(
-        "Use Tab to navigate to a button group, the arrow keys to navigate between each item in the group, and Space or Enter to select a focused button.",
+        "ui-use-tab-to-navigate-to-a-button-group-the-arrow-keys-to-navigate-between-each-item-in-the",
     );
     gap(Dp(16.0));
     bullets(vec![
-        "Tab: Initial focus lands on the first button".into(),
-        "Arrow keys: Navigate between items".into(),
-        "Space or Enter: Selects a focused item".into(),
+        "ui-tab-initial-focus-lands-on-the-first-button".into(),
+        "ui-arrow-keys-navigate-between-items".into(),
+        "ui-space-or-enter-selects-a-focused-item".into(),
     ]);
 }
 
 #[tessera]
 fn keyboard_navigation() {
     spec_table(
-        vec!["Keys".into(), "Actions".into()],
+        vec!["ui-keys".into(), "ui-actions".into()],
         vec![
-            vec!["Tab".into(), "Navigate between buttons".into()],
-            vec!["Arrow keys".into(), "Navigate inside the component".into()],
-            vec!["Space or Enter".into(), "Activate a focused button".into()],
+            vec!["ui-tab".into(), "ui-navigate-between-buttons".into()],
+            vec![
+                "ui-arrow-keys".into(),
+                "ui-navigate-inside-the-component".into(),
+            ],
+            vec![
+                "ui-space-or-enter".into(),
+                "ui-activate-a-focused-button".into(),
+            ],
         ],
     );
 }
@@ -1876,31 +2017,33 @@ fn keyboard_navigation() {
 #[tessera]
 fn labeling() {
     prose(
-        "The button group container doesn't need to be labeled. Label each button according to the button and icon button accessibility guidance.",
+        "ui-the-button-group-container-doesn-t-need-to-be-labeled-label-each-button-according-to-the-b",
     );
     gap(Dp(24.0));
-    panel(RenderSlot::new(|| {
+    panel(RenderSlot::new(move || {
         column()
             .modifier(Modifier::new().fill_max_width())
-            .children(|| {
+            .children(move || {
                 text()
-                    .content("Dinner Club")
+                    .content(I18N.text("ui-dinner-club"))
                     .color(INK)
                     .style(type_style(20.0, 28.0));
                 gap(Dp(8.0));
-                text().content("3 Messages").style(type_style(16.0, 24.0));
+                text()
+                    .content(I18N.text("ui-3-messages"))
+                    .style(type_style(16.0, 24.0));
                 gap(Dp(24.0));
                 group(
                     vec![
-                        icon_only(filled::REPLY_SVG, "Reply"),
-                        icon_only(filled::ARCHIVE_SVG, "Archive"),
-                        icon_only(filled::DELETE_SVG, "Delete"),
+                        icon_only(filled::REPLY_SVG, "ui-reply"),
+                        icon_only(filled::ARCHIVE_SVG, "ui-archive"),
+                        icon_only(filled::DELETE_SVG, "ui-delete"),
                     ],
                     ButtonGroupsStyle::Standard,
                 )
                 .variant(ButtonVariant::Tonal)
-                .label("Message actions");
+                .label(I18N.text("ui-message-actions"));
             });
     }));
-    caption("Label each button within the button group");
+    caption("ui-label-each-button-within-the-button-group");
 }

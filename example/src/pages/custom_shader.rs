@@ -14,6 +14,8 @@ use tessera_ui::{
     tessera, use_context, wgpu,
 };
 
+use crate::res::I18N;
+
 const RAYMARCH_CANVAS_WIDTH: Dp = Dp(560.0);
 const RAYMARCH_CANVAS_HEIGHT: Dp = Dp(320.0);
 const RAYMARCH_UNIFORM_FLOATS: usize = 28;
@@ -69,11 +71,11 @@ pub fn custom_shader_page() {
         .item_spacing(Dp(14.0))
         .item(move || {
             text()
-                .content("Custom Shader")
+                .content(I18N.text("ui-custom-shader"))
                 .style(theme.with(|t| t.typography.headline_large));
         })
         .item(move || {
-            text().content("A ray tracing demo.");
+            text().content(I18N.text("ui-a-ray-tracing-demo"));
         })
         .item(move || {
             raymarch_canvas(
@@ -88,10 +90,13 @@ pub fn custom_shader_page() {
             );
         })
         .item(move || {
-            text().content(format!("Time scale {:.2}x", time_scale));
+            text().content(I18N.format(
+                "ui-time-scale-valuex",
+                [("v0", format!("{:.2}", time_scale).into())],
+            ));
         })
         .item(move || {
-            text().content("Animation Speed");
+            text().content(I18N.text("ui-animation-speed"));
         })
         .item(move || {
             slider()

@@ -64,7 +64,11 @@ struct TextFont {
 fn load_material_fonts(db: &mut fontdb::Database) {
     let existing: Vec<_> = db
         .faces()
-        .filter(|face| face.families.iter().any(|(name, _)| name == "Roboto"))
+        .filter(|face| {
+            face.families
+                .iter()
+                .any(|(name, _)| matches!(name.as_str(), "Roboto" | "Noto Sans SC"))
+        })
         .map(|face| face.id)
         .collect();
     for id in existing {
@@ -75,17 +79,19 @@ fn load_material_fonts(db: &mut fontdb::Database) {
         include_bytes!("../../../assets/Roboto-Regular.ttf").as_slice(),
         include_bytes!("../../../assets/Roboto-Medium.ttf").as_slice(),
         include_bytes!("../../../assets/Roboto-Bold.ttf").as_slice(),
+        include_bytes!("../../../assets/NotoSansSC-Regular.otf").as_slice(),
     ] {
-        db.load_font_data(bytes.to_vec());
+        db.load_font_source(fontdb::Source::Binary(Arc::new(bytes)));
     }
     #[cfg(target_family = "wasm")]
     for asset in [
         res::ROBOTO_REGULAR_TTF,
         res::ROBOTO_MEDIUM_TTF,
         res::ROBOTO_BOLD_TTF,
+        res::NOTOSANSSC_REGULAR_OTF,
     ] {
         if let Err(err) = load_asset_font_data(db, asset) {
-            eprintln!("wasm fontdb: failed to load Roboto asset: {err}");
+            eprintln!("wasm fontdb: failed to load bundled text font: {err}");
         }
     }
     db.set_sans_serif_family("Roboto");
@@ -175,9 +181,6 @@ fn init_font_system() -> RwLock<glyphon::FontSystem> {
 
     {
         let db = font_system.db_mut();
-        if let Err(err) = load_asset_font_data(db, res::NOTOSANSSC_REGULAR_OTF) {
-            eprintln!("wasm fontdb: failed to load Noto Sans SC asset: {err}");
-        }
         if let Err(err) = load_asset_font_data(db, res::NOTOCOLOREMOJI_COLRV0_TTF) {
             eprintln!("wasm fontdb: failed to load emoji font asset: {err}");
         }
@@ -802,37 +805,71 @@ mod tests {
     }
 
     #[test]
-    fn material_text_uses_bundled_weight_and_tracking_with_exact_line_height() {
-        let typography = MaterialTypography::default();
-        let shape = |style| {
-            TextData::shape(
-                "Material typography".to_owned(),
-                Color::BLACK,
-                style,
-                TextConstraint {
-                    max_width: None,
-                    max_height: None,
+    fn bundled_fonts_shape_latin_weights_and_chinese_without_system_fonts() {
+        let session = tessera_ui::RuntimeSession::new();
+        session.run(|| {
+            let mut db = glyphon::fontdb::Database::new();
+            super::load_material_fonts(&mut db);
+            *super::write_font_system() =
+                glyphon::FontSystem::new_with_locale_and_db("en-US".into(), db);
+            let typography = MaterialTypography::default();
+            let shape = |content: &str, style| {
+                TextData::shape(
+                    content.to_owned(),
+                    Color::BLACK,
+                    style,
+                    TextConstraint {
+                        max_width: None,
+                        max_height: None,
+                    },
+                )
+            };
+            let regular = shape("Material typography", typography.body_large);
+            let medium = shape(
+                "Material typography",
+                crate::theme::TextStyle {
+                    font_weight: 500,
+                    ..typography.body_large
                 },
-            )
-        };
-        let regular = shape(typography.body_large);
-        let medium = shape(crate::theme::TextStyle {
-            font_weight: 500,
-            ..typography.body_large
+            );
+            let untracked = shape(
+                "Material typography",
+                crate::theme::TextStyle {
+                    letter_spacing: Dp(0.0),
+                    ..typography.body_large
+                },
+            );
+            assert_eq!(regular.size[1], Dp(24.0).to_pixels_f32().ceil() as u32);
+            assert!(
+                regular.first_baseline > 0.0 && regular.first_baseline < regular.size[1] as f32
+            );
+            assert!(regular.size[0] > untracked.size[0]);
+            let chinese = shape("中文", typography.body_large);
+            let font_system = read_font_system();
+            let glyphs: Vec<_> = chinese
+                .text_buffer
+                .layout_runs()
+                .flat_map(|run| run.glyphs)
+                .collect();
+            assert_eq!(glyphs.len(), 2);
+            for glyph in glyphs {
+                assert_ne!(glyph.glyph_id, 0);
+                assert!(
+                    font_system
+                        .db()
+                        .face(glyph.font_id)
+                        .unwrap()
+                        .families
+                        .iter()
+                        .any(|(name, _)| name == "Noto Sans SC")
+                );
+            }
+            for (data, weight) in [(&regular, 400), (&medium, 500)] {
+                let glyph = &data.text_buffer.layout_runs().next().unwrap().glyphs[0];
+                let face = font_system.db().face(glyph.font_id).unwrap();
+                assert_eq!(face.weight.0, weight);
+                assert!(face.families.iter().any(|(family, _)| family == "Roboto"));
+            }
         });
-        let untracked = shape(crate::theme::TextStyle {
-            letter_spacing: Dp(0.0),
-            ..typography.body_large
-        });
-        assert_eq!(regular.size[1], Dp(24.0).to_pixels_f32().ceil() as u32);
-        assert!(regular.first_baseline > 0.0 && regular.first_baseline < regular.size[1] as f32);
-        assert!(regular.size[0] > untracked.size[0]);
-        let font_system = read_font_system();
-        for (data, weight) in [(&regular, 400), (&medium, 500)] {
-            let glyph = &data.text_buffer.layout_runs().next().unwrap().glyphs[0];
-            let face = font_system.db().face(glyph.font_id).unwrap();
-            assert_eq!(face.weight.0, weight);
-            assert!(face.families.iter().any(|(family, _)| family == "Roboto"));
-        }
     }
 }

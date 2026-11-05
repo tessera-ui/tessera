@@ -27,6 +27,8 @@ use tessera_ui::{
     modifier::FocusModifierExt as _, remember, tessera, use_context,
 };
 
+use crate::res::I18N;
+
 use super::super::{
     ACCENT, INK,
     annotations::{self, Geometry, Rect, relative, watch},
@@ -54,14 +56,14 @@ const INTERACTION_DARK: (u8, u8, u8) = (106, 44, 113);
 const INTERACTION_FILL: (u8, u8, u8) = (168, 122, 173);
 
 pub(super) const TIMER_LABELS: [&str; 6] = [
-    "Alarm",
-    "Clock",
-    "Timer",
-    "Stopwatch",
-    "Bedtime",
-    "Settings",
+    "ui-alarm",
+    "ui-clock",
+    "ui-timer",
+    "ui-stopwatch",
+    "ui-bedtime",
+    "ui-settings",
 ];
-pub(super) const FILE_LABELS: [&str; 4] = ["All files", "Recent", "Photos", "Library"];
+pub(super) const FILE_LABELS: [&str; 4] = ["ui-all-files", "ui-recent", "ui-photos", "ui-library"];
 
 fn glyph(set: usize, index: usize, active: bool) -> Asset {
     match (set, index, active) {
@@ -94,7 +96,7 @@ fn label_for(set: usize, index: usize) -> String {
     match set {
         1 => TIMER_LABELS[index.min(5)].to_string(),
         2 => FILE_LABELS[index.min(3)].to_string(),
-        _ => "Label".to_string(),
+        _ => "ui-label".to_string(),
     }
 }
 
@@ -172,7 +174,7 @@ fn canvas_body(
                 .background(background)
                 .semantics(SemanticsArgs {
                     role: Some(Role::Group),
-                    label: Some(label),
+                    label: Some(I18N.text(label)),
                     merge_descendants: true,
                     ..Default::default()
                 }),
@@ -197,7 +199,7 @@ pub(super) fn number(value: usize) {
         )
         .children(move || {
             text()
-                .content(value.to_string())
+                .content((value).to_string())
                 .style(type_style(12.0, 16.0))
                 .color(Color::WHITE);
         });
@@ -257,7 +259,7 @@ pub(super) fn specimen(
                         .height(rail_height)
                         .semantics(SemanticsArgs {
                             role: Some(Role::Group),
-                            label: Some(label.clone()),
+                            label: Some(I18N.text(&(label))),
                             merge_descendants: true,
                             ..Default::default()
                         }),
@@ -351,13 +353,13 @@ fn specimen_item(
     let name = if named {
         super::super::navigation::NAMES[index.min(4)].to_string()
     } else {
-        "Label".to_string()
+        "ui-label".to_string()
     };
     boxed()
         .modifier(watch(geometry, ITEM_KEYS[index.min(5)]))
         .children(move || {
             let item = navigation_rail_item(rail_scope)
-                .label(name.clone())
+                .label(I18N.text(&(name)))
                 .selected(selected.get() == index)
                 .on_click(move || selected.set(index))
                 .icon(move || {
@@ -368,18 +370,18 @@ fn specimen_item(
                         });
                 });
             if badge_series && index == badge_start + 2 {
-                item.accessibility_description("999 or more new items")
+                item.accessibility_description(I18N.text("ui-999-or-more-new-items"))
                     .badge(move || {
                         boxed()
                             .modifier(watch(geometry, "max-badge"))
                             .children(move || {
-                                badge_with_content().content(|| {
-                                    text().content("999+");
+                                badge_with_content().content(move || {
+                                    text().content(I18N.text("999+"));
                                 });
                             });
                     });
             } else if badge_series && index == badge_start {
-                item.accessibility_description("New activity")
+                item.accessibility_description(I18N.text("ui-new-activity"))
                     .badge(move || {
                         boxed()
                             .modifier(watch(geometry, "small-badge"))
@@ -388,35 +390,35 @@ fn specimen_item(
                             });
                     });
             } else if badge_series && index == badge_start + 1 {
-                item.accessibility_description("3 new items")
+                item.accessibility_description(I18N.text("ui-3-new-items"))
                     .badge(move || {
                         boxed()
                             .modifier(watch(geometry, "large-badge"))
                             .children(move || {
-                                badge_with_content().content(|| {
-                                    text().content("3");
+                                badge_with_content().content(move || {
+                                    text().content(I18N.text("3"));
                                 });
                             });
                     });
             } else if badges && index == badge_start {
-                item.accessibility_description(if max_badge {
-                    "999 or more new items"
+                item.accessibility_description(I18N.text(if max_badge {
+                    "ui-999-or-more-new-items"
                 } else {
-                    "3 new items"
-                })
+                    "ui-3-new-items"
+                }))
                 .badge(move || {
                     boxed()
                         .modifier(watch(geometry, "large-badge"))
                         .children(move || {
                             badge_with_content().content(move || {
                                 text()
-                                    .content(if max_badge { "999+" } else { "3" })
+                                    .content(I18N.text(if max_badge { "999+" } else { "3" }))
                                     .modifier(watch(geometry, "badge-label"));
                             });
                         });
                 });
             } else if badges && index == badge_start + 1 {
-                item.accessibility_description("New activity")
+                item.accessibility_description(I18N.text("ui-new-activity"))
                     .badge(move || {
                         boxed()
                             .modifier(watch(geometry, "small-badge"))
@@ -459,7 +461,9 @@ fn specimen_header(
                 .modifier(watch(geometry, "menu").size(Dp(56.0), Dp(48.0)).semantics(
                     SemanticsArgs {
                         role: Some(Role::Image),
-                        label: Some(format!("{label} menu")),
+                        label: Some(
+                            I18N.format("ui-value-menu", [("v0", I18N.text(&label).into())]),
+                        ),
                         ..Default::default()
                     },
                 ))
@@ -480,7 +484,7 @@ fn specimen_header(
         if fab {
             let label = label.clone();
             boxed().modifier(watch(geometry, "fab")).children(move || {
-                extended_floating_action_button("Label")
+                extended_floating_action_button("ui-label")
                     .expanded(expanded)
                     .icon(filled::EDIT_SVG)
                     .elevation(FloatingActionButtonElevation::new(
@@ -489,7 +493,9 @@ fn specimen_header(
                         Dp::ZERO,
                         Dp::ZERO,
                     ))
-                    .accessibility_label(format!("{label} compose"))
+                    .accessibility_label(
+                        I18N.format("ui-value-compose", [("v0", I18N.text(&label).into())]),
+                    )
                     .on_click(|| {});
             });
         }
@@ -573,7 +579,7 @@ fn filled_marker(number: usize, x: Dp, y: Dp, dark: bool) {
                 .size(Dp(24.0), Dp(32.0))
                 .semantics(SemanticsArgs {
                     role: Some(Role::Note),
-                    label: Some(format!("Anatomy marker {number}")),
+                    label: Some(I18N.format("ui-anatomy-marker-value", [("v0", (number).into())])),
                     merge_descendants: true,
                     ..Default::default()
                 })
@@ -581,7 +587,7 @@ fn filled_marker(number: usize, x: Dp, y: Dp, dark: bool) {
         )
         .children(move || {
             text()
-                .content(number.to_string())
+                .content((number).to_string())
                 .style(type_style(14.0, 20.0))
                 .color(ink);
         });
@@ -1229,7 +1235,7 @@ fn mock_header(
                     )
                     .children(move || {
                         text()
-                            .content("M")
+                            .content(I18N.text("M"))
                             .style(type_style(16.0, 24.0))
                             .color(scheme.on_tertiary);
                     });
@@ -1275,9 +1281,9 @@ fn mock_fab(expanded: bool, set: usize, tertiary: bool, geometry: Option<State<G
     let style = theme.typography.title_medium;
     let sink = geometry;
     let (symbol, word) = if set == 1 {
-        (filled::HOURGLASS_EMPTY_SVG, "Add timer")
+        (filled::HOURGLASS_EMPTY_SVG, "ui-add-timer")
     } else {
-        (filled::EDIT_SVG, "Label")
+        (filled::EDIT_SVG, "ui-label")
     };
     row()
         .cross_axis_alignment(CrossAxisAlignment::Center)
@@ -1291,7 +1297,10 @@ fn mock_fab(expanded: bool, set: usize, tertiary: bool, geometry: Option<State<G
             icon().painter(symbol).size(Dp(24.0)).tint(ink);
             if expanded {
                 spacer().modifier(Modifier::new().width(Dp(12.0)));
-                text().content(word).style(style.clone()).color(ink);
+                text()
+                    .content(I18N.text(word))
+                    .style(style.clone())
+                    .color(ink);
             }
         });
 }
@@ -1300,9 +1309,9 @@ fn mock_label(set: usize, index: usize, mode: usize) -> String {
     match (mode, index) {
         (1, 3) => "Stop-\nwatch".into(),
         (1, 1) => "World\nclock".into(),
-        (2, 1) => "World time…".into(),
-        (3, 1) => "World time zones".into(),
-        (4, 1) => "World time\nzones".into(),
+        (2, 1) => "ui-world-time".into(),
+        (3, 1) => "ui-world-time-zones".into(),
+        (4, 1) => "ui-world-time-zones-6611".into(),
         (5, 3) => "Stop-\nwatch".into(),
         _ => label_for(set, index),
     }
@@ -1439,7 +1448,9 @@ fn mock_item(
                         .modifier(tagged(sink, "large-badge"))
                         .children(move || {
                             badge_with_content().content(move || {
-                                text().content("3").modifier(tagged(sink, "badge-label"));
+                                text()
+                                    .content(I18N.text("3"))
+                                    .modifier(tagged(sink, "badge-label"));
                             });
                         });
                 });
@@ -1493,7 +1504,7 @@ fn mock_item(
                         if show_label {
                             spacer().modifier(Modifier::new().width(Dp(8.0)));
                             text()
-                                .content(label.clone())
+                                .content(I18N.text(&(label)))
                                 .style(label_style.clone())
                                 .color(label_color);
                         }
@@ -1549,7 +1560,7 @@ fn mock_item(
                     if show_label {
                         gap(Dp(4.0));
                         text()
-                            .content(label.clone())
+                            .content(I18N.text(&(label)))
                             .style(label_style.clone())
                             .color(label_color);
                     }
@@ -1569,9 +1580,9 @@ fn mock_item(
                             .size(Dp(20.0), Dp(20.0))
                             .background_with_shape(srgb(29, 27, 32), Shape::Ellipse),
                     )
-                    .children(|| {
+                    .children(move || {
                         text()
-                            .content("1")
+                            .content(I18N.text("1"))
                             .style(type_style(11.0, 16.0))
                             .color(Color::WHITE);
                     });
@@ -1610,7 +1621,7 @@ pub(super) fn screen(
                 .padding_all(Dp(4.0))
                 .semantics(SemanticsArgs {
                     role: Some(Role::Image),
-                    label: Some(label),
+                    label: Some(I18N.text(label)),
                     ..Default::default()
                 }),
         )
@@ -1762,7 +1773,7 @@ fn mock_bar() {
                             });
                         gap(Dp(4.0));
                         text()
-                            .content(label_for(1, index))
+                            .content(I18N.text(label_for(1, index)))
                             .style(style.clone())
                             .color(scheme.on_surface_variant);
                     });
@@ -1841,7 +1852,7 @@ fn app_content(kind: usize) {
                 )
                 .children(move || {
                     text()
-                        .content("8:30")
+                        .content(I18N.text("8:30"))
                         .style(style.clone())
                         .color(scheme.on_primary_container);
                 });
@@ -1862,7 +1873,7 @@ pub(super) fn scene(#[prop(into)] label: String, height: Dp, content: RenderSlot
                 .background(srgb(232, 222, 248))
                 .semantics(SemanticsArgs {
                     role: Some(Role::Group),
-                    label: Some(label),
+                    label: Some(I18N.text(label)),
                     merge_descendants: true,
                     ..Default::default()
                 }),
@@ -1901,7 +1912,7 @@ pub(super) fn example(
                         .background(srgb(232, 222, 248))
                         .semantics(SemanticsArgs {
                             role: Some(Role::Group),
-                            label: Some(label.clone()),
+                            label: Some(I18N.text(&(label))),
                             merge_descendants: true,
                             ..Default::default()
                         }),
@@ -1919,7 +1930,7 @@ pub(super) fn example(
                         srgb(255, 235, 156),
                         srgb(91, 67, 0),
                         filled::WARNING_SVG,
-                        "Caution",
+                        "ui-caution",
                     ),
                     _ => (
                         srgb(255, 218, 214),
@@ -1939,7 +1950,7 @@ pub(super) fn example(
                     .children(move || {
                         icon().painter(symbol).size(Dp(20.0)).tint(ink);
                         text()
-                            .content(word)
+                            .content(I18N.text(word))
                             .style(type_style(16.0, 24.0))
                             .color(ink)
                             .modifier(Modifier::new().padding_symmetric(Dp(8.0), Dp::ZERO));
@@ -1947,7 +1958,7 @@ pub(super) fn example(
             }
             gap(Dp(12.0));
             text()
-                .content(note.clone())
+                .content(I18N.text(&(note)))
                 .style(type_style(14.0, 20.0))
                 .color(scheme.on_surface_variant);
         });
@@ -2011,7 +2022,7 @@ pub(super) fn key_chip(#[prop(into)] key: String) {
         )
         .children(move || {
             text()
-                .content(key.clone())
+                .content(I18N.text(&(key)))
                 .style(type_style(14.0, 20.0))
                 .color(Color::WHITE);
         });
@@ -2038,20 +2049,21 @@ pub(super) fn label_callout() {
                         .padding_symmetric(Dp(16.0), Dp(12.0)),
                 )
                 .children(move || {
-                    for (index, (key, value)) in [("Label", "Recent images"), ("Role", "Tab")]
-                        .into_iter()
-                        .enumerate()
+                    for (index, (key, value)) in
+                        [("ui-label", "ui-recent-images-6612"), ("ui-role", "ui-tab")]
+                            .into_iter()
+                            .enumerate()
                     {
                         if index > 0 {
                             gap(Dp(8.0));
                         }
                         text()
-                            .content(key)
+                            .content(I18N.text(key))
                             .style(type_style(14.0, 20.0))
                             .color(scheme.on_surface_variant);
                         let mut style = type_style(16.0, 24.0);
                         style.font_weight = 600;
-                        text().content(value).style(style).color(accent);
+                        text().content(I18N.text(value)).style(style).color(accent);
                     }
                 });
             boxed().modifier(

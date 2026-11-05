@@ -20,6 +20,8 @@ use tessera_ui::{
     modifier::FocusModifierExt as _, remember_with_key, tessera,
 };
 
+use crate::res::I18N;
+
 use super::{INK, srgb, type_style};
 
 pub(super) type Geometry = BTreeMap<&'static str, PxRect>;
@@ -206,7 +208,7 @@ pub(super) fn marker(number: usize, x: Dp, y: Dp) {
                 .size(Dp(24.0), Dp(32.0))
                 .semantics(SemanticsArgs {
                     role: Some(Role::Note),
-                    label: Some(format!("Anatomy marker {number}")),
+                    label: Some(I18N.format("ui-anatomy-marker-value", [("v0", (number).into())])),
                     merge_descendants: true,
                     ..Default::default()
                 })
@@ -219,7 +221,7 @@ pub(super) fn marker(number: usize, x: Dp, y: Dp) {
         )
         .children(move || {
             text()
-                .content(number.to_string())
+                .content((number).to_string())
                 .style(type_style(14.0, 20.0))
                 .color(INK);
         });
@@ -230,13 +232,13 @@ pub(super) fn dimension(label: String, x: Dp, y: Dp) {
     boxed()
         .modifier(Modifier::new().offset(x, y).semantics(SemanticsArgs {
             role: Some(Role::Note),
-            label: Some(format!("Dimension {label}")),
+            label: Some(I18N.format("ui-dimension-value", [("v0", I18N.text(&label).into())])),
             merge_descendants: true,
             ..Default::default()
         }))
         .children(move || {
             text()
-                .content(label.clone())
+                .content(I18N.text(&(label)))
                 .style(type_style(14.0, 20.0))
                 .color(INK);
         });

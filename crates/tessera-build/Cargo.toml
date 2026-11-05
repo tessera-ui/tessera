@@ -9,6 +9,7 @@ description = "Build-time utilities for Tessera projects"
 
 [dependencies]
 anyhow = "1.0.102"
+fluent-templates = { version = "0.15.1", default-features = false, features = ["walkdir"] }
 prettyplease = "0.2.37"
 proc-macro2 = "1.0.103"
 quote = "1.0.42"

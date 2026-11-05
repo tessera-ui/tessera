@@ -23,6 +23,8 @@ use tessera_components::{
 };
 use tessera_ui::{Dp, Modifier, RenderSlot, remember, tessera, use_context};
 
+use crate::res::I18N;
+
 use super::{
     ACCENT, INK,
     article::{ArticlePage, SpecSection, article},
@@ -38,9 +40,9 @@ const SIZES: [ExtendedFloatingActionButtonSize; 3] = [
 
 fn size_name(size: ExtendedFloatingActionButtonSize) -> &'static str {
     match size {
-        ExtendedFloatingActionButtonSize::Small => "Small",
-        ExtendedFloatingActionButtonSize::Medium => "Medium",
-        ExtendedFloatingActionButtonSize::Large => "Large",
+        ExtendedFloatingActionButtonSize::Small => "ui-small",
+        ExtendedFloatingActionButtonSize::Medium => "ui-medium",
+        ExtendedFloatingActionButtonSize::Large => "ui-large",
     }
 }
 
@@ -49,39 +51,39 @@ pub(super) fn extended_fabs_spec(
     route: Option<crate::pages::material_spec::article::ArticleRoute>,
 ) {
     article(
-        "Extended FABs",
-        "Extended floating action buttons (extended FABs) help people take primary actions",
+        "ui-extended-fabs",
+        "ui-extended-floating-action-buttons-extended-fabs-help-people-take-primary-actions",
         vec![
             SpecSection {
-                title: "Variants",
+                title: "ui-variants",
                 content: RenderSlot::new(variants),
             },
             SpecSection {
-                title: "Configurations",
+                title: "ui-configurations",
                 content: RenderSlot::new(configurations),
             },
             SpecSection {
-                title: "Tokens & specs",
+                title: "ui-tokens-specs",
                 content: RenderSlot::new(tokens),
             },
             SpecSection {
-                title: "Anatomy",
+                title: "ui-anatomy",
                 content: RenderSlot::new(anatomy),
             },
             SpecSection {
-                title: "Color",
+                title: "ui-color",
                 content: RenderSlot::new(colors),
             },
             SpecSection {
-                title: "States",
+                title: "ui-states",
                 content: RenderSlot::new(states),
             },
             SpecSection {
-                title: "Measurements",
+                title: "ui-measurements",
                 content: RenderSlot::new(measurements),
             },
             SpecSection {
-                title: "Baseline extended FAB",
+                title: "ui-baseline-extended-fab",
                 content: RenderSlot::new(baseline),
             },
         ],
@@ -89,75 +91,75 @@ pub(super) fn extended_fabs_spec(
     .route_optional(route.clone())
     .pages(vec![
         ArticlePage {
-            title: "Overview",
+            title: "ui-overview",
             intro: Some(RenderSlot::new(overview)),
             sections: vec![
                 SpecSection {
-                    title: "Availability & resources",
+                    title: "ui-availability-resources",
                     content: RenderSlot::new(resources),
                 },
                 SpecSection {
-                    title: "M3 Expressive update",
+                    title: "ui-m3-expressive-update",
                     content: RenderSlot::new(expressive),
                 },
                 SpecSection {
-                    title: "Differences from M2",
+                    title: "ui-differences-from-m2",
                     content: RenderSlot::new(differences),
                 },
             ],
         },
         ArticlePage {
-            title: "Guidelines",
+            title: "ui-guidelines",
             intro: None,
             sections: vec![
                 SpecSection {
-                    title: "Usage",
+                    title: "ui-usage",
                     content: RenderSlot::new(usage),
                 },
                 SpecSection {
-                    title: "Anatomy",
+                    title: "ui-anatomy",
                     content: RenderSlot::new(guidelines_anatomy),
                 },
                 SpecSection {
-                    title: "Color",
+                    title: "ui-color",
                     content: RenderSlot::new(guidelines_color),
                 },
                 SpecSection {
-                    title: "Placement",
+                    title: "ui-placement",
                     content: RenderSlot::new(placement),
                 },
                 SpecSection {
-                    title: "Responsive layout",
+                    title: "ui-responsive-layout",
                     content: RenderSlot::new(responsive_layout),
                 },
                 SpecSection {
-                    title: "Behavior",
+                    title: "ui-behavior",
                     content: RenderSlot::new(behavior),
                 },
             ],
         },
         ArticlePage {
-            title: "Accessibility",
+            title: "ui-accessibility",
             intro: None,
             sections: vec![
                 SpecSection {
-                    title: "Use cases",
+                    title: "ui-use-cases",
                     content: RenderSlot::new(use_cases),
                 },
                 SpecSection {
-                    title: "Interaction & style",
+                    title: "ui-interaction-style",
                     content: RenderSlot::new(interaction_style),
                 },
                 SpecSection {
-                    title: "Initial focus",
+                    title: "ui-initial-focus",
                     content: RenderSlot::new(initial_focus),
                 },
                 SpecSection {
-                    title: "Keyboard navigation",
+                    title: "ui-keyboard-navigation",
                     content: RenderSlot::new(keyboard_navigation),
                 },
                 SpecSection {
-                    title: "Labeling elements",
+                    title: "ui-labeling-elements",
                     content: RenderSlot::new(labeling),
                 },
             ],
@@ -167,7 +169,9 @@ pub(super) fn extended_fabs_spec(
 
 #[tessera]
 fn prose(#[prop(into)] value: String) {
-    text().content(value).style(type_style(16.0, 24.0));
+    text()
+        .content(I18N.text(value))
+        .style(type_style(16.0, 24.0));
 }
 
 #[tessera]
@@ -175,7 +179,7 @@ fn caption(#[prop(into)] value: String) {
     let scheme = use_context::<MaterialTheme>().unwrap().get().color_scheme;
     gap(Dp(16.0));
     text()
-        .content(value)
+        .content(I18N.text(value))
         .color(scheme.on_surface_variant)
         .style(type_style(14.0, 20.0));
 }
@@ -200,7 +204,9 @@ fn bullets(items: Vec<String>) {
                                 .background_with_shape(scheme.on_surface_variant, Shape::Ellipse),
                         );
                         spacer().modifier(Modifier::new().width(Dp(16.0)));
-                        text().content(item.clone()).style(type_style(16.0, 24.0));
+                        text()
+                            .content(I18N.text(&(item)))
+                            .style(type_style(16.0, 24.0));
                     });
             }
         });
@@ -234,7 +240,7 @@ fn fab(
         if counted.unwrap_or(false) {
             gap(Dp(16.0));
             text()
-                .content(format!("Activations: {}", activations.get()))
+                .content(I18N.format("ui-activations-value", [("v0", (activations.get()).into())]))
                 .style(type_style(14.0, 20.0));
         }
     });
@@ -243,13 +249,13 @@ fn fab(
 #[tessera]
 fn overview() {
     prose(
-        "Extended FABs help people take a primary action. Use them for the most common or important action on a screen, and choose the size that matches the surrounding layout.",
+        "ui-extended-fabs-help-people-take-a-primary-action-use-them-for-the-most-common-or-important",
     );
     gap(Dp(16.0));
     bullets(vec![
-        "Use for the most common or important action on a screen".into(),
-        "Three variants: small, medium, and large".into(),
-        "Use instead of a FAB when label text is needed to understand the action".into(),
+        "ui-use-for-the-most-common-or-important-action-on-a-screen".into(),
+        "ui-three-variants-small-medium-and-large".into(),
+        "ui-use-instead-of-a-fab-when-label-text-is-needed-to-understand-the-action".into(),
     ]);
     gap(Dp(32.0));
     panel(RenderSlot::new(|| {
@@ -263,108 +269,120 @@ fn overview() {
             });
     }));
     gap(Dp(16.0));
-    prose("1  Small extended FAB    2  Medium extended FAB    3  Large extended FAB");
+    prose("ui-1-small-extended-fab-2-medium-extended-fab-3-large-extended-fab");
 }
 
 #[tessera]
 fn resources() {
     spec_table(
-        vec!["Type".into(), "Resource".into(), "Status".into()],
+        vec!["ui-type".into(), "ui-resource".into(), "ui-status".into()],
         vec![
             vec![
-                "Design".into(),
-                "Design Kit (Figma)".into(),
-                "Available".into(),
+                "ui-design".into(),
+                "ui-design-kit-figma".into(),
+                "ui-available".into(),
             ],
             vec![
-                "Implementation".into(),
-                "Flutter".into(),
-                "Available".into(),
+                "ui-implementation".into(),
+                "ui-flutter".into(),
+                "ui-available".into(),
             ],
             vec![
-                "Implementation".into(),
-                "Jetpack Compose".into(),
-                "Available".into(),
+                "ui-implementation".into(),
+                "ui-jetpack-compose".into(),
+                "ui-available".into(),
             ],
             vec![
-                "Implementation".into(),
-                "Jetpack Compose: Expressive".into(),
-                "Available".into(),
+                "ui-implementation".into(),
+                "ui-jetpack-compose-expressive".into(),
+                "ui-available".into(),
             ],
             vec![
-                "Implementation".into(),
-                "Android Views (MDC-Android)".into(),
-                "Available".into(),
+                "ui-implementation".into(),
+                "ui-android-views-mdc-android".into(),
+                "ui-available".into(),
             ],
-            vec!["Implementation".into(), "Web".into(), "Available".into()],
             vec![
-                "Implementation".into(),
-                "Web: Expressive".into(),
-                "Unavailable".into(),
+                "ui-implementation".into(),
+                "ui-web".into(),
+                "ui-available".into(),
+            ],
+            vec![
+                "ui-implementation".into(),
+                "ui-web-expressive".into(),
+                "ui-unavailable".into(),
             ],
         ],
     );
     gap(Dp(24.0));
     prose(
-        "Tessera examples on this page use the native extended_floating_action_button component. Small, medium, and large sizes, six color tones, optional icons, and label expansion are implemented, together with elevation and state-layer feedback.",
+        "ui-tessera-examples-on-this-page-use-the-native-extended-floating-action-button-componen",
     );
 }
 
 #[tessera]
 fn expressive() {
     prose(
-        "May 2025: the extended FAB gained small, medium, and large sizes, and the baseline extended FAB is no longer recommended. Use the small extended FAB instead.",
+        "ui-may-2025-the-extended-fab-gained-small-medium-and-large-sizes-and-the-baseline-extended-fa",
     );
     gap(Dp(24.0));
     spec_table(
-        vec!["Change".into(), "Details".into()],
+        vec!["ui-change".into(), "ui-details".into()],
         vec![
             vec![
-                "Sizes".into(),
-                "Small (56dp), medium (80dp), and large (96dp)".into(),
+                "ui-sizes".into(),
+                "ui-small-56dp-medium-80dp-and-large-96dp".into(),
             ],
             vec![
-                "Type style".into(),
-                "The small extended FAB uses title medium instead of label large".into(),
+                "ui-type-style".into(),
+                "ui-the-small-extended-fab-uses-title-medium-instead-of-label-large".into(),
             ],
-            vec!["Padding".into(), "Inner padding was reduced".into()],
+            vec!["ui-padding".into(), "ui-inner-padding-was-reduced".into()],
             vec![
-                "Baseline".into(),
-                "Extended FAB (baseline) is no longer recommended".into(),
+                "ui-baseline".into(),
+                "ui-extended-fab-baseline-is-no-longer-recommended".into(),
             ],
         ],
     );
     gap(Dp(32.0));
     panel(RenderSlot::new(|| {
-        fab("Compose");
+        fab("ui-compose");
     }));
-    caption("The small extended FAB is the recommended size in the expressive update.");
+    caption("ui-the-small-extended-fab-is-the-recommended-size-in-the-expressive-update");
 }
 
 #[tessera]
 fn differences() {
     prose(
-        "M2: extended FABs used a fixed 48dp height, a single primary color, and label large type. M3 introduced container color roles, elevation levels, and state layers that follow the content color.",
+        "ui-m2-extended-fabs-used-a-fixed-48dp-height-a-single-primary-color-and-label-large-type-m3-i",
     );
     gap(Dp(16.0));
     prose(
-        "M3 Expressive: the container grew into three sizes, the label type moved to title medium for the small size, and the icon size follows the container height.",
+        "ui-m3-expressive-the-container-grew-into-three-sizes-the-label-type-moved-to-title-medium-for",
     );
     gap(Dp(24.0));
     spec_table(
-        vec!["Attribute".into(), "M2".into(), "M3 Expressive".into()],
         vec![
-            vec!["Height".into(), "48dp".into(), "56 / 80 / 96dp".into()],
+            "ui-attribute".into(),
+            "M2".into(),
+            "ui-m3-expressive".into(),
+        ],
+        vec![
+            vec!["ui-height".into(), "48dp".into(), "56 / 80 / 96dp".into()],
             vec![
-                "Label type".into(),
-                "Label large".into(),
-                "Title medium / title large / headline small".into(),
+                "ui-label-type".into(),
+                "ui-label-large".into(),
+                "ui-title-medium-title-large-headline-small-6940".into(),
             ],
-            vec!["Icon size".into(), "24dp".into(), "24 / 28 / 36dp".into()],
             vec![
-                "Color".into(),
-                "Single accent".into(),
-                "Primary, secondary, and tertiary containers or accents".into(),
+                "ui-icon-size".into(),
+                "24dp".into(),
+                "24 / 28 / 36dp".into(),
+            ],
+            vec![
+                "ui-color".into(),
+                "ui-single-accent".into(),
+                "ui-primary-secondary-and-tertiary-containers-or-accents".into(),
             ],
         ],
     );
@@ -373,7 +391,7 @@ fn differences() {
 #[tessera]
 fn variants() {
     prose(
-        "Three sizes share the same anatomy and differ in height, icon size, padding, and label type. Small is the recommended default.",
+        "ui-three-sizes-share-the-same-anatomy-and-differ-in-height-icon-size-padding-and-label-type-s",
     );
     gap(Dp(24.0));
     panel(RenderSlot::new(|| {
@@ -387,26 +405,30 @@ fn variants() {
             });
     }));
     gap(Dp(16.0));
-    caption("1 Small extended FAB · 2 Medium extended FAB · 3 Large extended FAB");
+    caption("ui-1-small-extended-fab-2-medium-extended-fab-3-large-extended-fab-2899");
     gap(Dp(32.0));
     spec_table(
-        vec!["Variant".into(), "M3".into(), "M3 Expressive".into()],
+        vec!["ui-variant".into(), "M3".into(), "ui-m3-expressive".into()],
         vec![
             vec![
-                "Small extended FAB".into(),
-                "Available".into(),
-                "Available".into(),
+                "ui-small-extended-fab".into(),
+                "ui-available".into(),
+                "ui-available".into(),
             ],
             vec![
-                "Medium extended FAB".into(),
+                "ui-medium-extended-fab".into(),
                 "--".into(),
-                "Available".into(),
+                "ui-available".into(),
             ],
-            vec!["Large extended FAB".into(), "--".into(), "Available".into()],
             vec![
-                "Extended FAB (baseline)".into(),
-                "Available".into(),
-                "Not recommended. Use small extended FAB.".into(),
+                "ui-large-extended-fab".into(),
+                "--".into(),
+                "ui-available".into(),
+            ],
+            vec![
+                "ui-extended-fab-baseline".into(),
+                "ui-available".into(),
+                "ui-not-recommended-use-small-extended-fab".into(),
             ],
         ],
     );
@@ -415,14 +437,14 @@ fn variants() {
 #[tessera]
 fn configurations() {
     prose(
-        "Choose a size, a container tone, whether the leading icon is present, and whether the label is expanded. All options keep the same anatomy and interaction feedback.",
+        "ui-choose-a-size-a-container-tone-whether-the-leading-icon-is-present-and-whether-the-label-i",
     );
     gap(Dp(24.0));
-    panel(RenderSlot::new(|| {
+    panel(RenderSlot::new(move || {
         column()
             .modifier(Modifier::new().fill_max_width())
-            .children(|| {
-                subheading("1  Size".into());
+            .children(move || {
+                subheading("ui-1-size".into());
                 gap(Dp(24.0));
                 flow_row()
                     .item_spacing(Dp(40.0))
@@ -433,7 +455,7 @@ fn configurations() {
                         }
                     });
                 gap(Dp(40.0));
-                subheading("2  Color".into());
+                subheading("ui-2-color".into());
                 gap(Dp(24.0));
                 flow_row()
                     .item_spacing(Dp(24.0))
@@ -444,27 +466,29 @@ fn configurations() {
                         }
                     });
                 gap(Dp(40.0));
-                subheading("3  Icon position".into());
+                subheading("ui-3-icon-position".into());
                 gap(Dp(24.0));
                 text()
-                    .content("With leading icon")
+                    .content(I18N.text("ui-with-leading-icon"))
                     .style(type_style(14.0, 20.0));
                 gap(Dp(16.0));
-                fab("Compose");
+                fab("ui-compose");
                 gap(Dp(24.0));
-                text().content("Without icon").style(type_style(14.0, 20.0));
+                text()
+                    .content(I18N.text("ui-without-icon"))
+                    .style(type_style(14.0, 20.0));
                 gap(Dp(16.0));
-                fab("Compose").with_icon(false);
+                fab("ui-compose").with_icon(false);
             });
     }));
     gap(Dp(32.0));
-    subheading("4  Label expansion".into());
+    subheading("ui-4-label-expansion".into());
     gap(Dp(8.0));
     prose(
-        "An extended FAB can collapse to an icon-only container and expand again when its label is needed. Use the control to compare both states.",
+        "ui-an-extended-fab-can-collapse-to-an-icon-only-container-and-expand-again-when-its-label-is",
     );
     gap(Dp(24.0));
-    collapsible("Compose");
+    collapsible("ui-compose");
 }
 
 #[tessera]
@@ -480,14 +504,14 @@ fn collapsible(#[prop(into)] label: String) {
                 button()
                     .tonal()
                     .selected(!expanded.get())
-                    .accessibility_label("Collapse or expand the extended FAB label")
+                    .accessibility_label(I18N.text("ui-collapse-or-expand-the-extended-fab-label"))
                     .on_click(move || expanded.set(!expanded.get()))
                     .child(move || {
-                        text().content(if expanded.get() {
-                            "Collapse label"
+                        text().content(I18N.text(if expanded.get() {
+                            "ui-collapse-label"
                         } else {
-                            "Expand label"
-                        });
+                            "ui-expand-label"
+                        }));
                     });
                 gap(Dp(32.0));
                 extended_floating_action_button(label.clone())
@@ -499,15 +523,25 @@ fn collapsible(#[prop(into)] label: String) {
                     .on_click(move || activations.set(activations.get() + 1));
                 gap(Dp(16.0));
                 text()
-                    .content(format!(
-                        "{} · activations: {}",
-                        if expanded.get() {
-                            "Expanded"
-                        } else {
-                            "Collapsed"
-                        },
-                        activations.get()
-                    ))
+                    .content(
+                        I18N.format(
+                            "ui-value-activations-value-format-161",
+                            [
+                                (
+                                    "v0",
+                                    I18N.text(
+                                        &(if expanded.get() {
+                                            "ui-expanded"
+                                        } else {
+                                            "ui-collapsed"
+                                        }),
+                                    )
+                                    .into(),
+                                ),
+                                ("v1", (activations.get()).into()),
+                            ],
+                        ),
+                    )
                     .style(type_style(14.0, 20.0));
             });
     }));
@@ -516,35 +550,35 @@ fn collapsible(#[prop(into)] label: String) {
 #[tessera]
 fn tokens() {
     prose(
-        "Extended FAB tokens are organized by size and color. Values below follow the native component defaults used on this page.",
+        "ui-extended-fab-tokens-are-organized-by-size-and-color-values-below-follow-the-native-compone",
     );
     gap(Dp(24.0));
     spec_table(
-        vec!["Token".into(), "Value".into()],
+        vec!["ui-token".into(), "ui-value".into()],
         vec![
             vec![
                 "md.comp.extended-fab.container.color".into(),
-                "Primary container".into(),
+                "ui-primary-container".into(),
             ],
             vec![
                 "md.comp.extended-fab.icon.color".into(),
-                "On primary container".into(),
+                "ui-on-primary-container".into(),
             ],
             vec![
                 "md.comp.extended-fab.label-text.color".into(),
-                "On primary container".into(),
+                "ui-on-primary-container".into(),
             ],
             vec![
                 "md.comp.extended-fab.container.height".into(),
-                "56dp small · 80dp medium · 96dp large".into(),
+                "ui-56dp-small-80dp-medium-96dp-large".into(),
             ],
             vec![
                 "md.comp.extended-fab.container.shape".into(),
-                "Full capsule".into(),
+                "ui-full-capsule".into(),
             ],
             vec![
                 "md.comp.extended-fab.label-text".into(),
-                "Title medium · title large · headline small".into(),
+                "ui-title-medium-title-large-headline-small".into(),
             ],
             vec![
                 "md.comp.extended-fab.icon.size".into(),
@@ -564,33 +598,33 @@ fn tokens() {
             ],
             vec![
                 "md.comp.extended-fab.container.elevation".into(),
-                "Level 3 · level 4 when hovered".into(),
+                "ui-level-3-level-4-when-hovered".into(),
             ],
             vec![
                 "md.comp.extended-fab.state-layer".into(),
-                "Content color at 8% hover and 10% focus or press".into(),
+                "ui-content-color-at-8-hover-and-10-focus-or-press".into(),
             ],
         ],
     );
     gap(Dp(24.0));
     prose(
-        "When a non-default color mapping is used, keep the state layer color equal to the icon color. For the primary mapping, the state layer is primary.",
+        "ui-when-a-non-default-color-mapping-is-used-keep-the-state-layer-color-equal-to-the-icon-colo",
     );
 }
 
 #[tessera]
 fn anatomy() {
     prose(
-        "An extended FAB combines a container, an optional leading icon, and a label. The icon and label share one content color, and the container carries the tone and elevation.",
+        "ui-an-extended-fab-combines-a-container-an-optional-leading-icon-and-a-label-the-icon-and-lab",
     );
     gap(Dp(24.0));
-    panel(RenderSlot::new(|| {
-        column().children(|| {
-            fab("Compose");
+    panel(RenderSlot::new(move || {
+        column().children(move || {
+            fab("ui-compose");
             gap(Dp(32.0));
-            for line in ["1  Container", "2  Icon (optional)", "3  Label text"] {
+            for line in ["ui-1-container", "ui-2-icon-optional", "ui-3-label-text"] {
                 text()
-                    .content(line)
+                    .content(I18N.text(line))
                     .color(INK)
                     .style(type_style(16.0, 28.0));
             }
@@ -598,21 +632,21 @@ fn anatomy() {
     }));
     gap(Dp(16.0));
     caption(
-        "The label states the action; the icon supports recognition without repeating the label.",
+        "ui-the-label-states-the-action-the-icon-supports-recognition-without-repeating-the-label",
     );
 }
 
 #[tessera]
 fn colors() {
     prose(
-        "Container tones map to the primary, secondary, and tertiary color roles, either as containers or as solid accents. Each tone pairs with its matching on-color for the icon and label.",
+        "ui-container-tones-map-to-the-primary-secondary-and-tertiary-color-roles-either-as-containers",
     );
     gap(Dp(24.0));
     for dark in [false, true] {
         subheading(if dark {
-            "Dark scheme".into()
+            "ui-dark-scheme".into()
         } else {
-            "Light scheme".into()
+            "ui-light-scheme".into()
         });
         gap(Dp(24.0));
         material_theme()
@@ -635,7 +669,7 @@ fn colors() {
                                     });
                                 gap(Dp(16.0));
                                 text()
-                                    .content("1  Primary container    2  Secondary container    3  Tertiary container    4  Primary    5  Secondary    6  Tertiary")
+                                    .content(I18N.text("ui-1-primary-container-2-secondary-container-3-tertiary-container-4-primary-5-secondary-6-ter"))
                                     .style(type_style(14.0, 20.0));
                             });
                     });
@@ -647,102 +681,110 @@ fn colors() {
 #[tessera]
 fn states() {
     prose(
-        "States communicate elevation and interaction. An enabled extended FAB rests at level 3, rises to level 4 on hover, and keeps level 3 while focused or pressed while the state layer darkens. A disabled extended FAB keeps its shape but stops accepting input.",
+        "ui-states-communicate-elevation-and-interaction-an-enabled-extended-fab-rests-at-level-3-rise",
     );
     gap(Dp(24.0));
-    panel(RenderSlot::new(|| {
+    panel(RenderSlot::new(move || {
         column()
             .modifier(Modifier::new().fill_max_width())
-            .children(|| {
+            .children(move || {
                 row()
                     .modifier(Modifier::new().fill_max_width())
                     .children(|| {
-                        fab("Enabled");
+                        fab("ui-enabled");
                         spacer().modifier(Modifier::new().width(Dp(32.0)));
-                        fab("Disabled").enabled(false);
+                        fab("ui-disabled").enabled(false);
                         spacer().modifier(Modifier::new().width(Dp(32.0)));
-                        fab("Elevated").tone(3);
+                        fab("ui-elevated").tone(3);
                     });
                 gap(Dp(32.0));
                 text()
                     .content(
-                        "Hover, focus with Tab, or press the actions above to see the state layer and elevation respond.",
+                        I18N.text("ui-hover-focus-with-tab-or-press-the-actions-above-to-see-the-state-layer-and-elevation-respo"),
                     )
                     .style(type_style(14.0, 20.0));
             });
     }));
     gap(Dp(24.0));
     spec_table(
-        vec!["State".into(), "Elevation".into(), "State layer".into()],
         vec![
-            vec!["Enabled".into(), "Level 3".into(), "--".into()],
-            vec!["Hovered".into(), "Level 4".into(), "8%".into()],
-            vec!["Focused".into(), "Level 3".into(), "10%".into()],
-            vec!["Pressed".into(), "Level 3".into(), "10%".into()],
-            vec!["Disabled".into(), "None".into(), "Faded container".into()],
+            "ui-state".into(),
+            "ui-elevation".into(),
+            "ui-state-layer".into(),
+        ],
+        vec![
+            vec!["ui-enabled".into(), "ui-level-3".into(), "--".into()],
+            vec!["ui-hovered".into(), "ui-level-4".into(), "8%".into()],
+            vec!["ui-focused".into(), "ui-level-3".into(), "10%".into()],
+            vec!["ui-pressed".into(), "ui-level-3".into(), "10%".into()],
+            vec![
+                "ui-disabled".into(),
+                "ui-none".into(),
+                "ui-faded-container".into(),
+            ],
         ],
     );
     gap(Dp(24.0));
     prose(
-        "The expanded and collapsed states use the same elevation. Only the width and label opacity animate when the label expands or collapses.",
+        "ui-the-expanded-and-collapsed-states-use-the-same-elevation-only-the-width-and-label-opacity",
     );
 }
 
 #[tessera]
 fn measurements() {
     prose(
-        "Height, icon size, and padding scale with the size variant. Reserve 16dp margins around a floating action, and keep at least 80dp of width available for the label when the action is expanded.",
+        "ui-height-icon-size-and-padding-scale-with-the-size-variant-reserve-16dp-margins-around-a-flo",
     );
     gap(Dp(24.0));
     spec_table(
         vec![
-            "Attribute".into(),
-            "Small".into(),
-            "Medium".into(),
-            "Large".into(),
+            "ui-attribute".into(),
+            "ui-small".into(),
+            "ui-medium".into(),
+            "ui-large".into(),
         ],
         vec![
             vec![
-                "Container height".into(),
+                "ui-container-height".into(),
                 "56dp".into(),
                 "80dp".into(),
                 "96dp".into(),
             ],
             vec![
-                "Icon size".into(),
+                "ui-icon-size".into(),
                 "24dp".into(),
                 "28dp".into(),
                 "36dp".into(),
             ],
             vec![
-                "Leading space".into(),
+                "ui-leading-space".into(),
                 "16dp".into(),
                 "26dp".into(),
                 "28dp".into(),
             ],
             vec![
-                "Icon to label".into(),
+                "ui-icon-to-label".into(),
                 "8dp".into(),
                 "12dp".into(),
                 "16dp".into(),
             ],
             vec![
-                "Trailing space".into(),
+                "ui-trailing-space".into(),
                 "16dp".into(),
                 "20dp".into(),
                 "28dp".into(),
             ],
             vec![
-                "Label type".into(),
-                "Title medium".into(),
-                "Title large".into(),
-                "Headline small".into(),
+                "ui-label-type".into(),
+                "ui-title-medium".into(),
+                "ui-title-large".into(),
+                "ui-headline-small-625".into(),
             ],
             vec![
-                "Corners".into(),
-                "Full".into(),
-                "Full".into(),
-                "Full".into(),
+                "ui-corners".into(),
+                "ui-full".into(),
+                "ui-full".into(),
+                "ui-full".into(),
             ],
         ],
     );
@@ -758,21 +800,21 @@ fn measurements() {
             });
     }));
     gap(Dp(16.0));
-    caption("Size and padding measurements of the small, medium, and large extended FABs.");
+    caption("ui-size-and-padding-measurements-of-the-small-medium-and-large-extended-fabs");
     gap(Dp(24.0));
     spec_table(
-        vec!["Attribute".into(), "Value".into()],
+        vec!["ui-attribute".into(), "ui-value".into()],
         vec![
-            vec!["Outer margin".into(), "16dp".into()],
+            vec!["ui-outer-margin".into(), "16dp".into()],
             vec![
-                "Collapsed width".into(),
-                "Matches the container height".into(),
+                "ui-collapsed-width".into(),
+                "ui-matches-the-container-height".into(),
             ],
             vec![
-                "Expanded width".into(),
-                "Follows the label, minimum 80dp".into(),
+                "ui-expanded-width".into(),
+                "ui-follows-the-label-minimum-80dp".into(),
             ],
-            vec!["Minimum interactive target".into(), "48 × 48dp".into()],
+            vec!["ui-minimum-interactive-target".into(), "48 × 48dp".into()],
         ],
     );
 }
@@ -780,32 +822,36 @@ fn measurements() {
 #[tessera]
 fn baseline() {
     prose(
-        "The baseline extended FAB is no longer recommended in the M3 expressive update. Use a small extended FAB instead: the type style moved from label large to title medium and the inner padding was reduced.",
+        "ui-the-baseline-extended-fab-is-no-longer-recommended-in-the-m3-expressive-update-use-a-small",
     );
     gap(Dp(24.0));
     panel(RenderSlot::new(|| {
-        fab("Label");
+        fab("ui-label");
     }));
     gap(Dp(16.0));
-    caption("1  Extended FAB (baseline) is superseded by the small extended FAB shown here.");
+    caption("ui-1-extended-fab-baseline-is-superseded-by-the-small-extended-fab-shown-here");
     gap(Dp(24.0));
     spec_table(
         vec![
-            "Attribute".into(),
-            "Baseline".into(),
-            "Small (recommended)".into(),
+            "ui-attribute".into(),
+            "ui-baseline".into(),
+            "ui-small-recommended".into(),
         ],
         vec![
             vec![
-                "Label type".into(),
-                "Label large".into(),
-                "Title medium".into(),
+                "ui-label-type".into(),
+                "ui-label-large".into(),
+                "ui-title-medium".into(),
             ],
-            vec!["Inner padding".into(), "Wider".into(), "Reduced".into()],
             vec![
-                "Status".into(),
-                "Not recommended".into(),
-                "Recommended".into(),
+                "ui-inner-padding".into(),
+                "ui-wider".into(),
+                "ui-reduced".into(),
+            ],
+            vec![
+                "ui-status".into(),
+                "ui-not-recommended".into(),
+                "ui-recommended".into(),
             ],
         ],
     );
@@ -814,40 +860,40 @@ fn baseline() {
 #[tessera]
 fn usage() {
     prose(
-        "Use an extended FAB for the most common or important action on a screen, and when the label is needed to understand the action. Choose a size that matches the density of the surrounding layout.",
+        "ui-use-an-extended-fab-for-the-most-common-or-important-action-on-a-screen-and-when-the-label",
     );
     gap(Dp(24.0));
-    panel(RenderSlot::new(|| {
+    panel(RenderSlot::new(move || {
         column()
             .modifier(Modifier::new().fill_max_width())
-            .children(|| {
-                fab("Compose");
+            .children(move || {
+                fab("ui-compose");
                 gap(Dp(16.0));
                 text()
-                    .content("Do: keep the label short and specific to the action.")
+                    .content(I18N.text("ui-do-keep-the-label-short-and-specific-to-the-action"))
                     .style(type_style(14.0, 20.0));
                 gap(Dp(32.0));
-                fab("Create a new message");
+                fab("ui-create-a-new-message");
                 gap(Dp(16.0));
                 text()
-                    .content("Don't: repeat the whole task description; the floating action stays concise.")
+                    .content(I18N.text("ui-don-t-repeat-the-whole-task-description-the-floating-action-stays-concise"))
                     .style(type_style(14.0, 20.0));
             });
     }));
     gap(Dp(16.0));
-    caption("Label the action, not the object: Compose, not New message composer screen.");
+    caption("ui-label-the-action-not-the-object-compose-not-new-message-composer-screen");
     gap(Dp(32.0));
     bullets(vec![
-        "Keep one extended FAB per screen and reserve it for the primary action".into(),
-        "Avoid covering content that people need while the action is visible".into(),
-        "Prefer a FAB without a label when the icon alone is universally understood".into(),
+        "ui-keep-one-extended-fab-per-screen-and-reserve-it-for-the-primary-action".into(),
+        "ui-avoid-covering-content-that-people-need-while-the-action-is-visible".into(),
+        "ui-prefer-a-fab-without-a-label-when-the-icon-alone-is-universally-understood".into(),
     ]);
 }
 
 #[tessera]
 fn guidelines_anatomy() {
     prose(
-        "An extended FAB is a single container with a leading icon and a label. Keep the icon optional: when the label already names the action, the icon only supports recognition.",
+        "ui-an-extended-fab-is-a-single-container-with-a-leading-icon-and-a-label-keep-the-icon-option",
     );
     gap(Dp(24.0));
     anatomy();
@@ -856,7 +902,7 @@ fn guidelines_anatomy() {
 #[tessera]
 fn guidelines_color() {
     prose(
-        "Use the default primary container tone for most screens. Secondary and tertiary tones separate a floating action from other primary-colored elements, and solid accent tones raise its emphasis.",
+        "ui-use-the-default-primary-container-tone-for-most-screens-secondary-and-tertiary-tones-separ",
     );
     gap(Dp(24.0));
     panel(RenderSlot::new(|| {
@@ -870,13 +916,13 @@ fn guidelines_color() {
             });
     }));
     gap(Dp(16.0));
-    caption("Keep one tone across a screen so the floating action stays identifiable.");
+    caption("ui-keep-one-tone-across-a-screen-so-the-floating-action-stays-identifiable");
 }
 
 #[tessera]
 fn placement() {
     prose(
-        "Place an extended FAB at the bottom end of the screen, above the bottom navigation bar or any bottom sheet. Keep a 16dp margin from the screen edges and from other floating elements.",
+        "ui-place-an-extended-fab-at-the-bottom-end-of-the-screen-above-the-bottom-navigation-bar-or-a",
     );
     gap(Dp(24.0));
     let scheme = use_context::<MaterialTheme>().unwrap().get().color_scheme;
@@ -895,7 +941,7 @@ fn placement() {
                 .modifier(Modifier::new().fill_max_size().padding_all(Dp(24.0)))
                 .children(move || {
                     text()
-                        .content("Content")
+                        .content(I18N.text("ui-content"))
                         .color(scheme.on_surface_variant)
                         .style(type_style(14.0, 20.0));
                     spacer().modifier(Modifier::new().weight(1.0));
@@ -903,7 +949,7 @@ fn placement() {
                         .modifier(Modifier::new().fill_max_width())
                         .children(move || {
                             spacer().modifier(Modifier::new().weight(1.0));
-                            extended_floating_action_button("Compose")
+                            extended_floating_action_button("ui-compose")
                                 .size(ExtendedFloatingActionButtonSize::Small)
                                 .icon(filled::EDIT_SVG)
                                 .container_color(scheme.primary_container)
@@ -913,69 +959,69 @@ fn placement() {
                 });
         });
     gap(Dp(16.0));
-    caption("Extended FABs should have margins of 16dp.");
+    caption("ui-extended-fabs-should-have-margins-of-16dp");
 }
 
 #[tessera]
 fn responsive_layout() {
     prose(
-        "Choose the size by window class. The small extended FAB suits compact and medium layouts, while the medium and large sizes give the action more presence in expanded layouts.",
+        "ui-choose-the-size-by-window-class-the-small-extended-fab-suits-compact-and-medium-layouts-wh",
     );
     gap(Dp(24.0));
     panel(RenderSlot::new(|| {
         column()
             .modifier(Modifier::new().fill_max_width())
             .children(|| {
-                subheading("Compact".into());
+                subheading("ui-compact".into());
                 gap(Dp(16.0));
-                fab("Compose");
+                fab("ui-compose");
                 gap(Dp(32.0));
-                subheading("Expanded".into());
+                subheading("ui-expanded".into());
                 gap(Dp(16.0));
-                fab("Compose").size(ExtendedFloatingActionButtonSize::Large);
+                fab("ui-compose").size(ExtendedFloatingActionButtonSize::Large);
             });
     }));
     gap(Dp(16.0));
     caption(
-        "The same label at two size presets; the large size carries more weight in wide layouts.",
+        "ui-the-same-label-at-two-size-presets-the-large-size-carries-more-weight-in-wide-layouts",
     );
 }
 
 #[tessera]
 fn behavior() {
     prose(
-        "An extended FAB can collapse to an icon-only container while content scrolls, then expand again when people stop or scroll back. Keep the action reachable in both states and never hide it behind scrolling content.",
+        "ui-an-extended-fab-can-collapse-to-an-icon-only-container-while-content-scrolls-then-expand-a",
     );
     gap(Dp(24.0));
-    collapsible("Compose");
+    collapsible("ui-compose");
     gap(Dp(24.0));
     prose(
-        "When the label collapses, keep the accessible name unchanged so assistive technology still announces the action. The container keeps its tone and elevation across the transition.",
+        "ui-when-the-label-collapses-keep-the-accessible-name-unchanged-so-assistive-technology-still",
     );
 }
 
 #[tessera]
 fn use_cases() {
-    prose("People should be able to do the following using assistive technology:");
+    prose("ui-people-should-be-able-to-do-the-following-using-assistive-technology");
     gap(Dp(16.0));
     bullets(vec![
-        "Navigate to and activate the extended FAB".into(),
-        "Identify the action from its label and icon".into(),
+        "ui-navigate-to-and-activate-the-extended-fab".into(),
+        "ui-identify-the-action-from-its-label-and-icon".into(),
     ]);
     gap(Dp(24.0));
     panel(RenderSlot::new(|| {
-        fab("Compose").counted(true);
+        fab("ui-compose").counted(true);
     }));
     gap(Dp(16.0));
     caption(
-        "The extended FAB exposes one action named by its label; activating it increments the counter.",
+        "ui-the-extended-fab-exposes-one-action-named-by-its-label-activating-it-increments-the-counte",
     );
 }
 
 #[tessera]
 fn interaction_style() {
     prose(
-        "Extended FABs are large targets by construction: the smallest container is 56dp high and the interactive target never drops below 48 × 48dp. Keep the label and icon contrast at 3:1 or higher against the container.",
+        "ui-extended-fabs-are-large-targets-by-construction-the-smallest-container-is-56dp-high-and-th",
     );
     gap(Dp(24.0));
     let scheme = use_context::<MaterialTheme>().unwrap().get().color_scheme;
@@ -983,88 +1029,91 @@ fn interaction_style() {
         row()
             .modifier(Modifier::new().fill_max_width())
             .children(move || {
-                extended_floating_action_button("Compose")
+                extended_floating_action_button("ui-compose")
                     .size(ExtendedFloatingActionButtonSize::Small)
                     .icon(filled::EDIT_SVG)
                     .container_color(scheme.primary_container)
                     .content_color(scheme.on_primary_container)
-                    .accessibility_label("Above three to one: Compose")
+                    .accessibility_label(I18N.text("ui-above-three-to-one-compose"))
                     .on_click(|| {});
                 spacer().modifier(Modifier::new().width(Dp(32.0)));
-                extended_floating_action_button("Compose")
+                extended_floating_action_button("ui-compose")
                     .size(ExtendedFloatingActionButtonSize::Small)
                     .icon(filled::EDIT_SVG)
                     .container_color(scheme.surface_container)
                     .content_color(scheme.outline)
-                    .accessibility_label("Below three to one: Compose")
+                    .accessibility_label(I18N.text("ui-below-three-to-one-compose"))
                     .on_click(|| {});
             });
     }));
     gap(Dp(16.0));
-    caption("Above 3:1 on primary container versus a low-contrast pairing.");
+    caption("ui-above-3-1-on-primary-container-versus-a-low-contrast-pairing");
     gap(Dp(24.0));
     prose(
-        "The pressed and focused state layers use the content color, so a custom container keeps readable feedback only when its on-color is chosen deliberately.",
+        "ui-the-pressed-and-focused-state-layers-use-the-content-color-so-a-custom-container-keeps-rea",
     );
 }
 
 #[tessera]
 fn initial_focus() {
     prose(
-        "Initial focus should land on the extended FAB when it is the only floating action on the screen, and otherwise follow the reading order of the page. The container itself is a single focus stop; its icon and label are not separate targets.",
+        "ui-initial-focus-should-land-on-the-extended-fab-when-it-is-the-only-floating-action-on-the-s",
     );
     gap(Dp(24.0));
     panel(RenderSlot::new(|| {
-        fab("Compose");
+        fab("ui-compose");
     }));
     gap(Dp(16.0));
-    caption("Press Tab to reach the action; the whole container receives focus once.");
+    caption("ui-press-tab-to-reach-the-action-the-whole-container-receives-focus-once");
 }
 
 #[tessera]
 fn keyboard_navigation() {
     spec_table(
-        vec!["Keys".into(), "Actions".into()],
+        vec!["ui-keys".into(), "ui-actions".into()],
         vec![
-            vec!["Tab".into(), "Navigate to the extended FAB".into()],
-            vec!["Space or Enter".into(), "Activate the extended FAB".into()],
+            vec!["ui-tab".into(), "ui-navigate-to-the-extended-fab".into()],
+            vec![
+                "ui-space-or-enter".into(),
+                "ui-activate-the-extended-fab".into(),
+            ],
         ],
     );
     gap(Dp(24.0));
     prose(
-        "The extended FAB behaves like a button for keyboard input: a single focus stop, activated by Space or Enter. Focus is drawn as a ring around the container, not around the icon or label.",
+        "ui-the-extended-fab-behaves-like-a-button-for-keyboard-input-a-single-focus-stop-activated-by",
     );
     gap(Dp(24.0));
     panel(RenderSlot::new(|| {
-        fab("Compose").counted(true);
+        fab("ui-compose").counted(true);
     }));
 }
 
 #[tessera]
 fn labeling() {
     prose(
-        "The accessible name of an extended FAB is its visible label, so the icon must not repeat it. Do not label the icon: it is decorative whenever the text already names the action.",
+        "ui-the-accessible-name-of-an-extended-fab-is-its-visible-label-so-the-icon-must-not-repeat-it",
     );
     gap(Dp(24.0));
-    panel(RenderSlot::new(|| {
+    panel(RenderSlot::new(move || {
         column()
             .modifier(Modifier::new().fill_max_width())
-            .children(|| {
-                fab("Compose");
+            .children(move || {
+                fab("ui-compose");
                 gap(Dp(16.0));
                 text()
-                    .content("Do: one label, one announcement — “Compose, button”.")
+                    .content(I18N.text("ui-do-one-label-one-announcement-compose-button"))
                     .style(type_style(14.0, 20.0));
                 gap(Dp(32.0));
-                fab("Compose").tone(1);
+                fab("ui-compose").tone(1);
                 gap(Dp(16.0));
                 text()
-                    .content("Don't: “Compose, edit pencil icon, button” — the icon description duplicates the action.")
+                    .content(I18N.text("ui-don-t-compose-edit-pencil-icon-button-the-icon-description-duplicates-the-action"))
                     .style(type_style(14.0, 20.0));
             });
     }));
     gap(Dp(32.0));
     prose(
-        "When the label collapses, keep the same accessible name. Provide a visible label on request rather than replacing the name with an icon description.",
+        "ui-when-the-label-collapses-keep-the-same-accessible-name-provide-a-visible-label-on-request",
     );
 }

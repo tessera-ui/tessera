@@ -14,7 +14,7 @@ use std::{
 
 use anyhow::{Result, anyhow};
 use notify::{Event, EventKind, RecursiveMode, Watcher};
-use tessera_build::{AssetBackend, load_tessera_config_from_dir, resolve_assets_dir};
+use tessera_build::{AssetBackend, load_tessera_config_from_dir, resolve_resource_dirs};
 
 use crate::{call_guard, output};
 
@@ -246,11 +246,11 @@ fn supervise(config: SuperviseConfig) -> Result<()> {
             watcher.watch(&path, RecursiveMode::NonRecursive)?;
         }
     }
-    if let Some(config) = load_tessera_config_from_dir(&package_dir)?
-        && let Some(assets_dir) = resolve_assets_dir(&package_dir, Some(&config))
-        && assets_dir.exists()
-    {
-        watcher.watch(&assets_dir, RecursiveMode::Recursive)?;
+    let config = load_tessera_config_from_dir(&package_dir)?;
+    for directory in resolve_resource_dirs(&package_dir, config.as_ref()) {
+        if directory.is_dir() {
+            watcher.watch(&directory, RecursiveMode::Recursive)?;
+        }
     }
 
     let mut child: Option<ManagedChild> = None;

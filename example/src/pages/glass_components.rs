@@ -5,6 +5,8 @@ use tessera_components::{
 use tessera_shard::shard;
 use tessera_ui::{Dp, Modifier, Px, remember, use_context};
 
+use crate::res::I18N;
+
 const MAX_BLUR_RADIUS: Dp = Dp(20.0);
 
 #[shard]
@@ -19,17 +21,20 @@ pub fn glass_components_page() {
         .item_spacing(Dp(8.0))
         .item(move || {
             text()
-                .content("Glass Components")
+                .content(I18N.text("ui-glass-components"))
                 .style(theme.with(|t| t.typography.headline_large));
         })
-        .item(|| {
-            text().content("Dragable glass");
+        .item(move || {
+            text().content(I18N.text("ui-dragable-glass"));
         })
         .item(move || {
             boxed()
                 .modifier(Modifier::new().fill_max_width())
                 .children(move || {
-                    text().content("The quick brown fox jumps over the lazy dog.".repeat(10));
+                    text().content(
+                        I18N.text("ui-the-quick-brown-fox-jumps-over-the-lazy-dog")
+                            .repeat(10),
+                    );
 
                     fluid_glass()
                         .blur_radius(MAX_BLUR_RADIUS * blur_radius_factor.get())
@@ -55,11 +60,11 @@ pub fn glass_components_page() {
                     offset.set((Px::ZERO, Px::ZERO));
                 })
                 .child(move || {
-                    text().content("Reset");
+                    text().content(I18N.text("ui-reset"));
                 });
         })
-        .item(|| {
-            text().content("Blur radius");
+        .item(move || {
+            text().content(I18N.text("ui-blur-radius"));
         })
         .item(move || {
             slider()

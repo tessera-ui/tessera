@@ -19,16 +19,24 @@ use tessera_components::{
 };
 use tessera_ui::{Dp, Modifier, RenderSlot, accesskit::Role, remember, tessera, use_context};
 
+use crate::res::I18N;
+
 use super::super::{ACCENT, annotations, gap, spec_table, type_style};
 
-const COLUMNS: [&str; 5] = ["Enabled", "Disabled", "Hovered", "Focused", "Pressed"];
+const COLUMNS: [&str; 5] = [
+    "ui-enabled",
+    "ui-disabled",
+    "ui-hovered",
+    "ui-focused",
+    "ui-pressed",
+];
 const KINDS: [&str; 6] = [
     "date",
     "today",
-    "selected date",
-    "range date",
+    "ui-selected-date-2083",
+    "ui-range-date",
     "year",
-    "selected year",
+    "ui-selected-year",
 ];
 
 #[tessera]
@@ -50,7 +58,7 @@ pub(super) fn states() {
     );
     gap(Dp(24.0));
     spec_table(
-        vec!["State".into(), "Interaction".into()],
+        vec!["ui-state".into(), "ui-interaction".into()],
         COLUMNS
             .iter()
             .enumerate()
@@ -72,10 +80,16 @@ fn panel(dark: bool) {
                 .semantics(SemanticsArgs {
                     role: Some(Role::Group),
                     merge_descendants: true,
-                    label: Some(format!(
-                        "{} calendar states",
-                        if dark { "Dark" } else { "Light" }
-                    )),
+                    label: Some(
+                        I18N.format(
+                            "ui-value-calendar-states",
+                            [(
+                                "v0",
+                                I18N.text(&(if dark { "ui-dark" } else { "ui-light" }))
+                                    .into(),
+                            )],
+                        ),
+                    ),
                     ..Default::default()
                 }),
         )
@@ -92,12 +106,22 @@ fn panel(dark: bool) {
                             .background_with_shape(scheme.on_surface, Shape::CAPSULE)
                             .semantics(SemanticsArgs {
                                 role: Some(Role::Note),
-                                label: Some(format!(
-                                    "{} calendar state {}: {}",
-                                    if dark { "Dark" } else { "Light" },
-                                    column + 1,
-                                    COLUMNS[column]
-                                )),
+                                label: Some(
+                                    I18N.format(
+                                        "ui-value-calendar-state-value-value",
+                                        [
+                                            (
+                                                "v0",
+                                                I18N.text(
+                                                    &(if dark { "ui-dark" } else { "ui-light" }),
+                                                )
+                                                .into(),
+                                            ),
+                                            ("v1", (column + 1).into()),
+                                            ("v2", I18N.text(&(COLUMNS[column])).into()),
+                                        ],
+                                    ),
+                                ),
                                 ..Default::default()
                             }),
                     )
@@ -179,7 +203,7 @@ fn state_cell(dark: bool, column: usize, row: usize) {
                 .semantics(SemanticsArgs {
                     role: Some(Role::Group),
                     merge_descendants: true,
-                    label: Some(cell_name(dark, column, row)),
+                    label: Some(I18N.text(cell_name(dark, column, row))),
                     ..Default::default()
                 }),
         )
@@ -193,14 +217,14 @@ fn state_cell(dark: bool, column: usize, row: usize) {
                     .enabled(enabled)
                     .presentation_state_optional(presentation)
                     .label_formatter(|_| "00".into())
-                    .accessibility_description(cell_name(dark, column, row))
+                    .accessibility_description(I18N.text(cell_name(dark, column, row)))
                     .on_select(move |_| selected.set(true));
             } else {
                 date_picker_year(2025)
                     .selected(selected.get())
                     .enabled(enabled)
                     .presentation_state_optional(presentation)
-                    .accessibility_description(cell_name(dark, column, row))
+                    .accessibility_description(I18N.text(cell_name(dark, column, row)))
                     .on_select(move |_| selected.set(true));
             }
         });
@@ -237,7 +261,7 @@ fn range_context(dark: bool, column: usize, presentation: Option<InteractionVisu
                                     date.day().to_string()
                                 }
                             })
-                            .accessibility_description(cell_name(dark, column, 3))
+                            .accessibility_description(I18N.text(cell_name(dark, column, 3)))
                             .on_select(move |date| selected.set(Some(date)));
                     }
                 });
@@ -245,11 +269,17 @@ fn range_context(dark: bool, column: usize, presentation: Option<InteractionVisu
 }
 
 fn cell_name(dark: bool, column: usize, row: usize) -> String {
-    format!(
-        "{} {} {} state",
-        if dark { "Dark" } else { "Light" },
-        COLUMNS[column],
-        KINDS[row]
+    I18N.format(
+        "ui-value-value-value-state",
+        [
+            (
+                "v0",
+                I18N.text(&(if dark { "ui-dark" } else { "ui-light" }))
+                    .into(),
+            ),
+            ("v1", I18N.text(&(COLUMNS[column])).into()),
+            ("v2", I18N.text(&(KINDS[row])).into()),
+        ],
     )
 }
 

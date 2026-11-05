@@ -18,6 +18,7 @@ use crate::{
     material_icons::filled,
     modifier::{DraggableArgs, ModifierExt as _, Padding, SemanticsArgs},
     progress::cubic_bezier_easing,
+    res::I18N,
     row::row,
     spacer::spacer,
     surface::surface,
@@ -223,6 +224,7 @@ impl TopAppBarBuilder {
         self.action(|| {
             icon_button()
                 .standard()
+                .accessibility_label(I18N.text("md3-minimize-window"))
                 .icon(filled::MINIMIZE_SVG)
                 .on_click(tessera_platform::window::minimize);
         })
@@ -233,6 +235,7 @@ impl TopAppBarBuilder {
         self.action(|| {
             icon_button()
                 .standard()
+                .accessibility_label(I18N.text("md3-toggle-maximize-window"))
                 .icon(filled::FULLSCREEN_SVG)
                 .on_click(tessera_platform::window::toggle_maximize);
         })
@@ -243,6 +246,7 @@ impl TopAppBarBuilder {
         self.action(|| {
             icon_button()
                 .standard()
+                .accessibility_label(I18N.text("md3-close-window"))
                 .icon(filled::CLOSE_SVG)
                 .on_click(tessera_platform::window::close);
         })

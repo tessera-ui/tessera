@@ -22,6 +22,8 @@ use tessera_components::{
 };
 use tessera_ui::{Color, Dp, Modifier, RenderSlot, State, remember, tessera, use_context};
 
+use crate::res::I18N;
+
 use super::{
     ACCENT, INK,
     annotations::{self, Geometry, Rect, dotted, relative, watch},
@@ -41,10 +43,10 @@ const DONT_COLOR: Color = Color::from_rgb(0.741, 0.161, 0.161);
 
 fn name(variant: ChipVariant) -> &'static str {
     match variant {
-        ChipVariant::Assist => "Assist",
-        ChipVariant::Filter => "Filter",
-        ChipVariant::Input => "Input",
-        ChipVariant::Suggestion => "Suggestion",
+        ChipVariant::Assist => "ui-assist",
+        ChipVariant::Filter => "ui-filter",
+        ChipVariant::Input => "ui-input",
+        ChipVariant::Suggestion => "ui-suggestion",
     }
 }
 
@@ -64,33 +66,33 @@ fn selectable(variant: ChipVariant) -> bool {
 #[tessera]
 pub(super) fn chips_spec(route: Option<crate::pages::material_spec::article::ArticleRoute>) {
     article(
-        "Chips",
-        "Chips help people enter information, make selections, filter content, or trigger actions",
+        "ui-chips",
+        "ui-chips-help-people-enter-information-make-selections-filter-content-or-trigger-actions",
         vec![
             SpecSection {
-                title: "Tokens & specs",
+                title: "ui-tokens-specs",
                 content: RenderSlot::new(tokens),
             },
             SpecSection {
-                title: "Assist chip",
+                title: "ui-assist-chip",
                 content: RenderSlot::new(|| {
                     detail(ChipVariant::Assist);
                 }),
             },
             SpecSection {
-                title: "Filter chip",
+                title: "ui-filter-chip",
                 content: RenderSlot::new(|| {
                     detail(ChipVariant::Filter);
                 }),
             },
             SpecSection {
-                title: "Input chip",
+                title: "ui-input-chip",
                 content: RenderSlot::new(|| {
                     detail(ChipVariant::Input);
                 }),
             },
             SpecSection {
-                title: "Suggestion chip",
+                title: "ui-suggestion-chip",
                 content: RenderSlot::new(|| {
                     detail(ChipVariant::Suggestion);
                 }),
@@ -98,19 +100,22 @@ pub(super) fn chips_spec(route: Option<crate::pages::material_spec::article::Art
         ],
     )
     .route_optional(route.clone())
-    .hero(|| {
-        panel(RenderSlot::new(|| {
+    .hero(move || {
+        panel(RenderSlot::new(move || {
             flow_row()
                 .item_spacing(Dp(24.0))
                 .line_spacing(Dp(24.0))
-                .children(|| {
+                .children(move || {
                     for variant in VARIANTS {
                         sample(
                             variant,
                             ChipStyle::Flat,
                             false,
                             true,
-                            format!("{} example", name(variant)),
+                            I18N.format(
+                                "ui-value-example",
+                                [("v0", I18N.text(&name(variant)).into())],
+                            ),
                         );
                     }
                 });
@@ -118,75 +123,75 @@ pub(super) fn chips_spec(route: Option<crate::pages::material_spec::article::Art
     })
     .pages(vec![
         ArticlePage {
-            title: "Overview",
+            title: "ui-overview",
             intro: Some(RenderSlot::new(overview)),
             sections: vec![
                 SpecSection {
-                    title: "Availability & resources",
+                    title: "ui-availability-resources",
                     content: RenderSlot::new(resources),
                 },
                 SpecSection {
-                    title: "Updates",
+                    title: "ui-updates",
                     content: RenderSlot::new(updates),
                 },
                 SpecSection {
-                    title: "Differences from M2",
+                    title: "ui-differences-from-m2",
                     content: RenderSlot::new(differences),
                 },
             ],
         },
         ArticlePage {
-            title: "Guidelines",
+            title: "ui-guidelines",
             intro: Some(RenderSlot::new(guidelines_intro)),
             sections: vec![
                 SpecSection {
-                    title: "Usage",
+                    title: "ui-usage",
                     content: RenderSlot::new(chip_usage),
                 },
                 SpecSection {
-                    title: "Variants",
+                    title: "ui-variants",
                     content: RenderSlot::new(variants_guideline),
                 },
                 SpecSection {
-                    title: "Anatomy",
+                    title: "ui-anatomy",
                     content: RenderSlot::new(chip_guideline_anatomy),
                 },
                 SpecSection {
-                    title: "Assist chips",
+                    title: "ui-assist-chips",
                     content: RenderSlot::new(assist_guidelines),
                 },
                 SpecSection {
-                    title: "Filter chips",
+                    title: "ui-filter-chips",
                     content: RenderSlot::new(filter_guidelines),
                 },
                 SpecSection {
-                    title: "Input chips",
+                    title: "ui-input-chips",
                     content: RenderSlot::new(input_guidelines),
                 },
                 SpecSection {
-                    title: "Suggestion chips",
+                    title: "ui-suggestion-chips",
                     content: RenderSlot::new(suggestion_guidelines),
                 },
             ],
         },
         ArticlePage {
-            title: "Accessibility",
+            title: "ui-accessibility",
             intro: None,
             sections: vec![
                 SpecSection {
-                    title: "Use cases",
+                    title: "ui-use-cases",
                     content: RenderSlot::new(use_cases),
                 },
                 SpecSection {
-                    title: "Interaction & style",
+                    title: "ui-interaction-style",
                     content: RenderSlot::new(interaction_style),
                 },
                 SpecSection {
-                    title: "Keyboard navigation",
+                    title: "ui-keyboard-navigation",
                     content: RenderSlot::new(keyboard),
                 },
                 SpecSection {
-                    title: "Labeling elements",
+                    title: "ui-labeling-elements",
                     content: RenderSlot::new(labeling),
                 },
             ],
@@ -196,14 +201,16 @@ pub(super) fn chips_spec(route: Option<crate::pages::material_spec::article::Art
 
 #[tessera]
 fn prose(#[prop(into)] value: String) {
-    text().content(value).style(type_style(16.0, 24.0));
+    text()
+        .content(I18N.text(value))
+        .style(type_style(16.0, 24.0));
 }
 
 #[tessera]
 fn caption(#[prop(into)] value: String) {
     let scheme = use_context::<MaterialTheme>().unwrap().get().color_scheme;
     text()
-        .content(value)
+        .content(I18N.text(value))
         .color(scheme.on_surface_variant)
         .style(type_style(14.0, 20.0));
 }
@@ -213,7 +220,7 @@ fn bullets(items: Vec<String>) {
     column().children(move || {
         for item in items.clone() {
             text()
-                .content(format!("•  {item}"))
+                .content(format!("•  {}", I18N.text(item)))
                 .style(type_style(16.0, 24.0));
             gap(Dp(8.0));
         }
@@ -231,7 +238,7 @@ fn badge(number: usize) {
         )
         .children(move || {
             text()
-                .content(number.to_string())
+                .content((number).to_string())
                 .style(type_style(12.0, 16.0))
                 .color(Color::WHITE);
         });
@@ -245,7 +252,9 @@ fn legend(number: usize, #[prop(into)] label: String) {
         .children(move || {
             badge(number);
             spacer().modifier(Modifier::new().width(Dp(12.0)));
-            text().content(label.clone()).style(type_style(16.0, 24.0));
+            text()
+                .content(I18N.text(&(label)))
+                .style(type_style(16.0, 24.0));
         });
 }
 
@@ -266,13 +275,13 @@ fn guidance_line(#[prop(into)] mark: String, #[prop(into)] note: String, color: 
                 )
                 .children(move || {
                     text()
-                        .content(mark.clone())
+                        .content(I18N.text(&(mark)))
                         .style(type_style(14.0, 20.0))
                         .color(Color::WHITE);
                 });
             spacer().modifier(Modifier::new().width(Dp(12.0)));
             text()
-                .content(note.clone())
+                .content(I18N.text(&(note)))
                 .color(scheme.on_surface_variant)
                 .style(type_style(14.0, 20.0));
         });
@@ -290,84 +299,96 @@ fn do_dont(#[prop(into)] good: String, #[prop(into)] bad: String) {
 #[tessera]
 fn overview() {
     bullets(vec![
-        "Use chips to show options for a specific context".into(),
-        "Four variants: assist, filter, input, and suggestion".into(),
-        "Chip elevation defaults to 0 but can be elevated if they need more visual separation"
+        "ui-use-chips-to-show-options-for-a-specific-context".into(),
+        "ui-four-variants-assist-filter-input-and-suggestion".into(),
+        "ui-chip-elevation-defaults-to-0-but-can-be-elevated-if-they-need-more-visual-separation"
             .into(),
     ]);
     gap(Dp(32.0));
-    panel(RenderSlot::new(|| {
+    panel(RenderSlot::new(move || {
         column()
             .cross_axis_alignment(CrossAxisAlignment::Center)
-            .children(|| {
+            .children(move || {
                 flow_row()
                     .item_spacing(Dp(24.0))
                     .line_spacing(Dp(24.0))
-                    .children(|| {
+                    .children(move || {
                         for variant in VARIANTS {
                             sample(
                                 variant,
                                 ChipStyle::Flat,
                                 variant == ChipVariant::Filter,
                                 true,
-                                format!("{} chip", name(variant)),
+                                I18N.format(
+                                    "ui-value-chip",
+                                    [("v0", I18N.text(&name(variant)).into())],
+                                ),
                             );
                         }
                     });
             });
     }));
     gap(Dp(16.0));
-    column().children(|| {
+    column().children(move || {
         for (index, variant) in VARIANTS.into_iter().enumerate() {
-            legend(index + 1, format!("{} chip", name(variant)));
+            legend(
+                index + 1,
+                I18N.format("ui-value-chip", [("v0", I18N.text(&name(variant)).into())]),
+            );
         }
     });
     gap(Dp(12.0));
-    caption("There are four chip variants: assist, filter, input, and suggestion");
+    caption("ui-there-are-four-chip-variants-assist-filter-input-and-suggestion");
 }
 
 #[tessera]
 fn resources() {
     spec_table(
-        vec!["Type".into(), "Resource".into(), "Status".into()],
+        vec!["ui-type".into(), "ui-resource".into(), "ui-status".into()],
         vec![
             vec![
-                "Design".into(),
-                "Design Kit (Figma)".into(),
-                "Available".into(),
+                "ui-design".into(),
+                "ui-design-kit-figma".into(),
+                "ui-available".into(),
             ],
             vec![
-                "Implementation".into(),
-                "Flutter".into(),
-                "Available".into(),
+                "ui-implementation".into(),
+                "ui-flutter".into(),
+                "ui-available".into(),
             ],
             vec![
-                "Implementation".into(),
-                "Jetpack Compose".into(),
-                "Available".into(),
+                "ui-implementation".into(),
+                "ui-jetpack-compose".into(),
+                "ui-available".into(),
             ],
             vec![
-                "Implementation".into(),
-                "Android Views (MDC-Android)".into(),
-                "Available".into(),
+                "ui-implementation".into(),
+                "ui-android-views-mdc-android".into(),
+                "ui-available".into(),
             ],
-            vec!["Implementation".into(), "Web".into(), "Available".into()],
+            vec![
+                "ui-implementation".into(),
+                "ui-web".into(),
+                "ui-available".into(),
+            ],
         ],
     );
     gap(Dp(24.0));
     prose(
-        "Tessera examples on this page use the native chip component with the flat and elevated styles, standard shape corners, and an independent remove action for input chips.",
+        "ui-tessera-examples-on-this-page-use-the-native-chip-component-with-the-flat-and-elevated-sty",
     );
 }
 
 #[tessera]
 fn updates() {
-    subheading("Aug 2024".into());
-    prose("Updated stroke color from outline to outline variant.");
+    subheading("ui-aug-2024".into());
+    prose("ui-updated-stroke-color-from-outline-to-outline-variant");
     gap(Dp(24.0));
     panel(RenderSlot::new(search_stroke));
     gap(Dp(16.0));
-    caption("The stroke color was softened to improve visual hierarchy between chips and buttons");
+    caption(
+        "ui-the-stroke-color-was-softened-to-improve-visual-hierarchy-between-chips-and-buttons",
+    );
 }
 
 #[tessera]
@@ -378,21 +399,21 @@ fn search_stroke() {
         .children(move || {
             boxed()
                 .modifier(Modifier::new().padding_all(Dp(8.0)))
-                .children(|| {
+                .children(move || {
                     chip()
-                        .input("Input")
+                        .input(I18N.text("ui-input"))
                         .shape_style(ChipShapeStyle::Standard)
                         .on_remove(|| {});
                 });
             text()
-                .content("→")
+                .content(I18N.text("→"))
                 .color(scheme.on_surface_variant)
                 .style(type_style(16.0, 24.0));
             boxed()
                 .modifier(Modifier::new().padding_all(Dp(8.0)))
-                .children(|| {
+                .children(move || {
                     chip()
-                        .input("Input")
+                        .input(I18N.text("ui-input"))
                         .shape_style(ChipShapeStyle::Standard)
                         .on_remove(|| {});
                 });
@@ -402,167 +423,167 @@ fn search_stroke() {
 #[tessera]
 fn differences() {
     bullets(vec![
-        "Color: New color mappings and compatibility with dynamic color".into(),
-        "Shape: Rounded rectangle".into(),
-        "Variants: Action chips have been separated into assist chips and suggestion chips. Choice chips are now a subset of filter chips".into(),
+        "ui-color-new-color-mappings-and-compatibility-with-dynamic-color".into(),
+        "ui-shape-rounded-rectangle".into(),
+        "ui-variants-action-chips-have-been-separated-into-assist-chips-and-suggestion-chips-choice-ch".into(),
     ]);
     gap(Dp(32.0));
-    panel(RenderSlot::new(|| {
-        column().children(|| {
-            flow_row().item_spacing(Dp(8.0)).children(|| {
+    panel(RenderSlot::new(move || {
+        column().children(move || {
+            flow_row().item_spacing(Dp(8.0)).children(move || {
                 chip()
-                    .input("Input")
+                    .input(I18N.text("ui-input"))
                     .shape_style(ChipShapeStyle::Standard)
                     .on_remove(|| {});
                 chip()
-                    .filter("Choice")
+                    .filter(I18N.text("ui-choice"))
                     .shape_style(ChipShapeStyle::Standard);
                 chip()
-                    .filter("Filter")
+                    .filter(I18N.text("ui-filter"))
                     .shape_style(ChipShapeStyle::Standard);
                 chip()
-                    .assist("Action")
+                    .assist(I18N.text("ui-action"))
                     .shape_style(ChipShapeStyle::Standard);
             });
         });
     }));
     gap(Dp(12.0));
-    caption("M2: Variants of chips are input, choice, filter, and action");
+    caption("ui-m2-variants-of-chips-are-input-choice-filter-and-action");
     gap(Dp(32.0));
-    panel(RenderSlot::new(|| {
-        flow_row().item_spacing(Dp(8.0)).children(|| {
+    panel(RenderSlot::new(move || {
+        flow_row().item_spacing(Dp(8.0)).children(move || {
             chip()
-                .assist("Assist")
+                .assist(I18N.text("ui-assist"))
                 .shape_style(ChipShapeStyle::Standard)
                 .leading_icon(filled::ADD_SVG);
             chip()
-                .filter("Filter")
+                .filter(I18N.text("ui-filter"))
                 .shape_style(ChipShapeStyle::Standard)
                 .selected(true)
                 .leading_icon(filled::CHECK_SVG);
             chip()
-                .input("Input")
+                .input(I18N.text("ui-input"))
                 .shape_style(ChipShapeStyle::Standard)
                 .on_remove(|| {});
             chip()
-                .suggestion("Suggestion")
+                .suggestion(I18N.text("ui-suggestion"))
                 .shape_style(ChipShapeStyle::Standard);
         });
     }));
     gap(Dp(12.0));
-    caption("M3: Variants of chips updated to assist, filter, input, and suggestion");
+    caption("ui-m3-variants-of-chips-updated-to-assist-filter-input-and-suggestion");
 }
 
 #[tessera]
 fn guidelines_intro() {
-    panel(RenderSlot::new(|| {
+    panel(RenderSlot::new(move || {
         flow_row()
             .item_spacing(Dp(24.0))
             .line_spacing(Dp(24.0))
-            .children(|| {
+            .children(move || {
                 chip()
-                    .assist("Assist")
+                    .assist(I18N.text("ui-assist"))
                     .shape_style(ChipShapeStyle::Standard)
                     .leading_icon(filled::EVENT_SVG);
                 chip()
-                    .filter("Filter")
+                    .filter(I18N.text("ui-filter"))
                     .shape_style(ChipShapeStyle::Standard)
                     .selected(true)
                     .leading_icon(filled::CHECK_SVG);
                 chip()
-                    .input("Input")
+                    .input(I18N.text("ui-input"))
                     .shape_style(ChipShapeStyle::Standard)
                     .on_remove(|| {});
                 chip()
-                    .suggestion("Suggestion")
+                    .suggestion(I18N.text("ui-suggestion"))
                     .shape_style(ChipShapeStyle::Standard);
             });
     }));
     gap(Dp(16.0));
-    caption("There are four variants of chips: assist, filter, input, and suggestion");
+    caption("ui-there-are-four-variants-of-chips-assist-filter-input-and-suggestion");
 }
 
 #[tessera]
 fn chip_usage() {
     prose(
-        "Chips help people enter information, make selections, filter content, or trigger actions. They're best used to help people accomplish their current task faster and easier.",
+        "ui-chips-help-people-enter-information-make-selections-filter-content-or-trigger-actions-they",
     );
     gap(Dp(24.0));
-    subheading("Chips aren’t buttons".into());
+    subheading("ui-chips-aren-t-buttons".into());
     prose(
-        "Chips and buttons are similar. They both provide visual cues to prompt people to take actions and make selections. While buttons appear consistently and with familiar calls of action, chips are dynamic to the situation, and appear as a group of interactive elements.",
+        "ui-chips-and-buttons-are-similar-they-both-provide-visual-cues-to-prompt-people-to-take-actio",
     );
     gap(Dp(16.0));
     prose(
-        "Use chips to enhance a person’s current journey and encourage action. Use buttons to progress them through the product and for significant actions.",
+        "ui-use-chips-to-enhance-a-person-s-current-journey-and-encourage-action-use-buttons-to-progre",
     );
     gap(Dp(24.0));
     do_dont(
-        "Use chips to present contextual, supplemental options",
-        "Avoid replacing major actions with chips. Actions that progress people to the next or previous step should always be displayed as buttons.",
+        "ui-use-chips-to-present-contextual-supplemental-options",
+        "ui-avoid-replacing-major-actions-with-chips-actions-that-progress-people-to-the-next-or-previ",
     );
     gap(Dp(32.0));
     prose(
-        "Chips should dynamically offer various actions depending on the current task, whereas a button should be a persistent fixture of a layout.",
+        "ui-chips-should-dynamically-offer-various-actions-depending-on-the-current-task-whereas-a-but",
     );
     gap(Dp(16.0));
     prose(
-        "Chips represent forking paths for a current task, while buttons represent linear steps.",
+        "ui-chips-represent-forking-paths-for-a-current-task-while-buttons-represent-linear-steps",
     );
     gap(Dp(24.0));
     assist_example();
     gap(Dp(24.0));
     do_dont(
-        "Use buttons for the final step in a task",
-        "Avoid using chips to finish or progress a task",
+        "ui-use-buttons-for-the-final-step-in-a-task",
+        "ui-avoid-using-chips-to-finish-or-progress-a-task",
     );
     gap(Dp(32.0));
     prose(
-        "Multiple chips should appear together in a set, whereas there should be no more than 3 buttons in a single arrangement.",
+        "ui-multiple-chips-should-appear-together-in-a-set-whereas-there-should-be-no-more-than-3-butt",
     );
     gap(Dp(16.0));
-    prose("Chip sets can be scrolled horizontally.");
+    prose("ui-chip-sets-can-be-scrolled-horizontally");
     gap(Dp(24.0));
     suggestion_example();
     gap(Dp(24.0));
     do_dont(
-        "Chips can be scrolled horizontally",
-        "Don’t display a single chip by itself. Chips should appear in a set.",
+        "ui-chips-can-be-scrolled-horizontally",
+        "ui-don-t-display-a-single-chip-by-itself-chips-should-appear-in-a-set",
     );
 }
 
 #[tessera]
 fn variants_guideline() {
-    prose("Choose the chip variant based on its purpose and author.");
+    prose("ui-choose-the-chip-variant-based-on-its-purpose-and-author");
     gap(Dp(16.0));
-    prose("Does the chip represent an action (assist chip) or filter results (filter chip)?");
+    prose("ui-does-the-chip-represent-an-action-assist-chip-or-filter-results-filter-chip");
     gap(Dp(16.0));
     prose(
-        "Is its content generated by the product (suggestion chip), or by the person using the product (input chip)?",
+        "ui-is-its-content-generated-by-the-product-suggestion-chip-or-by-the-person-using-the-product",
     );
     gap(Dp(24.0));
-    panel(RenderSlot::new(|| {
+    panel(RenderSlot::new(move || {
         column()
             .cross_axis_alignment(CrossAxisAlignment::Center)
-            .children(|| {
+            .children(move || {
                 flow_row()
                     .item_spacing(Dp(24.0))
                     .line_spacing(Dp(24.0))
-                    .children(|| {
+                    .children(move || {
                         chip()
-                            .assist("Assist")
+                            .assist(I18N.text("ui-assist"))
                             .shape_style(ChipShapeStyle::Standard)
                             .leading_icon(filled::EVENT_SVG);
                         chip()
-                            .filter("Filter")
+                            .filter(I18N.text("ui-filter"))
                             .shape_style(ChipShapeStyle::Standard)
                             .leading_icon(filled::CHECK_SVG);
                         chip()
-                            .input("Input")
+                            .input(I18N.text("ui-input"))
                             .shape_style(ChipShapeStyle::Standard)
                             .on_remove(|| {});
                         chip()
-                            .suggestion("Suggestion")
+                            .suggestion(I18N.text("ui-suggestion"))
                             .shape_style(ChipShapeStyle::Standard);
                     });
             });
@@ -576,36 +597,36 @@ fn variants_guideline() {
     gap(Dp(32.0));
     spec_table(
         vec![
-            "Purpose".into(),
-            "Chip variant".into(),
-            "Rationale".into(),
-            "Example".into(),
+            "ui-purpose".into(),
+            "ui-chip-variant".into(),
+            "ui-rationale".into(),
+            "ui-example".into(),
         ],
         vec![
             vec![
-                "Action".into(),
-                "Assist chip".into(),
-                "Assist chips represent smart or automated actions that can span multiple apps"
+                "ui-action".into(),
+                "ui-assist-chip".into(),
+                "ui-assist-chips-represent-smart-or-automated-actions-that-can-span-multiple-apps"
                     .into(),
-                "Add to calendar action".into(),
+                "ui-add-to-calendar-action".into(),
             ],
             vec![
-                "Filter".into(),
-                "Filter chip".into(),
-                "Filter chips represent filters for a collection".into(),
-                "Platform selector on material.io/components".into(),
+                "ui-filter".into(),
+                "ui-filter-chip".into(),
+                "ui-filter-chips-represent-filters-for-a-collection".into(),
+                "ui-platform-selector-on-material-io-components".into(),
             ],
             vec![
-                "Information, user-authored".into(),
-                "Input chip".into(),
-                "Input chips represent discrete pieces of information entered by a person".into(),
-                "Gmail contact in the To field".into(),
+                "ui-information-user-authored".into(),
+                "ui-input-chip".into(),
+                "ui-input-chips-represent-discrete-pieces-of-information-entered-by-a-person".into(),
+                "ui-gmail-contact-in-the-to-field".into(),
             ],
             vec![
-                "Information, product-authored".into(),
-                "Suggestion chip".into(),
-                "Suggestion chips help narrow a person’s intent by presenting dynamically-generated suggestions".into(),
-                "Suggested chat response".into(),
+                "ui-information-product-authored".into(),
+                "ui-suggestion-chip".into(),
+                "ui-suggestion-chips-help-narrow-a-person-s-intent-by-presenting-dynamically-generated-suggest".into(),
+                "ui-suggested-chat-response".into(),
             ],
         ],
     );
@@ -615,82 +636,82 @@ fn variants_guideline() {
 fn chip_guideline_anatomy() {
     chip_diagram(ChipVariant::Input, false);
     gap(Dp(16.0));
-    caption("A chip contains a container, a label, and optional leading and trailing elements");
+    caption("ui-a-chip-contains-a-container-a-label-and-optional-leading-and-trailing-elements");
     gap(Dp(32.0));
-    subheading("Container".into());
-    prose("All chips are slightly rounded with an 8dp corner.");
+    subheading("ui-container".into());
+    prose("ui-all-chips-are-slightly-rounded-with-an-8dp-corner");
     gap(Dp(24.0));
     chip_diagram(ChipVariant::Filter, true);
     gap(Dp(16.0));
-    caption("Chips have rounded corners");
+    caption("ui-chips-have-rounded-corners");
     gap(Dp(32.0));
-    subheading("Shadows & elevation".into());
-    prose("Chip containers can be elevated if placed on top of an image or dynamic background.");
+    subheading("ui-shadows-elevation".into());
+    prose("ui-chip-containers-can-be-elevated-if-placed-on-top-of-an-image-or-dynamic-background");
     gap(Dp(24.0));
     elevation_example();
     gap(Dp(16.0));
-    caption("When on complicated backgrounds, chip containers can be elevated");
+    caption("ui-when-on-complicated-backgrounds-chip-containers-can-be-elevated");
     gap(Dp(16.0));
     do_dont(
-        "Use an outline to define the edge of the chip's container on regular backgrounds",
-        "Chips shouldn't be elevated when placed directly on the page",
+        "ui-use-an-outline-to-define-the-edge-of-the-chip-s-container-on-regular-backgrounds",
+        "ui-chips-shouldn-t-be-elevated-when-placed-directly-on-the-page",
     );
     gap(Dp(16.0));
     do_dont(
-        "Chips may use elevation when placed on an image",
-        "Avoid using elevation to indicate a chip's pressed state. Instead, use the visual ripple effect.",
+        "ui-chips-may-use-elevation-when-placed-on-an-image",
+        "ui-avoid-using-elevation-to-indicate-a-chip-s-pressed-state-instead-use-the-visual-ripple-eff",
     );
     gap(Dp(32.0));
-    subheading("Label text".into());
+    subheading("ui-label-text".into());
     prose(
-        "Chip label text should be 20 characters or fewer, and have the same typography style as buttons.",
+        "ui-chip-label-text-should-be-20-characters-or-fewer-and-have-the-same-typography-style-as-but",
     );
     gap(Dp(16.0));
     prose(
-        "Chip labels should remain brief for the limited space available. Skip conventional grammar rules, such as articles (take “a” walk), to save space.",
+        "ui-chip-labels-should-remain-brief-for-the-limited-space-available-skip-conventional-grammar",
     );
     gap(Dp(24.0));
     label_length_example();
     gap(Dp(16.0));
     do_dont(
-        "Keep chip labels short",
-        "Avoid chip labels longer than 20 characters",
+        "ui-keep-chip-labels-short",
+        "ui-avoid-chip-labels-longer-than-20-characters",
     );
     gap(Dp(32.0));
-    subheading("Leading icon or image (optional)".into());
+    subheading("ui-leading-icon-or-image-optional".into());
     prose(
-        "Chips can contain a leading icon, logo, or circular image. Use a system icon to help identify a chip’s category.",
+        "ui-chips-can-contain-a-leading-icon-logo-or-circular-image-use-a-system-icon-to-help-identify",
     );
     gap(Dp(24.0));
     leading_examples();
     gap(Dp(16.0));
-    caption("Chips can contain a logo, icon, or circular image");
+    caption("ui-chips-can-contain-a-logo-icon-or-circular-image");
     gap(Dp(24.0));
     prose(
-        "The leading icon color for unselected chips can be customized through theming. While the default color role is primary, the on surface variant color role is a good alternative when the icon style requires less emphasis.",
+        "ui-the-leading-icon-color-for-unselected-chips-can-be-customized-through-theming-while-the-de",
     );
     gap(Dp(16.0));
     prose(
-        "Leading circular images are sized larger than leading icons to provide more space for detail. Icons are designed to be legible at small sizes. See the Specs tab for precise measurement values.",
+        "ui-leading-circular-images-are-sized-larger-than-leading-icons-to-provide-more-space-for-deta",
     );
     gap(Dp(16.0));
-    caption("Leading images, such as avatars, are sized larger than leading icons or logos");
+    caption("ui-leading-images-such-as-avatars-are-sized-larger-than-leading-icons-or-logos");
     gap(Dp(32.0));
-    subheading("Trailing icon (optional, input and filter chips only)".into());
-    prose("The trailing icon is present for input and filter chips.");
+    subheading("ui-trailing-icon-optional-input-and-filter-chips-only".into());
+    prose("ui-the-trailing-icon-is-present-for-input-and-filter-chips");
     gap(Dp(16.0));
     prose(
-        "On input chips, it’s required and must be used to remove the chip. On filter chips, it’s optional, and can be used to open a menu or remove the chip.",
+        "ui-on-input-chips-it-s-required-and-must-be-used-to-remove-the-chip-on-filter-chips-it-s-opti",
     );
     gap(Dp(16.0));
     prose(
-        "Secondary actions (such as a trailing icon button for Remove) must have a 48x48dp interaction target that doesn’t interfere with the chip’s primary action (such as Edit or Drag). To achieve this, apply a minimum width of 88dp to the chip, or 42dp to the label text.",
+        "ui-secondary-actions-such-as-a-trailing-icon-button-for-remove-must-have-a-48x48dp-interactio",
     );
     gap(Dp(24.0));
     chip_diagram(ChipVariant::Input, true);
     gap(Dp(16.0));
     caption(
-        "Interaction targets for actions like Edit or Close have a size of 48x48. This can be achieved by setting the minimum container width to 88dp",
+        "ui-interaction-targets-for-actions-like-edit-or-close-have-a-size-of-48x48-this-can-be-achiev",
     );
 }
 
@@ -705,17 +726,17 @@ fn elevation_example() {
                     .padding_all(Dp(20.0))
                     .background_with_shape(scheme.surface, Shape::rounded_rectangle(Dp(16.0))),
             )
-            .children(|| {
-                flow_row().item_spacing(Dp(8.0)).children(|| {
+            .children(move || {
+                flow_row().item_spacing(Dp(8.0)).children(move || {
                     chip()
-                        .assist("Assist")
+                        .assist(I18N.text("ui-assist"))
                         .shape_style(ChipShapeStyle::Standard)
                         .leading_icon(filled::EVENT_SVG);
                     chip()
-                        .filter("Filter")
+                        .filter(I18N.text("ui-filter"))
                         .shape_style(ChipShapeStyle::Standard);
                     chip()
-                        .suggestion("Suggestion")
+                        .suggestion(I18N.text("ui-suggestion"))
                         .shape_style(ChipShapeStyle::Standard);
                 });
             });
@@ -730,19 +751,19 @@ fn elevation_example() {
                         Shape::rounded_rectangle(Dp(16.0)),
                     ),
             )
-            .children(|| {
-                flow_row().item_spacing(Dp(8.0)).children(|| {
+            .children(move || {
+                flow_row().item_spacing(Dp(8.0)).children(move || {
                     chip()
-                        .assist("Assist")
+                        .assist(I18N.text("ui-assist"))
                         .style(ChipStyle::Elevated)
                         .shape_style(ChipShapeStyle::Standard)
                         .leading_icon(filled::EVENT_SVG);
                     chip()
-                        .filter("Filter")
+                        .filter(I18N.text("ui-filter"))
                         .style(ChipStyle::Elevated)
                         .shape_style(ChipShapeStyle::Standard);
                     chip()
-                        .suggestion("Suggestion")
+                        .suggestion(I18N.text("ui-suggestion"))
                         .style(ChipStyle::Elevated)
                         .shape_style(ChipShapeStyle::Standard);
                 });
@@ -750,22 +771,22 @@ fn elevation_example() {
     });
     gap(Dp(12.0));
     caption(
-        "Flat chips suit regular surfaces; elevated chips separate containers from imagery or dynamic color",
+        "ui-flat-chips-suit-regular-surfaces-elevated-chips-separate-containers-from-imagery-or-dynami",
     );
 }
 
 #[tessera]
 fn label_length_example() {
-    panel(RenderSlot::new(|| {
+    panel(RenderSlot::new(move || {
         flow_row()
             .item_spacing(Dp(8.0))
             .line_spacing(Dp(8.0))
-            .children(|| {
+            .children(move || {
                 chip()
-                    .assist("Take walk")
+                    .assist(I18N.text("ui-take-walk"))
                     .shape_style(ChipShapeStyle::Standard);
                 chip()
-                    .assist("Take a long walk around the park")
+                    .assist(I18N.text("ui-take-a-long-walk-around-the-park"))
                     .shape_style(ChipShapeStyle::Standard);
             });
     }));
@@ -773,18 +794,18 @@ fn label_length_example() {
 
 #[tessera]
 fn leading_examples() {
-    panel(RenderSlot::new(|| {
+    panel(RenderSlot::new(move || {
         flow_row()
             .item_spacing(Dp(8.0))
             .line_spacing(Dp(8.0))
-            .children(|| {
+            .children(move || {
                 chip()
-                    .input("Ping Qiang")
+                    .input(I18N.text("ui-ping-qiang"))
                     .shape_style(ChipShapeStyle::Standard)
                     .leading_icon(filled::PERSON_SVG)
                     .on_remove(|| {});
                 chip()
-                    .filter("Type: Images")
+                    .filter(I18N.text("ui-type-images"))
                     .shape_style(ChipShapeStyle::Standard)
                     .leading_icon(filled::IMAGE_SVG);
             });
@@ -814,17 +835,21 @@ fn chip_diagram(variant: ChipVariant, measurements: bool) {
                     button()
                         .outlined()
                         .on_click(move || removed.set(false))
-                        .child(|| {
-                            text().content("Restore input chip");
+                        .child(move || {
+                            text().content(I18N.text("ui-restore-input-chip"));
                         });
                 } else {
-                    let chip = chip()
-                        .variant(variant)
-                        .label(format!("{} chip", name(variant)))
-                        .modifier(watch(geometry, "chip"))
-                        .shape_style(ChipShapeStyle::Standard)
-                        .selected(selected.get())
-                        .on_click(move || selected.set(!selected.get()));
+                    let chip =
+                        chip()
+                            .variant(variant)
+                            .label(I18N.format(
+                                "ui-value-chip",
+                                [("v0", I18N.text(&name(variant)).into())],
+                            ))
+                            .modifier(watch(geometry, "chip"))
+                            .shape_style(ChipShapeStyle::Standard)
+                            .selected(selected.get())
+                            .on_click(move || selected.set(!selected.get()));
                     match variant {
                         ChipVariant::Input => {
                             chip.leading_icon(filled::IMAGE_SVG)
@@ -890,7 +915,7 @@ fn chip_callouts(geometry: State<Geometry>, variant: ChipVariant, measurements: 
             Dp(target.y + 14.0),
         );
         annotations::dimension("32".into(), Dp(chip.x - 40.0), Dp(chip.y + 6.0));
-        annotations::dimension("88dp min".into(), Dp(chip.x), Dp(chip.y + chip.h + 40.0));
+        annotations::dimension("ui-88dp-min".into(), Dp(chip.x), Dp(chip.y + chip.h + 40.0));
     } else {
         for (n, x, y, tx, ty) in [
             (1, chip.x + 16.0, chip.y - 64.0, chip.x + 28.0, chip.y),
@@ -952,22 +977,22 @@ fn assist_example() {
     panel(RenderSlot::new(move || {
         column().children(move || {
             text()
-                .content("Team catch-up")
+                .content(I18N.text("ui-team-catch-up"))
                 .style(type_style(24.0, 32.0));
-            prose("Wednesday · 10:00–10:30");
+            prose("ui-wednesday-10-00-10-30");
             gap(Dp(16.0));
             flow_row().item_spacing(Dp(8.0)).children(move || {
                 chip()
-                    .assist(if saved.get() {
-                        "Added"
+                    .assist(I18N.text(if saved.get() {
+                        "ui-added"
                     } else {
-                        "Add to calendar"
-                    })
+                        "ui-add-to-calendar"
+                    }))
                     .shape_style(ChipShapeStyle::Standard)
                     .leading_icon(filled::EVENT_SVG)
                     .on_click(move || saved.set(!saved.get()));
                 chip()
-                    .assist("Get directions")
+                    .assist(I18N.text("ui-get-directions"))
                     .shape_style(ChipShapeStyle::Standard)
                     .leading_icon(filled::DIRECTIONS_SVG)
                     .on_click(move || saved.set(true));
@@ -979,27 +1004,27 @@ fn assist_example() {
 #[tessera]
 fn assist_guidelines() {
     prose(
-        "Assist chips represent smart or automated actions that can span multiple apps, such as opening a calendar event from the home screen. Assist chips function as though the person asked an assistant to complete the action. They should appear dynamically and contextually in a UI.",
+        "ui-assist-chips-represent-smart-or-automated-actions-that-can-span-multiple-apps-such-as-open",
     );
     gap(Dp(16.0));
     prose(
-        "An alternative to assist chips are buttons, which should appear persistently and consistently.",
+        "ui-an-alternative-to-assist-chips-are-buttons-which-should-appear-persistently-and-consistent",
     );
     gap(Dp(24.0));
     assist_example();
     gap(Dp(16.0));
-    caption("The text in most assist chips begins with a short verb, like Get or Add");
+    caption("ui-the-text-in-most-assist-chips-begins-with-a-short-verb-like-get-or-add");
     gap(Dp(24.0));
     prose(
-        "Assist chips can trigger an action or show progress and confirmation. Write assist chips like buttons: start with a verb. Adjust text dynamically if the state changes, like Save to Saved.",
+        "ui-assist-chips-can-trigger-an-action-or-show-progress-and-confirmation-write-assist-chips-li",
     );
     gap(Dp(16.0));
     caption(
-        "Tapping an assist chip triggers a contextual action, and the chip can show progress and confirmation feedback",
+        "ui-tapping-an-assist-chip-triggers-a-contextual-action-and-the-chip-can-show-progress-and-con",
     );
     gap(Dp(24.0));
     prose(
-        "Assist chips are displayed after primary content, such as below a card or persistently at the bottom of a screen.",
+        "ui-assist-chips-are-displayed-after-primary-content-such-as-below-a-card-or-persistently-at-t",
     );
 }
 
@@ -1009,7 +1034,7 @@ fn filter_example() {
     panel(RenderSlot::new(move || {
         column().children(move || {
             text()
-                .content("Filter results")
+                .content(I18N.text("ui-filter-results"))
                 .style(type_style(20.0, 28.0));
             gap(Dp(16.0));
             flow_row()
@@ -1021,9 +1046,12 @@ fn filter_example() {
                     }
                 });
             gap(Dp(16.0));
-            text().content(format!(
-                "{} filters selected",
-                selection.get().into_iter().filter(|value| *value).count()
+            text().content(I18N.format(
+                "ui-value-filters-selected",
+                [(
+                    "v0",
+                    (selection.get().into_iter().filter(|value| *value).count()).into(),
+                )],
             ));
         });
     }));
@@ -1033,7 +1061,7 @@ fn filter_example() {
 fn filter_choice(index: usize, selection: State<[bool; 3]>) {
     let selected = selection.get()[index];
     let chip = chip()
-        .filter(["Unread", "Favorites", "Attachments"][index])
+        .filter(I18N.text(["ui-unread", "ui-favorites", "ui-attachments"][index]))
         .shape_style(ChipShapeStyle::Standard)
         .selected(selected)
         .on_click(move || selection.with_mut(|value| value[index] = !value[index]));
@@ -1045,28 +1073,28 @@ fn filter_choice(index: usize, selection: State<[bool; 3]>) {
 #[tessera]
 fn filter_guidelines() {
     prose(
-        "Filter chips use tags or descriptive words to filter content. They can be a good alternative to segmented buttons or checkboxes when viewing a list or search results.",
+        "ui-filter-chips-use-tags-or-descriptive-words-to-filter-content-they-can-be-a-good-alternativ",
     );
     gap(Dp(16.0));
     prose(
-        "Tapping on a filter chip activates it and appends a leading checkmark icon to the starting edge of the chip label.",
+        "ui-tapping-on-a-filter-chip-activates-it-and-appends-a-leading-checkmark-icon-to-the-starting",
     );
     gap(Dp(16.0));
     prose(
-        "Write filter chips with nouns that describe the category to include in the results. Avoid negative phrases like Exclude images.",
+        "ui-write-filter-chips-with-nouns-that-describe-the-category-to-include-in-the-results-avoid-n",
     );
     gap(Dp(24.0));
     filter_example();
     gap(Dp(16.0));
-    caption("Filter chips rely on tags or descriptive words to filter content");
+    caption("ui-filter-chips-rely-on-tags-or-descriptive-words-to-filter-content");
     gap(Dp(24.0));
-    prose("Tap a chip to select it. Multiple chips can be selected or unselected.");
+    prose("ui-tap-a-chip-to-select-it-multiple-chips-can-be-selected-or-unselected");
     gap(Dp(16.0));
-    caption("Filter chips in a shopping app and in a real estate app");
+    caption("ui-filter-chips-in-a-shopping-app-and-in-a-real-estate-app");
     gap(Dp(24.0));
     do_dont(
-        "Use nouns that describe the category to include in results",
-        "Avoid negative phrases like Exclude images",
+        "ui-use-nouns-that-describe-the-category-to-include-in-results",
+        "ui-avoid-negative-phrases-like-exclude-images",
     );
 }
 
@@ -1076,7 +1104,9 @@ fn input_example() {
     let selected = remember(|| [false; 3]);
     panel(RenderSlot::new(move || {
         column().children(move || {
-            text().content("To").style(type_style(14.0, 20.0));
+            text()
+                .content(I18N.text("ui-to"))
+                .style(type_style(14.0, 20.0));
             gap(Dp(8.0));
             flow_row()
                 .item_spacing(Dp(8.0))
@@ -1089,13 +1119,13 @@ fn input_example() {
             gap(Dp(16.0));
             button()
                 .text()
-                .accessibility_label("Restore recipients")
+                .accessibility_label(I18N.text("ui-restore-recipients"))
                 .on_click(move || {
                     visible.set([true; 3]);
                     selected.set([false; 3]);
                 })
-                .child(|| {
-                    text().content("Restore recipients");
+                .child(move || {
+                    text().content(I18N.text("ui-restore-recipients"));
                 });
         });
     }));
@@ -1105,7 +1135,7 @@ fn input_example() {
 fn recipient(index: usize, visible: State<[bool; 3]>, selected: State<[bool; 3]>) {
     if visible.get()[index] {
         chip()
-            .input(["Alex", "Sam", "Taylor"][index])
+            .input(I18N.text(["ui-alex", "ui-sam", "ui-taylor"][index]))
             .shape_style(ChipShapeStyle::Standard)
             .leading_icon(filled::PERSON_SVG)
             .selected(selected.get()[index])
@@ -1117,27 +1147,27 @@ fn recipient(index: usize, visible: State<[bool; 3]>, selected: State<[bool; 3]>
 #[tessera]
 fn input_guidelines() {
     prose(
-        "Input chips represent information entered by a person. Their body can select or edit the item; the independent trailing control removes it.",
+        "ui-input-chips-represent-information-entered-by-a-person-their-body-can-select-or-edit-the-it",
     );
     gap(Dp(16.0));
     prose(
-        "Use input chips for discrete pieces of information, such as recipients, filters, or tags. A leading icon, logo or circular avatar can identify the item, and the removal action must stay independent.",
+        "ui-use-input-chips-for-discrete-pieces-of-information-such-as-recipients-filters-or-tags-a-le",
     );
     gap(Dp(24.0));
     input_example();
     gap(Dp(16.0));
-    caption("Input chips represent discrete pieces of information entered by a person");
+    caption("ui-input-chips-represent-discrete-pieces-of-information-entered-by-a-person");
     gap(Dp(24.0));
-    subheading("Placement".into());
+    subheading("ui-placement".into());
     prose(
-        "Place input chips inline, in a wrapping set, or in a horizontally scrolling field. Keep all values visible when the task benefits from reviewing the whole set.",
+        "ui-place-input-chips-inline-in-a-wrapping-set-or-in-a-horizontally-scrolling-field-keep-all-v",
     );
     gap(Dp(24.0));
     chip_diagram(ChipVariant::Input, false);
     gap(Dp(16.0));
     do_dont(
-        "Use a leading avatar or icon and a separate trailing remove action",
-        "Avoid making the whole chip the remove action; the chip body and its removal stay separate",
+        "ui-use-a-leading-avatar-or-icon-and-a-separate-trailing-remove-action",
+        "ui-avoid-making-the-whole-chip-the-remove-action-the-chip-body-and-its-removal-stay-separate",
     );
 }
 
@@ -1146,19 +1176,19 @@ fn suggestion_example() {
     let reply = remember(String::new);
     panel(RenderSlot::new(move || {
         column().children(move || {
-            prose("Would you like to meet tomorrow?");
+            prose("ui-would-you-like-to-meet-tomorrow");
             gap(Dp(24.0));
             flow_row()
                 .item_spacing(Dp(8.0))
                 .line_spacing(Dp(8.0))
                 .children(move || {
-                    for label in ["Sounds good", "Maybe later", "What time?"] {
+                    for label in ["ui-sounds-good", "ui-maybe-later", "ui-what-time"] {
                         suggestion_choice(label.to_owned(), reply);
                     }
                 });
             if !reply.with(String::is_empty) {
                 gap(Dp(16.0));
-                prose(format!("Reply: {}", reply.get()));
+                prose(I18N.format("ui-reply-value", [("v0", I18N.text(&reply.get()).into())]));
             }
         });
     }));
@@ -1167,7 +1197,7 @@ fn suggestion_example() {
 #[tessera]
 fn suggestion_choice(#[prop(into)] label: String, reply: State<String>) {
     chip()
-        .suggestion(label.clone())
+        .suggestion(I18N.text(&(label)))
         .shape_style(ChipShapeStyle::Standard)
         .on_click(move || reply.set(label.clone()));
 }
@@ -1175,21 +1205,21 @@ fn suggestion_choice(#[prop(into)] label: String, reply: State<String>) {
 #[tessera]
 fn suggestion_guidelines() {
     prose(
-        "Suggestion chips help narrow a person’s intent by presenting dynamically-generated suggestions. They are product-authored, so their labels come from the app rather than the person.",
+        "ui-suggestion-chips-help-narrow-a-person-s-intent-by-presenting-dynamically-generated-suggest-1772",
     );
     gap(Dp(24.0));
     suggestion_example();
     gap(Dp(16.0));
-    caption("Suggestion chips offer short, product-generated replies or search suggestions");
+    caption("ui-suggestion-chips-offer-short-product-generated-replies-or-search-suggestions");
     gap(Dp(24.0));
-    subheading("Placement".into());
+    subheading("ui-placement".into());
     prose(
-        "Keep suggestions in an inline set that wraps as needed. Preserve at least 8dp between visual chips and 48dp interaction targets.",
+        "ui-keep-suggestions-in-an-inline-set-that-wraps-as-needed-preserve-at-least-8dp-between-visua",
     );
     gap(Dp(24.0));
     do_dont(
-        "Offer a short set of suggestions next to the content they answer",
-        "Avoid presenting a single suggestion chip on its own",
+        "ui-offer-a-short-set-of-suggestions-next-to-the-content-they-answer",
+        "ui-avoid-presenting-a-single-suggestion-chip-on-its-own",
     );
 }
 
@@ -1203,10 +1233,13 @@ fn tokens() {
             for variant in VARIANTS {
                 button()
                     .text()
-                    .accessibility_label(format!("{} chip tokens", name(variant)))
+                    .accessibility_label(I18N.format(
+                        "ui-value-chip-tokens",
+                        [("v0", I18N.text(&name(variant)).into())],
+                    ))
                     .on_click(move || selected.set(variant))
                     .child(move || {
-                        text().content(name(variant));
+                        text().content(I18N.text(name(variant)));
                     });
             }
         });
@@ -1222,122 +1255,136 @@ fn token_table(variant: ChipVariant) {
     let selectable = selectable(variant);
     let mut rows = vec![
         vec![
-            "Container color".into(),
+            "ui-container-color".into(),
             format!("{prefix}.container.color"),
-            if selectable { "Transparent" } else { "Surface" }.into(),
+            if selectable {
+                "ui-transparent"
+            } else {
+                "ui-surface"
+            }
+            .into(),
         ],
         vec![
-            "Container elevation".into(),
+            "ui-container-elevation".into(),
             format!("{prefix}.container.elevation"),
-            "0dp · elevated 1dp".into(),
+            "ui-0dp-elevated-1dp".into(),
         ],
         vec![
-            "Label color".into(),
+            "ui-label-color".into(),
             format!("{prefix}.label.text.color"),
             if variant == ChipVariant::Assist {
-                "On surface"
+                "ui-on-surface"
             } else {
-                "On surface variant"
+                "ui-on-surface-variant"
             }
             .into(),
         ],
         vec![
-            "Outline color".into(),
+            "ui-outline-color".into(),
             format!("{prefix}.outline.color"),
             if selectable {
-                "Outline variant"
+                "ui-outline-variant"
             } else {
-                "Outline"
+                "ui-outline"
             }
             .into(),
         ],
         vec![
-            "Shape".into(),
+            "ui-shape".into(),
             format!("{prefix}.container.shape"),
-            "8dp corner".into(),
+            "ui-8dp-corner".into(),
         ],
     ];
     if variant != ChipVariant::Suggestion {
         rows.push(vec![
-            "Leading icon color".into(),
+            "ui-leading-icon-color".into(),
             format!("{prefix}.leading-icon.color"),
             if variant == ChipVariant::Assist {
-                "Primary"
+                "ui-primary"
             } else {
-                "On surface variant"
+                "ui-on-surface-variant"
             }
             .into(),
         ]);
     }
     if matches!(variant, ChipVariant::Filter | ChipVariant::Input) {
         rows.push(vec![
-            "Trailing icon color".into(),
+            "ui-trailing-icon-color".into(),
             format!("{prefix}.trailing-icon.color"),
-            "On surface variant".into(),
+            "ui-on-surface-variant".into(),
         ]);
     }
     if selectable {
         rows.push(vec![
-            "Selected container".into(),
+            "ui-selected-container".into(),
             format!("{prefix}.container.color"),
-            "Secondary container".into(),
+            "ui-secondary-container".into(),
         ]);
         rows.push(vec![
-            "Selected label".into(),
+            "ui-selected-label".into(),
             format!("{prefix}.label.text.color"),
-            "On secondary container".into(),
+            "ui-on-secondary-container".into(),
         ]);
         rows.push(vec![
-            "Selected icon".into(),
+            "ui-selected-icon".into(),
             format!("{prefix}.leading-icon.color"),
-            "On secondary container".into(),
+            "ui-on-secondary-container".into(),
         ]);
     }
-    spec_table(vec!["Element".into(), "Token".into(), "Value".into()], rows);
+    spec_table(
+        vec!["ui-element".into(), "ui-token".into(), "ui-value".into()],
+        rows,
+    );
 }
 
 #[tessera]
 fn value_table(variant: ChipVariant) {
     if variant == ChipVariant::Suggestion {
         spec_table(
-            vec!["Attribute".into(), "Value".into()],
+            vec!["ui-attribute".into(), "ui-value".into()],
             vec![
-                vec!["Container height".into(), "32dp".into()],
-                vec!["Container shape".into(), "8dp corner radius".into()],
+                vec!["ui-container-height".into(), "32dp".into()],
+                vec!["ui-container-shape".into(), "ui-8dp-corner-radius".into()],
                 vec![
-                    "Label alignment".into(),
-                    "Center-aligned · start-aligned".into(),
+                    "ui-label-alignment".into(),
+                    "ui-center-aligned-start-aligned".into(),
                 ],
-                vec!["Left/right padding".into(), "16dp".into()],
-                vec!["Padding between elements".into(), "8dp".into()],
+                vec!["ui-left-right-padding".into(), "16dp".into()],
+                vec!["ui-padding-between-elements".into(), "8dp".into()],
             ],
         );
         return;
     }
     let mut rows = vec![
-        vec!["Container height".into(), "32dp".into()],
-        vec!["Container shape".into(), "8dp corner radius".into()],
-        vec!["Icon size".into(), "18dp".into()],
+        vec!["ui-container-height".into(), "32dp".into()],
+        vec!["ui-container-shape".into(), "ui-8dp-corner-radius".into()],
+        vec!["ui-icon-size".into(), "18dp".into()],
         vec![
-            "Vertical label text alignment".into(),
-            "Center-aligned".into(),
+            "ui-vertical-label-text-alignment".into(),
+            "ui-center-aligned".into(),
         ],
         vec![
-            "Horizontal label text alignment".into(),
-            "Start-aligned".into(),
+            "ui-horizontal-label-text-alignment".into(),
+            "ui-start-aligned".into(),
         ],
-        vec!["Left/right padding without icon".into(), "16dp".into()],
-        vec!["Left/right padding with icon".into(), "8dp".into()],
-        vec!["Padding between elements".into(), "8dp".into()],
+        vec!["ui-left-right-padding-without-icon".into(), "16dp".into()],
+        vec!["ui-left-right-padding-with-icon".into(), "8dp".into()],
+        vec!["ui-padding-between-elements".into(), "8dp".into()],
     ];
     if variant == ChipVariant::Input {
-        rows.push(vec!["Avatar shape".into(), "12dp corner radius".into()]);
-        rows.push(vec!["Avatar size".into(), "24dp".into()]);
-        rows.push(vec!["Left padding for avatar".into(), "4dp".into()]);
-        rows.push(vec!["Right padding for avatar".into(), "8dp".into()]);
-        rows.push(vec!["Target size for close icon".into(), "Min 48dp".into()]);
+        rows.push(vec![
+            "ui-avatar-shape".into(),
+            "ui-12dp-corner-radius".into(),
+        ]);
+        rows.push(vec!["ui-avatar-size".into(), "24dp".into()]);
+        rows.push(vec!["ui-left-padding-for-avatar".into(), "4dp".into()]);
+        rows.push(vec!["ui-right-padding-for-avatar".into(), "8dp".into()]);
+        rows.push(vec![
+            "ui-target-size-for-close-icon".into(),
+            "ui-min-48dp".into(),
+        ]);
     }
-    spec_table(vec!["Attribute".into(), "Value".into()], rows);
+    spec_table(vec!["ui-attribute".into(), "ui-value".into()], rows);
 }
 
 #[tessera]
@@ -1352,7 +1399,13 @@ fn examples(variant: ChipVariant, enabled: bool) {
                     style,
                     false,
                     enabled,
-                    format!("{} {style:?}", name(variant)),
+                    I18N.format(
+                        "ui-value-value-format-2",
+                        [
+                            ("v0", I18N.text(&name(variant)).into()),
+                            ("v1", format!("{:?}", style).into()),
+                        ],
+                    ),
                 );
             }
             if selectable(variant) {
@@ -1361,7 +1414,10 @@ fn examples(variant: ChipVariant, enabled: bool) {
                     ChipStyle::Flat,
                     true,
                     enabled,
-                    format!("{} selected", name(variant)),
+                    I18N.format(
+                        "ui-value-selected",
+                        [("v0", I18N.text(&name(variant)).into())],
+                    ),
                 );
             }
         });
@@ -1383,8 +1439,8 @@ fn sample(
             .variant(variant)
             .style(style)
             .shape_style(ChipShapeStyle::Standard)
-            .label(label.clone())
-            .accessibility_label(label.clone())
+            .label(I18N.text(&(label)))
+            .accessibility_label(I18N.text(&(label)))
             .enabled(enabled)
             .selected(selected.get())
             .on_click(move || {
@@ -1403,7 +1459,7 @@ fn sample(
         if !toggles {
             gap(Dp(8.0));
             text()
-                .content(format!("Actions: {}", actions.get()))
+                .content(I18N.format("ui-actions-value", [("v0", (actions.get()).into())]))
                 .style(type_style(12.0, 16.0));
         }
     });
@@ -1424,7 +1480,14 @@ fn scheme(variant: ChipVariant, dark: bool) {
                     column()
                         .modifier(Modifier::new().fill_max_width().padding_all(Dp(24.0)))
                         .children(move || {
-                            subheading(if dark { "Dark theme" } else { "Light theme" }.to_owned());
+                            subheading(
+                                if dark {
+                                    "ui-dark-theme"
+                                } else {
+                                    "ui-light-theme"
+                                }
+                                .to_owned(),
+                            );
                             gap(Dp(24.0));
                             examples(variant, true);
                         });
@@ -1438,23 +1501,23 @@ fn detail(variant: ChipVariant) {
     gap(Dp(16.0));
     let labels = match variant {
         ChipVariant::Assist => vec![
-            (1_usize, "Container"),
-            (2, "Label text"),
-            (3, "Leading icon"),
+            (1_usize, "ui-container"),
+            (2, "ui-label-text"),
+            (3, "ui-leading-icon"),
         ],
         ChipVariant::Filter => vec![
-            (1_usize, "Container"),
-            (2, "Label text"),
-            (3, "Leading icon"),
-            (4, "Trailing icon"),
+            (1_usize, "ui-container"),
+            (2, "ui-label-text"),
+            (3, "ui-leading-icon"),
+            (4, "ui-trailing-icon"),
         ],
         ChipVariant::Input => vec![
-            (1_usize, "Container"),
-            (2, "Label text"),
-            (3, "Trailing icon"),
-            (4, "Leading icon"),
+            (1_usize, "ui-container"),
+            (2, "ui-label-text"),
+            (3, "ui-trailing-icon"),
+            (4, "ui-leading-icon"),
         ],
-        ChipVariant::Suggestion => vec![(1_usize, "Container"), (2, "Label text")],
+        ChipVariant::Suggestion => vec![(1_usize, "ui-container"), (2, "ui-label-text")],
     };
     column().children(move || {
         for (number, label) in labels.clone() {
@@ -1462,57 +1525,62 @@ fn detail(variant: ChipVariant) {
         }
     });
     gap(Dp(32.0));
-    subheading(format!("{} chip color", name(variant)));
-    gap(Dp(16.0));
-    prose(format!(
-        "{} chip color roles used for light and dark themes: {}.",
-        name(variant),
-        match variant {
-            ChipVariant::Assist => "Surface container low (optional), on surface, outline, primary",
-            ChipVariant::Filter =>
-                "On surface variant, on secondary container, secondary container, outline variant, surface container low (optional)",
-            ChipVariant::Input =>
-                "On surface variant, surface container low (optional), outline variant, primary, secondary container, on secondary container",
-            ChipVariant::Suggestion =>
-                "Outline, surface container low (optional), on surface variant",
-        }
+    subheading(I18N.format(
+        "ui-value-chip-color",
+        [("v0", I18N.text(&name(variant)).into())],
     ));
+    gap(Dp(16.0));
+    prose(I18N.format("ui-value-chip-color-roles-used-for-light-and-dark-themes-value", [("v0", I18N.text(&name(variant)).into()), ("v1", I18N.text(&(match variant {
+            ChipVariant::Assist => "ui-surface-container-low-optional-on-surface-outline-primary",
+            ChipVariant::Filter =>
+                "ui-on-surface-variant-on-secondary-container-secondary-container-outline-variant-surface-cont",
+            ChipVariant::Input =>
+                "ui-on-surface-variant-surface-container-low-optional-outline-variant-primary-secondary-contai",
+            ChipVariant::Suggestion =>
+                "ui-outline-surface-container-low-optional-on-surface-variant",
+        })).into())]));
     gap(Dp(24.0));
     scheme(variant, false);
     gap(Dp(24.0));
     scheme(variant, true);
     gap(Dp(48.0));
-    subheading(format!("{} chip states", name(variant)));
+    subheading(I18N.format(
+        "ui-value-chip-states",
+        [("v0", I18N.text(&name(variant)).into())],
+    ));
     gap(Dp(16.0));
     prose(
-        "Enabled, disabled, hovered, focused, pressed and dragged states use the same container, label and icon color roles. Hover, focus with Tab, or press and hold to inspect actual input feedback.",
+        "ui-enabled-disabled-hovered-focused-pressed-and-dragged-states-use-the-same-container-label-a",
     );
     gap(Dp(24.0));
     panel(RenderSlot::new(move || {
         column().children(move || {
-            subheading("Enabled".into());
+            subheading("ui-enabled".into());
             gap(Dp(16.0));
             examples(variant, true);
             gap(Dp(24.0));
-            subheading("Disabled".into());
+            subheading("ui-disabled".into());
             gap(Dp(16.0));
             examples(variant, false);
         });
     }));
     gap(Dp(48.0));
-    subheading(format!("{} chip measurements", name(variant)));
+    subheading(I18N.format(
+        "ui-value-chip-measurements",
+        [("v0", I18N.text(&name(variant)).into())],
+    ));
     gap(Dp(24.0));
     value_table(variant);
 }
 
 #[tessera]
 fn use_cases() {
-    prose("People should be able to do the following with assistive technology:");
+    prose("ui-people-should-be-able-to-do-the-following-with-assistive-technology");
     gap(Dp(16.0));
     bullets(vec![
-        "Use a chip to perform an action".into(),
-        "Navigate to a chip".into(),
-        "Activate a chip".into(),
+        "ui-use-a-chip-to-perform-an-action".into(),
+        "ui-navigate-to-a-chip".into(),
+        "ui-activate-a-chip".into(),
     ]);
     gap(Dp(24.0));
     filter_example();
@@ -1520,48 +1588,48 @@ fn use_cases() {
 
 #[tessera]
 fn interaction_style() {
-    prose("The chip label needs at least 3:1 contrast with the background.");
+    prose("ui-the-chip-label-needs-at-least-3-1-contrast-with-the-background");
     gap(Dp(16.0));
     prose(
-        "A chip that performs an action should present the same semantics as a button to a platform’s accessibility API.",
+        "ui-a-chip-that-performs-an-action-should-present-the-same-semantics-as-a-button-to-a-platform",
     );
     gap(Dp(24.0));
     prose(
-        "This native sample exposes assist chips as buttons, filter and input chips as toggleable controls, and the input chip removal as a separate action.",
+        "ui-this-native-sample-exposes-assist-chips-as-buttons-filter-and-input-chips-as-toggleable-co",
     );
     gap(Dp(24.0));
     filter_example();
     gap(Dp(16.0));
-    caption("High contrast helps differentiate chips clustered together");
+    caption("ui-high-contrast-helps-differentiate-chips-clustered-together");
     gap(Dp(32.0));
-    subheading("Horizontal overflow".into());
+    subheading("ui-horizontal-overflow".into());
     prose(
-        "When there are too many chips to fit on one row, provide a way to display them all at once and avoid scrolling.",
+        "ui-when-there-are-too-many-chips-to-fit-on-one-row-provide-a-way-to-display-them-all-at-once",
     );
     gap(Dp(16.0));
     prose(
-        "Reflow method: Use a filter chip as a leading element to reflow the horizontal list. This should shift down the content below and make room for all chips to show.",
+        "ui-reflow-method-use-a-filter-chip-as-a-leading-element-to-reflow-the-horizontal-list-this-sh",
     );
     gap(Dp(24.0));
     overflow_example();
     gap(Dp(16.0));
     caption(
-        "The Show all filter chip is used to reflow the list, displaying all chips at once and pushing down the content below",
+        "ui-the-show-all-filter-chip-is-used-to-reflow-the-list-displaying-all-chips-at-once-and-pushi",
     );
     gap(Dp(32.0));
     prose(
-        "Menu method: Create a leading button to display all chip options in a menu. Use this option to avoid shifting the position of the content below.",
+        "ui-menu-method-create-a-leading-button-to-display-all-chip-options-in-a-menu-use-this-option",
     );
     gap(Dp(16.0));
-    prose("Don’t use the menu method on chips with a second action, like a remove icon.");
+    prose("ui-don-t-use-the-menu-method-on-chips-with-a-second-action-like-a-remove-icon");
     gap(Dp(32.0));
-    subheading("Avoid applying density by default".into());
+    subheading("ui-avoid-applying-density-by-default".into());
     prose(
-        "Don’t apply density to chips by default — this lowers their targets below our best practice of 48x48 CSS pixels. Instead, give people a way to choose a higher density, like selecting a denser layout or changing the theme.",
+        "ui-don-t-apply-density-to-chips-by-default-this-lowers-their-targets-below-our-best-practice",
     );
     gap(Dp(16.0));
     prose(
-        "To ensure that this density setting can be easily reverted when it’s active, keep all the targets to change it at minimum 48x48 CSS pixels each.",
+        "ui-to-ensure-that-this-density-setting-can-be-easily-reverted-when-it-s-active-keep-all-the-t",
     );
 }
 
@@ -1574,7 +1642,11 @@ fn overflow_example() {
             .line_spacing(Dp(8.0))
             .children(move || {
                 chip()
-                    .filter(if all.get() { "Show less" } else { "Show all" })
+                    .filter(I18N.text(if all.get() {
+                        "ui-show-less"
+                    } else {
+                        "ui-show-all"
+                    }))
                     .shape_style(ChipShapeStyle::Standard)
                     .selected(all.get())
                     .on_click(move || all.set(!all.get()));
@@ -1590,7 +1662,16 @@ fn overflow_choice(index: usize, all: bool) {
     let selected = remember(|| false);
     if all || index < 2 {
         chip()
-            .filter(["Music", "Movies", "Books", "Travel", "Food", "Sports"][index])
+            .filter(I18N.text(
+                [
+                    "ui-music",
+                    "ui-movies",
+                    "ui-books",
+                    "ui-travel",
+                    "ui-food",
+                    "ui-sports",
+                ][index],
+            ))
             .shape_style(ChipShapeStyle::Standard)
             .selected(selected.get())
             .on_click(move || selected.set(!selected.get()));
@@ -1600,26 +1681,26 @@ fn overflow_choice(index: usize, all: bool) {
 #[tessera]
 fn keyboard() {
     spec_table(
-        vec!["Keys".into(), "Actions".into()],
+        vec!["ui-keys".into(), "ui-actions".into()],
         vec![
             vec![
-                "Tab".into(),
-                "Moves focus to enabled chip or chip group".into(),
+                "ui-tab".into(),
+                "ui-moves-focus-to-enabled-chip-or-chip-group".into(),
             ],
             vec![
-                "Space or Enter".into(),
-                "Activates, selects, or deselects the focused chip".into(),
+                "ui-space-or-enter".into(),
+                "ui-activates-selects-or-deselects-the-focused-chip".into(),
             ],
             vec![
-                "Backspace or Delete".into(),
-                "Removes currently focused input chip".into(),
+                "ui-backspace-or-delete".into(),
+                "ui-removes-currently-focused-input-chip".into(),
             ],
-            vec!["Arrows".into(), "Moves focus between chips".into()],
+            vec!["ui-arrows".into(), "ui-moves-focus-between-chips".into()],
         ],
     );
     gap(Dp(24.0));
     prose(
-        "This native sample follows the table: Tab reaches each chip, Space or Enter activates the focused chip, and the remove action of an input chip is a separate focus stop.",
+        "ui-this-native-sample-follows-the-table-tab-reaches-each-chip-space-or-enter-activates-the-fo",
     );
     gap(Dp(24.0));
     input_example();
@@ -1628,75 +1709,75 @@ fn keyboard() {
 #[tessera]
 fn labeling() {
     prose(
-        "Use the visible chip label as its accessible name. Decorative icons are not repeated. Additional actions have their own labels.",
+        "ui-use-the-visible-chip-label-as-its-accessible-name-decorative-icons-are-not-repeated-additi",
     );
     gap(Dp(24.0));
     spec_table(
         vec![
-            "Element".into(),
-            "A11y label".into(),
-            "Role (Web)".into(),
-            "Role (Android Views)".into(),
-            "Role (Jetpack Compose)".into(),
+            "ui-element".into(),
+            "ui-a11y-label".into(),
+            "ui-role-web".into(),
+            "ui-role-android-views".into(),
+            "ui-role-jetpack-compose".into(),
         ],
         vec![
             vec![
-                "Image / Icon within chip".into(),
-                "Hide image".into(),
+                "ui-image-icon-within-chip".into(),
+                "ui-hide-image".into(),
                 "-".into(),
                 "-".into(),
                 "-".into(),
             ],
             vec![
-                "Basic chip (one action)".into(),
-                "{chip content}".into(),
+                "ui-basic-chip-one-action".into(),
+                "ui-chip-content".into(),
                 "gridcell".into(),
                 "button".into(),
                 "button".into(),
             ],
             vec![
-                "Selectable chip".into(),
-                "{chip content}".into(),
+                "ui-selectable-chip".into(),
+                "ui-chip-content".into(),
                 "gridcell".into(),
-                "radio button".into(),
+                "ui-radio-button-1835".into(),
                 "checkbox".into(),
             ],
             vec![
-                "Remove icon (no other action)".into(),
-                "Remove {chip content}".into(),
+                "ui-remove-icon-no-other-action".into(),
+                "ui-remove-chip-content".into(),
                 "-".into(),
                 "-".into(),
                 "-".into(),
             ],
             vec![
-                "Two actions (e.g., select + remove)".into(),
-                "{chip content}. Then “Remove {chip content}”".into(),
-                "button or checkbox".into(),
-                "button or checkbox".into(),
-                "button or checkbox".into(),
+                "ui-two-actions-e-g-select-remove".into(),
+                "ui-chip-content-then-remove-chip-content".into(),
+                "ui-button-or-checkbox".into(),
+                "ui-button-or-checkbox".into(),
+                "ui-button-or-checkbox".into(),
             ],
         ],
     );
     gap(Dp(32.0));
-    subheading("Multi-select".into());
-    prose("Space or Enter toggles a focused selectable chip without changing other choices.");
+    subheading("ui-multi-select-7064".into());
+    prose("ui-space-or-enter-toggles-a-focused-selectable-chip-without-changing-other-choices");
     gap(Dp(24.0));
     filter_example();
     gap(Dp(32.0));
-    subheading("Drop-down list".into());
+    subheading("ui-drop-down-list".into());
     prose(
-        "Menu item labels match their visible text; decorative icons do not add redundant announcements.",
+        "ui-menu-item-labels-match-their-visible-text-decorative-icons-do-not-add-redundant-announceme",
     );
     gap(Dp(32.0));
-    subheading("Input chip remove action".into());
+    subheading("ui-input-chip-remove-action".into());
     prose(
-        "A chip with selection and removal exposes two independent focusable actions. Name the second action Remove followed by the chip label.",
+        "ui-a-chip-with-selection-and-removal-exposes-two-independent-focusable-actions-name-the-secon",
     );
     gap(Dp(24.0));
     input_example();
     gap(Dp(32.0));
-    subheading("Showing chip interactivity".into());
+    subheading("ui-showing-chip-interactivity".into());
     prose(
-        "Introduce the chip group with a meaningful instruction, such as Filter results, or use an action-oriented label and leading icon.",
+        "ui-introduce-the-chip-group-with-a-meaningful-instruction-such-as-filter-results-or-use-an-ac",
     );
 }

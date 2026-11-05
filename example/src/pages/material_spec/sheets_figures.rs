@@ -23,6 +23,8 @@ use tessera_ui::{
     remember, tessera, use_context,
 };
 
+use crate::res::I18N;
+
 use super::{
     super::{ACCENT, INK, srgb},
     Geometry, annotations, caption,
@@ -123,7 +125,7 @@ fn ring(x: f64, y: f64, w: f64, h: f64, stroke: f64, color: Color, fill: Option<
 #[tessera]
 fn label(#[prop(into)] content: String, x: f64, y: f64, size: f64, color: Color) {
     text()
-        .content(content)
+        .content(I18N.text(content))
         .style(type_style(size, (size * 1.4).round()))
         .color(color)
         .modifier(at(x, y));
@@ -136,7 +138,7 @@ fn centered(#[prop(into)] content: String, center: f64, y: f64, size: f64, color
         .modifier(at(center - 60.0, y).required_width(Dp(120.0)))
         .children(move || {
             text()
-                .content(content.clone())
+                .content(I18N.text(&(content)))
                 .style(type_style(size, (size * 1.4).round()))
                 .color(color);
         });
@@ -289,7 +291,8 @@ fn badge(
     let round = round.unwrap_or(false);
     let outlined = outlined.unwrap_or(false);
     let (w, h) = if round { (36.0, 36.0) } else { (24.0, 32.0) };
-    let name = name.unwrap_or_else(|| format!("Bottom sheet marker {number}"));
+    let name = name
+        .unwrap_or_else(|| I18N.format("ui-bottom-sheet-marker-value", [("v0", (number).into())]));
     let mut modifier = at(x, y)
         .required_size(Dp(w), Dp(h))
         .background_with_shape(
@@ -302,7 +305,7 @@ fn badge(
         )
         .semantics(SemanticsArgs {
             role: Some(Role::Note),
-            label: Some(name),
+            label: Some(I18N.text(name)),
             merge_descendants: true,
             ..Default::default()
         });
@@ -314,7 +317,7 @@ fn badge(
         .modifier(modifier)
         .children(move || {
             text()
-                .content(number.to_string())
+                .content((number).to_string())
                 .style(type_style(14.0, 20.0))
                 .color(if outlined { INK } else { Color::WHITE });
         });
@@ -334,12 +337,14 @@ pub(super) fn badge_legend(items: Vec<String>) {
                     boxed()
                         .modifier(Modifier::new().size(Dp(24.0), Dp(32.0)))
                         .children(move || {
-                            badge(index + 1, 0.0, 0.0)
-                                .name(format!("Bottom sheet legend {}", index + 1));
+                            badge(index + 1, 0.0, 0.0).name(I18N.format(
+                                "ui-bottom-sheet-legend-value",
+                                [("v0", (index + 1).into())],
+                            ));
                         });
                     spacer().modifier(Modifier::new().width(Dp(12.0)));
                     text()
-                        .content(item.clone())
+                        .content(I18N.text(&(item)))
                         .style(type_style(14.0, 20.0))
                         .color(srgb(73, 69, 79));
                 });
@@ -448,14 +453,17 @@ pub(super) fn variants_figure() {
     stage(
         1024.0,
         417.0,
-        RenderSlot::new(|| {
+        RenderSlot::new(move || {
             for (index, x) in [(0usize, 63.0), (1, 545.0)] {
                 phone(x, -40.0, 414.0, 366.0).scrim(index == 1).overlay(|| {
                     sheet(0.0, 148.0, 400.0, 204.0).handle(18.0);
                 });
                 badge(index + 1, x + 189.0, 351.0)
                     .round(true)
-                    .name(format!("Bottom sheet variant {}", index + 1));
+                    .name(I18N.format(
+                        "ui-bottom-sheet-variant-value",
+                        [("v0", (index + 1).into())],
+                    ));
             }
         }),
     );
@@ -555,14 +563,14 @@ pub(super) fn measurements_figure() {
 fn files_list(tablet: bool) {
     let scheme = use_context::<MaterialTheme>().unwrap().get().color_scheme;
     let rows = [
-        ("Project brief", Glyph::Folder, "2 days ago"),
-        ("Onboarding documents", Glyph::Folder, "2 hours ago"),
-        ("Clinic codes", Glyph::Folder, "Yesterday"),
-        ("Certificate program", Glyph::Folder, "Nov 8"),
-        ("On-call protocol", Glyph::Document, "Nov 5"),
-        ("Cover letter template", Glyph::Document, "Oct 28"),
-        ("Resume", Glyph::Document, "Oct 12"),
-        ("CDC Health Literacy", Glyph::Document, "Sep 26"),
+        ("ui-project-brief", Glyph::Folder, "ui-2-days-ago"),
+        ("ui-onboarding-documents", Glyph::Folder, "ui-2-hours-ago"),
+        ("ui-clinic-codes", Glyph::Folder, "ui-yesterday"),
+        ("ui-certificate-program", Glyph::Folder, "ui-nov-8"),
+        ("ui-on-call-protocol", Glyph::Document, "ui-nov-5"),
+        ("ui-cover-letter-template", Glyph::Document, "ui-oct-28"),
+        ("ui-resume", Glyph::Document, "ui-oct-12"),
+        ("ui-cdc-health-literacy", Glyph::Document, "ui-sep-26"),
     ];
     let (first, pitch, icon_x, name_x, owner_x, divider) = if tablet {
         (-29.0, 43.0, 27.0, 63.0, 245.0, 15.0)
@@ -584,7 +592,7 @@ fn files_list(tablet: bool) {
         );
         label(name, name_x, center - 9.0, 13.0, scheme.on_surface);
         label(
-            "Lee Villanueva",
+            "ui-lee-villanueva",
             owner_x,
             center - 9.0,
             13.0,
@@ -606,14 +614,14 @@ fn files_list(tablet: bool) {
 #[tessera]
 fn filter_choices(second_icon: f64) {
     let scheme = use_context::<MaterialTheme>().unwrap().get().color_scheme;
-    label("Filters", 22.0, 45.0, 14.0, scheme.on_surface);
+    label("ui-filters", 22.0, 45.0, 14.0, scheme.on_surface);
     for (index, name) in [
-        "Work files",
-        "Personal",
-        "Projects",
-        "Priority",
-        "Reminders",
-        "Events",
+        "ui-work-files",
+        "ui-personal",
+        "ui-projects",
+        "ui-priority",
+        "ui-reminders",
+        "ui-events",
     ]
     .into_iter()
     .enumerate()
@@ -726,7 +734,7 @@ fn avatar(#[prop(into)] initial: String, center: f64, y: f64, diameter: f64, col
         )
         .children(move || {
             text()
-                .content(initial.clone())
+                .content(I18N.text(&(initial)))
                 .style(type_style(diameter * 0.4, diameter * 0.5))
                 .color(Color::WHITE);
         });
@@ -759,13 +767,13 @@ pub(super) fn share_figure() {
                     sheet(0.0, 156.0, 367.0, 321.0)
                         .handle(16.0)
                         .content(move || {
-                            chip(Glyph::Copy, "Copy", 83.0, 88.0);
-                            chip(Glyph::Nearby, "Nearby", 179.0, 105.0);
+                            chip(Glyph::Copy, "ui-copy", 83.0, 88.0);
+                            chip(Glyph::Nearby, "ui-nearby", 179.0, 105.0);
                             for (index, (name, center)) in [
-                                ("Alejandro", 54.0),
-                                ("Ines", 140.0),
-                                ("Oli", 226.0),
-                                ("Carmen", 312.0),
+                                ("ui-alejandro", 54.0),
+                                ("ui-ines", 140.0),
+                                ("ui-oli", 226.0),
+                                ("ui-carmen", 312.0),
                             ]
                             .into_iter()
                             .enumerate()
@@ -774,10 +782,10 @@ pub(super) fn share_figure() {
                                 centered(name, center, 162.0, 12.0, scheme.on_surface);
                             }
                             for (name, center, kind, color) in [
-                                ("Files", 54.0, Glyph::Folder, srgb(66, 133, 244)),
-                                ("Gmail", 140.0, Glyph::Mail, srgb(234, 67, 53)),
-                                ("Meet", 226.0, Glyph::Video, srgb(52, 168, 83)),
-                                ("Drive", 312.0, Glyph::Drive, srgb(251, 188, 4)),
+                                ("ui-files", 54.0, Glyph::Folder, srgb(66, 133, 244)),
+                                ("ui-gmail", 140.0, Glyph::Mail, srgb(234, 67, 53)),
+                                ("ui-meet", 226.0, Glyph::Video, srgb(52, 168, 83)),
+                                ("ui-drive", 312.0, Glyph::Drive, srgb(251, 188, 4)),
                             ] {
                                 block(center - 26.0, 203.0, 53.0, 53.0, Color::WHITE)
                                     .shape(Shape::Ellipse);
@@ -806,10 +814,10 @@ fn menu_stage() {
                     let scheme = use_context::<MaterialTheme>().unwrap().get().color_scheme;
                     sheet(0.0, 57.0, 367.0, 241.0).content(move || {
                         for (index, (kind, name)) in [
-                            (Glyph::Share, "Share"),
-                            (Glyph::Link, "Get link"),
-                            (Glyph::Edit, "Edit name"),
-                            (Glyph::Trash, "Delete"),
+                            (Glyph::Share, "ui-share"),
+                            (Glyph::Link, "ui-get-link"),
+                            (Glyph::Edit, "ui-edit-name"),
+                            (Glyph::Trash, "ui-delete"),
                         ]
                         .into_iter()
                         .enumerate()
@@ -862,11 +870,11 @@ pub(super) fn photo_actions_figure(sheet_top: f64) {
                         .handle(15.0)
                         .content(move || {
                             for (index, (kind, name)) in [
-                                (Glyph::Share, "Share"),
-                                (Glyph::Add, "Add to"),
-                                (Glyph::Trash, "Trash"),
+                                (Glyph::Share, "ui-share"),
+                                (Glyph::Add, "ui-add-to"),
+                                (Glyph::Trash, "ui-trash"),
                                 (Glyph::Bag, "Order\nprints"),
-                                (Glyph::Archive, "Move to\narchive"),
+                                (Glyph::Archive, "ui-move-to-archive"),
                             ]
                             .into_iter()
                             .enumerate()
@@ -876,13 +884,13 @@ pub(super) fn photo_actions_figure(sheet_top: f64) {
                                 centered(name, center, 82.0, 11.0, scheme.on_surface);
                             }
                             block(15.0, 152.0, 324.0, 1.0, scheme.outline_variant);
-                            label("Send", 15.0, 165.0, 15.0, scheme.on_surface);
+                            label("ui-send", 15.0, 165.0, 15.0, scheme.on_surface);
                             for (index, name) in [
                                 "Alejandro\nOrtega",
-                                "Oli Ortega",
+                                "ui-oli-ortega",
                                 "Carmen\nVillanueva",
-                                "Ana Russo",
-                                "Marty Reyes",
+                                "ui-ana-russo",
+                                "ui-marty-reyes",
                             ]
                             .into_iter()
                             .enumerate()
@@ -891,8 +899,8 @@ pub(super) fn photo_actions_figure(sheet_top: f64) {
                                 avatar(&name[..1], center, 202.0, 43.0, avatar_color(index));
                                 centered(name, center, 250.0, 10.0, scheme.on_surface);
                             }
-                            label("Add to album", 15.0, 301.0, 15.0, scheme.on_surface);
-                            label("View all", 280.0, 302.0, 13.0, scheme.primary);
+                            label("ui-add-to-album", 15.0, 301.0, 15.0, scheme.on_surface);
+                            label("ui-view-all", 280.0, 302.0, 13.0, scheme.primary);
                             photo(2, 15.0, 336.0, 100.0, 100.0).radius(12.0);
                             photo(3, 125.0, 336.0, 100.0, 100.0).radius(12.0);
                             photo(1, 235.0, 336.0, 100.0, 100.0).radius(12.0);
@@ -918,10 +926,10 @@ pub(super) fn dismiss_scrim_figure() {
                 .screen(|| {
                     let scheme = use_context::<MaterialTheme>().unwrap().get().color_scheme;
                     for (index, (start, name)) in [
-                        ("", "Lee Villanueva"),
-                        ("uri", "Sunita Saachi"),
-                        ("uri", "Lee Villanueva"),
-                        ("nning", "Daniel Maas"),
+                        ("", "ui-lee-villanueva"),
+                        ("uri", "ui-sunita-saachi"),
+                        ("uri", "ui-lee-villanueva"),
+                        ("nning", "ui-daniel-maas"),
                     ]
                     .into_iter()
                     .enumerate()
@@ -947,7 +955,7 @@ pub(super) fn dismiss_scrim_figure() {
                                 18.0,
                                 scheme.on_surface_variant,
                             );
-                            label("Priority", 212.0, 85.0, 13.0, scheme.on_surface_variant);
+                            label("ui-priority", 212.0, 85.0, 13.0, scheme.on_surface_variant);
                         });
                 });
         }),
@@ -973,9 +981,9 @@ pub(super) fn dismiss_swipe_figure() {
                         .handle_x(54.0)
                         .content(move || {
                             for (kind, name, center) in [
-                                (Glyph::Trash, "Trash", 55.0),
+                                (Glyph::Trash, "ui-trash", 55.0),
                                 (Glyph::Bag, "Order\nprints", 127.0),
-                                (Glyph::Archive, "Move to\narchive", 198.0),
+                                (Glyph::Archive, "ui-move-to-archive", 198.0),
                             ] {
                                 glyph(kind, center - 11.0, 49.0, 22.0, scheme.on_surface_variant);
                                 centered(name, center, 81.0, 11.0, scheme.on_surface);
@@ -1023,7 +1031,7 @@ pub(super) fn focus_figure() {
     stage(
         600.0,
         420.0,
-        RenderSlot::new(|| {
+        RenderSlot::new(move || {
             phone(116.0, -194.0, 370.0, 497.0)
                 .screen_color(srgb(254, 247, 255))
                 .overlay(|| {
@@ -1040,9 +1048,9 @@ pub(super) fn focus_figure() {
                         .required_size(Dp(66.0), Dp(36.0))
                         .background_with_shape(touch_color(), Shape::rounded_rectangle(Dp(4.0))),
                 )
-                .children(|| {
+                .children(move || {
                     text()
-                        .content("Tab")
+                        .content(I18N.text("ui-tab"))
                         .style(type_style(12.0, 16.0))
                         .color(Color::WHITE);
                 });
@@ -1082,13 +1090,13 @@ pub(super) fn drag_figure(raised: bool) {
                             .handle(14.0)
                             .handle_x(182.0)
                             .content(move || {
-                                label("Latest in the area", 23.0, 31.0, 19.0, scheme.on_surface);
+                                label("ui-latest-in-the-area", 23.0, 31.0, 19.0, scheme.on_surface);
                                 photo(2, 23.0, 88.0, 128.0, 112.0).radius(12.0);
                                 photo(3, 163.0, 88.0, 128.0, 112.0).radius(12.0);
                             });
                     } else {
                         sheet(0.0, 189.0, 386.0, 104.0).content(move || {
-                            label("Latest in the area", 23.0, 37.0, 19.0, scheme.on_surface);
+                            label("ui-latest-in-the-area", 23.0, 37.0, 19.0, scheme.on_surface);
                         });
                         ring(176.0, 158.0, 51.0, 51.0, 4.0, touch_color())
                             .fill(srgb(171, 128, 184));
@@ -1134,10 +1142,10 @@ pub(super) fn label_figure() {
                         ),
                 )
                 .children(|| {
-                    label("Label", 20.0, 20.0, 13.0, INK);
-                    label("Drag handle", 20.0, 40.0, 13.0, touch_color());
-                    label("Role", 20.0, 70.0, 13.0, INK);
-                    label("Button", 20.0, 90.0, 13.0, touch_color());
+                    label("ui-label", 20.0, 20.0, 13.0, INK);
+                    label("ui-drag-handle", 20.0, 40.0, 13.0, touch_color());
+                    label("ui-role", 20.0, 70.0, 13.0, INK);
+                    label("ui-button", 20.0, 90.0, 13.0, touch_color());
                 });
         }),
     );

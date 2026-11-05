@@ -14,9 +14,6 @@ use tessera_ui::{
     normalize_platform_scroll_delta, provide_context, remember, tessera, use_context, winit,
 };
 
-#[cfg(test)]
-use tessera_ui::PxRect;
-
 use crate::{
     alignment::{Alignment, CrossAxisAlignment},
     boxed::boxed,
@@ -24,6 +21,7 @@ use crate::{
     menus::{MenuAnchor, MenuController, MenuPlacement, menu_item, menu_provider},
     modifier::{InteractionVisualState, ModifierExt as _, Padding, with_pointer_input},
     pos_misc::is_position_inside_bounds,
+    res::I18N,
     row::row,
     shape_def::{RoundedCorner, Shape},
     spacer::spacer,
@@ -39,6 +37,9 @@ use crate::{
         TextStyle,
     },
 };
+
+#[cfg(test)]
+use tessera_ui::PxRect;
 
 /// Defaults for Material text fields.
 pub struct TextFieldDefaults;
@@ -1144,7 +1145,7 @@ fn text_field_menu_content(
     if menu.allow_cut {
         menu_item()
             .menu(scope)
-            .label("Cut")
+            .label(I18N.text("md3-cut"))
             .enabled(selection_available)
             .on_click(move || {
                 action_state.set(Some(TextFieldMenuAction::Cut));
@@ -1153,7 +1154,7 @@ fn text_field_menu_content(
     if menu.allow_copy {
         menu_item()
             .menu(scope)
-            .label("Copy")
+            .label(I18N.text("md3-copy"))
             .enabled(selection_available)
             .on_click(move || {
                 action_state.set(Some(TextFieldMenuAction::Copy));
@@ -1162,7 +1163,7 @@ fn text_field_menu_content(
     if menu.allow_paste {
         menu_item()
             .menu(scope)
-            .label("Paste")
+            .label(I18N.text("md3-paste"))
             .enabled(true)
             .on_click(move || {
                 action_state.set(Some(TextFieldMenuAction::Paste));
@@ -1171,7 +1172,7 @@ fn text_field_menu_content(
     if menu.allow_select_all {
         menu_item()
             .menu(scope)
-            .label("Select All")
+            .label(I18N.text("md3-select-all"))
             .enabled(true)
             .on_click(move || {
                 action_state.set(Some(TextFieldMenuAction::SelectAll));

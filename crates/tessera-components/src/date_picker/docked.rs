@@ -19,6 +19,7 @@ use crate::{
     icon_button::icon_button,
     material_icons::filled,
     modifier::{ModifierExt as _, SemanticsArgs},
+    res::I18N,
     row::row,
     scrollable::ScrollableController,
     shape_def::{RoundedCorner, Shape},
@@ -31,8 +32,8 @@ use crate::{
 use super::{
     CalendarDate, CalendarFocus, CalendarKeyboard, CalendarOwner, DATE_CELL_SIZE, DATE_COLUMNS,
     DATE_PICKER_MAX_WIDTH, DateGridLayout, DatePickerState, Weekday, YearMonth, calendar_day,
-    civil_from_days, days_from_civil, format_month_name, is_date_selectable, weekday_for_date,
-    weekday_narrow_label, weekday_sequence,
+    civil_from_days, days_from_civil, format_month_name, format_month_short_name,
+    is_date_selectable, weekday_for_date, weekday_narrow_label, weekday_sequence,
 };
 
 /// The content displayed beneath a docked calendar's navigation header.
@@ -109,7 +110,7 @@ pub fn docked_date_picker(
         })
         .style(scheme.surface_container_high.into())
         .accessibility_role(Role::Group)
-        .accessibility_label("Docked calendar")
+        .accessibility_label(I18N.text("md3-docked-calendar"))
         .block_input(false)
         .child(move || {
             if menu.get() != DockedDatePickerView::Calendar {
@@ -174,18 +175,18 @@ fn calendar_content(
                     .children(move || {
                         button()
                             .text()
-                            .accessibility_label("Cancel")
+                            .accessibility_label(I18N.text("md3-cancel"))
                             .on_click_shared(on_cancel)
-                            .child(|| {
-                                text().content("Cancel");
+                            .child(move || {
+                                text().content(I18N.text("md3-cancel"));
                             });
                         spacer().modifier(Modifier::new().width(Dp(8.0)));
                         button()
                             .text()
-                            .accessibility_label("OK")
+                            .accessibility_label(I18N.text("md3-ok"))
                             .on_click_shared(on_confirm)
-                            .child(|| {
-                                text().content("OK");
+                            .child(move || {
+                                text().content(I18N.text("md3-ok"));
                             });
                     });
             }
@@ -206,13 +207,13 @@ fn menu_header(state: State<DatePickerState>, menu: State<DockedDatePickerView>)
                     for (view, label, description) in [
                         (
                             DockedDatePickerView::Month,
-                            format_month_name(current.month())[..3].to_owned(),
-                            "Choose month",
+                            format_month_short_name(current.month()),
+                            I18N.text("md3-choose-month"),
                         ),
                         (
                             DockedDatePickerView::Year,
                             current.year().to_string(),
-                            "Choose year",
+                            I18N.text("md3-choose-year"),
                         ),
                     ] {
                         boxed()
@@ -222,7 +223,7 @@ fn menu_header(state: State<DatePickerState>, menu: State<DockedDatePickerView>)
                                 if menu.get() == view {
                                     menu_button(
                                         label.clone(),
-                                        description.into(),
+                                        description.clone(),
                                         if view == DockedDatePickerView::Month {
                                             Dp(64.0)
                                         } else {
@@ -269,14 +270,14 @@ fn header(state: State<DatePickerState>, menu: State<DockedDatePickerView>) {
         .main_axis_alignment(MainAxisAlignment::SpaceBetween)
         .children(move || {
             arrow(
-                "Previous month".into(),
+                I18N.text("md3-previous-month").into(),
                 false,
                 month.month() > 1 || month.year() > *years.start(),
                 Callback::new(move || state.with_mut(DatePickerState::previous_month)),
             );
             menu_button(
-                format_month_name(month.month())[..3].to_owned(),
-                "Choose month".into(),
+                format_month_short_name(month.month()),
+                I18N.text("md3-choose-month").into(),
                 Dp(64.0),
                 menu.get() == DockedDatePickerView::Month,
                 Callback::new(move || {
@@ -288,13 +289,13 @@ fn header(state: State<DatePickerState>, menu: State<DockedDatePickerView>) {
                 }),
             );
             arrow(
-                "Next month".into(),
+                I18N.text("md3-next-month").into(),
                 true,
                 month.month() < 12 || month.year() < *years.end(),
                 Callback::new(move || state.with_mut(DatePickerState::next_month)),
             );
             arrow(
-                "Previous year".into(),
+                I18N.text("md3-previous-year").into(),
                 false,
                 menu.get() != DockedDatePickerView::Month && month.year() > *years.start(),
                 Callback::new(move || {
@@ -309,7 +310,7 @@ fn header(state: State<DatePickerState>, menu: State<DockedDatePickerView>) {
             );
             menu_button(
                 month.year().to_string(),
-                "Choose year".into(),
+                I18N.text("md3-choose-year").into(),
                 Dp(72.0),
                 menu.get() == DockedDatePickerView::Year,
                 Callback::new(move || {
@@ -321,7 +322,7 @@ fn header(state: State<DatePickerState>, menu: State<DockedDatePickerView>) {
                 }),
             );
             arrow(
-                "Next year".into(),
+                I18N.text("md3-next-year").into(),
                 true,
                 menu.get() != DockedDatePickerView::Month && month.year() < *years.end(),
                 Callback::new(move || {
@@ -519,7 +520,7 @@ fn month_menu(state: State<DatePickerState>, menu: State<DockedDatePickerView>) 
                 .vertical_scroll(scroll)
                 .semantics(SemanticsArgs {
                     role: Some(Role::ListBox),
-                    label: Some("Choose month".into()),
+                    label: Some(I18N.text("md3-choose-month").into()),
                     merge_descendants: true,
                     ..Default::default()
                 }),
@@ -584,7 +585,7 @@ fn year_menu(state: State<DatePickerState>, menu: State<DockedDatePickerView>) {
                 .vertical_scroll(scroll)
                 .semantics(SemanticsArgs {
                     role: Some(Role::ListBox),
-                    label: Some("Choose year".into()),
+                    label: Some(I18N.text("md3-choose-year").into()),
                     merge_descendants: true,
                     ..Default::default()
                 }),

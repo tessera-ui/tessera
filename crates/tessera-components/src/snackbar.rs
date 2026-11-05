@@ -22,6 +22,7 @@ use crate::{
     icon_button::{IconButtonVariant, icon_button},
     material_icons::filled,
     modifier::{ModifierExt as _, Padding, SemanticsArgs, with_keyboard_input},
+    res::I18N,
     shape_def::Shape,
     surface::surface,
     text::text,
@@ -501,7 +502,8 @@ pub fn snackbar(
     let content_color = content_color.unwrap_or(scheme.inverse_on_surface);
     let action_color = action_color.unwrap_or(scheme.inverse_primary);
     let dismiss_action_color = dismiss_action_color.unwrap_or(scheme.inverse_on_surface);
-    let dismiss_action_label = dismiss_action_label.unwrap_or_else(|| "Dismiss".into());
+    let dismiss_action_label =
+        dismiss_action_label.unwrap_or_else(|| I18N.text("md3-dismiss").into());
     let action_label = action_label.filter(|label| !label.is_empty());
     let has_action = action_label.is_some();
     let action_on_new_line = action_on_new_line && has_action;

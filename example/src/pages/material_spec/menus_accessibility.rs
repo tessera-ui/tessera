@@ -26,6 +26,8 @@ use tessera_ui::{
     remember, tessera, use_context,
 };
 
+use crate::res::I18N;
+
 use super::{gap, prose, type_style};
 
 #[derive(Clone)]
@@ -81,7 +83,10 @@ pub(super) fn state_selection() {
                                 .style(scheme.surface_container_highest.into())
                                 .shape(Shape::RECTANGLE)
                                 .accessibility_role(Role::Button)
-                                .accessibility_label(format!("State: {}", selected.get()))
+                                .accessibility_label(I18N.format(
+                                    "ui-state-value",
+                                    [("v0", I18N.text(&selected.get()).into())],
+                                ))
                                 .modifier(Modifier::new().size(Dp(232.0), Dp(56.0)).push_semantics(
                                     Disclosure(controller.with(MenuController::is_open)),
                                 ))
@@ -96,11 +101,11 @@ pub(super) fn state_selection() {
                                                 )
                                                 .children(move || {
                                                     text()
-                                                        .content("State")
+                                                        .content(I18N.text("ui-state"))
                                                         .style(type_style(12.0, 16.0))
                                                         .color(scheme.on_surface_variant);
                                                     text()
-                                                        .content(selected.get())
+                                                        .content(I18N.text(selected.get()))
                                                         .style(type_style(16.0, 24.0))
                                                         .color(scheme.on_surface);
                                                 });
@@ -145,7 +150,7 @@ pub(super) fn state_selection() {
                     for code in ["AL", "AK", "AZ", "AR", "CA", "CO"] {
                         menu_item()
                             .menu(menu)
-                            .label(code)
+                            .label(I18N.text(code))
                             .selected(selected.get() == code)
                             .selection_mode(MenuItemSelectionMode::Radio)
                             .color_style(MenuColorStyle::Standard)
@@ -155,13 +160,15 @@ pub(super) fn state_selection() {
                 });
         });
     gap(Dp(16.0));
-    prose("Use multiple visual cues like color, shape, and icons to show that an item is selected");
+    prose(
+        "ui-use-multiple-visual-cues-like-color-shape-and-icons-to-show-that-an-item-is-selected",
+    );
 }
 
 #[tessera]
 pub(super) fn labeling() {
     let scheme = use_context::<MaterialTheme>().unwrap().get().color_scheme;
-    let notice = remember(|| "No action selected");
+    let notice = remember(|| "ui-no-action-selected");
     boxed()
         .modifier(
             Modifier::new()
@@ -190,14 +197,24 @@ pub(super) fn labeling() {
                     column()
                         .modifier(Modifier::new().padding_symmetric(Dp(64.0), Dp(24.0)))
                         .children(move || {
-                            text().content("My files").style(type_style(22.0, 28.0));
+                            text()
+                                .content(I18N.text("ui-my-files"))
+                                .style(type_style(22.0, 28.0));
                             gap(Dp(16.0));
-                            for name in ["Photos", "Recipes", "Work", "Documents", "Sketches"] {
+                            for name in [
+                                "ui-photos",
+                                "ui-recipes",
+                                "ui-work",
+                                "ui-documents",
+                                "ui-sketches",
+                            ] {
                                 boxed()
                                     .alignment(Alignment::CenterStart)
                                     .modifier(Modifier::new().height(Dp(48.0)))
                                     .children(move || {
-                                        text().content(name).style(type_style(14.0, 20.0));
+                                        text()
+                                            .content(I18N.text(name))
+                                            .style(type_style(14.0, 20.0));
                                     });
                             }
                         });
@@ -215,12 +232,12 @@ pub(super) fn labeling() {
                 .child(move || {
                     column().children(move || {
                         for (label, glyph) in [
-                            ("Preview", filled::VISIBILITY_SVG),
-                            ("Share", filled::PERSON_ADD_SVG),
-                            ("Get link", filled::LINK_SVG),
+                            ("ui-preview", filled::VISIBILITY_SVG),
+                            ("ui-share", filled::PERSON_ADD_SVG),
+                            ("ui-get-link", filled::LINK_SVG),
                         ] {
                             menu_item()
-                                .label(label)
+                                .label(I18N.text(label))
                                 .leading_icon(glyph)
                                 .height(Dp(48.0))
                                 .on_click(move || notice.set(label));
@@ -258,35 +275,40 @@ pub(super) fn labeling() {
                     column()
                         .modifier(Modifier::new().padding_all(Dp(14.0)))
                         .children(move || {
-                            text().content("Label").style(type_style(16.0, 24.0));
                             text()
-                                .content("Preview")
+                                .content(I18N.text("ui-label"))
+                                .style(type_style(16.0, 24.0));
+                            text()
+                                .content(I18N.text("ui-preview"))
                                 .style(type_style(16.0, 24.0))
                                 .color(scheme.tertiary);
                         });
                 });
         });
     gap(Dp(16.0));
-    prose("The menu item's accessibility label aligns with the UI text");
+    prose("ui-the-menu-item-s-accessibility-label-aligns-with-the-ui-text");
     gap(Dp(16.0));
     super::spec_table(
         vec![
-            "Element".into(),
-            "A11y label".into(),
-            "Role (Web)".into(),
-            "Role (Android Views)".into(),
-            "Role (Jetpack Compose)".into(),
+            "ui-element".into(),
+            "ui-a11y-label".into(),
+            "ui-role-web".into(),
+            "ui-role-android-views".into(),
+            "ui-role-jetpack-compose".into(),
         ],
         vec![vec![
-            "Menu item text".into(),
-            "Preview".into(),
-            "Menu item".into(),
-            "Generic actionable element".into(),
-            "Generic actionable element".into(),
+            "ui-menu-item-text".into(),
+            "ui-preview".into(),
+            "ui-menu-item".into(),
+            "ui-generic-actionable-element".into(),
+            "ui-generic-actionable-element".into(),
         ]],
     );
     gap(Dp(16.0));
-    prose(format!("Last file action: {}", notice.get()));
+    prose(I18N.format(
+        "ui-last-file-action-value",
+        [("v0", I18N.text(&notice.get()).into())],
+    ));
 }
 
 #[cfg(all(test, not(target_family = "wasm")))]

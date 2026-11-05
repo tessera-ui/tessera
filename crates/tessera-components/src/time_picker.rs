@@ -28,6 +28,7 @@ use crate::{
     material_icons::filled,
     modifier::{InteractionState, ModifierExt as _, SemanticsArgs},
     pipelines::image_vector::command::ImageVectorVertex,
+    res::I18N,
     row::row,
     shape_def::Shape,
     spacer::spacer,
@@ -517,9 +518,9 @@ fn time_number(state: State<TimePickerState>, field: TimePickerSelection, input:
     };
     let height = if input { 72.0 } else { 80.0 };
     let label = if field == TimePickerSelection::Hour {
-        "Hour"
+        I18N.text("md3-hour")
     } else {
-        "Minute"
+        I18N.text("md3-minute")
     };
     let background = if selected && !input {
         scheme.primary_container
@@ -576,7 +577,7 @@ fn time_number(state: State<TimePickerState>, field: TimePickerSelection, input:
                 .focus_border_color(scheme.primary)
                 .shape(theme.shapes.small)
                 .text_color(foreground)
-                .accessibility_label(label)
+                .accessibility_label(label.clone())
                 .single_line(true)
                 .on_change(move |text| {
                     if text.len() > 2 || !text.bytes().all(|ch| ch.is_ascii_digit()) {
@@ -611,7 +612,7 @@ fn time_number(state: State<TimePickerState>, field: TimePickerSelection, input:
                 });
             spacer().modifier(Modifier::new().height(Dp(4.0)));
             text()
-                .content(label)
+                .content(label.clone())
                 .style(theme.typography.body_small)
                 .color(scheme.on_surface_variant);
         } else {
@@ -628,7 +629,7 @@ fn time_number(state: State<TimePickerState>, field: TimePickerSelection, input:
                 .style(background.into())
                 .shape(theme.shapes.small)
                 .content_alignment(Alignment::Center)
-                .accessibility_label(label)
+                .accessibility_label(label.clone())
                 .on_click(move || {
                     state.with_mut(|s| s.selection = field);
                     FocusManager::current().defer_keyboard_until_layout();
@@ -660,7 +661,7 @@ fn time_period_selector(state: State<TimePickerState>, input: bool) {
         .modifier(Modifier::new().semantics(SemanticsArgs {
             test_tag: cfg!(test).then(|| "time-period".to_owned()),
             role: Some(Role::RadioGroup),
-            label: Some("AM/PM".to_owned()),
+            label: Some(I18N.text("md3-am-pm")),
             merge_descendants: true,
             ..Default::default()
         }))
@@ -673,9 +674,10 @@ fn time_period_selector(state: State<TimePickerState>, input: bool) {
                         .semantics(SemanticsArgs::clear()),
                 )
                 .child(move || {
-                    for (index, (label, value)) in [("AM", DayPeriod::Am), ("PM", DayPeriod::Pm)]
-                        .into_iter()
-                        .enumerate()
+                    for (index, (label, value)) in
+                        [("md3-am", DayPeriod::Am), ("md3-pm", DayPeriod::Pm)]
+                            .into_iter()
+                            .enumerate()
                     {
                         let selected = value == period;
                         surface()
@@ -694,7 +696,7 @@ fn time_period_selector(state: State<TimePickerState>, input: bool) {
                             .content_alignment(Alignment::Center)
                             .child(move || {
                                 text()
-                                    .content(label)
+                                    .content(I18N.text(label))
                                     .style(theme.typography.title_medium)
                                     .color(if selected {
                                         scheme.on_tertiary_container
@@ -715,7 +717,7 @@ fn time_period_selector(state: State<TimePickerState>, input: bool) {
                         .block_input(false)
                         .style(scheme.outline.into());
                 });
-            for (index, (label, value)) in [("AM", DayPeriod::Am), ("PM", DayPeriod::Pm)]
+            for (index, (label, value)) in [("md3-am", DayPeriod::Am), ("md3-pm", DayPeriod::Pm)]
                 .into_iter()
                 .enumerate()
             {
@@ -734,7 +736,7 @@ fn time_period_selector(state: State<TimePickerState>, input: bool) {
                     .interaction_state(interactions[index])
                     .show_state_layer(false)
                     .show_ripple(false)
-                    .accessibility_label(label)
+                    .accessibility_label(I18N.text(label))
                     .focus_requester(requesters[index])
                     .focus_properties(FocusProperties::new().skip_traversal(value != period))
                     .accessibility_role(Role::RadioButton)
@@ -1250,9 +1252,9 @@ fn time_clock(state: State<TimePickerState>, hour_step: u8, minute_step: u8) {
                     role: Some(Role::Group),
                     label: Some(
                         if snapshot.selection == TimePickerSelection::Hour {
-                            "Hours"
+                            I18N.text("md3-hours")
                         } else {
-                            "Minutes"
+                            I18N.text("md3-minutes")
                         }
                         .to_owned(),
                     ),
@@ -1316,9 +1318,9 @@ fn clock_value(
     let selected = index == selected_clock_slot(&snapshot);
     let (requester, anchor) = focus.with(|focus| (focus.requesters[index], focus.anchor));
     let field = if snapshot.selection == TimePickerSelection::Hour {
-        "Hour"
+        I18N.text("md3-hour")
     } else {
-        "Minute"
+        I18N.text("md3-minute")
     };
     let total = if snapshot.selection == TimePickerSelection::Minute {
         60
@@ -1351,7 +1353,14 @@ fn clock_value(
         .show_ripple(false)
         .focus_requester(requester)
         .focus_properties(FocusProperties::new().skip_traversal(index != anchor))
-        .accessibility_label(format!("{field} {number} of {total}"))
+        .accessibility_label(I18N.format(
+            "md3-clock-value",
+            [
+                ("field", field.into()),
+                ("number", number.into()),
+                ("total", total.into()),
+            ],
+        ))
         .on_click(move || select_clock_slot(state, index))
         .content_alignment(Alignment::Center)
         .child(move || {
@@ -1435,7 +1444,11 @@ pub fn time_picker_dialog(
 ) {
     crate::dialog::register_dialog_accessibility()
         .dialog_optional(dialog)
-        .label(title.clone().unwrap_or_else(|| "Select time".to_owned()));
+        .label(
+            title
+                .clone()
+                .unwrap_or_else(|| I18N.text("md3-select-time")),
+        );
     let show_mode_toggle = show_mode_toggle.unwrap_or(true);
     let picker_modifier = picker_modifier.unwrap_or_default();
     let picker_initial_hour = picker_initial_hour.unwrap_or(0);
@@ -1468,7 +1481,11 @@ pub fn time_picker_dialog(
         })
         .child(move || {
             text()
-                .content(title.as_deref().unwrap_or("Select time"))
+                .content(
+                    title
+                        .clone()
+                        .unwrap_or_else(|| I18N.text("md3-select-time")),
+                )
                 .style(theme.typography.label_medium)
                 .color(theme.color_scheme.on_surface_variant);
             time_picker()
@@ -1599,9 +1616,9 @@ fn time_display_mode_toggle(state: State<TimePickerState>) {
             filled::KEYBOARD_SVG
         })
         .accessibility_label(if input {
-            "Switch to clock"
+            I18N.text("md3-switch-to-clock")
         } else {
-            "Switch to time input"
+            I18N.text("md3-switch-to-time-input")
         })
         .on_click(move || {
             state.with_mut(TimePickerState::toggle_display_mode);

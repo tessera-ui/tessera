@@ -22,6 +22,8 @@ use tessera_components::{
 };
 use tessera_ui::{Color, Dp, Modifier, RenderSlot, remember, tessera, use_context};
 
+use crate::res::I18N;
+
 use super::{
     ACCENT, INK,
     article::{ArticlePage, SpecSection, article},
@@ -36,20 +38,20 @@ const SIZES: [FloatingActionButtonSize; 4] = [
 ];
 
 pub(super) const TONES: [&str; 6] = [
-    "Primary container",
-    "Secondary container",
-    "Tertiary container",
-    "Primary",
-    "Secondary",
-    "Tertiary",
+    "ui-primary-container",
+    "ui-secondary-container",
+    "ui-tertiary-container",
+    "ui-primary",
+    "ui-secondary",
+    "ui-tertiary",
 ];
 
 fn size_name(size: FloatingActionButtonSize) -> &'static str {
     match size {
-        FloatingActionButtonSize::Small => "Small",
-        FloatingActionButtonSize::Standard => "FAB",
-        FloatingActionButtonSize::Medium => "Medium",
-        FloatingActionButtonSize::Large => "Large",
+        FloatingActionButtonSize::Small => "ui-small",
+        FloatingActionButtonSize::Standard => "ui-fab",
+        FloatingActionButtonSize::Medium => "ui-medium",
+        FloatingActionButtonSize::Large => "ui-large",
     }
 }
 
@@ -87,39 +89,39 @@ pub(super) fn floating_actions_spec(
     route: Option<crate::pages::material_spec::article::ArticleRoute>,
 ) {
     article(
-        "Floating action buttons (FABs)",
-        "Floating action buttons (FABs) help people take primary actions",
+        "ui-floating-action-buttons-fabs",
+        "ui-floating-action-buttons-fabs-help-people-take-primary-actions",
         vec![
             SpecSection {
-                title: "Variants",
+                title: "ui-variants",
                 content: RenderSlot::new(variants),
             },
             SpecSection {
-                title: "Configurations",
+                title: "ui-configurations",
                 content: RenderSlot::new(configurations),
             },
             SpecSection {
-                title: "Tokens & specs",
+                title: "ui-tokens-specs",
                 content: RenderSlot::new(tokens),
             },
             SpecSection {
-                title: "Anatomy",
+                title: "ui-anatomy",
                 content: RenderSlot::new(anatomy),
             },
             SpecSection {
-                title: "Color",
+                title: "ui-color",
                 content: RenderSlot::new(colors),
             },
             SpecSection {
-                title: "States",
+                title: "ui-states",
                 content: RenderSlot::new(states),
             },
             SpecSection {
-                title: "Measurements",
+                title: "ui-measurements",
                 content: RenderSlot::new(measurements),
             },
             SpecSection {
-                title: "Baseline tokens & specs",
+                title: "ui-baseline-tokens-specs",
                 content: RenderSlot::new(baseline_tokens),
             },
         ],
@@ -127,83 +129,83 @@ pub(super) fn floating_actions_spec(
     .route_optional(route.clone())
     .pages(vec![
         ArticlePage {
-            title: "Overview",
+            title: "ui-overview",
             intro: Some(RenderSlot::new(overview)),
             sections: vec![
                 SpecSection {
-                    title: "Availability & resources",
+                    title: "ui-availability-resources",
                     content: RenderSlot::new(resources),
                 },
                 SpecSection {
-                    title: "M3 Expressive update",
+                    title: "ui-m3-expressive-update",
                     content: RenderSlot::new(expressive),
                 },
                 SpecSection {
-                    title: "Differences from M2",
+                    title: "ui-differences-from-m2",
                     content: RenderSlot::new(differences),
                 },
             ],
         },
         ArticlePage {
-            title: "Guidelines",
+            title: "ui-guidelines",
             intro: None,
             sections: vec![
                 SpecSection {
-                    title: "Usage",
+                    title: "ui-usage",
                     content: RenderSlot::new(usage),
                 },
                 SpecSection {
-                    title: "Actions",
+                    title: "ui-actions",
                     content: RenderSlot::new(actions),
                 },
                 SpecSection {
-                    title: "Anatomy",
+                    title: "ui-anatomy",
                     content: RenderSlot::new(guidelines_anatomy),
                 },
                 SpecSection {
-                    title: "Color",
+                    title: "ui-color",
                     content: RenderSlot::new(guidelines_color),
                 },
                 SpecSection {
-                    title: "Placement",
+                    title: "ui-placement",
                     content: RenderSlot::new(placement),
                 },
                 SpecSection {
-                    title: "Adaptive design",
+                    title: "ui-adaptive-design",
                     content: RenderSlot::new(adaptive),
                 },
                 SpecSection {
-                    title: "Behaviors",
+                    title: "ui-behaviors",
                     content: RenderSlot::new(behaviors),
                 },
             ],
         },
         ArticlePage {
-            title: "Accessibility",
+            title: "ui-accessibility",
             intro: None,
             sections: vec![
                 SpecSection {
-                    title: "Use cases",
+                    title: "ui-use-cases",
                     content: RenderSlot::new(use_cases),
                 },
                 SpecSection {
-                    title: "Interaction & style",
+                    title: "ui-interaction-style",
                     content: RenderSlot::new(interaction_style),
                 },
                 SpecSection {
-                    title: "Focus",
+                    title: "ui-focus",
                     content: RenderSlot::new(focus),
                 },
                 SpecSection {
-                    title: "Layout & position",
+                    title: "ui-layout-position",
                     content: RenderSlot::new(layout_position),
                 },
                 SpecSection {
-                    title: "Keyboard navigation",
+                    title: "ui-keyboard-navigation",
                     content: RenderSlot::new(keyboard_navigation),
                 },
                 SpecSection {
-                    title: "Labeling elements",
+                    title: "ui-labeling-elements",
                     content: RenderSlot::new(labeling),
                 },
             ],
@@ -213,7 +215,9 @@ pub(super) fn floating_actions_spec(
 
 #[tessera]
 fn prose(#[prop(into)] value: String) {
-    text().content(value).style(type_style(16.0, 24.0));
+    text()
+        .content(I18N.text(value))
+        .style(type_style(16.0, 24.0));
 }
 
 #[tessera]
@@ -221,7 +225,7 @@ fn caption(#[prop(into)] value: String) {
     let scheme = use_context::<MaterialTheme>().unwrap().get().color_scheme;
     gap(Dp(16.0));
     text()
-        .content(value)
+        .content(I18N.text(value))
         .color(scheme.on_surface_variant)
         .style(type_style(14.0, 20.0));
 }
@@ -246,7 +250,9 @@ fn bullets(items: Vec<String>) {
                                 .background_with_shape(scheme.on_surface_variant, Shape::Ellipse),
                         );
                         spacer().modifier(Modifier::new().width(Dp(16.0)));
-                        text().content(item.clone()).style(type_style(16.0, 24.0));
+                        text()
+                            .content(I18N.text(&(item)))
+                            .style(type_style(16.0, 24.0));
                     });
             }
         });
@@ -273,7 +279,7 @@ fn fab(
             .content_color(content)
             .ripple_color(content)
             .enabled(enabled.unwrap_or(true))
-            .accessibility_label(label.clone())
+            .accessibility_label(I18N.text(&(label)))
             .on_click(move || activations.set(activations.get() + 1))
             .content(move || {
                 icon().painter(filled::ADD_SVG).size(Dp(icon_size));
@@ -281,7 +287,7 @@ fn fab(
         if counted.unwrap_or(false) {
             gap(Dp(16.0));
             text()
-                .content(format!("Activations: {}", activations.get()))
+                .content(I18N.format("ui-activations-value", [("v0", (activations.get()).into())]))
                 .style(type_style(14.0, 20.0));
         }
     });
@@ -290,13 +296,13 @@ fn fab(
 #[tessera]
 fn overview() {
     prose(
-        "Floating action buttons help people take a primary action. Use one FAB for the most common or important action on a screen, keep its icon clear, and let it persist while content scrolls.",
+        "ui-floating-action-buttons-help-people-take-a-primary-action-use-one-fab-for-the-most-common",
     );
     gap(Dp(16.0));
     bullets(vec![
-        "Use a FAB for the most common or important action on a screen".into(),
-        "Make sure the icon in a FAB is clear and understandable".into(),
-        "FABs persist on the screen when content is scrolling".into(),
+        "ui-use-a-fab-for-the-most-common-or-important-action-on-a-screen".into(),
+        "ui-make-sure-the-icon-in-a-fab-is-clear-and-understandable".into(),
+        "ui-fabs-persist-on-the-screen-when-content-is-scrolling".into(),
     ]);
     gap(Dp(32.0));
     panel(RenderSlot::new(|| {
@@ -310,103 +316,115 @@ fn overview() {
             });
     }));
     gap(Dp(16.0));
-    prose("Small · FAB · Medium FAB · Large FAB");
+    prose("ui-small-fab-medium-fab-large-fab");
 }
 
 #[tessera]
 fn resources() {
     spec_table(
-        vec!["Type".into(), "Resource".into(), "Status".into()],
+        vec!["ui-type".into(), "ui-resource".into(), "ui-status".into()],
         vec![
             vec![
-                "Design".into(),
-                "Design Kit (Figma)".into(),
-                "Available".into(),
+                "ui-design".into(),
+                "ui-design-kit-figma".into(),
+                "ui-available".into(),
             ],
             vec![
-                "Implementation".into(),
-                "Flutter".into(),
-                "Available".into(),
+                "ui-implementation".into(),
+                "ui-flutter".into(),
+                "ui-available".into(),
             ],
             vec![
-                "Implementation".into(),
-                "Jetpack Compose".into(),
-                "Available".into(),
+                "ui-implementation".into(),
+                "ui-jetpack-compose".into(),
+                "ui-available".into(),
             ],
             vec![
-                "Implementation".into(),
-                "Android Views (MDC-Android)".into(),
-                "Available".into(),
+                "ui-implementation".into(),
+                "ui-android-views-mdc-android".into(),
+                "ui-available".into(),
             ],
-            vec!["Implementation".into(), "Web".into(), "Available".into()],
             vec![
-                "Implementation".into(),
-                "Web: Expressive".into(),
-                "Unavailable".into(),
+                "ui-implementation".into(),
+                "ui-web".into(),
+                "ui-available".into(),
+            ],
+            vec![
+                "ui-implementation".into(),
+                "ui-web-expressive".into(),
+                "ui-unavailable".into(),
             ],
         ],
     );
     gap(Dp(24.0));
     prose(
-        "Tessera examples on this page use the native floating_action_button component. Four sizes, six color tones, elevation and state-layer feedback are implemented, together with an accessibility label that names the action.",
+        "ui-tessera-examples-on-this-page-use-the-native-floating-action-button-component-four-si",
     );
 }
 
 #[tessera]
 fn expressive() {
     prose(
-        "May 2025: the FAB family gained small, medium, and large sizes, and the surface color styles are no longer recommended. Use the primary container tone with a clear icon.",
+        "ui-may-2025-the-fab-family-gained-small-medium-and-large-sizes-and-the-surface-color-styles-a",
     );
     gap(Dp(24.0));
     spec_table(
-        vec!["Change".into(), "Details".into()],
+        vec!["ui-change".into(), "ui-details".into()],
         vec![
             vec![
-                "Sizes".into(),
-                "Small (40dp), FAB (56dp), medium (80dp), and large (96dp)".into(),
+                "ui-sizes".into(),
+                "ui-small-40dp-fab-56dp-medium-80dp-and-large-96dp".into(),
             ],
             vec![
-                "Color".into(),
-                "Primary container is the default; secondary and tertiary tones are available"
+                "ui-color".into(),
+                "ui-primary-container-is-the-default-secondary-and-tertiary-tones-are-available"
                     .into(),
             ],
             vec![
-                "Baseline".into(),
-                "Surface color styles remain available but are no longer recommended".into(),
+                "ui-baseline".into(),
+                "ui-surface-color-styles-remain-available-but-are-no-longer-recommended".into(),
             ],
         ],
     );
     gap(Dp(32.0));
     panel(RenderSlot::new(|| {
-        fab("Add");
+        fab("ui-add");
     }));
-    caption("The 56dp FAB with a primary container remains the recommended default.");
+    caption("ui-the-56dp-fab-with-a-primary-container-remains-the-recommended-default");
 }
 
 #[tessera]
 fn differences() {
     prose(
-        "M2: the FAB used a fixed 56dp container, a single accent color, and elevation 6. M3 introduced color roles, elevation levels tied to interaction, and a state layer that follows the icon color.",
+        "ui-m2-the-fab-used-a-fixed-56dp-container-a-single-accent-color-and-elevation-6-m3-introduced",
     );
     gap(Dp(16.0));
     prose(
-        "M3 Expressive: the family grew to four sizes, the icon scales with the container, and the corner radius follows the size instead of staying fixed.",
+        "ui-m3-expressive-the-family-grew-to-four-sizes-the-icon-scales-with-the-container-and-the-cor",
     );
     gap(Dp(24.0));
     spec_table(
-        vec!["Attribute".into(), "M2".into(), "M3 Expressive".into()],
         vec![
-            vec!["Size".into(), "56dp".into(), "40 / 56 / 80 / 96dp".into()],
-            vec!["Icon".into(), "24dp".into(), "24 / 28 / 36dp".into()],
+            "ui-attribute".into(),
+            "M2".into(),
+            "ui-m3-expressive".into(),
+        ],
+        vec![
             vec![
-                "Corner radius".into(),
+                "ui-size".into(),
+                "56dp".into(),
+                "40 / 56 / 80 / 96dp".into(),
+            ],
+            vec!["ui-icon".into(), "24dp".into(), "24 / 28 / 36dp".into()],
+            vec![
+                "ui-corner-radius".into(),
                 "28dp".into(),
                 "12 / 16 / 20 / 28dp".into(),
             ],
             vec![
-                "Color".into(),
-                "Accent fill".into(),
-                "Primary, secondary, or tertiary container".into(),
+                "ui-color".into(),
+                "ui-accent-fill".into(),
+                "ui-primary-secondary-or-tertiary-container".into(),
             ],
         ],
     );
@@ -415,7 +433,7 @@ fn differences() {
 #[tessera]
 fn variants() {
     prose(
-        "The FAB family has four sizes that share one anatomy. The 56dp FAB is the default; small suits dense layouts and the larger sizes give the action more presence.",
+        "ui-the-fab-family-has-four-sizes-that-share-one-anatomy-the-56dp-fab-is-the-default-small-sui",
     );
     gap(Dp(24.0));
     panel(RenderSlot::new(|| {
@@ -429,19 +447,23 @@ fn variants() {
             });
     }));
     gap(Dp(16.0));
-    caption("1 Small FAB · 2 FAB · 3 Medium FAB · 4 Large FAB");
+    caption("ui-1-small-fab-2-fab-3-medium-fab-4-large-fab");
     gap(Dp(32.0));
     spec_table(
-        vec!["Variant".into(), "M3".into(), "M3 Expressive".into()],
+        vec!["ui-variant".into(), "M3".into(), "ui-m3-expressive".into()],
         vec![
-            vec!["Small FAB".into(), "--".into(), "Available".into()],
-            vec!["FAB".into(), "Available".into(), "Available".into()],
-            vec!["Medium FAB".into(), "--".into(), "Available".into()],
-            vec!["Large FAB".into(), "--".into(), "Available".into()],
+            vec!["ui-small-fab".into(), "--".into(), "ui-available".into()],
             vec![
-                "Surface FAB (baseline)".into(),
-                "Available".into(),
-                "Not recommended".into(),
+                "ui-fab".into(),
+                "ui-available".into(),
+                "ui-available".into(),
+            ],
+            vec!["ui-medium-fab".into(), "--".into(), "ui-available".into()],
+            vec!["ui-large-fab".into(), "--".into(), "ui-available".into()],
+            vec![
+                "ui-surface-fab-baseline".into(),
+                "ui-available".into(),
+                "ui-not-recommended".into(),
             ],
         ],
     );
@@ -450,14 +472,14 @@ fn variants() {
 #[tessera]
 fn configurations() {
     prose(
-        "Choose a size and a container tone. The icon scales with the size, and the container keeps the same corner treatment across tones.",
+        "ui-choose-a-size-and-a-container-tone-the-icon-scales-with-the-size-and-the-container-keeps-t",
     );
     gap(Dp(24.0));
     panel(RenderSlot::new(|| {
         column()
             .modifier(Modifier::new().fill_max_width())
             .children(|| {
-                subheading("1  Size".into());
+                subheading("ui-1-size".into());
                 gap(Dp(24.0));
                 flow_row()
                     .item_spacing(Dp(40.0))
@@ -468,7 +490,7 @@ fn configurations() {
                         }
                     });
                 gap(Dp(40.0));
-                subheading("2  Color".into());
+                subheading("ui-2-color".into());
                 gap(Dp(24.0));
                 flow_row()
                     .item_spacing(Dp(24.0))
@@ -482,16 +504,16 @@ fn configurations() {
     }));
     gap(Dp(32.0));
     spec_table(
-        vec!["Configuration".into(), "Options".into()],
+        vec!["ui-configuration".into(), "ui-options".into()],
         vec![
-            vec!["Size".into(), "Small · FAB · medium · large".into()],
+            vec!["ui-size".into(), "ui-small-fab-medium-large".into()],
             vec![
-                "Container tones".into(),
-                "Primary container · secondary container · tertiary container".into(),
+                "ui-container-tones".into(),
+                "ui-primary-container-secondary-container-tertiary-container".into(),
             ],
             vec![
-                "Accent tones".into(),
-                "Primary · secondary · tertiary".into(),
+                "ui-accent-tones".into(),
+                "ui-primary-secondary-tertiary".into(),
             ],
         ],
     );
@@ -500,35 +522,35 @@ fn configurations() {
 #[tessera]
 fn tokens() {
     prose(
-        "FAB tokens are organized by size and color. Values below follow the native component defaults used on this page.",
+        "ui-fab-tokens-are-organized-by-size-and-color-values-below-follow-the-native-component-defaul",
     );
     gap(Dp(24.0));
     spec_table(
-        vec!["Token".into(), "Value".into()],
+        vec!["ui-token".into(), "ui-value".into()],
         vec![
             vec![
                 "md.comp.fab.primary-container.color".into(),
-                "Primary container".into(),
+                "ui-primary-container".into(),
             ],
             vec![
                 "md.comp.fab.primary-container.icon.color".into(),
-                "On primary container".into(),
+                "ui-on-primary-container".into(),
             ],
             vec![
                 "md.comp.fab.secondary-container.color".into(),
-                "Secondary container".into(),
+                "ui-secondary-container".into(),
             ],
             vec![
                 "md.comp.fab.tertiary-container.color".into(),
-                "Tertiary container".into(),
+                "ui-tertiary-container".into(),
             ],
             vec![
                 "md.comp.fab.container.height".into(),
-                "40dp small · 56dp · 80dp medium · 96dp large".into(),
+                "ui-40dp-small-56dp-80dp-medium-96dp-large".into(),
             ],
             vec![
                 "md.comp.fab.container.width".into(),
-                "Matches the container height".into(),
+                "ui-matches-the-container-height".into(),
             ],
             vec![
                 "md.comp.fab.icon.size".into(),
@@ -536,57 +558,57 @@ fn tokens() {
             ],
             vec![
                 "md.comp.fab.container.shape".into(),
-                "12dp · 16dp · 20dp · 28dp corners".into(),
+                "ui-12dp-16dp-20dp-28dp-corners".into(),
             ],
             vec![
                 "md.comp.fab.container.elevation".into(),
-                "Level 3 · level 4 when hovered".into(),
+                "ui-level-3-level-4-when-hovered".into(),
             ],
             vec![
                 "md.comp.fab.state-layer".into(),
-                "Icon color at 8% hover and 10% focus or press".into(),
+                "ui-icon-color-at-8-hover-and-10-focus-or-press".into(),
             ],
         ],
     );
     gap(Dp(24.0));
     prose(
-        "Keep the state layer color equal to the icon color when a non-default color mapping is used, so feedback stays visible on every tone.",
+        "ui-keep-the-state-layer-color-equal-to-the-icon-color-when-a-non-default-color-mapping-is-use",
     );
 }
 
 #[tessera]
 fn anatomy() {
     prose(
-        "A FAB is a single container with one icon. It has no visible label; the icon carries the meaning and the accessibility label names the action.",
+        "ui-a-fab-is-a-single-container-with-one-icon-it-has-no-visible-label-the-icon-carries-the-mea",
     );
     gap(Dp(24.0));
-    panel(RenderSlot::new(|| {
-        column().children(|| {
-            fab("Add");
+    panel(RenderSlot::new(move || {
+        column().children(move || {
+            fab("ui-add");
             gap(Dp(32.0));
-            for line in ["1  Container", "2  Icon"] {
+            for line in ["ui-1-container", "ui-2-icon"] {
                 text()
-                    .content(line)
+                    .content(I18N.text(line))
                     .color(INK)
                     .style(type_style(16.0, 28.0));
             }
         });
     }));
     gap(Dp(16.0));
-    caption("One container, one icon, one action.");
+    caption("ui-one-container-one-icon-one-action");
 }
 
 #[tessera]
 fn colors() {
     prose(
-        "Container tones map to the primary, secondary, and tertiary color roles, either as containers or as solid accents. Each tone pairs with its matching on-color for the icon.",
+        "ui-container-tones-map-to-the-primary-secondary-and-tertiary-color-roles-either-as-containers-3175",
     );
     gap(Dp(24.0));
     for dark in [false, true] {
         subheading(if dark {
-            "Dark scheme".into()
+            "ui-dark-scheme".into()
         } else {
-            "Light scheme".into()
+            "ui-light-scheme".into()
         });
         gap(Dp(24.0));
         material_theme()
@@ -608,7 +630,7 @@ fn colors() {
                                     });
                                 gap(Dp(16.0));
                                 text()
-                                    .content("1  Primary container    2  Secondary container    3  Tertiary container    4  Primary    5  Secondary    6  Tertiary")
+                                    .content(I18N.text("ui-1-primary-container-2-secondary-container-3-tertiary-container-4-primary-5-secondary-6-ter"))
                                     .style(type_style(14.0, 20.0));
                             });
                     });
@@ -616,46 +638,54 @@ fn colors() {
         gap(Dp(32.0));
     }
     prose(
-        "Surface color styles are still available but no longer recommended; prefer a container tone so the action reads as primary.",
+        "ui-surface-color-styles-are-still-available-but-no-longer-recommended-prefer-a-container-tone",
     );
 }
 
 #[tessera]
 fn states() {
     prose(
-        "States communicate elevation and interaction. A FAB rests at level 3, rises to level 4 on hover, keeps level 3 while focused or pressed, and sharpens its state layer as interaction increases.",
+        "ui-states-communicate-elevation-and-interaction-a-fab-rests-at-level-3-rises-to-level-4-on-ho",
     );
     gap(Dp(24.0));
-    panel(RenderSlot::new(|| {
+    panel(RenderSlot::new(move || {
         column()
             .modifier(Modifier::new().fill_max_width())
-            .children(|| {
+            .children(move || {
                 row()
                     .modifier(Modifier::new().fill_max_width())
                     .children(|| {
-                        fab("Enabled");
+                        fab("ui-enabled");
                         spacer().modifier(Modifier::new().width(Dp(32.0)));
-                        fab("Disabled").enabled(false);
+                        fab("ui-disabled").enabled(false);
                         spacer().modifier(Modifier::new().width(Dp(32.0)));
-                        fab("Accent").tone(3);
+                        fab("ui-accent").tone(3);
                     });
                 gap(Dp(32.0));
                 text()
                     .content(
-                        "Hover, focus with Tab, or press the actions above to see the state layer and elevation respond.",
+                        I18N.text("ui-hover-focus-with-tab-or-press-the-actions-above-to-see-the-state-layer-and-elevation-respo"),
                     )
                     .style(type_style(14.0, 20.0));
             });
     }));
     gap(Dp(24.0));
     spec_table(
-        vec!["State".into(), "Elevation".into(), "State layer".into()],
         vec![
-            vec!["Enabled".into(), "Level 3".into(), "--".into()],
-            vec!["Hovered".into(), "Level 4".into(), "8%".into()],
-            vec!["Focused".into(), "Level 3".into(), "10%".into()],
-            vec!["Pressed".into(), "Level 3".into(), "10%".into()],
-            vec!["Disabled".into(), "None".into(), "Faded container".into()],
+            "ui-state".into(),
+            "ui-elevation".into(),
+            "ui-state-layer".into(),
+        ],
+        vec![
+            vec!["ui-enabled".into(), "ui-level-3".into(), "--".into()],
+            vec!["ui-hovered".into(), "ui-level-4".into(), "8%".into()],
+            vec!["ui-focused".into(), "ui-level-3".into(), "10%".into()],
+            vec!["ui-pressed".into(), "ui-level-3".into(), "10%".into()],
+            vec![
+                "ui-disabled".into(),
+                "ui-none".into(),
+                "ui-faded-container".into(),
+            ],
         ],
     );
 }
@@ -663,41 +693,41 @@ fn states() {
 #[tessera]
 fn measurements() {
     prose(
-        "Height, icon size, and corner radius scale together. Reserve 16dp margins around a floating action, and keep a 48dp minimum interactive target for the smaller sizes.",
+        "ui-height-icon-size-and-corner-radius-scale-together-reserve-16dp-margins-around-a-floating-a",
     );
     gap(Dp(24.0));
     spec_table(
         vec![
-            "Attribute".into(),
-            "Small".into(),
-            "FAB".into(),
-            "Medium".into(),
-            "Large".into(),
+            "ui-attribute".into(),
+            "ui-small".into(),
+            "ui-fab".into(),
+            "ui-medium".into(),
+            "ui-large".into(),
         ],
         vec![
             vec![
-                "Container".into(),
+                "ui-container".into(),
                 "40dp".into(),
                 "56dp".into(),
                 "80dp".into(),
                 "96dp".into(),
             ],
             vec![
-                "Icon".into(),
+                "ui-icon".into(),
                 "24dp".into(),
                 "24dp".into(),
                 "28dp".into(),
                 "36dp".into(),
             ],
             vec![
-                "Corner radius".into(),
+                "ui-corner-radius".into(),
                 "12dp".into(),
                 "16dp".into(),
                 "20dp".into(),
                 "28dp".into(),
             ],
             vec![
-                "Padding around icon".into(),
+                "ui-padding-around-icon".into(),
                 "8dp".into(),
                 "16dp".into(),
                 "26dp".into(),
@@ -706,27 +736,34 @@ fn measurements() {
         ],
     );
     gap(Dp(24.0));
-    panel(RenderSlot::new(|| {
+    panel(RenderSlot::new(move || {
         flow_row()
             .item_spacing(Dp(40.0))
             .line_spacing(Dp(24.0))
-            .children(|| {
+            .children(move || {
                 for size in SIZES {
-                    fab(format!("{} {}", size_name(size), size_height(size))).size(size);
+                    fab(I18N.format(
+                        "ui-value-value-format-2",
+                        [
+                            ("v0", I18N.text(&size_name(size)).into()),
+                            ("v1", I18N.text(&size_height(size)).into()),
+                        ],
+                    ))
+                    .size(size);
                 }
             });
     }));
     gap(Dp(16.0));
-    caption("Container sizes of the small, regular, medium, and large FABs.");
+    caption("ui-container-sizes-of-the-small-regular-medium-and-large-fabs");
     gap(Dp(24.0));
     spec_table(
-        vec!["Attribute".into(), "Value".into()],
+        vec!["ui-attribute".into(), "ui-value".into()],
         vec![
-            vec!["Outer margin".into(), "16dp".into()],
-            vec!["Minimum interactive target".into(), "48 × 48dp".into()],
+            vec!["ui-outer-margin".into(), "16dp".into()],
+            vec!["ui-minimum-interactive-target".into(), "48 × 48dp".into()],
             vec![
-                "Icon to container".into(),
-                "Centered in the container".into(),
+                "ui-icon-to-container".into(),
+                "ui-centered-in-the-container".into(),
             ],
         ],
     );
@@ -735,90 +772,93 @@ fn measurements() {
 #[tessera]
 fn baseline_tokens() {
     prose(
-        "Baseline FAB token sets are still published, but the surface color styles are no longer recommended in the expressive update. Prefer the primary container mapping shown on this page.",
+        "ui-baseline-fab-token-sets-are-still-published-but-the-surface-color-styles-are-no-longer-rec",
     );
     gap(Dp(24.0));
     spec_table(
-        vec!["Token".into(), "Baseline value".into()],
+        vec!["ui-token".into(), "ui-baseline-value".into()],
         vec![
             vec![
                 "md.comp.fab.surface-container.color".into(),
-                "Surface container high".into(),
+                "ui-surface-container-high".into(),
             ],
             vec![
                 "md.comp.fab.surface-container.icon.color".into(),
-                "Primary".into(),
+                "ui-primary".into(),
             ],
             vec!["md.comp.fab.container.height".into(), "56dp".into()],
-            vec!["md.comp.fab.container.shape".into(), "16dp corners".into()],
+            vec![
+                "md.comp.fab.container.shape".into(),
+                "ui-16dp-corners".into(),
+            ],
             vec!["md.comp.fab.icon.size".into(), "24dp".into()],
         ],
     );
     gap(Dp(24.0));
     prose(
-        "Both baseline and expressive mappings keep the same interaction model: elevation level 3 at rest, level 4 on hover, and a state layer that matches the icon color.",
+        "ui-both-baseline-and-expressive-mappings-keep-the-same-interaction-model-elevation-level-3-at",
     );
 }
 
 #[tessera]
 fn usage() {
     prose(
-        "Use one FAB for the most common or important action on a screen. Keep the icon clear and understandable, and avoid covering content that people need while the action is visible.",
+        "ui-use-one-fab-for-the-most-common-or-important-action-on-a-screen-keep-the-icon-clear-and-un",
     );
     gap(Dp(24.0));
-    panel(RenderSlot::new(|| {
+    panel(RenderSlot::new(move || {
         column()
             .modifier(Modifier::new().fill_max_width())
-            .children(|| {
-                fab("Add");
+            .children(move || {
+                fab("ui-add");
                 gap(Dp(16.0));
                 text()
-                    .content("Do: one FAB with a familiar icon for the primary action.")
+                    .content(I18N.text("ui-do-one-fab-with-a-familiar-icon-for-the-primary-action"))
                     .style(type_style(14.0, 20.0));
                 gap(Dp(32.0));
                 row()
                     .modifier(Modifier::new().fill_max_width())
                     .children(|| {
-                        fab("Add");
+                        fab("ui-add");
                         spacer().modifier(Modifier::new().width(Dp(24.0)));
-                        fab("Edit").tone(2);
+                        fab("ui-edit").tone(2);
                     });
                 gap(Dp(16.0));
                 text()
-                    .content("Don't: two FABs competing for equally important actions.")
+                    .content(I18N.text("ui-don-t-two-fabs-competing-for-equally-important-actions"))
                     .style(type_style(14.0, 20.0));
             });
     }));
     gap(Dp(16.0));
-    caption("A FAB represents one action, not a collection of actions.");
+    caption("ui-a-fab-represents-one-action-not-a-collection-of-actions");
     gap(Dp(32.0));
     bullets(vec![
-        "Do not use a FAB for destructive or dismissive actions".into(),
-        "Keep the icon understandable without extra explanation".into(),
-        "Prefer a FAB menu when several related actions belong together".into(),
+        "ui-do-not-use-a-fab-for-destructive-or-dismissive-actions".into(),
+        "ui-keep-the-icon-understandable-without-extra-explanation".into(),
+        "ui-prefer-a-fab-menu-when-several-related-actions-belong-together".into(),
     ]);
 }
 
 #[tessera]
 fn actions() {
     prose(
-        "A FAB performs its action immediately. When several related actions belong together, use a FAB menu, and when the action needs a visible label, use an extended FAB instead.",
+        "ui-a-fab-performs-its-action-immediately-when-several-related-actions-belong-together-use-a-f",
     );
     gap(Dp(24.0));
     spec_table(
-        vec!["Component".into(), "Use when".into()],
+        vec!["ui-component".into(), "ui-use-when".into()],
         vec![
             vec![
-                "FAB".into(),
-                "One primary action with a universally understood icon".into(),
+                "ui-fab".into(),
+                "ui-one-primary-action-with-a-universally-understood-icon".into(),
             ],
             vec![
-                "Extended FAB".into(),
-                "The action needs a visible text label".into(),
+                "ui-extended-fab".into(),
+                "ui-the-action-needs-a-visible-text-label".into(),
             ],
             vec![
-                "FAB menu".into(),
-                "Two to six related actions belong to one trigger".into(),
+                "ui-fab-menu".into(),
+                "ui-two-to-six-related-actions-belong-to-one-trigger".into(),
             ],
         ],
     );
@@ -827,7 +867,7 @@ fn actions() {
 #[tessera]
 fn guidelines_anatomy() {
     prose(
-        "The FAB is a single container with a centered icon. Keep the icon simple and recognizable, and place the accessible label on the container rather than on the icon.",
+        "ui-the-fab-is-a-single-container-with-a-centered-icon-keep-the-icon-simple-and-recognizable-a",
     );
     gap(Dp(24.0));
     anatomy();
@@ -836,7 +876,7 @@ fn guidelines_anatomy() {
 #[tessera]
 fn guidelines_color() {
     prose(
-        "Default to the primary container tone. Secondary and tertiary tones separate a floating action from other primary-colored elements, while solid accent tones raise its emphasis.",
+        "ui-default-to-the-primary-container-tone-secondary-and-tertiary-tones-separate-a-floating-act",
     );
     gap(Dp(24.0));
     panel(RenderSlot::new(|| {
@@ -850,13 +890,13 @@ fn guidelines_color() {
             });
     }));
     gap(Dp(16.0));
-    caption("Keep one tone across a screen so the floating action stays identifiable.");
+    caption("ui-keep-one-tone-across-a-screen-so-the-floating-action-stays-identifiable");
 }
 
 #[tessera]
 fn placement() {
     prose(
-        "Place a FAB at the bottom end of the screen, above the bottom navigation bar or any bottom sheet. Keep a 16dp margin from the screen edges and from other floating elements.",
+        "ui-place-a-fab-at-the-bottom-end-of-the-screen-above-the-bottom-navigation-bar-or-any-bottom",
     );
     gap(Dp(24.0));
     let scheme = use_context::<MaterialTheme>().unwrap().get().color_scheme;
@@ -875,7 +915,7 @@ fn placement() {
                 .modifier(Modifier::new().fill_max_size().padding_all(Dp(24.0)))
                 .children(move || {
                     text()
-                        .content("Content")
+                        .content(I18N.text("ui-content"))
                         .color(scheme.on_surface_variant)
                         .style(type_style(14.0, 20.0));
                     spacer().modifier(Modifier::new().weight(1.0));
@@ -888,7 +928,7 @@ fn placement() {
                                 .container_color(scheme.primary_container)
                                 .content_color(scheme.on_primary_container)
                                 .ripple_color(scheme.on_primary_container)
-                                .accessibility_label("Add")
+                                .accessibility_label(I18N.text("ui-add"))
                                 .on_click(|| {})
                                 .content(|| {
                                     icon().painter(filled::ADD_SVG).size(Dp(24.0));
@@ -897,36 +937,36 @@ fn placement() {
                 });
         });
     gap(Dp(16.0));
-    caption("FABs should have margins of 16dp and must not cover the navigation bar.");
+    caption("ui-fabs-should-have-margins-of-16dp-and-must-not-cover-the-navigation-bar");
 }
 
 #[tessera]
 fn adaptive() {
     prose(
-        "Choose the size by window class. The small and regular FABs suit compact layouts, while the medium and large sizes give the action more presence in expanded layouts.",
+        "ui-choose-the-size-by-window-class-the-small-and-regular-fabs-suit-compact-layouts-while-the",
     );
     gap(Dp(24.0));
     panel(RenderSlot::new(|| {
         column()
             .modifier(Modifier::new().fill_max_width())
             .children(|| {
-                subheading("Compact".into());
+                subheading("ui-compact".into());
                 gap(Dp(16.0));
-                fab("Add");
+                fab("ui-add");
                 gap(Dp(32.0));
-                subheading("Expanded".into());
+                subheading("ui-expanded".into());
                 gap(Dp(16.0));
-                fab("Add").size(FloatingActionButtonSize::Large);
+                fab("ui-add").size(FloatingActionButtonSize::Large);
             });
     }));
     gap(Dp(16.0));
-    caption("The same action at two size presets.");
+    caption("ui-the-same-action-at-two-size-presets");
 }
 
 #[tessera]
 fn behaviors() {
     prose(
-        "A FAB can hide while content scrolls down and reappear when scrolling up, so it never blocks the content people are reading. Keep it reachable and avoid animating it on every frame.",
+        "ui-a-fab-can-hide-while-content-scrolls-down-and-reappear-when-scrolling-up-so-it-never-block",
     );
     gap(Dp(24.0));
     let visible = remember(|| true);
@@ -937,53 +977,53 @@ fn behaviors() {
                 button()
                     .tonal()
                     .selected(!visible.get())
-                    .accessibility_label("Hide or show the floating action")
+                    .accessibility_label(I18N.text("ui-hide-or-show-the-floating-action"))
                     .on_click(move || visible.set(!visible.get()))
                     .child(move || {
-                        text().content(if visible.get() {
-                            "Hide FAB"
+                        text().content(I18N.text(if visible.get() {
+                            "ui-hide-fab"
                         } else {
-                            "Show FAB"
-                        });
+                            "ui-show-fab"
+                        }));
                     });
                 gap(Dp(32.0));
                 if visible.get() {
-                    fab("Add").counted(true);
+                    fab("ui-add").counted(true);
                 } else {
                     text()
-                        .content("FAB hidden while scrolling")
+                        .content(I18N.text("ui-fab-hidden-while-scrolling"))
                         .style(type_style(14.0, 20.0));
                 }
             });
     }));
     gap(Dp(24.0));
     prose(
-        "Hiding is a scroll behavior, not a state change: the action keeps its position and its accessible name when it returns.",
+        "ui-hiding-is-a-scroll-behavior-not-a-state-change-the-action-keeps-its-position-and-its-acces",
     );
 }
 
 #[tessera]
 fn use_cases() {
-    prose("People should be able to do the following using assistive technology:");
+    prose("ui-people-should-be-able-to-do-the-following-using-assistive-technology");
     gap(Dp(16.0));
     bullets(vec![
-        "Navigate to and activate the FAB".into(),
-        "Identify the action from its accessible label".into(),
+        "ui-navigate-to-and-activate-the-fab".into(),
+        "ui-identify-the-action-from-its-accessible-label".into(),
     ]);
     gap(Dp(24.0));
     panel(RenderSlot::new(|| {
-        fab("Add").counted(true);
+        fab("ui-add").counted(true);
     }));
     gap(Dp(16.0));
     caption(
-        "The FAB exposes one action named by its accessibility label; activating it increments the counter.",
+        "ui-the-fab-exposes-one-action-named-by-its-accessibility-label-activating-it-increments-the-c",
     );
 }
 
 #[tessera]
 fn interaction_style() {
     prose(
-        "The FAB is a large target: the smallest container is 40dp and the interactive target never drops below 48 × 48dp. Keep the icon contrast at 3:1 or higher against the container.",
+        "ui-the-fab-is-a-large-target-the-smallest-container-is-40dp-and-the-interactive-target-never",
     );
     gap(Dp(24.0));
     let scheme = use_context::<MaterialTheme>().unwrap().get().color_scheme;
@@ -996,7 +1036,7 @@ fn interaction_style() {
                     .container_color(scheme.primary_container)
                     .content_color(scheme.on_primary_container)
                     .ripple_color(scheme.on_primary_container)
-                    .accessibility_label("Above three to one: add")
+                    .accessibility_label(I18N.text("ui-above-three-to-one-add"))
                     .on_click(|| {})
                     .content(|| {
                         icon().painter(filled::ADD_SVG).size(Dp(24.0));
@@ -1007,7 +1047,7 @@ fn interaction_style() {
                     .container_color(scheme.surface_container)
                     .content_color(scheme.outline)
                     .ripple_color(scheme.outline)
-                    .accessibility_label("Below three to one: add")
+                    .accessibility_label(I18N.text("ui-below-three-to-one-add"))
                     .on_click(|| {})
                     .content(|| {
                         icon().painter(filled::ADD_SVG).size(Dp(24.0));
@@ -1015,26 +1055,26 @@ fn interaction_style() {
             });
     }));
     gap(Dp(16.0));
-    caption("Above 3:1 on primary container versus a low-contrast pairing.");
+    caption("ui-above-3-1-on-primary-container-versus-a-low-contrast-pairing");
 }
 
 #[tessera]
 fn focus() {
     prose(
-        "A FAB is a single focus stop. Focus is drawn as a ring around the container, and it should follow the reading order of the screen rather than jumping to the corner first.",
+        "ui-a-fab-is-a-single-focus-stop-focus-is-drawn-as-a-ring-around-the-container-and-it-should-f",
     );
     gap(Dp(24.0));
     panel(RenderSlot::new(|| {
-        fab("Add");
+        fab("ui-add");
     }));
     gap(Dp(16.0));
-    caption("Press Tab to reach the action; the container receives focus once.");
+    caption("ui-press-tab-to-reach-the-action-the-container-receives-focus-once");
 }
 
 #[tessera]
 fn layout_position() {
     prose(
-        "Keep the FAB clear of navigation bars, sheets, and snackbars. It should stay in the same corner across screens, so people can find it without searching.",
+        "ui-keep-the-fab-clear-of-navigation-bars-sheets-and-snackbars-it-should-stay-in-the-same-corn",
     );
     gap(Dp(24.0));
     placement();
@@ -1043,49 +1083,49 @@ fn layout_position() {
 #[tessera]
 fn keyboard_navigation() {
     spec_table(
-        vec!["Keys".into(), "Actions".into()],
+        vec!["ui-keys".into(), "ui-actions".into()],
         vec![
-            vec!["Tab".into(), "Navigate to the FAB".into()],
-            vec!["Space or Enter".into(), "Activate the FAB".into()],
+            vec!["ui-tab".into(), "ui-navigate-to-the-fab".into()],
+            vec!["ui-space-or-enter".into(), "ui-activate-the-fab".into()],
         ],
     );
     gap(Dp(24.0));
     prose(
-        "The FAB behaves like a button for keyboard input: one focus stop, activated by Space or Enter, with a focus ring around the container rather than around the icon.",
+        "ui-the-fab-behaves-like-a-button-for-keyboard-input-one-focus-stop-activated-by-space-or-ente",
     );
     gap(Dp(24.0));
     panel(RenderSlot::new(|| {
-        fab("Add").counted(true);
+        fab("ui-add").counted(true);
     }));
 }
 
 #[tessera]
 fn labeling() {
     prose(
-        "A FAB has no visible label, so its accessibility label must name the action. Do not describe the icon; describe what activating it does.",
+        "ui-a-fab-has-no-visible-label-so-its-accessibility-label-must-name-the-action-do-not-describe",
     );
     gap(Dp(24.0));
-    panel(RenderSlot::new(|| {
+    panel(RenderSlot::new(move || {
         column()
             .modifier(Modifier::new().fill_max_width())
-            .children(|| {
-                fab("Add");
+            .children(move || {
+                fab("ui-add");
                 gap(Dp(16.0));
                 text()
-                    .content("Do: “Add, button” — the label names the action.")
+                    .content(I18N.text("ui-do-add-button-the-label-names-the-action"))
                     .style(type_style(14.0, 20.0));
                 gap(Dp(32.0));
-                fab("Add").tone(1);
+                fab("ui-add").tone(1);
                 gap(Dp(16.0));
                 text()
-                    .content(
-                        "Don't: “Plus icon” — describing the glyph does not explain the action.",
-                    )
+                    .content(I18N.text(
+                        "ui-don-t-plus-icon-describing-the-glyph-does-not-explain-the-action",
+                    ))
                     .style(type_style(14.0, 20.0));
             });
     }));
     gap(Dp(32.0));
     prose(
-        "Keep the same label when the FAB hides and returns, and provide a tooltip only as a visual hint — the accessible name stays on the container.",
+        "ui-keep-the-same-label-when-the-fab-hides-and-returns-and-provide-a-tooltip-only-as-a-visual",
     );
 }

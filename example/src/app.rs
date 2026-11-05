@@ -2,6 +2,7 @@ use tessera_components::{
     alignment::Alignment,
     app_bar::top_app_bar,
     boxed::boxed,
+    button::button,
     column::column,
     icon::icon,
     icon_button::icon_button,
@@ -13,17 +14,23 @@ use tessera_components::{
     side_sheet::{SideSheetController, modal_side_sheet_provider},
     spacer::spacer,
     surface::surface,
+    text::text,
     theme::{MaterialTheme, material_theme},
 };
+use tessera_i18n::{I18n, langid};
 use tessera_shard::{RouterController, RouterDestination, shard_home};
 use tessera_ui::{
     Color, Dp, FrameNanosControl, Modifier, RenderSlotWith, State, current_frame_nanos,
     receive_frame_nanos, remember, tessera, use_context,
 };
 
-use crate::pages::{
-    custom_shader::CustomShaderPageDestination, glass_components::GlassComponentsPageDestination,
-    home::HomePageDestination, material_components::MaterialComponentsPageDestination,
+use crate::{
+    pages::{
+        custom_shader::CustomShaderPageDestination,
+        glass_components::GlassComponentsPageDestination, home::HomePageDestination,
+        material_components::MaterialComponentsPageDestination,
+    },
+    res::I18N,
 };
 
 #[derive(Clone, Copy, PartialEq)]
@@ -71,13 +78,15 @@ pub(crate) fn app(
                 .top_bar(move || {
                     let _app_bar = top_app_bar()
                         .title(
-                            if nav_controller
-                                .with(|c| c.current_is::<MaterialComponentsPageDestination>())
-                            {
-                                "Material Design 3"
-                            } else {
-                                "Examples"
-                            },
+                            I18N.text(
+                                if nav_controller
+                                    .with(|c| c.current_is::<MaterialComponentsPageDestination>())
+                                {
+                                    "ui-material-design-3"
+                                } else {
+                                    "ui-examples"
+                                },
+                            ),
                         )
                         .navigation_icon(move || {
                             navigation_button(
@@ -87,6 +96,41 @@ pub(crate) fn app(
                                     .with(|c| c.current_is::<MaterialComponentsPageDestination>()),
                             );
                         });
+                    if let Some(locale) = I18n::try_current() {
+                        _app_bar.action(move || {
+                            button()
+                                .text()
+                                .accessibility_label(
+                                    I18N.format(
+                                        "ui-switch-language",
+                                        [(
+                                            "language",
+                                            I18N.text(if locale.locale() == langid!("zh-CN") {
+                                                "ui-english"
+                                            } else {
+                                                "ui-language-chinese"
+                                            })
+                                            .into(),
+                                        )],
+                                    ),
+                                )
+                                .on_click(move || {
+                                    let chinese = locale.locale() == langid!("zh-CN");
+                                    locale.set_locale(if chinese {
+                                        langid!("en")
+                                    } else {
+                                        langid!("zh-CN")
+                                    });
+                                })
+                                .child(move || {
+                                    text().content(if locale.locale() == langid!("zh-CN") {
+                                        "English"
+                                    } else {
+                                        "简体中文"
+                                    });
+                                });
+                        });
+                    }
                     #[cfg(not(target_arch = "wasm32"))]
                     _app_bar
                         .title_area_modifier(Modifier::new().window_drag_region())
@@ -108,7 +152,7 @@ pub(crate) fn app(
                                         .modifier(Modifier::new().fill_max_width())
                                         .children(move || {
                                             nav_item(
-                                                "Home",
+                                                "ui-home",
                                                 HomePageDestination {},
                                                 nav_controller,
                                                 side_sheet_controller,
@@ -117,7 +161,7 @@ pub(crate) fn app(
                                             spacer().modifier(Modifier::new().height(Dp(8.0)));
 
                                             nav_item(
-                                                "Material Components",
+                                                "ui-material-components",
                                                 MaterialComponentsPageDestination {
                                                     selected: Some(selected),
                                                     sessions: Some(sessions),
@@ -129,7 +173,7 @@ pub(crate) fn app(
                                             spacer().modifier(Modifier::new().height(Dp(8.0)));
 
                                             nav_item(
-                                                "Glass Components",
+                                                "ui-glass-components",
                                                 GlassComponentsPageDestination {},
                                                 nav_controller,
                                                 side_sheet_controller,
@@ -138,7 +182,7 @@ pub(crate) fn app(
                                             spacer().modifier(Modifier::new().height(Dp(8.0)));
 
                                             nav_item(
-                                                "Custom Shader",
+                                                "ui-custom-shader",
                                                 CustomShaderPageDestination {},
                                                 nav_controller,
                                                 side_sheet_controller,
@@ -186,7 +230,7 @@ fn nav_item<D: RouterDestination + Clone + PartialEq>(
 ) {
     list_item()
         .modifier(Modifier::new().fill_max_width())
-        .headline(headline)
+        .headline(I18N.text(headline))
         .on_click(move || {
             nav_controller.with_mut(|c| c.replace(destination.clone()));
             side_sheet_controller.with_mut(|c| {
@@ -265,11 +309,11 @@ pub(crate) fn navigation_button(
                 .standard()
                 .icon(filled::MENU_OPEN_SVG)
                 .content_color(Color::TRANSPARENT)
-                .accessibility_label(if back {
-                    "Back to components"
+                .accessibility_label(I18N.text(if back {
+                    "ui-back-to-components"
                 } else {
-                    "Open navigation drawer"
-                })
+                    "ui-open-navigation-drawer"
+                }))
                 .on_click(move || {
                     if material_page && selected.get().is_some() {
                         selected.set(None);
@@ -306,4 +350,108 @@ pub(crate) fn app_fixture(
     app()
         .navigation(handles)
         .on_navigation_ready(move |handles| navigation.set(Some(handles)));
+}
+
+#[cfg(test)]
+mod tests {
+    use tessera_ui::{
+        accesskit::{Action, ActionRequest, Role, TreeId},
+        testing::{TestProbe, layout_test, pump_layout_test_session, start_layout_test_session},
+    };
+
+    use super::*;
+
+    #[test]
+    fn language_switch_preserves_route_and_edited_control_state_in_both_directions() {
+        let navigation = TestProbe::default();
+        let mut session = start_layout_test_session(
+            layout_test(|| app_fixture(navigation.clone())).viewport_px(1200, 1600),
+        );
+        session.run(|| tessera_ui::EntryRegistry::new().register_package(crate::res::i18n()));
+        pump_layout_test_session(&mut session, 0);
+        let handles = navigation.get().unwrap();
+        session.run(|| {
+            handles.directory.with_mut(SideSheetController::close);
+            handles
+                .router
+                .with_mut(|router| router.replace(GlassComponentsPageDestination {}));
+        });
+        pump_layout_test_session(&mut session, 1_000_000_000);
+        pump_layout_test_session(&mut session, 2_000_000_000);
+        let language = session.run(|| {
+            I18N.format(
+                "ui-switch-language",
+                [("language", I18N.text("ui-language-chinese").into())],
+            )
+        });
+        let accessibility = session.inspect_accessibility().unwrap();
+        let language = accessibility
+            .find(&language, Role::Button)
+            .expect("language action")
+            .0;
+        let slider = accessibility
+            .nodes()
+            .iter()
+            .find(|(_, node)| node.role() == Role::Slider)
+            .expect("glass slider after navigation")
+            .0;
+        let action = |target_node, action| ActionRequest {
+            action,
+            target_tree: TreeId::ROOT,
+            target_node,
+            data: None,
+        };
+        assert!(session.dispatch_accessibility_action(action(slider, Action::Increment)));
+        pump_layout_test_session(&mut session, 2_016_666_667);
+        let accessibility = session.inspect_accessibility().unwrap();
+        let value = accessibility
+            .nodes()
+            .iter()
+            .find(|(id, _)| *id == slider)
+            .unwrap()
+            .1
+            .numeric_value()
+            .unwrap();
+        assert!(value > 0.0);
+        let labels = |snapshot: &tessera_ui::testing::AccessibilitySnapshot| {
+            snapshot
+                .nodes()
+                .iter()
+                .filter_map(|(_, node)| node.label().map(str::to_owned))
+                .collect::<Vec<_>>()
+        };
+        let english = labels(&accessibility);
+        for (index, timestamp) in [2_033_333_334, 2_050_000_001].into_iter().enumerate() {
+            assert!(session.dispatch_accessibility_action(action(language, Action::Click)));
+            pump_layout_test_session(&mut session, timestamp);
+            assert!(session.run(|| {
+                handles
+                    .router
+                    .with(RouterController::current_is::<GlassComponentsPageDestination>)
+            }));
+            let current = session.inspect_accessibility().unwrap();
+            assert_eq!(
+                current
+                    .nodes()
+                    .iter()
+                    .find(|(id, _)| *id == slider)
+                    .unwrap()
+                    .1
+                    .numeric_value(),
+                Some(value)
+            );
+            let current = labels(&current);
+            assert!(current.iter().all(|label| !label.contains("ui-")));
+            if index == 0 {
+                assert_ne!(current, english);
+            } else {
+                assert_eq!(current, english);
+            }
+        }
+        for _ in 0..2 {
+            assert!(session.dispatch_accessibility_action(action(language, Action::Click)));
+        }
+        pump_layout_test_session(&mut session, 2_066_666_668);
+        assert_eq!(labels(&session.inspect_accessibility().unwrap()), english);
+    }
 }

@@ -25,6 +25,8 @@ use tessera_ui::{
     use_context,
 };
 
+use crate::res::I18N;
+
 use super::{
     ACCENT, INK,
     article::{ArticlePage, SpecSection, article},
@@ -53,56 +55,56 @@ const SIZES: [ButtonSize; 5] = [
 
 fn style_name(style: ButtonVariant) -> &'static str {
     match style {
-        ButtonVariant::Elevated => "Elevated",
-        ButtonVariant::Filled => "Filled",
-        ButtonVariant::Tonal => "Tonal",
-        ButtonVariant::Outlined => "Outlined",
-        ButtonVariant::Text => "Text",
+        ButtonVariant::Elevated => "ui-elevated",
+        ButtonVariant::Filled => "ui-filled",
+        ButtonVariant::Tonal => "ui-tonal",
+        ButtonVariant::Outlined => "ui-outlined",
+        ButtonVariant::Text => "ui-text",
     }
 }
 
 #[tessera]
 pub(super) fn buttons_spec(route: Option<crate::pages::material_spec::article::ArticleRoute>) {
     article(
-        "Buttons",
-        "Buttons prompt most actions in a UI",
+        "ui-buttons",
+        "ui-buttons-prompt-most-actions-in-a-ui",
         vec![
             SpecSection {
-                title: "Variants",
+                title: "ui-variants",
                 content: RenderSlot::new(variants),
             },
             SpecSection {
-                title: "Configurations",
+                title: "ui-configurations",
                 content: RenderSlot::new(configurations),
             },
             SpecSection {
-                title: "Tokens & specs",
+                title: "ui-tokens-specs",
                 content: RenderSlot::new(tokens),
             },
             SpecSection {
-                title: "Anatomy",
+                title: "ui-anatomy",
                 content: RenderSlot::new(|| {
-                    anatomy(vec!["Container", "Label text", "Icon (optional)"]);
+                    anatomy(vec!["ui-container", "ui-label-text", "ui-icon-optional"]);
                 }),
             },
             SpecSection {
-                title: "Color",
+                title: "ui-color",
                 content: RenderSlot::new(colors),
             },
             SpecSection {
-                title: "States",
+                title: "ui-states",
                 content: RenderSlot::new(states),
             },
             SpecSection {
-                title: "Shape morph",
+                title: "ui-shape-morph",
                 content: RenderSlot::new(shape_morph),
             },
             SpecSection {
-                title: "Measurements",
+                title: "ui-measurements",
                 content: RenderSlot::new(measurements),
             },
             SpecSection {
-                title: "Baseline tokens",
+                title: "ui-baseline-tokens",
                 content: RenderSlot::new(baseline_tokens),
             },
         ],
@@ -110,67 +112,67 @@ pub(super) fn buttons_spec(route: Option<crate::pages::material_spec::article::A
     .route_optional(route)
     .pages(vec![
         ArticlePage {
-            title: "Overview",
+            title: "ui-overview",
             intro: Some(RenderSlot::new(overview)),
             sections: vec![
                 SpecSection {
-                    title: "Availability & resources",
+                    title: "ui-availability-resources",
                     content: RenderSlot::new(resources),
                 },
                 SpecSection {
-                    title: "M3 Expressive update",
+                    title: "ui-m3-expressive-update",
                     content: RenderSlot::new(expressive),
                 },
                 SpecSection {
-                    title: "Differences from M2",
+                    title: "ui-differences-from-m2",
                     content: RenderSlot::new(differences),
                 },
             ],
         },
         ArticlePage {
-            title: "Guidelines",
+            title: "ui-guidelines",
             intro: None,
             sections: vec![
                 SpecSection {
-                    title: "Usage",
+                    title: "ui-usage",
                     content: RenderSlot::new(usage),
                 },
                 SpecSection {
-                    title: "Toggle buttons",
+                    title: "ui-toggle-buttons",
                     content: RenderSlot::new(toggle_buttons),
                 },
                 SpecSection {
-                    title: "Anatomy",
+                    title: "ui-anatomy",
                     content: RenderSlot::new(guidelines_anatomy),
                 },
                 SpecSection {
-                    title: "Color styles",
+                    title: "ui-color-styles",
                     content: RenderSlot::new(color_styles),
                 },
                 SpecSection {
-                    title: "Adaptive design",
+                    title: "ui-adaptive-design",
                     content: RenderSlot::new(adaptive),
                 },
             ],
         },
         ArticlePage {
-            title: "Accessibility",
+            title: "ui-accessibility",
             intro: None,
             sections: vec![
                 SpecSection {
-                    title: "Use cases",
+                    title: "ui-use-cases",
                     content: RenderSlot::new(use_cases),
                 },
                 SpecSection {
-                    title: "Interaction & style",
+                    title: "ui-interaction-style",
                     content: RenderSlot::new(interaction_style),
                 },
                 SpecSection {
-                    title: "Keyboard navigation",
+                    title: "ui-keyboard-navigation",
                     content: RenderSlot::new(keyboard_navigation),
                 },
                 SpecSection {
-                    title: "Labeling elements",
+                    title: "ui-labeling-elements",
                     content: RenderSlot::new(labeling),
                 },
             ],
@@ -207,8 +209,10 @@ pub(super) fn button_preview(
         .presentation_state_optional(presentation)
         .content_padding_optional(padding)
         .modifier_optional(modifier)
-        .accessibility_label(label.clone())
-        .accessibility_description(format!("Activations: {}", activations.get()))
+        .accessibility_label(I18N.text(&(label)))
+        .accessibility_description(
+            I18N.format("ui-activations-value", [("v0", (activations.get()).into())]),
+        )
         .leading_icon_optional(if let Some(asset) = leading {
             Some(RenderSlot::new(move || {
                 icon().painter(asset);
@@ -223,7 +227,7 @@ pub(super) fn button_preview(
             }
         })
         .child(move || {
-            text().content(label.clone());
+            text().content(I18N.text(&(label)));
         });
 }
 
@@ -270,7 +274,13 @@ fn overview_art() {
                             .background_with_shape(scheme.on_surface, Shape::Ellipse)
                             .semantics(SemanticsArgs {
                                 role: Some(Role::Note),
-                                label: Some(format!("{} {} button", index + 1, style_name(style))),
+                                label: Some(I18N.format(
+                                    "ui-value-value-button",
+                                    [
+                                        ("v0", (index + 1).into()),
+                                        ("v1", I18N.text(&style_name(style)).into()),
+                                    ],
+                                )),
                                 ..Default::default()
                             }),
                     )
@@ -284,11 +294,11 @@ fn overview_art() {
         });
     gap(Dp(24.0));
     legend(vec![
-        "Elevated button",
-        "Filled button",
-        "Filled tonal button",
-        "Outlined button",
-        "Text button",
+        "ui-elevated-button",
+        "ui-filled-button",
+        "ui-filled-tonal-button",
+        "ui-outlined-button",
+        "ui-text-button",
     ]);
 }
 
@@ -311,11 +321,18 @@ fn overview_button(style: ButtonVariant, index: usize, scale: f64) {
         } else {
             0.0
         }))
-        .accessibility_label(format!("Overview {} button", style_name(style)))
-        .accessibility_description(format!("Activations: {}", actions.get()))
+        .accessibility_label(I18N.format(
+            "ui-overview-value-button",
+            [("v0", I18N.text(&style_name(style)).into())],
+        ))
+        .accessibility_description(
+            I18N.format("ui-activations-value", [("v0", (actions.get()).into())]),
+        )
         .on_click(move || actions.set(actions.get() + 1))
         .child(move || {
-            text().content(style_name(style)).style(label_style);
+            text()
+                .content(I18N.text(style_name(style)))
+                .style(label_style);
         });
 }
 
@@ -334,7 +351,7 @@ fn variants() {
                             ButtonShape::Round,
                             false,
                             true,
-                            "Label",
+                            "ui-label",
                         )
                         .leading(filled::EDIT_SVG);
                     }),
@@ -344,13 +361,21 @@ fn variants() {
             });
     }));
     gap(Dp(16.0));
-    legend(vec!["Default button", "Toggle button"]);
+    legend(vec!["ui-default-button", "ui-toggle-button"]);
     gap(Dp(32.0));
     spec_table(
-        vec!["Variant".into(), "M3".into(), "M3 Expressive".into()],
+        vec!["ui-variant".into(), "M3".into(), "ui-m3-expressive".into()],
         vec![
-            vec!["Default".into(), "Available".into(), "Available".into()],
-            vec!["Toggle (selection)".into(), "--".into(), "Available".into()],
+            vec![
+                "ui-default".into(),
+                "ui-available".into(),
+                "ui-available".into(),
+            ],
+            vec![
+                "ui-toggle-selection".into(),
+                "--".into(),
+                "ui-available".into(),
+            ],
         ],
     );
 }
@@ -359,65 +384,70 @@ fn variants() {
 fn configurations() {
     config_figure(vec![0, 2, 3, 4]);
     gap(Dp(16.0));
-    legend(vec!["Size", "Shape", "Color", "Small button padding"]);
+    legend(vec![
+        "ui-size",
+        "ui-shape",
+        "ui-color",
+        "ui-small-button-padding",
+    ]);
     gap(Dp(32.0));
     spec_table(
         vec![
-            "Category".into(),
-            "Configuration".into(),
+            "ui-category".into(),
+            "ui-configuration".into(),
             "M3".into(),
-            "M3 Expressive".into(),
+            "ui-m3-expressive".into(),
         ],
         vec![
             vec![
-                "Size".into(),
-                "Small (default)".into(),
-                "Available".into(),
-                "Available".into(),
+                "ui-size".into(),
+                "ui-small-default".into(),
+                "ui-available".into(),
+                "ui-available".into(),
             ],
             vec![
-                "Size".into(),
+                "ui-size".into(),
                 "XS, M, L, XL".into(),
                 "--".into(),
-                "Available".into(),
+                "ui-available".into(),
             ],
             vec![
-                "Shape".into(),
-                "Round (default)".into(),
-                "Available".into(),
-                "Available".into(),
+                "ui-shape".into(),
+                "ui-round-default".into(),
+                "ui-available".into(),
+                "ui-available".into(),
             ],
             vec![
-                "Shape".into(),
-                "Square".into(),
+                "ui-shape".into(),
+                "ui-square".into(),
                 "--".into(),
-                "Available".into(),
+                "ui-available".into(),
             ],
             vec![
-                "Color".into(),
-                "Elevated, filled (default), tonal, outlined, text".into(),
-                "Available".into(),
-                "Available".into(),
+                "ui-color".into(),
+                "ui-elevated-filled-default-tonal-outlined-text".into(),
+                "ui-available".into(),
+                "ui-available".into(),
             ],
             vec![
-                "Small button padding".into(),
+                "ui-small-button-padding".into(),
                 "24dp".into(),
-                "Available".into(),
-                "Not recommended. Use 16dp".into(),
+                "ui-available".into(),
+                "ui-not-recommended-use-16dp".into(),
             ],
             vec![
-                "Small button padding".into(),
+                "ui-small-button-padding".into(),
                 "16dp".into(),
                 "--".into(),
-                "Available".into(),
+                "ui-available".into(),
             ],
         ],
     );
     gap(Dp(48.0));
-    subheading("Live configuration".into());
+    subheading("ui-live-configuration".into());
     gap(Dp(8.0));
     prose(
-        "Change the configuration and activate the button. Focus it with Tab and activate it with Space or Enter to check keyboard and assistive-technology behavior.",
+        "ui-change-the-configuration-and-activate-the-button-focus-it-with-tab-and-activate-it-with-sp",
     );
     gap(Dp(24.0));
     playground();
@@ -427,7 +457,7 @@ fn configurations() {
 fn tokens() {
     let style = remember(|| ButtonVariant::Filled);
     prose(
-        "Select a color style to inspect its container, content, border, elevation, typography, and shape roles. Values resolve from the active Material theme, so the same roles map to different color values in light and dark schemes.",
+        "ui-select-a-color-style-to-inspect-its-container-content-border-elevation-typography-and-shap",
     );
     gap(Dp(24.0));
     flow_row()
@@ -438,60 +468,66 @@ fn tokens() {
                 button()
                     .tonal()
                     .selected(style.get() == variant)
-                    .accessibility_label(format!("{} color tokens", style_name(variant)))
+                    .accessibility_label(I18N.format(
+                        "ui-value-color-tokens",
+                        [("v0", I18N.text(&style_name(variant)).into())],
+                    ))
                     .on_click(move || style.set(variant))
                     .child(move || {
-                        text().content(style_name(variant));
+                        text().content(I18N.text(style_name(variant)));
                     });
             }
         });
     gap(Dp(24.0));
     let mut rows = match style.get() {
         ButtonVariant::Elevated => vec![
-            vec!["Container".into(), "Surface container low".into()],
-            vec!["Icon and label".into(), "Primary".into()],
-            vec!["Border".into(), "None".into()],
-            vec!["Elevation".into(), "1dp enabled · 0dp disabled".into()],
+            vec!["ui-container".into(), "ui-surface-container-low".into()],
+            vec!["ui-icon-and-label".into(), "ui-primary".into()],
+            vec!["ui-border".into(), "ui-none".into()],
+            vec!["ui-elevation".into(), "ui-1dp-enabled-0dp-disabled".into()],
         ],
         ButtonVariant::Filled => vec![
-            vec!["Container".into(), "Primary".into()],
-            vec!["Icon and label".into(), "On primary".into()],
-            vec!["Border".into(), "None".into()],
-            vec!["Elevation".into(), "0dp".into()],
+            vec!["ui-container".into(), "ui-primary".into()],
+            vec!["ui-icon-and-label".into(), "ui-on-primary".into()],
+            vec!["ui-border".into(), "ui-none".into()],
+            vec!["ui-elevation".into(), "0dp".into()],
         ],
         ButtonVariant::Tonal => vec![
-            vec!["Container".into(), "Secondary container".into()],
-            vec!["Icon and label".into(), "On secondary container".into()],
-            vec!["Border".into(), "None".into()],
-            vec!["Elevation".into(), "0dp".into()],
+            vec!["ui-container".into(), "ui-secondary-container".into()],
+            vec![
+                "ui-icon-and-label".into(),
+                "ui-on-secondary-container".into(),
+            ],
+            vec!["ui-border".into(), "ui-none".into()],
+            vec!["ui-elevation".into(), "0dp".into()],
         ],
         ButtonVariant::Outlined => vec![
-            vec!["Container".into(), "Transparent".into()],
-            vec!["Icon and label".into(), "On surface variant".into()],
-            vec!["Border".into(), "Outline variant · 1dp".into()],
-            vec!["Elevation".into(), "0dp".into()],
+            vec!["ui-container".into(), "ui-transparent".into()],
+            vec!["ui-icon-and-label".into(), "ui-on-surface-variant".into()],
+            vec!["ui-border".into(), "ui-outline-variant-1dp".into()],
+            vec!["ui-elevation".into(), "0dp".into()],
         ],
         ButtonVariant::Text => vec![
-            vec!["Container".into(), "Transparent".into()],
-            vec!["Icon and label".into(), "Primary".into()],
-            vec!["Border".into(), "None".into()],
-            vec!["Elevation".into(), "0dp".into()],
+            vec!["ui-container".into(), "ui-transparent".into()],
+            vec!["ui-icon-and-label".into(), "ui-primary".into()],
+            vec!["ui-border".into(), "ui-none".into()],
+            vec!["ui-elevation".into(), "0dp".into()],
         ],
     };
     rows.push(vec![
-        "Label type".into(),
-        "Label large · 14sp / 20sp".into(),
+        "ui-label-type".into(),
+        "ui-label-large-14sp-20sp".into(),
     ]);
     rows.push(vec![
-        "Shape".into(),
-        "Full capsule; size-specific corners when square".into(),
+        "ui-shape".into(),
+        "ui-full-capsule-size-specific-corners-when-square".into(),
     ]);
     rows.push(vec![
-        "Height".into(),
-        "40dp for the default small size".into(),
+        "ui-height".into(),
+        "ui-40dp-for-the-default-small-size".into(),
     ]);
-    rows.push(vec!["Disabled label opacity".into(), "38%".into()]);
-    spec_table(vec!["Element".into(), "Token value".into()], rows);
+    rows.push(vec!["ui-disabled-label-opacity".into(), "38%".into()]);
+    spec_table(vec!["ui-element".into(), "ui-token-value".into()], rows);
 }
 
 #[tessera]
@@ -503,7 +539,7 @@ fn anatomy(labels: Vec<&'static str>) {
             ButtonShape::Round,
             false,
             true,
-            "Label",
+            "ui-label",
         )
         .leading(filled::EDIT_SVG);
     }));
@@ -523,11 +559,19 @@ fn color_examples(dark: bool) {
                         .modifier(Modifier::new().fill_max_width().padding_all(Dp(32.0)))
                         .children(move || {
                             text()
-                                .content(if dark { "Dark scheme" } else { "Light scheme" })
+                                .content(I18N.text(if dark {
+                                    "ui-dark-scheme"
+                                } else {
+                                    "ui-light-scheme"
+                                }))
                                 .style(type_style(24.0, 32.0));
                             gap(Dp(24.0));
                             style_grid(
-                                vec!["1. Default", "2. Toggle unselected", "3. Toggle selected"],
+                                vec![
+                                    "ui-1-default",
+                                    "ui-2-toggle-unselected",
+                                    "ui-3-toggle-selected",
+                                ],
                                 vec!["A", "B", "C", "D", "E"],
                             );
                         });
@@ -538,63 +582,67 @@ fn color_examples(dark: bool) {
 #[tessera]
 fn colors() {
     prose(
-        "Color values are implemented through design tokens. For designers, this means working with color values that correspond with tokens. In implementation, a color value will be a token that references a value.",
+        "ui-color-values-are-implemented-through-design-tokens-for-designers-this-means-working-with-c",
     );
     gap(Dp(16.0));
     bullets(vec![
-        "There are five built-in button color styles: elevated, filled, tonal, outlined, and text"
+        "ui-there-are-five-built-in-button-color-styles-elevated-filled-tonal-outlined-and-text"
             .into(),
-        "The default and toggle buttons use different colors".into(),
-        "Toggle buttons don’t use the text style".into(),
+        "ui-the-default-and-toggle-buttons-use-different-colors".into(),
+        "ui-toggle-buttons-don-t-use-the-text-style".into(),
     ]);
     gap(Dp(24.0));
     note(
-        "Note: These color roles were chosen to create design coherence and familiarity. Other color roles can be used as long as the container and text have a 3:1 contrast ratio. For example, tertiary and on tertiary.",
+        "ui-note-these-color-roles-were-chosen-to-create-design-coherence-and-familiarity-other-color",
     );
     gap(Dp(32.0));
     color_examples(false);
     gap(Dp(24.0));
     color_examples(true);
-    caption("A. Elevated, B. Filled, C. Tonal, D. Outlined, E. Text");
+    caption("ui-a-elevated-b-filled-c-tonal-d-outlined-e-text");
     gap(Dp(16.0));
-    legend(vec!["Default", "Toggle: unselected", "Toggle: selected"]);
+    legend(vec![
+        "ui-default",
+        "ui-toggle-unselected",
+        "ui-toggle-selected",
+    ]);
     gap(Dp(32.0));
     let pair = |container: &str, content: &str| format!("{container}\n{content}");
     spec_table(
         vec![
             "".into(),
-            "1. Default".into(),
-            "2. Toggle unselected".into(),
-            "3. Toggle selected".into(),
+            "ui-1-default".into(),
+            "ui-2-toggle-unselected".into(),
+            "ui-3-toggle-selected".into(),
         ],
         vec![
             vec![
-                pair("Elevated container", "Elevated icon & label"),
-                pair("Surface container low", "Primary"),
-                pair("Surface container low", "Primary"),
-                pair("Primary", "On primary"),
+                pair("ui-elevated-container", "ui-elevated-icon-label"),
+                pair("ui-surface-container-low", "ui-primary"),
+                pair("ui-surface-container-low", "ui-primary"),
+                pair("ui-primary", "ui-on-primary"),
             ],
             vec![
-                pair("Filled container", "Filled icon & label"),
-                pair("Primary", "On primary"),
-                pair("Surface container", "On surface variant"),
-                pair("Primary", "On primary"),
+                pair("ui-filled-container", "ui-filled-icon-label"),
+                pair("ui-primary", "ui-on-primary"),
+                pair("ui-surface-container", "ui-on-surface-variant"),
+                pair("ui-primary", "ui-on-primary"),
             ],
             vec![
-                pair("Tonal container", "Tonal icon & label"),
-                pair("Secondary container", "On secondary container"),
-                pair("Secondary container", "On secondary container"),
-                pair("Secondary", "On secondary"),
+                pair("ui-tonal-container", "ui-tonal-icon-label"),
+                pair("ui-secondary-container", "ui-on-secondary-container"),
+                pair("ui-secondary-container", "ui-on-secondary-container"),
+                pair("ui-secondary", "ui-on-secondary"),
             ],
             vec![
-                pair("Outlined container", "Outlined icon & label"),
-                pair("Outline variant (outline)", "On surface variant"),
-                pair("Outline variant (outline)", "On surface variant"),
-                pair("Inverse surface", "Inverse on surface"),
+                pair("ui-outlined-container", "ui-outlined-icon-label"),
+                pair("ui-outline-variant-outline", "ui-on-surface-variant"),
+                pair("ui-outline-variant-outline", "ui-on-surface-variant"),
+                pair("ui-inverse-surface", "ui-inverse-on-surface"),
             ],
             vec![
-                "Text icon & label".into(),
-                "Primary".into(),
+                "ui-text-icon-label".into(),
+                "ui-primary".into(),
                 "--".into(),
                 "--".into(),
             ],
@@ -605,45 +653,48 @@ fn colors() {
 #[tessera]
 fn states() {
     prose(
-        "States are visual representations used to communicate the status of a component or interactive element.",
+        "ui-states-are-visual-representations-used-to-communicate-the-status-of-a-component-or-interac",
     );
     gap(Dp(40.0));
     for style in STYLES {
         subheading(if style == ButtonVariant::Text {
-            "Text button style states".into()
+            "ui-text-button-style-states".into()
         } else {
-            format!("{} button states", style_name(style))
+            I18N.format(
+                "ui-value-button-states",
+                [("v0", I18N.text(&style_name(style)).into())],
+            )
         });
         match style {
             ButtonVariant::Elevated => {
                 gap(Dp(16.0));
                 prose(
-                    "The elevated button style has an elevation of 1 by default and 0 when disabled.",
+                    "ui-the-elevated-button-style-has-an-elevation-of-1-by-default-and-0-when-disabled",
                 );
             }
             ButtonVariant::Outlined => {
                 gap(Dp(16.0));
                 prose(
-                    "The outlined button’s container fill is invisible at rest, but the opacity and state layers behave the same as other button styles when disabled, hovered, focused, or pressed.",
+                    "ui-the-outlined-button-s-container-fill-is-invisible-at-rest-but-the-opacity-and-state-layers",
                 );
             }
             ButtonVariant::Text => {
                 gap(Dp(16.0));
                 prose(
-                    "The text button’s container is invisible at rest, but the opacity and state layers behave the same as other button styles when disabled, hovered, focused, or pressed. There is no toggle text button.",
+                    "ui-the-text-button-s-container-is-invisible-at-rest-but-the-opacity-and-state-layers-behave-t",
                 );
             }
             _ => {}
         }
         gap(Dp(24.0));
-        subheading("Default".into()).level(4);
+        subheading("ui-default".into()).level(4);
         gap(Dp(24.0));
         button_state_matrix(style, false);
         if style != ButtonVariant::Text {
             gap(Dp(40.0));
-            subheading("Toggle".into()).level(4);
+            subheading("ui-toggle".into()).level(4);
             gap(Dp(16.0));
-            caption("A. Unselected, B. Selected");
+            caption("ui-a-unselected-b-selected");
             gap(Dp(16.0));
             button_state_matrix(style, true);
         }
@@ -726,20 +777,61 @@ fn button_state_matrix(style: ButtonVariant, toggle: bool) {
                                                     selected,
                                                     state,
                                                     scale,
-                                                    format!(
-                                                        "{} {} {} {} {}",
-                                                        if dark { "Dark" } else { "Light" },
-                                                        style_name(style),
-                                                        if toggle { "toggle" } else { "default" },
-                                                        if selected {
-                                                            "selected"
-                                                        } else {
-                                                            "unselected"
-                                                        },
+                                                    I18N.format(
+                                                        "ui-value-value-value-value-value",
                                                         [
-                                                            "enabled", "disabled", "hovered",
-                                                            "focused", "pressed"
-                                                        ][state]
+                                                            (
+                                                                "v0",
+                                                                I18N.text(
+                                                                    &(if dark {
+                                                                        "ui-dark"
+                                                                    } else {
+                                                                        "ui-light"
+                                                                    }),
+                                                                )
+                                                                .into(),
+                                                            ),
+                                                            (
+                                                                "v1",
+                                                                I18N.text(&style_name(style))
+                                                                    .into(),
+                                                            ),
+                                                            (
+                                                                "v2",
+                                                                I18N.text(
+                                                                    &(if toggle {
+                                                                        "ui-toggle-7073"
+                                                                    } else {
+                                                                        "ui-default-7074"
+                                                                    }),
+                                                                )
+                                                                .into(),
+                                                            ),
+                                                            (
+                                                                "v3",
+                                                                I18N.text(
+                                                                    &(if selected {
+                                                                        "ui-selected-7075"
+                                                                    } else {
+                                                                        "ui-unselected-7076"
+                                                                    }),
+                                                                )
+                                                                .into(),
+                                                            ),
+                                                            (
+                                                                "v4",
+                                                                I18N.text(
+                                                                    &([
+                                                                        "ui-enabled-7077",
+                                                                        "ui-disabled-7078",
+                                                                        "ui-hovered-7079",
+                                                                        "ui-focused-7080",
+                                                                        "ui-pressed-7081",
+                                                                    ][state]),
+                                                                )
+                                                                .into(),
+                                                            ),
+                                                        ],
                                                     ),
                                                 );
                                             });
@@ -766,15 +858,24 @@ fn button_state_matrix(style: ButtonVariant, toggle: bool) {
     gap(Dp(24.0));
     if toggle {
         text()
-            .content("A. Unselected, B. Selected")
+            .content(I18N.text("ui-a-unselected-b-selected"))
             .style(type_style(16.0, 24.0));
     }
-    for (index, label) in ["Enabled", "Disabled", "Hovered", "Focused", "Pressed"]
-        .into_iter()
-        .enumerate()
+    for (index, label) in [
+        "ui-enabled",
+        "ui-disabled",
+        "ui-hovered",
+        "ui-focused",
+        "ui-pressed",
+    ]
+    .into_iter()
+    .enumerate()
     {
         text()
-            .content(format!("{}  {label}", index + 1))
+            .content(I18N.format(
+                "ui-value-value",
+                [("v0", (index + 1).into()), ("v1", I18N.text(&label).into())],
+            ))
             .style(type_style(16.0, 24.0));
     }
 }
@@ -792,7 +893,7 @@ fn button_state_marker(label: String, x: f64, y: f64, scale: f64) {
         )
         .children(move || {
             text()
-                .content(label.clone())
+                .content(I18N.text(&(label)))
                 .style(type_style(14.0 * scale, 20.0 * scale))
                 .color(scheme.surface);
         });
@@ -838,8 +939,10 @@ fn button_state_item(
         } else {
             0.0
         }))
-        .accessibility_label(name.get())
-        .accessibility_description(format!("Activations: {}", actions.get()))
+        .accessibility_label(I18N.text(name.get()))
+        .accessibility_description(
+            I18N.format("ui-activations-value", [("v0", (actions.get()).into())]),
+        )
         .on_click(move || {
             actions.set(actions.get() + 1);
             if toggle {
@@ -848,26 +951,34 @@ fn button_state_item(
         })
         .child(move || {
             text()
-                .content(["Enabled", "Disabled", "Hovered", "Focused", "Pressed"][state])
+                .content(I18N.text(
+                    [
+                        "ui-enabled",
+                        "ui-disabled",
+                        "ui-hovered",
+                        "ui-focused",
+                        "ui-pressed",
+                    ][state],
+                ))
                 .style(label_style);
         });
 }
 
 #[tessera]
 fn shape_morph() {
-    subheading("Pressed state".into()).level(4);
+    subheading("ui-pressed-state".into()).level(4);
     gap(Dp(16.0));
     prose(
-        "When pressed, buttons can morph to become more square. Both round and square buttons should have the same pressed shape.",
+        "ui-when-pressed-buttons-can-morph-to-become-more-square-both-round-and-square-buttons-should",
     );
     gap(Dp(16.0));
     prose(
-        "The corner radius value differs for each button size. See the corner sizes under Measurements.",
+        "ui-the-corner-radius-value-differs-for-each-button-size-see-the-corner-sizes-under-measuremen",
     );
     gap(Dp(24.0));
     panel(RenderSlot::new(|| {
         figure_grid(
-            vec!["Enabled", "Hovered", "Pressed"],
+            vec!["ui-enabled", "ui-hovered", "ui-pressed"],
             vec!["A", "B"],
             RenderSlotWith::new(|(row, column): (usize, usize)| {
                 button_preview(
@@ -876,7 +987,7 @@ fn shape_morph() {
                     [ButtonShape::Round, ButtonShape::Square][row],
                     false,
                     true,
-                    "Learn more",
+                    "ui-learn-more",
                 )
                 .presentation(
                     [
@@ -888,15 +999,15 @@ fn shape_morph() {
             }),
         );
     }));
-    caption("A. Round button, B. Square button");
+    caption("ui-a-round-button-b-square-button");
     gap(Dp(48.0));
-    subheading("When selected".into()).level(4);
+    subheading("ui-when-selected".into()).level(4);
     gap(Dp(16.0));
     prose(
-        "In addition to changing shape when pressed, toggle buttons also change the resting shape from round (unselected) to square (selected).",
+        "ui-in-addition-to-changing-shape-when-pressed-toggle-buttons-also-change-the-resting-shape-fr",
     );
     gap(Dp(16.0));
-    prose("If the resting unselected shape is square, the selected shape should be round.");
+    prose("ui-if-the-resting-unselected-shape-is-square-the-selected-shape-should-be-round");
     gap(Dp(24.0));
     panel(RenderSlot::new(|| {
         figure_grid(
@@ -909,7 +1020,7 @@ fn shape_morph() {
                     [ButtonShape::Round, ButtonShape::Square][row],
                     true,
                     true,
-                    "Play",
+                    "ui-play",
                 )
                 .initial_selected(column == 3)
                 .leading(if column == 3 {
@@ -928,9 +1039,14 @@ fn shape_morph() {
             }),
         );
     }));
-    caption("A. Round button, B. Square button");
+    caption("ui-a-round-button-b-square-button");
     gap(Dp(16.0));
-    legend(vec!["Enabled", "Hovered", "Pressed", "Selected"]);
+    legend(vec![
+        "ui-enabled",
+        "ui-hovered",
+        "ui-pressed",
+        "ui-selected",
+    ]);
 }
 
 #[tessera]
@@ -955,7 +1071,7 @@ fn measurements() {
                                         ButtonShape::Round,
                                         false,
                                         true,
-                                        "Label",
+                                        "ui-label",
                                     )
                                     .leading(filled::EDIT_SVG);
                                     spacer().modifier(Modifier::new().width(Dp(24.0)));
@@ -965,7 +1081,7 @@ fn measurements() {
                                         ButtonShape::Round,
                                         false,
                                         true,
-                                        "Label",
+                                        "ui-label",
                                     );
                                 });
                         }),
@@ -973,48 +1089,62 @@ fn measurements() {
                 }
             });
     }));
-    caption("Padding and size measurements of each button size");
+    caption("ui-padding-and-size-measurements-of-each-button-size");
     gap(Dp(16.0));
     legend(vec![
-        "Extra small",
-        "Small",
-        "Medium",
-        "Large",
-        "Extra large",
+        "ui-extra-small",
+        "ui-small",
+        "ui-medium",
+        "ui-large",
+        "ui-extra-large",
     ]);
     gap(Dp(32.0));
     spec_table(
-        ["Attribute", "XS", "S", "M", "L", "XL"]
+        ["ui-attribute", "XS", "S", "M", "L", "XL"]
             .map(str::to_owned)
             .to_vec(),
         vec![
-            ["Container height", "32dp", "40dp", "56dp", "96dp", "136dp"]
+            [
+                "ui-container-height",
+                "32dp",
+                "40dp",
+                "56dp",
+                "96dp",
+                "136dp",
+            ]
+            .map(str::to_owned)
+            .to_vec(),
+            [
+                "ui-horizontal-padding",
+                "12dp",
+                "16dp",
+                "24dp",
+                "48dp",
+                "64dp",
+            ]
+            .map(str::to_owned)
+            .to_vec(),
+            ["ui-icon-size", "20dp", "20dp", "24dp", "32dp", "40dp"]
                 .map(str::to_owned)
                 .to_vec(),
-            ["Horizontal padding", "12dp", "16dp", "24dp", "48dp", "64dp"]
+            ["ui-icon-label-spacing", "4dp", "8dp", "8dp", "12dp", "16dp"]
                 .map(str::to_owned)
                 .to_vec(),
-            ["Icon size", "20dp", "20dp", "24dp", "32dp", "40dp"]
-                .map(str::to_owned)
-                .to_vec(),
-            ["Icon-label spacing", "4dp", "8dp", "8dp", "12dp", "16dp"]
-                .map(str::to_owned)
-                .to_vec(),
-            ["Outline width", "1dp", "1dp", "1dp", "2dp", "3dp"]
+            ["ui-outline-width", "1dp", "1dp", "1dp", "2dp", "3dp"]
                 .map(str::to_owned)
                 .to_vec(),
         ],
     );
     gap(Dp(48.0));
-    subheading("Target areas".into()).level(4);
+    subheading("ui-target-areas".into()).level(4);
     gap(Dp(16.0));
     prose(
-        "Extra small and small icon buttons must have a target size of 48x48dp or larger to be accessible.",
+        "ui-extra-small-and-small-icon-buttons-must-have-a-target-size-of-48x48dp-or-larger-to-be-acce",
     );
     gap(Dp(24.0));
     panel(RenderSlot::new(|| {
         figure_grid(
-            vec!["Round button", "Button with icon", "Square button"],
+            vec!["ui-round-button", "ui-button-with-icon", "ui-square-button"],
             vec!["A", "B"],
             RenderSlotWith::new(|(row, column): (usize, usize)| {
                 let preview = button_preview(
@@ -1027,7 +1157,7 @@ fn measurements() {
                     },
                     false,
                     true,
-                    "Label",
+                    "ui-label",
                 );
                 if column == 1 {
                     preview.leading(filled::EDIT_SVG);
@@ -1035,20 +1165,27 @@ fn measurements() {
             }),
         );
     }));
-    caption("A. Extra small  B. Small");
+    caption("ui-a-extra-small-b-small");
     gap(Dp(48.0));
-    subheading("Corner sizes".into()).level(4);
+    subheading("ui-corner-sizes".into()).level(4);
     gap(Dp(16.0));
     spec_table(
         ["", "XS", "S", "M", "L", "XL"].map(str::to_owned).to_vec(),
         vec![
-            ["A. Round button", "Full", "Full", "Full", "Full", "Full"]
+            [
+                "ui-a-round-button",
+                "ui-full",
+                "ui-full",
+                "ui-full",
+                "ui-full",
+                "ui-full",
+            ]
+            .map(str::to_owned)
+            .to_vec(),
+            ["ui-b-square-button", "12dp", "12dp", "16dp", "28dp", "28dp"]
                 .map(str::to_owned)
                 .to_vec(),
-            ["B. Square button", "12dp", "12dp", "16dp", "28dp", "28dp"]
-                .map(str::to_owned)
-                .to_vec(),
-            ["C. Pressed state", "8dp", "8dp", "12dp", "16dp", "16dp"]
+            ["ui-c-pressed-state", "8dp", "8dp", "12dp", "16dp", "16dp"]
                 .map(str::to_owned)
                 .to_vec(),
         ],
@@ -1077,17 +1214,19 @@ fn next_size(size: ButtonSize) -> ButtonSize {
 
 fn size_name(size: ButtonSize) -> &'static str {
     match size {
-        ButtonSize::ExtraSmall => "Extra small",
-        ButtonSize::Small => "Small",
-        ButtonSize::Medium => "Medium",
-        ButtonSize::Large => "Large",
-        ButtonSize::ExtraLarge => "Extra large",
+        ButtonSize::ExtraSmall => "ui-extra-small",
+        ButtonSize::Small => "ui-small",
+        ButtonSize::Medium => "ui-medium",
+        ButtonSize::Large => "ui-large",
+        ButtonSize::ExtraLarge => "ui-extra-large",
     }
 }
 
 #[tessera]
 pub(super) fn prose(#[prop(into)] value: String) {
-    text().content(value).style(type_style(16.0, 24.0));
+    text()
+        .content(I18N.text(value))
+        .style(type_style(16.0, 24.0));
 }
 
 #[tessera]
@@ -1095,7 +1234,7 @@ pub(super) fn caption(#[prop(into)] value: String) {
     let scheme = use_context::<MaterialTheme>().unwrap().get().color_scheme;
     gap(Dp(16.0));
     text()
-        .content(value)
+        .content(I18N.text(value))
         .color(scheme.on_surface_variant)
         .style(type_style(14.0, 20.0));
 }
@@ -1121,7 +1260,9 @@ pub(super) fn bullets(items: Vec<String>) {
                                 .background_with_shape(scheme.on_surface_variant, Shape::Ellipse),
                         );
                         spacer().modifier(Modifier::new().width(Dp(16.0)));
-                        text().content(item.clone()).style(type_style(16.0, 24.0));
+                        text()
+                            .content(I18N.text(&(item)))
+                            .style(type_style(16.0, 24.0));
                     });
             }
         });
@@ -1138,7 +1279,7 @@ pub(super) fn badge(number: usize) {
         )
         .children(move || {
             text()
-                .content(number.to_string())
+                .content((number).to_string())
                 .style(type_style(12.0, 16.0))
                 .color(Color::WHITE);
         });
@@ -1157,7 +1298,9 @@ fn legend(items: Vec<&'static str>) {
                     .children(move || {
                         badge(index + 1);
                         spacer().modifier(Modifier::new().width(Dp(12.0)));
-                        text().content(item).style(type_style(16.0, 24.0));
+                        text()
+                            .content(I18N.text(item))
+                            .style(type_style(16.0, 24.0));
                     });
             }
         });
@@ -1193,13 +1336,13 @@ fn guidance(#[prop(into)] mark: String, #[prop(into)] note: String, color: Color
                 )
                 .children(move || {
                     text()
-                        .content(mark.clone())
+                        .content(I18N.text(&(mark)))
                         .style(type_style(14.0, 20.0))
                         .color(Color::WHITE);
                 });
             spacer().modifier(Modifier::new().width(Dp(12.0)));
             text()
-                .content(note.clone())
+                .content(I18N.text(&(note)))
                 .color(scheme.on_surface_variant)
                 .style(type_style(14.0, 20.0))
                 .modifier(Modifier::new().weight(1.0));
@@ -1223,7 +1366,9 @@ fn figure_grid(
                     .alignment(Alignment::Center)
                     .modifier(Modifier::new().width(Dp(CELL)))
                     .children(move || {
-                        text().content(header).style(type_style(14.0, 20.0));
+                        text()
+                            .content(I18N.text(header))
+                            .style(type_style(14.0, 20.0));
                     });
             }
         });
@@ -1235,7 +1380,9 @@ fn figure_grid(
                     boxed()
                         .modifier(Modifier::new().width(Dp(40.0)))
                         .children(move || {
-                            text().content(label).style(type_style(16.0, 24.0));
+                            text()
+                                .content(I18N.text(label))
+                                .style(type_style(16.0, 24.0));
                         });
                     for column in 0..count {
                         boxed()
@@ -1266,7 +1413,7 @@ fn note(#[prop(into)] value: String) {
             icon().painter(filled::STAR_SVG).size(Dp(24.0));
             spacer().modifier(Modifier::new().width(Dp(16.0)));
             text()
-                .content(value.clone())
+                .content(I18N.text(&(value)))
                 .style(type_style(16.0, 24.0))
                 .modifier(Modifier::new().weight(1.0));
         });
@@ -1305,15 +1452,19 @@ fn config_row(kind: usize) {
                         ButtonShape::Round,
                         true,
                         true,
-                        if selected { "Selected" } else { "Unselected" },
+                        if selected {
+                            "ui-selected"
+                        } else {
+                            "ui-unselected"
+                        },
                     )
                     .initial_selected(selected);
                 }
             }
             2 => {
                 for (shape, label) in [
-                    (ButtonShape::Round, "Round"),
-                    (ButtonShape::Square, "Square"),
+                    (ButtonShape::Round, "ui-round"),
+                    (ButtonShape::Square, "ui-square"),
                 ] {
                     button_preview(
                         ButtonVariant::Filled,
@@ -1344,7 +1495,7 @@ fn config_row(kind: usize) {
                     ButtonShape::Round,
                     false,
                     true,
-                    "24dp padding",
+                    "ui-24dp-padding",
                 )
                 .padding(Padding::symmetric(Dp(24.0), Dp(10.0)));
                 button_preview(
@@ -1353,7 +1504,7 @@ fn config_row(kind: usize) {
                     ButtonShape::Round,
                     false,
                     true,
-                    "16dp padding",
+                    "ui-16dp-padding",
                 );
             }
         });
@@ -1382,10 +1533,12 @@ fn style_grid(columns: Vec<&'static str>, rows: Vec<&'static str>) {
     figure_grid(
         columns,
         rows,
-        RenderSlotWith::new(|(row, column): (usize, usize)| {
+        RenderSlotWith::new(move |(row, column): (usize, usize)| {
             let style = STYLES[row];
             if column > 0 && style == ButtonVariant::Text {
-                text().content("--").style(type_style(14.0, 20.0));
+                text()
+                    .content(I18N.text("--"))
+                    .style(type_style(14.0, 20.0));
             } else {
                 button_preview(
                     style,
@@ -1393,7 +1546,7 @@ fn style_grid(columns: Vec<&'static str>, rows: Vec<&'static str>) {
                     ButtonShape::Round,
                     column > 0,
                     true,
-                    "Label",
+                    "ui-label",
                 )
                 .initial_selected(column == 2)
                 .leading(filled::EDIT_SVG);
@@ -1427,7 +1580,7 @@ fn m2_button(style: ButtonVariant) {
         )
         .children(move || {
             text()
-                .content("BUTTON")
+                .content(I18N.text("ui-button-7082"))
                 .color(content)
                 .style(type_style(14.0, 20.0));
         });
@@ -1476,10 +1629,12 @@ fn flight_example(large: bool) {
 
 #[tessera]
 fn flight_info() {
-    column().children(|| {
-        text().content("SFO → JFK").style(type_style(24.0, 32.0));
+    column().children(move || {
         text()
-            .content("Depart 8:05 AM · Nonstop · 5h 32m")
+            .content(I18N.text("ui-sfo-jfk"))
+            .style(type_style(24.0, 32.0));
+        text()
+            .content(I18N.text("ui-depart-8-05-am-nonstop-5h-32m"))
             .style(type_style(14.0, 20.0));
     });
 }
@@ -1493,7 +1648,7 @@ fn flight_actions() {
             ButtonShape::Round,
             false,
             true,
-            "Details",
+            "ui-details",
         );
         spacer().modifier(Modifier::new().width(Dp(8.0)));
         button_preview(
@@ -1502,7 +1657,7 @@ fn flight_actions() {
             ButtonShape::Round,
             false,
             true,
-            "Book",
+            "ui-book",
         )
         .leading(filled::FLIGHT_SVG);
     });
@@ -1511,12 +1666,12 @@ fn flight_actions() {
 #[tessera]
 fn overview() {
     bullets(vec![
-        "Two variants: default and toggle".into(),
-        "Can contain an optional leading icon".into(),
-        "Five color options: elevated, filled, tonal, outlined, and text".into(),
-        "Five size recommendations: extra small, small, medium, large, and extra large".into(),
-        "Two shape options: round and square".into(),
-        "Keep labels concise and use sentence case".into(),
+        "ui-two-variants-default-and-toggle".into(),
+        "ui-can-contain-an-optional-leading-icon".into(),
+        "ui-five-color-options-elevated-filled-tonal-outlined-and-text".into(),
+        "ui-five-size-recommendations-extra-small-small-medium-large-and-extra-large".into(),
+        "ui-two-shape-options-round-and-square".into(),
+        "ui-keep-labels-concise-and-use-sentence-case".into(),
     ]);
     gap(Dp(32.0));
     overview_art();
@@ -1525,43 +1680,47 @@ fn overview() {
 #[tessera]
 fn resources() {
     spec_table(
-        vec!["Type".into(), "Resource".into(), "Status".into()],
+        vec!["ui-type".into(), "ui-resource".into(), "ui-status".into()],
         vec![
             vec![
-                "Design".into(),
-                "Design Kit (Figma)".into(),
-                "Available".into(),
+                "ui-design".into(),
+                "ui-design-kit-figma".into(),
+                "ui-available".into(),
             ],
             vec![
-                "Implementation".into(),
-                "Flutter".into(),
-                "Available".into(),
+                "ui-implementation".into(),
+                "ui-flutter".into(),
+                "ui-available".into(),
             ],
             vec![
-                "Implementation".into(),
-                "Jetpack Compose".into(),
-                "Available".into(),
+                "ui-implementation".into(),
+                "ui-jetpack-compose".into(),
+                "ui-available".into(),
             ],
             vec![
-                "Implementation".into(),
-                "Jetpack Compose: Expressive".into(),
-                "Available".into(),
+                "ui-implementation".into(),
+                "ui-jetpack-compose-expressive".into(),
+                "ui-available".into(),
             ],
             vec![
-                "Implementation".into(),
-                "Android Views (MDC-Android)".into(),
-                "Available".into(),
+                "ui-implementation".into(),
+                "ui-android-views-mdc-android".into(),
+                "ui-available".into(),
             ],
             vec![
-                "Implementation".into(),
-                "Android Views (MDC-Android): Expressive".into(),
-                "Available".into(),
+                "ui-implementation".into(),
+                "ui-android-views-mdc-android-expressive".into(),
+                "ui-available".into(),
             ],
-            vec!["Implementation".into(), "Web".into(), "Available".into()],
             vec![
-                "Implementation".into(),
-                "Web: Expressive".into(),
-                "Unavailable".into(),
+                "ui-implementation".into(),
+                "ui-web".into(),
+                "ui-available".into(),
+            ],
+            vec![
+                "ui-implementation".into(),
+                "ui-web-expressive".into(),
+                "ui-unavailable".into(),
             ],
         ],
     );
@@ -1569,42 +1728,42 @@ fn resources() {
 
 #[tessera]
 fn expressive() {
-    subheading("May 2025".into()).level(4);
+    subheading("ui-may-2025".into()).level(4);
     gap(Dp(16.0));
     prose(
-        "Buttons now have a wider variety of shapes and sizes, toggle functionality, and can change shape when selected.",
+        "ui-buttons-now-have-a-wider-variety-of-shapes-and-sizes-toggle-functionality-and-can-change-s",
     );
     for (title, items) in [
         (
-            "Variants and naming:",
+            "ui-variants-and-naming-921",
             vec![
-                "Default and toggle (selection)",
-                "Color styles are now configurations (elevated, filled, tonal, outlined, text)",
+                "ui-default-and-toggle-selection",
+                "ui-color-styles-are-now-configurations-elevated-filled-tonal-outlined-text",
             ],
         ),
         (
             "Shapes:",
             vec![
-                "Round and square",
-                "Shape morphs when pressed",
-                "Shape morphs when selected",
+                "ui-round-and-square",
+                "ui-shape-morphs-when-pressed",
+                "ui-shape-morphs-when-selected",
             ],
         ),
         (
             "Sizes:",
             vec![
-                "Extra small",
-                "Small (existing, default)",
-                "Medium",
-                "Large",
-                "Extra large",
+                "ui-extra-small",
+                "ui-small-existing-default",
+                "ui-medium",
+                "ui-large",
+                "ui-extra-large",
             ],
         ),
         (
-            "New padding for small buttons:",
+            "ui-new-padding-for-small-buttons",
             vec![
-                "16dp (recommended to match padding of new sizes)",
-                "24dp (no longer recommended)",
+                "ui-16dp-recommended-to-match-padding-of-new-sizes",
+                "ui-24dp-no-longer-recommended",
             ],
         ),
     ] {
@@ -1616,26 +1775,26 @@ fn expressive() {
     config_figure(vec![0, 1, 2, 4]);
     gap(Dp(16.0));
     legend(vec![
-        "Five sizes",
-        "Toggle (selection)",
-        "Two shapes",
-        "Two small padding widths",
+        "ui-five-sizes",
+        "ui-toggle-selection",
+        "ui-two-shapes",
+        "ui-two-small-padding-widths",
     ]);
 }
 
 #[tessera]
 fn differences() {
     bullets(vec![
-        "Color: New color mappings and compatibility with dynamic color. Icons and labels now share the same color. Neutral text button is no longer recommended.".into(),
-        "Icons: Standard size for leading and trailing icons is now 20dp".into(),
-        "Shape: Fully-rounded corner radius and additional height options".into(),
+        "ui-color-new-color-mappings-and-compatibility-with-dynamic-color-icons-and-labels-now-share-t".into(),
+        "ui-icons-standard-size-for-leading-and-trailing-icons-is-now-20dp".into(),
+        "ui-shape-fully-rounded-corner-radius-and-additional-height-options".into(),
     ]);
     gap(Dp(24.0));
     m2_m3_figure();
     gap(Dp(16.0));
     legend(vec![
-        "M2: Buttons have a height of 36dp and slightly rounded corner radius",
-        "M3: Default buttons are taller at 40dp and have fully rounded corners",
+        "ui-m2-buttons-have-a-height-of-36dp-and-slightly-rounded-corner-radius",
+        "ui-m3-default-buttons-are-taller-at-40dp-and-have-fully-rounded-corners",
     ]);
 }
 
@@ -1667,33 +1826,33 @@ fn m2_m3_figure() {
 #[tessera]
 fn usage() {
     prose(
-        "Buttons communicate actions that people can take. They are typically placed throughout the UI, in places like:",
+        "ui-buttons-communicate-actions-that-people-can-take-they-are-typically-placed-throughout-the",
     );
     gap(Dp(8.0));
     bullets(vec![
-        "Dialogs".into(),
-        "Modal windows".into(),
-        "Forms".into(),
-        "Cards".into(),
-        "Toolbars".into(),
+        "ui-dialogs".into(),
+        "ui-modal-windows".into(),
+        "ui-forms".into(),
+        "ui-cards".into(),
+        "ui-toolbars".into(),
     ]);
     gap(Dp(8.0));
-    prose("They can also be placed within standard button groups.");
+    prose("ui-they-can-also-be-placed-within-standard-button-groups");
     gap(Dp(24.0));
     usage_example();
-    caption("Use visually-prominent filled buttons for the most important actions");
+    caption("ui-use-visually-prominent-filled-buttons-for-the-most-important-actions");
     gap(Dp(32.0));
     prose(
-        "Buttons are just one option for representing actions in a product and shouldn’t be overused. Too many buttons on a screen can disrupt the visual hierarchy.",
+        "ui-buttons-are-just-one-option-for-representing-actions-in-a-product-and-shouldn-t-be-overuse",
     );
     gap(Dp(16.0));
     prose(
-        "Consider placing additional actions in a navigation rail, set of chips, text links, or icon buttons.",
+        "ui-consider-placing-additional-actions-in-a-navigation-rail-set-of-chips-text-links-or-icon-b",
     );
-    guidance("Do", "Use buttons for discrete actions", DO_COLOR);
+    guidance("Do", "ui-use-buttons-for-discrete-actions", DO_COLOR);
     guidance(
         "Don’t",
-        "Don’t clutter your UI with too many buttons. Consider presenting low-priority actions in overflow menus or as icon buttons.",
+        "ui-don-t-clutter-your-ui-with-too-many-buttons-consider-presenting-low-priority-actions-in-ov",
         DONT_COLOR,
     );
     gap(Dp(32.0));
@@ -1707,7 +1866,7 @@ fn usage() {
                     ButtonShape::Round,
                     false,
                     true,
-                    "Learn more",
+                    "ui-learn-more",
                 );
                 gap(Dp(24.0));
                 button_preview(
@@ -1716,7 +1875,7 @@ fn usage() {
                     ButtonShape::Round,
                     false,
                     true,
-                    "Learn more",
+                    "ui-learn-more",
                 )
                 .modifier(Modifier::new().fill_max_width());
                 gap(Dp(24.0));
@@ -1726,24 +1885,24 @@ fn usage() {
                     ButtonShape::Round,
                     false,
                     true,
-                    "Learn more",
+                    "ui-learn-more",
                 )
                 .modifier(Modifier::new().width(Dp(64.0)).clip_to_bounds());
             });
     }));
     guidance(
         "Do",
-        "A button container’s width is dynamically set to fit its label text",
+        "ui-a-button-container-s-width-is-dynamically-set-to-fit-its-label-text",
         DO_COLOR,
     );
     guidance(
         "Do",
-        "Button container width can be responsive, which allows it to stretch horizontally",
+        "ui-button-container-width-can-be-responsive-which-allows-it-to-stretch-horizontally",
         DO_COLOR,
     );
     guidance(
         "Don’t",
-        "A button container’s width shouldn’t be narrower than its label text",
+        "ui-a-button-container-s-width-shouldn-t-be-narrower-than-its-label-text",
         DONT_COLOR,
     );
     gap(Dp(32.0));
@@ -1751,59 +1910,59 @@ fn usage() {
         style_grid(vec!["A", "B", "C"], vec!["1", "2", "3", "4", "5"]);
     }));
     caption(
-        "A: Default button; B: Toggle (unselected); C: Toggle (selected) for five button styles, in order of emphasis:",
+        "ui-a-default-button-b-toggle-unselected-c-toggle-selected-for-five-button-styles-in-order-of",
     );
     gap(Dp(16.0));
     legend(vec![
-        "Elevated button",
-        "Filled button",
-        "Filled tonal button",
-        "Outlined button",
-        "Text button",
+        "ui-elevated-button",
+        "ui-filled-button",
+        "ui-filled-tonal-button",
+        "ui-outlined-button",
+        "ui-text-button",
     ]);
     gap(Dp(32.0));
     prose(
-        "A button group is a collection of buttons that relate to each other and can respond to one another. Both buttons and icon buttons can be used inside a button group.",
+        "ui-a-button-group-is-a-collection-of-buttons-that-relate-to-each-other-and-can-respond-to-one",
     );
     gap(Dp(16.0));
     prose(
-        "In some cases, there are primary and secondary actions within a button group. Buttons with primary actions should have a higher visual emphasis through size, color, or shape.",
+        "ui-in-some-cases-there-are-primary-and-secondary-actions-within-a-button-group-buttons-with-p",
     );
 }
 
 #[tessera]
 fn usage_example() {
-    panel(RenderSlot::new(|| {
+    panel(RenderSlot::new(move || {
         column()
             .modifier(Modifier::new().fill_max_width())
-            .children(|| {
+            .children(move || {
                 text()
-                    .content("Appointment - Thea")
+                    .content(I18N.text("ui-appointment-thea"))
                     .style(type_style(24.0, 32.0));
                 gap(Dp(8.0));
                 text()
-                    .content("Your host has not yet joined")
+                    .content(I18N.text("ui-your-host-has-not-yet-joined"))
                     .style(type_style(16.0, 24.0));
                 gap(Dp(24.0));
                 flow_row()
                     .item_spacing(Dp(16.0))
                     .line_spacing(Dp(16.0))
-                    .children(|| {
+                    .children(move || {
                         button()
                             .filled()
                             .size(ButtonSize::Medium)
-                            .accessibility_label("Ask to join")
+                            .accessibility_label(I18N.text("ui-ask-to-join"))
                             .on_click(|| {})
-                            .child(|| {
-                                text().content("Ask to join");
+                            .child(move || {
+                                text().content(I18N.text("ui-ask-to-join"));
                             });
                         button()
                             .outlined()
                             .size(ButtonSize::Medium)
-                            .accessibility_label("Share details")
+                            .accessibility_label(I18N.text("ui-share-details"))
                             .on_click(|| {})
-                            .child(|| {
-                                text().content("Share details");
+                            .child(move || {
+                                text().content(I18N.text("ui-share-details"));
                             });
                     });
             });
@@ -1813,29 +1972,29 @@ fn usage_example() {
 #[tessera]
 fn toggle_buttons() {
     prose(
-        "Toggle buttons should be used for binary selections, such as Save or Favorite. When toggle buttons are pressed, they can change color, shape, and labels.",
+        "ui-toggle-buttons-should-be-used-for-binary-selections-such-as-save-or-favorite-when-toggle-b",
     );
     gap(Dp(16.0));
     prose(
-        "Toggle buttons should use an outlined icon when unselected, and a filled version of the icon when selected. If a filled version doesn’t exist, increase the weight instead.",
+        "ui-toggle-buttons-should-use-an-outlined-icon-when-unselected-and-a-filled-version-of-the-ico",
     );
     gap(Dp(16.0));
-    prose("By default, toggle buttons change from round to square when selected.");
+    prose("ui-by-default-toggle-buttons-change-from-round-to-square-when-selected");
     gap(Dp(24.0));
     toggle_example();
-    caption("Use toggle buttons for binary actions");
+    caption("ui-use-toggle-buttons-for-binary-actions");
     gap(Dp(32.0));
     prose(
-        "If the label changes on selected or unselected states, be mindful of the character count. Changing the label significantly is disruptive to the user and the page layout.",
+        "ui-if-the-label-changes-on-selected-or-unselected-states-be-mindful-of-the-character-count-ch",
     );
     guidance(
         "Do",
-        "When using toggleable buttons, keep the label character count a similar length for both states",
+        "ui-when-using-toggleable-buttons-keep-the-label-character-count-a-similar-length-for-both-sta",
         DO_COLOR,
     );
     guidance(
         "Don’t",
-        "The label length shouldn’t change dramatically to be longer or shorter",
+        "ui-the-label-length-shouldn-t-change-dramatically-to-be-longer-or-shorter",
         DONT_COLOR,
     );
 }
@@ -1857,50 +2016,72 @@ fn toggle_example() {
                             .filled()
                             .size(ButtonSize::Medium)
                             .selected(filled.get())
-                            .accessibility_label("Filled toggle")
+                            .accessibility_label(I18N.text("ui-filled-toggle"))
                             .on_click(move || filled.set(!filled.get()))
-                            .child(|| {
-                                text().content("Filled");
+                            .child(move || {
+                                text().content(I18N.text("ui-filled"));
                             });
                         button()
                             .tonal()
                             .size(ButtonSize::Medium)
                             .selected(tonal.get())
-                            .accessibility_label("Tonal toggle")
+                            .accessibility_label(I18N.text("ui-tonal-toggle"))
                             .on_click(move || tonal.set(!tonal.get()))
-                            .child(|| {
-                                text().content("Tonal");
+                            .child(move || {
+                                text().content(I18N.text("ui-tonal"));
                             });
                         button()
                             .outlined()
                             .size(ButtonSize::Medium)
                             .selected(outlined.get())
-                            .accessibility_label("Outlined toggle")
+                            .accessibility_label(I18N.text("ui-outlined-toggle"))
                             .on_click(move || outlined.set(!outlined.get()))
-                            .child(|| {
-                                text().content("Outlined");
+                            .child(move || {
+                                text().content(I18N.text("ui-outlined"));
                             });
                     });
                 gap(Dp(16.0));
                 text()
-                    .content(format!(
-                        "Filled: {} · Tonal: {} · Outlined: {}",
-                        if filled.get() {
-                            "selected"
-                        } else {
-                            "unselected"
-                        },
-                        if tonal.get() {
-                            "selected"
-                        } else {
-                            "unselected"
-                        },
-                        if outlined.get() {
-                            "selected"
-                        } else {
-                            "unselected"
-                        },
-                    ))
+                    .content(
+                        I18N.format(
+                            "ui-filled-value-tonal-value-outlined-value",
+                            [
+                                (
+                                    "v0",
+                                    I18N.text(
+                                        &(if filled.get() {
+                                            "ui-selected-7075"
+                                        } else {
+                                            "ui-unselected-7076"
+                                        }),
+                                    )
+                                    .into(),
+                                ),
+                                (
+                                    "v1",
+                                    I18N.text(
+                                        &(if tonal.get() {
+                                            "ui-selected-7075"
+                                        } else {
+                                            "ui-unselected-7076"
+                                        }),
+                                    )
+                                    .into(),
+                                ),
+                                (
+                                    "v2",
+                                    I18N.text(
+                                        &(if outlined.get() {
+                                            "ui-selected-7075"
+                                        } else {
+                                            "ui-unselected-7076"
+                                        }),
+                                    )
+                                    .into(),
+                                ),
+                            ],
+                        ),
+                    )
                     .style(type_style(14.0, 20.0));
             });
     }));
@@ -1908,307 +2089,311 @@ fn toggle_example() {
 
 #[tessera]
 fn guidelines_anatomy() {
-    anatomy(vec!["Label text", "Container", "Icon (optional)"]);
+    anatomy(vec!["ui-label-text", "ui-container", "ui-icon-optional"]);
     gap(Dp(48.0));
-    subheading("Label text".into()).level(4);
+    subheading("ui-label-text".into()).level(4);
     gap(Dp(16.0));
     prose(
-        "Label text is the most important element of a button. It describes the action that will occur if someone taps a button. It should be very brief, ideally 1–3 words.",
+        "ui-label-text-is-the-most-important-element-of-a-button-it-describes-the-action-that-will-occ",
     );
     gap(Dp(16.0));
     prose(
-        "Use sentence case, which only capitalizes the first word and proper nouns. This allows the text to distinguish proper nouns, for example: Book with Flights, not BOOK WITH FLIGHTS.",
+        "ui-use-sentence-case-which-only-capitalizes-the-first-word-and-proper-nouns-this-allows-the-t",
     );
     gap(Dp(16.0));
-    prose("Don’t truncate or wrap label text. It should always be fully visible on a single line.");
+    prose(
+        "ui-don-t-truncate-or-wrap-label-text-it-should-always-be-fully-visible-on-a-single-line",
+    );
     gap(Dp(24.0));
-    style_example(ButtonVariant::Filled, "Book with Flights");
+    style_example(ButtonVariant::Filled, "ui-book-with-flights");
     guidance(
         "Do",
-        "Use sentence case for button label text, capitalizing the first word and proper nouns",
+        "ui-use-sentence-case-for-button-label-text-capitalizing-the-first-word-and-proper-nouns",
         DO_COLOR,
     );
     guidance(
         "Don’t",
-        "Don’t wrap text. For maximum legibility, label text should remain on a single line.",
+        "ui-don-t-wrap-text-for-maximum-legibility-label-text-should-remain-on-a-single-line",
         DONT_COLOR,
     );
     gap(Dp(24.0));
     prose(
-        "Buttons with the outlined and text color style depend on the colors to be recognizable from other text and elements. Use caution when putting these buttons next to visually similar elements, such as chips or large text.",
+        "ui-buttons-with-the-outlined-and-text-color-style-depend-on-the-colors-to-be-recognizable-fro",
     );
     guidance(
-        "Caution",
-        "The outlined button style is very similar to chips. Consider using a filled or tonal button instead.",
+        "ui-caution",
+        "ui-the-outlined-button-style-is-very-similar-to-chips-consider-using-a-filled-or-tonal-button",
         CAUTION_COLOR,
     );
     gap(Dp(48.0));
-    subheading("Container".into()).level(4);
+    subheading("ui-container".into()).level(4);
     gap(Dp(16.0));
     prose(
-        "Button containers hold the label text and optional icon. Buttons with the text color style have a visible container only when hovered, focused, or pressed.",
+        "ui-button-containers-hold-the-label-text-and-optional-icon-buttons-with-the-text-color-style",
     );
     gap(Dp(16.0));
-    prose("Buttons with a round shape have containers with fully rounded corners.");
+    prose("ui-buttons-with-a-round-shape-have-containers-with-fully-rounded-corners");
     gap(Dp(16.0));
     prose(
-        "Buttons with a square shape have containers with more subtle rounding that changes based on button size.",
+        "ui-buttons-with-a-square-shape-have-containers-with-more-subtle-rounding-that-changes-based-o",
     );
     gap(Dp(24.0));
     config_figure(vec![0, 5]);
     gap(Dp(16.0));
     legend(vec![
-        "Round buttons have containers with fully rounded corners",
-        "Square buttons have square containers and change radius as the button size changes",
+        "ui-round-buttons-have-containers-with-fully-rounded-corners",
+        "ui-square-buttons-have-square-containers-and-change-radius-as-the-button-size-changes",
     ]);
     guidance(
         "Do",
-        "A button’s width dynamically adjusts to the label text",
+        "ui-a-button-s-width-dynamically-adjusts-to-the-label-text",
         DO_COLOR,
     );
     guidance(
         "Don’t",
-        "Avoid setting a fixed width smaller than the label text",
+        "ui-avoid-setting-a-fixed-width-smaller-than-the-label-text",
         DONT_COLOR,
     );
     gap(Dp(48.0));
-    subheading("Icon (optional)".into()).level(4);
+    subheading("ui-icon-optional".into()).level(4);
     gap(Dp(16.0));
     prose(
-        "Icons visually communicate the button’s action and help draw attention. They should be placed on the leading side of the button, before the label text.",
+        "ui-icons-visually-communicate-the-button-s-action-and-help-draw-attention-they-should-be-plac",
     );
     gap(Dp(24.0));
-    panel(RenderSlot::new(|| {
+    panel(RenderSlot::new(move || {
         row()
             .cross_axis_alignment(CrossAxisAlignment::Center)
-            .children(|| {
+            .children(move || {
                 button_preview(
                     ButtonVariant::Filled,
                     ButtonSize::Small,
                     ButtonShape::Round,
                     false,
                     true,
-                    "Send",
+                    "ui-send",
                 )
                 .leading(filled::SEND_SVG);
                 spacer().modifier(Modifier::new().width(Dp(48.0)));
                 button()
                     .filled()
-                    .accessibility_label("Send, right-to-left")
+                    .accessibility_label(I18N.text("ui-send-right-to-left"))
                     .trailing_icon(|| {
                         icon().painter(filled::SEND_SVG).rotation(180.0);
                     })
                     .on_click(|| {})
-                    .child(|| {
-                        text().content("Send");
+                    .child(move || {
+                        text().content(I18N.text("ui-send"));
                     });
             });
     }));
     guidance(
         "Do",
-        "Place the icon to the left of the label in buttons with text in left-to-right languages",
+        "ui-place-the-icon-to-the-left-of-the-label-in-buttons-with-text-in-left-to-right-languages",
         DO_COLOR,
     );
     guidance(
         "Do",
-        "Place the icon to the right of the label in buttons with text in right-to-left languages",
+        "ui-place-the-icon-to-the-right-of-the-label-in-buttons-with-text-in-right-to-left-languages",
         DO_COLOR,
     );
     guidance(
         "Do",
-        "Use icons that clearly communicate their meaning",
+        "ui-use-icons-that-clearly-communicate-their-meaning",
         DO_COLOR,
     );
     guidance(
         "Don’t",
-        "Don’t vertically align an icon and text in the center of a button",
+        "ui-don-t-vertically-align-an-icon-and-text-in-the-center-of-a-button",
         DONT_COLOR,
     );
     guidance(
         "Don’t",
-        "Don’t use two icons in the same button",
+        "ui-don-t-use-two-icons-in-the-same-button",
         DONT_COLOR,
     );
 }
 
 #[tessera]
 fn color_styles() {
-    subheading("Elevated style".into()).level(4);
+    subheading("ui-elevated-style".into()).level(4);
     gap(Dp(16.0));
-    prose("The elevated button style is the same as the tonal button, but with a shadow.");
+    prose("ui-the-elevated-button-style-is-the-same-as-the-tonal-button-but-with-a-shadow");
     gap(Dp(16.0));
     prose(
-        "To avoid overusing shadows, use the elevated style only when absolutely necessary, such as when the button requires visual separation from a visually prominent background.",
+        "ui-to-avoid-overusing-shadows-use-the-elevated-style-only-when-absolutely-necessary-such-as-w",
     );
     gap(Dp(24.0));
-    style_example(ButtonVariant::Elevated, "Add to cart");
-    caption("Elevated buttons provide separation from a visually prominent background");
+    style_example(ButtonVariant::Elevated, "ui-add-to-cart");
+    caption("ui-elevated-buttons-provide-separation-from-a-visually-prominent-background");
     gap(Dp(24.0));
     prose(
-        "Buttons at higher elevations typically have more emphasis in a design, and should be used sparingly. For high emphasis, consider the filled style instead.",
+        "ui-buttons-at-higher-elevations-typically-have-more-emphasis-in-a-design-and-should-be-used-s",
     );
     guidance(
-        "Caution",
-        "Higher elevation increases the emphasis of a button",
+        "ui-caution",
+        "ui-higher-elevation-increases-the-emphasis-of-a-button",
         CAUTION_COLOR,
     );
     gap(Dp(48.0));
-    subheading("Filled style".into()).level(4);
+    subheading("ui-filled-style".into()).level(4);
     gap(Dp(16.0));
     prose(
-        "The filled button style has the most visual impact after the FAB, and should be used for important, final actions that complete a flow, like Save, Join now, or Confirm.",
+        "ui-the-filled-button-style-has-the-most-visual-impact-after-the-fab-and-should-be-used-for-im",
     );
     gap(Dp(24.0));
-    style_example(ButtonVariant::Filled, "Join now");
-    caption("Filled buttons have high visual impact when used for important actions");
+    style_example(ButtonVariant::Filled, "ui-join-now");
+    caption("ui-filled-buttons-have-high-visual-impact-when-used-for-important-actions");
     gap(Dp(24.0));
     prose(
-        "Since they have such strong emphasis, the filled style should be used sparingly, ideally for only one action on a page.",
+        "ui-since-they-have-such-strong-emphasis-the-filled-style-should-be-used-sparingly-ideally-for",
     );
     gap(Dp(16.0));
-    prose("In some cases, filled buttons can use tertiary colors.");
+    prose("ui-in-some-cases-filled-buttons-can-use-tertiary-colors");
     gap(Dp(48.0));
-    subheading("Tonal style".into()).level(4);
+    subheading("ui-tonal-style".into()).level(4);
     gap(Dp(16.0));
     prose(
-        "The tonal button style is useful in contexts where a lower-priority button requires slightly more emphasis than an outline would give, such as Next in an onboarding flow. Tonal buttons use the secondary color mapping.",
+        "ui-the-tonal-button-style-is-useful-in-contexts-where-a-lower-priority-button-requires-slight",
     );
     gap(Dp(24.0));
-    style_example(ButtonVariant::Tonal, "Next");
-    caption("The tonal style has less emphasis than filled or emphasis");
+    style_example(ButtonVariant::Tonal, "ui-next");
+    caption("ui-the-tonal-style-has-less-emphasis-than-filled-or-emphasis");
     gap(Dp(48.0));
-    subheading("Outlined style".into()).level(4);
+    subheading("ui-outlined-style".into()).level(4);
     gap(Dp(16.0));
     prose(
-        "The outlined style is ideal for medium-emphasis buttons which contain actions that are important, but aren’t the primary action in a product.",
+        "ui-the-outlined-style-is-ideal-for-medium-emphasis-buttons-which-contain-actions-that-are-imp",
     );
     gap(Dp(16.0));
     prose(
-        "Outlined buttons pair well with filled buttons to indicate alternative, secondary actions.",
+        "ui-outlined-buttons-pair-well-with-filled-buttons-to-indicate-alternative-secondary-actions",
     );
     gap(Dp(24.0));
-    style_example(ButtonVariant::Outlined, "Share details");
-    caption("Outlined buttons contain less important supporting actions");
+    style_example(ButtonVariant::Outlined, "ui-share-details");
+    caption("ui-outlined-buttons-contain-less-important-supporting-actions");
     gap(Dp(24.0));
     prose(
-        "Outlined buttons display a stroke around the button container, and have no fill by default.",
+        "ui-outlined-buttons-display-a-stroke-around-the-button-container-and-have-no-fill-by-default",
     );
     gap(Dp(16.0));
     prose(
-        "They should be placed on simple backgrounds, not visually prominent backgrounds such as images or videos.",
+        "ui-they-should-be-placed-on-simple-backgrounds-not-visually-prominent-backgrounds-such-as-ima",
     );
     guidance(
         "Do",
-        "Outlined buttons can be used on backgrounds with a color gradient",
+        "ui-outlined-buttons-can-be-used-on-backgrounds-with-a-color-gradient",
         DO_COLOR,
     );
     guidance(
-        "Caution",
-        "Use caution when placing outlined buttons on top of images. Customizing the button to have a contrasting container fill can help ensure legibility of label text. Or, use a filled button instead.",
+        "ui-caution",
+        "ui-use-caution-when-placing-outlined-buttons-on-top-of-images-customizing-the-button-to-have",
         CAUTION_COLOR,
     );
     gap(Dp(48.0));
-    subheading("Text style".into()).level(4);
+    subheading("ui-text-style".into()).level(4);
     gap(Dp(16.0));
     prose(
-        "The text button style should be used for the lowest priority actions, especially when presenting multiple options.",
+        "ui-the-text-button-style-should-be-used-for-the-lowest-priority-actions-especially-when-prese",
     );
     gap(Dp(16.0));
     prose(
-        "They should be placed on simple backgrounds, not visually prominent backgrounds such as images or videos. The container isn’t visible until someone interacts with the button.",
+        "ui-they-should-be-placed-on-simple-backgrounds-not-visually-prominent-backgrounds-such-as-ima-1016",
     );
     gap(Dp(16.0));
-    prose("Don’t underline the text button. Use hyperlinked body text instead to emphasize links.");
+    prose(
+        "ui-don-t-underline-the-text-button-use-hyperlinked-body-text-instead-to-emphasize-links",
+    );
     gap(Dp(24.0));
-    style_example(ButtonVariant::Text, "Learn more");
-    caption("Use text buttons for the lowest priority actions");
+    style_example(ButtonVariant::Text, "ui-learn-more");
+    caption("ui-use-text-buttons-for-the-lowest-priority-actions");
     gap(Dp(24.0));
     prose(
-        "Text buttons are often placed within components such as cards, dialogs, and snackbars. Since text buttons don’t have a visible container in their default state, they don’t distract from nearby content.",
+        "ui-text-buttons-are-often-placed-within-components-such-as-cards-dialogs-and-snackbars-since",
     );
     gap(Dp(16.0));
     prose(
-        "However, since there’s no container, the label text color must always be recognizable from non-button text and elements.",
+        "ui-however-since-there-s-no-container-the-label-text-color-must-always-be-recognizable-from-n",
     );
     gap(Dp(16.0));
-    prose("In cards, text buttons help maintain an emphasis on card content.");
+    prose("ui-in-cards-text-buttons-help-maintain-an-emphasis-on-card-content");
     gap(Dp(16.0));
     prose(
-        "Dialogs use text buttons because the absence of a container helps unify the action with the dialog text.",
+        "ui-dialogs-use-text-buttons-because-the-absence-of-a-container-helps-unify-the-action-with-th",
     );
     gap(Dp(16.0));
     prose(
-        "Align text buttons to the trailing edge of dialogs, on the right for left-to-right languages and on the left for right-to-left languages.",
+        "ui-align-text-buttons-to-the-trailing-edge-of-dialogs-on-the-right-for-left-to-right-language",
     );
 }
 
 #[tessera]
 fn adaptive() {
-    subheading("Resizing".into()).level(4);
+    subheading("ui-resizing".into()).level(4);
     gap(Dp(16.0));
     prose(
-        "When scaling layouts for large screen devices, buttons can adapt their visual presentation, size, alignment, and arrangement to fit different contexts and user needs.",
+        "ui-when-scaling-layouts-for-large-screen-devices-buttons-can-adapt-their-visual-presentation",
     );
     gap(Dp(16.0));
-    prose("Choose the best button position based on screen size.");
+    prose("ui-choose-the-best-button-position-based-on-screen-size");
     gap(Dp(24.0));
     flight_example(false);
-    caption("Filled buttons are end-aligned below flight information in a compact window");
+    caption("ui-filled-buttons-are-end-aligned-below-flight-information-in-a-compact-window");
     gap(Dp(24.0));
     flight_example(true);
-    caption("Filled buttons are start-aligned beside flight information in a large window");
+    caption("ui-filled-buttons-are-start-aligned-beside-flight-information-in-a-large-window");
     gap(Dp(32.0));
     prose(
-        "The icon and label text in a button stay centered and grouped as the button's width changes.",
+        "ui-the-icon-and-label-text-in-a-button-stay-centered-and-grouped-as-the-button-s-width-change",
     );
     guidance(
         "Do",
-        "Keep the icon and label text grouped and centered",
+        "ui-keep-the-icon-and-label-text-grouped-and-centered",
         DO_COLOR,
     );
     guidance(
         "Don’t",
-        "Don't ungroup the icon and label text or let them anchor to opposite sides of the button",
+        "ui-don-t-ungroup-the-icon-and-label-text-or-let-them-anchor-to-opposite-sides-of-the-button",
         DONT_COLOR,
     );
     gap(Dp(24.0));
     prose(
-        "Buttons can be customized to change size and scaling behavior across different breakpoints.",
+        "ui-buttons-can-be-customized-to-change-size-and-scaling-behavior-across-different-breakpoints",
     );
     gap(Dp(16.0));
     prose(
-        "To avoid creating very long buttons in large windows, constrain button width or place buttons beside other elements.",
+        "ui-to-avoid-creating-very-long-buttons-in-large-windows-constrain-button-width-or-place-butto",
     );
     guidance(
         "Don’t",
-        "Don’t allow the button to stretch in a way that creates long, flat buttons with very little content inside",
+        "ui-don-t-allow-the-button-to-stretch-in-a-way-that-creates-long-flat-buttons-with-very-little",
         DONT_COLOR,
     );
     gap(Dp(48.0));
-    subheading("Presentation".into()).level(4);
+    subheading("ui-presentation".into()).level(4);
     gap(Dp(16.0));
     prose(
-        "The size and placement of buttons can change as parent containers, such as cards, adapt for larger screens.",
+        "ui-the-size-and-placement-of-buttons-can-change-as-parent-containers-such-as-cards-adapt-for",
     );
     gap(Dp(16.0));
     prose(
-        "Keep items, including buttons, in the same order between large and small screens to provide a consistent experience for screen readers and keyboard navigation.",
+        "ui-keep-items-including-buttons-in-the-same-order-between-large-and-small-screens-to-provide",
     );
-    caption("Buttons can move in the layout, but elements should remain in the same order");
+    caption("ui-buttons-can-move-in-the-layout-but-elements-should-remain-in-the-same-order");
 }
 
 #[tessera]
 fn use_cases() {
-    prose("People should be able to do the following with assistive technology:");
+    prose("ui-people-should-be-able-to-do-the-following-with-assistive-technology");
     gap(Dp(16.0));
     bullets(vec![
-        "Use a button to perform an action".into(),
-        "Navigate to and activate a button".into(),
+        "ui-use-a-button-to-perform-an-action".into(),
+        "ui-navigate-to-and-activate-a-button".into(),
     ]);
     gap(Dp(24.0));
     activation_demo();
     caption(
-        "The native button exposes an accessible label and a description that reports its activation count. Activate it with a click, or focus it with Tab and press Space or Enter.",
+        "ui-the-native-button-exposes-an-accessible-label-and-a-description-that-reports-its-activatio",
     );
 }
 
@@ -2222,15 +2407,19 @@ fn activation_demo() {
                 button()
                     .filled()
                     .size(ButtonSize::Medium)
-                    .accessibility_label("Perform action")
-                    .accessibility_description(format!("Activations: {}", activations.get()))
+                    .accessibility_label(I18N.text("ui-perform-action"))
+                    .accessibility_description(
+                        I18N.format("ui-activations-value", [("v0", (activations.get()).into())]),
+                    )
                     .on_click(move || activations.set(activations.get() + 1))
-                    .child(|| {
-                        text().content("Perform action");
+                    .child(move || {
+                        text().content(I18N.text("ui-perform-action"));
                     });
                 gap(Dp(16.0));
                 text()
-                    .content(format!("Activations: {}", activations.get()))
+                    .content(
+                        I18N.format("ui-activations-value", [("v0", (activations.get()).into())]),
+                    )
                     .style(type_style(14.0, 20.0));
             });
     }));
@@ -2238,42 +2427,42 @@ fn activation_demo() {
 
 #[tessera]
 fn interaction_style() {
-    subheading("Color contrast".into()).level(4);
+    subheading("ui-color-contrast".into()).level(4);
     gap(Dp(16.0));
     prose(
-        "Enabled buttons need a 3:1 contrast ratio with the background to meet accessibility best practices.",
+        "ui-enabled-buttons-need-a-3-1-contrast-ratio-with-the-background-to-meet-accessibility-best-p",
     );
     gap(Dp(16.0));
     prose(
-        "This is measured from the container for elevated, filled, and tonal button styles, and the label text for outlined and text button styles.",
+        "ui-this-is-measured-from-the-container-for-elevated-filled-and-tonal-button-styles-and-the-la",
     );
     gap(Dp(24.0));
     contrast_examples();
-    caption("Higher contrast helps differentiate elements");
+    caption("ui-higher-contrast-helps-differentiate-elements");
     gap(Dp(48.0));
-    subheading("200% text size".into()).level(4);
+    subheading("ui-200-text-size".into()).level(4);
     gap(Dp(16.0));
-    prose("Avoid excessive text wrapping or truncation by choosing concise strings.");
+    prose("ui-avoid-excessive-text-wrapping-or-truncation-by-choosing-concise-strings");
     gap(Dp(16.0));
     prose(
-        "On Android, button labels should be kept concise enough to fit within two lines after the text size is increased to 200%. If a button label exceeds this limit and gets truncated, provide an alternative way to access the full content in a single tap.",
+        "ui-on-android-button-labels-should-be-kept-concise-enough-to-fit-within-two-lines-after-the-t",
     );
     gap(Dp(24.0));
     text_scale_example();
     guidance(
-        "Caution",
-        "Avoid excessive text wrapping or truncation by choosing concise strings",
+        "ui-caution",
+        "ui-avoid-excessive-text-wrapping-or-truncation-by-choosing-concise-strings-1047",
         CAUTION_COLOR,
     );
     gap(Dp(48.0));
-    subheading("Rapid clicks".into()).level(4);
+    subheading("ui-rapid-clicks".into()).level(4);
     gap(Dp(16.0));
     prose(
-        "On the web, you can use a modified motion curve to avoid resonant effects from overlapping animations. This provides a smoother experience for interactions where you anticipate multiple clicks or taps in succession.",
+        "ui-on-the-web-you-can-use-a-modified-motion-curve-to-avoid-resonant-effects-from-overlapping",
     );
     gap(Dp(24.0));
     rapid_click_example();
-    caption("Use the modified motion curve if rapid click or pointer interactions are expected");
+    caption("ui-use-the-modified-motion-curve-if-rapid-click-or-pointer-interactions-are-expected");
 }
 
 #[tessera]
@@ -2288,14 +2477,14 @@ fn contrast_examples() {
                     button()
                         .filled()
                         .size(ButtonSize::Medium)
-                        .accessibility_label("Above three to one")
+                        .accessibility_label(I18N.text("ui-above-three-to-one"))
                         .on_click(|| {})
-                        .child(|| {
-                            text().content("Share");
+                        .child(move || {
+                            text().content(I18N.text("ui-share"));
                         });
                     gap(Dp(12.0));
                     text()
-                        .content("Above 3:1 — primary container on surface")
+                        .content(I18N.text("ui-above-3-1-primary-container-on-surface"))
                         .style(type_style(14.0, 20.0));
                 });
                 column().children(move || {
@@ -2303,14 +2492,14 @@ fn contrast_examples() {
                         .size(ButtonSize::Medium)
                         .color(scheme.surface_container)
                         .content_color(scheme.outline)
-                        .accessibility_label("Below three to one")
+                        .accessibility_label(I18N.text("ui-below-three-to-one"))
                         .on_click(|| {})
-                        .child(|| {
-                            text().content("Share");
+                        .child(move || {
+                            text().content(I18N.text("ui-share"));
                         });
                     gap(Dp(12.0));
                     text()
-                        .content("Below 3:1 — low-contrast container and label")
+                        .content(I18N.text("ui-below-3-1-low-contrast-container-and-label"))
                         .style(type_style(14.0, 20.0));
                 });
             });
@@ -2319,31 +2508,31 @@ fn contrast_examples() {
 
 #[tessera]
 fn text_scale_example() {
-    panel(RenderSlot::new(|| {
+    panel(RenderSlot::new(move || {
         column()
             .modifier(Modifier::new().fill_max_width())
-            .children(|| {
+            .children(move || {
                 button()
                     .filled()
                     .size(ButtonSize::Medium)
-                    .accessibility_label("Save")
+                    .accessibility_label(I18N.text("ui-save"))
                     .on_click(|| {})
-                    .child(|| {
-                        text().content("Save");
+                    .child(move || {
+                        text().content(I18N.text("ui-save"));
                     });
                 gap(Dp(12.0));
-                prose("A concise label keeps its single-line shape when text is scaled up.");
+                prose("ui-a-concise-label-keeps-its-single-line-shape-when-text-is-scaled-up");
                 gap(Dp(24.0));
                 button()
                     .filled()
                     .size(ButtonSize::Medium)
-                    .accessibility_label("Save the current document to your device")
+                    .accessibility_label(I18N.text("ui-save-the-current-document-to-your-device"))
                     .on_click(|| {})
-                    .child(|| {
-                        text().content("Save the current document to your device");
+                    .child(move || {
+                        text().content(I18N.text("ui-save-the-current-document-to-your-device"));
                     });
                 gap(Dp(12.0));
-                prose("A long label wraps or truncates once the text size grows. Prefer a shorter string or a wider container.");
+                prose("ui-a-long-label-wraps-or-truncates-once-the-text-size-grows-prefer-a-shorter-string-or-a-wide");
             });
     }));
 }
@@ -2358,18 +2547,15 @@ fn rapid_click_example() {
                 button()
                     .tonal()
                     .size(ButtonSize::Medium)
-                    .accessibility_label("Skip forward")
-                    .accessibility_description(format!("Activations: {}", clicks.get()))
+                    .accessibility_label(I18N.text("ui-skip-forward"))
+                    .accessibility_description(I18N.format("ui-activations-value", [("v0", (clicks.get()).into())]))
                     .on_click(move || clicks.set(clicks.get() + 1))
-                    .child(|| {
-                        text().content("Skip forward");
+                    .child(move || {
+                        text().content(I18N.text("ui-skip-forward"));
                     });
                 gap(Dp(16.0));
                 text()
-                    .content(format!(
-                        "Press repeatedly to check the shape and state animations. Activations: {}",
-                        clicks.get()
-                    ))
+                    .content(I18N.format("ui-press-repeatedly-to-check-the-shape-and-state-animations-activations-value", [("v0", (clicks.get()).into())]))
                     .style(type_style(14.0, 20.0));
             });
     }));
@@ -2378,15 +2564,15 @@ fn rapid_click_example() {
 #[tessera]
 fn keyboard_navigation() {
     spec_table(
-        vec!["Keys".into(), "Actions".into()],
+        vec!["ui-keys".into(), "ui-actions".into()],
         vec![
-            vec!["Tab".into(), "Navigate to a button".into()],
-            vec!["Space or Enter".into(), "Activate a button".into()],
+            vec!["ui-tab".into(), "ui-navigate-to-a-button".into()],
+            vec!["ui-space-or-enter".into(), "ui-activate-a-button".into()],
         ],
     );
     gap(Dp(24.0));
     prose(
-        "In this native example, Tab moves focus between the two buttons and Space or Enter activates the focused one. The focused button draws a focus ring, and the status text reports the last activation.",
+        "ui-in-this-native-example-tab-moves-focus-between-the-two-buttons-and-space-or-enter-activate",
     );
     gap(Dp(24.0));
     keyboard_demo();
@@ -2394,7 +2580,7 @@ fn keyboard_navigation() {
 
 #[tessera]
 fn keyboard_demo() {
-    let status = remember(|| "No activation yet".to_string());
+    let status = remember(|| "ui-no-activation-yet".to_string());
     panel(RenderSlot::new(move || {
         column()
             .modifier(Modifier::new().fill_max_width())
@@ -2406,22 +2592,24 @@ fn keyboard_demo() {
                         button()
                             .filled()
                             .size(ButtonSize::Medium)
-                            .accessibility_label("Save")
-                            .on_click(move || status.set("Save activated".to_string()))
-                            .child(|| {
-                                text().content("Save");
+                            .accessibility_label(I18N.text("ui-save"))
+                            .on_click(move || status.set("ui-save-activated".to_string()))
+                            .child(move || {
+                                text().content(I18N.text("ui-save"));
                             });
                         button()
                             .outlined()
                             .size(ButtonSize::Medium)
-                            .accessibility_label("Discard")
-                            .on_click(move || status.set("Discard activated".to_string()))
-                            .child(|| {
-                                text().content("Discard");
+                            .accessibility_label(I18N.text("ui-discard"))
+                            .on_click(move || status.set("ui-discard-activated".to_string()))
+                            .child(move || {
+                                text().content(I18N.text("ui-discard"));
                             });
                     });
                 gap(Dp(16.0));
-                text().content(status.get()).style(type_style(14.0, 20.0));
+                text()
+                    .content(I18N.text(status.get()))
+                    .style(type_style(14.0, 20.0));
             });
     }));
 }
@@ -2429,58 +2617,58 @@ fn keyboard_demo() {
 #[tessera]
 fn labeling() {
     prose(
-        "The accessibility label for a button should match the visible label text on the button, such as Done, Send, or Reply. It can contain extra contextual information if necessary.",
+        "ui-the-accessibility-label-for-a-button-should-match-the-visible-label-text-on-the-button-suc",
     );
     gap(Dp(24.0));
     labeling_example();
-    caption("Label: Next · Role: Button. The accessible label repeats the visible text.");
+    caption("ui-label-next-role-button-the-accessible-label-repeats-the-visible-text");
     gap(Dp(32.0));
     prose(
-        "An icon inside a button is decorative when the label already names the action. Provide the accessible label on the button rather than describing the icon.",
+        "ui-an-icon-inside-a-button-is-decorative-when-the-label-already-names-the-action-provide-the",
     );
 }
 
 #[tessera]
 fn labeling_example() {
-    panel(RenderSlot::new(|| {
+    panel(RenderSlot::new(move || {
         column()
             .modifier(Modifier::new().fill_max_width())
-            .children(|| {
+            .children(move || {
                 text()
-                    .content("Maze of Mycelium")
+                    .content(I18N.text("ui-maze-of-mycelium"))
                     .style(type_style(20.0, 28.0));
                 gap(Dp(8.0));
                 text()
-                    .content("From truffle hunting in the forests of France to digging deep underground to find vast mycelium networks, this documentary shows a side of the fungi family you never knew existed.")
+                    .content(I18N.text("ui-from-truffle-hunting-in-the-forests-of-france-to-digging-deep-underground-to-find-vast-myc"))
                     .style(type_style(16.0, 24.0));
                 gap(Dp(24.0));
                 row()
                     .cross_axis_alignment(CrossAxisAlignment::Center)
-                    .children(|| {
+                    .children(move || {
                         button()
                             .text()
                             .size(ButtonSize::Medium)
-                            .accessibility_label("Back")
+                            .accessibility_label(I18N.text("ui-back"))
                             .on_click(|| {})
-                            .child(|| {
-                                text().content("Back");
+                            .child(move || {
+                                text().content(I18N.text("ui-back"));
                             });
                         spacer().modifier(Modifier::new().width(Dp(8.0)));
                         button()
                             .filled()
                             .size(ButtonSize::Medium)
-                            .accessibility_label("Next")
+                            .accessibility_label(I18N.text("ui-next"))
                             .on_click(|| {})
-                            .child(|| {
-                                text().content("Next");
+                            .child(move || {
+                                text().content(I18N.text("ui-next"));
                             });
                         spacer().modifier(Modifier::new().width(Dp(32.0)));
-                        column().children(|| {
+                        column().children(move || {
                             text()
-                                .content("Label: Next")
+                                .content(I18N.text("ui-label-next"))
                                 .style(type_style(14.0, 20.0));
                             text()
-                                .content("Role: Button")
+                                .content(I18N.text("ui-role-button"))
                                 .style(type_style(14.0, 20.0));
                         });
                     });
@@ -2491,19 +2679,19 @@ fn labeling_example() {
 #[tessera]
 fn baseline_tokens() {
     prose(
-        "Baseline token sets describe the reference color, typography, and size roles for a small filled button. These values match the native component defaults used on this page.",
+        "ui-baseline-token-sets-describe-the-reference-color-typography-and-size-roles-for-a-small-fil",
     );
     gap(Dp(24.0));
     spec_table(
-        vec!["Token".into(), "Value".into()],
+        vec!["ui-token".into(), "ui-value".into()],
         vec![
             vec![
                 "md.comp.filled-button.container.color".into(),
-                "Primary".into(),
+                "ui-primary".into(),
             ],
             vec![
                 "md.comp.filled-button.label-text.color".into(),
-                "On primary".into(),
+                "ui-on-primary".into(),
             ],
             vec![
                 "md.comp.filled-button.container.height".into(),
@@ -2511,11 +2699,11 @@ fn baseline_tokens() {
             ],
             vec![
                 "md.comp.filled-button.container.shape".into(),
-                "Full capsule".into(),
+                "ui-full-capsule".into(),
             ],
             vec![
                 "md.comp.filled-button.label-text".into(),
-                "Label large · 14sp / 20sp".into(),
+                "ui-label-large-14sp-20sp".into(),
             ],
             vec!["md.comp.filled-button.icon.size".into(), "20dp".into()],
             vec!["md.comp.filled-button.leading-space".into(), "16dp".into()],
@@ -2552,22 +2740,28 @@ fn playground() {
                     .children(move || {
                         button()
                             .text()
-                            .accessibility_label("Cycle color style")
+                            .accessibility_label(I18N.text("ui-cycle-color-style"))
                             .on_click(move || style.set(next_style(style.get())))
                             .child(move || {
-                                text().content(format!("Style: {}", style_name(style.get())));
+                                text().content(I18N.format(
+                                    "ui-style-value",
+                                    [("v0", I18N.text(&style_name(style.get())).into())],
+                                ));
                             });
                         button()
                             .text()
-                            .accessibility_label("Cycle size")
+                            .accessibility_label(I18N.text("ui-cycle-size"))
                             .on_click(move || size.set(next_size(size.get())))
                             .child(move || {
-                                text().content(format!("Size: {}", size_name(size.get())));
+                                text().content(I18N.format(
+                                    "ui-size-value",
+                                    [("v0", I18N.text(&size_name(size.get())).into())],
+                                ));
                             });
                         button()
                             .tonal()
                             .selected(shape.get() == ButtonShape::Square)
-                            .accessibility_label("Square shape")
+                            .accessibility_label(I18N.text("ui-square-shape"))
                             .on_click(move || {
                                 shape.set(if shape.get() == ButtonShape::Square {
                                     ButtonShape::Round
@@ -2575,13 +2769,13 @@ fn playground() {
                                     ButtonShape::Square
                                 });
                             })
-                            .child(|| {
-                                text().content("Square");
+                            .child(move || {
+                                text().content(I18N.text("ui-square"));
                             });
                         button()
                             .tonal()
                             .selected(toggle.get())
-                            .accessibility_label("Toggle variant")
+                            .accessibility_label(I18N.text("ui-toggle-variant"))
                             .on_click(move || {
                                 let next = !toggle.get();
                                 toggle.set(next);
@@ -2589,24 +2783,24 @@ fn playground() {
                                     selected.set(false);
                                 }
                             })
-                            .child(|| {
-                                text().content("Toggle");
+                            .child(move || {
+                                text().content(I18N.text("ui-toggle"));
                             });
                         button()
                             .tonal()
                             .selected(!enabled.get())
-                            .accessibility_label("Disabled")
+                            .accessibility_label(I18N.text("ui-disabled"))
                             .on_click(move || enabled.set(!enabled.get()))
-                            .child(|| {
-                                text().content("Disabled");
+                            .child(move || {
+                                text().content(I18N.text("ui-disabled"));
                             });
                         button()
                             .tonal()
                             .selected(with_icon.get())
-                            .accessibility_label("Leading icon")
+                            .accessibility_label(I18N.text("ui-leading-icon"))
                             .on_click(move || with_icon.set(!with_icon.get()))
-                            .child(|| {
-                                text().content("Icon");
+                            .child(move || {
+                                text().content(I18N.text("ui-icon"));
                             });
                     });
                 gap(Dp(32.0));
@@ -2620,8 +2814,10 @@ fn playground() {
                         None
                     })
                     .enabled(enabled.get())
-                    .accessibility_label("Live button")
-                    .accessibility_description(format!("Activations: {}", activations.get()))
+                    .accessibility_label(I18N.text("ui-live-button"))
+                    .accessibility_description(
+                        I18N.format("ui-activations-value", [("v0", (activations.get()).into())]),
+                    )
                     .leading_icon_optional(if with_icon.get() {
                         Some(RenderSlot::new(|| {
                             icon().painter(filled::EDIT_SVG);
@@ -2636,23 +2832,33 @@ fn playground() {
                         }
                     })
                     .child(move || {
-                        text().content("Enable");
+                        text().content(I18N.text("ui-enable"));
                     });
                 gap(Dp(24.0));
                 text()
-                    .content(format!(
-                        "Activations: {} · {}",
-                        activations.get(),
-                        if toggle.get() && style.get() != ButtonVariant::Text {
-                            if selected.get() {
-                                "Selected"
-                            } else {
-                                "Unselected"
-                            }
-                        } else {
-                            "Default action"
-                        }
-                    ))
+                    .content(
+                        I18N.format(
+                            "ui-activations-value-value",
+                            [
+                                ("v0", (activations.get()).into()),
+                                (
+                                    "v1",
+                                    I18N.text(
+                                        &(if toggle.get() && style.get() != ButtonVariant::Text {
+                                            if selected.get() {
+                                                "ui-selected"
+                                            } else {
+                                                "ui-unselected"
+                                            }
+                                        } else {
+                                            "ui-default-action"
+                                        }),
+                                    )
+                                    .into(),
+                                ),
+                            ],
+                        ),
+                    )
                     .style(type_style(14.0, 20.0));
             });
     }));

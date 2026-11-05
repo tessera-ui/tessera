@@ -25,6 +25,8 @@ use tessera_ui::{
     remember, scaled_box, tessera, use_context,
 };
 
+use crate::res::I18N;
+
 use super::{
     super::{annotations, gap, media, srgb, subheading, type_style},
     SIZES, context,
@@ -38,39 +40,39 @@ pub(super) fn figures() {
     sizes();
     gap(Dp(24.0));
     caption(vec![
-        "A. Extra small",
-        "B. Small",
-        "C. Medium",
-        "D. Large",
-        "E. Extra large",
+        "ui-a-extra-small",
+        "ui-b-small",
+        "ui-c-medium",
+        "ui-d-large",
+        "ui-e-extra-large",
     ]);
     gap(Dp(16.0));
     numbered_legend(vec![
-        "Icon size",
-        "Default width",
-        "Narrow width",
-        "Wide width",
+        "ui-icon-size",
+        "ui-default-width",
+        "ui-narrow-width",
+        "ui-wide-width",
     ]);
     gap(Dp(56.0));
     context::context_row(
-        RenderSlot::new(|| {
-            subheading("Target sizes".into());
+        RenderSlot::new(move || {
+            subheading("ui-target-sizes".into());
             gap(Dp(24.0));
-            text().content("Extra small and small icon buttons must have a target size of 48x48dp or larger to be accessible.").style(type_style(16.0,24.0));
+            text().content(I18N.text("ui-extra-small-and-small-icon-buttons-must-have-a-target-size-of-48x48dp-or-larger-to-be-acce")).style(type_style(16.0,24.0));
         }),
         RenderSlot::new(|| {
             targets();
             gap(Dp(24.0));
             caption(vec![
-                "A. Extra small icon button size",
-                "B. Small icon button size",
+                "ui-a-extra-small-icon-button-size",
+                "ui-b-small-icon-button-size",
             ]);
             gap(Dp(16.0));
-            numbered_legend(vec!["Narrow width", "Default width", "Wide width"]);
+            numbered_legend(vec!["ui-narrow-width", "ui-default-width", "ui-wide-width"]);
         }),
     );
     gap(Dp(56.0));
-    subheading("Button corner radius".into());
+    subheading("ui-button-corner-radius".into());
     gap(Dp(32.0));
     corners();
     gap(Dp(24.0));
@@ -84,7 +86,9 @@ fn caption(items: Vec<&'static str>) {
         .line_spacing(Dp(4.0))
         .children(move || {
             for item in &items {
-                text().content(*item).style(type_style(16.0, 24.0));
+                text()
+                    .content(I18N.text(*item))
+                    .style(type_style(16.0, 24.0));
             }
         });
 }
@@ -113,7 +117,9 @@ fn numbered_legend(items: Vec<&'static str>) {
                             .style(type_style(16.0, 24.0));
                     });
                 boxed().modifier(Modifier::new().size(Dp(12.0), Dp(1.0)));
-                text().content(item).style(type_style(14.0, 20.0));
+                text()
+                    .content(I18N.text(item))
+                    .style(type_style(14.0, 20.0));
             });
         gap(Dp(8.0));
     }
@@ -147,7 +153,7 @@ fn stage(width: f64, height: f64, label: String, child: RenderSlot) {
                             .clip_shape(Shape::rounded_rectangle(Dp(24.0)))
                             .semantics(SemanticsArgs {
                                 role: Some(Role::Group),
-                                label: Some(label.clone()),
+                                label: Some(I18N.text(&(label))),
                                 merge_descendants: true,
                                 ..Default::default()
                             }),
@@ -191,7 +197,9 @@ fn label(value: String, x: f64, y: f64, width: f64) {
                 .size(Dp(width), Dp(24.0)),
         )
         .children(move || {
-            text().content(value.clone()).style(type_style(14.0, 20.0));
+            text()
+                .content(I18N.text(&(value)))
+                .style(type_style(14.0, 20.0));
         });
 }
 
@@ -208,7 +216,7 @@ fn badge(value: String, x: f64, y: f64) {
         )
         .children(move || {
             text()
-                .content(value.clone())
+                .content(I18N.text(&(value)))
                 .color(scheme.inverse_on_surface)
                 .style(type_style(16.0, 24.0));
         });
@@ -266,8 +274,10 @@ fn control(
                 .shape(fixed_shape)
                 .presentation_state(InteractionVisualState::Rest)
                 .icon(filled::EDIT_SVG)
-                .accessibility_label(name.clone())
-                .accessibility_description(format!("Activations: {}", actions.get()))
+                .accessibility_label(I18N.text(&(name)))
+                .accessibility_description(
+                    I18N.format("ui-activations-value", [("v0", (actions.get()).into())]),
+                )
                 .on_click(move || actions.set(actions.get() + 1));
         });
 }
@@ -305,13 +315,13 @@ fn sizes() {
     stage(
         1024.0,
         942.0,
-        "Icon button visual measurements".into(),
-        RenderSlot::new(|| {
+        "ui-icon-button-visual-measurements".into(),
+        RenderSlot::new(move || {
             for (index, (x, title)) in [
-                (209.0, "Icon"),
-                (411.0, "Default width"),
-                (615.0, "Narrow width"),
-                (833.0, "Wide width"),
+                (209.0, "ui-icon"),
+                (411.0, "ui-default-width"),
+                (615.0, "ui-narrow-width"),
+                (833.0, "ui-wide-width"),
             ]
             .into_iter()
             .enumerate()
@@ -333,7 +343,10 @@ fn sizes() {
                     false,
                     209.0,
                     y,
-                    format!("Measure {size:?} icon"),
+                    I18N.format(
+                        "ui-measure-value-icon",
+                        [("v0", format!("{:?}", size).into())],
+                    ),
                 );
                 let icon = size.icon_size().0;
                 let mut svg = String::new();
@@ -369,7 +382,13 @@ fn sizes() {
                         false,
                         x,
                         y,
-                        format!("Measure {size:?} {width:?}"),
+                        I18N.format(
+                            "ui-measure-value-value",
+                            [
+                                ("v0", format!("{:?}", size).into()),
+                                ("v1", format!("{:?}", width).into()),
+                            ],
+                        ),
                     );
                     dimensions(
                         x,
@@ -391,8 +410,8 @@ fn targets() {
     stage(
         676.0,
         300.0,
-        "Icon button touch targets".into(),
-        RenderSlot::new(|| {
+        "ui-icon-button-touch-targets".into(),
+        RenderSlot::new(move || {
             for (row, (size, y)) in [
                 (IconButtonSize::ExtraSmall, 53.0),
                 (IconButtonSize::Small, 161.0),
@@ -424,7 +443,13 @@ fn targets() {
                         false,
                         x,
                         y,
-                        format!("Target {size:?} {width:?}"),
+                        I18N.format(
+                            "ui-target-value-value",
+                            [
+                                ("v0", format!("{:?}", size).into()),
+                                ("v1", format!("{:?}", width).into()),
+                            ],
+                        ),
                     );
                     dimensions(x, y, target, 48.0, y + 32.0, 676.0, 300.0);
                     if row == 1 {
@@ -441,8 +466,8 @@ fn corners() {
     stage(
         1024.0,
         626.0,
-        "Icon button corner radii".into(),
-        RenderSlot::new(|| {
+        "ui-icon-button-corner-radii".into(),
+        RenderSlot::new(move || {
             for (row, y) in [107.0, 303.0, 498.0].into_iter().enumerate() {
                 badge(["A", "B", "C"][row].into(), 124.0, y);
                 for (size, x) in SIZES.into_iter().zip([242.0, 360.0, 492.0, 648.0, 844.0]) {
@@ -458,7 +483,10 @@ fn corners() {
                         row == 2,
                         x,
                         y,
-                        format!("Corner row {row} {size:?}"),
+                        I18N.format(
+                            "ui-corner-row-value-value",
+                            [("v0", (row).into()), ("v1", format!("{:?}", size).into())],
+                        ),
                     );
                     if row == 0 {
                         continue;

@@ -24,39 +24,41 @@ use tessera_ui::{
     use_context,
 };
 
+use crate::res::I18N;
+
 use super::{gap, srgb, type_style};
 
 #[tessera]
 pub(super) fn labeling() {
-    paragraph("The accessible name matches the visible text field label.");
+    paragraph("ui-the-accessible-name-matches-the-visible-text-field-label");
     gap(Dp(24.0));
     labeling_figure(0);
     gap(Dp(24.0));
     paragraph(
-        "Name interactive trailing icons by their action. The password action changes between Show password and Hide password.",
+        "ui-name-interactive-trailing-icons-by-their-action-the-password-action-changes-between-show-p",
     );
     gap(Dp(24.0));
     labeling_figure(1);
     for (kind, description) in [
         (
             2,
-            "Give affixes a meaningful accessible name, such as Euro or At gmail dot com.",
+            "ui-give-affixes-a-meaningful-accessible-name-such-as-euro-or-at-gmail-dot-com",
         ),
         (
             3,
-            "Expose error messages with an alert role and describe how to correct the input.",
+            "ui-expose-error-messages-with-an-alert-role-and-describe-how-to-correct-the-input",
         ),
         (
             4,
-            "Name the character counter and announce the number of characters entered and the limit.",
+            "ui-name-the-character-counter-and-announce-the-number-of-characters-entered-and-the-limit",
         ),
         (
             5,
-            "Supporting text has its own accessible name and is associated with the field.",
+            "ui-supporting-text-has-its-own-accessible-name-and-is-associated-with-the-field",
         ),
         (
             6,
-            "Include the asterisk in a required field's accessible name and explain it in supporting text.",
+            "ui-include-the-asterisk-in-a-required-field-s-accessible-name-and-explain-it-in-supporting-te",
         ),
     ] {
         gap(Dp(24.0));
@@ -68,7 +70,9 @@ pub(super) fn labeling() {
 
 #[tessera]
 fn paragraph(#[prop(into)] value: String) {
-    text().content(value).style(type_style(16.0, 24.0));
+    text()
+        .content(I18N.text(value))
+        .style(type_style(16.0, 24.0));
 }
 
 #[tessera]
@@ -184,18 +188,18 @@ fn callout(x: f64, y: f64, width: f64, height: f64, label: String, role: String,
                 )
                 .children(move || {
                     text()
-                        .content("Label")
+                        .content(I18N.text("ui-label"))
                         .style(type_style(14.0 * scale, 18.0 * scale));
                     text()
-                        .content(label.clone())
+                        .content(I18N.text(&(label)))
                         .style(emphasis.clone())
                         .color(srgb(132, 69, 143));
                     gap(Dp(12.0 * scale));
                     text()
-                        .content("Role")
+                        .content(I18N.text("ui-role"))
                         .style(type_style(14.0 * scale, 18.0 * scale));
                     text()
-                        .content(role.clone())
+                        .content(I18N.text(&(role)))
                         .style(emphasis)
                         .color(srgb(132, 69, 143));
                 });
@@ -222,7 +226,7 @@ fn email_diagram(scale: f64) {
                 .clip_to_bounds()
                 .semantics(SemanticsArgs {
                     role: Some(Role::Image),
-                    label: Some("Food photograph".into()),
+                    label: Some(I18N.text("ui-food-photograph")),
                     ..Default::default()
                 }),
         )
@@ -235,8 +239,15 @@ fn email_diagram(scale: f64) {
                     .required_size(Dp(676.0 * scale), Dp(300.0 * scale)),
             );
         });
-    editable_field(340.0, 128.0, 327.0, "Email".into(), "".into(), scale);
-    editable_field(340.0, 223.0, 327.0, "Phone number".into(), "".into(), scale);
+    editable_field(340.0, 128.0, 327.0, "ui-email".into(), "".into(), scale);
+    editable_field(
+        340.0,
+        223.0,
+        327.0,
+        "ui-phone-number".into(),
+        "".into(),
+        scale,
+    );
     rectangle(270.0, 155.0, 66.0, 5.0, srgb(132, 69, 143), scale);
     highlight(334.0, 122.0, 339.0, 66.0, 6.0, scale);
     callout(
@@ -244,8 +255,8 @@ fn email_diagram(scale: f64) {
         102.0,
         230.0,
         116.0,
-        "UI text (“Email”)".into(),
-        "Textbox".into(),
+        "ui-ui-text-email".into(),
+        "ui-textbox".into(),
         scale,
     );
 }
@@ -254,9 +265,9 @@ fn email_diagram(scale: f64) {
 fn editable_field(x: f64, y: f64, width: f64, label: String, initial: String, scale: f64) {
     text_field()
         .outlined()
-        .label(label.clone())
+        .label(I18N.text(&(label)))
         .initial_text(initial)
-        .accessibility_label(label)
+        .accessibility_label(I18N.text(label))
         .min_width(Dp::ZERO)
         .min_height(Dp(56.0 * scale))
         .font_size(Dp(16.0 * scale))
@@ -279,12 +290,19 @@ fn password_diagram(scale: f64) {
     let scheme = use_context::<MaterialTheme>().unwrap().get().color_scheme;
     rectangle(0.0, 0.0, 378.0, 300.0, scheme.surface, scale);
     rectangle(378.0, 0.0, 8.0, 300.0, scheme.outline_variant, scale);
-    editable_field(26.5, 41.5, 327.0, "Label".into(), "Input".into(), scale);
+    editable_field(
+        26.5,
+        41.5,
+        327.0,
+        "ui-label".into(),
+        "ui-input".into(),
+        scale,
+    );
     dropdown_field(scale);
     let field = text_field()
         .outlined()
-        .label("Password")
-        .accessibility_label("Password")
+        .label(I18N.text("ui-password"))
+        .accessibility_label(I18N.text("ui-password"))
         .controller(controller)
         .min_width(Dp::ZERO)
         .min_height(Dp(56.0 * scale))
@@ -307,11 +325,11 @@ fn password_diagram(scale: f64) {
                 } else {
                     filled::VISIBILITY_SVG
                 })
-                .accessibility_label(if show.get() {
-                    "Hide password"
+                .accessibility_label(I18N.text(if show.get() {
+                    "ui-hide-password"
                 } else {
-                    "Show password"
-                })
+                    "ui-show-password"
+                }))
                 .on_click(move || {
                     show.set(!show.get());
                     controller.with(|controller| controller.request_focus());
@@ -330,11 +348,11 @@ fn password_diagram(scale: f64) {
         237.0,
         116.0,
         if show.get() {
-            "Hide Password".into()
+            "ui-hide-password-5934".into()
         } else {
-            "Show Password".into()
+            "ui-show-password-5935".into()
         },
-        "Button".into(),
+        "ui-button".into(),
         scale,
     );
 }
@@ -344,7 +362,7 @@ fn dropdown_field(scale: f64) {
     let menu = remember(MenuController::new);
     let controller = remember(|| {
         let mut controller = TextInputController::new(Dp(16.0 * scale), Some(Dp(24.0 * scale)));
-        controller.set_text("Input");
+        controller.set_text(&I18N.text("ui-input"));
         controller
     });
     boxed()
@@ -365,8 +383,8 @@ fn dropdown_field(scale: f64) {
                     text_field()
                         .outlined()
                         .controller(controller)
-                        .label("Label")
-                        .accessibility_label("Label options")
+                        .label(I18N.text("ui-label"))
+                        .accessibility_label(I18N.text("ui-label-options"))
                         .min_width(Dp::ZERO)
                         .min_height(Dp(56.0 * scale))
                         .font_size(Dp(16.0 * scale))
@@ -380,17 +398,26 @@ fn dropdown_field(scale: f64) {
                                 .standard()
                                 .color_style(IconButtonColorStyle::Inherited)
                                 .icon(filled::ARROW_DROP_DOWN_SVG)
-                                .accessibility_label("Choose label option")
+                                .accessibility_label(I18N.text("ui-choose-label-option"))
                                 .on_click(move || menu.with_mut(MenuController::toggle));
                         });
                 })
                 .menu_content(move |menu| {
-                    menu_item().menu(menu).label("Personal").on_click(move || {
-                        controller.with_mut(|controller| controller.set_text("Personal"));
-                    });
-                    menu_item().menu(menu).label("Work").on_click(move || {
-                        controller.with_mut(|controller| controller.set_text("Work"));
-                    });
+                    menu_item()
+                        .menu(menu)
+                        .label(I18N.text("ui-personal"))
+                        .on_click(move || {
+                            controller.with_mut(|controller| {
+                                controller.set_text(&I18N.text("ui-personal"))
+                            });
+                        });
+                    menu_item()
+                        .menu(menu)
+                        .label(I18N.text("ui-work"))
+                        .on_click(move || {
+                            controller
+                                .with_mut(|controller| controller.set_text(&I18N.text("ui-work")));
+                        });
                 });
         });
 }
@@ -419,14 +446,11 @@ fn reference_photo(source: usize, x: f64, y: f64, width: f64, height: f64, scale
                 .clip_to_bounds()
                 .semantics(SemanticsArgs {
                     role: Some(Role::Image),
-                    label: Some(
-                        if source == 6 {
-                            "Flower photograph"
-                        } else {
-                            "Food photograph"
-                        }
-                        .into(),
-                    ),
+                    label: Some(I18N.text(if source == 6 {
+                        "ui-flower-photograph"
+                    } else {
+                        "ui-food-photograph"
+                    })),
                     ..Default::default()
                 }),
         )
@@ -449,7 +473,14 @@ fn affixes_diagram(scale: f64) {
     reference_photo(2, 180.0, 0.0, 316.0, 64.0, scale);
     labeled_field(0, 180.0, 88.0, 316.0, scale);
     labeled_field(1, 180.0, 172.0, 316.0, scale);
-    editable_field(180.0, 256.0, 316.0, "Phone number".into(), "".into(), scale);
+    editable_field(
+        180.0,
+        256.0,
+        316.0,
+        "ui-phone-number".into(),
+        "".into(),
+        scale,
+    );
     rectangle(138.0, 114.0, 48.0, 5.0, srgb(132, 69, 143), scale);
     rectangle(491.0, 197.0, 48.0, 5.0, srgb(132, 69, 143), scale);
     highlight(186.0, 96.0, 40.0, 40.0, 6.0, scale);
@@ -459,8 +490,8 @@ fn affixes_diagram(scale: f64) {
         52.0,
         122.0,
         136.0,
-        "UI text\n(“Euro”)".into(),
-        "[No role]".into(),
+        "ui-ui-text-euro".into(),
+        "ui-no-role".into(),
         scale,
     );
     callout(
@@ -468,8 +499,8 @@ fn affixes_diagram(scale: f64) {
         102.0,
         122.0,
         156.0,
-        "UI text (“At\ngmail dot\ncom”)".into(),
-        "[No role]".into(),
+        "ui-ui-text-at-gmail-dot-com".into(),
+        "ui-no-role".into(),
         scale,
     );
 }
@@ -513,8 +544,8 @@ fn error_diagram(scale: f64) {
         92.0,
         278.0,
         116.0,
-        "UI text (“Not a valid ZIP code”)".into(),
-        "Alert".into(),
+        "ui-ui-text-not-a-valid-zip-code".into(),
+        "ui-alert".into(),
         scale,
     );
 }
@@ -529,21 +560,28 @@ fn counter_diagram(scale: f64) {
         -138.5,
         -5.5,
         327.0,
-        "Previous input".into(),
+        "ui-previous-input".into(),
         "".into(),
         scale,
     );
     boxed()
         .modifier(Modifier::new().fill_max_size().semantics(SemanticsArgs {
             role: Some(Role::Group),
-            label: Some("Character count labeling example".into()),
+            label: Some(I18N.text("ui-character-count-labeling-example")),
             merge_descendants: true,
             ..Default::default()
         }))
         .children(move || {
             labeled_field(3, -140.0, 90.0, 327.0, scale);
         });
-    editable_field(-138.5, 190.5, 327.0, "Next input".into(), "".into(), scale);
+    editable_field(
+        -138.5,
+        190.5,
+        327.0,
+        "ui-next-input".into(),
+        "".into(),
+        scale,
+    );
     rectangle(187.0, 154.0, 62.0, 5.0, srgb(132, 69, 143), scale);
     highlight(139.0, 133.0, 47.0, 48.0, 6.0, scale);
 }
@@ -553,9 +591,23 @@ fn supporting_diagram(scale: f64) {
     let scheme = use_context::<MaterialTheme>().unwrap().get().color_scheme;
     rectangle(0.0, 0.0, 369.0, 300.0, scheme.surface, scale);
     rectangle(369.0, 0.0, 8.0, 300.0, scheme.outline_variant, scale);
-    editable_field(17.5, 19.5, 326.5, "Phone number".into(), "".into(), scale);
+    editable_field(
+        17.5,
+        19.5,
+        326.5,
+        "ui-phone-number".into(),
+        "".into(),
+        scale,
+    );
     labeled_field(4, 16.0, 119.5, 327.0, scale);
-    editable_field(16.0, 219.5, 327.0, "Label".into(), "Input".into(), scale);
+    editable_field(
+        16.0,
+        219.5,
+        327.0,
+        "ui-label".into(),
+        "ui-input".into(),
+        scale,
+    );
     rectangle(348.0, 150.0, 68.0, 5.0, srgb(132, 69, 143), scale);
     highlight(12.0, 114.5, 336.0, 85.5, 6.0, scale);
     callout(
@@ -563,8 +615,8 @@ fn supporting_diagram(scale: f64) {
         82.0,
         233.0,
         134.0,
-        "UI text (“Please use the\ncompany email address”)".into(),
-        "[No role]".into(),
+        "ui-ui-text-please-use-the-company-email-address".into(),
+        "ui-no-role".into(),
         scale,
     );
 }
@@ -577,12 +629,19 @@ fn required_diagram(scale: f64) {
     rectangle(338.0, 0.0, 338.0, 300.0, scheme.surface, scale);
     reference_photo(6, 362.0, 0.0, 314.0, 83.0, scale);
     labeled_field(5, 362.0, 107.5, 327.0, scale);
-    editable_field(362.0, 203.5, 327.0, "Phone number".into(), "".into(), scale);
+    editable_field(
+        362.0,
+        203.5,
+        327.0,
+        "ui-phone-number".into(),
+        "".into(),
+        scale,
+    );
     editable_field(
         362.0,
         283.5,
         327.0,
-        "Additional input".into(),
+        "ui-additional-input".into(),
         "".into(),
         scale,
     );
@@ -593,8 +652,8 @@ fn required_diagram(scale: f64) {
         92.0,
         230.0,
         116.0,
-        "UI text (“Username*”)".into(),
-        "Textbox".into(),
+        "ui-ui-text-username".into(),
+        "ui-textbox".into(),
         scale,
     );
 }
@@ -604,35 +663,35 @@ fn labeled_field(kind: usize, x: f64, y: f64, width: f64, scale: f64) {
     let initial = if kind == 2 {
         "01"
     } else if kind == 3 {
-        "Input"
+        "ui-input"
     } else {
         ""
     };
     let controller = remember(|| {
         let mut controller = TextInputController::new(Dp(16.0 * scale), Some(Dp(24.0 * scale)));
-        controller.set_text(initial);
+        controller.set_text(&I18N.text(initial));
         controller
     });
-    let count = remember(|| initial.chars().count());
+    let count = remember(|| controller.with(|controller| controller.text().chars().count()));
     let scheme = use_context::<MaterialTheme>().unwrap().get().color_scheme;
     let description = match kind {
-        2 => "Not a valid ZIP code",
-        4 => "Please use the company email address",
-        5 => "Required",
+        2 => "ui-not-a-valid-zip-code",
+        4 => "ui-please-use-the-company-email-address",
+        5 => "ui-required",
         _ => "",
     };
     let name = match kind {
-        0 => "Amount",
-        1 | 4 => "Email",
-        2 => "ZIP code",
-        3 => "Label",
+        0 => "ui-amount",
+        1 | 4 => "ui-email",
+        2 => "ui-zip-code",
+        3 => "ui-label",
         _ => "Username*",
     };
     let field = text_field()
         .outlined()
         .controller(controller)
-        .accessibility_label(name)
-        .accessibility_description(description)
+        .accessibility_label(I18N.text(name))
+        .accessibility_description(I18N.text(description))
         .min_width(Dp::ZERO)
         .min_height(Dp(56.0 * scale))
         .font_size(Dp(16.0 * scale))
@@ -651,22 +710,22 @@ fn labeled_field(kind: usize, x: f64, y: f64, width: f64, scale: f64) {
             next
         });
     if kind >= 2 {
-        field.label(name);
+        field.label(I18N.text(name));
     }
     if kind == 1 {
-        field.placeholder("Email").suffix(move || {
+        field.placeholder(I18N.text("ui-email")).suffix(move || {
             text()
-                .content("@gmail.com")
+                .content(I18N.text("@gmail.com"))
                 .style(type_style(16.0 * scale, 24.0 * scale))
-                .accessibility_label("At gmail dot com");
+                .accessibility_label(I18N.text("ui-at-gmail-dot-com-5953"));
         });
     }
     if kind == 0 {
         field.prefix(move || {
             text()
-                .content("€")
+                .content(I18N.text("€"))
                 .style(type_style(16.0 * scale, 24.0 * scale))
-                .accessibility_label("Euro");
+                .accessibility_label(I18N.text("ui-euro"));
         });
     }
     if kind == 2 || kind == 3 {
@@ -676,9 +735,9 @@ fn labeled_field(kind: usize, x: f64, y: f64, width: f64, scale: f64) {
         text()
             .content(format!("{}/20", count.get()))
             .style(type_style(12.0 * scale, 16.0 * scale))
-            .accessibility_label(format!(
-                "Character count, {} of 20 characters entered",
-                count.get()
+            .accessibility_label(I18N.format(
+                "ui-character-count-value-of-20-characters-entered",
+                [("v0", (count.get()).into())],
             ))
             .modifier(
                 Modifier::new().offset(Dp((x + width - 37.0) * scale), Dp((y + 62.0) * scale)),
@@ -688,16 +747,16 @@ fn labeled_field(kind: usize, x: f64, y: f64, width: f64, scale: f64) {
             96.0,
             316.0,
             136.0,
-            format!(
-                "UI text (“Character count, {} of 20\ncharacters entered”)",
-                count.get()
+            I18N.format(
+                "ui-ui-text-character-count-value-of-20-characters-entered",
+                [("v0", (count.get()).into())],
             ),
-            "[No role]".into(),
+            "ui-no-role".into(),
             scale,
         );
     } else if !description.is_empty() {
         text()
-            .content(if kind == 5 { "*required" } else { description })
+            .content(I18N.text(if kind == 5 { "*required" } else { description }))
             .style(type_style(12.0 * scale, 16.0 * scale))
             .color(if kind == 2 {
                 scheme.error
@@ -712,7 +771,7 @@ fn labeled_field(kind: usize, x: f64, y: f64, width: f64, scale: f64) {
                     )
                     .semantics(SemanticsArgs {
                         role: if kind == 2 { Some(Role::Alert) } else { None },
-                        label: Some(if kind == 5 { "*required" } else { description }.into()),
+                        label: Some(I18N.text(if kind == 5 { "*required" } else { description })),
                         ..Default::default()
                     }),
             );

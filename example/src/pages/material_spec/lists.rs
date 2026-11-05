@@ -25,6 +25,8 @@ use tessera_ui::{
     Dp, Modifier, RenderSlot, State, accesskit::Role, remember, tessera, use_context,
 };
 
+use crate::res::I18N;
+
 use super::{
     ACCENT,
     annotations::{self, Geometry, dotted, relative, watch},
@@ -36,7 +38,7 @@ use super::{
 #[path = "lists_figures_tests.rs"]
 mod figures_tests;
 
-const ITEMS: [&str; 3] = ["Notes", "Projects", "Archive"];
+const ITEMS: [&str; 3] = ["ui-notes", "ui-projects", "ui-archive"];
 
 #[derive(Clone, Copy, PartialEq)]
 struct DemoState {
@@ -49,60 +51,60 @@ struct DemoState {
 #[tessera]
 pub(super) fn lists_spec(route: Option<crate::pages::material_spec::article::ArticleRoute>) {
     article(
-        "Lists",
-        "Present a continuous vertical index of related content and actions.",
+        "ui-lists",
+        "ui-present-a-continuous-vertical-index-of-related-content-and-actions",
         vec![
             SpecSection {
-                title: "Variants",
+                title: "ui-variants",
                 content: RenderSlot::new(variants),
             },
             SpecSection {
-                title: "Configurations",
+                title: "ui-configurations",
                 content: RenderSlot::new(configurations),
             },
             SpecSection {
-                title: "Tokens & specs",
+                title: "ui-tokens-specs",
                 content: RenderSlot::new(tokens),
             },
             SpecSection {
-                title: "Anatomy",
+                title: "ui-anatomy",
                 content: RenderSlot::new(anatomy),
             },
             SpecSection {
-                title: "Color",
+                title: "ui-color",
                 content: RenderSlot::new(colors),
             },
             SpecSection {
-                title: "States",
+                title: "ui-states",
                 content: RenderSlot::new(states),
             },
             SpecSection {
-                title: "Measurements",
+                title: "ui-measurements",
                 content: RenderSlot::new(measurements),
             },
             SpecSection {
-                title: "List (baseline)",
+                title: "ui-list-baseline",
                 content: RenderSlot::new(baseline),
             },
         ],
     ).route_optional(route.clone()).pages(vec![
-        ArticlePage {title:"Overview",intro:Some(RenderSlot::new(list_reading_examples)),sections:vec![
-            SpecSection {title:"M3 Expressive update",content:RenderSlot::new(|| {prose("Expressive lists introduce segmented shapes, highlighted selection and flexible content slots. Use this treatment for new designs.");gap(Dp(24.0));panel(RenderSlot::new(|| {mode_demo(ListItemSelectionMode::Multiple,false,true,true,"Overview selection");}));})},
-            SpecSection {title:"Differences from M2 to M3 baseline",content:RenderSlot::new(|| {prose("Baseline lists standardize color, spacing, heights and alignment. Content determines a one-, two- or three-line item's height; taller rows align their contents toward the top.");gap(Dp(24.0));list_reading_examples();})},
+        ArticlePage {title:"ui-overview",intro:Some(RenderSlot::new(list_reading_examples)),sections:vec![
+            SpecSection {title:"ui-m3-expressive-update",content:RenderSlot::new(|| {prose("ui-expressive-lists-introduce-segmented-shapes-highlighted-selection-and-flexible-content-slo");gap(Dp(24.0));panel(RenderSlot::new(|| {mode_demo(ListItemSelectionMode::Multiple,false,true,true,"ui-overview-selection");}));})},
+            SpecSection {title:"ui-differences-from-m2-to-m3-baseline",content:RenderSlot::new(|| {prose("ui-baseline-lists-standardize-color-spacing-heights-and-alignment-content-determines-a-one-tw");gap(Dp(24.0));list_reading_examples();})},
         ]},
-        ArticlePage {title:"Guidelines",intro:None,sections:vec![
-            SpecSection {title:"Usage",content:RenderSlot::new(|| {prose("Order related items logically and use consistent formatting so people can find and act on a particular item. Keep labels concise and supporting text easy to scan.");gap(Dp(24.0));list_reading_examples();})},
-            SpecSection {title:"Anatomy",content:RenderSlot::new(list_guideline_anatomy)},
-            SpecSection {title:"Adaptive design",content:RenderSlot::new(list_adaptive)},
-            SpecSection {title:"Behavior",content:RenderSlot::new(list_behavior)},
+        ArticlePage {title:"ui-guidelines",intro:None,sections:vec![
+            SpecSection {title:"ui-usage",content:RenderSlot::new(|| {prose("ui-order-related-items-logically-and-use-consistent-formatting-so-people-can-find-and-act-on");gap(Dp(24.0));list_reading_examples();})},
+            SpecSection {title:"ui-anatomy",content:RenderSlot::new(list_guideline_anatomy)},
+            SpecSection {title:"ui-adaptive-design",content:RenderSlot::new(list_adaptive)},
+            SpecSection {title:"ui-behavior",content:RenderSlot::new(list_behavior)},
         ]},
-        ArticlePage {title:"Accessibility",intro:None,sections:vec![
-            SpecSection {title:"Use cases",content:RenderSlot::new(|| {prose("People must be able to reach list items, identify their purpose and activate or select them with assistive technology.");gap(Dp(24.0));panel(RenderSlot::new(|| {mode_demo(ListItemSelectionMode::Action,false,true,true,"Accessible actions");}));})},
-            SpecSection {title:"Indicate selection with more than color",content:RenderSlot::new(|| {prose("Add a checkmark or selection control so selected items remain identifiable without relying on color.");gap(Dp(24.0));panel(RenderSlot::new(|| {mode_demo(ListItemSelectionMode::Multiple,false,true,true,"Accessible multiple selection");}));})},
-            SpecSection {title:"Interaction & style",content:RenderSlot::new(list_interaction)},
-            SpecSection {title:"Focus",content:RenderSlot::new(list_focus)},
-            SpecSection {title:"Keyboard navigation",content:RenderSlot::new(|| {spec_table(vec!["Keys".into(),"Action".into()],vec![vec!["Tab / Shift + Tab".into(),"Navigate between enabled row actions".into()],vec!["Space or Enter".into(),"Activate or select the focused action".into()]]);})},
-            SpecSection {title:"Labeling elements",content:RenderSlot::new(|| {prose("The item's visible label and supporting text describe its purpose. Give secondary actions their own meaningful names.");gap(Dp(24.0));subheading("Platform-specific labels".into());prose("Single and multiple selection expose distinct roles and checked states. Action rows do not pretend to be selected. Decorative icons do not add redundant announcements.");gap(Dp(24.0));panel(RenderSlot::new(|| {mode_demo(ListItemSelectionMode::Single,false,true,true,"Labeled single selection");}));})},
+        ArticlePage {title:"ui-accessibility",intro:None,sections:vec![
+            SpecSection {title:"ui-use-cases",content:RenderSlot::new(|| {prose("ui-people-must-be-able-to-reach-list-items-identify-their-purpose-and-activate-or-select-them");gap(Dp(24.0));panel(RenderSlot::new(|| {mode_demo(ListItemSelectionMode::Action,false,true,true,"ui-accessible-actions");}));})},
+            SpecSection {title:"ui-indicate-selection-with-more-than-color",content:RenderSlot::new(|| {prose("ui-add-a-checkmark-or-selection-control-so-selected-items-remain-identifiable-without-relying");gap(Dp(24.0));panel(RenderSlot::new(|| {mode_demo(ListItemSelectionMode::Multiple,false,true,true,"ui-accessible-multiple-selection");}));})},
+            SpecSection {title:"ui-interaction-style",content:RenderSlot::new(list_interaction)},
+            SpecSection {title:"ui-focus",content:RenderSlot::new(list_focus)},
+            SpecSection {title:"ui-keyboard-navigation",content:RenderSlot::new(|| {spec_table(vec!["ui-keys".into(),"ui-action".into()],vec![vec!["ui-tab-shift-tab".into(),"ui-navigate-between-enabled-row-actions".into()],vec!["ui-space-or-enter".into(),"ui-activate-or-select-the-focused-action".into()]]);})},
+            SpecSection {title:"ui-labeling-elements",content:RenderSlot::new(|| {prose("ui-the-item-s-visible-label-and-supporting-text-describe-its-purpose-give-secondary-actions-t");gap(Dp(24.0));subheading("ui-platform-specific-labels".into());prose("ui-single-and-multiple-selection-expose-distinct-roles-and-checked-states-action-rows-do-not");gap(Dp(24.0));panel(RenderSlot::new(|| {mode_demo(ListItemSelectionMode::Single,false,true,true,"ui-labeled-single-selection");}));})},
         ]},
     ]);
 }
@@ -133,7 +135,7 @@ fn mode_demo(
                     } else {
                         Role::List
                     }),
-                    label: Some(label.clone()),
+                    label: Some(I18N.text(&(label))),
                     merge_descendants: true,
                     ..Default::default()
                 }))
@@ -156,16 +158,22 @@ fn mode_demo(
             if mode == ListItemSelectionMode::Action {
                 gap(Dp(16.0));
                 text()
-                    .content(format!(
-                        "{caption} primary actions: {}",
-                        state.primary.get()
+                    .content(I18N.format(
+                        "ui-value-primary-actions-value",
+                        [
+                            ("v0", I18N.text(&caption).into()),
+                            ("v1", (state.primary.get()).into()),
+                        ],
                     ))
                     .style(type_style(14.0, 20.0));
                 if multi_action {
                     text()
-                        .content(format!(
-                            "{caption} secondary actions: {}",
-                            state.secondary.get()
+                        .content(I18N.format(
+                            "ui-value-secondary-actions-value",
+                            [
+                                ("v0", I18N.text(&caption).into()),
+                                ("v1", (state.secondary.get()).into()),
+                            ],
                         ))
                         .style(type_style(14.0, 20.0));
                 }
@@ -195,7 +203,13 @@ fn item(
                 .standard()
                 .icon(filled::MORE_VERT_SVG)
                 .enabled(enabled)
-                .accessibility_label(format!("{label}: {} more actions", ITEMS[index]))
+                .accessibility_label(I18N.format(
+                    "ui-value-value-more-actions",
+                    [
+                        ("v0", I18N.text(&label).into()),
+                        ("v1", I18N.text(&(ITEMS[index])).into()),
+                    ],
+                ))
                 .on_click(move || state.secondary.set(state.secondary.get() + 1));
         }))
     } else if selected {
@@ -206,9 +220,15 @@ fn item(
         None
     };
     list_item()
-        .headline(ITEMS[index])
-        .supporting_text("Folder and related documents")
-        .accessibility_label(format!("{label}: {}", ITEMS[index]))
+        .headline(I18N.text(ITEMS[index]))
+        .supporting_text(I18N.text("ui-folder-and-related-documents"))
+        .accessibility_label(I18N.format(
+            "ui-value-value-format-1",
+            [
+                ("v0", I18N.text(&label).into()),
+                ("v1", I18N.text(&(ITEMS[index])).into()),
+            ],
+        ))
         .enabled(enabled)
         .selection_mode(mode)
         .selected_optional((mode != ListItemSelectionMode::Action).then_some(selected))
@@ -238,7 +258,11 @@ fn item(
 #[tessera]
 fn variants() {
     text()
-        .content("Expressive lists add grouped corners, selection treatment and flexible slots.")
+        .content(
+            I18N.text(
+                "ui-expressive-lists-add-grouped-corners-selection-treatment-and-flexible-slots",
+            ),
+        )
         .style(type_style(16.0, 24.0));
     gap(Dp(24.0));
     panel(RenderSlot::new(|| {
@@ -247,7 +271,7 @@ fn variants() {
             false,
             true,
             true,
-            "Expressive list",
+            "ui-expressive-list",
         );
     }));
 }
@@ -259,12 +283,12 @@ fn expansion() {
         .modifier(Modifier::new().fill_max_width())
         .children(move || {
             list_item()
-                .headline(if expanded.get() {
-                    "Hide related folders"
+                .headline(I18N.text(if expanded.get() {
+                    "ui-hide-related-folders"
                 } else {
-                    "Show related folders"
-                })
-                .accessibility_label("Expand related folders")
+                    "ui-show-related-folders"
+                }))
+                .accessibility_label(I18N.text("ui-expand-related-folders"))
                 .on_click(move || expanded.set(!expanded.get()))
                 .trailing(move || {
                     icon().painter(if expanded.get() {
@@ -275,9 +299,9 @@ fn expansion() {
                 });
             if expanded.get() {
                 list_item()
-                    .headline("Archive")
-                    .supporting_text("Completed projects and previous notes")
-                    .accessibility_label("Expanded archive folder")
+                    .headline(I18N.text("ui-archive"))
+                    .supporting_text(I18N.text("ui-completed-projects-and-previous-notes"))
+                    .accessibility_label(I18N.text("ui-expanded-archive-folder"))
                     .leading(|| {
                         icon().painter(filled::FOLDER_SVG);
                     });
@@ -287,29 +311,36 @@ fn expansion() {
 
 #[tessera]
 fn configurations() {
-    subheading("Styles".into());
+    subheading("ui-styles".into());
     gap(Dp(24.0));
     for segmented in [false, true] {
         style_configuration(segmented);
     }
-    subheading("List selection".into());
+    subheading("ui-list-selection".into());
     gap(Dp(24.0));
     for (mode, multi_action, label) in [
-        (ListItemSelectionMode::Action, false, "Single action"),
-        (ListItemSelectionMode::Action, true, "Multi action"),
-        (ListItemSelectionMode::Single, false, "Single select"),
-        (ListItemSelectionMode::Multiple, false, "Multi select"),
+        (ListItemSelectionMode::Action, false, "ui-single-action"),
+        (ListItemSelectionMode::Action, true, "ui-multi-action"),
+        (ListItemSelectionMode::Single, false, "ui-single-select"),
+        (ListItemSelectionMode::Multiple, false, "ui-multi-select"),
     ] {
         selection_configuration(mode, multi_action, label.to_owned());
     }
-    subheading("Expand".into());
+    subheading("ui-expand".into());
     gap(Dp(24.0));
     panel(RenderSlot::new(expansion));
 }
 
 #[tessera]
 fn style_configuration(segmented: bool) {
-    subheading(if segmented { "Segmented" } else { "Standard" }.to_owned());
+    subheading(
+        if segmented {
+            "ui-segmented"
+        } else {
+            "ui-standard"
+        }
+        .to_owned(),
+    );
     gap(Dp(16.0));
     panel(RenderSlot::new(move || {
         mode_demo(
@@ -318,9 +349,9 @@ fn style_configuration(segmented: bool) {
             segmented,
             true,
             if segmented {
-                "Segmented list"
+                "ui-segmented-list"
             } else {
-                "Standard list"
+                "ui-standard-list"
             },
         );
     }));
@@ -340,18 +371,18 @@ fn selection_configuration(mode: ListItemSelectionMode, multi_action: bool, labe
 #[tessera]
 fn tokens() {
     spec_table(
-        vec!["Element".into(), "Token value".into()],
+        vec!["ui-element".into(), "ui-token-value".into()],
         vec![
-            vec!["Container".into(), "Surface".into()],
-            vec!["Label".into(), "On surface".into()],
+            vec!["ui-container".into(), "ui-surface".into()],
+            vec!["ui-label".into(), "ui-on-surface".into()],
             vec![
-                "Overline / supporting / trailing content".into(),
-                "On surface variant".into(),
+                "ui-overline-supporting-trailing-content".into(),
+                "ui-on-surface-variant".into(),
             ],
-            vec!["Divider".into(), "Outline variant".into()],
-            vec!["Inner / outer corners".into(), "4 / 16dp".into()],
-            vec!["Selected corners".into(), "16dp".into()],
-            vec!["Leading icon".into(), "20dp".into()],
+            vec!["ui-divider".into(), "ui-outline-variant".into()],
+            vec!["ui-inner-outer-corners".into(), "4 / 16dp".into()],
+            vec!["ui-selected-corners".into(), "16dp".into()],
+            vec!["ui-leading-icon".into(), "20dp".into()],
         ],
     );
 }
@@ -366,9 +397,9 @@ fn anatomy() {
             .modifier(Modifier::new().fill_max_width())
             .children(move || {
                 list_item()
-                    .headline("Quarterly summary")
-                    .overline_text("Documents")
-                    .supporting_text("Review the latest notes and decisions.")
+                    .headline(I18N.text("ui-quarterly-summary"))
+                    .overline_text(I18N.text("ui-documents"))
+                    .supporting_text(I18N.text("ui-review-the-latest-notes-and-decisions"))
                     .leading(|| {
                         icon().painter(filled::FOLDER_SVG);
                     })
@@ -376,18 +407,24 @@ fn anatomy() {
                         icon_button()
                             .standard()
                             .icon(filled::MORE_VERT_SVG)
-                            .accessibility_label("Summary more actions")
+                            .accessibility_label(I18N.text("ui-summary-more-actions"))
                             .on_click(move || secondary.set(secondary.get() + 1));
                     });
                 gap(Dp(16.0));
-                text().content(format!("Summary actions: {}", secondary.get()));
+                text().content(I18N.format(
+                    "ui-summary-actions-value",
+                    [("v0", (secondary.get()).into())],
+                ));
             });
     }));
     gap(Dp(24.0));
-    text().content("1  Container    2  Overline    3  Label    4  Trailing content    5  Supporting text    6  Leading icon")
+    text()
+        .content(I18N.text(
+            "ui-1-container-2-overline-3-label-4-trailing-content-5-supporting-text-6-leading-icon",
+        ))
         .style(type_style(16.0, 24.0));
     gap(Dp(24.0));
-    text().content("Content occupies the largest slot. Selection rows expose one selection interaction; action rows may offer separate secondary actions.")
+    text().content(I18N.text("ui-content-occupies-the-largest-slot-selection-rows-expose-one-selection-interaction-action-r"))
         .style(type_style(16.0, 24.0));
 }
 
@@ -406,14 +443,25 @@ fn scheme(dark: bool) {
                     column()
                         .modifier(Modifier::new().fill_max_width().padding_all(Dp(24.0)))
                         .children(move || {
-                            subheading(if dark { "Dark theme" } else { "Light theme" }.to_owned());
+                            subheading(
+                                if dark {
+                                    "ui-dark-theme"
+                                } else {
+                                    "ui-light-theme"
+                                }
+                                .to_owned(),
+                            );
                             gap(Dp(24.0));
                             mode_demo(
                                 ListItemSelectionMode::Single,
                                 false,
                                 true,
                                 true,
-                                if dark { "Dark list" } else { "Light list" },
+                                if dark {
+                                    "ui-dark-list"
+                                } else {
+                                    "ui-light-list"
+                                },
                             );
                         });
                 });
@@ -430,7 +478,9 @@ fn colors() {
 #[tessera]
 fn states() {
     text()
-        .content("Hover, focus with Tab, press and hold, or select a row to inspect real feedback.")
+        .content(I18N.text(
+            "ui-hover-focus-with-tab-press-and-hold-or-select-a-row-to-inspect-real-feedback",
+        ))
         .style(type_style(16.0, 24.0));
     gap(Dp(24.0));
     for enabled in [true, false] {
@@ -440,7 +490,7 @@ fn states() {
 
 #[tessera]
 fn state_configuration(enabled: bool) {
-    subheading(if enabled { "Enabled" } else { "Disabled" }.to_owned());
+    subheading(if enabled { "ui-enabled" } else { "ui-disabled" }.to_owned());
     gap(Dp(24.0));
     panel(RenderSlot::new(move || {
         mode_demo(
@@ -449,9 +499,9 @@ fn state_configuration(enabled: bool) {
             true,
             enabled,
             if enabled {
-                "Enabled list"
+                "ui-enabled-list"
             } else {
-                "Disabled list"
+                "ui-disabled-list"
             },
         );
     }));
@@ -460,44 +510,47 @@ fn state_configuration(enabled: bool) {
 
 #[tessera]
 fn measurements() {
-    panel(RenderSlot::new(|| {
+    panel(RenderSlot::new(move || {
         column()
             .modifier(Modifier::new().fill_max_width())
-            .children(|| {
+            .children(move || {
                 list_item()
-                    .headline("One line")
-                    .accessibility_label("One-line list measurement");
+                    .headline(I18N.text("ui-one-line"))
+                    .accessibility_label(I18N.text("ui-one-line-list-measurement"));
                 gap(Dp(2.0));
                 list_item()
-                    .headline("Two lines")
-                    .supporting_text("Supporting text")
-                    .accessibility_label("Two-line list measurement");
+                    .headline(I18N.text("ui-two-lines"))
+                    .supporting_text(I18N.text("ui-supporting-text"))
+                    .accessibility_label(I18N.text("ui-two-line-list-measurement"));
                 gap(Dp(2.0));
                 list_item()
-                    .headline("Three lines")
-                    .supporting_text("Supporting text\nSecond supporting line")
-                    .accessibility_label("Three-line list measurement");
+                    .headline(I18N.text("ui-three-lines"))
+                    .supporting_text(I18N.text("ui-supporting-text-second-supporting-line"))
+                    .accessibility_label(I18N.text("ui-three-line-list-measurement"));
             });
     }));
     gap(Dp(24.0));
     spec_table(
-        vec!["Attribute".into(), "Value".into()],
+        vec!["ui-attribute".into(), "ui-value".into()],
         vec![
             vec![
-                "One / two / three-line minimum height".into(),
+                "ui-one-two-three-line-minimum-height".into(),
                 "56 / 72 / 88dp".into(),
             ],
-            vec!["Horizontal content padding".into(), "16dp".into()],
-            vec!["Vertical content padding".into(), "10dp".into()],
-            vec!["Between segmented rows".into(), "2dp".into()],
+            vec!["ui-horizontal-content-padding".into(), "16dp".into()],
+            vec!["ui-vertical-content-padding".into(), "10dp".into()],
+            vec!["ui-between-segmented-rows".into(), "2dp".into()],
             vec![
-                "Between leading / content / trailing slots".into(),
+                "ui-between-leading-content-trailing-slots".into(),
                 "12dp".into(),
             ],
-            vec!["Leading icon".into(), "20dp".into()],
-            vec!["Unselected inner / outer corners".into(), "4 / 16dp".into()],
-            vec!["Selected corner radius".into(), "16dp".into()],
-            vec!["Minimum interactive target".into(), "48 × 48dp".into()],
+            vec!["ui-leading-icon".into(), "20dp".into()],
+            vec![
+                "ui-unselected-inner-outer-corners".into(),
+                "4 / 16dp".into(),
+            ],
+            vec!["ui-selected-corner-radius".into(), "16dp".into()],
+            vec!["ui-minimum-interactive-target".into(), "48 × 48dp".into()],
         ],
     );
 }
@@ -505,32 +558,32 @@ fn measurements() {
 #[tessera]
 fn baseline() {
     prose(
-        "The baseline list keeps rows flush with their container instead of using segmented shapes and gaps. Content determines a one-, two- or three-line height, and dividers stay optional.",
+        "ui-the-baseline-list-keeps-rows-flush-with-their-container-instead-of-using-segmented-shapes",
     );
     gap(Dp(24.0));
-    panel(RenderSlot::new(|| {
+    panel(RenderSlot::new(move || {
         column()
             .modifier(Modifier::new().fill_max_width())
-            .children(|| {
+            .children(move || {
                 list_item()
-                    .headline("Label text")
-                    .supporting_text("Supporting text")
-                    .accessibility_label("Baseline two-line row")
+                    .headline(I18N.text("ui-label-text"))
+                    .supporting_text(I18N.text("ui-supporting-text"))
+                    .accessibility_label(I18N.text("ui-baseline-two-line-row"))
                     .leading(|| {
                         icon().vector(filled::FOLDER_SVG);
                     });
                 horizontal_divider();
                 list_item()
-                    .headline("Label text")
-                    .accessibility_label("Baseline one-line row")
+                    .headline(I18N.text("ui-label-text"))
+                    .accessibility_label(I18N.text("ui-baseline-one-line-row"))
                     .leading(|| {
                         icon().vector(filled::FOLDER_SVG);
                     });
                 horizontal_divider();
                 list_item()
-                    .headline("Label text")
-                    .supporting_text("Supporting text that wraps onto another line")
-                    .accessibility_label("Baseline three-line row")
+                    .headline(I18N.text("ui-label-text"))
+                    .supporting_text(I18N.text("ui-supporting-text-that-wraps-onto-another-line"))
+                    .accessibility_label(I18N.text("ui-baseline-three-line-row"))
                     .leading(|| {
                         icon().vector(filled::FOLDER_SVG);
                     });
@@ -538,23 +591,23 @@ fn baseline() {
     }));
     gap(Dp(24.0));
     spec_table(
-        vec!["Attribute".into(), "Baseline value".into()],
+        vec!["ui-attribute".into(), "ui-baseline-value".into()],
         vec![
             vec![
-                "Row container".into(),
-                "Surface without segmented corners".into(),
+                "ui-row-container".into(),
+                "ui-surface-without-segmented-corners".into(),
             ],
             vec![
-                "Between rows".into(),
-                "0dp, with an optional outline variant divider".into(),
+                "ui-between-rows".into(),
+                "ui-0dp-with-an-optional-outline-variant-divider".into(),
             ],
             vec![
-                "One / two / three-line height".into(),
+                "ui-one-two-three-line-height".into(),
                 "56 / 72 / 88dp".into(),
             ],
             vec![
-                "Horizontal content padding".into(),
-                "16dp leading and trailing".into(),
+                "ui-horizontal-content-padding".into(),
+                "ui-16dp-leading-and-trailing".into(),
             ],
         ],
     );
@@ -562,18 +615,20 @@ fn baseline() {
 
 #[tessera]
 fn prose(#[prop(into)] value: String) {
-    text().content(value).style(type_style(16.0, 24.0));
+    text()
+        .content(I18N.text(value))
+        .style(type_style(16.0, 24.0));
 }
 
 #[tessera]
 fn list_reading_examples() {
-    panel(RenderSlot::new(|| {
-        column().modifier(Modifier::new().fill_max_width()).children(|| {
-        list_item().headline("Label text").leading(|| {icon().vector(filled::FOLDER_SVG);});
+    panel(RenderSlot::new(move || {
+        column().modifier(Modifier::new().fill_max_width()).children(move || {
+        list_item().headline(I18N.text("ui-label-text")).leading(|| {icon().vector(filled::FOLDER_SVG);});
         gap(Dp(8.0));
-        list_item().headline("Label text").supporting_text("Supporting text").leading(|| {icon().vector(filled::FOLDER_SVG);});
+        list_item().headline(I18N.text("ui-label-text")).supporting_text(I18N.text("ui-supporting-text")).leading(|| {icon().vector(filled::FOLDER_SVG);});
         gap(Dp(8.0));
-        list_item().headline("Label text").supporting_text("Supporting text that wraps naturally onto another line when the available width is compact.")
+        list_item().headline(I18N.text("ui-label-text")).supporting_text(I18N.text("ui-supporting-text-that-wraps-naturally-onto-another-line-when-the-available-width-is-compact"))
             .leading(|| {icon().vector(filled::FOLDER_SVG);});
     });
     }));
@@ -619,24 +674,24 @@ fn list_anatomy_diagram() {
                         .content(move || {
                             column().children(move || {
                                 text()
-                                    .content("Overline")
+                                    .content(I18N.text("ui-overline"))
                                     .style(type_style(12.0, 16.0))
                                     .modifier(watch(geometry, "overline"));
                                 text()
-                                    .content("Label text")
+                                    .content(I18N.text("ui-label-text"))
                                     .style(type_style(16.0, 24.0))
                                     .modifier(watch(geometry, "label"));
                             });
                         })
                         .trailing(move || {
                             text()
-                                .content("100+")
+                                .content(I18N.text("100+"))
                                 .style(type_style(14.0, 20.0))
                                 .modifier(watch(geometry, "trailing-text"));
                         });
                     gap(Dp(16.0));
                     list_item()
-                        .headline("Label text")
+                        .headline(I18N.text("ui-label-text"))
                         .min_height(Dp(64.0))
                         .leading(move || {
                             boxed().modifier(watch(geometry, "icon")).children(|| {
@@ -645,14 +700,14 @@ fn list_anatomy_diagram() {
                         })
                         .supporting_content(move || {
                             text()
-                                .content("Supporting text")
+                                .content(I18N.text("ui-supporting-text"))
                                 .style(type_style(14.0, 20.0))
                                 .modifier(watch(geometry, "support"));
                         });
                     gap(Dp(16.0));
                     list_item()
-                        .headline("Label text")
-                        .supporting_text("Supporting text")
+                        .headline(I18N.text("ui-label-text"))
+                        .supporting_text(I18N.text("ui-supporting-text"))
                         .min_height(Dp(64.0))
                         .leading(move || {
                             boxed()
@@ -666,7 +721,9 @@ fn list_anatomy_diagram() {
                                         ),
                                 )
                                 .children(move || {
-                                    text().content("A").color(scheme.on_primary_container);
+                                    text()
+                                        .content(I18N.text("A"))
+                                        .color(scheme.on_primary_container);
                                 });
                         })
                         .trailing(move || {
@@ -800,39 +857,37 @@ fn list_callouts(geometry: State<Geometry>) {
 #[tessera]
 fn list_guideline_anatomy() {
     prose(
-        "The container and label are required. Supporting text, leading media and trailing information are optional.",
+        "ui-the-container-and-label-are-required-supporting-text-leading-media-and-trailing-informatio",
     );
     gap(Dp(24.0));
     list_anatomy_diagram();
     gap(Dp(24.0));
-    subheading("Container".into());
+    subheading("ui-container".into());
     prose(
-        "The tallest contained element determines the row's height. Keep the content hierarchy clear as visual styles change.",
+        "ui-the-tallest-contained-element-determines-the-row-s-height-keep-the-content-hierarchy-clear",
     );
     gap(Dp(24.0));
-    subheading("Label & supporting text".into());
+    subheading("ui-label-supporting-text".into());
     prose(
-        "Keep the label brief. Limit supporting text to a few readable lines and reduce detail at compact widths.",
+        "ui-keep-the-label-brief-limit-supporting-text-to-a-few-readable-lines-and-reduce-detail-at-co",
     );
     gap(Dp(24.0));
-    subheading("Icons".into());
+    subheading("ui-icons".into());
     prose(
-        "A leading icon identifies the subject; a trailing icon can communicate status or another action.",
+        "ui-a-leading-icon-identifies-the-subject-a-trailing-icon-can-communicate-status-or-another-ac",
     );
     gap(Dp(24.0));
-    subheading("Leading media".into());
+    subheading("ui-leading-media".into());
     prose(
-        "Anchor thumbnails and avatars to the leading edge for consistent scanning. Use circular avatars for people and rectangular media for other content.",
+        "ui-anchor-thumbnails-and-avatars-to-the-leading-edge-for-consistent-scanning-use-circular-ava",
     );
     gap(Dp(24.0));
-    subheading("Trailing text".into());
-    prose(
-        "Use concise supplemental details, such as a count, price or date, at the trailing edge.",
-    );
+    subheading("ui-trailing-text".into());
+    prose("ui-use-concise-supplemental-details-such-as-a-count-price-or-date-at-the-trailing-edge");
     gap(Dp(24.0));
-    subheading("Selection controls".into());
+    subheading("ui-selection-controls".into());
     prose(
-        "Use radio-style semantics for one choice, checkboxes for several choices and switches for independent settings. A selectable row has one selection interaction.",
+        "ui-use-radio-style-semantics-for-one-choice-checkboxes-for-several-choices-and-switches-for-i",
     );
     gap(Dp(24.0));
     panel(RenderSlot::new(|| {
@@ -841,13 +896,13 @@ fn list_guideline_anatomy() {
             false,
             true,
             true,
-            "Guideline single selection",
+            "ui-guideline-single-selection",
         );
     }));
     gap(Dp(24.0));
-    subheading("Gaps & dividers".into());
+    subheading("ui-gaps-dividers".into());
     prose(
-        "Use small gaps with contained segmented rows. Reserve dividers for uncontained or more complex lists that need stronger separation.",
+        "ui-use-small-gaps-with-contained-segmented-rows-reserve-dividers-for-uncontained-or-more-comp",
     );
     gap(Dp(24.0));
     panel(RenderSlot::new(|| {
@@ -856,35 +911,35 @@ fn list_guideline_anatomy() {
             false,
             true,
             true,
-            "Guideline grouped list",
+            "ui-guideline-grouped-list",
         );
     }));
 }
 
 #[tessera]
 fn list_adaptive() {
-    subheading("Line length".into());
+    subheading("ui-line-length".into());
     prose(
-        "Adjust margins or columns to avoid long text lines. Preserve a comfortable reading measure instead of stretching rows across an expanded window.",
+        "ui-adjust-margins-or-columns-to-avoid-long-text-lines-preserve-a-comfortable-reading-measure",
     );
     gap(Dp(24.0));
-    subheading("Adapt list elements & layout".into());
+    subheading("ui-adapt-list-elements-layout".into());
     prose(
-        "Expanded windows can show additional context and larger imagery while compact windows keep the most important information.",
+        "ui-expanded-windows-can-show-additional-context-and-larger-imagery-while-compact-windows-keep",
     );
     gap(Dp(24.0));
     list_reading_examples();
     gap(Dp(24.0));
-    subheading("Swap components".into());
+    subheading("ui-swap-components".into());
     prose(
-        "A card or carousel can present the same images, text and actions when more space is available.",
+        "ui-a-card-or-carousel-can-present-the-same-images-text-and-actions-when-more-space-is-availab",
     );
     gap(Dp(24.0));
-    subheading("Compact breakpoints".into());
-    prose("Let the list use the available width and open details as another page.");
+    subheading("ui-compact-breakpoints".into());
+    prose("ui-let-the-list-use-the-available-width-and-open-details-as-another-page");
     gap(Dp(24.0));
-    subheading("Medium & expanded breakpoints".into());
-    prose("A list and its selected detail can share the same view.");
+    subheading("ui-medium-expanded-breakpoints".into());
+    prose("ui-a-list-and-its-selected-detail-can-share-the-same-view");
     gap(Dp(24.0));
     list_detail_example();
 }
@@ -895,7 +950,7 @@ fn list_detail_example() {
     panel(RenderSlot::new(move || {
         flow_row().item_spacing(Dp(24.0)).line_spacing(Dp(24.0)).children(move || {
         column().modifier(Modifier::new().width(Dp(240.0))).children(move || {for index in 0..3 {detail_row(index,selected);}});
-        column().modifier(Modifier::new().width(Dp(240.0)).padding_all(Dp(16.0))).children(move || {text().content(ITEMS[selected.get()]).style(type_style(24.0,32.0));gap(Dp(16.0));prose("The selected item's details remain next to the list in an expanded layout.");});
+        column().modifier(Modifier::new().width(Dp(240.0)).padding_all(Dp(16.0))).children(move || {text().content(I18N.text(ITEMS[selected.get()])).style(type_style(24.0,32.0));gap(Dp(16.0));prose("ui-the-selected-item-s-details-remain-next-to-the-list-in-an-expanded-layout");});
     });
     }));
 }
@@ -903,7 +958,7 @@ fn list_detail_example() {
 #[tessera]
 fn detail_row(index: usize, selected: State<usize>) {
     list_item()
-        .headline(ITEMS[index])
+        .headline(I18N.text(ITEMS[index]))
         .selection_mode(ListItemSelectionMode::Single)
         .selected(selected.get() == index)
         .on_selection_change(move |value| {
@@ -915,9 +970,9 @@ fn detail_row(index: usize, selected: State<usize>) {
 
 #[tessera]
 fn list_behavior() {
-    subheading("List selection modes".into());
+    subheading("ui-list-selection-modes".into());
     prose(
-        "Single-select and multi-select rows expose one selection action for the whole item. Action rows can navigate or offer clearly separated supplementary actions.",
+        "ui-single-select-and-multi-select-rows-expose-one-selection-action-for-the-whole-item-action",
     );
     gap(Dp(24.0));
     panel(RenderSlot::new(|| {
@@ -926,7 +981,7 @@ fn list_behavior() {
             false,
             true,
             true,
-            "Behavior multiple selection",
+            "ui-behavior-multiple-selection",
         );
     }));
     gap(Dp(24.0));
@@ -936,13 +991,13 @@ fn list_behavior() {
             true,
             true,
             true,
-            "Behavior multiple actions",
+            "ui-behavior-multiple-actions",
         );
     }));
     gap(Dp(24.0));
-    subheading("List interactions".into());
+    subheading("ui-list-interactions".into());
     prose(
-        "Nested rows may expand and collapse. If a swipe reveals actions, provide a reachable secondary action as an alternative.",
+        "ui-nested-rows-may-expand-and-collapse-if-a-swipe-reveals-actions-provide-a-reachable-seconda",
     );
     gap(Dp(24.0));
     panel(RenderSlot::new(expansion));
@@ -950,19 +1005,19 @@ fn list_behavior() {
 
 #[tessera]
 fn list_interaction() {
-    subheading("Touch".into());
-    prose("A ripple confirms activation or selection.");
+    subheading("ui-touch".into());
+    prose("ui-a-ripple-confirms-activation-or-selection");
     gap(Dp(24.0));
-    subheading("Cursor".into());
-    prose("Hover feedback distinguishes actionable rows from passive information.");
+    subheading("ui-cursor".into());
+    prose("ui-hover-feedback-distinguishes-actionable-rows-from-passive-information");
     gap(Dp(24.0));
-    subheading("Keyboard & switch".into());
+    subheading("ui-keyboard-switch".into());
     prose(
-        "Focus identifies the action reached by traversal. Space or Enter activates the focused item.",
+        "ui-focus-identifies-the-action-reached-by-traversal-space-or-enter-activates-the-focused-item",
     );
     gap(Dp(24.0));
-    subheading("Swipe".into());
-    prose("Keep hidden swipe actions reachable through a visible secondary control.");
+    subheading("ui-swipe".into());
+    prose("ui-keep-hidden-swipe-actions-reachable-through-a-visible-secondary-control");
     gap(Dp(24.0));
     panel(RenderSlot::new(|| {
         mode_demo(
@@ -970,15 +1025,15 @@ fn list_interaction() {
             true,
             true,
             true,
-            "Accessible multiple actions",
+            "ui-accessible-multiple-actions",
         );
     }));
 }
 
 #[tessera]
 fn list_focus() {
-    subheading("Single-action lists".into());
-    prose("Each row exposes one action and an accessible name matching its content.");
+    subheading("ui-single-action-lists".into());
+    prose("ui-each-row-exposes-one-action-and-an-accessible-name-matching-its-content");
     gap(Dp(24.0));
     panel(RenderSlot::new(|| {
         mode_demo(
@@ -986,13 +1041,13 @@ fn list_focus() {
             false,
             true,
             true,
-            "Focus single actions",
+            "ui-focus-single-actions",
         );
     }));
     gap(Dp(24.0));
-    subheading("Multi-action lists".into());
+    subheading("ui-multi-action-lists".into());
     prose(
-        "The primary action and supplementary controls must each be reachable. Activating a secondary control must not activate the row's primary action.",
+        "ui-the-primary-action-and-supplementary-controls-must-each-be-reachable-activating-a-secondar",
     );
     gap(Dp(24.0));
     panel(RenderSlot::new(|| {
@@ -1001,7 +1056,7 @@ fn list_focus() {
             true,
             true,
             true,
-            "Focus multiple actions",
+            "ui-focus-multiple-actions",
         );
     }));
 }

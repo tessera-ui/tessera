@@ -16,6 +16,7 @@ use tessera_ui::{
 use crate::{
     modifier::{ModifierExt as _, SemanticsArgs},
     pipelines::loading_shape::command::LoadingShapeCommand,
+    res::I18N,
     shape_def::Shape,
     theme::MaterialTheme,
 };
@@ -221,7 +222,7 @@ pub fn loading_indicator(
     };
     let semantics = SemanticsArgs {
         role: Some(Role::ProgressIndicator),
-        label: Some(accessibility_label.unwrap_or_else(|| "Loading".into())),
+        label: Some(accessibility_label.unwrap_or_else(|| I18N.text("md3-loading").into())),
         numeric_value: progress.map(f64::from),
         numeric_range: progress.map(|_| (0.0, 1.0)),
         ..Default::default()

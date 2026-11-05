@@ -26,6 +26,8 @@ use tessera_ui::{
     Dp, Modifier, RenderSlot, State, accesskit::Role, remember, tessera, use_context,
 };
 
+use crate::res::I18N;
+
 use super::{
     ACCENT,
     article::{ArticlePage, SpecSection, article},
@@ -101,20 +103,20 @@ fn live_rail_modal(
 ) {
     modal_navigation_rail()
         .is_open(modal_open.get())
-        .accessibility_label("Mail rail navigation")
+        .accessibility_label(I18N.text("ui-mail-rail-navigation"))
         .on_close_request(move || modal_open.set(false))
         .main_content_shared(main_content)
         .header(move || {
             icon_button()
                 .standard()
                 .icon(filled::MENU_SVG)
-                .accessibility_label("Close modal navigation rail")
+                .accessibility_label(I18N.text("ui-close-modal-navigation-rail"))
                 .on_click(move || modal_open.set(false));
         })
         .content(move |rail_scope| {
             for (index, name) in NAMES.into_iter().enumerate() {
                 navigation_rail_item(rail_scope)
-                    .label(name)
+                    .label(I18N.text(name))
                     .selected(modal_selected.get() == index)
                     .on_click(move || {
                         modal_selected.set(index);
@@ -143,43 +145,43 @@ pub(super) fn navigation_rail_spec(
     };
     let content = RenderSlot::new(move || {
         article(
-            "Navigation rail",
-            "Navigation rails let people switch between UI views on mid-sized devices",
+            "ui-navigation-rail",
+            "ui-navigation-rails-let-people-switch-between-ui-views-on-mid-sized-devices",
             vec![
                 SpecSection {
-                    title: "Variants",
+                    title: "ui-variants",
                     content: RenderSlot::new(variants),
                 },
                 SpecSection {
-                    title: "Configurations",
+                    title: "ui-configurations",
                     content: RenderSlot::new(configurations),
                 },
                 SpecSection {
-                    title: "Tokens & specs",
+                    title: "ui-tokens-specs",
                     content: RenderSlot::new(tokens),
                 },
                 SpecSection {
-                    title: "Anatomy",
+                    title: "ui-anatomy",
                     content: RenderSlot::new(anatomy),
                 },
                 SpecSection {
-                    title: "Color",
+                    title: "ui-color",
                     content: RenderSlot::new(colors),
                 },
                 SpecSection {
-                    title: "States",
+                    title: "ui-states",
                     content: RenderSlot::new(states),
                 },
                 SpecSection {
-                    title: "Measurements",
+                    title: "ui-measurements",
                     content: RenderSlot::new(measurements),
                 },
                 SpecSection {
-                    title: "Common layouts",
+                    title: "ui-common-layouts",
                     content: RenderSlot::new(layouts),
                 },
                 SpecSection {
-                    title: "Baseline navigation rail",
+                    title: "ui-baseline-navigation-rail",
                     content: RenderSlot::new(baseline),
                 },
             ],
@@ -187,45 +189,45 @@ pub(super) fn navigation_rail_spec(
         .route_optional(route.clone())
         .pages(vec![
             ArticlePage {
-                title: "Overview",
+                title: "ui-overview",
                 intro: Some(RenderSlot::new(overview)),
                 sections: vec![
                     SpecSection {
-                        title: "Availability & resources",
+                        title: "ui-availability-resources",
                         content: RenderSlot::new(availability),
                     },
                     SpecSection {
-                        title: "M3 Expressive update",
+                        title: "ui-m3-expressive-update",
                         content: RenderSlot::new(expressive_update),
                     },
                     SpecSection {
-                        title: "Differences from M2",
+                        title: "ui-differences-from-m2",
                         content: RenderSlot::new(differences),
                     },
                 ],
             },
             ArticlePage {
-                title: "Guidelines",
+                title: "ui-guidelines",
                 intro: None,
                 sections: vec![
                     SpecSection {
-                        title: "Usage",
+                        title: "ui-usage",
                         content: RenderSlot::new(usage),
                     },
                     SpecSection {
-                        title: "Anatomy",
+                        title: "ui-anatomy",
                         content: RenderSlot::new(guide_anatomy),
                     },
                     SpecSection {
-                        title: "Placement",
+                        title: "ui-placement",
                         content: RenderSlot::new(placement),
                     },
                     SpecSection {
-                        title: "Adaptive design",
+                        title: "ui-adaptive-design",
                         content: RenderSlot::new(adaptive_design),
                     },
                     SpecSection {
-                        title: "Behavior",
+                        title: "ui-behavior",
                         content: RenderSlot::new(move || {
                             behavior(modal_open, modal_selected).session_optional(session);
                         }),
@@ -233,35 +235,35 @@ pub(super) fn navigation_rail_spec(
                 ],
             },
             ArticlePage {
-                title: "Accessibility",
+                title: "ui-accessibility",
                 intro: None,
                 sections: vec![
                     SpecSection {
-                        title: "Use cases",
+                        title: "ui-use-cases",
                         content: RenderSlot::new(use_cases),
                     },
                     SpecSection {
-                        title: "Interaction & style",
+                        title: "ui-interaction-style",
                         content: RenderSlot::new(interaction_style),
                     },
                     SpecSection {
-                        title: "Text scaling and truncation",
+                        title: "ui-text-scaling-and-truncation",
                         content: RenderSlot::new(text_scaling),
                     },
                     SpecSection {
-                        title: "Initial focus",
+                        title: "ui-initial-focus",
                         content: RenderSlot::new(initial_focus),
                     },
                     SpecSection {
-                        title: "Visual indicators",
+                        title: "ui-visual-indicators",
                         content: RenderSlot::new(visual_indicators),
                     },
                     SpecSection {
-                        title: "Keyboard navigation",
+                        title: "ui-keyboard-navigation",
                         content: RenderSlot::new(keyboard),
                     },
                     SpecSection {
-                        title: "Labeling elements",
+                        title: "ui-labeling-elements",
                         content: RenderSlot::new(labeling),
                     },
                 ],
@@ -277,14 +279,16 @@ pub(super) fn navigation_rail_spec(
 
 #[tessera]
 fn prose(#[prop(into)] value: String) {
-    text().content(value).style(type_style(16.0, 24.0));
+    text()
+        .content(I18N.text(value))
+        .style(type_style(16.0, 24.0));
 }
 
 #[tessera]
 fn caption(#[prop(into)] value: String) {
     let scheme = use_context::<MaterialTheme>().unwrap().get().color_scheme;
     text()
-        .content(value)
+        .content(I18N.text(value))
         .color(scheme.on_surface_variant)
         .style(type_style(14.0, 20.0));
 }
@@ -294,7 +298,7 @@ fn bullets(items: Vec<String>) {
     column().children(move || {
         for item in items.clone() {
             text()
-                .content(format!("•  {item}"))
+                .content(format!("•  {}", I18N.text(item)))
                 .style(type_style(16.0, 24.0));
             gap(Dp(8.0));
         }
@@ -309,7 +313,9 @@ fn legend(number: usize, #[prop(into)] label: String) {
         .children(move || {
             figures::number(number);
             spacer().modifier(Modifier::new().width(Dp(12.0)));
-            text().content(label.clone()).style(type_style(16.0, 24.0));
+            text()
+                .content(I18N.text(&(label)))
+                .style(type_style(16.0, 24.0));
         });
 }
 
@@ -324,7 +330,13 @@ fn legend_list(items: Vec<String>) {
 
 fn format_rail_status(label: &str, selected: usize) -> String {
     let name = NAMES.get(selected).copied().unwrap_or(NAMES[0]);
-    format!("{label} destination: {name}")
+    I18N.format(
+        "ui-value-destination-value",
+        [
+            ("v0", I18N.text(&label).into()),
+            ("v1", I18N.text(&name).into()),
+        ],
+    )
 }
 
 #[tessera]
@@ -410,112 +422,124 @@ fn card(
 #[tessera]
 fn overview() {
     bullets(vec![
-        "Use navigation rails in medium, expanded, large, or extra-large window sizes".into(),
-        "Can contain 3-7 destinations plus an optional FAB".into(),
-        "Always put the rail in the same place, even on different screens of an app".into(),
+        "ui-use-navigation-rails-in-medium-expanded-large-or-extra-large-window-sizes".into(),
+        "ui-can-contain-3-7-destinations-plus-an-optional-fab".into(),
+        "ui-always-put-the-rail-in-the-same-place-even-on-different-screens-of-an-app".into(),
     ]);
     gap(Dp(32.0));
     figures::scene(
-        "Collapsed and expanded navigation rails on a tablet and a phone",
+        "ui-collapsed-and-expanded-navigation-rails-on-a-tablet-and-a-phone",
         Dp(540.0),
         RenderSlot::new(|| {
-            timer_screen("Expanded navigation rail on a tablet", Dp(560.0), Dp(480.0))
-                .expanded(true)
-                .fab(true);
+            timer_screen(
+                "ui-expanded-navigation-rail-on-a-tablet",
+                Dp(560.0),
+                Dp(480.0),
+            )
+            .expanded(true)
+            .fab(true);
             spacer().modifier(Modifier::new().width(Dp(32.0)));
-            timer_screen("Collapsed navigation rail on a phone", Dp(220.0), Dp(480.0))
-                .fab(true)
-                .content_kind(1);
+            timer_screen(
+                "ui-collapsed-navigation-rail-on-a-phone",
+                Dp(220.0),
+                Dp(480.0),
+            )
+            .fab(true)
+            .content_kind(1);
         }),
     );
     gap(Dp(16.0));
     caption(
-        "Collapsed and expanded navigation rails can transition between each other on any device, including large or medium window size classes like tablets, and compact window size classes like phones in portrait orientation",
+        "ui-collapsed-and-expanded-navigation-rails-can-transition-between-each-other-on-any-device-in",
     );
 }
 
 #[tessera]
 fn availability() {
     spec_table(
-        vec!["Type".into(), "Resource".into(), "Status".into()],
+        vec!["ui-type".into(), "ui-resource".into(), "ui-status".into()],
         vec![
             vec![
-                "Design".into(),
-                "Design Kit (Figma)".into(),
-                "Available".into(),
+                "ui-design".into(),
+                "ui-design-kit-figma".into(),
+                "ui-available".into(),
             ],
             vec![
-                "Implementation".into(),
-                "Flutter".into(),
-                "Available".into(),
+                "ui-implementation".into(),
+                "ui-flutter".into(),
+                "ui-available".into(),
             ],
             vec![
-                "Implementation".into(),
-                "Jetpack Compose".into(),
-                "Available".into(),
+                "ui-implementation".into(),
+                "ui-jetpack-compose".into(),
+                "ui-available".into(),
             ],
             vec![
-                "Implementation".into(),
-                "Jetpack Compose: Expressive".into(),
-                "Available".into(),
+                "ui-implementation".into(),
+                "ui-jetpack-compose-expressive".into(),
+                "ui-available".into(),
             ],
             vec![
-                "Implementation".into(),
-                "Android Views (MDC-Android)".into(),
-                "Available".into(),
+                "ui-implementation".into(),
+                "ui-android-views-mdc-android".into(),
+                "ui-available".into(),
             ],
             vec![
-                "Implementation".into(),
-                "Android Views (MDC-Android): Expressive".into(),
-                "Available".into(),
+                "ui-implementation".into(),
+                "ui-android-views-mdc-android-expressive".into(),
+                "ui-available".into(),
             ],
-            vec!["Implementation".into(), "Web".into(), "Unavailable".into()],
             vec![
-                "Implementation".into(),
-                "Web: Expressive".into(),
-                "Unavailable".into(),
+                "ui-implementation".into(),
+                "ui-web".into(),
+                "ui-unavailable".into(),
+            ],
+            vec![
+                "ui-implementation".into(),
+                "ui-web-expressive".into(),
+                "ui-unavailable".into(),
             ],
         ],
     );
     gap(Dp(24.0));
     prose(
-        "This page documents the native navigation_rail and navigation_rail_item components. The values below were verified against the published navigation rail specification.",
+        "ui-this-page-documents-the-native-navigation-rail-and-navigation-rail-item-components-th",
     );
 }
 
 #[tessera]
 fn expressive_update() {
     prose(
-        "May 2025 — A collapsed and an expanded navigation rail replaced the baseline navigation rail. The expanded rail is meant to replace the navigation drawer; in Expressive interfaces, use an expanded navigation rail instead of a drawer.",
+        "ui-may-2025-a-collapsed-and-an-expanded-navigation-rail-replaced-the-baseline-navigation-rail",
     );
     gap(Dp(24.0));
-    subheading("Variants and naming".into());
+    subheading("ui-variants-and-naming".into());
     bullets(vec![
-        "Baseline navigation rail is no longer recommended".into(),
-        "Added a collapsed navigation rail that replaces the baseline rail".into(),
-        "Added an expanded navigation rail that replaces the navigation drawer".into(),
+        "ui-baseline-navigation-rail-is-no-longer-recommended".into(),
+        "ui-added-a-collapsed-navigation-rail-that-replaces-the-baseline-rail".into(),
+        "ui-added-an-expanded-navigation-rail-that-replaces-the-navigation-drawer".into(),
     ]);
     gap(Dp(24.0));
-    subheading("Configurations".into());
+    subheading("ui-configurations".into());
     bullets(vec![
-        "Expanded rail modality: non-modal or modal".into(),
-        "Expanded behavior: transition to collapsed rail, or hide when collapsed".into(),
+        "ui-expanded-rail-modality-non-modal-or-modal".into(),
+        "ui-expanded-behavior-transition-to-collapsed-rail-or-hide-when-collapsed".into(),
     ]);
     gap(Dp(24.0));
-    subheading("Color".into());
+    subheading("ui-color".into());
     bullets(vec![
-        "Active label on vertical items changed from on surface variant to secondary".into(),
+        "ui-active-label-on-vertical-items-changed-from-on-surface-variant-to-secondary".into(),
     ]);
     gap(Dp(32.0));
     figures::scene(
-        "Collapsed and expanded navigation rails on timer screens",
+        "ui-collapsed-and-expanded-navigation-rails-on-timer-screens",
         Dp(500.0),
         RenderSlot::new(|| {
-            timer_screen("Collapsed timer navigation rail", Dp(300.0), Dp(440.0))
+            timer_screen("ui-collapsed-timer-navigation-rail", Dp(300.0), Dp(440.0))
                 .fab(true)
                 .selected(2);
             spacer().modifier(Modifier::new().width(Dp(32.0)));
-            timer_screen("Expanded timer navigation rail", Dp(400.0), Dp(440.0))
+            timer_screen("ui-expanded-timer-navigation-rail", Dp(400.0), Dp(440.0))
                 .expanded(true)
                 .fab(true)
                 .selected(2);
@@ -523,27 +547,27 @@ fn expressive_update() {
     );
     gap(Dp(16.0));
     caption(
-        "The collapsed and expanded navigation rails match visually and can transition into each other",
+        "ui-the-collapsed-and-expanded-navigation-rails-match-visually-and-can-transition-into-each-ot",
     );
 }
 
 #[tessera]
 fn differences() {
     bullets(vec![
-        "Behavior: Predictive back interaction".into(),
-        "Color: New color mappings and compatibility with dynamic color".into(),
-        "States: The active destination can be indicated with a pill shape in a contrasting color"
+        "ui-behavior-predictive-back-interaction".into(),
+        "ui-color-new-color-mappings-and-compatibility-with-dynamic-color".into(),
+        "ui-states-the-active-destination-can-be-indicated-with-a-pill-shape-in-a-contrasting-color"
             .into(),
     ]);
     gap(Dp(32.0));
     figures::pair(
         RenderSlot::new(|| {
             figures::example(
-                "M2 navigation rail",
+                "ui-m2-navigation-rail",
                 0,
-                "M2: The navigation rail uses icon color, weight, and fill to communicate which destination is active",
+                "ui-m2-the-navigation-rail-uses-icon-color-weight-and-fill-to-communicate-which-destination-is",
                 RenderSlot::new(|| {
-                    figures::screen("M2 navigation rail with photos", Dp(340.0), Dp(260.0))
+                    figures::screen("ui-m2-navigation-rail-with-photos", Dp(340.0), Dp(260.0))
                         .content_kind(2)
                         .rail(|| {
                             figures::mock_rail()
@@ -557,11 +581,11 @@ fn differences() {
         }),
         RenderSlot::new(|| {
             figures::example(
-                "M3 navigation rail",
+                "ui-m3-navigation-rail",
                 0,
-                "M3: The navigation rail uses a pill-shaped active indicator to communicate which destination is active",
+                "ui-m3-the-navigation-rail-uses-a-pill-shaped-active-indicator-to-communicate-which-destinatio",
                 RenderSlot::new(|| {
-                    figures::screen("M3 navigation rail with photos", Dp(340.0), Dp(260.0))
+                    figures::screen("ui-m3-navigation-rail-with-photos", Dp(340.0), Dp(260.0))
                         .content_kind(2)
                         .rail(|| {
                             figures::mock_rail().count(3).selected(1);
@@ -575,7 +599,7 @@ fn differences() {
 #[tessera]
 fn variants() {
     figures::canvas(
-        "Collapsed and expanded navigation rail variants",
+        "ui-collapsed-and-expanded-navigation-rail-variants",
         Dp(560.0),
         RenderSlot::new(|| {
             row()
@@ -584,7 +608,7 @@ fn variants() {
                     figures::number(1);
                     spacer().modifier(Modifier::new().width(Dp(40.0)));
                     figures::specimen(
-                        "Collapsed navigation rail variant",
+                        "ui-collapsed-navigation-rail-variant",
                         false,
                         Dp(96.0),
                         Dp(512.0),
@@ -597,7 +621,7 @@ fn variants() {
                     figures::number(2);
                     spacer().modifier(Modifier::new().width(Dp(40.0)));
                     figures::specimen(
-                        "Expanded navigation rail variant",
+                        "ui-expanded-navigation-rail-variant",
                         true,
                         Dp(220.0),
                         Dp(512.0),
@@ -611,17 +635,17 @@ fn variants() {
     );
     gap(Dp(24.0));
     legend_list(vec![
-        "Collapsed navigation rail".into(),
-        "Expanded navigation rail".into(),
+        "ui-collapsed-navigation-rail".into(),
+        "ui-expanded-navigation-rail".into(),
     ]);
     gap(Dp(48.0));
-    subheading("Baseline variants".into());
+    subheading("ui-baseline-variants".into());
     prose(
-        "The baseline navigation rail is no longer recommended, and should be replaced by the collapsed navigation rail.",
+        "ui-the-baseline-navigation-rail-is-no-longer-recommended-and-should-be-replaced-by-the-collap",
     );
     gap(Dp(24.0));
     figures::canvas(
-        "Baseline navigation rail",
+        "ui-baseline-navigation-rail",
         Dp(480.0),
         RenderSlot::new(|| {
             row()
@@ -644,25 +668,28 @@ fn variants() {
         }),
     );
     gap(Dp(24.0));
-    legend(1, "The baseline navigation rail is no longer recommended");
+    legend(
+        1,
+        "ui-the-baseline-navigation-rail-is-no-longer-recommended",
+    );
     gap(Dp(32.0));
     spec_table(
-        vec!["Variant".into(), "M3".into(), "M3 Expressive".into()],
+        vec!["ui-variant".into(), "M3".into(), "ui-m3-expressive".into()],
         vec![
             vec![
-                "Collapsed navigation rail".into(),
+                "ui-collapsed-navigation-rail".into(),
                 "—".into(),
-                "Available".into(),
+                "ui-available".into(),
             ],
             vec![
-                "Expanded navigation rail".into(),
+                "ui-expanded-navigation-rail".into(),
                 "—".into(),
-                "Available".into(),
+                "ui-available".into(),
             ],
             vec![
-                "Navigation rail (baseline)".into(),
-                "Available".into(),
-                "Not recommended. Use collapsed navigation rail.".into(),
+                "ui-navigation-rail-baseline".into(),
+                "ui-available".into(),
+                "ui-not-recommended-use-collapsed-navigation-rail".into(),
             ],
         ],
     );
@@ -671,11 +698,11 @@ fn variants() {
 #[tessera]
 fn configurations() {
     prose(
-        "In compact windows, use a navigation bar instead of a rail. From the medium breakpoint up, the rail can be collapsed or expanded; an expanded rail is either standard (placed beside the content) or modal (overlaying the content).",
+        "ui-in-compact-windows-use-a-navigation-bar-instead-of-a-rail-from-the-medium-breakpoint-up-th",
     );
     gap(Dp(32.0));
     figures::canvas(
-        "Expanded standard and modal navigation rails in dark theme",
+        "ui-expanded-standard-and-modal-navigation-rails-in-dark-theme",
         Dp(540.0),
         RenderSlot::new(|| {
             row()
@@ -683,7 +710,7 @@ fn configurations() {
                 .children(|| {
                     figures::number(1);
                     spacer().modifier(Modifier::new().width(Dp(12.0)));
-                    figures::screen("Expanded standard navigation rail", Dp(440.0), Dp(440.0))
+                    figures::screen("ui-expanded-standard-navigation-rail", Dp(440.0), Dp(440.0))
                         .content_kind(1)
                         .rail(|| {
                             figures::mock_rail()
@@ -697,7 +724,7 @@ fn configurations() {
                     spacer().modifier(Modifier::new().width(Dp(32.0)));
                     figures::number(2);
                     spacer().modifier(Modifier::new().width(Dp(12.0)));
-                    figures::screen("Expanded modal navigation rail", Dp(440.0), Dp(440.0))
+                    figures::screen("ui-expanded-modal-navigation-rail", Dp(440.0), Dp(440.0))
                         .content_kind(1)
                         .rail(|| {
                             figures::mock_rail()
@@ -718,35 +745,35 @@ fn configurations() {
     .dots(false);
     gap(Dp(24.0));
     legend_list(vec![
-        "Expanded layout: standard".into(),
-        "Expanded layout: modal".into(),
+        "ui-expanded-layout-standard".into(),
+        "ui-expanded-layout-modal".into(),
     ]);
     gap(Dp(32.0));
     spec_table(
         vec![
-            "Category".into(),
-            "Configuration".into(),
+            "ui-category".into(),
+            "ui-configuration".into(),
             "M3".into(),
-            "M3 Expressive".into(),
+            "ui-m3-expressive".into(),
         ],
         vec![
             vec![
-                "Expanded layout".into(),
-                "Standard (default)".into(),
-                "Available as navigation drawer".into(),
-                "Available".into(),
+                "ui-expanded-layout".into(),
+                "ui-standard-default".into(),
+                "ui-available-as-navigation-drawer".into(),
+                "ui-available".into(),
             ],
             vec![
-                "Expanded layout".into(),
-                "Modal".into(),
-                "Available as modal navigation drawer".into(),
-                "Available".into(),
+                "ui-expanded-layout".into(),
+                "ui-modal".into(),
+                "ui-available-as-modal-navigation-drawer".into(),
+                "ui-available".into(),
             ],
             vec![
-                "Expanded behavior".into(),
-                "Hide when collapsed".into(),
+                "ui-expanded-behavior".into(),
+                "ui-hide-when-collapsed".into(),
                 "—".into(),
-                "Available".into(),
+                "ui-available".into(),
             ],
         ],
     );
@@ -755,72 +782,72 @@ fn configurations() {
 #[tessera]
 fn tokens() {
     prose(
-        "Browse the component elements, attributes, tokens, and their values. Color values below are the Default light scheme.",
+        "ui-browse-the-component-elements-attributes-tokens-and-their-values-color-values-below-are-th",
     );
     gap(Dp(24.0));
     spec_table(
-        vec!["Element".into(), "Token".into(), "Value".into()],
+        vec!["ui-element".into(), "ui-token".into(), "ui-value".into()],
         vec![
             vec![
-                "Container width (collapsed)".into(),
+                "ui-container-width-collapsed".into(),
                 "md.comp.navigation-rail.container.width".into(),
                 "96dp".into(),
             ],
             vec![
-                "Container width (expanded)".into(),
+                "ui-container-width-expanded".into(),
                 "md.comp.navigation-rail-expanded.container.width".into(),
                 "220–360dp".into(),
             ],
             vec![
-                "Active indicator".into(),
+                "ui-active-indicator".into(),
                 "md.comp.navigation-rail.active-indicator".into(),
-                "56 × 32dp, 16dp radius".into(),
+                "ui-56-32dp-16dp-radius".into(),
             ],
             vec![
-                "Active indicator color".into(),
+                "ui-active-indicator-color".into(),
                 "md.comp.navigation-rail.active-indicator.color".into(),
-                "Secondary container #E8DEF8".into(),
+                "ui-secondary-container-e8def8".into(),
             ],
             vec![
-                "Active icon color".into(),
+                "ui-active-icon-color".into(),
                 "md.comp.navigation-rail.active-icon.color".into(),
-                "On secondary container #4A4458".into(),
+                "ui-on-secondary-container-4a4458".into(),
             ],
             vec![
-                "Active label text color".into(),
+                "ui-active-label-text-color".into(),
                 "md.comp.navigation-rail.active-label-text.color".into(),
-                "Secondary #625B71".into(),
+                "ui-secondary-625b71".into(),
             ],
             vec![
-                "Inactive icon color".into(),
+                "ui-inactive-icon-color".into(),
                 "md.comp.navigation-rail.inactive-icon.color".into(),
-                "On surface variant #49454F".into(),
+                "ui-on-surface-variant-49454f".into(),
             ],
             vec![
-                "Inactive label text color".into(),
+                "ui-inactive-label-text-color".into(),
                 "md.comp.navigation-rail.inactive-label-text.color".into(),
-                "On surface variant #49454F".into(),
+                "ui-on-surface-variant-49454f".into(),
             ],
             vec![
-                "Icon size".into(),
+                "ui-icon-size".into(),
                 "md.comp.navigation-rail.icon.size".into(),
                 "24dp".into(),
             ],
             vec![
-                "Label".into(),
+                "ui-label".into(),
                 "md.comp.navigation-rail.label-text".into(),
-                "Label medium (vertical) · Label large (horizontal)".into(),
+                "ui-label-medium-vertical-label-large-horizontal".into(),
             ],
             vec![
-                "State layer".into(),
+                "ui-state-layer".into(),
                 "md.comp.navigation-rail.state-layer".into(),
-                "Hover 8% · Focus 10% · Press 10%".into(),
+                "ui-hover-8-focus-10-press-10".into(),
             ],
         ],
     );
     gap(Dp(24.0));
     prose(
-        "The published token set groups container and item values by interaction state: Enabled, Hovered, Focused and Pressed.",
+        "ui-the-published-token-set-groups-container-and-item-values-by-interaction-state-enabled-hove",
     );
 }
 
@@ -846,7 +873,7 @@ fn anatomy_figure(
     filled: bool,
 ) {
     figures::canvas(
-        "Navigation rail anatomy",
+        "ui-navigation-rail-anatomy",
         Dp(620.0),
         RenderSlot::new(move || {
             let collapsed = collapsed.clone();
@@ -854,7 +881,7 @@ fn anatomy_figure(
             row()
                 .cross_axis_alignment(CrossAxisAlignment::Center)
                 .children(move || {
-                    figures::specimen("Collapsed rail anatomy", false, Dp(200.0), Dp(600.0))
+                    figures::specimen("ui-collapsed-rail-anatomy", false, Dp(200.0), Dp(600.0))
                         .menu(true)
                         .fab(true)
                         .count(count)
@@ -863,7 +890,7 @@ fn anatomy_figure(
                         .filled(filled)
                         .callouts(collapsed.clone());
                     spacer().modifier(Modifier::new().width(Dp(48.0)));
-                    figures::specimen("Expanded rail anatomy", true, Dp(324.0), Dp(600.0))
+                    figures::specimen("ui-expanded-rail-anatomy", true, Dp(324.0), Dp(600.0))
                         .menu(true)
                         .fab(true)
                         .count(count)
@@ -880,18 +907,18 @@ fn anatomy_figure(
 fn anatomy() {
     anatomy_figure(anatomy_callouts(), anatomy_callouts(), 3, false);
     gap(Dp(24.0));
-    prose("Collapsed and expanded navigation rail elements:");
+    prose("ui-collapsed-and-expanded-navigation-rail-elements");
     gap(Dp(16.0));
     legend_list(vec![
-        "Container".into(),
-        "Menu (optional)".into(),
-        "FAB or Extended FAB (optional)".into(),
-        "Icon".into(),
-        "Active indicator".into(),
-        "Label text".into(),
-        "Large badge (optional)".into(),
-        "Large badge label (optional)".into(),
-        "Small badge (optional)".into(),
+        "ui-container".into(),
+        "ui-menu-optional".into(),
+        "ui-fab-or-extended-fab-optional".into(),
+        "ui-icon".into(),
+        "ui-active-indicator".into(),
+        "ui-label-text".into(),
+        "ui-large-badge-optional".into(),
+        "ui-large-badge-label-optional".into(),
+        "ui-small-badge-optional".into(),
     ]);
 }
 
@@ -934,7 +961,7 @@ fn rail_color_half(dark: bool) {
 
 #[tessera]
 fn rail_color_half_content(dark: bool) {
-    let mode = if dark { "Dark" } else { "Light" };
+    let mode = if dark { "ui-dark" } else { "ui-light" };
     // The published dark diagram uses the baseline surface pair; light keeps
     // the native Material 2025 surfaces.
     let (background, container) = if dark {
@@ -943,7 +970,10 @@ fn rail_color_half_content(dark: bool) {
         (None, None)
     };
     figures::canvas(
-        format!("{mode} navigation rail colors"),
+        I18N.format(
+            "ui-value-navigation-rail-colors",
+            [("v0", I18N.text(&mode).into())],
+        ),
         Dp(640.0),
         RenderSlot::new(move || {
             row()
@@ -956,9 +986,22 @@ fn rail_color_half_content(dark: bool) {
                             spacer().modifier(Modifier::new().width(Dp(48.0)));
                         }
                         let rail = figures::specimen(
-                            format!(
-                                "{mode} {} reference rail",
-                                if expanded { "expanded" } else { "collapsed" }
+                            I18N.format(
+                                "ui-value-value-reference-rail",
+                                [
+                                    ("v0", I18N.text(&mode).into()),
+                                    (
+                                        "v1",
+                                        I18N.text(
+                                            &(if expanded {
+                                                "ui-expanded-7100"
+                                            } else {
+                                                "ui-collapsed-7101"
+                                            }),
+                                        )
+                                        .into(),
+                                    ),
+                                ],
                             ),
                             expanded,
                             Dp(if expanded { 400.0 } else { 260.0 }),
@@ -996,16 +1039,16 @@ fn rail_color_pair() {
 #[tessera]
 fn colors() {
     prose(
-        "Color values are implemented through design tokens. For design, this means working with color values that correspond with tokens. For implementation, a color value will be a token that references a value.",
+        "ui-color-values-are-implemented-through-design-tokens-for-design-this-means-working-with-colo",
     );
     gap(Dp(24.0));
     rail_color_pair();
     gap(Dp(16.0));
     caption(
-        "The dark reference matches the published baseline surface (#141218) and container (#211F26); the light reference and all other color roles use the current Material 2025 scheme.",
+        "ui-the-dark-reference-matches-the-published-baseline-surface-141218-and-container-211f26-the",
     );
     gap(Dp(24.0));
-    prose("Navigation rail color roles used for light and dark schemes:");
+    prose("ui-navigation-rail-color-roles-used-for-light-and-dark-schemes");
     gap(Dp(16.0));
     legend_list(
         navigation_color_roles(true, false)
@@ -1019,9 +1062,9 @@ fn colors() {
 fn state_grid(expanded: bool) {
     figures::canvas(
         if expanded {
-            "Expanded navigation rail states"
+            "ui-expanded-navigation-rail-states"
         } else {
-            "Collapsed navigation rail states"
+            "ui-collapsed-navigation-rail-states"
         },
         Dp(460.0),
         RenderSlot::new(move || {
@@ -1071,11 +1114,11 @@ fn state_grid(expanded: bool) {
 #[tessera]
 fn states() {
     prose(
-        "States are visual representations used to communicate the status of a component or an interactive element.",
+        "ui-states-are-visual-representations-used-to-communicate-the-status-of-a-component-or-an-inte",
     );
     gap(Dp(16.0));
     prose(
-        "The navigation item's target area always spans the full width of the nav rail, even if the item container hugs its contents.",
+        "ui-the-navigation-item-s-target-area-always-spans-the-full-width-of-the-nav-rail-even-if-the",
     );
     gap(Dp(32.0));
     state_grid(false);
@@ -1083,34 +1126,39 @@ fn states() {
     state_grid(true);
     gap(Dp(24.0));
     legend_list(vec![
-        "Enabled".into(),
-        "Hovered".into(),
-        "Focused".into(),
-        "Pressed".into(),
+        "ui-enabled".into(),
+        "ui-hovered".into(),
+        "ui-focused".into(),
+        "ui-pressed".into(),
     ]);
     gap(Dp(24.0));
     prose(
-        "The native component does not expose a per-destination disabled state; hide a destination or disable its host when a destination must be unavailable.",
+        "ui-the-native-component-does-not-expose-a-per-destination-disabled-state-hide-a-destination-o-4179",
     );
 }
 
 #[tessera]
 fn measurements() {
     figures::canvas(
-        "Navigation rail padding and size measurements",
+        "ui-navigation-rail-padding-and-size-measurements",
         Dp(640.0),
         RenderSlot::new(|| {
             row()
                 .cross_axis_alignment(CrossAxisAlignment::Center)
                 .children(|| {
-                    figures::specimen("Collapsed rail measurements", false, Dp(240.0), Dp(620.0))
-                        .menu(true)
-                        .fab(true)
-                        .count(4)
-                        .measurements(true)
-                        .rail_height(Dp(540.0));
+                    figures::specimen(
+                        "ui-collapsed-rail-measurements",
+                        false,
+                        Dp(240.0),
+                        Dp(620.0),
+                    )
+                    .menu(true)
+                    .fab(true)
+                    .count(4)
+                    .measurements(true)
+                    .rail_height(Dp(540.0));
                     spacer().modifier(Modifier::new().width(Dp(48.0)));
-                    figures::specimen("Expanded rail measurements", true, Dp(360.0), Dp(620.0))
+                    figures::specimen("ui-expanded-rail-measurements", true, Dp(360.0), Dp(620.0))
                         .menu(true)
                         .fab(true)
                         .count(4)
@@ -1120,88 +1168,93 @@ fn measurements() {
         }),
     );
     gap(Dp(16.0));
-    caption("Navigation rail padding and size measurements");
+    caption("ui-navigation-rail-padding-and-size-measurements");
     gap(Dp(32.0));
     spec_table(
         vec![
-            "Element".into(),
-            "Attribute".into(),
-            "Tessera native".into(),
-            "M3 reference".into(),
+            "ui-element".into(),
+            "ui-attribute".into(),
+            "ui-tessera-native".into(),
+            "ui-m3-reference".into(),
         ],
         vec![
             vec![
-                "Container".into(),
-                "Collapsed width".into(),
+                "ui-container".into(),
+                "ui-collapsed-width".into(),
                 "96dp".into(),
-                "96dp (baseline rail: 80dp)".into(),
+                "ui-96dp-baseline-rail-80dp".into(),
             ],
             vec![
-                "Container".into(),
-                "Expanded width".into(),
-                "220dp minimum".into(),
+                "ui-container".into(),
+                "ui-expanded-width".into(),
+                "ui-220dp-minimum".into(),
                 "220–360dp".into(),
             ],
             vec![
-                "Active indicator".into(),
-                "Size".into(),
+                "ui-active-indicator".into(),
+                "ui-size".into(),
                 "56 × 32dp".into(),
                 "56 × 32dp".into(),
             ],
             vec![
-                "Active indicator".into(),
-                "Corner radius".into(),
-                "Capsule (16dp)".into(),
+                "ui-active-indicator".into(),
+                "ui-corner-radius".into(),
+                "ui-capsule-16dp".into(),
                 "16dp".into(),
             ],
-            vec!["Icon".into(), "Size".into(), "24dp".into(), "24dp".into()],
             vec![
-                "Destination".into(),
-                "Minimum height".into(),
+                "ui-icon".into(),
+                "ui-size".into(),
+                "24dp".into(),
+                "24dp".into(),
+            ],
+            vec![
+                "ui-destination".into(),
+                "ui-minimum-height".into(),
                 "56dp".into(),
                 "56dp".into(),
             ],
             vec![
-                "Destination".into(),
-                "Minimum target".into(),
+                "ui-destination".into(),
+                "ui-minimum-target".into(),
                 "48 × 48dp".into(),
                 "48 × 48dp".into(),
             ],
             vec![
-                "Container".into(),
-                "Top padding".into(),
+                "ui-container".into(),
+                "ui-top-padding".into(),
                 "36dp".into(),
                 "36dp".into(),
             ],
             vec![
-                "Indicator to label".into(),
-                "Gap".into(),
-                "4dp (collapsed, icon-top)".into(),
+                "ui-indicator-to-label".into(),
+                "ui-gap".into(),
+                "ui-4dp-collapsed-icon-top".into(),
                 "4dp".into(),
             ],
             vec![
-                "Expanded content".into(),
-                "Icon to label inside indicator (distinct from collapsed 4dp)".into(),
+                "ui-expanded-content".into(),
+                "ui-icon-to-label-inside-indicator-distinct-from-collapsed-4dp".into(),
                 "8dp".into(),
                 "8dp".into(),
             ],
             vec![
-                "Expanded content".into(),
-                "Leading margin · indicator padding".into(),
+                "ui-expanded-content".into(),
+                "ui-leading-margin-indicator-padding".into(),
                 "20dp · 16dp".into(),
                 "20dp · 16dp".into(),
             ],
             vec![
-                "Destinations".into(),
-                "Recommended count".into(),
+                "ui-destinations".into(),
+                "ui-recommended-count".into(),
                 "3–7".into(),
                 "3–7".into(),
             ],
             vec![
-                "Window".into(),
-                "Breakpoint".into(),
-                "600dp and wider".into(),
-                "Medium and larger".into(),
+                "ui-window".into(),
+                "ui-breakpoint".into(),
+                "ui-600dp-and-wider".into(),
+                "ui-medium-and-larger".into(),
             ],
         ],
     );
@@ -1211,9 +1264,9 @@ fn measurements() {
 fn layout_figure(expanded: bool) {
     figures::canvas(
         if expanded {
-            "Common expanded navigation rail layouts"
+            "ui-common-expanded-navigation-rail-layouts"
         } else {
-            "Common collapsed navigation rail layouts"
+            "ui-common-collapsed-navigation-rail-layouts"
         },
         Dp(500.0),
         RenderSlot::new(move || {
@@ -1238,10 +1291,22 @@ fn layout_figure(expanded: bool) {
                                 figures::number(index + 1);
                                 gap(Dp(8.0));
                                 figures::specimen(
-                                    format!(
-                                        "Common {} layout {}",
-                                        if expanded { "expanded" } else { "collapsed" },
-                                        index + 1
+                                    I18N.format(
+                                        "ui-common-value-layout-value",
+                                        [
+                                            (
+                                                "v0",
+                                                I18N.text(
+                                                    &(if expanded {
+                                                        "ui-expanded-7100"
+                                                    } else {
+                                                        "ui-collapsed-7101"
+                                                    }),
+                                                )
+                                                .into(),
+                                            ),
+                                            ("v1", (index + 1).into()),
+                                        ],
                                     ),
                                     expanded,
                                     Dp(if expanded { 228.0 } else { 120.0 }),
@@ -1264,10 +1329,10 @@ fn layouts() {
     layout_figure(true);
     gap(Dp(24.0));
     legend_list(vec![
-        "Three navigation items".into(),
-        "Three navigation items with a menu".into(),
-        "Three navigation items with a FAB".into(),
-        "Three navigation items with a menu and FAB".into(),
+        "ui-three-navigation-items".into(),
+        "ui-three-navigation-items-with-a-menu".into(),
+        "ui-three-navigation-items-with-a-fab".into(),
+        "ui-three-navigation-items-with-a-menu-and-fab".into(),
     ]);
 }
 
@@ -1358,9 +1423,9 @@ fn baseline_measurement(#[prop(into)] label: String, marks: usize) {
 fn baseline_states(dark: bool) {
     figures::canvas(
         if dark {
-            "Dark baseline navigation rail states"
+            "ui-dark-baseline-navigation-rail-states"
         } else {
-            "Light baseline navigation rail states"
+            "ui-light-baseline-navigation-rail-states"
         },
         Dp(500.0),
         RenderSlot::new(|| {
@@ -1404,54 +1469,58 @@ fn baseline_states(dark: bool) {
 #[tessera]
 fn baseline() {
     prose(
-        "The baseline navigation rail is no longer recommended. Use the collapsed navigation rail documented above for new designs.",
+        "ui-the-baseline-navigation-rail-is-no-longer-recommended-use-the-collapsed-navigation-rail-do",
     );
     gap(Dp(24.0));
     baseline_canvas(
-        "Baseline navigation rail anatomy",
+        "ui-baseline-navigation-rail-anatomy",
         baseline_callouts(false),
         false,
     );
     gap(Dp(24.0));
     legend_list(vec![
-        "Container".into(),
-        "Menu icon (optional)".into(),
-        "Icon".into(),
-        "Active indicator".into(),
-        "Label text".into(),
-        "Large badge label (optional)".into(),
-        "Large badge (optional)".into(),
-        "Badge (optional)".into(),
+        "ui-container".into(),
+        "ui-menu-icon-optional".into(),
+        "ui-icon".into(),
+        "ui-active-indicator".into(),
+        "ui-label-text".into(),
+        "ui-large-badge-label-optional".into(),
+        "ui-large-badge-optional".into(),
+        "ui-badge-optional".into(),
     ]);
     gap(Dp(32.0));
-    subheading("Tokens & specs".into());
+    subheading("ui-tokens-specs".into());
     spec_table(
-        vec!["Element".into(), "Baseline".into(), "Collapsed rail".into()],
         vec![
-            vec!["Container width".into(), "80dp".into(), "96dp".into()],
+            "ui-element".into(),
+            "ui-baseline".into(),
+            "ui-collapsed-rail-4208".into(),
+        ],
+        vec![
+            vec!["ui-container-width".into(), "80dp".into(), "96dp".into()],
             vec![
-                "Active label color".into(),
-                "On surface".into(),
-                "Secondary".into(),
+                "ui-active-label-color".into(),
+                "ui-on-surface".into(),
+                "ui-secondary".into(),
             ],
             vec![
-                "Active indicator".into(),
+                "ui-active-indicator".into(),
                 "56 × 32dp".into(),
                 "56 × 32dp".into(),
             ],
-            vec!["Icon".into(), "24dp".into(), "24dp".into()],
-            vec!["Destination height".into(), "56dp".into(), "56dp".into()],
+            vec!["ui-icon".into(), "24dp".into(), "24dp".into()],
+            vec!["ui-destination-height".into(), "56dp".into(), "56dp".into()],
         ],
     );
     gap(Dp(32.0));
-    subheading("Color".into());
+    subheading("ui-color".into());
     baseline_canvas(
-        "Light baseline navigation rail colors",
+        "ui-light-baseline-navigation-rail-colors",
         baseline_callouts(true),
         true,
     );
     gap(Dp(16.0));
-    prose("Navigation rail color roles used for light and dark schemes:");
+    prose("ui-navigation-rail-color-roles-used-for-light-and-dark-schemes");
     gap(Dp(16.0));
     legend_list(
         navigation_color_roles(true, true)
@@ -1460,9 +1529,9 @@ fn baseline() {
             .collect(),
     );
     gap(Dp(32.0));
-    subheading("States".into());
+    subheading("ui-states".into());
     prose(
-        "States are visual representations used to communicate the status of a component or interactive element.",
+        "ui-states-are-visual-representations-used-to-communicate-the-status-of-a-component-or-interac",
     );
     gap(Dp(24.0));
     for dark in [false, true] {
@@ -1473,27 +1542,34 @@ fn baseline() {
         ["active", "inactive"]
             .into_iter()
             .flat_map(|target| {
-                ["Enabled", "Hovered", "Focused", "Pressed"]
-                    .map(|state| format!("{state} (on {target} destination)"))
+                ["ui-enabled", "ui-hovered", "ui-focused", "ui-pressed"].map(|state| {
+                    I18N.format(
+                        "ui-value-on-value-destination",
+                        [
+                            ("v0", I18N.text(&state).into()),
+                            ("v1", I18N.text(&target).into()),
+                        ],
+                    )
+                })
             })
             .collect(),
     );
     gap(Dp(32.0));
-    subheading("Measurements".into());
+    subheading("ui-measurements".into());
     figures::pair(
         RenderSlot::new(|| {
-            baseline_measurement("Navigation rail size measurements", 2);
+            baseline_measurement("ui-navigation-rail-size-measurements", 2);
         }),
         RenderSlot::new(|| {
-            baseline_measurement("Navigation rail padding and margin measurements", 3);
+            baseline_measurement("ui-navigation-rail-padding-and-margin-measurements", 3);
         }),
     );
     gap(Dp(32.0));
-    subheading("Configurations".into());
-    prose("Common arrangements of elements within a navigation rail");
+    subheading("ui-configurations".into());
+    prose("ui-common-arrangements-of-elements-within-a-navigation-rail");
     gap(Dp(24.0));
     figures::canvas(
-        "Baseline navigation rail configurations",
+        "ui-baseline-navigation-rail-configurations",
         Dp(480.0),
         RenderSlot::new(|| {
             row().children(|| {
@@ -1547,86 +1623,90 @@ fn baseline() {
     .dark(true);
     gap(Dp(24.0));
     legend_list(vec![
-        "With a menu".into(),
-        "With a FAB".into(),
-        "With menu and FAB, without labels".into(),
-        "All destinations with text labels".into(),
-        "With menu, FAB, and label text for all destinations".into(),
+        "ui-with-a-menu".into(),
+        "ui-with-a-fab".into(),
+        "ui-with-menu-and-fab-without-labels".into(),
+        "ui-all-destinations-with-text-labels".into(),
+        "ui-with-menu-fab-and-label-text-for-all-destinations".into(),
     ]);
 }
 
 #[tessera]
 fn usage() {
     figures::scene(
-        "Navigation rail shown collapsed and expanded",
+        "ui-navigation-rail-shown-collapsed-and-expanded",
         Dp(540.0),
         RenderSlot::new(|| {
-            timer_screen("Collapsed rail on a timer screen", Dp(300.0), Dp(480.0))
+            timer_screen("ui-collapsed-rail-on-a-timer-screen", Dp(300.0), Dp(480.0))
                 .selected(2)
                 .fab(true);
             spacer().modifier(Modifier::new().width(Dp(32.0)));
-            timer_screen("Expanded rail on a timer screen", Dp(400.0), Dp(480.0))
+            timer_screen("ui-expanded-rail-on-a-timer-screen", Dp(400.0), Dp(480.0))
                 .expanded(true)
                 .selected(2)
                 .fab(true);
         }),
     );
     gap(Dp(16.0));
-    caption("Use the menu icon to transition between collapsed and expanded navigation rails");
+    caption("ui-use-the-menu-icon-to-transition-between-collapsed-and-expanded-navigation-rails");
     gap(Dp(32.0));
     prose(
-        "The navigation rail can display navigation items, a menu, and a floating action button (FAB) in a vertical orientation.",
+        "ui-the-navigation-rail-can-display-navigation-items-a-menu-and-a-floating-action-button-fab-i",
     );
     gap(Dp(16.0));
     prose(
-        "There are two variants of navigation rails, collapsed and expanded, which can easily transform into each other when the menu button is selected.",
+        "ui-there-are-two-variants-of-navigation-rails-collapsed-and-expanded-which-can-easily-transfo",
     );
     gap(Dp(24.0));
-    subheading("Collapsed".into());
+    subheading("ui-collapsed".into());
     prose(
-        "The collapsed nav rail runs along the leading edge of the window, and should contain 3–7 navigation items. It should not be hidden.",
+        "ui-the-collapsed-nav-rail-runs-along-the-leading-edge-of-the-window-and-should-contain-3-7-na",
     );
     gap(Dp(16.0));
     prose(
-        "It can be used in medium to extra-large windows, such as tablets and desktop. In medium windows with few destinations, consider using a navigation bar instead. Compact windows should always use a navigation bar.",
+        "ui-it-can-be-used-in-medium-to-extra-large-windows-such-as-tablets-and-desktop-in-medium-wind",
     );
     gap(Dp(24.0));
     figures::scene(
-        "Collapsed navigation rail with a timer FAB",
+        "ui-collapsed-navigation-rail-with-a-timer-fab",
         Dp(540.0),
         RenderSlot::new(|| {
-            timer_screen("Collapsed navigation rail with a FAB", Dp(560.0), Dp(480.0))
-                .selected(2)
-                .fab(true);
+            timer_screen(
+                "ui-collapsed-navigation-rail-with-a-fab",
+                Dp(560.0),
+                Dp(480.0),
+            )
+            .selected(2)
+            .fab(true);
         }),
     );
     gap(Dp(16.0));
-    caption("A navigation rail should be the only visible navigation element");
+    caption("ui-a-navigation-rail-should-be-the-only-visible-navigation-element");
     gap(Dp(32.0));
-    subheading("Expanded".into());
+    subheading("ui-expanded".into());
     prose(
-        "The expanded navigation rail can be standard or modal, and should always open from a menu icon. An expanded rail can reveal secondary destinations not visible when collapsed.",
+        "ui-the-expanded-navigation-rail-can-be-standard-or-modal-and-should-always-open-from-a-menu-i",
     );
     gap(Dp(16.0));
     prose(
-        "The standard configuration is placed beside body content. It's best for larger windows with lots of available space. The modal configuration overlaps the body content, and should be opened from a menu icon. Use the modal configuration for:",
+        "ui-the-standard-configuration-is-placed-beside-body-content-it-s-best-for-larger-windows-with",
     );
     gap(Dp(8.0));
     bullets(vec![
-        "Information dense layouts where space is limited".into(),
-        "Products with many navigation items".into(),
+        "ui-information-dense-layouts-where-space-is-limited".into(),
+        "ui-products-with-many-navigation-items".into(),
     ]);
     gap(Dp(24.0));
     figures::scene(
-        "Expanded navigation rail by default and over content",
+        "ui-expanded-navigation-rail-by-default-and-over-content",
         Dp(500.0),
         RenderSlot::new(|| {
-            timer_screen("Expanded by default", Dp(440.0), Dp(440.0))
+            timer_screen("ui-expanded-by-default", Dp(440.0), Dp(440.0))
                 .expanded(true)
                 .selected(2)
                 .fab(true);
             spacer().modifier(Modifier::new().width(Dp(24.0)));
-            figures::screen("Expanded over content", Dp(440.0), Dp(440.0))
+            figures::screen("ui-expanded-over-content", Dp(440.0), Dp(440.0))
                 .rail(|| {
                     figures::mock_rail()
                         .count(4)
@@ -1641,26 +1721,26 @@ fn usage() {
     );
     gap(Dp(16.0));
     caption(
-        "A navigation rail can be expanded by default on larger screen sizes, or can be expanded over content on smaller screen sizes",
+        "ui-a-navigation-rail-can-be-expanded-by-default-on-larger-screen-sizes-or-can-be-expanded-ove",
     );
     gap(Dp(32.0));
     prose(
-        "In immersive experiences, the expanded navigation rail can be hidden entirely, appearing only when the menu icon is selected. The collapsed navigation rail should not be hidden.",
+        "ui-in-immersive-experiences-the-expanded-navigation-rail-can-be-hidden-entirely-appearing-onl",
     );
     gap(Dp(24.0));
     figures::scene(
-        "Navigation rail and hidden navigation rail",
+        "ui-navigation-rail-and-hidden-navigation-rail",
         Dp(500.0),
         RenderSlot::new(|| {
             figures::screen(
-                "Hidden navigation rail with a menu icon",
+                "ui-hidden-navigation-rail-with-a-menu-icon",
                 Dp(440.0),
                 Dp(440.0),
             )
             .hidden_menu(true);
             spacer().modifier(Modifier::new().width(Dp(24.0)));
             figures::screen(
-                "Hidden navigation rail expanded over content",
+                "ui-hidden-navigation-rail-expanded-over-content",
                 Dp(440.0),
                 Dp(440.0),
             )
@@ -1671,7 +1751,7 @@ fn usage() {
     );
     gap(Dp(16.0));
     caption(
-        "The expanded navigation rail can also be hidden, appearing only when the menu icon is selected",
+        "ui-the-expanded-navigation-rail-can-also-be-hidden-appearing-only-when-the-menu-icon-is-selec",
     );
 }
 
@@ -1696,34 +1776,34 @@ fn guide_anatomy() {
     anatomy_figure(guide_callouts(false), guide_callouts(true), 4, true);
     gap(Dp(24.0));
     legend_list(vec![
-        "Container".into(),
-        "Menu (optional)".into(),
-        "Floating action button (FAB) (optional)".into(),
-        "Icon - active".into(),
-        "Label text - active".into(),
-        "Active indicator".into(),
-        "Icon - inactive".into(),
-        "Large badge (optional)".into(),
-        "Large badge label".into(),
-        "Small badge".into(),
-        "Label text - inactive".into(),
+        "ui-container".into(),
+        "ui-menu-optional".into(),
+        "ui-floating-action-button-fab-optional".into(),
+        "ui-icon-active".into(),
+        "ui-label-text-active".into(),
+        "ui-active-indicator".into(),
+        "ui-icon-inactive".into(),
+        "ui-large-badge-optional".into(),
+        "ui-large-badge-label".into(),
+        "ui-small-badge".into(),
+        "ui-label-text-inactive".into(),
     ]);
     gap(Dp(32.0));
-    subheading("Container".into());
+    subheading("ui-container".into());
     prose(
-        "The navigation rail should be placed on the leading edge of the window. This is the left side for left-to-right languages, and the right side for right-to-left languages.",
+        "ui-the-navigation-rail-should-be-placed-on-the-leading-edge-of-the-window-this-is-the-left-si",
     );
     gap(Dp(16.0));
     prose(
-        "The container fill can be turned off so the nav rail appears directly on the surface. When doing this, make sure all items have a minimum of 3:1 color contrast.",
+        "ui-the-container-fill-can-be-turned-off-so-the-nav-rail-appears-directly-on-the-surface-when",
     );
     gap(Dp(24.0));
     figures::pair(
         RenderSlot::new(|| {
             card(
-                "Left-to-right navigation rail",
+                "ui-left-to-right-navigation-rail",
                 0,
-                "Left-to-right layouts place the rail on the left edge",
+                "ui-left-to-right-layouts-place-the-rail-on-the-left-edge",
                 RenderSlot::new(|| {
                     figures::mock_rail().count(3).selected(1).menu(true);
                 }),
@@ -1731,9 +1811,9 @@ fn guide_anatomy() {
         }),
         RenderSlot::new(|| {
             card(
-                "Right-to-left navigation rail",
+                "ui-right-to-left-navigation-rail",
                 0,
-                "Right-to-left layouts place the rail on the right edge",
+                "ui-right-to-left-layouts-place-the-rail-on-the-right-edge",
                 RenderSlot::new(|| {
                     figures::mock_rail().count(3).selected(1).menu(true);
                 }),
@@ -1742,18 +1822,18 @@ fn guide_anatomy() {
         }),
     );
     gap(Dp(16.0));
-    caption("The navigation rail should be placed on the leading edge of the window");
+    caption("ui-the-navigation-rail-should-be-placed-on-the-leading-edge-of-the-window");
     gap(Dp(32.0));
     prose(
-        "The navigation rail should always run vertically along the side of a layout. Don't make it horizontal. Use a navigation bar for horizontal navigation.",
+        "ui-the-navigation-rail-should-always-run-vertically-along-the-side-of-a-layout-don-t-make-it",
     );
     gap(Dp(24.0));
     figures::pair(
         RenderSlot::new(|| {
             card(
-                "Vertical navigation rail",
+                "ui-vertical-navigation-rail",
                 1,
-                "Run the navigation rail vertically along the side of the layout",
+                "ui-run-the-navigation-rail-vertically-along-the-side-of-the-layout",
                 RenderSlot::new(|| {
                     figures::mock_rail().count(3).selected(1).menu(true);
                 }),
@@ -1761,9 +1841,9 @@ fn guide_anatomy() {
         }),
         RenderSlot::new(|| {
             card(
-                "Horizontal navigation rail",
+                "ui-horizontal-navigation-rail",
                 3,
-                "Don't use the navigation rail horizontally. Use a navigation bar instead.",
+                "ui-don-t-use-the-navigation-rail-horizontally-use-a-navigation-bar-instead",
                 RenderSlot::empty(),
             )
             .bar(2);
@@ -1771,15 +1851,15 @@ fn guide_anatomy() {
     );
     gap(Dp(32.0));
     prose(
-        "Navigation rail items can be aligned as a group to the top or center of a layout. On tablets, use center alignment to make it easier to reach items. The menu icon and FAB should always be top-aligned.",
+        "ui-navigation-rail-items-can-be-aligned-as-a-group-to-the-top-or-center-of-a-layout-on-tablet",
     );
     gap(Dp(24.0));
     figures::pair(
         RenderSlot::new(|| {
             card(
-                "Top-aligned rail destinations",
+                "ui-top-aligned-rail-destinations",
                 0,
-                "Top-aligned rail destination placement",
+                "ui-top-aligned-rail-destination-placement",
                 RenderSlot::new(|| {
                     figures::mock_rail().count(3).selected(1).menu(true);
                 }),
@@ -1787,9 +1867,9 @@ fn guide_anatomy() {
         }),
         RenderSlot::new(|| {
             card(
-                "Center-aligned rail destinations",
+                "ui-center-aligned-rail-destinations",
                 0,
-                "Center-aligned rail destination placement",
+                "ui-center-aligned-rail-destination-placement",
                 RenderSlot::new(|| {
                     figures::mock_rail()
                         .count(3)
@@ -1801,23 +1881,23 @@ fn guide_anatomy() {
         }),
     );
     gap(Dp(32.0));
-    subheading("Menu (optional)".into());
+    subheading("ui-menu-optional".into());
     prose(
-        "The menu button can transition between the collapsed and expanded navigation rails. Once expanded, the rail can reveal secondary destinations.",
+        "ui-the-menu-button-can-transition-between-the-collapsed-and-expanded-navigation-rails-once-ex",
     );
     gap(Dp(16.0));
     prose(
-        "When the navigation rail is expanded, the menu icon should change to represent that it can be collapsed.",
+        "ui-when-the-navigation-rail-is-expanded-the-menu-icon-should-change-to-represent-that-it-can",
     );
     gap(Dp(24.0));
     figures::scene(
-        "Expanded and collapsed navigation rails controlled by a menu icon button",
+        "ui-expanded-and-collapsed-navigation-rails-controlled-by-a-menu-icon-button",
         Dp(500.0),
         RenderSlot::new(|| {
-            timer_screen("Collapsed rail with a menu", Dp(440.0), Dp(440.0)).count(4);
+            timer_screen("ui-collapsed-rail-with-a-menu", Dp(440.0), Dp(440.0)).count(4);
             spacer().modifier(Modifier::new().width(Dp(24.0)));
             timer_screen(
-                "Expanded rail with secondary destinations",
+                "ui-expanded-rail-with-secondary-destinations",
                 Dp(440.0),
                 Dp(440.0),
             )
@@ -1826,23 +1906,23 @@ fn guide_anatomy() {
         }),
     );
     gap(Dp(16.0));
-    caption("A navigation rail can expand to reveal more destinations");
+    caption("ui-a-navigation-rail-can-expand-to-reveal-more-destinations");
     gap(Dp(32.0));
-    subheading("Floating action button (FAB) (optional)".into());
+    subheading("ui-floating-action-button-fab-optional".into());
     prose(
-        "The container of the navigation rail is ideal for anchoring the FAB to the top of a screen, placing the app's key action above navigation destinations.",
+        "ui-the-container-of-the-navigation-rail-is-ideal-for-anchoring-the-fab-to-the-top-of-a-screen",
     );
     gap(Dp(16.0));
     prose(
-        "When nested within another component, such as the navigation rail, the FAB's resting elevation should be level 0.",
+        "ui-when-nested-within-another-component-such-as-the-navigation-rail-the-fab-s-resting-elevati",
     );
     gap(Dp(24.0));
     figures::pair(
         RenderSlot::new(|| {
             card(
-                "FAB at the top of the rail",
+                "ui-fab-at-the-top-of-the-rail",
                 1,
-                "A top-aligned FAB in the navigation rail",
+                "ui-a-top-aligned-fab-in-the-navigation-rail",
                 RenderSlot::new(|| {
                     figures::mock_rail().count(3).selected(1).fab(true);
                 }),
@@ -1850,9 +1930,9 @@ fn guide_anatomy() {
         }),
         RenderSlot::new(|| {
             card(
-                "FAB at the bottom of the rail",
+                "ui-fab-at-the-bottom-of-the-rail",
                 3,
-                "Avoid placing the FAB below navigation items",
+                "ui-avoid-placing-the-fab-below-navigation-items",
                 RenderSlot::new(|| {
                     figures::mock_rail()
                         .count(3)
@@ -1865,27 +1945,27 @@ fn guide_anatomy() {
     );
     gap(Dp(32.0));
     prose(
-        "The top of the rail can also be used for a logo, however avoid using logos that could be mistaken as buttons. Don't use a logo as a menu button to expand the navigation rail.",
+        "ui-the-top-of-the-rail-can-also-be-used-for-a-logo-however-avoid-using-logos-that-could-be-mi",
     );
     gap(Dp(24.0));
     card(
-        "Logo at the top of the rail",
+        "ui-logo-at-the-top-of-the-rail",
         2,
-        "Use caution when placing logos in the rail where they might be confused with an action or destination",
+        "ui-use-caution-when-placing-logos-in-the-rail-where-they-might-be-confused-with-an-action-or",
         RenderSlot::new(|| {
             figures::mock_rail().count(3).selected(1).logo(true);
         }),
     );
     gap(Dp(32.0));
-    subheading("Active indicator".into());
-    prose("The active indicator shows which page is being displayed.");
+    subheading("ui-active-indicator".into());
+    prose("ui-the-active-indicator-shows-which-page-is-being-displayed");
     gap(Dp(24.0));
     figures::pair(
         RenderSlot::new(|| {
             card(
-                "One active indicator",
+                "ui-one-active-indicator",
                 1,
-                "Use the active indicator only for the current open page",
+                "ui-use-the-active-indicator-only-for-the-current-open-page",
                 RenderSlot::new(|| {
                     figures::mock_rail().count(4).selected(1);
                 }),
@@ -1893,9 +1973,9 @@ fn guide_anatomy() {
         }),
         RenderSlot::new(|| {
             card(
-                "Active indicators on every item",
+                "ui-active-indicators-on-every-item",
                 3,
-                "Don't use the active indicator for more than one navigation item at a time",
+                "ui-don-t-use-the-active-indicator-for-more-than-one-navigation-item-at-a-time",
                 RenderSlot::new(|| {
                     figures::mock_rail().count(4).all_active(true);
                 }),
@@ -1904,15 +1984,15 @@ fn guide_anatomy() {
     );
     gap(Dp(32.0));
     prose(
-        "The active indicator hugs the label text in the expanded nav rail. To achieve a similar style to the baseline navigation drawer, consider modifying the active indicator to fill the container. The target area should always span the full width.",
+        "ui-the-active-indicator-hugs-the-label-text-in-the-expanded-nav-rail-to-achieve-a-similar-sty",
     );
     gap(Dp(24.0));
     figures::pair(
         RenderSlot::new(|| {
             card(
-                "Hugging active indicator",
+                "ui-hugging-active-indicator",
                 0,
-                "The active indicator hugs contents in the expanded nav rail",
+                "ui-the-active-indicator-hugs-contents-in-the-expanded-nav-rail",
                 RenderSlot::new(|| {
                     figures::mock_rail().expanded(true).count(4).selected(1);
                 }),
@@ -1921,9 +2001,9 @@ fn guide_anatomy() {
         }),
         RenderSlot::new(|| {
             card(
-                "Filled active indicator",
+                "ui-filled-active-indicator",
                 0,
-                "Override the indicator to fill the container to more closely resemble the baseline navigation drawer",
+                "ui-override-the-indicator-to-fill-the-container-to-more-closely-resemble-the-baseline-navigat",
                 RenderSlot::new(|| {
                     figures::mock_rail()
                         .expanded(true)
@@ -1936,28 +2016,28 @@ fn guide_anatomy() {
         }),
     );
     gap(Dp(32.0));
-    subheading("Icons".into());
-    prose("Navigation rail items must use icons that symbolize the content of their page.");
+    subheading("ui-icons".into());
+    prose("ui-navigation-rail-items-must-use-icons-that-symbolize-the-content-of-their-page");
     gap(Dp(24.0));
     card(
-        "Icons for timer destinations",
+        "ui-icons-for-timer-destinations",
         0,
-        "Icons should symbolize the content of the page they open",
+        "ui-icons-should-symbolize-the-content-of-the-page-they-open",
         RenderSlot::new(|| {
             figures::mock_rail().count(4).selected(2);
         }),
     );
     gap(Dp(32.0));
     prose(
-        "When a destination is selected, the icon fills and changes color. An active indicator appears behind the icon.",
+        "ui-when-a-destination-is-selected-the-icon-fills-and-changes-color-an-active-indicator-appear",
     );
     gap(Dp(24.0));
     figures::pair(
         RenderSlot::new(|| {
             card(
-                "Destinations without an active indicator",
+                "ui-destinations-without-an-active-indicator",
                 0,
-                "Unselected navigation items use outlined icons",
+                "ui-unselected-navigation-items-use-outlined-icons",
                 RenderSlot::new(|| {
                     figures::mock_rail().count(4);
                 }),
@@ -1965,9 +2045,9 @@ fn guide_anatomy() {
         }),
         RenderSlot::new(|| {
             card(
-                "Destination with an active indicator",
+                "ui-destination-with-an-active-indicator",
                 0,
-                "Selected navigation items have an active indicator, a filled icon, and a more prominent color",
+                "ui-selected-navigation-items-have-an-active-indicator-a-filled-icon-and-a-more-prominent-colo",
                 RenderSlot::new(|| {
                     figures::mock_rail().count(4).selected(1);
                 }),
@@ -1975,21 +2055,21 @@ fn guide_anatomy() {
         }),
     );
     gap(Dp(32.0));
-    subheading("Label text".into());
+    subheading("ui-label-text".into());
     prose(
-        "The label text should be a short, meaningful description of each navigation destination and another way for users to understand an icon's meaning. All navigation items require a one word label text.",
+        "ui-the-label-text-should-be-a-short-meaningful-description-of-each-navigation-destination-and",
     );
     gap(Dp(16.0));
     prose(
-        "Avoid wrapping long labels when possible. If necessary, create a line break between words, or hyphenate longer words.",
+        "ui-avoid-wrapping-long-labels-when-possible-if-necessary-create-a-line-break-between-words-or",
     );
     gap(Dp(24.0));
     figures::pair(
         RenderSlot::new(|| {
             card(
-                "Clear navigation labels",
+                "ui-clear-navigation-labels",
                 1,
-                "Write clear and concise labels that describe the destination page",
+                "ui-write-clear-and-concise-labels-that-describe-the-destination-page",
                 RenderSlot::new(|| {
                     figures::mock_rail().count(4).selected(1);
                 }),
@@ -1998,9 +2078,9 @@ fn guide_anatomy() {
         }),
         RenderSlot::new(|| {
             card(
-                "Two-line navigation labels",
+                "ui-two-line-navigation-labels",
                 2,
-                "Break up longer phrases into two text lines if necessary",
+                "ui-break-up-longer-phrases-into-two-text-lines-if-necessary",
                 RenderSlot::new(|| {
                     figures::mock_rail().count(4).selected(1).label_mode(4);
                 }),
@@ -2010,15 +2090,15 @@ fn guide_anatomy() {
     );
     gap(Dp(32.0));
     prose(
-        "Labels should be short enough to not be truncated. Don't shrink the type scale to fit longer text labels.",
+        "ui-labels-should-be-short-enough-to-not-be-truncated-don-t-shrink-the-type-scale-to-fit-longe",
     );
     gap(Dp(24.0));
     figures::pair(
         RenderSlot::new(|| {
             card(
-                "Truncated navigation labels",
+                "ui-truncated-navigation-labels",
                 3,
-                "Don't truncate or display an ellipsis in place of label text",
+                "ui-don-t-truncate-or-display-an-ellipsis-in-place-of-label-text",
                 RenderSlot::new(|| {
                     figures::mock_rail().count(4).selected(1).label_mode(2);
                 }),
@@ -2027,9 +2107,9 @@ fn guide_anatomy() {
         }),
         RenderSlot::new(|| {
             card(
-                "Small navigation labels",
+                "ui-small-navigation-labels",
                 3,
-                "Don't reduce the type size to fit more characters into a destination label",
+                "ui-don-t-reduce-the-type-size-to-fit-more-characters-into-a-destination-label",
                 RenderSlot::new(|| {
                     figures::mock_rail().count(4).selected(1).label_mode(3);
                 }),
@@ -2038,17 +2118,17 @@ fn guide_anatomy() {
         }),
     );
     gap(Dp(32.0));
-    subheading("Badges".into());
+    subheading("ui-badges".into());
     prose(
-        "Navigation rail icons can include badges to communicate dynamic information about the destination, such as counts or status.",
+        "ui-navigation-rail-icons-can-include-badges-to-communicate-dynamic-information-about-the-dest",
     );
     gap(Dp(16.0));
     prose(
-        "In compact nav rails, the badge is placed in the upper right corner of the icon. In expanded nav rails, the badge should be placed next to the label text.",
+        "ui-in-compact-nav-rails-the-badge-is-placed-in-the-upper-right-corner-of-the-icon-in-expanded",
     );
     gap(Dp(24.0));
     figures::canvas(
-        "Navigation rail badges",
+        "ui-navigation-rail-badges",
         Dp(380.0),
         RenderSlot::new(|| {
             row()
@@ -2059,14 +2139,14 @@ fn guide_anatomy() {
                         (2, "large-badge", true),
                         (3, "max-badge", true),
                     ];
-                    figures::specimen("Collapsed rail with badges", false, Dp(220.0), Dp(340.0))
+                    figures::specimen("ui-collapsed-rail-with-badges", false, Dp(220.0), Dp(340.0))
                         .count(4)
                         .badge_series(true)
                         .filled(true)
                         .callouts(callouts.clone())
                         .rail_height(Dp(320.0));
                     spacer().modifier(Modifier::new().width(Dp(48.0)));
-                    figures::specimen("Expanded rail with badges", true, Dp(340.0), Dp(340.0))
+                    figures::specimen("ui-expanded-rail-with-badges", true, Dp(340.0), Dp(340.0))
                         .count(4)
                         .badge_series(true)
                         .filled(true)
@@ -2077,22 +2157,22 @@ fn guide_anatomy() {
     );
     gap(Dp(24.0));
     legend_list(vec![
-        "Small badge on a rail destination".into(),
-        "Large badge with a number".into(),
-        "Large badge with a maximum character count".into(),
+        "ui-small-badge-on-a-rail-destination".into(),
+        "ui-large-badge-with-a-number".into(),
+        "ui-large-badge-with-a-maximum-character-count".into(),
     ]);
     gap(Dp(32.0));
-    subheading("Divider (optional)".into());
+    subheading("ui-divider-optional".into());
     prose(
-        "A vertical divider can help separate the rail from app content. The divider should be positioned on the edge of the rail container that's adjacent to the app's content area.",
+        "ui-a-vertical-divider-can-help-separate-the-rail-from-app-content-the-divider-should-be-posit",
     );
     gap(Dp(24.0));
     figures::scene(
-        "Navigation rail with a divider",
+        "ui-navigation-rail-with-a-divider",
         Dp(460.0),
         RenderSlot::new(|| {
             figures::screen(
-                "Navigation rail with a divider beside a list",
+                "ui-navigation-rail-with-a-divider-beside-a-list",
                 Dp(560.0),
                 Dp(420.0),
             )
@@ -2110,26 +2190,26 @@ fn guide_anatomy() {
     );
     gap(Dp(16.0));
     caption(
-        "A divider can make the navigation rail container distinct from other on-screen content",
+        "ui-a-divider-can-make-the-navigation-rail-container-distinct-from-other-on-screen-content",
     );
 }
 
 #[tessera]
 fn placement() {
     prose(
-        "In adaptive layouts, the navigation rail should be placed outside any panes, always along the leading edge of the window. Don't place it within body content.",
+        "ui-in-adaptive-layouts-the-navigation-rail-should-be-placed-outside-any-panes-always-along-th",
     );
     gap(Dp(16.0));
     prose(
-        "When the navigation rail is hidden, the body content can fill in the remaining space as long as the menu icon is still accessible.",
+        "ui-when-the-navigation-rail-is-hidden-the-body-content-can-fill-in-the-remaining-space-as-lon",
     );
     gap(Dp(24.0));
     figures::pair(
         RenderSlot::new(|| {
             card(
-                "Rail outside body panes",
+                "ui-rail-outside-body-panes",
                 0,
-                "Place the navigation rail outside panes, along the leading edge of the window",
+                "ui-place-the-navigation-rail-outside-panes-along-the-leading-edge-of-the-window",
                 RenderSlot::new(|| {
                     figures::mock_rail().count(4).selected(1).menu(true);
                 }),
@@ -2138,9 +2218,9 @@ fn placement() {
         }),
         RenderSlot::new(|| {
             card(
-                "Hidden rail with a menu icon",
+                "ui-hidden-rail-with-a-menu-icon",
                 0,
-                "Body content fills the window while the menu icon stays accessible",
+                "ui-body-content-fills-the-window-while-the-menu-icon-stays-accessible",
                 RenderSlot::empty(),
             )
             .content_kind(2)
@@ -2149,14 +2229,14 @@ fn placement() {
     );
     gap(Dp(32.0));
     prose(
-        "Tabs can be used alongside a navigation rail to create an extra layer of visible navigation.",
+        "ui-tabs-can-be-used-alongside-a-navigation-rail-to-create-an-extra-layer-of-visible-navigatio",
     );
     gap(Dp(24.0));
     figures::scene(
-        "Expanded navigation rail opened from a menu button on mobile",
+        "ui-expanded-navigation-rail-opened-from-a-menu-button-on-mobile",
         Dp(500.0),
         RenderSlot::new(|| {
-            figures::screen("Modal expanded rail on a phone", Dp(300.0), Dp(440.0))
+            figures::screen("ui-modal-expanded-rail-on-a-phone", Dp(300.0), Dp(440.0))
                 .content_kind(1)
                 .rail(|| {
                     figures::mock_rail().count(4).selected(1).menu(true);
@@ -2167,53 +2247,53 @@ fn placement() {
         }),
     );
     gap(Dp(16.0));
-    caption("Expanded navigation rails can open from menu buttons on mobile");
+    caption("ui-expanded-navigation-rails-can-open-from-menu-buttons-on-mobile");
 }
 
 #[tessera]
 fn adaptive_design() {
-    prose("For more, see adaptive design.");
+    prose("ui-for-more-see-adaptive-design");
     gap(Dp(24.0));
-    subheading("Resizing".into());
+    subheading("ui-resizing".into());
     prose(
-        "When moving from a large screen to a small screen, a navigation rail can transform into a navigation bar, providing the same quick access in a configuration that's easier to use on smaller displays. Never use the navigation rail and navigation bar simultaneously.",
+        "ui-when-moving-from-a-large-screen-to-a-small-screen-a-navigation-rail-can-transform-into-a-n",
     );
     gap(Dp(16.0));
     prose(
-        "Only use navigation rails for medium breakpoints and larger. Don't use a navigation bar. If there are more than five destinations, consider using a modal expanded nav rail instead.",
+        "ui-only-use-navigation-rails-for-medium-breakpoints-and-larger-don-t-use-a-navigation-bar-if",
     );
     gap(Dp(16.0));
     bullets(vec![
-        "Compact: Don't use a standard navigation rail for compact layouts due to space constraints. Use a navigation bar instead.".into(),
-        "Medium: Use a navigation rail, especially if prioritizing persistent vertical navigation over maximizing vertical content space.".into(),
-        "Expanded to extra-large: Use a navigation rail, not a navigation bar. Consider available horizontal space and the number of destinations when choosing between standard and modal.".into(),
+        "ui-compact-don-t-use-a-standard-navigation-rail-for-compact-layouts-due-to-space-constraints".into(),
+        "ui-medium-use-a-navigation-rail-especially-if-prioritizing-persistent-vertical-navigation-ove".into(),
+        "ui-expanded-to-extra-large-use-a-navigation-rail-not-a-navigation-bar-consider-available-hori".into(),
     ]);
     gap(Dp(24.0));
     figures::scene(
-        "Navigation bar on a phone and navigation rail on a tablet",
+        "ui-navigation-bar-on-a-phone-and-navigation-rail-on-a-tablet",
         Dp(500.0),
         RenderSlot::new(|| {
-            figures::screen("Phone with a navigation bar", Dp(240.0), Dp(440.0)).bar(1);
+            figures::screen("ui-phone-with-a-navigation-bar", Dp(240.0), Dp(440.0)).bar(1);
             spacer().modifier(Modifier::new().width(Dp(32.0)));
-            timer_screen("Tablet with a navigation rail", Dp(600.0), Dp(440.0)).fab(true);
+            timer_screen("ui-tablet-with-a-navigation-rail", Dp(600.0), Dp(440.0)).fab(true);
         }),
     );
     gap(Dp(16.0));
-    caption("On smaller devices, use a navigation bar. On larger displays, use a navigation rail.");
+    caption("ui-on-smaller-devices-use-a-navigation-bar-on-larger-displays-use-a-navigation-rail");
     gap(Dp(32.0));
-    subheading("Presentation".into());
+    subheading("ui-presentation".into());
     prose(
-        "When the navigation rail transitions from collapsed to expanded, the contents of the page should automatically adjust to fit. The contents of the navigation rail also expand to fill the space. For example, the FAB should transition into an extended FAB.",
+        "ui-when-the-navigation-rail-transitions-from-collapsed-to-expanded-the-contents-of-the-page-s",
     );
     gap(Dp(16.0));
-    prose("Extra destinations can be shown in an expanded nav rail.");
+    prose("ui-extra-destinations-can-be-shown-in-an-expanded-nav-rail");
     gap(Dp(24.0));
     figures::scene(
-        "Expanded navigation rail with secondary destinations",
+        "ui-expanded-navigation-rail-with-secondary-destinations",
         Dp(500.0),
         RenderSlot::new(|| {
             timer_screen(
-                "Standard expanded rail with extra destinations",
+                "ui-standard-expanded-rail-with-extra-destinations",
                 Dp(640.0),
                 Dp(460.0),
             )
@@ -2224,7 +2304,7 @@ fn adaptive_design() {
     );
     gap(Dp(16.0));
     caption(
-        "Use a standard expanded rail when there are secondary destinations or actions that have lower priority than the main navigation items",
+        "ui-use-a-standard-expanded-rail-when-there-are-secondary-destinations-or-actions-that-have-lo",
     );
 }
 
@@ -2234,9 +2314,9 @@ fn behavior(
     modal_selected: State<usize>,
     session: Option<LiveRailSession>,
 ) {
-    subheading("Modal expanded rail".into());
+    subheading("ui-modal-expanded-rail".into());
     prose(
-        "A modal expanded rail opens from the menu and closes by selecting its scrim or a destination, or by pressing Escape. It returns focus to the control that opened it.",
+        "ui-a-modal-expanded-rail-opens-from-the-menu-and-closes-by-selecting-its-scrim-or-a-destinati",
     );
     gap(Dp(16.0));
     row()
@@ -2245,42 +2325,42 @@ fn behavior(
             icon_button()
                 .standard()
                 .icon(filled::MENU_SVG)
-                .accessibility_label("Open modal navigation rail")
+                .accessibility_label(I18N.text("ui-open-modal-navigation-rail"))
                 .on_click(move || {
                     if session.is_none_or(LiveRailSession::can_open) {
                         modal_open.set(true);
                     }
                 });
             text()
-                .content(format!(
-                    "Current destination: {}",
-                    NAMES[modal_selected.get()]
+                .content(I18N.format(
+                    "ui-current-destination-value",
+                    [("v0", I18N.text(&(NAMES[modal_selected.get()])).into())],
                 ))
                 .style(type_style(14.0, 20.0));
         });
     caption(
-        "Open from the menu, then choose a destination, select the scrim or press Escape to close and return focus",
+        "ui-open-from-the-menu-then-choose-a-destination-select-the-scrim-or-press-escape-to-close-and",
     );
     gap(Dp(32.0));
-    subheading("Scrolling".into());
+    subheading("ui-scrolling".into());
     prose(
-        "Destinations in the navigation rail should remain visible and fixed when scrolling vertically.",
+        "ui-destinations-in-the-navigation-rail-should-remain-visible-and-fixed-when-scrolling-vertica",
     );
     gap(Dp(24.0));
     panel(RenderSlot::new(scrolling_rail));
     gap(Dp(16.0));
-    caption("Rail destinations remain fixed while on-screen content scrolls vertically");
+    caption("ui-rail-destinations-remain-fixed-while-on-screen-content-scrolls-vertically");
     gap(Dp(32.0));
     prose(
-        "If a layout scrolls horizontally, the rail can scroll off-screen or remain fixed. To distinguish that content is scrolling underneath the rail, use a divider or add elevation to the rail.",
+        "ui-if-a-layout-scrolls-horizontally-the-rail-can-scroll-off-screen-or-remain-fixed-to-disting",
     );
     gap(Dp(24.0));
     figures::pair(
         RenderSlot::new(move || {
             card(
-                "Rail with a divider over horizontal content",
+                "ui-rail-with-a-divider-over-horizontal-content",
                 0,
-                "A divider and color fill change create visual distinction between the rail and horizontally scrolling content",
+                "ui-a-divider-and-color-fill-change-create-visual-distinction-between-the-rail-and-horizontall",
                 RenderSlot::new(move || {
                     figures::mock_rail()
                         .count(3)
@@ -2293,9 +2373,9 @@ fn behavior(
         }),
         RenderSlot::new(move || {
             card(
-                "Elevated rail over horizontal content",
+                "ui-elevated-rail-over-horizontal-content",
                 0,
-                "Elevating the rail to level 1 creates visual distinction between the rail and horizontally scrolling content",
+                "ui-elevating-the-rail-to-level-1-creates-visual-distinction-between-the-rail-and-horizontally",
                 RenderSlot::new(move || {
                     figures::mock_rail()
                         .count(3)
@@ -2308,37 +2388,37 @@ fn behavior(
         }),
     );
     gap(Dp(32.0));
-    subheading("Selection".into());
+    subheading("ui-selection".into());
     prose(
-        "When a destination is tapped, the destination screen uses a top level transition pattern. In addition, the icon becomes filled and the active indicator expands from the center of the icon.",
+        "ui-when-a-destination-is-tapped-the-destination-screen-uses-a-top-level-transition-pattern-in",
     );
     gap(Dp(16.0));
     prose(
-        "The menu control transitions the rail between collapsed and expanded. Selection is preserved across the transition: the same destination keeps its active indicator and filled icon.",
+        "ui-the-menu-control-transitions-the-rail-between-collapsed-and-expanded-selection-is-preserve",
     );
     gap(Dp(24.0));
     panel(RenderSlot::new(behavior_rail));
     gap(Dp(16.0));
     caption(
-        "Select a destination, then use the menu button to expand or collapse the rail; the selected destination is preserved",
+        "ui-select-a-destination-then-use-the-menu-button-to-expand-or-collapse-the-rail-the-selected",
     );
     gap(Dp(32.0));
-    subheading("Back".into());
+    subheading("ui-back".into());
     prose(
-        "On Android, a gesture called predictive back allows people to swipe left or right on the screen to go back or dismiss modal components.",
+        "ui-on-android-a-gesture-called-predictive-back-allows-people-to-swipe-left-or-right-on-the-sc",
     );
     gap(Dp(8.0));
     bullets(vec![
-        "Previous screen is revealed in a preview to signal the destination".into(),
-        "Predictive back only applies to the modal expanded navigation rail".into(),
+        "ui-previous-screen-is-revealed-in-a-preview-to-signal-the-destination".into(),
+        "ui-predictive-back-only-applies-to-the-modal-expanded-navigation-rail".into(),
     ]);
     gap(Dp(24.0));
     figures::scene(
-        "Modal navigation rail during the predictive back gesture",
+        "ui-modal-navigation-rail-during-the-predictive-back-gesture",
         Dp(460.0),
         RenderSlot::new(move || {
             figures::screen(
-                "Predictive back on a modal navigation rail",
+                "ui-predictive-back-on-a-modal-navigation-rail",
                 Dp(560.0),
                 Dp(420.0),
             )
@@ -2351,7 +2431,7 @@ fn behavior(
         }),
     );
     gap(Dp(16.0));
-    caption("The nav rail pops off the edge of the window during the predictive back gesture");
+    caption("ui-the-nav-rail-pops-off-the-edge-of-the-window-during-the-predictive-back-gesture");
 }
 
 #[tessera]
@@ -2364,7 +2444,7 @@ fn behavior_rail() {
             boxed()
                 .modifier(Modifier::new().semantics(SemanticsArgs {
                     role: Some(Role::Navigation),
-                    label: Some("Interactive mail navigation".into()),
+                    label: Some(I18N.text("ui-interactive-mail-navigation")),
                     test_tag: Some("behavior-rail".into()),
                     merge_descendants: true,
                     ..Default::default()
@@ -2376,11 +2456,11 @@ fn behavior_rail() {
                             icon_button()
                                 .standard()
                                 .icon(filled::MENU_SVG)
-                                .accessibility_label(if expanded.get() {
-                                    "Collapse navigation rail"
+                                .accessibility_label(I18N.text(if expanded.get() {
+                                    "ui-collapse-navigation-rail"
                                 } else {
-                                    "Expand navigation rail"
-                                })
+                                    "ui-expand-navigation-rail"
+                                }))
                                 .modifier(Modifier::new().semantics(SemanticsArgs {
                                     test_tag: Some("behavior-rail-menu".into()),
                                     merge_descendants: true,
@@ -2400,7 +2480,7 @@ fn behavior_rail() {
                                     }))
                                     .children(move || {
                                         navigation_rail_item(rail_scope)
-                                            .label(name)
+                                            .label(I18N.text(name))
                                             .selected(selected.get() == index)
                                             .on_click(move || selected.set(index))
                                             .icon(move || {
@@ -2412,14 +2492,14 @@ fn behavior_rail() {
                 });
             gap(Dp(16.0));
             text()
-                .content(format_rail_status(
+                .content(I18N.text(format_rail_status(
                     if expanded.get() {
-                        "Expanded"
+                        "ui-expanded"
                     } else {
-                        "Collapsed"
+                        "ui-collapsed"
                     },
                     selected.get(),
-                ))
+                )))
                 .modifier(Modifier::new().semantics(SemanticsArgs {
                     test_tag: Some(format!("behavior-rail-destination-{}", selected.get())),
                     merge_descendants: true,
@@ -2451,7 +2531,7 @@ fn scrolling_rail_view(
                 boxed()
                     .modifier(Modifier::new().fill_max_height().semantics(SemanticsArgs {
                         role: Some(Role::Navigation),
-                        label: Some("Fixed mail navigation beside scrolling content".into()),
+                        label: Some(I18N.text("ui-fixed-mail-navigation-beside-scrolling-content")),
                         test_tag: Some("scrolling-rail".into()),
                         merge_descendants: true,
                         ..Default::default()
@@ -2463,11 +2543,11 @@ fn scrolling_rail_view(
                                 icon_button()
                                     .standard()
                                     .icon(filled::MENU_SVG)
-                                    .accessibility_label(if expanded.get() {
-                                        "Collapse fixed rail"
+                                    .accessibility_label(I18N.text(if expanded.get() {
+                                        "ui-collapse-fixed-rail"
                                     } else {
-                                        "Expand fixed rail"
-                                    })
+                                        "ui-expand-fixed-rail"
+                                    }))
                                     .on_click(move || expanded.with_mut(|value| *value = !*value))
                                     .modifier(Modifier::new().semantics(SemanticsArgs {
                                         test_tag: Some("scrolling-rail-menu".into()),
@@ -2485,7 +2565,7 @@ fn scrolling_rail_view(
                                         }))
                                         .children(move || {
                                             navigation_rail_item(rail_scope)
-                                                .label(name)
+                                                .label(I18N.text(name))
                                                 .selected(selected.get() == index)
                                                 .on_click(move || selected.set(index))
                                                 .icon(move || {
@@ -2532,10 +2612,12 @@ fn scrolling_rail_view(
                                 )
                                 .children(move || {
                                     text()
-                                        .content(format!(
-                                            "{} message {}",
-                                            NAMES[selected.get()],
-                                            index + 1
+                                        .content(I18N.format(
+                                            "ui-value-message-value",
+                                            [
+                                                ("v0", I18N.text(&(NAMES[selected.get()])).into()),
+                                                ("v1", (index + 1).into()),
+                                            ],
                                         ))
                                         .style(type_style(14.0, 20.0));
                                 });
@@ -2545,7 +2627,7 @@ fn scrolling_rail_view(
             });
         gap(Dp(16.0));
         text()
-            .content(format_rail_status("Fixed rail", selected.get()))
+            .content(I18N.text(format_rail_status("ui-fixed-rail", selected.get())))
             .style(type_style(14.0, 20.0))
             .modifier(Modifier::new().semantics(SemanticsArgs {
                 test_tag: Some(format!("scrolling-rail-destination-{}", selected.get())),
@@ -2557,37 +2639,37 @@ fn scrolling_rail_view(
 
 #[tessera]
 fn use_cases() {
-    prose("People should be able to do the following using the assistive technology:");
+    prose("ui-people-should-be-able-to-do-the-following-using-the-assistive-technology");
     gap(Dp(16.0));
     bullets(vec![
-        "Navigate between navigation destinations".into(),
-        "Select a particular navigation destination from a set".into(),
-        "Get appropriate feedback based on input type".into(),
+        "ui-navigate-between-navigation-destinations".into(),
+        "ui-select-a-particular-navigation-destination-from-a-set".into(),
+        "ui-get-appropriate-feedback-based-on-input-type".into(),
     ]);
 }
 
 #[tessera]
 fn interaction_style() {
     prose(
-        "When a navigation item is tapped, the active indicator appears, providing the following feedback to the user that it is selected:",
+        "ui-when-a-navigation-item-is-tapped-the-active-indicator-appears-providing-the-following-feed",
     );
     gap(Dp(8.0));
     bullets(vec![
-        "A ripple passes through the indicator".into(),
-        "The icon switches from outlined to filled".into(),
-        "The icon and text change color".into(),
+        "ui-a-ripple-passes-through-the-indicator".into(),
+        "ui-the-icon-switches-from-outlined-to-filled".into(),
+        "ui-the-icon-and-text-change-color".into(),
     ]);
     gap(Dp(8.0));
     prose(
-        "When hovered, the hover state appears, providing a visual cue that the destination is interactive.",
+        "ui-when-hovered-the-hover-state-appears-providing-a-visual-cue-that-the-destination-is-intera",
     );
     gap(Dp(24.0));
     figures::pair(
         RenderSlot::new(|| {
             card(
-                "Touch tap on a rail destination",
+                "ui-touch-tap-on-a-rail-destination",
                 0,
-                "Touch: Tap",
+                "ui-touch-tap",
                 RenderSlot::new(|| {
                     figures::mock_rail()
                         .count(4)
@@ -2600,9 +2682,9 @@ fn interaction_style() {
         }),
         RenderSlot::new(|| {
             card(
-                "Cursor hover on a rail destination",
+                "ui-cursor-hover-on-a-rail-destination",
                 0,
-                "Cursor: Hover, Click",
+                "ui-cursor-hover-click",
                 RenderSlot::new(|| {
                     figures::mock_rail()
                         .count(4)
@@ -2616,14 +2698,14 @@ fn interaction_style() {
     );
     gap(Dp(32.0));
     prose(
-        "The target area for expanded navigation rails spans the full width of the container, even though the active indicator visually hugs the content.",
+        "ui-the-target-area-for-expanded-navigation-rails-spans-the-full-width-of-the-container-even-t",
     );
     gap(Dp(24.0));
     figures::scene(
-        "Full-width target area in an expanded rail",
+        "ui-full-width-target-area-in-an-expanded-rail",
         Dp(420.0),
         RenderSlot::new(|| {
-            figures::screen("Expanded rail target area", Dp(560.0), Dp(380.0)).rail(|| {
+            figures::screen("ui-expanded-rail-target-area", Dp(560.0), Dp(380.0)).rail(|| {
                 figures::mock_rail()
                     .expanded(true)
                     .count(4)
@@ -2636,18 +2718,18 @@ fn interaction_style() {
         }),
     );
     gap(Dp(16.0));
-    caption("Touch: Tap");
+    caption("ui-touch-tap");
     gap(Dp(32.0));
     prose(
-        "Use a filled icon for the active destination and outlined icons for inactive destinations. Active and inactive icons need sufficient contrast against the container.",
+        "ui-use-a-filled-icon-for-the-active-destination-and-outlined-icons-for-inactive-destinations",
     );
     gap(Dp(24.0));
     figures::pair(
         RenderSlot::new(|| {
             card(
-                "Default navigation rail colors",
+                "ui-default-navigation-rail-colors",
                 1,
-                "Use the default color scheme to ensure proper contrast and emphasis on the active destination",
+                "ui-use-the-default-color-scheme-to-ensure-proper-contrast-and-emphasis-on-the-active-destinat",
                 RenderSlot::new(|| {
                     figures::mock_rail().count(4).selected(2);
                 }),
@@ -2655,9 +2737,9 @@ fn interaction_style() {
         }),
         RenderSlot::new(|| {
             card(
-                "Low-contrast navigation rail colors",
+                "ui-low-contrast-navigation-rail-colors",
                 3,
-                "Don't use more than two colors for destinations or low-contrast colors in the navigation rail. This will make distinguishing active items difficult.",
+                "ui-don-t-use-more-than-two-colors-for-destinations-or-low-contrast-colors-in-the-navigation-r",
                 RenderSlot::new(|| {
                     figures::mock_rail().count(4).selected(2).low_contrast(true);
                 }),
@@ -2665,15 +2747,15 @@ fn interaction_style() {
         }),
     );
     gap(Dp(32.0));
-    prose("If an icon doesn't have a filled style, use the semibold icon weight instead.");
+    prose("ui-if-an-icon-doesn-t-have-a-filled-style-use-the-semibold-icon-weight-instead");
     gap(Dp(24.0));
     figures::scene(
-        "Voicemail icon inactive and active",
+        "ui-voicemail-icon-inactive-and-active",
         Dp(220.0),
         RenderSlot::new(voicemail_weights),
     );
     gap(Dp(16.0));
-    caption("An icon with no filled option should use the semibold weight when active");
+    caption("ui-an-icon-with-no-filled-option-should-use-the-semibold-weight-when-active");
 }
 
 #[tessera]
@@ -2718,7 +2800,7 @@ fn voicemail_weights() {
                             });
                         gap(Dp(8.0));
                         text()
-                            .content("Voicemail")
+                            .content(I18N.text("ui-voicemail"))
                             .style(style.clone())
                             .color(scheme.on_surface);
                     });
@@ -2729,19 +2811,19 @@ fn voicemail_weights() {
 #[tessera]
 fn text_scaling() {
     prose(
-        "When someone sets their device to show a larger text size, the navigation rail items should grow vertically to accommodate larger labels while retaining the default padding. It's okay for scaled text to wrap in navigation items.",
+        "ui-when-someone-sets-their-device-to-show-a-larger-text-size-the-navigation-rail-items-should",
     );
     gap(Dp(16.0));
     prose(
-        "To remain accessible, ensure the full label is always visible on-screen at up to 2x text sizing. Beyond this size, text can truncate.",
+        "ui-to-remain-accessible-ensure-the-full-label-is-always-visible-on-screen-at-up-to-2x-text-si",
     );
     gap(Dp(24.0));
     figures::pair(
         RenderSlot::new(|| {
             card(
-                "Text scaled to 1.5 size",
+                "ui-text-scaled-to-1-5-size",
                 0,
-                "Text scaled to 1.5 size",
+                "ui-text-scaled-to-1-5-size",
                 RenderSlot::new(|| {
                     figures::mock_rail().count(4).selected(2).label_scale(1.5);
                 }),
@@ -2749,9 +2831,9 @@ fn text_scaling() {
         }),
         RenderSlot::new(|| {
             card(
-                "Text scaled to 2x size",
+                "ui-text-scaled-to-2x-size",
                 0,
-                "Text scaled to 2x size",
+                "ui-text-scaled-to-2x-size",
                 RenderSlot::new(|| {
                     figures::mock_rail()
                         .count(4)
@@ -2787,24 +2869,24 @@ fn focus_example(#[prop(into)] key: String, target: usize, selected: usize, stat
 #[tessera]
 fn initial_focus() {
     prose(
-        "Initial focus lands directly on the first interactive item, whether it's the menu, the FAB, or the first navigation item.",
+        "ui-initial-focus-lands-directly-on-the-first-interactive-item-whether-it-s-the-menu-the-fab-o",
     );
     gap(Dp(16.0));
     prose(
-        "From the FAB or menu, Tab brings the person to the navigation items. Tab or Arrows then navigate between items.",
+        "ui-from-the-fab-or-menu-tab-brings-the-person-to-the-navigation-items-tab-or-arrows-then-navi",
     );
     gap(Dp(24.0));
     figures::pair(
         RenderSlot::new(|| {
             figures::example(
-                "Arrow keys move focus between rail destinations",
+                "ui-arrow-keys-move-focus-between-rail-destinations",
                 0,
-                "Use arrows to move between navigation items",
+                "ui-use-arrows-to-move-between-navigation-items",
                 RenderSlot::new(|| {
                     row().children(|| {
-                        focus_example("Tab", 0, 0, 2);
+                        focus_example("ui-tab", 0, 0, 2);
                         spacer().modifier(Modifier::new().width(Dp(40.0)));
-                        focus_example("Arrow", 1, 0, 2);
+                        focus_example("ui-arrow", 1, 0, 2);
                     });
                 }),
             )
@@ -2812,12 +2894,12 @@ fn initial_focus() {
         }),
         RenderSlot::new(|| {
             figures::example(
-                "Space or Enter activates the focused destination",
+                "ui-space-or-enter-activates-the-focused-destination",
                 0,
-                "Use space/enter to activate the focused navigation item",
+                "ui-use-space-enter-to-activate-the-focused-navigation-item",
                 RenderSlot::new(|| {
                     row().children(|| {
-                        focus_example("Tab", 0, 0, 2);
+                        focus_example("ui-tab", 0, 0, 2);
                         spacer().modifier(Modifier::new().width(Dp(40.0)));
                         focus_example("Space/Enter", 0, 0, 3);
                     });
@@ -2831,15 +2913,15 @@ fn initial_focus() {
 #[tessera]
 fn visual_indicators() {
     prose(
-        "Icons give the dominant cue of the navigation state. Use a filled icon for the selected destination to contrast with outlined icons for the non-selected destinations.",
+        "ui-icons-give-the-dominant-cue-of-the-navigation-state-use-a-filled-icon-for-the-selected-des",
     );
     gap(Dp(24.0));
     figures::pair(
         RenderSlot::new(|| {
             card(
-                "Filled icon for the selected destination",
+                "ui-filled-icon-for-the-selected-destination",
                 1,
-                "Use a filled icon variant on the selected navigation item to help differentiate from inactive navigation items",
+                "ui-use-a-filled-icon-variant-on-the-selected-navigation-item-to-help-differentiate-from-inact",
                 RenderSlot::new(|| {
                     figures::mock_rail().count(4).selected(2);
                 }),
@@ -2847,9 +2929,9 @@ fn visual_indicators() {
         }),
         RenderSlot::new(|| {
             card(
-                "Outlined icon for the selected destination",
+                "ui-outlined-icon-for-the-selected-destination",
                 3,
-                "Avoid using the same unfilled icon style for both selected and unselected items because it lacks important visual feedback",
+                "ui-avoid-using-the-same-unfilled-icon-style-for-both-selected-and-unselected-items-because-it",
                 RenderSlot::new(|| {
                     figures::mock_rail()
                         .count(4)
@@ -2864,50 +2946,53 @@ fn visual_indicators() {
 #[tessera]
 fn keyboard() {
     spec_table(
-        vec!["Keys".into(), "Actions".into()],
+        vec!["ui-keys".into(), "ui-actions".into()],
         vec![
-            vec!["Tab".into(), "Move focus into or out of the rail".into()],
             vec![
-                "Up / Down arrows".into(),
-                "Move focus between destinations".into(),
+                "ui-tab".into(),
+                "ui-move-focus-into-or-out-of-the-rail".into(),
             ],
             vec![
-                "Enter or Space".into(),
-                "Activate the focused destination".into(),
+                "ui-up-down-arrows".into(),
+                "ui-move-focus-between-destinations".into(),
             ],
             vec![
-                "Escape".into(),
-                "Close a modal expanded rail and restore focus".into(),
+                "ui-enter-or-space".into(),
+                "ui-activate-the-focused-destination".into(),
+            ],
+            vec![
+                "ui-escape".into(),
+                "ui-close-a-modal-expanded-rail-and-restore-focus".into(),
             ],
         ],
     );
     gap(Dp(24.0));
     prose(
-        "Arrow keys move focus only; a destination changes only after Enter or Space, so browsing the list never navigates unexpectedly.",
+        "ui-arrow-keys-move-focus-only-a-destination-changes-only-after-enter-or-space-so-browsing-the",
     );
 }
 
 #[tessera]
 fn labeling() {
     prose(
-        "The accessibility label for a navigation item is typically the same as the adjacent text label.",
+        "ui-the-accessibility-label-for-a-navigation-item-is-typically-the-same-as-the-adjacent-text-l",
     );
     gap(Dp(16.0));
     prose(
-        "When the visible UI text is ambiguous, accessibility labels need to be more descriptive. For example, a navigation item visibly labeled Recent would benefit from additional information in its accessibility label to clarify the destination's intent.",
+        "ui-when-the-visible-ui-text-is-ambiguous-accessibility-labels-need-to-be-more-descriptive-for-4411",
     );
     gap(Dp(16.0));
     prose(
-        "Note: On Android Views (MDC-Android), a more descriptive accessibility label is not available and the role is not announced.",
+        "ui-note-on-android-views-mdc-android-a-more-descriptive-accessibility-label-is-not-available",
     );
     gap(Dp(24.0));
     figures::scene(
-        "Accessibility label for the Recent destination",
+        "ui-accessibility-label-for-the-recent-destination",
         Dp(420.0),
         RenderSlot::new(|| {
             figures::label_callout();
             figures::screen(
-                "Recent destination in a file navigation rail",
+                "ui-recent-destination-in-a-file-navigation-rail",
                 Dp(520.0),
                 Dp(380.0),
             )
@@ -2926,7 +3011,7 @@ fn labeling() {
     );
     gap(Dp(16.0));
     caption(
-        "While the visible label text reads Recent, the accessibility label for this destination clarifies its function: Recent images",
+        "ui-while-the-visible-label-text-reads-recent-the-accessibility-label-for-this-destination-cla",
     );
 }
 

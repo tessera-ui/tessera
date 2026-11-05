@@ -27,6 +27,8 @@ use tessera_ui::{
     modifier::FocusModifierExt as _, remember, scaled_box, tessera, use_context,
 };
 
+use crate::res::I18N;
+
 use super::super::{
     ACCENT, gap, media, selection_articles::option_label, spec_table, subheading, type_style,
 };
@@ -34,41 +36,41 @@ use super::super::{
 #[tessera]
 pub(super) fn overview_article() {
     super::prose(
-        "• Use radio buttons, not switches, when only one item can be selected from a list.\n• Labels should be scannable.\n• Selected items are more prominent than unselected items.",
+        "ui-use-radio-buttons-not-switches-when-only-one-item-can-be-selected-from-a-list-labels-shoul",
     );
     gap(Dp(32.0));
     super::overview();
     gap(Dp(48.0));
-    subheading("Resources & availability".into());
+    subheading("ui-resources-availability".into());
     gap(Dp(24.0));
     spec_table(
-        vec!["Resource".into(), "Status".into()],
+        vec!["ui-resource".into(), "ui-status".into()],
         vec![
             vec![
-                "Native radio button and radio group".into(),
-                "Available in this example".into(),
+                "ui-native-radio-button-and-radio-group".into(),
+                "ui-available-in-this-example".into(),
             ],
             vec![
-                "Theme colors and bundled icons".into(),
-                "Available in the interactive figures".into(),
+                "ui-theme-colors-and-bundled-icons".into(),
+                "ui-available-in-the-interactive-figures".into(),
             ],
             vec![
-                "Keyboard and accessibility semantics".into(),
-                "Available on the live controls".into(),
+                "ui-keyboard-and-accessibility-semantics".into(),
+                "ui-available-on-the-live-controls".into(),
             ],
         ],
     );
     gap(Dp(48.0));
-    subheading("What's new".into());
+    subheading("ui-what-s-new".into());
     gap(Dp(24.0));
     super::prose(
-        "Radio buttons use new color mappings and support dynamic color. Selected icons use primary; unselected icons use on surface variant. Adjacent text retains the on surface color.",
+        "ui-radio-buttons-use-new-color-mappings-and-support-dynamic-color-selected-icons-use-primary",
     );
     gap(Dp(24.0));
     context(
         RenderSlot::new(|| {
             super::prose(
-                "Color changes emphasize the selection without changing the label. These native choices demonstrate the current theme's color roles.",
+                "ui-color-changes-emphasize-the-selection-without-changing-the-label-these-native-choices-demo",
             );
         }),
         RenderSlot::new(|| {
@@ -82,7 +84,7 @@ pub(super) fn usage() {
     context(
         RenderSlot::new(|| {
             super::prose(
-                "Radio buttons are the recommended way to make a single selection from a visible list of options. Only one radio button can be selected at a time. Always accompany each radio with a clear inline label.",
+                "ui-radio-buttons-are-the-recommended-way-to-make-a-single-selection-from-a-visible-list-of-op",
             );
         }),
         RenderSlot::new(language),
@@ -91,13 +93,13 @@ pub(super) fn usage() {
     context(
         RenderSlot::new(|| {
             super::prose(
-                "Use radio buttons to select one option from a set and expose all available options. Checkboxes are different: several independent options can be selected together.",
+                "ui-use-radio-buttons-to-select-one-option-from-a-set-and-expose-all-available-options-checkbo",
             );
         }),
         RenderSlot::new(notification_settings),
     );
     gap(Dp(48.0));
-    subheading("Choose the right selection control".into());
+    subheading("ui-choose-the-right-selection-control".into());
     gap(Dp(24.0));
     flow_row()
         .item_spacing(Dp(24.0))
@@ -109,11 +111,11 @@ pub(super) fn usage() {
         });
     gap(Dp(24.0));
     super::prose(
-        "Do: use radio buttons for a single choice, checkboxes for multiple choices, and switches for independent on/off settings. Don't nest radio groups or use several selected radios to represent a multi-select list.",
+        "ui-do-use-radio-buttons-for-a-single-choice-checkboxes-for-multiple-choices-and-switches-for",
     );
     gap(Dp(24.0));
     super::prose(
-        "Use radio buttons when there are five or fewer options. Consider a drop-down menu when saving space is important, remembering that opening a menu adds clicks and cognitive effort.",
+        "ui-use-radio-buttons-when-there-are-five-or-fewer-options-consider-a-drop-down-menu-when-savi",
     );
 }
 
@@ -129,8 +131,8 @@ pub(super) fn anatomy(labels: bool) {
                     .modifier(Modifier::new().offset(Dp(400.0), Dp(95.0)).width(Dp(240.0)))
                     .children(move || {
                         options(
-                            "Radio anatomy".into(),
-                            vec!["Option 1".into(), "Option 2".into()],
+                            "ui-radio-anatomy".into(),
+                            vec!["ui-option-1".into(), "ui-option-2".into()],
                             selected,
                             true,
                             false,
@@ -147,10 +149,10 @@ pub(super) fn anatomy(labels: bool) {
                             .offset(Dp(488.0), Dp(100.0))
                             .size(Dp(48.0), Dp(48.0)),
                     )
-                    .children(|| {
+                    .children(move || {
                         radio_button()
                             .selected(true)
-                            .accessibility_label("Radio button icon anatomy");
+                            .accessibility_label(I18N.text("ui-radio-button-icon-anatomy"));
                     });
                 spacer().modifier(
                     Modifier::new()
@@ -170,9 +172,9 @@ pub(super) fn anatomy(labels: bool) {
     );
     gap(Dp(16.0));
     if labels {
-        super::prose("1. Selected icon\n2. Adjacent label text\n3. Unselected icon");
+        super::prose("ui-1-selected-icon-2-adjacent-label-text-3-unselected-icon");
     } else {
-        super::prose("1. Radio button icon");
+        super::prose("ui-1-radio-button-icon");
     }
 }
 
@@ -181,7 +183,7 @@ pub(super) fn placement() {
     context(
         RenderSlot::new(|| {
             super::prose(
-                "Radio buttons are often arranged in stacked layouts. List them vertically with an appropriate option preselected. Use an adjacent label for every option; short, distinct labels are easier to scan.",
+                "ui-radio-buttons-are-often-arranged-in-stacked-layouts-list-them-vertically-with-an-appropria",
             );
         }),
         RenderSlot::new(|| {
@@ -199,10 +201,10 @@ pub(super) fn placement() {
     gap(Dp(24.0));
     context(
         RenderSlot::new(|| {
-            subheading("Adjacent label text".into());
+            subheading("ui-adjacent-label-text".into());
             gap(Dp(16.0));
             super::prose(
-                "Always pair a radio button with a label describing what it selects. Each choice needs its own label. The label and the radio select the same option; label text keeps the on surface color during interaction.",
+                "ui-always-pair-a-radio-button-with-a-label-describing-what-it-selects-each-choice-needs-its-o",
             );
         }),
         RenderSlot::new(|| {
@@ -214,13 +216,13 @@ pub(super) fn placement() {
 #[tessera]
 pub(super) fn behavior() {
     super::prose(
-        "Selecting a radio button deselects the previous option. Activating the selected option does not clear it. A group can start with a selection or with no selection, but should provide a suitable default whenever possible.",
+        "ui-selecting-a-radio-button-deselects-the-previous-option-activating-the-selected-option-does",
     );
     gap(Dp(24.0));
     context(
         RenderSlot::new(|| {
             super::prose(
-                "Apply a settings change immediately when appropriate. In a form or dialog, keep a draft selection until the person confirms. Cancel restores the saved value; Continue commits the selected language in this example.",
+                "ui-apply-a-settings-change-immediately-when-appropriate-in-a-form-or-dialog-keep-a-draft-sele",
             );
         }),
         RenderSlot::new(language),
@@ -230,20 +232,20 @@ pub(super) fn behavior() {
 #[tessera]
 pub(super) fn accessibility(section: String) {
     match section.as_str() {
-        "Use cases" => {
+        "ui-use-cases" => {
             super::prose(
-                "People using assistive technology should be able to:\n• Navigate to a radio button\n• Select a radio button\n• Get appropriate feedback for the input type",
+                "ui-people-using-assistive-technology-should-be-able-to-navigate-to-a-radio-button-select-a-ra",
             );
         }
-        "Interaction & style" => {
+        "ui-interaction-style" => {
             context(
                 RenderSlot::new(|| {
                     super::prose(
-                        "A radio button can be selected or unselected. Selecting one deselects the others. A group may start with one selection or none. Once an option is selected, selecting it again doesn't clear it.",
+                        "ui-a-radio-button-can-be-selected-or-unselected-selecting-one-deselects-the-others-a-group-ma",
                     );
                     gap(Dp(16.0));
                     super::prose(
-                        "To let people opt out, provide a Not applicable or No option choice, or a separate Clear selection action. People must be able to select either the radio or its text label.",
+                        "ui-to-let-people-opt-out-provide-a-not-applicable-or-no-option-choice-or-a-separate-clear-sel",
                     );
                 }),
                 RenderSlot::new(|| {
@@ -251,15 +253,15 @@ pub(super) fn accessibility(section: String) {
                 }),
             );
             gap(Dp(32.0));
-            subheading("Avoid applying density by default".into());
+            subheading("ui-avoid-applying-density-by-default".into());
             gap(Dp(16.0));
             super::prose(
-                "Keep targets at least 48 × 48dp by default. Let people explicitly choose a denser layout or theme. Keep the controls that reverse a density setting at least 48 × 48dp so the setting remains easy to undo.",
+                "ui-keep-targets-at-least-48-48dp-by-default-let-people-explicitly-choose-a-denser-layout-or-t",
             );
         }
-        "Initial focus" => {
+        "ui-initial-focus" => {
             super::prose(
-                "Tab enters the group at the selected radio, or the first option if none is selected. Shift+Tab enters at the selected radio, or the last option if none is selected. Arrow keys move focus and selection between options.",
+                "ui-tab-enters-the-group-at-the-selected-radio-or-the-first-option-if-none-is-selected-shift-t",
             );
             gap(Dp(24.0));
             flow_row()
@@ -270,20 +272,20 @@ pub(super) fn accessibility(section: String) {
                     checkout(true);
                 });
         }
-        "Keyboard navigation" => {
-            spec_table(vec!["Keys".into(), "Actions".into()], vec![
-                vec!["Tab".into(), "Enter at the selected radio, or the first if none is selected; Tab again leaves the group".into()],
-                vec!["Shift + Tab".into(), "Enter at the selected radio, or the last if none is selected; move backward out of the group".into()],
-                vec!["Space".into(), "Select the focused option".into()],
-                vec!["Right / Down arrow".into(), "Focus and select the next option, wrapping to the first".into()],
-                vec!["Left / Up arrow".into(), "Focus and select the previous option, wrapping to the last".into()],
+        "ui-keyboard-navigation" => {
+            spec_table(vec!["ui-keys".into(), "ui-actions".into()], vec![
+                vec!["ui-tab".into(), "ui-enter-at-the-selected-radio-or-the-first-if-none-is-selected-tab-again-leaves-the-group".into()],
+                vec!["ui-shift-tab".into(), "ui-enter-at-the-selected-radio-or-the-last-if-none-is-selected-move-backward-out-of-the-group".into()],
+                vec!["ui-space".into(), "ui-select-the-focused-option".into()],
+                vec!["ui-right-down-arrow".into(), "ui-focus-and-select-the-next-option-wrapping-to-the-first".into()],
+                vec!["ui-left-up-arrow".into(), "ui-focus-and-select-the-previous-option-wrapping-to-the-last".into()],
             ]);
             gap(Dp(24.0));
             checkout(false).initial(0);
         }
         _ => {
             super::prose(
-                "Give the group a category name and each radio its own adjacent label. Assistive technology should announce the option's label, radio role, selected or unselected state, and its relationship to the group. Do not label a radio only by its appearance.",
+                "ui-give-the-group-a-category-name-and-each-radio-its-own-adjacent-label-assistive-technology",
             );
             gap(Dp(24.0));
             checkout(false).initial(0);
@@ -318,39 +320,49 @@ pub(super) fn checkout(initial: Option<usize>, clear: bool) {
                                 .padding_all(Dp(16.0))
                                 .background(scheme.surface_container),
                         )
-                        .children(|| {
+                        .children(move || {
                             icon().vector(filled::ARROW_BACK_SVG).size(Dp(24.0));
                             spacer().modifier(Modifier::new().width(Dp(16.0)));
-                            text().content("Checkout").style(type_style(22.0, 28.0));
+                            text()
+                                .content(I18N.text("ui-checkout"))
+                                .style(type_style(22.0, 28.0));
                         });
                     column()
                         .modifier(Modifier::new().fill_max_width().padding_all(Dp(16.0)))
                         .children(move || {
-                            super::prose("Ship to");
+                            super::prose("ui-ship-to");
                             gap(Dp(16.0));
                             options(
-                                "Ship to".into(),
-                                vec!["Home".into(), "Office".into()],
+                                "ui-ship-to".into(),
+                                vec!["ui-home".into(), "ui-office".into()],
                                 selected,
                                 true,
                                 false,
                             );
                             gap(Dp(16.0));
-                            super::prose(format!(
-                                "Shipping destination: {}",
-                                match selected.get() {
-                                    Some(0) => "Home",
-                                    Some(_) => "Office",
-                                    None => "Not selected",
-                                }
-                            ));
+                            super::prose(
+                                I18N.format(
+                                    "ui-shipping-destination-value",
+                                    [(
+                                        "v0",
+                                        I18N.text(
+                                            &(match selected.get() {
+                                                Some(0) => "ui-home",
+                                                Some(_) => "ui-office",
+                                                None => "ui-not-selected",
+                                            }),
+                                        )
+                                        .into(),
+                                    )],
+                                ),
+                            );
                             if clear {
                                 button()
                                     .text()
-                                    .accessibility_label("Clear shipping selection")
+                                    .accessibility_label(I18N.text("ui-clear-shipping-selection"))
                                     .on_click(move || selected.set(None))
-                                    .child(|| {
-                                        text().content("Clear selection");
+                                    .child(move || {
+                                        text().content(I18N.text("ui-clear-selection"));
                                     });
                             }
                         });
@@ -368,7 +380,7 @@ pub(super) fn options(
 ) {
     let scheme = use_context::<MaterialTheme>().unwrap().get().color_scheme;
     radio_group()
-        .accessibility_label(name)
+        .accessibility_label(I18N.text(name))
         .orientation(if horizontal {
             RadioGroupOrientation::Horizontal
         } else {
@@ -388,7 +400,7 @@ pub(super) fn options(
                                 .focus_requester(focus)
                                 .selected(selected.get() == Some(index))
                                 .enabled(enabled)
-                                .accessibility_label(value.clone())
+                                .accessibility_label(I18N.text(&(value)))
                                 .on_select(move |_| selected.set(Some(index)));
                             option_label(
                                 value.clone(),
@@ -419,7 +431,7 @@ pub(super) fn options(
 pub(super) fn language() {
     let draft = remember(|| Some(2_usize));
     let saved = remember(|| Some(2_usize));
-    let status = remember(|| "Current language: Spanish".to_owned());
+    let status = remember(|| "ui-current-language-spanish".to_owned());
     let scheme = use_context::<MaterialTheme>().unwrap().get().color_scheme;
     boxed()
         .alignment(Alignment::Center)
@@ -447,16 +459,16 @@ pub(super) fn language() {
                     icon().vector(filled::LANGUAGE_SVG).size(Dp(24.0));
                     gap(Dp(12.0));
                     text()
-                        .content("Choose your language")
+                        .content(I18N.text("ui-choose-your-language"))
                         .style(type_style(20.0, 28.0));
-                    super::prose("You can always change this later");
+                    super::prose("ui-you-can-always-change-this-later");
                     gap(Dp(16.0));
                     options(
-                        "Choose your language".into(),
+                        "ui-choose-your-language".into(),
                         vec![
-                            "English".into(),
-                            "Chinese (Mandarin)".into(),
-                            "Spanish".into(),
+                            "ui-english".into(),
+                            "ui-chinese-mandarin".into(),
+                            "ui-spanish".into(),
                         ],
                         draft,
                         true,
@@ -466,30 +478,38 @@ pub(super) fn language() {
                     flow_row().item_spacing(Dp(12.0)).children(move || {
                         button()
                             .text()
-                            .accessibility_label("Cancel language selection")
+                            .accessibility_label(I18N.text("ui-cancel-language-selection"))
                             .on_click(move || {
                                 draft.set(saved.get());
-                                status.set("Selection restored".into());
+                                status.set("ui-selection-restored".into());
                             })
-                            .child(|| {
-                                text().content("Cancel");
+                            .child(move || {
+                                text().content(I18N.text("ui-cancel"));
                             });
                         button()
                             .text()
-                            .accessibility_label("Confirm language selection")
+                            .accessibility_label(I18N.text("ui-confirm-language-selection"))
                             .on_click(move || {
                                 saved.set(draft.get());
-                                status.set(format!(
-                                    "Current language: {}",
-                                    match draft.get() {
-                                        Some(0) => "English",
-                                        Some(1) => "Chinese (Mandarin)",
-                                        _ => "Spanish",
-                                    }
-                                ));
+                                status.set(
+                                    I18N.format(
+                                        "ui-current-language-value",
+                                        [(
+                                            "v0",
+                                            I18N.text(
+                                                &(match draft.get() {
+                                                    Some(0) => "ui-english",
+                                                    Some(1) => "ui-chinese-mandarin",
+                                                    _ => "ui-spanish",
+                                                }),
+                                            )
+                                            .into(),
+                                        )],
+                                    ),
+                                );
                             })
-                            .child(|| {
-                                text().content("Continue");
+                            .child(move || {
+                                text().content(I18N.text("ui-continue"));
                             });
                     });
                     gap(Dp(12.0));
@@ -502,16 +522,16 @@ pub(super) fn language() {
 fn language_settings() {
     let selected = remember(|| Some(0_usize));
     card(
-        "Settings".into(),
+        "ui-settings".into(),
         RenderSlot::new(move || {
-            super::prose("Language");
+            super::prose("ui-language");
             gap(Dp(16.0));
             options(
-                "Language".into(),
+                "ui-language".into(),
                 vec![
-                    "English".into(),
-                    "Chinese (Mandarin)".into(),
-                    "Spanish".into(),
+                    "ui-english".into(),
+                    "ui-chinese-mandarin".into(),
+                    "ui-spanish".into(),
                 ],
                 selected,
                 true,
@@ -525,22 +545,22 @@ fn language_settings() {
 fn notification_settings() {
     let selected = remember(|| Some(0_usize));
     card(
-        "Notifications".into(),
+        "ui-notifications".into(),
         RenderSlot::new(move || {
             options(
-                "Notifications".into(),
+                "ui-notifications".into(),
                 vec![
-                    "Allow notifications".into(),
-                    "Turn off notifications".into(),
+                    "ui-allow-notifications".into(),
+                    "ui-turn-off-notifications".into(),
                 ],
                 selected,
                 true,
                 false,
             );
             gap(Dp(24.0));
-            super::prose("Allow access");
-            check_option("Microphone access".into());
-            check_option("Location access".into());
+            super::prose("ui-allow-access");
+            check_option("ui-microphone-access".into());
+            check_option("ui-location-access".into());
         }),
     );
 }
@@ -555,7 +575,7 @@ fn check_option(value: String) {
             checkbox()
                 .checked(checked.get())
                 .focus_requester(focus)
-                .accessibility_label(value.clone())
+                .accessibility_label(I18N.text(&(value)))
                 .on_toggle(move |value| checked.set(value));
             option_label(
                 value.clone(),
@@ -571,40 +591,40 @@ fn check_option(value: String) {
 #[tessera]
 fn choice_card(kind: usize) {
     card(
-        ["Filters", "Meal options", "Settings"][kind].into(),
+        ["ui-filters", "ui-meal-options", "ui-settings"][kind].into(),
         RenderSlot::new(move || {
             if kind == 0 {
                 let selected = remember(|| Some(0_usize));
                 options(
-                    "Sort by".into(),
+                    "ui-sort-by".into(),
                     vec![
-                        "Relevance".into(),
-                        "Lowest price".into(),
-                        "Highest rating".into(),
-                        "Most reviewed".into(),
+                        "ui-relevance".into(),
+                        "ui-lowest-price".into(),
+                        "ui-highest-rating".into(),
+                        "ui-most-reviewed".into(),
                     ],
                     selected,
                     true,
                     false,
                 );
             } else if kind == 1 {
-                for value in ["Pickles", "Tomato", "Lettuce", "Cheese"] {
+                for value in ["ui-pickles", "ui-tomato", "ui-lettuce", "ui-cheese"] {
                     check_option(value.into());
                 }
             } else {
                 let checked = remember(|| true);
-                super::prose("Allow notifications");
+                super::prose("ui-allow-notifications");
                 switch()
                     .checked(checked.get())
-                    .accessibility_label("Allow notifications independently")
+                    .accessibility_label(I18N.text("ui-allow-notifications-independently"))
                     .on_toggle(move |value| checked.set(value));
             }
             gap(Dp(16.0));
             super::prose(
                 [
-                    "Do: one selected option",
-                    "Do: multiple independent options",
-                    "Do: one setting on or off",
+                    "ui-do-one-selected-option",
+                    "ui-do-multiple-independent-options",
+                    "ui-do-one-setting-on-or-off",
                 ][kind],
             );
         }),
@@ -616,18 +636,22 @@ fn layout_comparison(horizontal: bool) {
     let selected = remember(|| Some(0_usize));
     card(
         if horizontal {
-            "Caution: horizontal list".into()
+            "ui-caution-horizontal-list".into()
         } else {
-            "Do: stacked list".into()
+            "ui-do-stacked-list".into()
         },
         RenderSlot::new(move || {
             options(
                 if horizontal {
-                    "Horizontal placement example".into()
+                    "ui-horizontal-placement-example".into()
                 } else {
-                    "Stacked placement example".into()
+                    "ui-stacked-placement-example".into()
                 },
-                vec!["Option 1".into(), "Option 2".into(), "Option 3".into()],
+                vec![
+                    "ui-option-1".into(),
+                    "ui-option-2".into(),
+                    "ui-option-3".into(),
+                ],
                 selected,
                 true,
                 horizontal,
@@ -650,7 +674,9 @@ fn card(title: String, content: RenderSlot) {
                 ),
         )
         .children(move || {
-            text().content(title.clone()).style(type_style(20.0, 28.0));
+            text()
+                .content(I18N.text(&(title)))
+                .style(type_style(20.0, 28.0));
             gap(Dp(16.0));
             content.render();
         });
@@ -675,13 +701,35 @@ pub(super) fn colors() {
                                         .size(Dp(48.0), Dp(48.0)),
                                 )
                                 .children(move || {
-                                    radio_button()
-                                        .selected(selected)
-                                        .accessibility_label(format!(
-                                            "{} {} color role",
-                                            if dark { "Dark" } else { "Light" },
-                                            if selected { "Selected" } else { "Unselected" }
-                                        ));
+                                    radio_button().selected(selected).accessibility_label(
+                                        I18N.format(
+                                            "ui-value-value-color-role",
+                                            [
+                                                (
+                                                    "v0",
+                                                    I18N.text(
+                                                        &(if dark {
+                                                            "ui-dark"
+                                                        } else {
+                                                            "ui-light"
+                                                        }),
+                                                    )
+                                                    .into(),
+                                                ),
+                                                (
+                                                    "v1",
+                                                    I18N.text(
+                                                        &(if selected {
+                                                            "ui-selected"
+                                                        } else {
+                                                            "ui-unselected"
+                                                        }),
+                                                    )
+                                                    .into(),
+                                                ),
+                                            ],
+                                        ),
+                                    );
                                 });
                             native_label(
                                 (index + 1).to_string(),
@@ -696,15 +744,15 @@ pub(super) fn colors() {
     }
     gap(Dp(16.0));
     super::prose(
-        "Radio button color roles in light and dark themes:\n1. Primary\n2. On surface variant",
+        "ui-radio-button-color-roles-in-light-and-dark-themes-1-primary-2-on-surface-variant",
     );
     gap(Dp(40.0));
     context(
         RenderSlot::new(|| {
-            subheading("Adjacent text label color".into());
+            subheading("ui-adjacent-text-label-color".into());
             gap(Dp(16.0));
             super::prose(
-                "Use on surface for adjacent text labels. This color remains the same when the label or radio is selected, hovered, focused or pressed.",
+                "ui-use-on-surface-for-adjacent-text-labels-this-color-remains-the-same-when-the-label-or-radi",
             );
         }),
         RenderSlot::new(|| {
@@ -716,7 +764,7 @@ pub(super) fn colors() {
 #[tessera]
 pub(super) fn states() {
     super::prose(
-        "States communicate the status of a component. These examples retain real radio controls; their native surrounding circles illustrate hover, focus and pressed state layers.",
+        "ui-states-communicate-the-status-of-a-component-these-examples-retain-real-radio-controls-the",
     );
     gap(Dp(24.0));
     for dark in [false, true] {
@@ -749,7 +797,7 @@ pub(super) fn states() {
             });
     }
     gap(Dp(16.0));
-    super::prose("1. Enabled\n2. Hover\n3. Focused\n4. Pressed\n5. Disabled");
+    super::prose("ui-1-enabled-2-hover-3-focused-4-pressed-5-disabled");
 }
 
 #[tessera]
@@ -789,18 +837,42 @@ fn state_item(initial: bool, state: usize, dark: bool, x: f64, y: f64) {
             radio_button()
                 .selected(selected.get())
                 .enabled(state != 4)
-                .accessibility_label(format!(
-                    "{} {} {} radio",
-                    if dark { "Dark" } else { "Light" },
-                    if initial { "Selected" } else { "Unselected" },
-                    [
-                        "enabled",
-                        "hover preview",
-                        "focus preview",
-                        "pressed preview",
-                        "disabled"
-                    ][state]
-                ))
+                .accessibility_label(
+                    I18N.format(
+                        "ui-value-value-value-radio",
+                        [
+                            (
+                                "v0",
+                                I18N.text(&(if dark { "ui-dark" } else { "ui-light" }))
+                                    .into(),
+                            ),
+                            (
+                                "v1",
+                                I18N.text(
+                                    &(if initial {
+                                        "ui-selected"
+                                    } else {
+                                        "ui-unselected"
+                                    }),
+                                )
+                                .into(),
+                            ),
+                            (
+                                "v2",
+                                I18N.text(
+                                    &([
+                                        "ui-enabled-7077",
+                                        "ui-hover-preview",
+                                        "ui-focus-preview",
+                                        "ui-pressed-preview",
+                                        "ui-disabled-7078",
+                                    ][state]),
+                                )
+                                .into(),
+                            ),
+                        ],
+                    ),
+                )
                 .on_select(move |_| selected.set(true));
         });
 }
@@ -810,7 +882,7 @@ pub(super) fn measurements() {
     stage(
         1024.0,
         330.0,
-        RenderSlot::new(|| {
+        RenderSlot::new(move || {
             let scheme = use_context::<MaterialTheme>().unwrap().get().color_scheme;
             for (index, selected) in [true, false].into_iter().enumerate() {
                 let x = 376.0 + index as f64 * 224.0;
@@ -831,12 +903,22 @@ pub(super) fn measurements() {
                                     Shape::Ellipse,
                                 ),
                         );
-                        radio_button()
-                            .selected(selected)
-                            .accessibility_label(format!(
-                                "{} radio dimensions",
-                                if selected { "Selected" } else { "Unselected" }
-                            ));
+                        radio_button().selected(selected).accessibility_label(
+                            I18N.format(
+                                "ui-value-radio-dimensions",
+                                [(
+                                    "v0",
+                                    I18N.text(
+                                        &(if selected {
+                                            "ui-selected"
+                                        } else {
+                                            "ui-unselected"
+                                        }),
+                                    )
+                                    .into(),
+                                )],
+                            ),
+                        );
                     });
                 for (row, length) in [20.0, 40.0, 48.0].into_iter().enumerate() {
                     spacer().modifier(
@@ -847,20 +929,20 @@ pub(super) fn measurements() {
                     );
                 }
             }
-            native_label("20dp icon".into(), 680.0, 134.0, 200.0);
-            native_label("40dp state layer".into(), 680.0, 184.0, 200.0);
-            native_label("48 × 48dp target".into(), 680.0, 234.0, 200.0);
+            native_label("ui-20dp-icon".into(), 680.0, 134.0, 200.0);
+            native_label("ui-40dp-state-layer".into(), 680.0, 184.0, 200.0);
+            native_label("ui-48-48dp-target".into(), 680.0, 234.0, 200.0);
         }),
     );
     gap(Dp(24.0));
     spec_table(
-        vec!["Attribute".into(), "Value".into()],
+        vec!["ui-attribute".into(), "ui-value".into()],
         vec![
-            vec!["Icon diameter".into(), "20dp".into()],
-            vec!["Stroke".into(), "2dp".into()],
-            vec!["Selected dot".into(), "10dp".into()],
-            vec!["State layer".into(), "40dp".into()],
-            vec!["Minimum target".into(), "48 × 48dp".into()],
+            vec!["ui-icon-diameter".into(), "20dp".into()],
+            vec!["ui-stroke".into(), "2dp".into()],
+            vec!["ui-selected-dot".into(), "10dp".into()],
+            vec!["ui-state-layer".into(), "40dp".into()],
+            vec!["ui-minimum-target".into(), "48 × 48dp".into()],
         ],
     );
 }
@@ -908,7 +990,7 @@ fn native_label(value: String, x: f64, y: f64, width: f64) {
         )
         .children(move || {
             text()
-                .content(value.clone())
+                .content(I18N.text(&(value)))
                 .style(type_style(16.0, 24.0))
                 .color(scheme.on_surface);
         });

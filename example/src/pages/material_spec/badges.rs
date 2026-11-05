@@ -27,6 +27,8 @@ use tessera_ui::{
     Dp, Modifier, RenderSlot, State, accesskit::Role, remember, tessera, use_context,
 };
 
+use crate::res::I18N;
+
 use super::{
     ACCENT,
     annotations::{self, Geometry, relative, watch},
@@ -37,46 +39,46 @@ use super::{
 #[tessera]
 pub(super) fn badges_spec(route: Option<crate::pages::material_spec::article::ArticleRoute>) {
     article(
-        "Badges",
-        "Badges show notifications, counts, or status information on navigation items and icons.",
+        "ui-badges",
+        "ui-badges-show-notifications-counts-or-status-information-on-navigation-items-and-icons",
         vec![
             SpecSection {
-                title: "Tokens & specs",
+                title: "ui-tokens-specs",
                 content: RenderSlot::new(tokens),
             },
             SpecSection {
-                title: "Color",
+                title: "ui-color",
                 content: RenderSlot::new(colors),
             },
             SpecSection {
-                title: "Measurements",
+                title: "ui-measurements",
                 content: RenderSlot::new(measurements),
             },
             SpecSection {
-                title: "Configuration",
+                title: "ui-configuration",
                 content: RenderSlot::new(configuration_article),
             },
         ],
     ).route_optional(route.clone())
     .pages(vec![
-        ArticlePage {title:"Overview",intro:Some(RenderSlot::new(overview_article)),sections:vec![]},
-        ArticlePage {title:"Guidelines",intro:Some(RenderSlot::new(badge_navigation)),sections:vec![
-            SpecSection{title:"Usage",content:RenderSlot::new(|| {badge_variants();gap(Dp(24.0));subheading("With other components".into());prose("Anchor badges to navigation destinations, app bars or tabs. Hide unread badges after their destination is selected.");gap(Dp(24.0));spec_table(vec!["Do".into(),"Don't".into()],vec![vec!["Use a badge for new or unread activity".into(),"Use a badge as a permanent decoration".into()],vec!["Anchor inside the icon bounding box at its upper trailing edge".into(),"Place the badge over the icon or outside its bounds".into()],vec!["Clear the badge once its destination is selected".into(),"Keep a count that no longer reflects unread items".into()],vec!["Limit large badge content to four characters including a +".into(),"Let a badge label grow past four characters".into()]]);gap(Dp(24.0));readable_badge_navigation();})},
-            SpecSection{title:"Anatomy",content:RenderSlot::new(|| {badge_figure(true,false);gap(Dp(24.0));prose("1  Small badge");gap(Dp(24.0));badge_figure(false,false);gap(Dp(24.0));prose("2  Large badge container    3  Large badge label");})},
-            SpecSection{title:"Container",content:RenderSlot::new(badge_container)},
-            SpecSection{title:"Placement",content:RenderSlot::new(|| {prose("Anchor at the upper trailing edge inside the icon bounds. Use a dot when space is tight, and a count when it will not collide with adjacent content.");gap(Dp(24.0));spec_table(vec!["Context".into(),"Do".into(),"Avoid".into()],vec![vec!["Navigation rail".into(),"Large badge with a count".into(),"Clipping the badge".into()],vec!["App bar or tabs".into(),"A small dot when space is constrained".into(),"A wide label that collides with actions".into()],vec!["Icon followed by text".into(),"Anchor at the icon's trailing edge".into(),"Placing the badge over the trailing element".into()]]);gap(Dp(24.0));let selected=remember(|| 0_usize);navigation_examples("Rail placement",selected,3,true,false);})},
+        ArticlePage {title:"ui-overview",intro:Some(RenderSlot::new(overview_article)),sections:vec![]},
+        ArticlePage {title:"ui-guidelines",intro:Some(RenderSlot::new(badge_navigation)),sections:vec![
+            SpecSection{title:"ui-usage",content:RenderSlot::new(|| {badge_variants();gap(Dp(24.0));subheading("ui-with-other-components".into());prose("ui-anchor-badges-to-navigation-destinations-app-bars-or-tabs-hide-unread-badges-after-their-d");gap(Dp(24.0));spec_table(vec!["Do".into(),"Don't".into()],vec![vec!["ui-use-a-badge-for-new-or-unread-activity".into(),"ui-use-a-badge-as-a-permanent-decoration".into()],vec!["ui-anchor-inside-the-icon-bounding-box-at-its-upper-trailing-edge".into(),"ui-place-the-badge-over-the-icon-or-outside-its-bounds".into()],vec!["ui-clear-the-badge-once-its-destination-is-selected".into(),"ui-keep-a-count-that-no-longer-reflects-unread-items".into()],vec!["ui-limit-large-badge-content-to-four-characters-including-a".into(),"ui-let-a-badge-label-grow-past-four-characters".into()]]);gap(Dp(24.0));readable_badge_navigation();})},
+            SpecSection{title:"ui-anatomy",content:RenderSlot::new(|| {badge_figure(true,false);gap(Dp(24.0));prose("ui-1-small-badge");gap(Dp(24.0));badge_figure(false,false);gap(Dp(24.0));prose("ui-2-large-badge-container-3-large-badge-label");})},
+            SpecSection{title:"ui-container",content:RenderSlot::new(badge_container)},
+            SpecSection{title:"ui-placement",content:RenderSlot::new(|| {prose("ui-anchor-at-the-upper-trailing-edge-inside-the-icon-bounds-use-a-dot-when-space-is-tight-and");gap(Dp(24.0));spec_table(vec!["ui-context".into(),"Do".into(),"ui-avoid".into()],vec![vec!["ui-navigation-rail".into(),"ui-large-badge-with-a-count".into(),"ui-clipping-the-badge".into()],vec!["ui-app-bar-or-tabs".into(),"ui-a-small-dot-when-space-is-constrained".into(),"ui-a-wide-label-that-collides-with-actions".into()],vec!["ui-icon-followed-by-text".into(),"ui-anchor-at-the-icon-s-trailing-edge".into(),"ui-placing-the-badge-over-the-trailing-element".into()]]);gap(Dp(24.0));let selected=remember(|| 0_usize);navigation_examples("ui-rail-placement",selected,3,true,false);})},
         ]},
-        ArticlePage{title:"Accessibility",intro:None,sections:vec![
-            SpecSection{title:"Use cases",content:RenderSlot::new(|| {prose("People must be able to understand unread counts and clear the notification by visiting the associated destination.");gap(Dp(24.0));readable_badge_navigation();})},
-            SpecSection{title:"Interaction & style",content:RenderSlot::new(|| {prose("The navigation item owns the action. The badge itself adds information without creating another focus target. Selecting a destination clears its unread indication.");gap(Dp(24.0));readable_badge_navigation();})},
-            SpecSection{title:"Visual indicators",content:RenderSlot::new(|| {prose("Keep the default color mapping so badges stand out. Custom badge colors need at least 3:1 contrast.");gap(Dp(24.0));badge_figure(false,false);})},
-            SpecSection{title:"Labeling elements",content:RenderSlot::new(|| {prose("Announce the destination followed by its count, or New notification for a dot. Do not announce the decorative badge twice.");gap(Dp(16.0));prose("A large badge contributes its count to the destination's accessible name, such as Inbox, 10 unread items. A small dot announces one new notification and never a number, so counts and presence stay distinguishable without sight.");gap(Dp(24.0));spec_table(vec!["Element".into(),"Accessible information".into()],vec![vec!["Navigation item".into(),"Destination label and selected state".into()],vec!["Large badge".into(),"Count included in the destination label".into()],vec!["Small badge".into(),"One new notification".into()],vec!["Decorative badge shape".into(),"Hidden from assistive technology".into()]]);gap(Dp(24.0));readable_badge_navigation();})},
+        ArticlePage{title:"ui-accessibility",intro:None,sections:vec![
+            SpecSection{title:"ui-use-cases",content:RenderSlot::new(|| {prose("ui-people-must-be-able-to-understand-unread-counts-and-clear-the-notification-by-visiting-the");gap(Dp(24.0));readable_badge_navigation();})},
+            SpecSection{title:"ui-interaction-style",content:RenderSlot::new(|| {prose("ui-the-navigation-item-owns-the-action-the-badge-itself-adds-information-without-creating-ano");gap(Dp(24.0));readable_badge_navigation();})},
+            SpecSection{title:"ui-visual-indicators",content:RenderSlot::new(|| {prose("ui-keep-the-default-color-mapping-so-badges-stand-out-custom-badge-colors-need-at-least-3-1-c");gap(Dp(24.0));badge_figure(false,false);})},
+            SpecSection{title:"ui-labeling-elements",content:RenderSlot::new(|| {prose("ui-announce-the-destination-followed-by-its-count-or-new-notification-for-a-dot-do-not-announ");gap(Dp(16.0));prose("ui-a-large-badge-contributes-its-count-to-the-destination-s-accessible-name-such-as-inbox-10");gap(Dp(24.0));spec_table(vec!["ui-element".into(),"ui-accessible-information".into()],vec![vec!["ui-navigation-item".into(),"ui-destination-label-and-selected-state".into()],vec!["ui-large-badge".into(),"ui-count-included-in-the-destination-label".into()],vec!["ui-small-badge".into(),"ui-one-new-notification".into()],vec!["ui-decorative-badge-shape".into(),"ui-hidden-from-assistive-technology".into()]]);gap(Dp(24.0));readable_badge_navigation();})},
         ]},
     ])
     .hero(|| {
         panel(RenderSlot::new(|| {
             let selected = remember(|| 0_usize);
-            navigation_examples("Preview", selected, 7, false, false);
+            navigation_examples("ui-preview", selected, 7, false, false);
         }));
     });
 }
@@ -86,13 +88,13 @@ fn badged_icon(kind: usize, count: u32) {
     badged_box()
         .modifier(Modifier::new().semantics(SemanticsArgs {
             role: Some(Role::Image),
-            label: Some(if count == 0 {
-                "No unread items".into()
+            label: Some(I18N.text(if count == 0 {
+                "ui-no-unread-items".to_owned()
             } else if kind == 0 {
-                "New activity".into()
+                "ui-new-activity".to_owned()
             } else {
-                format!("{count} unread items")
-            }),
+                I18N.format("ui-value-unread-items", [("v0", (count).into())])
+            })),
             ..Default::default()
         }))
         .content(move || {
@@ -114,11 +116,11 @@ fn badged_icon(kind: usize, count: u32) {
                     badge().modifier(hidden);
                 } else {
                     badge_with_content().modifier(hidden).content(move || {
-                        text().content(if count > 999 {
-                            "999+".into()
+                        text().content(I18N.text(if count > 999 {
+                            "999+".to_owned()
                         } else {
                             count.to_string()
-                        });
+                        }));
                     });
                 }
             }
@@ -137,7 +139,10 @@ fn navigation_examples(
     column()
         .modifier(Modifier::new().fill_max_width().semantics(SemanticsArgs {
             role: Some(Role::Group),
-            label: Some(format!("{label} badge navigation")),
+            label: Some(I18N.format(
+                "ui-value-badge-navigation",
+                [("v0", I18N.text(&label).into())],
+            )),
             merge_descendants: true,
             ..Default::default()
         }))
@@ -147,11 +152,12 @@ fn navigation_examples(
                     .modifier(Modifier::new().height(Dp(320.0)))
                     .children(move || {
                         navigation_rail().content(move |rail_scope| {
-                            for (index, name) in
-                                ["Home", "Inbox", "Updates"].into_iter().enumerate()
+                            for (index, name) in ["ui-home", "ui-inbox", "ui-updates"]
+                                .into_iter()
+                                .enumerate()
                             {
                                 navigation_rail_item(rail_scope)
-                                    .label(name)
+                                    .label(I18N.text(name))
                                     .selected(selected.get() == index)
                                     .on_click(move || selected.set(index))
                                     .icon(move || {
@@ -167,10 +173,13 @@ fn navigation_examples(
                 navigation_bar()
                     .icon_position(NavigationBarIconPosition::Top)
                     .content(move |icon_position| {
-                        for (index, name) in ["Home", "Inbox", "Updates"].into_iter().enumerate() {
+                        for (index, name) in ["ui-home", "ui-inbox", "ui-updates"]
+                            .into_iter()
+                            .enumerate()
+                        {
                             navigation_bar_item()
                                 .icon_position(icon_position)
-                                .label(name)
+                                .label(I18N.text(name))
                                 .selected(selected.get() == index)
                                 .on_click(move || selected.set(index))
                                 .label_behavior(if selected_labels {
@@ -189,10 +198,19 @@ fn navigation_examples(
             }
             gap(Dp(16.0));
             text()
-                .content(format!(
-                    "{caption} destination: {}",
-                    ["Home", "Inbox", "Updates"][selected.get()]
-                ))
+                .content(
+                    I18N.format(
+                        "ui-value-destination-value",
+                        [
+                            ("v0", I18N.text(&caption).into()),
+                            (
+                                "v1",
+                                I18N.text(&(["ui-home", "ui-inbox", "ui-updates"][selected.get()]))
+                                    .into(),
+                            ),
+                        ],
+                    ),
+                )
                 .style(type_style(14.0, 20.0));
         });
 }
@@ -202,29 +220,29 @@ fn specimens() {
     flow_row()
         .item_spacing(Dp(40.0))
         .line_spacing(Dp(24.0))
-        .children(|| {
+        .children(move || {
             badge().modifier(Modifier::new().semantics(SemanticsArgs {
                 role: Some(Role::Image),
-                label: Some("Small badge specimen".into()),
+                label: Some(I18N.text("ui-small-badge-specimen")),
                 ..Default::default()
             }));
             badge_with_content()
                 .modifier(Modifier::new().semantics(SemanticsArgs {
                     role: Some(Role::Image),
-                    label: Some("Large badge specimen".into()),
+                    label: Some(I18N.text("ui-large-badge-specimen")),
                     ..Default::default()
                 }))
-                .content(|| {
-                    text().content("7");
+                .content(move || {
+                    text().content(I18N.text("7"));
                 });
             badge_with_content()
                 .modifier(Modifier::new().semantics(SemanticsArgs {
                     role: Some(Role::Image),
-                    label: Some("Maximum badge specimen".into()),
+                    label: Some(I18N.text("ui-maximum-badge-specimen")),
                     ..Default::default()
                 }))
-                .content(|| {
-                    text().content("999+");
+                .content(move || {
+                    text().content(I18N.text("999+"));
                 });
         });
 }
@@ -234,20 +252,20 @@ fn tokens() {
     panel(RenderSlot::new(specimens));
     gap(Dp(24.0));
     spec_table(
-        vec!["Token".into(), "Value".into()],
+        vec!["ui-token".into(), "ui-value".into()],
         vec![
-            vec!["Badge color".into(), "Error".into()],
-            vec!["Badge shape".into(), "Full".into()],
-            vec!["Badge size".into(), "6dp".into()],
-            vec!["Large badge color".into(), "Error".into()],
-            vec!["Large badge shape".into(), "Full".into()],
-            vec!["Large badge size".into(), "16dp".into()],
-            vec!["Large badge label color".into(), "On error".into()],
-            vec!["Large badge label font".into(), "Roboto".into()],
-            vec!["Large badge label line height".into(), "16pt".into()],
-            vec!["Large badge label size".into(), "11pt".into()],
-            vec!["Large badge label tracking".into(), "0.5pt".into()],
-            vec!["Large badge label weight".into(), "500".into()],
+            vec!["ui-badge-color".into(), "ui-error".into()],
+            vec!["ui-badge-shape".into(), "ui-full".into()],
+            vec!["ui-badge-size".into(), "6dp".into()],
+            vec!["ui-large-badge-color".into(), "ui-error".into()],
+            vec!["ui-large-badge-shape".into(), "ui-full".into()],
+            vec!["ui-large-badge-size".into(), "16dp".into()],
+            vec!["ui-large-badge-label-color".into(), "ui-on-error".into()],
+            vec!["ui-large-badge-label-font".into(), "ui-roboto".into()],
+            vec!["ui-large-badge-label-line-height".into(), "16pt".into()],
+            vec!["ui-large-badge-label-size".into(), "11pt".into()],
+            vec!["ui-large-badge-label-tracking".into(), "0.5pt".into()],
+            vec!["ui-large-badge-label-weight".into(), "500".into()],
         ],
     );
 }
@@ -256,9 +274,9 @@ fn tokens() {
 fn colors() {
     for dark in [false, true] {
         subheading(if dark {
-            "Dark scheme".into()
+            "ui-dark-scheme".into()
         } else {
-            "Light scheme".into()
+            "ui-light-scheme".into()
         });
         gap(Dp(24.0));
         material_theme()
@@ -273,9 +291,9 @@ fn colors() {
                                 let selected = remember(|| 1_usize);
                                 navigation_examples(
                                     if dark {
-                                        "Dark navigation bar"
+                                        "ui-dark-navigation-bar"
                                     } else {
-                                        "Light navigation bar"
+                                        "ui-light-navigation-bar"
                                     },
                                     selected,
                                     7,
@@ -285,9 +303,9 @@ fn colors() {
                                 gap(Dp(24.0));
                                 navigation_examples(
                                     if dark {
-                                        "Dark navigation rail"
+                                        "ui-dark-navigation-rail"
                                     } else {
-                                        "Light navigation rail"
+                                        "ui-light-navigation-rail"
                                     },
                                     selected,
                                     3,
@@ -299,20 +317,24 @@ fn colors() {
             });
         gap(Dp(32.0));
     }
-    subheading("Badge color roles".into());
+    subheading("ui-badge-color-roles".into());
     spec_table(
         vec![
-            "Placement".into(),
-            "Container".into(),
-            "Icon / label".into(),
+            "ui-placement".into(),
+            "ui-container".into(),
+            "ui-icon-label".into(),
         ],
         vec![
             vec![
-                "Navigation bar".into(),
-                "Error".into(),
-                "On error when active".into(),
+                "ui-navigation-bar".into(),
+                "ui-error".into(),
+                "ui-on-error-when-active".into(),
             ],
-            vec!["Navigation rail".into(), "Error".into(), "On error".into()],
+            vec![
+                "ui-navigation-rail".into(),
+                "ui-error".into(),
+                "ui-on-error".into(),
+            ],
         ],
     );
 }
@@ -320,22 +342,22 @@ fn colors() {
 #[tessera]
 fn measurements() {
     spec_table(
-        vec!["Attribute".into(), "Value".into()],
+        vec!["ui-attribute".into(), "ui-value".into()],
         vec![
-            vec!["Small badge size / radius".into(), "6dp / 3dp".into()],
-            vec!["Large badge height / radius".into(), "16dp / 8dp".into()],
-            vec!["Single digit width".into(), "16dp".into()],
-            vec!["Label horizontal padding".into(), "4dp".into()],
+            vec!["ui-small-badge-size-radius".into(), "6dp / 3dp".into()],
+            vec!["ui-large-badge-height-radius".into(), "16dp / 8dp".into()],
+            vec!["ui-single-digit-width".into(), "16dp".into()],
+            vec!["ui-label-horizontal-padding".into(), "4dp".into()],
             vec![
-                "Large badge maximum label width / height".into(),
+                "ui-large-badge-maximum-label-width-height".into(),
                 "34dp / 16dp".into(),
             ],
             vec![
-                "Small icon-corner offset · vertical / horizontal".into(),
+                "ui-small-icon-corner-offset-vertical-horizontal".into(),
                 "6 / 6dp".into(),
             ],
             vec![
-                "Large icon-corner offset · vertical / horizontal".into(),
+                "ui-large-icon-corner-offset-vertical-horizontal".into(),
                 "14 / 12dp".into(),
             ],
         ],
@@ -354,40 +376,40 @@ fn configuration() {
         .children(move || {
             button()
                 .tonal()
-                .accessibility_label("Add unread item")
+                .accessibility_label(I18N.text("ui-add-unread-item"))
                 .on_click(move || count.set(count.get() + 1))
-                .child(|| {
-                    text().content("Add unread");
+                .child(move || {
+                    text().content(I18N.text("ui-add-unread"));
                 });
             button()
                 .text()
-                .accessibility_label("Clear unread items")
+                .accessibility_label(I18N.text("ui-clear-unread-items"))
                 .on_click(move || count.set(0))
-                .child(|| {
-                    text().content("Clear");
+                .child(move || {
+                    text().content(I18N.text("ui-clear"));
                 });
             button()
                 .tonal()
                 .selected(rail.get())
-                .accessibility_label("Use badge navigation rail")
+                .accessibility_label(I18N.text("ui-use-badge-navigation-rail"))
                 .on_click(move || rail.set(!rail.get()))
-                .child(|| {
-                    text().content("Rail");
+                .child(move || {
+                    text().content(I18N.text("ui-rail"));
                 });
             button()
                 .tonal()
                 .selected(labels.get())
                 .enabled(!rail.get())
-                .accessibility_label("Only selected bar label")
+                .accessibility_label(I18N.text("ui-only-selected-bar-label"))
                 .on_click(move || labels.set(!labels.get()))
-                .child(|| {
-                    text().content("Selected label only");
+                .child(move || {
+                    text().content(I18N.text("ui-selected-label-only"));
                 });
         });
     gap(Dp(24.0));
     panel(RenderSlot::new(move || {
         navigation_examples(
-            "Configured",
+            "ui-configured",
             selected,
             count.get(),
             rail.get(),
@@ -396,13 +418,15 @@ fn configuration() {
     }));
     gap(Dp(24.0));
     text()
-        .content(format!("Unread count: {}", count.get()))
+        .content(I18N.format("ui-unread-count-value", [("v0", (count.get()).into())]))
         .style(type_style(16.0, 24.0));
 }
 
 #[tessera]
 fn prose(#[prop(into)] value: String) {
-    text().content(value).style(type_style(16.0, 24.0));
+    text()
+        .content(I18N.text(value))
+        .style(type_style(16.0, 24.0));
 }
 
 #[tessera]
@@ -431,8 +455,8 @@ fn badge_figure(small: bool, measurements: bool) {
                     } else {
                         badge_with_content()
                             .modifier(watch(geometry, "badge"))
-                            .content(|| {
-                                text().content("3");
+                            .content(move || {
+                                text().content(I18N.text("3"));
                             });
                     }
                 });
@@ -506,7 +530,7 @@ fn badge_annotations(geometry: State<Geometry>, small: bool, measurements: bool)
 #[tessera]
 fn badge_variants() {
     prose(
-        "Badges draw attention to new activity. A small dot conveys presence; a large badge shows a short count.",
+        "ui-badges-draw-attention-to-new-activity-a-small-dot-conveys-presence-a-large-badge-shows-a-s",
     );
     gap(Dp(24.0));
     let scheme = use_context::<MaterialTheme>().unwrap().get().color_scheme;
@@ -550,12 +574,14 @@ fn badge_overview_destination(number: usize) {
                         badge();
                     } else {
                         badge_with_content().content(move || {
-                            text().content(if number == 2 { "1" } else { "999+" });
+                            text().content(I18N.text(if number == 2 { "1" } else { "999+" }));
                         });
                     }
                 });
             gap(Dp(12.0));
-            text().content("Label").style(type_style(14.0, 20.0));
+            text()
+                .content(I18N.text("ui-label"))
+                .style(type_style(14.0, 20.0));
             gap(Dp(32.0));
             boxed()
                 .alignment(Alignment::Center)
@@ -566,7 +592,7 @@ fn badge_overview_destination(number: usize) {
                 )
                 .children(move || {
                     text()
-                        .content(number.to_string())
+                        .content((number).to_string())
                         .style(type_style(14.0, 20.0))
                         .color(scheme.inverse_on_surface);
                 });
@@ -578,51 +604,55 @@ fn overview_article() {
     badge_variants();
     gap(Dp(16.0));
     prose(
-        "1  Small badge on a navigation item    2  Large badge on a navigation item    3  Large badge with maximum characters on a navigation item",
+        "ui-1-small-badge-on-a-navigation-item-2-large-badge-on-a-navigation-item-3-large-badge-with-m",
     );
     gap(Dp(32.0));
-    subheading("Key points".into());
+    subheading("ui-key-points".into());
     for point in [
-        "Badges can contain labels or numbers.",
-        "There are two variants: a small badge and a large badge.",
-        "Anchor badges inside the icon bounding box, at the upper trailing edge of the icon.",
-        "Limit content to four characters, including a plus sign.",
-        "Keep the default color mapping so badges stand out.",
+        "ui-badges-can-contain-labels-or-numbers",
+        "ui-there-are-two-variants-a-small-badge-and-a-large-badge",
+        "ui-anchor-badges-inside-the-icon-bounding-box-at-the-upper-trailing-edge-of-the-icon",
+        "ui-limit-content-to-four-characters-including-a-plus-sign",
+        "ui-keep-the-default-color-mapping-so-badges-stand-out",
     ] {
-        prose(format!("• {point}"));
+        prose(format!("• {}", I18N.text(point)));
     }
     gap(Dp(32.0));
-    subheading("Availability & resources".into());
+    subheading("ui-availability-resources".into());
     spec_table(
-        vec!["Type".into(), "Resource".into(), "Status".into()],
+        vec!["ui-type".into(), "ui-resource".into(), "ui-status".into()],
         vec![
             vec![
-                "Design".into(),
-                "Design Kit (Figma)".into(),
-                "Available".into(),
+                "ui-design".into(),
+                "ui-design-kit-figma".into(),
+                "ui-available".into(),
             ],
             vec![
-                "Implementation".into(),
-                "Flutter".into(),
-                "Available".into(),
+                "ui-implementation".into(),
+                "ui-flutter".into(),
+                "ui-available".into(),
             ],
             vec![
-                "Implementation".into(),
-                "Jetpack Compose".into(),
-                "Available".into(),
+                "ui-implementation".into(),
+                "ui-jetpack-compose".into(),
+                "ui-available".into(),
             ],
             vec![
-                "Implementation".into(),
-                "Android Views (MDC-Android)".into(),
-                "Available".into(),
+                "ui-implementation".into(),
+                "ui-android-views-mdc-android".into(),
+                "ui-available".into(),
             ],
-            vec!["Implementation".into(), "Web".into(), "Unavailable".into()],
+            vec![
+                "ui-implementation".into(),
+                "ui-web".into(),
+                "ui-unavailable".into(),
+            ],
         ],
     );
     gap(Dp(32.0));
-    subheading("Differences from M2".into());
+    subheading("ui-differences-from-m2".into());
     prose(
-        "Color: Badges use new color mappings and support dynamic color. Keep the default error and on-error roles for readable contrast.",
+        "ui-color-badges-use-new-color-mappings-and-support-dynamic-color-keep-the-default-error-and-o",
     );
     gap(Dp(24.0));
     badge_figure(false, false);
@@ -631,58 +661,58 @@ fn overview_article() {
 #[tessera]
 fn anatomy() {
     prose(
-        "A small badge is a shape with no text. A large badge adds a label so it can carry a count or a short status.",
+        "ui-a-small-badge-is-a-shape-with-no-text-a-large-badge-adds-a-label-so-it-can-carry-a-count-o",
     );
     gap(Dp(24.0));
     badge_figure(true, false);
     gap(Dp(16.0));
-    prose("1  Small badge");
+    prose("ui-1-small-badge");
     gap(Dp(24.0));
     badge_figure(false, false);
     gap(Dp(16.0));
-    prose("2  Large badge container    3  Large badge label");
+    prose("ui-2-large-badge-container-3-large-badge-label");
 }
 
 #[tessera]
 fn configuration_article() {
     anatomy();
     gap(Dp(32.0));
-    subheading("Elements".into());
+    subheading("ui-elements".into());
     spec_table(
         vec![
             "#".into(),
-            "Element".into(),
-            "Navigation bar".into(),
-            "Navigation rail".into(),
+            "ui-element".into(),
+            "ui-navigation-bar".into(),
+            "ui-navigation-rail".into(),
         ],
         vec![
             vec![
                 "1".into(),
-                "Small badge".into(),
-                "Upper trailing icon corner".into(),
-                "Upper trailing icon corner".into(),
+                "ui-small-badge".into(),
+                "ui-upper-trailing-icon-corner".into(),
+                "ui-upper-trailing-icon-corner".into(),
             ],
             vec![
                 "2".into(),
-                "Large badge container".into(),
-                "Upper trailing icon corner".into(),
-                "Upper trailing icon corner".into(),
+                "ui-large-badge-container".into(),
+                "ui-upper-trailing-icon-corner".into(),
+                "ui-upper-trailing-icon-corner".into(),
             ],
             vec![
                 "3".into(),
-                "Large badge label".into(),
-                "Centered in the container".into(),
-                "Centered in the container".into(),
+                "ui-large-badge-label".into(),
+                "ui-centered-in-the-container".into(),
+                "ui-centered-in-the-container".into(),
             ],
             vec![
                 "4".into(),
-                "Large badge maximum character count container".into(),
-                "Four characters including a +".into(),
-                "Four characters including a +".into(),
+                "ui-large-badge-maximum-character-count-container".into(),
+                "ui-four-characters-including-a".into(),
+                "ui-four-characters-including-a".into(),
             ],
             vec![
                 "5".into(),
-                "Large badge maximum character count label".into(),
+                "ui-large-badge-maximum-character-count-label".into(),
                 "999+".into(),
                 "999+".into(),
             ],
@@ -696,85 +726,85 @@ fn configuration_article() {
 
 #[tessera]
 fn configuration_variants() {
-    subheading("Navigation bar and rail variants".into());
+    subheading("ui-navigation-bar-and-rail-variants".into());
     gap(Dp(16.0));
     spec_table(
-        vec!["#".into(), "Destination state".into(), "Badge".into()],
+        vec!["#".into(), "ui-destination-state".into(), "ui-badge".into()],
         vec![
             vec![
                 "1".into(),
-                "Inactive bar, with label".into(),
-                "Small badge".into(),
+                "ui-inactive-bar-with-label".into(),
+                "ui-small-badge".into(),
             ],
             vec![
                 "2".into(),
-                "Inactive bar, with label".into(),
-                "Large number".into(),
+                "ui-inactive-bar-with-label".into(),
+                "ui-large-number".into(),
             ],
             vec![
                 "3".into(),
-                "Inactive bar, with label".into(),
-                "Maximum count".into(),
+                "ui-inactive-bar-with-label".into(),
+                "ui-maximum-count".into(),
             ],
             vec![
                 "4".into(),
-                "Active bar, with label".into(),
-                "Small badge".into(),
+                "ui-active-bar-with-label".into(),
+                "ui-small-badge".into(),
             ],
             vec![
                 "5".into(),
-                "Active bar, with label".into(),
-                "Large number".into(),
+                "ui-active-bar-with-label".into(),
+                "ui-large-number".into(),
             ],
             vec![
                 "6".into(),
-                "Active bar, with label".into(),
-                "Maximum count".into(),
+                "ui-active-bar-with-label".into(),
+                "ui-maximum-count".into(),
             ],
             vec![
                 "7".into(),
-                "Inactive bar, no label".into(),
-                "Small badge".into(),
+                "ui-inactive-bar-no-label".into(),
+                "ui-small-badge".into(),
             ],
             vec![
                 "8".into(),
-                "Inactive bar, no label".into(),
-                "Large number".into(),
+                "ui-inactive-bar-no-label".into(),
+                "ui-large-number".into(),
             ],
             vec![
                 "9".into(),
-                "Inactive bar, no label".into(),
-                "Maximum count".into(),
+                "ui-inactive-bar-no-label".into(),
+                "ui-maximum-count".into(),
             ],
             vec![
                 "10".into(),
-                "Active bar, no label".into(),
-                "Small badge".into(),
+                "ui-active-bar-no-label".into(),
+                "ui-small-badge".into(),
             ],
             vec![
                 "11".into(),
-                "Active bar, no label".into(),
-                "Large number".into(),
+                "ui-active-bar-no-label".into(),
+                "ui-large-number".into(),
             ],
             vec![
                 "12".into(),
-                "Active bar, no label".into(),
-                "Maximum count".into(),
+                "ui-active-bar-no-label".into(),
+                "ui-maximum-count".into(),
             ],
             vec![
                 "13".into(),
-                "Active rail, with label".into(),
-                "Small badge".into(),
+                "ui-active-rail-with-label".into(),
+                "ui-small-badge".into(),
             ],
             vec![
                 "14".into(),
-                "Active rail, no label".into(),
-                "Large number".into(),
+                "ui-active-rail-no-label".into(),
+                "ui-large-number".into(),
             ],
             vec![
                 "15".into(),
-                "Active rail, no label".into(),
-                "Maximum count".into(),
+                "ui-active-rail-no-label".into(),
+                "ui-maximum-count".into(),
             ],
         ],
     );
@@ -786,33 +816,33 @@ fn configuration_variants() {
 fn badge_navigation() {
     let selected = remember(|| 1_usize);
     panel(RenderSlot::new(move || {
-        navigation_examples("Guideline", selected, 3, false, false);
+        navigation_examples("ui-guideline", selected, 3, false, false);
     }));
 }
 
 #[tessera]
 fn badge_container() {
     prose(
-        "Badge containers expand horizontally as their label grows, retaining the same anchor and height. Do not move the badge over the icon.",
+        "ui-badge-containers-expand-horizontally-as-their-label-grows-retaining-the-same-anchor-and-he",
     );
     gap(Dp(24.0));
     badge_figure(true, true);
     gap(Dp(24.0));
     badge_figure(false, true);
     gap(Dp(32.0));
-    subheading("Position in right-to-left layouts".into());
+    subheading("ui-position-in-right-to-left-layouts".into());
     prose(
-        "Do: mirror the badge to the leading edge in right-to-left languages. Don't: move the badge arbitrarily or place it over the icon.",
+        "ui-do-mirror-the-badge-to-the-leading-edge-in-right-to-left-languages-don-t-move-the-badge-ar",
     );
     gap(Dp(24.0));
-    subheading("Color".into());
+    subheading("ui-color".into());
     prose(
-        "Do: use the default badge color role. Don't: use custom container or label colors below 3:1 contrast.",
+        "ui-do-use-the-default-badge-color-role-don-t-use-custom-container-or-label-colors-below-3-1-c",
     );
     gap(Dp(24.0));
-    subheading("Label text".into());
+    subheading("ui-label-text".into());
     prose(
-        "Limit large badge labels to four characters, including a plus sign. Truncate counts before they collide with nearby content.",
+        "ui-limit-large-badge-labels-to-four-characters-including-a-plus-sign-truncate-counts-before-t",
     );
     gap(Dp(24.0));
     panel(RenderSlot::new(specimens));
@@ -825,10 +855,13 @@ fn readable_badge_navigation() {
     navigation_bar()
         .icon_position(NavigationBarIconPosition::Top)
         .content(move |icon_position| {
-            for (index, name) in ["Home", "Inbox", "Updates"].into_iter().enumerate() {
+            for (index, name) in ["ui-home", "ui-inbox", "ui-updates"]
+                .into_iter()
+                .enumerate()
+            {
                 navigation_bar_item()
                     .icon_position(icon_position)
-                    .label(name)
+                    .label(I18N.text(name))
                     .selected(selected.get() == index)
                     .on_click(move || {
                         selected.set(index);
@@ -841,10 +874,16 @@ fn readable_badge_navigation() {
         });
     gap(Dp(16.0));
     text()
-        .content(format!(
-            "{} selected; unread badge cleared",
-            ["Home", "Inbox", "Updates"][selected.get()]
-        ))
+        .content(
+            I18N.format(
+                "ui-value-selected-unread-badge-cleared",
+                [(
+                    "v0",
+                    I18N.text(&(["ui-home", "ui-inbox", "ui-updates"][selected.get()]))
+                        .into(),
+                )],
+            ),
+        )
         .style(type_style(14.0, 20.0));
 }
 

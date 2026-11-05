@@ -36,6 +36,7 @@ use serde::Deserialize;
 use serde_json::{Value, json};
 use tessera_build::{
     AssetBackend, asset_namespace, load_tessera_config_from_dir, resolve_assets_dir,
+    resolve_resource_dirs,
 };
 
 use crate::{
@@ -737,10 +738,8 @@ pub fn dev(opts: DevOptions) -> Result<()> {
             watcher.watch(&path, RecursiveMode::NonRecursive)?;
         }
     }
-    for assets_dir in collect_asset_dirs(ctx.config.app().root_dir(), ctx.package_dir.as_ref())? {
-        if assets_dir.exists() {
-            watcher.watch(&assets_dir, RecursiveMode::Recursive)?;
-        }
+    for directory in collect_resource_dirs(ctx.config.app().root_dir(), ctx.package_dir.as_ref())? {
+        watcher.watch(&directory, RecursiveMode::Recursive)?;
     }
 
     let mut run_child: Option<ChildHandle> = None;
@@ -1129,19 +1128,14 @@ fn collect_tessera_permissions(
     Ok(permissions)
 }
 
-fn collect_asset_dirs(root_dir: &Path, package_dir: Option<&PathBuf>) -> Result<Vec<PathBuf>> {
+fn collect_resource_dirs(root_dir: &Path, package_dir: Option<&PathBuf>) -> Result<Vec<PathBuf>> {
     let packages = collect_resolved_packages(root_dir, package_dir)?;
     let mut dirs = Vec::new();
     for package in packages {
-        let Some(config) = load_tessera_config_from_dir(&package.dir)? else {
-            continue;
-        };
-        let Some(assets_dir) = resolve_assets_dir(&package.dir, Some(&config)) else {
-            continue;
-        };
-        if assets_dir.is_dir() {
-            dirs.push(assets_dir);
-        }
+        let config = load_tessera_config_from_dir(&package.dir)?;
+        dirs.extend(
+            resolve_resource_dirs(&package.dir, config.as_ref()).filter(|dir| dir.is_dir()),
+        );
     }
     dirs.sort();
     dirs.dedup();

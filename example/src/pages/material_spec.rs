@@ -18,14 +18,17 @@ use tessera_components::{
 };
 use tessera_ui::{Color, Dp, Modifier, RenderSlot, tessera};
 
-#[cfg(all(target_family = "wasm", feature = "md3-diagnostics"))]
-pub(crate) use self::drawers::{
-    DrawerObservations, diagnostic_drawer_figures, diagnostic_drawer_observations,
-};
+use crate::res::I18N;
+
 pub(crate) use self::{
     drawers::{LiveDrawerSession, live_drawer_host},
     navigation_rail::{LiveRailSession, live_rail_host},
     side_sheets::{LiveSideSheetSession, live_side_sheet_host},
+};
+
+#[cfg(all(target_family = "wasm", feature = "md3-diagnostics"))]
+pub(crate) use self::drawers::{
+    DrawerObservations, diagnostic_drawer_figures, diagnostic_drawer_observations,
 };
 
 mod action_articles;
@@ -123,7 +126,7 @@ fn gap(height: Dp) {
 fn heading(label: String, compact: Option<bool>, level: Option<u8>) {
     let level = level.unwrap_or(2).clamp(2, 4);
     text()
-        .content(label)
+        .content(I18N.text(label))
         .style(if level >= 3 {
             type_style(24.0, 32.0)
         } else if compact.unwrap_or(false) {
@@ -142,7 +145,7 @@ fn heading(label: String, compact: Option<bool>, level: Option<u8>) {
 #[tessera]
 fn subheading(label: String, level: Option<u8>) {
     text()
-        .content(label)
+        .content(I18N.text(label))
         .style(type_style(24.0, 32.0))
         .modifier(Modifier::new().semantics(SemanticsArgs {
             role: Some(tessera_ui::accesskit::Role::Heading),
@@ -204,6 +207,9 @@ fn spec_table_cells(headers: Vec<String>, cells: Vec<TextTableCell>) {
         })
         .collect::<Vec<_>>();
     values.extend(cells);
+    for cell in &mut values {
+        cell.text = I18N.text(&cell.text);
+    }
     text_table(values)
         .columns(columns)
         .style(type_style(16.0, 24.0))

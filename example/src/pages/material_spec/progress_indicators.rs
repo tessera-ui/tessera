@@ -22,6 +22,8 @@ use tessera_ui::{
     remember, tessera, use_context,
 };
 
+use crate::res::I18N;
+
 use super::{
     ACCENT,
     article::{ArticlePage, SpecSection, article},
@@ -33,35 +35,35 @@ pub(super) fn progress_indicators_spec(
     route: Option<crate::pages::material_spec::article::ArticleRoute>,
 ) {
     article(
-        "Progress indicators",
-        "Progress indicators show the status of a process in real time.",
+        "ui-progress-indicators",
+        "ui-progress-indicators-show-the-status-of-a-process-in-real-time-4416",
         vec![
             SpecSection {
-                title: "Variants",
+                title: "ui-variants",
                 content: RenderSlot::new(variants),
             },
             SpecSection {
-                title: "Configurations",
+                title: "ui-configurations",
                 content: RenderSlot::new(configurations),
             },
             SpecSection {
-                title: "Tokens & specs",
+                title: "ui-tokens-specs",
                 content: RenderSlot::new(tokens),
             },
             SpecSection {
-                title: "Anatomy",
+                title: "ui-anatomy",
                 content: RenderSlot::new(anatomy),
             },
             SpecSection {
-                title: "Color",
+                title: "ui-color",
                 content: RenderSlot::new(colors),
             },
             SpecSection {
-                title: "Measurements",
+                title: "ui-measurements",
                 content: RenderSlot::new(measurements),
             },
             SpecSection {
-                title: "Baseline tokens",
+                title: "ui-baseline-tokens",
                 content: RenderSlot::new(baseline_tokens),
             },
         ],
@@ -69,59 +71,59 @@ pub(super) fn progress_indicators_spec(
     .route_optional(route.clone())
     .pages(vec![
         ArticlePage {
-            title: "Overview",
+            title: "ui-overview",
             intro: Some(RenderSlot::new(overview_intro)),
             sections: vec![
                 SpecSection {
-                    title: "Availability & resources",
+                    title: "ui-availability-resources",
                     content: RenderSlot::new(availability),
                 },
                 SpecSection {
-                    title: "M3 Expressive update",
+                    title: "ui-m3-expressive-update",
                     content: RenderSlot::new(expressive_update),
                 },
                 SpecSection {
-                    title: "Differences from M2",
+                    title: "ui-differences-from-m2",
                     content: RenderSlot::new(differences),
                 },
             ],
         },
         ArticlePage {
-            title: "Guidelines",
+            title: "ui-guidelines",
             intro: None,
             sections: vec![
                 SpecSection {
-                    title: "Usage",
+                    title: "ui-usage",
                     content: RenderSlot::new(usage),
                 },
                 SpecSection {
-                    title: "Anatomy",
+                    title: "ui-anatomy",
                     content: RenderSlot::new(anatomy),
                 },
                 SpecSection {
-                    title: "Placement",
+                    title: "ui-placement",
                     content: RenderSlot::new(placement),
                 },
                 SpecSection {
-                    title: "Responsive layout",
+                    title: "ui-responsive-layout",
                     content: RenderSlot::new(responsive_layout),
                 },
             ],
         },
         ArticlePage {
-            title: "Accessibility",
+            title: "ui-accessibility",
             intro: None,
             sections: vec![
                 SpecSection {
-                    title: "Use cases",
+                    title: "ui-use-cases",
                     content: RenderSlot::new(accessibility_use_cases),
                 },
                 SpecSection {
-                    title: "Interaction & style",
+                    title: "ui-interaction-style",
                     content: RenderSlot::new(accessibility_interaction),
                 },
                 SpecSection {
-                    title: "Labeling elements",
+                    title: "ui-labeling-elements",
                     content: RenderSlot::new(accessibility_labeling),
                 },
             ],
@@ -129,11 +131,17 @@ pub(super) fn progress_indicators_spec(
     ])
     .hero(|| {
         panel(RenderSlot::new(|| {
-            linear_sample("Preview".to_owned(), true, 0.6, true, false);
+            linear_sample("ui-preview".to_owned(), true, 0.6, true, false);
             gap(Dp(32.0));
             flow_row().item_spacing(Dp(48.0)).children(|| {
-                circular_sample("Preview determinate".to_owned(), true, 0.65, true, false);
-                circular_sample("Preview indeterminate".to_owned(), false, 0.0, true, false);
+                circular_sample("ui-preview-determinate".to_owned(), true, 0.65, true, false);
+                circular_sample(
+                    "ui-preview-indeterminate".to_owned(),
+                    false,
+                    0.0,
+                    true,
+                    false,
+                );
             });
         }));
     });
@@ -141,7 +149,9 @@ pub(super) fn progress_indicators_spec(
 
 #[tessera]
 fn prose(#[prop(into)] value: String) {
-    text().content(value).style(type_style(16.0, 24.0));
+    text()
+        .content(I18N.text(value))
+        .style(type_style(16.0, 24.0));
 }
 
 #[tessera]
@@ -161,12 +171,18 @@ fn linear_sample(
             .progress_optional(progress)
             .stroke_width(stroke)
             .track_stroke_width(stroke)
-            .accessibility_label(format!("{label} linear progress"));
+            .accessibility_label(I18N.format(
+                "ui-value-linear-progress",
+                [("v0", I18N.text(&label).into())],
+            ));
     } else {
         linear_progress_indicator()
             .modifier(Modifier::new().fill_max_width().height(stroke))
             .progress_optional(progress)
-            .accessibility_label(format!("{label} linear progress"));
+            .accessibility_label(I18N.format(
+                "ui-value-linear-progress",
+                [("v0", I18N.text(&label).into())],
+            ));
     }
 }
 
@@ -193,13 +209,19 @@ fn circular_sample(
             .progress_optional(progress)
             .stroke_width(stroke)
             .track_stroke_width(stroke)
-            .accessibility_label(format!("{label} circular progress"));
+            .accessibility_label(I18N.format(
+                "ui-value-circular-progress",
+                [("v0", I18N.text(&label).into())],
+            ));
     } else {
         circular_progress_indicator()
             .diameter(diameter)
             .stroke_width(stroke)
             .progress_optional(progress)
-            .accessibility_label(format!("{label} circular progress"));
+            .accessibility_label(I18N.format(
+                "ui-value-circular-progress",
+                [("v0", I18N.text(&label).into())],
+            ));
     }
 }
 
@@ -232,12 +254,12 @@ fn auto_determinate() {
             linear_progress_indicator()
                 .modifier(Modifier::new().fill_max_width().height(Dp(4.0)))
                 .progress_optional(Some(progress.get()))
-                .accessibility_label("Determinate download progress".to_owned());
+                .accessibility_label(I18N.text("ui-determinate-download-progress"));
             gap(Dp(16.0));
             text()
-                .content(format!(
-                    "{}% complete",
-                    (progress.get() * 100.0).round() as u32
+                .content(I18N.format(
+                    "ui-value-complete",
+                    [("v0", ((progress.get() * 100.0).round() as u32).into())],
                 ))
                 .style(type_style(14.0, 20.0));
             gap(Dp(16.0));
@@ -247,21 +269,25 @@ fn auto_determinate() {
                 .children(move || {
                     button()
                         .tonal()
-                        .accessibility_label("Restart determinate progress".to_owned())
+                        .accessibility_label(I18N.text("ui-restart-determinate-progress"))
                         .on_click(move || {
                             progress.set(0.0);
                             running.set(true);
                         })
-                        .child(|| {
-                            text().content("Restart");
+                        .child(move || {
+                            text().content(I18N.text("ui-restart"));
                         });
                     button()
                         .tonal()
                         .selected(!running.get())
-                        .accessibility_label("Pause determinate progress".to_owned())
+                        .accessibility_label(I18N.text("ui-pause-determinate-progress"))
                         .on_click(move || running.set(!running.get()))
                         .child(move || {
-                            text().content(if running.get() { "Pause" } else { "Resume" });
+                            text().content(I18N.text(if running.get() {
+                                "ui-pause"
+                            } else {
+                                "ui-resume"
+                            }));
                         });
                 });
         });
@@ -270,14 +296,20 @@ fn auto_determinate() {
 #[tessera]
 fn overview_intro() {
     prose(
-        "Progress indicators express an unspecified wait time or display the length of a process. Use a determinate indicator when the completion rate is known and an indeterminate one when it is not.",
+        "ui-progress-indicators-express-an-unspecified-wait-time-or-display-the-length-of-a-process-us",
     );
     gap(Dp(24.0));
     panel(RenderSlot::new(|| {
-        linear_sample("Overview determinate".to_owned(), true, 0.4, false, false);
+        linear_sample(
+            "ui-overview-determinate".to_owned(),
+            true,
+            0.4,
+            false,
+            false,
+        );
         gap(Dp(24.0));
         linear_sample(
-            "Overview indeterminate".to_owned(),
+            "ui-overview-indeterminate".to_owned(),
             false,
             0.0,
             false,
@@ -286,14 +318,14 @@ fn overview_intro() {
         gap(Dp(32.0));
         flow_row().item_spacing(Dp(48.0)).children(|| {
             circular_sample(
-                "Overview circular determinate".to_owned(),
+                "ui-overview-circular-determinate".to_owned(),
                 true,
                 0.4,
                 false,
                 false,
             );
             circular_sample(
-                "Overview circular indeterminate".to_owned(),
+                "ui-overview-circular-indeterminate".to_owned(),
                 false,
                 0.0,
                 false,
@@ -303,41 +335,45 @@ fn overview_intro() {
     }));
     gap(Dp(24.0));
     for point in [
-        "Determinate indicators show how much of a known process is complete.",
-        "Indeterminate indicators animate continuously while the wait time is unknown.",
-        "Use one linear or circular indicator per process, close to its content.",
-        "Expressive wavy indicators keep the same meaning as the flat ones.",
+        "ui-determinate-indicators-show-how-much-of-a-known-process-is-complete",
+        "ui-indeterminate-indicators-animate-continuously-while-the-wait-time-is-unknown",
+        "ui-use-one-linear-or-circular-indicator-per-process-close-to-its-content",
+        "ui-expressive-wavy-indicators-keep-the-same-meaning-as-the-flat-ones",
     ] {
-        prose(format!("• {point}"));
+        prose(format!("• {}", I18N.text(point)));
     }
 }
 
 #[tessera]
 fn availability() {
     spec_table(
-        vec!["Type".into(), "Resource".into(), "Status".into()],
+        vec!["ui-type".into(), "ui-resource".into(), "ui-status".into()],
         vec![
             vec![
-                "Design".into(),
-                "Design Kit (Figma)".into(),
-                "Available".into(),
+                "ui-design".into(),
+                "ui-design-kit-figma".into(),
+                "ui-available".into(),
             ],
             vec![
-                "Implementation".into(),
-                "Flutter".into(),
-                "Available".into(),
+                "ui-implementation".into(),
+                "ui-flutter".into(),
+                "ui-available".into(),
             ],
             vec![
-                "Implementation".into(),
-                "Jetpack Compose".into(),
-                "Available".into(),
+                "ui-implementation".into(),
+                "ui-jetpack-compose".into(),
+                "ui-available".into(),
             ],
             vec![
-                "Implementation".into(),
-                "Android Views (MDC-Android)".into(),
-                "Available".into(),
+                "ui-implementation".into(),
+                "ui-android-views-mdc-android".into(),
+                "ui-available".into(),
             ],
-            vec!["Implementation".into(), "Web".into(), "Unavailable".into()],
+            vec![
+                "ui-implementation".into(),
+                "ui-web".into(),
+                "ui-unavailable".into(),
+            ],
         ],
     );
 }
@@ -345,22 +381,22 @@ fn availability() {
 #[tessera]
 fn expressive_update() {
     prose(
-        "The Material 3 expressive update adds wavy progress indicators. The wavy active indicator uses the same color roles and states as the flat one, and its amplitude grows with the reported progress, so determinate and indeterminate behavior stay readable.",
+        "ui-the-material-3-expressive-update-adds-wavy-progress-indicators-the-wavy-active-indicator-u",
     );
     gap(Dp(24.0));
     panel(RenderSlot::new(|| {
-        linear_sample("Expressive linear".to_owned(), true, 0.55, true, false);
+        linear_sample("ui-expressive-linear".to_owned(), true, 0.55, true, false);
         gap(Dp(32.0));
         flow_row().item_spacing(Dp(48.0)).children(|| {
             circular_sample(
-                "Expressive circular determinate".to_owned(),
+                "ui-expressive-circular-determinate".to_owned(),
                 true,
                 0.6,
                 true,
                 false,
             );
             circular_sample(
-                "Expressive circular indeterminate".to_owned(),
+                "ui-expressive-circular-indeterminate".to_owned(),
                 false,
                 0.0,
                 true,
@@ -373,31 +409,37 @@ fn expressive_update() {
 #[tessera]
 fn differences() {
     prose(
-        "Color: progress indicators use the primary role for the active indicator and the secondary container role for the track, with dynamic color support. Shape: flat indicators keep fully rounded ends, and the expressive update adds an optional wavy form. Motion: indeterminate indicators animate continuously instead of using an M2 sweeping bar.",
+        "ui-color-progress-indicators-use-the-primary-role-for-the-active-indicator-and-the-secondary",
     );
 }
 
 #[tessera]
 fn variants() {
     prose(
-        "Two shapes cover four combinations: a linear or circular track, each with a determinate or indeterminate active indicator.",
+        "ui-two-shapes-cover-four-combinations-a-linear-or-circular-track-each-with-a-determinate-or-i",
     );
     gap(Dp(24.0));
     panel(RenderSlot::new(|| {
-        linear_sample("Variant determinate".to_owned(), true, 0.5, false, false);
+        linear_sample("ui-variant-determinate".to_owned(), true, 0.5, false, false);
         gap(Dp(32.0));
-        linear_sample("Variant indeterminate".to_owned(), false, 0.0, false, false);
+        linear_sample(
+            "ui-variant-indeterminate".to_owned(),
+            false,
+            0.0,
+            false,
+            false,
+        );
         gap(Dp(32.0));
         flow_row().item_spacing(Dp(48.0)).children(|| {
             circular_sample(
-                "Variant circular determinate".to_owned(),
+                "ui-variant-circular-determinate".to_owned(),
                 true,
                 0.5,
                 false,
                 false,
             );
             circular_sample(
-                "Variant circular indeterminate".to_owned(),
+                "ui-variant-circular-indeterminate".to_owned(),
                 false,
                 0.0,
                 false,
@@ -406,23 +448,23 @@ fn variants() {
         });
     }));
     gap(Dp(32.0));
-    subheading("Wavy variants".into());
+    subheading("ui-wavy-variants".into());
     gap(Dp(16.0));
     panel(RenderSlot::new(|| {
-        linear_sample("Wavy determinate".to_owned(), true, 0.5, true, false);
+        linear_sample("ui-wavy-determinate".to_owned(), true, 0.5, true, false);
         gap(Dp(32.0));
-        linear_sample("Wavy indeterminate".to_owned(), false, 0.0, true, false);
+        linear_sample("ui-wavy-indeterminate".to_owned(), false, 0.0, true, false);
         gap(Dp(32.0));
         flow_row().item_spacing(Dp(48.0)).children(|| {
             circular_sample(
-                "Wavy circular determinate".to_owned(),
+                "ui-wavy-circular-determinate".to_owned(),
                 true,
                 0.5,
                 true,
                 false,
             );
             circular_sample(
-                "Wavy circular indeterminate".to_owned(),
+                "ui-wavy-circular-indeterminate".to_owned(),
                 false,
                 0.0,
                 true,
@@ -444,32 +486,32 @@ fn configurations() {
             button()
                 .tonal()
                 .selected(wavy.get())
-                .accessibility_label("Progress configuration wavy".to_owned())
+                .accessibility_label(I18N.text("ui-progress-configuration-wavy"))
                 .on_click(move || wavy.set(!wavy.get()))
-                .child(|| {
-                    text().content("Wavy");
+                .child(move || {
+                    text().content(I18N.text("ui-wavy"));
                 });
             button()
                 .tonal()
                 .selected(thick.get())
-                .accessibility_label("Progress configuration thick".to_owned())
+                .accessibility_label(I18N.text("ui-progress-configuration-thick"))
                 .on_click(move || thick.set(!thick.get()))
-                .child(|| {
-                    text().content("Thick stroke");
+                .child(move || {
+                    text().content(I18N.text("ui-thick-stroke"));
                 });
             button()
                 .tonal()
                 .selected(determinate.get())
-                .accessibility_label("Progress configuration determinate".to_owned())
+                .accessibility_label(I18N.text("ui-progress-configuration-determinate"))
                 .on_click(move || determinate.set(!determinate.get()))
-                .child(|| {
-                    text().content("Determinate");
+                .child(move || {
+                    text().content(I18N.text("ui-determinate"));
                 });
         });
     gap(Dp(24.0));
     panel(RenderSlot::new(move || {
         linear_sample(
-            "Configuration linear".to_owned(),
+            "ui-configuration-linear".to_owned(),
             determinate.get(),
             0.5,
             wavy.get(),
@@ -477,7 +519,7 @@ fn configurations() {
         );
         gap(Dp(32.0));
         circular_sample(
-            "Configuration circular".to_owned(),
+            "ui-configuration-circular".to_owned(),
             determinate.get(),
             0.5,
             wavy.get(),
@@ -485,15 +527,35 @@ fn configurations() {
         );
         gap(Dp(16.0));
         text()
-            .content(format!(
-                "{} · {} stroke",
-                if determinate.get() {
-                    "determinate"
-                } else {
-                    "indeterminate"
-                },
-                if thick.get() { "thick" } else { "default" }
-            ))
+            .content(
+                I18N.format(
+                    "ui-value-value-stroke",
+                    [
+                        (
+                            "v0",
+                            I18N.text(
+                                &(if determinate.get() {
+                                    "ui-determinate-7102"
+                                } else {
+                                    "ui-indeterminate"
+                                }),
+                            )
+                            .into(),
+                        ),
+                        (
+                            "v1",
+                            I18N.text(
+                                &(if thick.get() {
+                                    "ui-thick"
+                                } else {
+                                    "ui-default-7074"
+                                }),
+                            )
+                            .into(),
+                        ),
+                    ],
+                ),
+            )
             .style(type_style(14.0, 20.0));
     }));
 }
@@ -501,57 +563,57 @@ fn configurations() {
 #[tessera]
 fn tokens() {
     spec_table(
-        vec!["Element".into(), "Token".into(), "Value".into()],
+        vec!["ui-element".into(), "ui-token".into(), "ui-value".into()],
         vec![
             vec![
-                "Track".into(),
+                "ui-track".into(),
                 "md.comp.linear-progress-indicator.track.color".into(),
-                "Secondary container".into(),
+                "ui-secondary-container".into(),
             ],
             vec![
-                "Active indicator".into(),
+                "ui-active-indicator".into(),
                 "md.comp.linear-progress-indicator.active-indicator.color".into(),
-                "Primary".into(),
+                "ui-primary".into(),
             ],
             vec![
-                "Stop indicator".into(),
+                "ui-stop-indicator".into(),
                 "md.comp.linear-progress-indicator.stop-indicator.color".into(),
-                "Primary".into(),
+                "ui-primary".into(),
             ],
             vec![
-                "Track thickness".into(),
+                "ui-track-thickness".into(),
                 "md.comp.linear-progress-indicator.track.thickness".into(),
                 "4dp".into(),
             ],
             vec![
-                "Active thickness".into(),
+                "ui-active-thickness".into(),
                 "md.comp.linear-progress-indicator.active-indicator.thickness".into(),
                 "4dp".into(),
             ],
             vec![
-                "Shape".into(),
+                "ui-shape".into(),
                 "md.comp.linear-progress-indicator.track.shape".into(),
-                "Full · round caps".into(),
+                "ui-full-round-caps".into(),
             ],
             vec![
-                "Circular track".into(),
+                "ui-circular-track".into(),
                 "md.comp.circular-progress-indicator.track.color".into(),
-                "Secondary container".into(),
+                "ui-secondary-container".into(),
             ],
             vec![
-                "Circular active".into(),
+                "ui-circular-active".into(),
                 "md.comp.circular-progress-indicator.active-indicator.color".into(),
-                "Primary".into(),
+                "ui-primary".into(),
             ],
             vec![
-                "Circular size / thickness".into(),
+                "ui-circular-size-thickness".into(),
                 "md.comp.circular-progress-indicator.size / thickness".into(),
                 "40dp / 4dp".into(),
             ],
             vec![
-                "Indeterminate motion".into(),
+                "ui-indeterminate-motion".into(),
                 "md.comp.progress-indicator.indeterminate.animation".into(),
-                "Continuous advance and retract".into(),
+                "ui-continuous-advance-and-retract".into(),
             ],
         ],
     );
@@ -560,16 +622,16 @@ fn tokens() {
 #[tessera]
 fn anatomy() {
     prose(
-        "A linear progress indicator contains a track, an active indicator and a stop indicator.",
+        "ui-a-linear-progress-indicator-contains-a-track-an-active-indicator-and-a-stop-indicator",
     );
     gap(Dp(24.0));
     panel(RenderSlot::new(|| {
-        linear_sample("Anatomy linear".to_owned(), true, 0.6, false, false);
+        linear_sample("ui-anatomy-linear".to_owned(), true, 0.6, false, false);
         gap(Dp(32.0));
         flow_row().item_spacing(Dp(48.0)).children(|| {
-            circular_sample("Anatomy circular".to_owned(), true, 0.6, false, false);
+            circular_sample("ui-anatomy-circular".to_owned(), true, 0.6, false, false);
             circular_sample(
-                "Anatomy circular track".to_owned(),
+                "ui-anatomy-circular-track".to_owned(),
                 false,
                 0.0,
                 false,
@@ -578,9 +640,9 @@ fn anatomy() {
         });
     }));
     gap(Dp(16.0));
-    prose("Linear: 1  Track    2  Active indicator    3  Stop indicator");
+    prose("ui-linear-1-track-2-active-indicator-3-stop-indicator");
     gap(Dp(8.0));
-    prose("Circular: 1  Track    2  Active indicator");
+    prose("ui-circular-1-track-2-active-indicator");
 }
 
 #[tessera]
@@ -601,11 +663,21 @@ fn colors() {
                             .modifier(Modifier::new().fill_max_width().padding_all(Dp(24.0)))
                             .children(move || {
                                 subheading(
-                                    if dark { "Dark scheme" } else { "Light scheme" }.to_owned(),
+                                    if dark {
+                                        "ui-dark-scheme"
+                                    } else {
+                                        "ui-light-scheme"
+                                    }
+                                    .to_owned(),
                                 );
                                 gap(Dp(24.0));
                                 linear_sample(
-                                    if dark { "Dark linear" } else { "Light linear" }.to_owned(),
+                                    if dark {
+                                        "ui-dark-linear"
+                                    } else {
+                                        "ui-light-linear"
+                                    }
+                                    .to_owned(),
                                     true,
                                     0.5,
                                     false,
@@ -614,9 +686,9 @@ fn colors() {
                                 gap(Dp(32.0));
                                 circular_sample(
                                     if dark {
-                                        "Dark circular"
+                                        "ui-dark-circular"
                                     } else {
-                                        "Light circular"
+                                        "ui-light-circular"
                                     }
                                     .to_owned(),
                                     true,
@@ -629,16 +701,16 @@ fn colors() {
             });
         gap(Dp(24.0));
     }
-    subheading("Color roles".into());
+    subheading("ui-color-roles-4475".into());
     spec_table(
-        vec!["Element".into(), "Color role".into()],
+        vec!["ui-element".into(), "ui-color-role".into()],
         vec![
-            vec!["Active indicator".into(), "Primary".into()],
-            vec!["Track".into(), "Secondary container".into()],
-            vec!["Stop indicator".into(), "Primary".into()],
+            vec!["ui-active-indicator".into(), "ui-primary".into()],
+            vec!["ui-track".into(), "ui-secondary-container".into()],
+            vec!["ui-stop-indicator".into(), "ui-primary".into()],
             vec![
-                "Track on a surface container".into(),
-                "Surface container highest".into(),
+                "ui-track-on-a-surface-container".into(),
+                "ui-surface-container-highest".into(),
             ],
         ],
     );
@@ -647,24 +719,30 @@ fn colors() {
 #[tessera]
 fn measurements() {
     panel(RenderSlot::new(|| {
-        linear_sample("Measurement linear".to_owned(), true, 0.5, false, false);
+        linear_sample("ui-measurement-linear".to_owned(), true, 0.5, false, false);
         gap(Dp(32.0));
-        circular_sample("Measurement circular".to_owned(), true, 0.5, false, false);
+        circular_sample(
+            "ui-measurement-circular".to_owned(),
+            true,
+            0.5,
+            false,
+            false,
+        );
     }));
     gap(Dp(24.0));
     spec_table(
-        vec!["Attribute".into(), "Value".into()],
+        vec!["ui-attribute".into(), "ui-value".into()],
         vec![
-            vec!["Linear indicator height".into(), "4dp".into()],
-            vec!["Linear default width".into(), "240dp".into()],
-            vec!["Linear track gap".into(), "4dp".into()],
-            vec!["Stop indicator size".into(), "4dp".into()],
-            vec!["Circular diameter".into(), "40dp".into()],
-            vec!["Circular stroke width".into(), "4dp".into()],
-            vec!["Circular track gap".into(), "4dp".into()],
-            vec!["Wavy linear height".into(), "12dp".into()],
-            vec!["Wavy circular diameter".into(), "48dp".into()],
-            vec!["Minimum interactive target".into(), "48 × 48dp".into()],
+            vec!["ui-linear-indicator-height".into(), "4dp".into()],
+            vec!["ui-linear-default-width".into(), "240dp".into()],
+            vec!["ui-linear-track-gap".into(), "4dp".into()],
+            vec!["ui-stop-indicator-size".into(), "4dp".into()],
+            vec!["ui-circular-diameter".into(), "40dp".into()],
+            vec!["ui-circular-stroke-width".into(), "4dp".into()],
+            vec!["ui-circular-track-gap".into(), "4dp".into()],
+            vec!["ui-wavy-linear-height".into(), "12dp".into()],
+            vec!["ui-wavy-circular-diameter".into(), "48dp".into()],
+            vec!["ui-minimum-interactive-target".into(), "48 × 48dp".into()],
         ],
     );
 }
@@ -672,19 +750,19 @@ fn measurements() {
 #[tessera]
 fn baseline_tokens() {
     spec_table(
-        vec!["Token".into(), "Baseline value".into()],
+        vec!["ui-token".into(), "ui-baseline-value".into()],
         vec![
             vec![
                 "md.comp.linear-progress-indicator.track.color".into(),
-                "Secondary container".into(),
+                "ui-secondary-container".into(),
             ],
             vec![
                 "md.comp.linear-progress-indicator.active-indicator.color".into(),
-                "Primary".into(),
+                "ui-primary".into(),
             ],
             vec![
                 "md.comp.linear-progress-indicator.stop-indicator.color".into(),
-                "Primary".into(),
+                "ui-primary".into(),
             ],
             vec![
                 "md.comp.linear-progress-indicator.track.thickness".into(),
@@ -692,11 +770,11 @@ fn baseline_tokens() {
             ],
             vec![
                 "md.comp.circular-progress-indicator.track.color".into(),
-                "Secondary container".into(),
+                "ui-secondary-container".into(),
             ],
             vec![
                 "md.comp.circular-progress-indicator.active-indicator.color".into(),
-                "Primary".into(),
+                "ui-primary".into(),
             ],
             vec![
                 "md.comp.circular-progress-indicator.size".into(),
@@ -713,27 +791,27 @@ fn baseline_tokens() {
 #[tessera]
 fn usage() {
     prose(
-        "Show progress as soon as a process starts and keep the indicator visible until it finishes. Determinate indicators must report the real completion fraction; never animate them at an arbitrary rate.",
+        "ui-show-progress-as-soon-as-a-process-starts-and-keep-the-indicator-visible-until-it-finishes",
     );
     gap(Dp(24.0));
     spec_table(
         vec!["Do".into(), "Don't".into()],
         vec![
             vec![
-                "Use a determinate indicator when completion can be measured".into(),
-                "Use a determinate indicator for an unknown wait time".into(),
+                "ui-use-a-determinate-indicator-when-completion-can-be-measured".into(),
+                "ui-use-a-determinate-indicator-for-an-unknown-wait-time".into(),
             ],
             vec![
-                "Use an indeterminate indicator while the length is unknown".into(),
-                "Switch an indeterminate indicator into a determinate one mid-process".into(),
+                "ui-use-an-indeterminate-indicator-while-the-length-is-unknown".into(),
+                "ui-switch-an-indeterminate-indicator-into-a-determinate-one-mid-process".into(),
             ],
             vec![
-                "Keep one indicator per process, close to its content".into(),
-                "Show several competing indicators for one process".into(),
+                "ui-keep-one-indicator-per-process-close-to-its-content".into(),
+                "ui-show-several-competing-indicators-for-one-process".into(),
             ],
             vec![
-                "Keep the indicator visible until the process finishes".into(),
-                "Remove progress feedback while work continues".into(),
+                "ui-keep-the-indicator-visible-until-the-process-finishes".into(),
+                "ui-remove-progress-feedback-while-work-continues".into(),
             ],
         ],
     );
@@ -744,26 +822,26 @@ fn usage() {
 #[tessera]
 fn placement() {
     prose(
-        "Place a linear indicator along the edge of the container it describes and center a circular indicator inside its container. Progress indicators do not take focus and never replace the content they describe.",
+        "ui-place-a-linear-indicator-along-the-edge-of-the-container-it-describes-and-center-a-circula",
     );
     gap(Dp(24.0));
     spec_table(
-        vec!["Context".into(), "Do".into(), "Avoid".into()],
+        vec!["ui-context".into(), "Do".into(), "ui-avoid".into()],
         vec![
             vec![
-                "Page or card load".into(),
-                "Linear indicator on the top edge".into(),
-                "A circular indicator floating over content".into(),
+                "ui-page-or-card-load".into(),
+                "ui-linear-indicator-on-the-top-edge".into(),
+                "ui-a-circular-indicator-floating-over-content".into(),
             ],
             vec![
-                "Button or short action".into(),
-                "Small circular indicator inside the button".into(),
-                "A full-width linear indicator inside a button".into(),
+                "ui-button-or-short-action".into(),
+                "ui-small-circular-indicator-inside-the-button".into(),
+                "ui-a-full-width-linear-indicator-inside-a-button".into(),
             ],
             vec![
-                "Media or image load".into(),
-                "Circular indicator at the center".into(),
-                "A linear indicator crossing the media".into(),
+                "ui-media-or-image-load".into(),
+                "ui-circular-indicator-at-the-center".into(),
+                "ui-a-linear-indicator-crossing-the-media".into(),
             ],
         ],
     );
@@ -772,31 +850,37 @@ fn placement() {
 #[tessera]
 fn responsive_layout() {
     prose(
-        "Let a linear indicator stretch with its container, and keep a circular indicator at its fixed 40dp size so it stays legible at every window width.",
+        "ui-let-a-linear-indicator-stretch-with-its-container-and-keep-a-circular-indicator-at-its-fix",
     );
     gap(Dp(24.0));
     panel(RenderSlot::new(|| {
-        linear_sample("Responsive linear".to_owned(), true, 0.35, false, false);
+        linear_sample("ui-responsive-linear".to_owned(), true, 0.35, false, false);
         gap(Dp(32.0));
-        circular_sample("Responsive circular".to_owned(), true, 0.35, false, false);
+        circular_sample(
+            "ui-responsive-circular".to_owned(),
+            true,
+            0.35,
+            false,
+            false,
+        );
     }));
 }
 
 #[tessera]
 fn accessibility_use_cases() {
-    prose("People should be able to use assistive technology to:");
+    prose("ui-people-should-be-able-to-use-assistive-technology-to");
     gap(Dp(16.0));
     for point in [
-        "Navigate to the progress indicator.",
-        "Understand what progress the indicator is communicating.",
-        "Hear the completion value of a determinate indicator.",
+        "ui-navigate-to-the-progress-indicator",
+        "ui-understand-what-progress-the-indicator-is-communicating-4511",
+        "ui-hear-the-completion-value-of-a-determinate-indicator",
     ] {
-        prose(format!("• {point}"));
+        prose(format!("• {}", I18N.text(point)));
     }
     gap(Dp(24.0));
     panel(RenderSlot::new(|| {
         linear_sample(
-            "Accessible determinate".to_owned(),
+            "ui-accessible-determinate".to_owned(),
             true,
             0.75,
             false,
@@ -808,12 +892,12 @@ fn accessibility_use_cases() {
 #[tessera]
 fn accessibility_interaction() {
     prose(
-        "A determinate indicator publishes its value through the progress indicator role, so assistive technology can report a percentage. An indeterminate indicator publishes no numeric value; it must never announce a fake percentage.",
+        "ui-a-determinate-indicator-publishes-its-value-through-the-progress-indicator-role-so-assisti",
     );
     gap(Dp(24.0));
     panel(RenderSlot::new(|| {
         linear_sample(
-            "Accessible indeterminate".to_owned(),
+            "ui-accessible-indeterminate".to_owned(),
             false,
             0.0,
             false,
@@ -821,7 +905,7 @@ fn accessibility_interaction() {
         );
         gap(Dp(32.0));
         circular_sample(
-            "Accessible circular indeterminate".to_owned(),
+            "ui-accessible-circular-indeterminate".to_owned(),
             false,
             0.0,
             false,
@@ -833,27 +917,27 @@ fn accessibility_interaction() {
 #[tessera]
 fn accessibility_labeling() {
     prose(
-        "Name the process rather than the shape. A determinate indicator reports its percentage automatically, while an indeterminate one is announced as in progress.",
+        "ui-name-the-process-rather-than-the-shape-a-determinate-indicator-reports-its-percentage-auto",
     );
     gap(Dp(24.0));
     spec_table(
-        vec!["Element".into(), "Accessible information".into()],
+        vec!["ui-element".into(), "ui-accessible-information".into()],
         vec![
             vec![
-                "Determinate indicator".into(),
-                "Process name plus the reported percentage".into(),
+                "ui-determinate-indicator".into(),
+                "ui-process-name-plus-the-reported-percentage".into(),
             ],
             vec![
-                "Indeterminate indicator".into(),
-                "Process name with an in-progress state".into(),
+                "ui-indeterminate-indicator".into(),
+                "ui-process-name-with-an-in-progress-state".into(),
             ],
             vec![
-                "Track and stop indicator".into(),
-                "Decorative, hidden from assistive technology".into(),
+                "ui-track-and-stop-indicator".into(),
+                "ui-decorative-hidden-from-assistive-technology".into(),
             ],
             vec![
-                "Visible percentage text".into(),
-                "Keep it out of the name to avoid double announcements".into(),
+                "ui-visible-percentage-text".into(),
+                "ui-keep-it-out-of-the-name-to-avoid-double-announcements".into(),
             ],
         ],
     );

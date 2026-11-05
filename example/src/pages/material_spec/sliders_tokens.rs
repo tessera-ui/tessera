@@ -21,6 +21,8 @@ use tessera_ui::{
     Dp, LayoutCoordinates, Modifier, State, modifier::FocusModifierExt as _, remember, tessera,
 };
 
+use crate::res::I18N;
+
 use super::{gap, spec_table, subheading, type_style};
 
 #[cfg(all(test, not(target_family = "wasm")))]
@@ -28,27 +30,42 @@ use super::{gap, spec_table, subheading, type_style};
 mod tests;
 
 const SET_NAMES: [&str; 6] = [
-    "Slider",
-    "Slider - Size - Xsmall",
-    "Slider - Size - Small",
-    "Slider - Size - Medium",
-    "Slider - Size - Large",
-    "Slider - Size - Xlarge",
+    "ui-slider",
+    "ui-slider-size-xsmall",
+    "ui-slider-size-small",
+    "ui-slider-size-medium",
+    "ui-slider-size-large",
+    "ui-slider-size-xlarge",
 ];
 
 const GROUPS: [&[&str]; 6] = [
     &[
-        "Enabled",
-        "Disabled",
-        "Hovered",
-        "Focused",
-        "Pressed (ripple)",
+        "ui-enabled",
+        "ui-disabled",
+        "ui-hovered",
+        "ui-focused",
+        "ui-pressed-ripple",
     ],
-    &["Active track", "Inactive track", "Handle"],
-    &["Active track", "Inactive track", "Handle"],
-    &["Active track", "Inactive track", "Handle", "Icon"],
-    &["Active track", "Inactive track", "Handle", "Icon"],
-    &["Active track", "Inactive track", "Handle", "Icon"],
+    &["ui-active-track", "ui-inactive-track", "ui-handle"],
+    &["ui-active-track", "ui-inactive-track", "ui-handle"],
+    &[
+        "ui-active-track",
+        "ui-inactive-track",
+        "ui-handle",
+        "ui-icon",
+    ],
+    &[
+        "ui-active-track",
+        "ui-inactive-track",
+        "ui-handle",
+        "ui-icon",
+    ],
+    &[
+        "ui-active-track",
+        "ui-inactive-track",
+        "ui-handle",
+        "ui-icon",
+    ],
 ];
 
 struct Token {
@@ -83,9 +100,9 @@ fn token_menu(
                 .modifier(Modifier::new().fill_max_width())
                 .children(move || {
                     text()
-                        .content(
-                            "Switch between common slider tokens and the five size token sets.",
-                        )
+                        .content(I18N.text(
+                            "ui-switch-between-common-slider-tokens-and-the-five-size-token-sets",
+                        ))
                         .style(type_style(16.0, 24.0));
                     gap(Dp(16.0));
                     flow_row()
@@ -94,7 +111,7 @@ fn token_menu(
                         .children(move || {
                             button()
                                 .outlined()
-                                .accessibility_label("Slider token set selector")
+                                .accessibility_label(I18N.text("ui-slider-token-set-selector"))
                                 .modifier(Modifier::new().on_layout_coordinates(
                                     move |coordinates| {
                                         anchor.set_if_changed(coordinates);
@@ -105,7 +122,7 @@ fn token_menu(
                                     row()
                                         .cross_axis_alignment(CrossAxisAlignment::Center)
                                         .children(move || {
-                                            text().content(SET_NAMES[selected.get()]);
+                                            text().content(I18N.text(SET_NAMES[selected.get()]));
                                             boxed().modifier(Modifier::new().width(Dp(8.0)));
                                             icon()
                                                 .vector(filled::ARROW_DROP_DOWN_SVG)
@@ -114,17 +131,17 @@ fn token_menu(
                                 });
                             button()
                                 .text()
-                                .accessibility_label(
+                                .accessibility_label(I18N.text(
                                     if expanded.with(|state| {
                                         state[selected.get()][..GROUPS[selected.get()].len()]
                                             .iter()
                                             .all(|open| *open)
                                     }) {
-                                        "Collapse all"
+                                        "ui-collapse-all"
                                     } else {
-                                        "Expand all"
+                                        "ui-expand-all"
                                     },
-                                )
+                                ))
                                 .on_click(move || {
                                     let index = selected.get();
                                     expanded.with_mut(|state| {
@@ -139,11 +156,11 @@ fn token_menu(
                                     let all_open = expanded.with(|state| {
                                         state[index][..GROUPS[index].len()].iter().all(|open| *open)
                                     });
-                                    text().content(if all_open {
-                                        "Collapse all"
+                                    text().content(I18N.text(if all_open {
+                                        "ui-collapse-all"
                                     } else {
-                                        "Expand all"
-                                    });
+                                        "ui-expand-all"
+                                    }));
                                 });
                         });
                     gap(Dp(24.0));
@@ -152,7 +169,7 @@ fn token_menu(
                         let open = expanded.with(|state| state[index][group_index]);
                         button()
                             .text()
-                            .accessibility_label(group)
+                            .accessibility_label(I18N.text(group))
                             .on_click(move || {
                                 let index = selected.get();
                                 expanded.with_mut(|state| {
@@ -163,8 +180,13 @@ fn token_menu(
                                 let index = selected.get();
                                 let open = expanded.with(|state| state[index][group_index]);
                                 let group = GROUPS[index][group_index];
-                                text()
-                                    .content(format!("{}  {group}", if open { "−" } else { "+" }));
+                                text().content(I18N.format(
+                                    "ui-value-value",
+                                    [
+                                        ("v0", I18N.text(&(if open { "−" } else { "+" })).into()),
+                                        ("v1", I18N.text(&group).into()),
+                                    ],
+                                ));
                             });
                         if open {
                             token_table(index, group.to_owned());
@@ -176,7 +198,7 @@ fn token_menu(
             for (index, label) in SET_NAMES.into_iter().enumerate() {
                 menu_item()
                     .menu(menu)
-                    .label(label)
+                    .label(I18N.text(label))
                     .selected(selected.get() == index)
                     .selection_mode(MenuItemSelectionMode::Radio)
                     .on_click(move || {
@@ -203,7 +225,7 @@ fn token_table(index: usize, group: String) {
             .filter(|token| token.group == group && token.section == section)
             .map(|token| vec![token.name.to_owned(), token.value.to_owned()])
             .collect();
-        spec_table(vec!["Token".into(), "Value".into()], rows);
+        spec_table(vec!["ui-token".into(), "ui-value".into()], rows);
         gap(Dp(16.0));
     }
 }
@@ -211,33 +233,38 @@ fn token_table(index: usize, group: String) {
 #[tessera]
 pub(super) fn availability() {
     let rows = [
-        ["Inset icon", "No (default)", "Available", "Available"],
-        ["", "Yes", "--", "Available"],
         [
-            "Orientation",
-            "Horizontal (default)",
-            "Available",
-            "Available",
+            "ui-inset-icon",
+            "ui-no-default",
+            "ui-available",
+            "ui-available",
         ],
-        ["", "Vertical", "--", "Available"],
-        ["Size", "XS (default)", "Available", "Available"],
+        ["", "ui-yes", "--", "ui-available"],
+        [
+            "ui-orientation",
+            "ui-horizontal-default",
+            "ui-available",
+            "ui-available",
+        ],
+        ["", "ui-vertical", "--", "ui-available"],
+        ["ui-size", "ui-xs-default", "ui-available", "ui-available"],
         [
             "",
             "S, M, L, XL",
             "--",
-            "Available on Android Views (MDC-Android).\nAvailable as tokens on other platforms.*",
+            "ui-available-on-android-views-mdc-android-available-as-tokens-on-other-platforms",
         ],
         [
-            "Stop indicators",
-            "No (default), Yes",
-            "Available as “discrete” slider",
-            "Available",
+            "ui-stop-indicators",
+            "ui-no-default-yes",
+            "ui-available-as-discrete-slider",
+            "ui-available",
         ],
         [
-            "Value Indicator",
-            "No (default), Yes",
-            "Available",
-            "Available",
+            "ui-value-indicator-5305",
+            "ui-no-default-yes",
+            "ui-available",
+            "ui-available",
         ],
     ];
     let mut cells = Vec::new();
@@ -256,530 +283,530 @@ pub(super) fn availability() {
         }
     }
     super::spec_table_cells(
-        ["Category", "Configuration", "M3", "M3 Expressive"]
+        ["ui-category", "ui-configuration", "M3", "ui-m3-expressive"]
             .map(str::to_owned)
             .to_vec(),
         cells,
     );
     gap(Dp(16.0));
-    text().content("*Configurations only available using tokens don’t have implemented presets in code. To change the size, swap the default size tokens md.comp.slider.xsmall.[...] with those of the desired size.")
+    text().content(I18N.text("ui-configurations-only-available-using-tokens-don-t-have-implemented-presets-in-code-to"))
         .style(type_style(16.0,24.0));
 }
 
 const TOKEN_SETS: [&[Token]; 6] = [
     &[
         Token {
-            group: "Disabled",
-            section: "Stop indicator",
-            name: "Slider disabled active stop indicator container color\nmd.comp.slider.disabled.active.stop-indicator.container.color",
-            value: "Inverse on surface",
+            group: "ui-disabled",
+            section: "ui-stop-indicator",
+            name: "ui-slider-disabled-active-stop-indicator-container-color-md-comp-slider-disabled-active",
+            value: "ui-inverse-on-surface",
         },
         Token {
-            group: "Disabled",
-            section: "Stop indicator",
-            name: "Slider disabled inactive stop indicator container color\nmd.comp.slider.disabled.inactive.stop-indicator.container.color",
-            value: "On surface",
+            group: "ui-disabled",
+            section: "ui-stop-indicator",
+            name: "ui-slider-disabled-inactive-stop-indicator-container-color-md-comp-slider-disabled-inact",
+            value: "ui-on-surface",
         },
         Token {
-            group: "Disabled",
-            section: "Track",
-            name: "Slider disabled active track color\nmd.comp.slider.disabled.active.track.color",
-            value: "On surface",
+            group: "ui-disabled",
+            section: "ui-track",
+            name: "ui-slider-disabled-active-track-color-md-comp-slider-disabled-active-track-color",
+            value: "ui-on-surface",
         },
         Token {
-            group: "Disabled",
-            section: "Track",
-            name: "Slider disabled active track opacity\nmd.comp.slider.disabled.active.track.opacity",
+            group: "ui-disabled",
+            section: "ui-track",
+            name: "ui-slider-disabled-active-track-opacity-md-comp-slider-disabled-active-track-opacity",
             value: "38%",
         },
         Token {
-            group: "Disabled",
-            section: "Track",
-            name: "Slider disabled inactive track color\nmd.comp.slider.disabled.inactive.track.color",
-            value: "On surface",
+            group: "ui-disabled",
+            section: "ui-track",
+            name: "ui-slider-disabled-inactive-track-color-md-comp-slider-disabled-inactive-track-color",
+            value: "ui-on-surface",
         },
         Token {
-            group: "Disabled",
-            section: "Track",
-            name: "Slider disabled inactive track opacity\nmd.comp.slider.disabled.inactive.track.opacity",
+            group: "ui-disabled",
+            section: "ui-track",
+            name: "ui-slider-disabled-inactive-track-opacity-md-comp-slider-disabled-inactive-track-opacity",
             value: "12%",
         },
         Token {
-            group: "Disabled",
-            section: "Handle",
-            name: "Slider disabled handle color\nmd.comp.slider.disabled.handle.color",
-            value: "On surface",
+            group: "ui-disabled",
+            section: "ui-handle",
+            name: "ui-slider-disabled-handle-color-md-comp-slider-disabled-handle-color",
+            value: "ui-on-surface",
         },
         Token {
-            group: "Disabled",
-            section: "Handle",
-            name: "Slider disabled handle opacity\nmd.comp.slider.disabled.handle.opacity",
+            group: "ui-disabled",
+            section: "ui-handle",
+            name: "ui-slider-disabled-handle-opacity-md-comp-slider-disabled-handle-opacity",
             value: "38%",
         },
         Token {
-            group: "Disabled",
-            section: "Handle",
-            name: "Slider disabled handle width\nmd.comp.slider.disabled.handle.width",
+            group: "ui-disabled",
+            section: "ui-handle",
+            name: "ui-slider-disabled-handle-width-md-comp-slider-disabled-handle-width",
             value: "4dp",
         },
         Token {
-            group: "Enabled",
-            section: "Stop indicator",
-            name: "Slider stop indicator size\nmd.comp.slider.stop-indicator.size",
+            group: "ui-enabled",
+            section: "ui-stop-indicator",
+            name: "ui-slider-stop-indicator-size-md-comp-slider-stop-indicator-size",
             value: "4dp",
         },
         Token {
-            group: "Enabled",
-            section: "Stop indicator",
-            name: "Slider stop indicator shape\nmd.comp.slider.stop-indicator.shape",
-            value: "Full",
+            group: "ui-enabled",
+            section: "ui-stop-indicator",
+            name: "ui-slider-stop-indicator-shape-md-comp-slider-stop-indicator-shape",
+            value: "ui-full",
         },
         Token {
-            group: "Enabled",
-            section: "Stop indicator",
-            name: "Slider stop indicator trailing space\nmd.comp.slider.stop-indicator.trailing-space",
+            group: "ui-enabled",
+            section: "ui-stop-indicator",
+            name: "ui-slider-stop-indicator-trailing-space-md-comp-slider-stop-indicator-trailing-space",
             value: "4dp",
         },
         Token {
-            group: "Enabled",
-            section: "Stop indicator",
-            name: "Slider stop indicator color\nmd.comp.slider.stop-indicator.color",
-            value: "On secondary container",
+            group: "ui-enabled",
+            section: "ui-stop-indicator",
+            name: "ui-slider-stop-indicator-color-md-comp-slider-stop-indicator-color",
+            value: "ui-on-secondary-container",
         },
         Token {
-            group: "Enabled",
-            section: "Stop indicator",
-            name: "Slider stop indicator color selected\nmd.comp.slider.stop-indicator.color-selected",
-            value: "On primary",
+            group: "ui-enabled",
+            section: "ui-stop-indicator",
+            name: "ui-slider-stop-indicator-color-selected-md-comp-slider-stop-indicator-color-selected",
+            value: "ui-on-primary",
         },
         Token {
-            group: "Enabled",
-            section: "Container",
-            name: "Slider active stop indicator container color\nmd.comp.slider.active.stop-indicator.container.color",
-            value: "On primary",
+            group: "ui-enabled",
+            section: "ui-container",
+            name: "ui-slider-active-stop-indicator-container-color-md-comp-slider-active-stop-indicator-con",
+            value: "ui-on-primary",
         },
         Token {
-            group: "Enabled",
-            section: "Container",
-            name: "Slider active stop indicator container opacity\nmd.comp.slider.active.stop-indicator.container.opacity",
+            group: "ui-enabled",
+            section: "ui-container",
+            name: "ui-slider-active-stop-indicator-container-opacity-md-comp-slider-active-stop-indicator-c",
             value: "100%",
         },
         Token {
-            group: "Enabled",
-            section: "Container",
-            name: "Slider inactive stop indicator container color\nmd.comp.slider.inactive.stop-indicator.container.color",
-            value: "On secondary container",
+            group: "ui-enabled",
+            section: "ui-container",
+            name: "ui-slider-inactive-stop-indicator-container-color-md-comp-slider-inactive-stop-indicator",
+            value: "ui-on-secondary-container",
         },
         Token {
-            group: "Enabled",
-            section: "Container",
-            name: "Slider inactive stop indicator container opacity\nmd.comp.slider.inactive.stop-indicator.container.opacity",
+            group: "ui-enabled",
+            section: "ui-container",
+            name: "ui-slider-inactive-stop-indicator-container-opacity-md-comp-slider-inactive-stop-indicat",
             value: "100%",
         },
         Token {
-            group: "Enabled",
-            section: "Track",
-            name: "Slider active track height\nmd.comp.slider.active.track.height",
+            group: "ui-enabled",
+            section: "ui-track",
+            name: "ui-slider-active-track-height-md-comp-slider-active-track-height",
             value: "16dp",
         },
         Token {
-            group: "Enabled",
-            section: "Track",
-            name: "Slider inactive track height\nmd.comp.slider.inactive.track.height",
+            group: "ui-enabled",
+            section: "ui-track",
+            name: "ui-slider-inactive-track-height-md-comp-slider-inactive-track-height",
             value: "16dp",
         },
         Token {
-            group: "Enabled",
-            section: "Track",
-            name: "Slider active track shape\nmd.comp.slider.active.track.shape",
-            value: "Full",
+            group: "ui-enabled",
+            section: "ui-track",
+            name: "ui-slider-active-track-shape-md-comp-slider-active-track-shape",
+            value: "ui-full",
         },
         Token {
-            group: "Enabled",
-            section: "Track",
-            name: "Slider active track outer corner size\nmd.comp.slider.active.track.outer-corner.corner-size",
-            value: "Full",
+            group: "ui-enabled",
+            section: "ui-track",
+            name: "ui-slider-active-track-outer-corner-size-md-comp-slider-active-track-outer-corner-corner",
+            value: "ui-full",
         },
         Token {
-            group: "Enabled",
-            section: "Track",
-            name: "Slider active track inner corner size\nmd.comp.slider.active.track.inner-corner.corner-size",
+            group: "ui-enabled",
+            section: "ui-track",
+            name: "ui-slider-active-track-inner-corner-size-md-comp-slider-active-track-inner-corner-corner",
             value: "0dp 2dp 2dp 0dp",
         },
         Token {
-            group: "Enabled",
-            section: "Track",
-            name: "Slider inactive track shape\nmd.comp.slider.inactive.track.shape",
-            value: "Full",
+            group: "ui-enabled",
+            section: "ui-track",
+            name: "ui-slider-inactive-track-shape-md-comp-slider-inactive-track-shape",
+            value: "ui-full",
         },
         Token {
-            group: "Enabled",
-            section: "Track",
-            name: "Slider active track color\nmd.comp.slider.active.track.color",
-            value: "Primary",
+            group: "ui-enabled",
+            section: "ui-track",
+            name: "ui-slider-active-track-color-md-comp-slider-active-track-color",
+            value: "ui-primary",
         },
         Token {
-            group: "Enabled",
-            section: "Track",
-            name: "Slider inactive track color\nmd.comp.slider.inactive.track.color",
-            value: "Secondary container",
+            group: "ui-enabled",
+            section: "ui-track",
+            name: "ui-slider-inactive-track-color-md-comp-slider-inactive-track-color",
+            value: "ui-secondary-container",
         },
         Token {
-            group: "Enabled",
-            section: "Handle",
-            name: "Slider handle height\nmd.comp.slider.handle.height",
+            group: "ui-enabled",
+            section: "ui-handle",
+            name: "ui-slider-handle-height-md-comp-slider-handle-height",
             value: "44dp",
         },
         Token {
-            group: "Enabled",
-            section: "Handle",
-            name: "Slider handle width\nmd.comp.slider.handle.width",
+            group: "ui-enabled",
+            section: "ui-handle",
+            name: "ui-slider-handle-width-md-comp-slider-handle-width",
             value: "4dp",
         },
         Token {
-            group: "Enabled",
-            section: "Handle",
-            name: "Slider handle shape\nmd.comp.slider.handle.shape",
-            value: "Full",
+            group: "ui-enabled",
+            section: "ui-handle",
+            name: "ui-slider-handle-shape-md-comp-slider-handle-shape",
+            value: "ui-full",
         },
         Token {
-            group: "Enabled",
-            section: "Handle",
-            name: "Slider handle color\nmd.comp.slider.handle.color",
-            value: "Primary",
+            group: "ui-enabled",
+            section: "ui-handle",
+            name: "ui-slider-handle-color-md-comp-slider-handle-color",
+            value: "ui-primary",
         },
         Token {
-            group: "Enabled",
-            section: "Handle",
-            name: "Slider active handle color\nmd.comp.slider.active.handle.color",
-            value: "Primary",
+            group: "ui-enabled",
+            section: "ui-handle",
+            name: "ui-slider-active-handle-color-md-comp-slider-active-handle-color",
+            value: "ui-primary",
         },
         Token {
-            group: "Enabled",
-            section: "Handle",
-            name: "Slider active handle height\nmd.comp.slider.active.handle.height",
+            group: "ui-enabled",
+            section: "ui-handle",
+            name: "ui-slider-active-handle-height-md-comp-slider-active-handle-height",
             value: "44dp",
         },
         Token {
-            group: "Enabled",
-            section: "Handle",
-            name: "Slider active handle width\nmd.comp.slider.active.handle.width",
+            group: "ui-enabled",
+            section: "ui-handle",
+            name: "ui-slider-active-handle-width-md-comp-slider-active-handle-width",
             value: "4dp",
         },
         Token {
-            group: "Enabled",
-            section: "Handle",
-            name: "Slider active handle shape\nmd.comp.slider.active.handle.shape",
-            value: "Full",
+            group: "ui-enabled",
+            section: "ui-handle",
+            name: "ui-slider-active-handle-shape-md-comp-slider-active-handle-shape",
+            value: "ui-full",
         },
         Token {
-            group: "Enabled",
-            section: "Handle",
-            name: "Slider active handle leading space\nmd.comp.slider.active.handle.leading-space",
+            group: "ui-enabled",
+            section: "ui-handle",
+            name: "ui-slider-active-handle-leading-space-md-comp-slider-active-handle-leading-space",
             value: "6dp",
         },
         Token {
-            group: "Enabled",
-            section: "Handle",
-            name: "Slider active handle trailing space\nmd.comp.slider.active.handle.trailing-space",
+            group: "ui-enabled",
+            section: "ui-handle",
+            name: "ui-slider-active-handle-trailing-space-md-comp-slider-active-handle-trailing-space",
             value: "6dp",
         },
         Token {
-            group: "Enabled",
-            section: "Handle",
-            name: "Slider active handle padding\nmd.comp.slider.active.handle.padding",
+            group: "ui-enabled",
+            section: "ui-handle",
+            name: "ui-slider-active-handle-padding-md-comp-slider-active-handle-padding",
             value: "6dp",
         },
         Token {
-            group: "Focused",
-            section: "Track",
-            name: "Slider focus active track color\nmd.comp.slider.focus.active.track.color",
-            value: "Primary",
+            group: "ui-focused",
+            section: "ui-track",
+            name: "ui-slider-focus-active-track-color-md-comp-slider-focus-active-track-color",
+            value: "ui-primary",
         },
         Token {
-            group: "Focused",
-            section: "Track",
-            name: "Slider focus inactive track color\nmd.comp.slider.focus.inactive.track.color",
-            value: "Secondary container",
+            group: "ui-focused",
+            section: "ui-track",
+            name: "ui-slider-focus-inactive-track-color-md-comp-slider-focus-inactive-track-color",
+            value: "ui-secondary-container",
         },
         Token {
-            group: "Focused",
-            section: "Handle",
-            name: "Slider focus handle width\nmd.comp.slider.focus.handle.width",
+            group: "ui-focused",
+            section: "ui-handle",
+            name: "ui-slider-focus-handle-width-md-comp-slider-focus-handle-width",
             value: "2dp",
         },
         Token {
-            group: "Hovered",
-            section: "Handle",
-            name: "Slider hover handle width\nmd.comp.slider.hover.handle.width",
+            group: "ui-hovered",
+            section: "ui-handle",
+            name: "ui-slider-hover-handle-width-md-comp-slider-hover-handle-width",
             value: "4dp",
         },
         Token {
-            group: "Pressed (ripple)",
-            section: "Handle",
-            name: "Slider pressed handle color\nmd.comp.slider.pressed.handle.color",
-            value: "Primary",
+            group: "ui-pressed-ripple",
+            section: "ui-handle",
+            name: "ui-slider-pressed-handle-color-md-comp-slider-pressed-handle-color",
+            value: "ui-primary",
         },
         Token {
-            group: "Pressed (ripple)",
-            section: "Handle",
-            name: "Slider pressed handle width\nmd.comp.slider.pressed.handle.width",
+            group: "ui-pressed-ripple",
+            section: "ui-handle",
+            name: "ui-slider-pressed-handle-width-md-comp-slider-pressed-handle-width",
             value: "2dp",
         },
         Token {
-            group: "Pressed (ripple)",
-            section: "Track",
-            name: "Slider pressed active track color\nmd.comp.slider.pressed.active.track.color",
-            value: "Primary",
+            group: "ui-pressed-ripple",
+            section: "ui-track",
+            name: "ui-slider-pressed-active-track-color-md-comp-slider-pressed-active-track-color",
+            value: "ui-primary",
         },
         Token {
-            group: "Pressed (ripple)",
-            section: "Track",
-            name: "Slider pressed inactive track color\nmd.comp.slider.pressed.inactive.track.color",
-            value: "Secondary container",
+            group: "ui-pressed-ripple",
+            section: "ui-track",
+            name: "ui-slider-pressed-inactive-track-color-md-comp-slider-pressed-inactive-track-color",
+            value: "ui-secondary-container",
         },
         Token {
-            group: "Pressed (ripple)",
-            section: "Value indicator",
-            name: "Slider value indicator container color\nmd.comp.slider.value-indicator.container.color",
-            value: "Inverse surface",
+            group: "ui-pressed-ripple",
+            section: "ui-value-indicator",
+            name: "ui-slider-value-indicator-container-color-md-comp-slider-value-indicator-container-color",
+            value: "ui-inverse-surface",
         },
         Token {
-            group: "Pressed (ripple)",
-            section: "Value indicator",
-            name: "Slider value indicator label font\nmd.comp.slider.value-indicator.label.label-text.font",
+            group: "ui-pressed-ripple",
+            section: "ui-value-indicator",
+            name: "ui-slider-value-indicator-label-font-md-comp-slider-value-indicator-label-label-text-fon",
             value: "md.sys.typescale.label-large.font",
         },
         Token {
-            group: "Pressed (ripple)",
-            section: "Value indicator",
-            name: "Slider value indicator label font color\nmd.comp.slider.value-indicator.label.label-text.color",
-            value: "Inverse on surface",
+            group: "ui-pressed-ripple",
+            section: "ui-value-indicator",
+            name: "ui-slider-value-indicator-label-font-color-md-comp-slider-value-indicator-label-label-te",
+            value: "ui-inverse-on-surface",
         },
         Token {
-            group: "Pressed (ripple)",
-            section: "Value indicator",
-            name: "Slider value indicator label line height\nmd.comp.slider.value-indicator.label.label-text.line-height",
+            group: "ui-pressed-ripple",
+            section: "ui-value-indicator",
+            name: "ui-slider-value-indicator-label-line-height-md-comp-slider-value-indicator-label-label-t",
             value: "md.sys.typescale.label-large.line-height",
         },
         Token {
-            group: "Pressed (ripple)",
-            section: "Value indicator",
-            name: "Slider value indicator label size\nmd.comp.slider.value-indicator.label.label-text.size",
+            group: "ui-pressed-ripple",
+            section: "ui-value-indicator",
+            name: "ui-slider-value-indicator-label-size-md-comp-slider-value-indicator-label-label-text-siz",
             value: "md.sys.typescale.label-large.size",
         },
         Token {
-            group: "Pressed (ripple)",
-            section: "Value indicator",
-            name: "Slider value indicator label tracking\nmd.comp.slider.value-indicator.label.label-text.tracking",
+            group: "ui-pressed-ripple",
+            section: "ui-value-indicator",
+            name: "ui-slider-value-indicator-label-tracking-md-comp-slider-value-indicator-label-label-text",
             value: "md.sys.typescale.body-large.tracking",
         },
         Token {
-            group: "Pressed (ripple)",
-            section: "Value indicator",
-            name: "Slider value indicator label weight\nmd.comp.slider.value-indicator.label.label-text.weight",
+            group: "ui-pressed-ripple",
+            section: "ui-value-indicator",
+            name: "ui-slider-value-indicator-label-weight-md-comp-slider-value-indicator-label-label-text-w",
             value: "md.sys.typescale.body-large.weight",
         },
         Token {
-            group: "Pressed (ripple)",
-            section: "Value indicator",
-            name: "Slider value indicator active bottom space\nmd.comp.slider.value-indicator.active.bottom-space",
+            group: "ui-pressed-ripple",
+            section: "ui-value-indicator",
+            name: "ui-slider-value-indicator-active-bottom-space-md-comp-slider-value-indicator-active-bott",
             value: "12dp",
         },
     ],
     &[
         Token {
-            group: "Active track",
-            section: "Active track",
-            name: "Slider xsmall active track height\nmd.comp.slider.xsmall.active.track.height",
+            group: "ui-active-track",
+            section: "ui-active-track",
+            name: "ui-slider-xsmall-active-track-height-md-comp-slider-xsmall-active-track-height",
             value: "16dp",
         },
         Token {
-            group: "Active track",
-            section: "Active track",
-            name: "Slider xsmall active track leading shape\nmd.comp.slider.xsmall.active.track.shape.leading",
+            group: "ui-active-track",
+            section: "ui-active-track",
+            name: "ui-slider-xsmall-active-track-leading-shape-md-comp-slider-xsmall-active-track-shape-lea",
             value: "8dp",
         },
         Token {
-            group: "Handle",
-            section: "Handle",
-            name: "Slider xsmall active handle height\nmd.comp.slider.xsmall.active.handle.height",
+            group: "ui-handle",
+            section: "ui-handle",
+            name: "ui-slider-xsmall-active-handle-height-md-comp-slider-xsmall-active-handle-height",
             value: "44dp",
         },
         Token {
-            group: "Inactive track",
-            section: "Inactive track",
-            name: "Slider xsmall inactive track height\nmd.comp.slider.xsmall.inactive.track.height",
+            group: "ui-inactive-track",
+            section: "ui-inactive-track",
+            name: "ui-slider-xsmall-inactive-track-height-md-comp-slider-xsmall-inactive-track-height",
             value: "16dp",
         },
         Token {
-            group: "Inactive track",
-            section: "Inactive track",
-            name: "Slider xsmall inactive track trailing shape\nmd.comp.slider.xsmall.inactive.track.shape.trailing",
+            group: "ui-inactive-track",
+            section: "ui-inactive-track",
+            name: "ui-slider-xsmall-inactive-track-trailing-shape-md-comp-slider-xsmall-inactive-track-shap",
             value: "8dp",
         },
     ],
     &[
         Token {
-            group: "Active track",
-            section: "Active track",
-            name: "Slider small active track height\nmd.comp.slider.small.active.track.height",
+            group: "ui-active-track",
+            section: "ui-active-track",
+            name: "ui-slider-small-active-track-height-md-comp-slider-small-active-track-height",
             value: "24dp",
         },
         Token {
-            group: "Active track",
-            section: "Active track",
-            name: "Slider small active track leading shape\nmd.comp.slider.small.active.track.shape.leading",
+            group: "ui-active-track",
+            section: "ui-active-track",
+            name: "ui-slider-small-active-track-leading-shape-md-comp-slider-small-active-track-shape-leadi",
             value: "8dp",
         },
         Token {
-            group: "Handle",
-            section: "Handle",
-            name: "Slider small active handle height\nmd.comp.slider.small.active.handle.height",
+            group: "ui-handle",
+            section: "ui-handle",
+            name: "ui-slider-small-active-handle-height-md-comp-slider-small-active-handle-height",
             value: "44dp",
         },
         Token {
-            group: "Inactive track",
-            section: "Inactive track",
-            name: "Slider small inactive track height\nmd.comp.slider.small.inactive.track.height",
+            group: "ui-inactive-track",
+            section: "ui-inactive-track",
+            name: "ui-slider-small-inactive-track-height-md-comp-slider-small-inactive-track-height",
             value: "24dp",
         },
         Token {
-            group: "Inactive track",
-            section: "Inactive track",
-            name: "Slider small inactive track trailing shape\nmd.comp.slider.small.inactive.track.shape.trailing",
+            group: "ui-inactive-track",
+            section: "ui-inactive-track",
+            name: "ui-slider-small-inactive-track-trailing-shape-md-comp-slider-small-inactive-track-shape",
             value: "8dp",
         },
     ],
     &[
         Token {
-            group: "Active track",
-            section: "Active track",
-            name: "Slider medium active track height\nmd.comp.slider.medium.active.track.height",
+            group: "ui-active-track",
+            section: "ui-active-track",
+            name: "ui-slider-medium-active-track-height-md-comp-slider-medium-active-track-height",
             value: "40dp",
         },
         Token {
-            group: "Active track",
-            section: "Active track",
-            name: "Slider medium active track leading shape\nmd.comp.slider.medium.active.track.shape.leading",
+            group: "ui-active-track",
+            section: "ui-active-track",
+            name: "ui-slider-medium-active-track-leading-shape-md-comp-slider-medium-active-track-shape-lea",
             value: "12dp",
         },
         Token {
-            group: "Handle",
-            section: "Handle",
-            name: "Slider medium active handle height\nmd.comp.slider.medium.active.handle.height",
+            group: "ui-handle",
+            section: "ui-handle",
+            name: "ui-slider-medium-active-handle-height-md-comp-slider-medium-active-handle-height",
             value: "44dp",
         },
         Token {
-            group: "Icon",
-            section: "Icon",
-            name: "Slider medium icon padding\nmd.comp.slider.medium.icon.padding",
+            group: "ui-icon",
+            section: "ui-icon",
+            name: "ui-slider-medium-icon-padding-md-comp-slider-medium-icon-padding",
             value: "6dp",
         },
         Token {
-            group: "Icon",
-            section: "Icon",
-            name: "Slider medium icon size\nmd.comp.slider.medium.icon.size",
+            group: "ui-icon",
+            section: "ui-icon",
+            name: "ui-slider-medium-icon-size-md-comp-slider-medium-icon-size",
             value: "24dp",
         },
         Token {
-            group: "Inactive track",
-            section: "Inactive track",
-            name: "Slider medium inactive track height\nmd.comp.slider.medium.inactive.track.height",
+            group: "ui-inactive-track",
+            section: "ui-inactive-track",
+            name: "ui-slider-medium-inactive-track-height-md-comp-slider-medium-inactive-track-height",
             value: "40dp",
         },
         Token {
-            group: "Inactive track",
-            section: "Inactive track",
-            name: "Slider medium inactive track trailing shape\nmd.comp.slider.medium.inactive.track.shape.trailing",
+            group: "ui-inactive-track",
+            section: "ui-inactive-track",
+            name: "ui-slider-medium-inactive-track-trailing-shape-md-comp-slider-medium-inactive-track-shap",
             value: "12dp",
         },
     ],
     &[
         Token {
-            group: "Active track",
-            section: "Active track",
-            name: "Slider large active track height\nmd.comp.slider.large.active.track.height",
+            group: "ui-active-track",
+            section: "ui-active-track",
+            name: "ui-slider-large-active-track-height-md-comp-slider-large-active-track-height",
             value: "56dp",
         },
         Token {
-            group: "Active track",
-            section: "Active track",
-            name: "Slider large active track leading shape\nmd.comp.slider.large.active.track.shape.leading",
+            group: "ui-active-track",
+            section: "ui-active-track",
+            name: "ui-slider-large-active-track-leading-shape-md-comp-slider-large-active-track-shape-leadi",
             value: "16dp",
         },
         Token {
-            group: "Handle",
-            section: "Handle",
-            name: "Slider large active handle height\nmd.comp.slider.large.active.handle.height",
+            group: "ui-handle",
+            section: "ui-handle",
+            name: "ui-slider-large-active-handle-height-md-comp-slider-large-active-handle-height",
             value: "68dp",
         },
         Token {
-            group: "Icon",
-            section: "Icon",
-            name: "Slider large icon padding\nmd.comp.slider.large.icon.padding",
+            group: "ui-icon",
+            section: "ui-icon",
+            name: "ui-slider-large-icon-padding-md-comp-slider-large-icon-padding",
             value: "6dp",
         },
         Token {
-            group: "Icon",
-            section: "Icon",
-            name: "Slider large icon size\nmd.comp.slider.large.icon.size",
+            group: "ui-icon",
+            section: "ui-icon",
+            name: "ui-slider-large-icon-size-md-comp-slider-large-icon-size",
             value: "24dp",
         },
         Token {
-            group: "Inactive track",
-            section: "Inactive track",
-            name: "Slider large inactive track height\nmd.comp.slider.large.inactive.track.height",
+            group: "ui-inactive-track",
+            section: "ui-inactive-track",
+            name: "ui-slider-large-inactive-track-height-md-comp-slider-large-inactive-track-height",
             value: "56dp",
         },
         Token {
-            group: "Inactive track",
-            section: "Inactive track",
-            name: "Slider large inactive track trailing shape\nmd.comp.slider.large.inactive.track.shape.trailing",
+            group: "ui-inactive-track",
+            section: "ui-inactive-track",
+            name: "ui-slider-large-inactive-track-trailing-shape-md-comp-slider-large-inactive-track-shape",
             value: "16dp",
         },
     ],
     &[
         Token {
-            group: "Active track",
-            section: "Active track",
-            name: "Slider xlarge active track height\nmd.comp.slider.xlarge.active.track.height",
+            group: "ui-active-track",
+            section: "ui-active-track",
+            name: "ui-slider-xlarge-active-track-height-md-comp-slider-xlarge-active-track-height",
             value: "96dp",
         },
         Token {
-            group: "Active track",
-            section: "Active track",
-            name: "Slider xlarge active track leading shape\nmd.comp.slider.xlarge.active.track.shape.leading",
+            group: "ui-active-track",
+            section: "ui-active-track",
+            name: "ui-slider-xlarge-active-track-leading-shape-md-comp-slider-xlarge-active-track-shape-lea",
             value: "28dp",
         },
         Token {
-            group: "Handle",
-            section: "Handle",
-            name: "Slider xlarge active handle height\nmd.comp.slider.xlarge.active.handle.height",
+            group: "ui-handle",
+            section: "ui-handle",
+            name: "ui-slider-xlarge-active-handle-height-md-comp-slider-xlarge-active-handle-height",
             value: "108dp",
         },
         Token {
-            group: "Icon",
-            section: "Icon",
-            name: "Slider xlarge icon padding\nmd.comp.slider.xlarge.icon.padding",
+            group: "ui-icon",
+            section: "ui-icon",
+            name: "ui-slider-xlarge-icon-padding-md-comp-slider-xlarge-icon-padding",
             value: "8dp",
         },
         Token {
-            group: "Icon",
-            section: "Icon",
-            name: "Slider xlarge icon size\nmd.comp.slider.xlarge.icon.size",
+            group: "ui-icon",
+            section: "ui-icon",
+            name: "ui-slider-xlarge-icon-size-md-comp-slider-xlarge-icon-size",
             value: "32dp",
         },
         Token {
-            group: "Inactive track",
-            section: "Inactive track",
-            name: "Slider xlarge inactive track height\nmd.comp.slider.xlarge.inactive.track.height",
+            group: "ui-inactive-track",
+            section: "ui-inactive-track",
+            name: "ui-slider-xlarge-inactive-track-height-md-comp-slider-xlarge-inactive-track-height",
             value: "96dp",
         },
         Token {
-            group: "Inactive track",
-            section: "Inactive track",
-            name: "Slider xlarge inactive track trailing shape\nmd.comp.slider.xlarge.inactive.track.shape.trailing",
+            group: "ui-inactive-track",
+            section: "ui-inactive-track",
+            name: "ui-slider-xlarge-inactive-track-trailing-shape-md-comp-slider-xlarge-inactive-track-shap",
             value: "28dp",
         },
     ],

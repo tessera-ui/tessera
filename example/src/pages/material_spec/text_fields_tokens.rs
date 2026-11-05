@@ -11,108 +11,146 @@ use tessera_components::{
 };
 use tessera_ui::{Dp, Modifier, remember, tessera};
 
+use crate::res::I18N;
+
 use super::{gap, prose, spec_table, subheading, type_style};
 
-const VARIANTS: [&str; 2] = ["Text field - Filled", "Text field - Outlined"];
+const VARIANTS: [&str; 2] = ["ui-text-field-filled", "ui-text-field-outlined"];
 
-const GROUPS: [&str; 5] = ["Enabled", "Disabled", "Hovered", "Focused", "Error"];
+const GROUPS: [&str; 5] = [
+    "ui-enabled",
+    "ui-disabled",
+    "ui-hovered",
+    "ui-focused",
+    "ui-error",
+];
 
 const ROWS: [[&[(&str, &str)]; 5]; 2] = [
     [
         &[
-            ("Container color", "Surface container highest"),
-            ("Container shape", "Extra small top (4dp)"),
-            ("Container height", "56dp"),
-            ("Active indicator color", "On surface variant"),
-            ("Active indicator height", "1dp"),
-            ("Label text color", "On surface variant"),
-            ("Label text type", "Body large; Body small when populated"),
-            ("Input text color", "On surface"),
-            ("Input text type", "Body large"),
-            ("Supporting text color", "On surface variant"),
-            ("Supporting text type", "Body small"),
-            ("Leading and trailing icon color", "On surface variant"),
-            ("Leading and trailing icon size", "24dp"),
-            ("Caret color", "Primary"),
+            ("ui-container-color", "ui-surface-container-highest"),
+            ("ui-container-shape", "ui-extra-small-top-4dp"),
+            ("ui-container-height", "56dp"),
+            ("ui-active-indicator-color", "ui-on-surface-variant"),
+            ("ui-active-indicator-height", "1dp"),
+            ("ui-label-text-color", "ui-on-surface-variant"),
+            (
+                "ui-label-text-type",
+                "ui-body-large-body-small-when-populated",
+            ),
+            ("ui-input-text-color", "ui-on-surface"),
+            ("ui-input-text-type", "ui-body-large-6012"),
+            ("ui-supporting-text-color", "ui-on-surface-variant"),
+            ("ui-supporting-text-type", "ui-body-small"),
+            (
+                "ui-leading-and-trailing-icon-color",
+                "ui-on-surface-variant",
+            ),
+            ("ui-leading-and-trailing-icon-size", "24dp"),
+            ("ui-caret-color", "ui-primary"),
         ],
         &[
-            ("Container color", "On surface, 4% opacity"),
-            ("Active indicator color", "On surface, 38% opacity"),
-            ("Label text color", "On surface, 38% opacity"),
-            ("Input text color", "On surface, 38% opacity"),
-            ("Supporting text color", "On surface, 38% opacity"),
-            ("Leading and trailing icon color", "On surface, 38% opacity"),
+            ("ui-container-color", "ui-on-surface-4-opacity"),
+            ("ui-active-indicator-color", "ui-on-surface-38-opacity"),
+            ("ui-label-text-color", "ui-on-surface-38-opacity"),
+            ("ui-input-text-color", "ui-on-surface-38-opacity"),
+            ("ui-supporting-text-color", "ui-on-surface-38-opacity"),
+            (
+                "ui-leading-and-trailing-icon-color",
+                "ui-on-surface-38-opacity",
+            ),
         ],
         &[
-            ("State layer color", "On surface, 8% opacity"),
-            ("Active indicator color", "On surface"),
-            ("Label text color", "On surface variant"),
-            ("Supporting text color", "On surface variant"),
-            ("Leading and trailing icon color", "On surface variant"),
+            ("ui-state-layer-color", "ui-on-surface-8-opacity"),
+            ("ui-active-indicator-color", "ui-on-surface"),
+            ("ui-label-text-color", "ui-on-surface-variant"),
+            ("ui-supporting-text-color", "ui-on-surface-variant"),
+            (
+                "ui-leading-and-trailing-icon-color",
+                "ui-on-surface-variant",
+            ),
         ],
         &[
-            ("Active indicator color", "Primary"),
-            ("Active indicator height", "2dp"),
-            ("Label text color", "Primary"),
-            ("Input text color", "On surface"),
-            ("Supporting text color", "On surface variant"),
-            ("Leading and trailing icon color", "On surface variant"),
-            ("Caret color", "Primary"),
+            ("ui-active-indicator-color", "ui-primary"),
+            ("ui-active-indicator-height", "2dp"),
+            ("ui-label-text-color", "ui-primary"),
+            ("ui-input-text-color", "ui-on-surface"),
+            ("ui-supporting-text-color", "ui-on-surface-variant"),
+            (
+                "ui-leading-and-trailing-icon-color",
+                "ui-on-surface-variant",
+            ),
+            ("ui-caret-color", "ui-primary"),
         ],
         &[
-            ("Active indicator color", "Error"),
-            ("Hovered active indicator color", "On error container"),
-            ("Label text color", "Error"),
-            ("Supporting text color", "Error"),
-            ("Trailing icon color", "Error"),
-            ("Caret color", "Error"),
+            ("ui-active-indicator-color", "ui-error"),
+            ("ui-hovered-active-indicator-color", "ui-on-error-container"),
+            ("ui-label-text-color", "ui-error"),
+            ("ui-supporting-text-color", "ui-error"),
+            ("ui-trailing-icon-color", "ui-error"),
+            ("ui-caret-color", "ui-error"),
         ],
     ],
     [
         &[
-            ("Container shape", "Extra small (4dp)"),
-            ("Container height", "56dp"),
-            ("Outline color", "Outline"),
-            ("Outline width", "1dp"),
-            ("Label text color", "On surface variant"),
-            ("Label text type", "Body large; Body small when populated"),
-            ("Input text color", "On surface"),
-            ("Input text type", "Body large"),
-            ("Supporting text color", "On surface variant"),
-            ("Supporting text type", "Body small"),
-            ("Leading and trailing icon color", "On surface variant"),
-            ("Leading and trailing icon size", "24dp"),
-            ("Caret color", "Primary"),
+            ("ui-container-shape", "ui-extra-small-4dp-6024"),
+            ("ui-container-height", "56dp"),
+            ("ui-outline-color", "ui-outline"),
+            ("ui-outline-width", "1dp"),
+            ("ui-label-text-color", "ui-on-surface-variant"),
+            (
+                "ui-label-text-type",
+                "ui-body-large-body-small-when-populated",
+            ),
+            ("ui-input-text-color", "ui-on-surface"),
+            ("ui-input-text-type", "ui-body-large-6012"),
+            ("ui-supporting-text-color", "ui-on-surface-variant"),
+            ("ui-supporting-text-type", "ui-body-small"),
+            (
+                "ui-leading-and-trailing-icon-color",
+                "ui-on-surface-variant",
+            ),
+            ("ui-leading-and-trailing-icon-size", "24dp"),
+            ("ui-caret-color", "ui-primary"),
         ],
         &[
-            ("Outline color", "On surface, 12% opacity"),
-            ("Label text color", "On surface, 38% opacity"),
-            ("Input text color", "On surface, 38% opacity"),
-            ("Supporting text color", "On surface, 38% opacity"),
-            ("Leading and trailing icon color", "On surface, 38% opacity"),
+            ("ui-outline-color", "ui-on-surface-12-opacity"),
+            ("ui-label-text-color", "ui-on-surface-38-opacity"),
+            ("ui-input-text-color", "ui-on-surface-38-opacity"),
+            ("ui-supporting-text-color", "ui-on-surface-38-opacity"),
+            (
+                "ui-leading-and-trailing-icon-color",
+                "ui-on-surface-38-opacity",
+            ),
         ],
         &[
-            ("Outline color", "On surface"),
-            ("Label text color", "On surface variant"),
-            ("Supporting text color", "On surface variant"),
-            ("Leading and trailing icon color", "On surface variant"),
+            ("ui-outline-color", "ui-on-surface"),
+            ("ui-label-text-color", "ui-on-surface-variant"),
+            ("ui-supporting-text-color", "ui-on-surface-variant"),
+            (
+                "ui-leading-and-trailing-icon-color",
+                "ui-on-surface-variant",
+            ),
         ],
         &[
-            ("Outline color", "Primary"),
-            ("Outline width", "2dp"),
-            ("Label text color", "Primary"),
-            ("Input text color", "On surface"),
-            ("Supporting text color", "On surface variant"),
-            ("Leading and trailing icon color", "On surface variant"),
-            ("Caret color", "Primary"),
+            ("ui-outline-color", "ui-primary"),
+            ("ui-outline-width", "2dp"),
+            ("ui-label-text-color", "ui-primary"),
+            ("ui-input-text-color", "ui-on-surface"),
+            ("ui-supporting-text-color", "ui-on-surface-variant"),
+            (
+                "ui-leading-and-trailing-icon-color",
+                "ui-on-surface-variant",
+            ),
+            ("ui-caret-color", "ui-primary"),
         ],
         &[
-            ("Outline color", "Error"),
-            ("Hovered outline color", "On error container"),
-            ("Label text color", "Error"),
-            ("Supporting text color", "Error"),
-            ("Trailing icon color", "Error"),
-            ("Caret color", "Error"),
+            ("ui-outline-color", "ui-error"),
+            ("ui-hovered-outline-color", "ui-on-error-container"),
+            ("ui-label-text-color", "ui-error"),
+            ("ui-supporting-text-color", "ui-error"),
+            ("ui-trailing-icon-color", "ui-error"),
+            ("ui-caret-color", "ui-error"),
         ],
     ],
 ];
@@ -121,11 +159,11 @@ const ROWS: [[&[(&str, &str)]; 5]; 2] = [
 pub(super) fn token_sets() {
     let variant = remember(|| 0_usize);
     let expanded = remember(|| [[false; 5]; 2]);
-    prose("Browse the component elements, attributes, tokens, and their values.");
+    prose("ui-browse-the-component-elements-attributes-tokens-and-their-values");
     gap(Dp(8.0));
     text()
         .content(
-            "Reference values follow the Material 3 filled and outlined text field token specification. They have not been checked one by one against the current token explorer on m3.material.io.",
+            I18N.text("ui-reference-values-follow-the-material-3-filled-and-outlined-text-field-token-specification"),
         )
         .style(type_style(14.0, 20.0));
     gap(Dp(24.0));
@@ -142,25 +180,34 @@ pub(super) fn token_sets() {
                     choice.outlined()
                 };
                 choice
-                    .accessibility_label(format!(
-                        "{name} token set{}",
-                        if selected { ", selected" } else { "" }
-                    ))
+                    .accessibility_label(
+                        I18N.format(
+                            "ui-value-token-setvalue",
+                            [
+                                ("v0", I18N.text(&name).into()),
+                                (
+                                    "v1",
+                                    I18N.text(&(if selected { "ui-selected-7004" } else { "" }))
+                                        .into(),
+                                ),
+                            ],
+                        ),
+                    )
                     .on_click(move || variant.set(index))
                     .child(move || {
-                        text().content(name);
+                        text().content(I18N.text(name));
                     });
             }
             let index = variant.get();
             let all_open = expanded.with(|state| state[index].iter().all(|open| *open));
             let action = if all_open {
-                "Collapse all"
+                "ui-collapse-all"
             } else {
-                "Expand all"
+                "ui-expand-all"
             };
             button()
                 .text()
-                .accessibility_label(action)
+                .accessibility_label(I18N.text(action))
                 .on_click(move || {
                     let index = variant.get();
                     expanded.with_mut(|state| {
@@ -169,7 +216,7 @@ pub(super) fn token_sets() {
                     });
                 })
                 .child(move || {
-                    text().content(action);
+                    text().content(I18N.text(action));
                 });
         });
     gap(Dp(16.0));
@@ -179,10 +226,25 @@ pub(super) fn token_sets() {
         button()
             .text()
             .modifier(Modifier::new().fill_max_width())
-            .accessibility_label(format!(
-                "{title} tokens, {}",
-                if open { "expanded" } else { "collapsed" }
-            ))
+            .accessibility_label(
+                I18N.format(
+                    "ui-value-tokens-value",
+                    [
+                        ("v0", I18N.text(&title).into()),
+                        (
+                            "v1",
+                            I18N.text(
+                                &(if open {
+                                    "ui-expanded-7100"
+                                } else {
+                                    "ui-collapsed-7101"
+                                }),
+                            )
+                            .into(),
+                        ),
+                    ],
+                ),
+            )
             .on_click(move || {
                 expanded.with_mut(|state| state[index][group] = !state[index][group]);
             })
@@ -192,17 +254,17 @@ pub(super) fn token_sets() {
                     .modifier(Modifier::new().fill_max_width())
                     .children(move || {
                         text()
-                            .content(title)
+                            .content(I18N.text(title))
                             .style(type_style(16.0, 24.0))
                             .modifier(Modifier::new().weight(1.0));
                         text()
-                            .content(if open { "▾" } else { "▸" })
+                            .content(I18N.text(if open { "▾" } else { "▸" }))
                             .style(type_style(16.0, 24.0));
                     });
             });
         if open {
             spec_table(
-                vec!["Token".into(), "Value".into()],
+                vec!["ui-token".into(), "ui-value".into()],
                 ROWS[index][group]
                     .iter()
                     .map(|(name, value)| vec![(*name).into(), (*value).into()])
@@ -212,5 +274,5 @@ pub(super) fn token_sets() {
         gap(Dp(8.0));
     }
     gap(Dp(24.0));
-    subheading("Color role summary".into());
+    subheading("ui-color-role-summary".into());
 }

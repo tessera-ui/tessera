@@ -25,6 +25,7 @@ use crate::{
     modifier::{ModifierExt as _, SemanticsArgs, with_keyboard_input, with_pointer_input},
     painter::Painter,
     pos_misc::is_position_in_rect,
+    res::I18N,
     scrollable::ScrollableController,
     shape_def::{RoundedCorner, Shape},
     surface::surface,
@@ -530,8 +531,8 @@ pub fn floating_action_button_menu(
         enabled,
         alignment,
         colors,
-        open_label: open_label.unwrap_or_else(|| "Open actions".into()),
-        close_label: close_label.unwrap_or_else(|| "Close actions".into()),
+        open_label: open_label.unwrap_or_else(|| I18N.text("md3-open-actions").into()),
+        close_label: close_label.unwrap_or_else(|| I18N.text("md3-close-actions").into()),
         scrim_color: scrim_color.unwrap_or(Color::TRANSPARENT),
     };
     let data = remember(|| current.clone());

@@ -31,12 +31,12 @@ impl EntryRegistry {
         self.modules.push(Box::new(module));
     }
 
-    /// Registers a plugin instance with the global plugin registry.
+    /// Registers a plugin instance with the application session.
     pub fn register_plugin<P: Plugin>(&mut self, plugin: P) {
         register_plugin(plugin);
     }
 
-    /// Registers a boxed plugin instance with the global plugin registry.
+    /// Registers a boxed plugin instance with the application session.
     pub fn register_plugin_boxed<P: Plugin>(&mut self, plugin: Arc<RwLock<P>>) {
         register_plugin_boxed(plugin);
     }

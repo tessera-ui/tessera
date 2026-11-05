@@ -56,7 +56,7 @@ fn range_input_resolves_both_endpoints_and_preserves_invalid_drafts() {
     super::apply_draft(&mut state, &values);
     assert!(!state.is_complete());
     assert_eq!(
-        super::input_error(&values[1], false, &state),
+        super::input_error(&values[1], false, &state).as_deref(),
         Some("Enter a start date first")
     );
     values[0] = "07/29/2026".to_owned();
@@ -66,7 +66,7 @@ fn range_input_resolves_both_endpoints_and_preserves_invalid_drafts() {
     super::apply_draft(&mut state, &values);
     assert_eq!(state.selected_end_date(), None);
     assert_eq!(
-        super::input_error(&values[1], false, &state),
+        super::input_error(&values[1], false, &state).as_deref(),
         Some("End date must be on or after start date")
     );
     values[1] = "08/05/2026".to_owned();
@@ -76,7 +76,7 @@ fn range_input_resolves_both_endpoints_and_preserves_invalid_drafts() {
     super::apply_draft(&mut state, &values);
     assert!(!state.is_complete());
     assert_eq!(
-        super::input_error(&values[1], false, &state),
+        super::input_error(&values[1], false, &state).as_deref(),
         Some("Enter a date as MM/DD/YYYY")
     );
 }

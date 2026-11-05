@@ -29,6 +29,8 @@ use tessera_ui::{
     remember, tessera, use_context,
 };
 
+use crate::res::I18N;
+
 use super::{
     BACKGROUND, INK,
     article_navigation::{
@@ -96,15 +98,17 @@ pub(super) fn article(
     route: Option<ArticleRoute>,
     modal_controller: Option<modal_host::ArticleModalController>,
 ) {
-    let initial_page = route.as_ref().map_or("Specs", |route| route.initial_page);
-    let initial_page = if initial_page == "Specs"
+    let initial_page = route
+        .as_ref()
+        .map_or("ui-specs", |route| route.initial_page);
+    let initial_page = if initial_page == "ui-specs"
         || pages
             .as_ref()
             .is_some_and(|pages| pages.iter().any(|page| page.title == initial_page))
     {
         initial_page
     } else {
-        "Specs"
+        "ui-specs"
     };
     let selected = remember(|| initial_page);
     let alternate = pages
@@ -181,11 +185,13 @@ fn article_section(index: usize, data: State<ArticleData>, inset: Dp) {
             let live_section = page
                 .sections
                 .iter()
-                .position(|section| matches!(section.title, "Configurations" | "Configuration"))
+                .position(|section| {
+                    matches!(section.title, "ui-configurations" | "ui-configuration")
+                })
                 .or_else(|| {
                     page.sections
                         .iter()
-                        .position(|section| section.title == "States")
+                        .position(|section| section.title == "ui-states")
                 })
                 .unwrap_or(0);
             if index == live_section
@@ -223,18 +229,27 @@ fn footer_links(
 ) -> FooterData {
     let available = ARTICLE_TAB_TITLES
         .into_iter()
-        .filter(|label| *label == "Specs" || pages.iter().any(|page| page.title == *label))
+        .filter(|label| *label == "ui-specs" || pages.iter().any(|page| page.title == *label))
         .collect::<Vec<_>>();
     let index = available
         .iter()
         .position(|label| *label == selected)
         .unwrap_or(0);
-    let local = |page: &'static str| FooterLink {
-        title: format!("{title}: {page}"),
+    let local = move |page: &'static str| FooterLink {
+        title: I18N.format(
+            "ui-value-value-format-1",
+            [
+                ("v0", I18N.text(&title).into()),
+                ("v1", I18N.text(&page).into()),
+            ],
+        ),
         action: FooterAction::Page(page),
     };
-    let external = |destination: &ArticleDestination| FooterLink {
-        title: format!("{}: Overview", destination.title),
+    let external = move |destination: &ArticleDestination| FooterLink {
+        title: I18N.format(
+            "ui-value-overview",
+            [("v0", I18N.text(&destination.title).into())],
+        ),
         action: FooterAction::Component(destination.on_open),
     };
     FooterData {
@@ -279,7 +294,7 @@ fn article_footer(
                 .padding_symmetric(Dp(8.0), Dp::ZERO)
                 .semantics(SemanticsArgs {
                     role: Some(Role::Group),
-                    label: Some("Previous and up next articles".into()),
+                    label: Some(I18N.text("ui-previous-and-up-next-articles")),
                     merge_descendants: true,
                     ..Default::default()
                 }),
@@ -315,7 +330,11 @@ fn article_footer_link(
             }
         })
         .expect("article footer destination");
-    let label = if previous { "Previous" } else { "Up next" };
+    let label = if previous {
+        "ui-previous"
+    } else {
+        "ui-up-next"
+    };
     let corner = RoundedCorner::manual(Dp(24.0), 2.0);
     boxed()
         .modifier(
@@ -332,7 +351,13 @@ fn article_footer_link(
                 )
                 .clickable_with(ClickableArgs {
                     role: Some(Role::Link),
-                    label: Some(format!("{label} {}", link.title)),
+                    label: Some(I18N.format(
+                        "ui-value-value-format-2",
+                        [
+                            ("v0", I18N.text(&label).into()),
+                            ("v1", I18N.text(&link.title).into()),
+                        ],
+                    )),
                     on_click: Callback::new(move || {
                         let link = data.with(|data| {
                             if previous {
@@ -373,7 +398,7 @@ fn article_footer_link(
                                 .tint(INK);
                         }
                         text()
-                            .content(label)
+                            .content(I18N.text(label))
                             .style(type_style(16.0, 24.0))
                             .color(INK);
                         if !previous {
@@ -385,7 +410,7 @@ fn article_footer_link(
                     });
                 gap(Dp(8.0));
                 text()
-                    .content(title.clone())
+                    .content(I18N.text(&(title)))
                     .style(type_style(24.0, 32.0))
                     .color(INK);
             });
@@ -457,7 +482,7 @@ fn article_tab_row(
         contents.set([Dp(160.0); 4]);
     }
     let available = ARTICLE_TAB_TITLES.map(|label| {
-        label == "Specs"
+        label == "ui-specs"
             || pages
                 .as_ref()
                 .is_some_and(|pages| pages.iter().any(|page| page.title == label))
@@ -664,11 +689,11 @@ fn article_navigation_arrow(
         } else {
             filled::ARROW_FORWARD_SVG
         })
-        .accessibility_label(if previous {
-            "Go to previous tab"
+        .accessibility_label(I18N.text(if previous {
+            "ui-go-to-previous-tab"
         } else {
-            "Go to next tab"
-        })
+            "ui-go-to-next-tab"
+        }))
         .on_click(move || {
             let available = navigation.with(|navigation| navigation.available);
             let Some(target) = adjacent_article_tab(selected.get(), available, previous) else {
@@ -743,7 +768,7 @@ fn article_tab_strip(
                 .horizontal_scroll(horizontal)
                 .semantics(SemanticsArgs {
                     role: Some(Role::TabList),
-                    label: Some("Article sections".into()),
+                    label: Some(I18N.text("ui-article-sections")),
                     merge_descendants: true,
                     ..Default::default()
                 }),
@@ -823,7 +848,7 @@ fn article_tab_strip(
                                     .tint(article_tab_visual::foreground(active, hovered, pressed));
                                 spacer().modifier(Modifier::new().width(Dp(8.0)));
                                 text()
-                                    .content(label)
+                                    .content(I18N.text(label))
                                     .style(tessera_components::theme::TextStyle {
                                         font_family: Some(article_tab_visual::font_family(
                                             active, hovered, pressed,

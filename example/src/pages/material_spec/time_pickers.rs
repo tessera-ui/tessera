@@ -30,6 +30,8 @@ use tessera_ui::{
     modifier::FocusModifierExt as _, remember, scaled_box, tessera, use_context,
 };
 
+use crate::res::I18N;
+
 use super::{
     ACCENT,
     annotations::{self, PreciseGeometry, Rect, dotted, watch_precise},
@@ -50,7 +52,7 @@ pub(super) fn time_pickers_spec(route: Option<crate::pages::material_spec::artic
     let sample = Sample {
         state: remember(|| TimePickerState::new(9, 41, false, TimePickerDisplayMode::Picker)),
         layout: remember(TimePickerLayout::default),
-        status: remember(|| "Ready".to_owned()),
+        status: remember(|| "ui-ready".to_owned()),
     };
     let committed = remember(|| (9_u8, 41_u8));
     let draft = Sample {
@@ -61,67 +63,67 @@ pub(super) fn time_pickers_spec(route: Option<crate::pages::material_spec::artic
     dialog_provider()
         .is_open(modal.get())
         .padding(Dp::ZERO)
-        .accessibility_label("Time picker dialog")
+        .accessibility_label(I18N.text("ui-time-picker-dialog"))
         .on_close_request(move || modal.set(false))
         .main_content(move || {
             article(
-                "Time pickers",
-                "Time pickers help people select and set a specific time",
+                "ui-time-pickers",
+                "ui-time-pickers-help-people-select-and-set-a-specific-time",
                 vec![
                     SpecSection {
-                        title: "Tokens & specs",
+                        title: "ui-tokens-specs",
                         content: RenderSlot::new(tokens),
                     },
                     SpecSection {
-                        title: "Anatomy",
+                        title: "ui-anatomy",
                         content: RenderSlot::new(move || {
-                            subheading("Time picker dial".into());
+                            subheading("ui-time-picker-dial".into());
                             time_figure(
                                 false,
                                 false,
                                 false,
                                 FigureKind::Specs,
-                                "Dial anatomy".into(),
+                                "ui-dial-anatomy".into(),
                             );
                             gap(Dp(24.0));
-                            subheading("Time picker input".into());
+                            subheading("ui-time-picker-input".into());
                             time_figure(
                                 true,
                                 false,
                                 false,
                                 FigureKind::Specs,
-                                "Input anatomy".into(),
+                                "ui-input-anatomy".into(),
                             );
                             gap(Dp(24.0));
-                            controls(sample, "Anatomy");
+                            controls(sample, "ui-anatomy");
                             gap(Dp(24.0));
-                            visual(sample, "Anatomy");
+                            visual(sample, "ui-anatomy");
                             gap(Dp(24.0));
                             button()
                                 .outlined()
-                                .accessibility_label("Open time picker dialog")
+                                .accessibility_label(I18N.text("ui-open-time-picker-dialog"))
                                 .on_click(move || open_picker(modal, draft, committed))
-                                .child(|| {
-                                    text().content("Open dialog");
+                                .child(move || {
+                                    text().content(I18N.text("ui-open-dialog"));
                                 });
                             confirmed_time(committed);
                             gap(Dp(24.0));
                         }),
                     },
                     SpecSection {
-                        title: "Color",
+                        title: "ui-color",
                         content: RenderSlot::new(colors),
                     },
                     SpecSection {
-                        title: "States",
+                        title: "ui-states",
                         content: RenderSlot::new(states),
                     },
                     SpecSection {
-                        title: "Measurements",
+                        title: "ui-measurements",
                         content: RenderSlot::new(measurements),
                     },
                     SpecSection {
-                        title: "Configurations",
+                        title: "ui-configurations",
                         content: RenderSlot::new(configurations),
                     },
                 ],
@@ -130,60 +132,60 @@ pub(super) fn time_pickers_spec(route: Option<crate::pages::material_spec::artic
             .compact_content_inset(Dp(8.0))
             .pages(vec![
                 ArticlePage {
-                    title: "Overview",
+                    title: "ui-overview",
                     intro: Some(RenderSlot::new(time_variants)),
                     sections: vec![
                         SpecSection {
-                            title: "Availability & resources",
+                            title: "ui-availability-resources",
                             content: RenderSlot::new(time_resources),
                         },
                         SpecSection {
-                            title: "Differences from M2",
+                            title: "ui-differences-from-m2",
                             content: RenderSlot::new(time_m2_difference),
                         },
                     ],
                 },
                 ArticlePage {
-                    title: "Guidelines",
+                    title: "ui-guidelines",
                     intro: Some(RenderSlot::new(|| {
                         time_figure(
                             false,
                             false,
                             false,
                             FigureKind::Plain,
-                            "Guideline introduction".into(),
+                            "ui-guideline-introduction".into(),
                         );
                     })),
                     sections: vec![
                         SpecSection {
-                            title: "Usage",
+                            title: "ui-usage",
                             content: RenderSlot::new(time_usage),
                         },
                         SpecSection {
-                            title: "Anatomy",
+                            title: "ui-anatomy",
                             content: RenderSlot::new(time_guideline_anatomy),
                         },
                         SpecSection {
-                            title: "Placement",
+                            title: "ui-placement",
                             content: RenderSlot::new(move || {
                                 time_placement();
                                 gap(Dp(24.0));
                                 button()
                                     .outlined()
-                                    .accessibility_label("Open placement time picker")
+                                    .accessibility_label(I18N.text("ui-open-placement-time-picker"))
                                     .on_click(move || open_picker(modal, draft, committed))
-                                    .child(|| {
-                                        text().content("Open time picker");
+                                    .child(move || {
+                                        text().content(I18N.text("ui-open-time-picker"));
                                     });
                                 confirmed_time(committed);
                             }),
                         },
                         SpecSection {
-                            title: "Adaptive design",
+                            title: "ui-adaptive-design",
                             content: RenderSlot::new(time_adaptive),
                         },
                         SpecSection {
-                            title: "Behavior",
+                            title: "ui-behavior",
                             content: RenderSlot::new(move || {
                                 time_behavior(sample, modal, draft, committed);
                             }),
@@ -191,23 +193,23 @@ pub(super) fn time_pickers_spec(route: Option<crate::pages::material_spec::artic
                     ],
                 },
                 ArticlePage {
-                    title: "Accessibility",
+                    title: "ui-accessibility",
                     intro: None,
                     sections: vec![
                         SpecSection {
-                            title: "Use cases",
+                            title: "ui-use-cases",
                             content: RenderSlot::new(time_accessibility_use_cases),
                         },
                         SpecSection {
-                            title: "Interaction & style",
+                            title: "ui-interaction-style",
                             content: RenderSlot::new(time_accessibility_interaction),
                         },
                         SpecSection {
-                            title: "Keyboard navigation",
+                            title: "ui-keyboard-navigation",
                             content: RenderSlot::new(time_keyboard),
                         },
                         SpecSection {
-                            title: "Labeling elements",
+                            title: "ui-labeling-elements",
                             content: RenderSlot::new(time_labels),
                         },
                     ],
@@ -215,7 +217,7 @@ pub(super) fn time_pickers_spec(route: Option<crate::pages::material_spec::artic
             ]);
         })
         .dialog_content(move |dialog_scope| {
-            picker_surface(draft, "Modal")
+            picker_surface(draft, "ui-modal")
                 .dialog(dialog_scope)
                 .modal(modal)
                 .committed(committed);
@@ -238,7 +240,13 @@ fn confirmed_time(committed: State<(u8, u8)>) {
     let (hour, minute) = committed.get();
     gap(Dp(16.0));
     text()
-        .content(format!("Saved time: {hour:02}:{minute:02}"))
+        .content(I18N.format(
+            "ui-saved-time-value-value",
+            [
+                ("v0", format!("{:02}", hour).into()),
+                ("v1", format!("{:02}", minute).into()),
+            ],
+        ))
         .style(type_style(16.0, 24.0));
 }
 
@@ -252,7 +260,10 @@ fn controls(sample: Sample, #[prop(into)] label: String) {
             button()
                 .tonal()
                 .selected(sample.state.with(TimePickerState::is_24_hour))
-                .accessibility_label(format!("{label} 24-hour format"))
+                .accessibility_label(I18N.format(
+                    "ui-value-24-hour-format",
+                    [("v0", I18N.text(&label).into())],
+                ))
                 .on_click(move || {
                     sample
                         .state
@@ -260,16 +271,21 @@ fn controls(sample: Sample, #[prop(into)] label: String) {
                     FocusManager::current().defer_keyboard_until_layout();
                 })
                 .child(move || {
-                    text().content(if sample.state.with(TimePickerState::is_24_hour) {
-                        "24 hours"
-                    } else {
-                        "12 hours"
-                    });
+                    text().content(
+                        I18N.text(if sample.state.with(TimePickerState::is_24_hour) {
+                            "ui-24-hours"
+                        } else {
+                            "ui-12-hours"
+                        }),
+                    );
                 });
             button()
                 .tonal()
                 .selected(sample.layout.get() == TimePickerLayout::Horizontal)
-                .accessibility_label(format!("{label} horizontal layout"))
+                .accessibility_label(I18N.format(
+                    "ui-value-horizontal-layout",
+                    [("v0", I18N.text(&label).into())],
+                ))
                 .on_click(move || {
                     sample
                         .layout
@@ -281,11 +297,13 @@ fn controls(sample: Sample, #[prop(into)] label: String) {
                     FocusManager::current().defer_keyboard_until_layout();
                 })
                 .child(move || {
-                    text().content(if sample.layout.get() == TimePickerLayout::Horizontal {
-                        "Horizontal"
-                    } else {
-                        "Vertical"
-                    });
+                    text().content(I18N.text(
+                        if sample.layout.get() == TimePickerLayout::Horizontal {
+                            "ui-horizontal"
+                        } else {
+                            "ui-vertical"
+                        },
+                    ));
                 });
             button()
                 .tonal()
@@ -294,21 +312,26 @@ fn controls(sample: Sample, #[prop(into)] label: String) {
                         .state
                         .with(|state| state.display_mode() == TimePickerDisplayMode::Input),
                 )
-                .accessibility_label(format!("{label} keyboard input"))
+                .accessibility_label(I18N.format(
+                    "ui-value-keyboard-input",
+                    [("v0", I18N.text(&label).into())],
+                ))
                 .on_click(move || {
                     sample.state.with_mut(TimePickerState::toggle_display_mode);
                     FocusManager::current().defer_keyboard_until_layout();
                 })
                 .child(move || {
                     text().content(
-                        if sample
-                            .state
-                            .with(|state| state.display_mode() == TimePickerDisplayMode::Input)
-                        {
-                            "Keyboard input"
-                        } else {
-                            "Clock dial"
-                        },
+                        I18N.text(
+                            if sample
+                                .state
+                                .with(|state| state.display_mode() == TimePickerDisplayMode::Input)
+                            {
+                                "ui-keyboard-input"
+                            } else {
+                                "ui-clock-dial"
+                            },
+                        ),
                     );
                 });
         });
@@ -326,13 +349,21 @@ fn visual(sample: Sample, #[prop(into)] label: String, modal: Option<State<bool>
     gap(Dp(16.0));
     text()
         .content(
-            sample
-                .state
-                .with(|state| format!("{caption} time: {:02}:{:02}", state.hour(), state.minute())),
+            (sample.state.with(|state| {
+                I18N.format(
+                    "ui-value-time-value-value",
+                    [
+                        ("v0", I18N.text(&caption).into()),
+                        ("v1", format!("{:02}", state.hour()).into()),
+                        ("v2", format!("{:02}", state.minute()).into()),
+                    ],
+                )
+            }))
+            .to_string(),
         )
         .style(type_style(16.0, 24.0));
     text()
-        .content(sample.status.get())
+        .content(I18N.text(sample.status.get()))
         .style(type_style(14.0, 20.0));
 }
 
@@ -347,14 +378,14 @@ fn picker_surface(
     let theme = use_context::<MaterialTheme>()
         .expect("MaterialTheme must be provided")
         .get();
-    let confirm_label = format!("{label} confirm time");
-    let cancel_label = format!("{label} cancel time");
+    let confirm_label = I18N.format("ui-value-confirm-time", [("v0", I18N.text(&label).into())]);
+    let cancel_label = I18N.format("ui-value-cancel-time", [("v0", I18N.text(&label).into())]);
     surface()
         .style(theme.color_scheme.surface_container_high.into())
         .shape(Shape::rounded_rectangle(Dp(28.0)))
         .modifier(Modifier::new().semantics(SemanticsArgs {
             role: Some(Role::Group),
-            label: Some(format!("{label} time preview")),
+            label: Some(I18N.format("ui-value-time-preview", [("v0", I18N.text(&label).into())])),
             merge_descendants: true,
             ..Default::default()
         }))
@@ -384,46 +415,50 @@ fn picker_contents(
     time_picker_dialog()
         .dialog_optional(dialog)
         .state(sample.state)
-        .title(sample.state.with(|state| {
+        .title(I18N.text(sample.state.with(|state| {
             if state.display_mode() == TimePickerDisplayMode::Input {
-                "Enter time"
+                "ui-enter-time"
             } else {
-                "Select time"
+                "ui-select-time"
             }
-        }))
+        })))
         .picker_layout(sample.layout.get())
         .confirm_button(move || {
             button()
                 .text()
-                .accessibility_label(confirm_label.clone())
+                .accessibility_label(I18N.text(&(confirm_label)))
                 .on_click(move || {
                     let time = sample.state.with(|state| (state.hour(), state.minute()));
                     if let Some(committed) = committed {
                         committed.set(time);
                     }
-                    sample
-                        .status
-                        .set(format!("Confirmed {:02}:{:02}", time.0, time.1));
+                    sample.status.set(I18N.format(
+                        "ui-confirmed-value-value",
+                        [
+                            ("v0", format!("{:02}", time.0).into()),
+                            ("v1", format!("{:02}", time.1).into()),
+                        ],
+                    ));
                     if let Some(modal) = modal {
                         modal.set(false);
                     }
                 })
-                .child(|| {
-                    text().content("OK");
+                .child(move || {
+                    text().content(I18N.text("ui-ok"));
                 });
         })
         .dismiss_button(move || {
             button()
                 .text()
-                .accessibility_label(cancel_label.clone())
+                .accessibility_label(I18N.text(&(cancel_label)))
                 .on_click(move || {
-                    sample.status.set("Cancelled".into());
+                    sample.status.set("ui-cancelled".into());
                     if let Some(modal) = modal {
                         modal.set(false);
                     }
                 })
-                .child(|| {
-                    text().content("Cancel");
+                .child(move || {
+                    text().content(I18N.text("ui-cancel"));
                 });
         });
 }
@@ -444,7 +479,7 @@ fn example(#[prop(into)] label: String, input: bool) {
             )
         }),
         layout: remember(TimePickerLayout::default),
-        status: remember(|| "Ready".to_owned()),
+        status: remember(|| "ui-ready".to_owned()),
     };
     controls(sample, label.clone());
     gap(Dp(24.0));
@@ -454,63 +489,63 @@ fn example(#[prop(into)] label: String, input: bool) {
 #[tessera]
 fn tokens() {
     spec_table(
-        vec!["Element".into(), "Token value".into()],
+        vec!["ui-element".into(), "ui-token-value".into()],
         vec![
-            vec!["Container".into(), "Surface container high".into()],
+            vec!["ui-container".into(), "ui-surface-container-high".into()],
             vec![
-                "Selected time field".into(),
-                "Primary container / on primary container".into(),
+                "ui-selected-time-field".into(),
+                "ui-primary-container-on-primary-container".into(),
             ],
             vec![
-                "Unselected time field / clock dial".into(),
-                "Surface container highest / on surface".into(),
+                "ui-unselected-time-field-clock-dial".into(),
+                "ui-surface-container-highest-on-surface".into(),
             ],
             vec![
-                "Selected period".into(),
-                "Tertiary container / on tertiary container".into(),
+                "ui-selected-period".into(),
+                "ui-tertiary-container-on-tertiary-container".into(),
             ],
-            vec!["Dial selector".into(), "Primary / on primary".into()],
-            vec!["Period outline".into(), "Outline".into()],
+            vec!["ui-dial-selector".into(), "ui-primary-on-primary".into()],
+            vec!["ui-period-outline".into(), "ui-outline".into()],
         ],
     );
 }
 
 #[tessera]
 fn colors() {
-    subheading("Time picker dial color".into());
+    subheading("ui-time-picker-dial-color".into());
     gap(Dp(24.0));
     time_color_pair(false);
     gap(Dp(32.0));
-    subheading("Time picker input color".into());
+    subheading("ui-time-picker-input-color".into());
     gap(Dp(24.0));
     time_color_pair(true);
 }
 
 fn time_color_labels(input: bool) -> Vec<&'static str> {
     let mut labels = vec![
-        "On surface variant",
-        "On surface",
-        "Surface container highest",
-        "On surface",
-        "Tertiary container",
-        "On tertiary container",
-        "Surface container high",
-        "Outline",
-        "On surface",
-        "Primary",
-        "On surface variant",
+        "ui-on-surface-variant",
+        "ui-on-surface",
+        "ui-surface-container-highest",
+        "ui-on-surface",
+        "ui-tertiary-container",
+        "ui-on-tertiary-container",
+        "ui-surface-container-high",
+        "ui-outline",
+        "ui-on-surface",
+        "ui-primary",
+        "ui-on-surface-variant",
     ];
     if input {
-        labels.extend(["On primary container", "Primary container"]);
+        labels.extend(["ui-on-primary-container", "ui-primary-container"]);
     } else {
-        labels[10] = "On primary";
+        labels[10] = "ui-on-primary";
         labels.extend([
-            "Primary",
-            "On surface variant",
-            "On surface",
-            "Surface container highest",
-            "On primary container",
-            "Primary container",
+            "ui-primary",
+            "ui-on-surface-variant",
+            "ui-on-surface",
+            "ui-surface-container-highest",
+            "ui-on-primary-container",
+            "ui-primary-container",
         ]);
     }
     labels
@@ -526,10 +561,16 @@ fn time_color_pair(input: bool) {
                 .clip_shape(Shape::rounded_rectangle(Dp(24.0)))
                 .semantics(SemanticsArgs {
                     role: Some(Role::Group),
-                    label: Some(format!(
-                        "Time picker {} color roles",
-                        if input { "input" } else { "dial" }
-                    )),
+                    label: Some(
+                        I18N.format(
+                            "ui-time-picker-value-color-roles",
+                            [(
+                                "v0",
+                                I18N.text(&(if input { "ui-input-7117" } else { "ui-dial" }))
+                                    .into(),
+                            )],
+                        ),
+                    ),
                     merge_descendants: true,
                     ..Default::default()
                 }),
@@ -550,10 +591,32 @@ fn time_color_pair(input: bool) {
                                             false,
                                             false,
                                             FigureKind::Colors,
-                                            format!(
-                                                "{} {} color",
-                                                if dark { "Dark" } else { "Light" },
-                                                if input { "input" } else { "dial" }
+                                            I18N.format(
+                                                "ui-value-value-color",
+                                                [
+                                                    (
+                                                        "v0",
+                                                        I18N.text(
+                                                            &(if dark {
+                                                                "ui-dark"
+                                                            } else {
+                                                                "ui-light"
+                                                            }),
+                                                        )
+                                                        .into(),
+                                                    ),
+                                                    (
+                                                        "v1",
+                                                        I18N.text(
+                                                            &(if input {
+                                                                "ui-input-7117"
+                                                            } else {
+                                                                "ui-dial"
+                                                            }),
+                                                        )
+                                                        .into(),
+                                                    ),
+                                                ],
                                             ),
                                         );
                                     });
@@ -562,10 +625,16 @@ fn time_color_pair(input: bool) {
                 });
         });
     gap(Dp(24.0));
-    prose(format!(
-        "Time picker {} color roles used for light and dark themes:",
-        if input { "input" } else { "dial" }
-    ));
+    prose(
+        I18N.format(
+            "ui-time-picker-value-color-roles-used-for-light-and-dark-themes",
+            [(
+                "v0",
+                I18N.text(&(if input { "ui-input-7117" } else { "ui-dial" }))
+                    .into(),
+            )],
+        ),
+    );
     gap(Dp(16.0));
     for (index, label) in time_color_labels(input).into_iter().enumerate() {
         row()
@@ -585,7 +654,7 @@ fn time_color_pair(input: bool) {
                             .style(type_style(14.0, 20.0));
                     });
                 text()
-                    .content(label)
+                    .content(I18N.text(label))
                     .style(type_style(16.0, 24.0))
                     .modifier(Modifier::new().padding_symmetric(Dp(12.0), Dp::ZERO));
             });
@@ -595,91 +664,91 @@ fn time_color_pair(input: bool) {
 
 #[tessera]
 fn states() {
-    text().content("Hover, focus with Tab, or use the arrow keys on the dial. Activate a value with Enter or Space.").style(type_style(16.0, 24.0));
+    text().content(I18N.text("ui-hover-focus-with-tab-or-use-the-arrow-keys-on-the-dial-activate-a-value-with-enter-or-spac")).style(type_style(16.0, 24.0));
     gap(Dp(24.0));
-    example("States", false);
+    example("ui-states", false);
 }
 
 #[tessera]
 fn measurements() {
-    subheading("Time picker dial - vertical".into());
+    subheading("ui-time-picker-dial-vertical".into());
     time_figure(
         false,
         false,
         false,
         FigureKind::Measurements,
-        "Vertical measurements".into(),
+        "ui-vertical-measurements".into(),
     );
     gap(Dp(32.0));
-    subheading("Time picker dial - horizontal".into());
+    subheading("ui-time-picker-dial-horizontal".into());
     time_figure(
         false,
         true,
         false,
         FigureKind::Measurements,
-        "Horizontal measurements".into(),
+        "ui-horizontal-measurements".into(),
     );
     gap(Dp(32.0));
-    subheading("Time picker input".into());
+    subheading("ui-time-picker-input".into());
     time_figure(
         true,
         false,
         false,
         FigureKind::Measurements,
-        "Input measurements".into(),
+        "ui-input-measurements".into(),
     );
     gap(Dp(24.0));
     spec_table(
-        vec!["Element".into(), "Measurement".into()],
+        vec!["ui-element".into(), "ui-measurement".into()],
         vec![
-            vec!["Container padding".into(), "24dp".into()],
+            vec!["ui-container-padding".into(), "24dp".into()],
             vec![
-                "Dial time selector".into(),
-                "96 × 80dp · 114dp wide for vertical 24h".into(),
+                "ui-dial-time-selector".into(),
+                "ui-96-80dp-114dp-wide-for-vertical-24h".into(),
             ],
-            vec!["Input time field".into(), "96 × 72dp".into()],
+            vec!["ui-input-time-field".into(), "96 × 72dp".into()],
             vec![
-                "Vertical period selector".into(),
-                "52 × 80dp · 72dp high for input".into(),
+                "ui-vertical-period-selector".into(),
+                "ui-52-80dp-72dp-high-for-input".into(),
             ],
-            vec!["Horizontal period selector".into(), "216 × 38dp".into()],
-            vec!["Clock dial".into(), "256dp".into()],
-            vec!["Selector handle / center".into(), "48 / 8dp".into()],
-            vec!["Selector track".into(), "2dp".into()],
+            vec!["ui-horizontal-period-selector".into(), "216 × 38dp".into()],
+            vec!["ui-clock-dial".into(), "256dp".into()],
+            vec!["ui-selector-handle-center".into(), "48 / 8dp".into()],
+            vec!["ui-selector-track".into(), "2dp".into()],
         ],
     );
 }
 
 #[tessera]
 fn configurations() {
-    subheading("Vertical orientation and horizontal orientation".into());
+    subheading("ui-vertical-orientation-and-horizontal-orientation".into());
     gap(Dp(24.0));
     time_configuration_pair(false, false);
     gap(Dp(32.0));
-    subheading("24-hour time picker dial".into());
+    subheading("ui-24-hour-time-picker-dial".into());
     gap(Dp(24.0));
     time_configuration_pair(false, true);
     gap(Dp(32.0));
-    subheading("12-hour and 24-hour time picker inputs".into());
+    subheading("ui-12-hour-and-24-hour-time-picker-inputs".into());
     gap(Dp(24.0));
     time_configuration_pair(true, false);
     gap(Dp(24.0));
     text()
-        .content("Switch orientation, clock format and input mode.")
+        .content(I18N.text("ui-switch-orientation-clock-format-and-input-mode"))
         .style(type_style(16.0, 24.0));
     gap(Dp(24.0));
-    example("Configurations", false);
+    example("ui-configurations", false);
 }
 
 #[tessera]
 fn time_configuration_pair(input: bool, twenty_four: bool) {
     let scheme = use_context::<MaterialTheme>().unwrap().get().color_scheme;
     let title = if input {
-        "Time input format comparison"
+        "ui-time-input-format-comparison"
     } else if twenty_four {
-        "24-hour time orientation comparison"
+        "ui-24-hour-time-orientation-comparison"
     } else {
-        "12-hour time orientation comparison"
+        "ui-12-hour-time-orientation-comparison"
     };
     let available_width = remember(|| Dp(1024.0));
     let scale = (available_width.get().0 / 1024.0) as f32;
@@ -705,7 +774,7 @@ fn time_configuration_pair(input: bool, twenty_four: bool) {
                             )
                             .semantics(SemanticsArgs {
                                 role: Some(Role::Group),
-                                label: Some(title.into()),
+                                label: Some(I18N.text(title)),
                                 merge_descendants: true,
                                 ..Default::default()
                             }),
@@ -719,20 +788,20 @@ fn time_configuration_pair(input: bool, twenty_four: bool) {
                                     let twenty_four = twenty_four || (input && second);
                                     let label = if input {
                                         if twenty_four {
-                                            "24-hour input"
+                                            "ui-24-hour-input"
                                         } else {
-                                            "12-hour input"
+                                            "ui-12-hour-input"
                                         }
                                     } else if twenty_four {
                                         if horizontal {
-                                            "24-hour horizontal dial"
+                                            "ui-24-hour-horizontal-dial"
                                         } else {
-                                            "24-hour vertical dial"
+                                            "ui-24-hour-vertical-dial"
                                         }
                                     } else if horizontal {
-                                        "12-hour horizontal dial"
+                                        "ui-12-hour-horizontal-dial"
                                     } else {
-                                        "12-hour vertical dial"
+                                        "ui-12-hour-vertical-dial"
                                     };
                                     if second {
                                         spacer().modifier(Modifier::new().width(Dp(32.0)));
@@ -788,7 +857,10 @@ fn time_configuration_card(input: bool, horizontal: bool, twenty_four: bool, lab
                 }))
                 .semantics(SemanticsArgs {
                     role: Some(Role::Group),
-                    label: Some(format!("{label} time configuration")),
+                    label: Some(I18N.format(
+                        "ui-value-time-configuration",
+                        [("v0", I18N.text(&label).into())],
+                    )),
                     merge_descendants: true,
                     ..Default::default()
                 }),
@@ -798,18 +870,22 @@ fn time_configuration_card(input: bool, horizontal: bool, twenty_four: bool, lab
                 picker_surface(sample, label.clone()).modal(open);
             } else {
                 text()
-                    .content(sample.status.get())
+                    .content(I18N.text(sample.status.get()))
                     .style(type_style(16.0, 24.0));
                 button()
                     .text()
-                    .accessibility_label(format!("Reopen {label}"))
+                    .accessibility_label(
+                        I18N.format("ui-reopen-value", [("v0", I18N.text(&label).into())]),
+                    )
                     .on_click(move || open.set(true))
-                    .child(|| {
-                        text().content("Open time picker");
+                    .child(move || {
+                        text().content(I18N.text("ui-open-time-picker"));
                     });
             }
             gap(Dp(16.0));
-            text().content(label.clone()).style(type_style(16.0, 24.0));
+            text()
+                .content(I18N.text(&(label)))
+                .style(type_style(16.0, 24.0));
         });
 }
 
@@ -825,16 +901,18 @@ enum FigureKind {
 
 #[tessera]
 fn prose(#[prop(into)] value: String) {
-    text().content(value).style(type_style(16.0, 24.0));
+    text()
+        .content(I18N.text(value))
+        .style(type_style(16.0, 24.0));
 }
 
 #[tessera]
 fn time_variants() {
     for item in [
-        "Time pickers are modal and cover the main content.",
-        "Two variants: dial and input. The keyboard icon makes input available from the dial.",
-        "Select hours, minutes and, for a 12-hour clock, AM or PM.",
-        "Keep touch selection comfortable on mobile devices.",
+        "ui-time-pickers-are-modal-and-cover-the-main-content",
+        "ui-two-variants-dial-and-input-the-keyboard-icon-makes-input-available-from-the-dial",
+        "ui-select-hours-minutes-and-for-a-12-hour-clock-am-or-pm",
+        "ui-keep-touch-selection-comfortable-on-mobile-devices",
     ] {
         prose(format!("• {item}"));
         gap(Dp(12.0));
@@ -854,72 +932,72 @@ fn time_variants() {
                 .padding_all(Dp(24.0)),
         )
         .children(|| {
-            time_configuration_card(false, false, false, "Time picker dial".into());
-            time_configuration_card(true, false, false, "Time picker input".into());
+            time_configuration_card(false, false, false, "ui-time-picker-dial".into());
+            time_configuration_card(true, false, false, "ui-time-picker-input".into());
         });
 }
 
 #[tessera]
 fn time_resources() {
     spec_table(
-        vec!["Type".into(), "Resource".into(), "Status".into()],
+        vec!["ui-type".into(), "ui-resource".into(), "ui-status".into()],
         vec![
             vec![
-                "Design".into(),
-                "Material 3 Design Kit (Figma)".into(),
-                "Available".into(),
+                "ui-design".into(),
+                "ui-material-3-design-kit-figma".into(),
+                "ui-available".into(),
             ],
             vec![
-                "Implementation".into(),
-                "Flutter".into(),
-                "Available".into(),
+                "ui-implementation".into(),
+                "ui-flutter".into(),
+                "ui-available".into(),
             ],
             vec![
-                "Implementation".into(),
-                "Jetpack Compose".into(),
-                "Available".into(),
+                "ui-implementation".into(),
+                "ui-jetpack-compose".into(),
+                "ui-available".into(),
             ],
             vec![
-                "Implementation".into(),
-                "Android Views (MDC-Android)".into(),
-                "Available".into(),
+                "ui-implementation".into(),
+                "ui-android-views-mdc-android".into(),
+                "ui-available".into(),
             ],
             vec![
-                "Implementation".into(),
-                "Material Web".into(),
-                "Unavailable".into(),
+                "ui-implementation".into(),
+                "ui-material-web".into(),
+                "ui-unavailable".into(),
             ],
         ],
     );
     gap(Dp(16.0));
     prose(
-        "The availability above describes the Material libraries. The live examples on this page are rendered by Tessera.",
+        "ui-the-availability-above-describes-the-material-libraries-the-live-examples-on-this-page-are",
     );
 }
 
 #[tessera]
 fn time_m2_difference() {
     prose(
-        "Material 3 keeps the dial and keyboard variants, with new color mappings that support dynamic color. Selected time and period fields use different container roles rather than one shared accent treatment.",
+        "ui-material-3-keeps-the-dial-and-keyboard-variants-with-new-color-mappings-that-support-dynam",
     );
     gap(Dp(24.0));
     spec_table(
-        vec!["Element".into(), "M2".into(), "M3".into()],
+        vec!["ui-element".into(), "M2".into(), "M3".into()],
         vec![
             vec![
-                "Selected time field".into(),
-                "Accent emphasis".into(),
-                "Primary container / on primary container".into(),
+                "ui-selected-time-field".into(),
+                "ui-accent-emphasis".into(),
+                "ui-primary-container-on-primary-container".into(),
             ],
             vec![
-                "Selected period".into(),
-                "Accent emphasis".into(),
-                "Tertiary container / on tertiary container".into(),
+                "ui-selected-period".into(),
+                "ui-accent-emphasis".into(),
+                "ui-tertiary-container-on-tertiary-container".into(),
             ],
             vec![
-                "Color system".into(),
-                "Previous color mappings".into(),
-                "Dynamic color-compatible semantic roles".into(),
+                "ui-color-system".into(),
+                "ui-previous-color-mappings".into(),
+                "ui-dynamic-color-compatible-semantic-roles".into(),
             ],
         ],
     );
@@ -929,26 +1007,26 @@ fn time_m2_difference() {
         false,
         false,
         FigureKind::Plain,
-        "M3 dynamic color mapping".into(),
+        "ui-m3-dynamic-color-mapping".into(),
     );
-    prose("M3: selected hour and selected period have distinct color mappings.");
+    prose("ui-m3-selected-hour-and-selected-period-have-distinct-color-mappings");
 }
 
 #[tessera]
 fn time_placement() {
     prose(
-        "Center a modal time picker above a scrim. The main content remains visible for context but is unavailable until the picker closes. Keep the whole container, input-mode switch and confirmation actions on screen.",
+        "ui-center-a-modal-time-picker-above-a-scrim-the-main-content-remains-visible-for-context-but",
     );
     gap(Dp(16.0));
     prose(
-        "Use the dialog below to try a real modal. Changes remain a draft until OK; Cancel or a click outside the dialog preserves the saved value.",
+        "ui-use-the-dialog-below-to-try-a-real-modal-changes-remain-a-draft-until-ok-cancel-or-a-click",
     );
 }
 
 #[tessera]
 fn time_accessibility_use_cases() {
     prose(
-        "Offer both touch and keyboard entry. People using a screen reader, a physical keyboard or an alternative input device must be able to set a time without dragging a clock hand. Respect the person's 12- or 24-hour format preference.",
+        "ui-offer-both-touch-and-keyboard-entry-people-using-a-screen-reader-a-physical-keyboard-or-an",
     );
     gap(Dp(24.0));
     time_figure(
@@ -956,74 +1034,74 @@ fn time_accessibility_use_cases() {
         false,
         false,
         FigureKind::Plain,
-        "Accessible input".into(),
+        "ui-accessible-input".into(),
     );
 }
 
 #[tessera]
 fn time_accessibility_interaction() {
     prose(
-        "Always expose manual time entry through the keyboard icon on the dial. A clock icon returns to dial selection. Prefer the input variant when a dial is unnecessary or the available screen cannot contain it comfortably.",
+        "ui-always-expose-manual-time-entry-through-the-keyboard-icon-on-the-dial-a-clock-icon-returns",
     );
     gap(Dp(24.0));
-    subheading("Targets".into());
+    subheading("ui-targets".into());
     prose(
-        "Dial selection targets are 48 × 48dp. The annotated illustrations may scale to fit this article; production controls should retain their interactive target sizes rather than shrinking the dial to fit.",
+        "ui-dial-selection-targets-are-48-48dp-the-annotated-illustrations-may-scale-to-fit-this-artic",
     );
     gap(Dp(24.0));
     dial_target_figure();
     gap(Dp(24.0));
-    subheading("Focus and selection".into());
+    subheading("ui-focus-and-selection".into());
     prose(
-        "Keep a visible focus indicator as well as selected colors. Hour and Minute supporting labels identify editable fields; AM and PM expose their selected state. Moving focus to a dial value does not confirm the time.",
+        "ui-keep-a-visible-focus-indicator-as-well-as-selected-colors-hour-and-minute-supporting-label",
     );
 }
 
 #[tessera]
 fn time_keyboard() {
     spec_table(
-        vec!["Keys".into(), "Action".into()],
+        vec!["ui-keys".into(), "ui-action".into()],
         vec![
             vec![
-                "Tab / Shift+Tab".into(),
-                "Move forward / backward through enabled fields, dial, period and actions".into(),
+                "ui-tab-shift-tab-6921".into(),
+                "ui-move-forward-backward-through-enabled-fields-dial-period-and-actions".into(),
             ],
             vec![
-                "Space or Enter".into(),
-                "Activate the focused time slot or button".into(),
+                "ui-space-or-enter".into(),
+                "ui-activate-the-focused-time-slot-or-button".into(),
             ],
         ],
     );
     gap(Dp(24.0));
-    subheading("Dial and period navigation in this example".into());
+    subheading("ui-dial-and-period-navigation-in-this-example".into());
     spec_table(
-        vec!["Keys".into(), "Action".into()],
+        vec!["ui-keys".into(), "ui-action".into()],
         vec![
             vec![
-                "Right / Down arrow".into(),
-                "Focus the next dial value; switch between AM and PM".into(),
+                "ui-right-down-arrow".into(),
+                "ui-focus-the-next-dial-value-switch-between-am-and-pm".into(),
             ],
             vec![
-                "Left / Up arrow".into(),
-                "Focus the previous dial value; switch between AM and PM".into(),
+                "ui-left-up-arrow".into(),
+                "ui-focus-the-previous-dial-value-switch-between-am-and-pm".into(),
             ],
             vec![
-                "Home / End".into(),
-                "Focus the first / last dial value or AM / PM".into(),
+                "ui-home-end".into(),
+                "ui-focus-the-first-last-dial-value-or-am-pm".into(),
             ],
             vec![
-                "Number keys".into(),
-                "Edit the focused Hour or Minute field in input mode".into(),
+                "ui-number-keys".into(),
+                "ui-edit-the-focused-hour-or-minute-field-in-input-mode".into(),
             ],
             vec![
-                "Escape".into(),
-                "Dismiss the modal without saving its draft".into(),
+                "ui-escape".into(),
+                "ui-dismiss-the-modal-without-saving-its-draft".into(),
             ],
         ],
     );
     gap(Dp(16.0));
     prose(
-        "Arrow keys move dial focus; Space or Enter selects the focused value. Use OK to save the dialog's time. The standalone illustrations let you explore controls without changing the saved modal value.",
+        "ui-arrow-keys-move-dial-focus-space-or-enter-selects-the-focused-value-use-ok-to-save-the-dia",
     );
 }
 
@@ -1055,7 +1133,7 @@ fn time_figure(
                 TimePickerLayout::Vertical
             }
         }),
-        status: remember(|| "Ready".to_owned()),
+        status: remember(|| "ui-ready".to_owned()),
     };
     let geometry = remember(PreciseGeometry::new);
     let scheme = use_context::<MaterialTheme>().unwrap().get().color_scheme;
@@ -1113,7 +1191,10 @@ fn time_figure(
                                 SemanticsArgs {
                                     test_tag: Some("time-spec-container".into()),
                                     role: Some(Role::Group),
-                                    label: Some(format!("{label} annotated time picker")),
+                                    label: Some(I18N.format(
+                                        "ui-value-annotated-time-picker",
+                                        [("v0", I18N.text(&label).into())],
+                                    )),
                                     merge_descendants: true,
                                     ..Default::default()
                                 },
@@ -1143,7 +1224,7 @@ fn time_figure(
     if kind != FigureKind::Colors {
         gap(Dp(12.0));
         text()
-            .content(sample.status.get())
+            .content(I18N.text(sample.status.get()))
             .style(type_style(14.0, 20.0));
     }
 }
@@ -1152,65 +1233,65 @@ fn time_figure(
 fn time_anatomy_legend(input: bool, kind: FigureKind) {
     let labels: Vec<&str> = if kind == FigureKind::Guidelines {
         let mut labels = vec![
-            "Headline",
-            "Separator",
-            "Unselected input container",
-            "Unselected input text",
-            "Selected period container",
-            "Selected period label",
-            "Container",
-            "Period selector",
-            "Unselected period label",
+            "ui-headline",
+            "ui-separator",
+            "ui-unselected-input-container",
+            "ui-unselected-input-text",
+            "ui-selected-period-container",
+            "ui-selected-period-label",
+            "ui-container",
+            "ui-period-selector",
+            "ui-unselected-period-label",
         ];
         if input {
             labels.extend([
-                "Text buttons",
-                "Clock icon button",
-                "Selected input text",
-                "Selected input container",
+                "ui-text-buttons",
+                "ui-clock-icon-button",
+                "ui-selected-input-text",
+                "ui-selected-input-container",
             ]);
         } else {
             labels.extend([
-                "Selector track",
-                "Selector handle",
-                "Text buttons",
-                "Keyboard icon button",
-                "Dial label",
-                "Dial container",
-                "Selected input text",
-                "Selected input container",
+                "ui-selector-track",
+                "ui-selector-handle",
+                "ui-text-buttons",
+                "ui-keyboard-icon-button",
+                "ui-dial-label",
+                "ui-dial-container",
+                "ui-selected-input-text",
+                "ui-selected-input-container",
             ]);
         }
         labels
     } else if input {
         vec![
-            "Headline",
-            "Separator",
-            "Container",
-            "AM period",
-            "PM period",
-            "Text buttons",
-            "Clock icon button",
-            "Supporting labels",
-            "Selected input text",
-            "Selected input container",
+            "ui-headline",
+            "ui-separator",
+            "ui-container",
+            "ui-am-period",
+            "ui-pm-period",
+            "ui-text-buttons",
+            "ui-clock-icon-button",
+            "ui-supporting-labels",
+            "ui-selected-input-text",
+            "ui-selected-input-container",
         ]
     } else {
         vec![
-            "Headline",
-            "Separator",
-            "Container",
-            "AM period",
-            "PM period",
-            "Selector center",
-            "Selector track",
-            "Text buttons",
-            "Keyboard icon button",
-            "Selector handle",
-            "Dial label",
-            "Dial container",
-            "Selected input text",
-            "Selected input container",
+            "ui-headline",
+            "ui-separator",
+            "ui-container",
+            "ui-am-period",
+            "ui-pm-period",
+            "ui-selector-center",
+            "ui-selector-track",
+            "ui-text-buttons",
+            "ui-keyboard-icon-button",
+            "ui-selector-handle",
+            "ui-dial-label",
+            "ui-dial-container",
+            "ui-selected-input-text",
+            "ui-selected-input-container",
         ]
     };
     column().children(move || {
@@ -1227,7 +1308,9 @@ fn time_legend_item(number: usize, label: String) {
         .children(move || {
             annotations::marker(number, Dp::ZERO, Dp::ZERO);
             spacer().modifier(Modifier::new().width(Dp(12.0)));
-            text().content(label.clone()).style(type_style(16.0, 24.0));
+            text()
+                .content(I18N.text(&(label)))
+                .style(type_style(16.0, 24.0));
         });
 }
 
@@ -1254,7 +1337,11 @@ fn time_figure_contents(
         .children(move || {
             let label = label.clone();
             text()
-                .content(if input { "Enter time" } else { "Select time" })
+                .content(I18N.text(if input {
+                    "ui-enter-time"
+                } else {
+                    "ui-select-time"
+                }))
                 .style(theme.typography.label_medium)
                 .color(theme.color_scheme.on_surface_variant)
                 .modifier(watch_precise(geometry, "headline").semantics(
@@ -1293,14 +1380,25 @@ fn time_figure_contents(
                         })
                         .content_color(theme.color_scheme.on_surface_variant)
                         .modifier(watch_precise(geometry, "toggle"))
-                        .accessibility_label(format!(
-                            "{label} {}",
-                            if input {
-                                "switch to dial"
-                            } else {
-                                "switch to time input"
-                            }
-                        ))
+                        .accessibility_label(
+                            I18N.format(
+                                "ui-value-value-format-2",
+                                [
+                                    ("v0", I18N.text(&label).into()),
+                                    (
+                                        "v1",
+                                        I18N.text(
+                                            &(if input {
+                                                "ui-switch-to-dial"
+                                            } else {
+                                                "ui-switch-to-time-input-7120"
+                                            }),
+                                        )
+                                        .into(),
+                                    ),
+                                ],
+                            ),
+                        )
                         .on_click(move || {
                             sample.state.with_mut(TimePickerState::toggle_display_mode);
                             FocusManager::current().defer_keyboard_until_layout();
@@ -1309,23 +1407,36 @@ fn time_figure_contents(
                     button()
                         .text()
                         .modifier(watch_precise(geometry, "cancel"))
-                        .accessibility_label(format!("{label} cancel time"))
-                        .on_click(move || sample.status.set("Cancelled".into()))
-                        .child(|| {
-                            text().content("Cancel");
+                        .accessibility_label(
+                            I18N.format("ui-value-cancel-time", [("v0", I18N.text(&label).into())]),
+                        )
+                        .on_click(move || sample.status.set("ui-cancelled".into()))
+                        .child(move || {
+                            text().content(I18N.text("ui-cancel"));
                         });
                     spacer().modifier(Modifier::new().width(Dp(8.0)));
                     button()
                         .text()
                         .modifier(watch_precise(geometry, "confirm"))
-                        .accessibility_label(format!("{label} confirm time"))
+                        .accessibility_label(
+                            I18N.format(
+                                "ui-value-confirm-time",
+                                [("v0", I18N.text(&label).into())],
+                            ),
+                        )
                         .on_click(move || {
                             sample.status.set(sample.state.with(|value| {
-                                format!("Confirmed {:02}:{:02}", value.hour(), value.minute())
+                                I18N.format(
+                                    "ui-confirmed-value-value",
+                                    [
+                                        ("v0", format!("{:02}", value.hour()).into()),
+                                        ("v1", format!("{:02}", value.minute()).into()),
+                                    ],
+                                )
                             }))
                         })
-                        .child(|| {
-                            text().content("OK");
+                        .child(move || {
+                            text().content(I18N.text("ui-ok"));
                         });
                 });
         });
@@ -1854,14 +1965,17 @@ fn time_color_marker(number: usize, label: String, x: Dp, y: Dp) {
                 .background_with_shape(scheme.on_surface, Shape::CAPSULE)
                 .semantics(SemanticsArgs {
                     role: Some(Role::Note),
-                    label: Some(format!("Time color role {number}: {label}")),
+                    label: Some(I18N.format(
+                        "ui-time-color-role-value-value",
+                        [("v0", (number).into()), ("v1", I18N.text(&label).into())],
+                    )),
                     merge_descendants: true,
                     ..Default::default()
                 }),
         )
         .children(move || {
             text()
-                .content(number.to_string())
+                .content((number).to_string())
                 .style(type_style(14.0, 20.0))
                 .color(scheme.surface);
         });
@@ -1870,19 +1984,25 @@ fn time_color_marker(number: usize, label: String, x: Dp, y: Dp) {
 #[tessera]
 fn time_usage() {
     prose(
-        "Set an alarm or schedule a meeting with a specific hour and minute. Time pickers appear in modal dialogs above the main content. They are not intended for granular measurements such as milliseconds in a stopwatch.",
+        "ui-set-an-alarm-or-schedule-a-meeting-with-a-specific-hour-and-minute-time-pickers-appear-in",
     );
     gap(Dp(24.0));
-    subheading("Time input picker".into());
+    subheading("ui-time-input-picker".into());
     prose(
-        "Manual number entry must remain available from the dial through its keyboard button. The input variant uses separate Hour and Minute fields and opens the numeric keyboard on touch devices.",
+        "ui-manual-number-entry-must-remain-available-from-the-dial-through-its-keyboard-button-the-in",
     );
     gap(Dp(24.0));
-    time_figure(true, false, false, FigureKind::Plain, "Usage input".into());
+    time_figure(
+        true,
+        false,
+        false,
+        FigureKind::Plain,
+        "ui-usage-input".into(),
+    );
     gap(Dp(24.0));
-    subheading("24-hour time selection".into());
+    subheading("ui-24-hour-time-selection".into());
     prose(
-        "Choose the clock format outside the picker, usually according to system or app preferences. A 24-hour picker omits AM and PM: its hour dial uses an outer ring for 1–12 and an inner ring for 13–23 and 00.",
+        "ui-choose-the-clock-format-outside-the-picker-usually-according-to-system-or-app-preferences",
     );
     gap(Dp(24.0));
     time_figure(
@@ -1890,7 +2010,7 @@ fn time_usage() {
         false,
         true,
         FigureKind::Plain,
-        "Usage 24-hour".into(),
+        "ui-usage-24-hour".into(),
     );
 }
 
@@ -1901,7 +2021,7 @@ fn time_guideline_anatomy() {
         false,
         false,
         FigureKind::Guidelines,
-        "Guidelines dial anatomy".into(),
+        "ui-guidelines-dial-anatomy".into(),
     );
     gap(Dp(24.0));
     time_figure(
@@ -1909,45 +2029,45 @@ fn time_guideline_anatomy() {
         false,
         false,
         FigureKind::Guidelines,
-        "Guidelines input anatomy".into(),
+        "ui-guidelines-input-anatomy".into(),
     );
     gap(Dp(24.0));
-    subheading("Container".into());
-    prose("The modal surface contains all controls and appears above a scrim.");
+    subheading("ui-container".into());
+    prose("ui-the-modal-surface-contains-all-controls-and-appears-above-a-scrim");
     gap(Dp(24.0));
-    subheading("Input selector".into());
+    subheading("ui-input-selector".into());
     prose(
-        "Hours and minutes have distinct large fields. The focused field is highlighted, and input mode includes a supporting label below each field.",
+        "ui-hours-and-minutes-have-distinct-large-fields-the-focused-field-is-highlighted-and-input-mo",
     );
     gap(Dp(24.0));
-    subheading("Dial selector".into());
+    subheading("ui-dial-selector".into());
     prose(
-        "Select a value by tapping its label or dragging the dial. The 24-hour hour view adds an inner ring.",
+        "ui-select-a-value-by-tapping-its-label-or-dragging-the-dial-the-24-hour-hour-view-adds-an-inn",
     );
     gap(Dp(24.0));
     dial_target_figure();
     gap(Dp(24.0));
-    subheading("Text & icon buttons".into());
+    subheading("ui-text-icon-buttons".into());
     prose(
-        "The keyboard and clock buttons switch input methods. Cancel dismisses the selection; OK confirms it.",
+        "ui-the-keyboard-and-clock-buttons-switch-input-methods-cancel-dismisses-the-selection-ok-conf",
     );
     gap(Dp(24.0));
-    subheading("Landscape orientation".into());
-    prose("Place the time selectors beside the dial when horizontal space is available.");
+    subheading("ui-landscape-orientation".into());
+    prose("ui-place-the-time-selectors-beside-the-dial-when-horizontal-space-is-available");
     gap(Dp(24.0));
     time_figure(
         false,
         true,
         false,
         FigureKind::Plain,
-        "Guidelines landscape".into(),
+        "ui-guidelines-landscape".into(),
     );
 }
 
 #[tessera]
 fn time_adaptive() {
     prose(
-        "Choose orientation or input mode to fit the viewport. Prefer manual input when neither dial orientation can remain fully visible.",
+        "ui-choose-orientation-or-input-mode-to-fit-the-viewport-prefer-manual-input-when-neither-dial",
     );
     gap(Dp(24.0));
     time_figure(
@@ -1955,12 +2075,12 @@ fn time_adaptive() {
         true,
         false,
         FigureKind::Plain,
-        "Adaptive landscape".into(),
+        "ui-adaptive-landscape".into(),
     );
     gap(Dp(24.0));
-    subheading("Density".into());
+    subheading("ui-density".into());
     prose(
-        "Keep the dial's targets at their intended size. Switch to the input variant instead of shrinking the dial.",
+        "ui-keep-the-dial-s-targets-at-their-intended-size-switch-to-the-input-variant-instead-of-shri",
     );
     gap(Dp(24.0));
     time_figure(
@@ -1968,38 +2088,38 @@ fn time_adaptive() {
         false,
         false,
         FigureKind::Plain,
-        "Adaptive input".into(),
+        "ui-adaptive-input".into(),
     );
 }
 
 #[tessera]
 fn time_behavior(sample: Sample, modal: State<bool>, draft: Sample, committed: State<(u8, u8)>) {
     prose(
-        "Select a field and adjust the corresponding dial, or type directly using keyboard input. Releasing the clock hand after touch or pointer hour selection advances to minutes. Tap the Hour or Minute field to return to that part of the time; choose AM or PM separately in 12-hour format.",
+        "ui-select-a-field-and-adjust-the-corresponding-dial-or-type-directly-using-keyboard-input-rel",
     );
     gap(Dp(24.0));
-    subheading("Appearing & disappearing".into());
+    subheading("ui-appearing-disappearing".into());
     prose(
-        "The modal keeps focus until OK, Cancel or dismissal outside the surface. OK saves the draft. Cancel and outside dismissal leave the saved time unchanged; opening the dialog again starts from the saved time.",
+        "ui-the-modal-keeps-focus-until-ok-cancel-or-dismissal-outside-the-surface-ok-saves-the-draft",
     );
     button()
         .outlined()
-        .accessibility_label("Open behavior time picker")
+        .accessibility_label(I18N.text("ui-open-behavior-time-picker"))
         .on_click(move || open_picker(modal, draft, committed))
-        .child(|| {
-            text().content("Open time picker");
+        .child(move || {
+            text().content(I18N.text("ui-open-time-picker"));
         });
     gap(Dp(24.0));
     confirmed_time(committed);
     gap(Dp(24.0));
-    subheading("Toggle between dial & input".into());
-    controls(sample, "Behavior");
+    subheading("ui-toggle-between-dial-input".into());
+    controls(sample, "ui-behavior");
     gap(Dp(24.0));
-    visual(sample, "Behavior");
+    visual(sample, "ui-behavior");
     gap(Dp(24.0));
-    subheading("Scrolling".into());
+    subheading("ui-scrolling".into());
     prose(
-        "Keep the picker fully visible and stationary above the page. Change orientation or variant rather than making the dial scroll.",
+        "ui-keep-the-picker-fully-visible-and-stationary-above-the-page-change-orientation-or-variant",
     );
 }
 
@@ -2083,39 +2203,47 @@ fn dial_target_annotations(geometry: State<PreciseGeometry>, state: State<TimePi
 #[tessera]
 fn time_labels() {
     prose(
-        "Name the hour and minute fields separately and associate each label with its control. Assistive technology can announce the control's role, label and value. A selected state must not depend on color alone. Dial values communicate the time unit, value and position in the set; icon buttons describe the destination input method.",
+        "ui-name-the-hour-and-minute-fields-separately-and-associate-each-label-with-its-control-assis",
     );
     gap(Dp(24.0));
-    subheading("Dial selector".into());
+    subheading("ui-dial-selector".into());
     spec_table(
-        vec!["Element".into(), "Accessible label".into(), "Role".into()],
+        vec![
+            "ui-element".into(),
+            "ui-accessible-label".into(),
+            "ui-role".into(),
+        ],
         vec![
             vec![
-                "Hour / Minute".into(),
-                "Hour / Minute".into(),
-                "Text input or selection action".into(),
-            ],
-            vec!["Period".into(), "AM / PM".into(), "Radio button".into()],
-            vec![
-                "Mode action".into(),
-                "Switch to time input".into(),
-                "Button".into(),
+                "ui-hour-minute".into(),
+                "ui-hour-minute".into(),
+                "ui-text-input-or-selection-action".into(),
             ],
             vec![
-                "Dial value".into(),
-                "Hour 7 of 12 / Minute 35 of 60".into(),
-                "Button".into(),
+                "ui-period".into(),
+                "AM / PM".into(),
+                "ui-radio-button".into(),
+            ],
+            vec![
+                "ui-mode-action".into(),
+                "ui-switch-to-time-input".into(),
+                "ui-button".into(),
+            ],
+            vec![
+                "ui-dial-value".into(),
+                "ui-hour-7-of-12-minute-35-of-60".into(),
+                "ui-button".into(),
             ],
         ],
     );
     gap(Dp(24.0));
-    subheading("Input selector".into());
+    subheading("ui-input-selector".into());
     time_figure(
         true,
         false,
         false,
         FigureKind::Plain,
-        "Labeled input".into(),
+        "ui-labeled-input".into(),
     );
 }
 

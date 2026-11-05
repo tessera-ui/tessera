@@ -1,9 +1,3 @@
-//! Native article tab interaction and focus visuals.
-//!
-//! ## Usage
-//!
-//! Verify section navigation states without changing target geometry.
-
 use std::time::Duration;
 
 use tessera_components::theme::material_theme;
@@ -53,7 +47,7 @@ fn ink(renderer: &HeadlessRenderer, index: usize, label: bool) -> Vec<(usize, us
 
 #[tessera]
 fn fixture(output: tessera_ui::testing::TestProbe<Option<Observed>>) {
-    let selected = remember(|| "Specs");
+    let selected = remember(|| "ui-specs");
     let scroll = remember(ScrollableController::new);
     let pinned = remember(|| false);
     output.set(Some((selected, pinned)));
@@ -85,7 +79,9 @@ fn tab(renderer: &HeadlessRenderer, title: &str) -> (NodeId, Node) {
         .unwrap()
         .nodes
         .into_iter()
-        .find(|(_, node)| node.role() == Role::Tab && node.label() == Some(title))
+        .find(|(_, node)| {
+            node.role() == Role::Tab && node.label() == Some(I18N.text(title).as_str())
+        })
         .expect("native article tab")
 }
 
@@ -167,7 +163,7 @@ fn article_tab_hover_hold_selection_and_focus_preserve_targets_and_idle_work() {
         renderer.render_frames(4);
         assert_pixel(&renderer, "Overview", 8.0, [227, 220, 227]);
         assert_eq!(
-            output.get().unwrap().0.get(),
+            I18N.text(output.get().unwrap().0.get()),
             "Specs",
             "press must not activate"
         );
@@ -178,7 +174,7 @@ fn article_tab_hover_hold_selection_and_focus_preserve_targets_and_idle_work() {
         );
         renderer.pointer_release(MOUSE_POINTER_ID, overview, PressKeyEventType::Left);
         renderer.render_frames(14);
-        assert_eq!(output.get().unwrap().0.get(), "Overview");
+        assert_eq!(I18N.text(output.get().unwrap().0.get()), "Overview");
         assert_pixel(&renderer, "Overview", 8.0, [205, 203, 228]);
         let selected_icon = ink(&renderer, 0, false);
         assert!(
@@ -215,7 +211,7 @@ fn article_tab_hover_hold_selection_and_focus_preserve_targets_and_idle_work() {
             guidelines.0
         );
         assert_eq!(
-            output.get().unwrap().0.get(),
+            I18N.text(output.get().unwrap().0.get()),
             "Overview",
             "focus alone must not activate"
         );
@@ -282,7 +278,7 @@ fn article_selection_pill_animates_with_clock_without_measuring_or_moving_target
         renderer.pointer_release(MOUSE_POINTER_ID, point, PressKeyEventType::Left);
         renderer.pointer_move(MOUSE_POINTER_ID, PxPosition::from_f32_xy(990.0, 150.0));
         renderer.render_frames(1);
-        assert_eq!(output.get().unwrap().0.get(), "Overview");
+        assert_eq!(I18N.text(output.get().unwrap().0.get()), "Overview");
         assert_pixel(&renderer, "Overview", 8.0, [248, 241, 246]);
         let edge = |renderer: &HeadlessRenderer| {
             let rgba = renderer.read_pixels().unwrap();
@@ -412,7 +408,7 @@ fn narrow_article_tabs_keep_natural_labels_and_clip_scrolled_capsule() {
                 let visible_label = focused_label.unwrap_or("Specs");
                 let visible_index = ARTICLE_TAB_TITLES
                     .iter()
-                    .position(|title| *title == visible_label)
+                    .position(|title| I18N.text(title) == visible_label)
                     .unwrap();
                 let visible = tab(&renderer, visible_label).1.bounds().unwrap();
                 let minimum = natural[visible_index].0 + 2 * Dp(24.0).to_px().0;
@@ -512,7 +508,7 @@ fn narrow_article_arrows_select_adjacent_pages_and_reveal_the_selected_tab() {
     renderer.render_frames(12);
     for pinned in [false, true] {
         output.get().unwrap().1.set(pinned);
-        output.get().unwrap().0.set("Specs");
+        output.get().unwrap().0.set("ui-specs");
         renderer.render_frames(12);
         for (label, expected) in [
             ("Go to next tab", "Guidelines"),
@@ -534,7 +530,7 @@ fn narrow_article_arrows_select_adjacent_pages_and_reveal_the_selected_tab() {
                 data: None,
             }));
             renderer.render_frames(16);
-            assert_eq!(output.get().unwrap().0.get(), expected);
+            assert_eq!(I18N.text(output.get().unwrap().0.get()), expected);
             let tree = renderer.accessibility_snapshot().unwrap();
             let viewport = tree
                 .nodes

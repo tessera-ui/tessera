@@ -30,6 +30,8 @@ use tessera_ui::{
     remember, scaled_box, tessera, use_context,
 };
 
+use crate::res::I18N;
+
 use super::super::{
     annotations::{self, PreciseGeometry, watch_precise},
     article::modal_host::hosted_dialog,
@@ -133,7 +135,7 @@ fn canvas(
                         .semantics(SemanticsArgs {
                             test_tag: Some("date-instruction-figure".into()),
                             role: Some(Role::Group),
-                            label: Some(label.clone()),
+                            label: Some(I18N.text(&(label))),
                             merge_descendants: true,
                             ..Default::default()
                         }),
@@ -228,20 +230,23 @@ fn date_field(
     error: Option<State<String>>,
 ) {
     let scheme = use_context::<MaterialTheme>().unwrap().get().color_scheme;
-    let icon_name = format!("Open {accessible_name} calendar");
+    let icon_name = I18N.format(
+        "ui-open-named-calendar",
+        [("name", I18N.text(&accessible_name).into())],
+    );
     let show_calendar = show_calendar.unwrap_or(true);
     let error = error.map(|error| error.get()).unwrap_or_default();
     let had_focus = remember(|| false);
     text_field()
         .outlined()
         .controller(controller)
-        .label(label)
-        .accessibility_label(accessible_name)
-        .accessibility_description(if error.is_empty() {
+        .label(I18N.text(label))
+        .accessibility_label(I18N.text(accessible_name))
+        .accessibility_description(I18N.text(if error.is_empty() {
             format.clone()
         } else {
             error.clone()
-        })
+        }))
         .is_error(!error.is_empty())
         .min_width(Dp::ZERO)
         .presentation_state(if focused.unwrap_or(false) {
@@ -276,7 +281,7 @@ fn date_field(
                     .standard()
                     .icon(filled::CALENDAR_TODAY_SVG)
                     .presentation_state(InteractionVisualState::Hover)
-                    .accessibility_label(icon_name.clone())
+                    .accessibility_label(I18N.text(&(icon_name)))
                     .on_click(move || {
                         open.set(!open.get());
                         FocusManager::current().defer_keyboard_until_layout();
@@ -284,11 +289,11 @@ fn date_field(
             }
         });
     text()
-        .content(if error.is_empty() {
+        .content(I18N.text(if error.is_empty() {
             format
         } else {
             error.clone()
-        })
+        }))
         .style(type_style(12.0, 16.0))
         .color(if error.is_empty() {
             scheme.on_surface_variant
@@ -311,7 +316,7 @@ fn calendar_dialog(
 ) {
     hosted_dialog(open)
         .modal_controller_optional(modal_controller)
-        .accessibility_label("Optional date selection")
+        .accessibility_label(I18N.text("ui-optional-date-selection"))
         .on_close_request(move || open.set(false))
         .main_content_shared(content)
         .dialog_content(move |dialog_scope| {
@@ -323,22 +328,22 @@ fn calendar_dialog(
                 .dismiss_button(move || {
                     button()
                         .text()
-                        .accessibility_label("Cancel optional date selection")
+                        .accessibility_label(I18N.text("ui-cancel-optional-date-selection"))
                         .on_click(move || open.set(false))
-                        .child(|| {
-                            text().content("Cancel");
+                        .child(move || {
+                            text().content(I18N.text("ui-cancel"));
                         });
                 })
                 .confirm_button(move || {
                     button()
                         .text()
-                        .accessibility_label("Confirm optional date selection")
+                        .accessibility_label(I18N.text("ui-confirm-optional-date-selection"))
                         .on_click(move || {
                             on_confirm.call();
                             open.set(false);
                         })
-                        .child(|| {
-                            text().content("OK");
+                        .child(move || {
+                            text().content(I18N.text("ui-ok"));
                         });
                 });
         });
@@ -369,7 +374,7 @@ fn entry_methods(
         }),
         RenderSlot::new(move || {
             canvas(
-                "Date entry methods diagram".into(),
+                "ui-date-entry-methods-diagram".into(),
                 geometry,
                 RenderSlot::new(move || {
                     date_field(
@@ -377,8 +382,8 @@ fn entry_methods(
                         open,
                         geometry,
                         FieldGeometry::Field,
-                        "Date".into(),
-                        "Entry methods date".into(),
+                        "ui-date".into(),
+                        "ui-entry-methods-date".into(),
                         "MM/DD/YYYY".into(),
                         167.0,
                         122.0,
@@ -395,7 +400,7 @@ fn entry_methods(
                                 draft.set(value.clone());
                                 controller.with_mut(|controller| controller.set_text(&value));
                             } else {
-                                error.set("Enter a valid date (MM/DD/YYYY)".into());
+                                error.set("ui-enter-a-valid-date-mm-dd-yyyy".into());
                             }
                         }),
                     )
@@ -439,7 +444,7 @@ fn formatting(
             raw.with_mut(|controller| controller.set_text(&value));
             formatted.with_mut(|controller| controller.set_text(&value));
         } else {
-            raw_error.set("Enter a valid date (MM/DD/YYYY)".into());
+            raw_error.set("ui-enter-a-valid-date-mm-dd-yyyy".into());
         }
     });
     calendar_dialog(
@@ -458,7 +463,7 @@ fn formatting(
         }),
         RenderSlot::new(move || {
             canvas(
-                "Deferred date formatting diagram".into(),
+                "ui-deferred-date-formatting-diagram".into(),
                 geometry,
                 RenderSlot::new(move || {
                     date_field(
@@ -466,8 +471,8 @@ fn formatting(
                         open,
                         geometry,
                         FieldGeometry::Raw,
-                        "Date".into(),
-                        "Unformatted date".into(),
+                        "ui-date".into(),
+                        "ui-unformatted-date".into(),
                         "MM/DD/YYYY".into(),
                         167.0,
                         62.0,
@@ -485,8 +490,8 @@ fn formatting(
                         open,
                         geometry,
                         FieldGeometry::Formatted,
-                        "Date".into(),
-                        "Formatted date".into(),
+                        "ui-date".into(),
+                        "ui-formatted-date".into(),
                         "MM/DD/YYYY".into(),
                         167.0,
                         172.0,
@@ -503,7 +508,7 @@ fn formatting(
                                 formatted_draft.set(value.clone());
                                 formatted.with_mut(|c| c.set_text(&value));
                             } else {
-                                formatted_error.set("Enter a valid date (MM/DD/YYYY)".into());
+                                formatted_error.set("ui-enter-a-valid-date-mm-dd-yyyy".into());
                             }
                         }),
                     )
@@ -522,7 +527,7 @@ fn optional_clear() {
     let geometry = remember(PreciseGeometry::new);
     let scheme = use_context::<MaterialTheme>().unwrap().get().color_scheme;
     canvas(
-        "Optional clear action diagram".into(),
+        "ui-optional-clear-action-diagram".into(),
         geometry,
         RenderSlot::new(move || {
             dotted_background();
@@ -562,9 +567,9 @@ fn optional_clear() {
                         )
                         .children(move || {
                             for (caption, x, width) in [
-                                ("Clear", 12.0, 60.0),
-                                ("Cancel", 212.0, 72.0),
-                                ("OK", 300.0, 48.0),
+                                ("ui-clear", 12.0, 60.0),
+                                ("ui-cancel", 212.0, 72.0),
+                                ("ui-ok", 300.0, 48.0),
                             ] {
                                 button()
                                     .text()
@@ -574,12 +579,15 @@ fn optional_clear() {
                                             .offset(Dp(x), Dp(4.0))
                                             .size(Dp(width), Dp(48.0)),
                                     )
-                                    .accessibility_label(format!("Optional clear {caption}"))
+                                    .accessibility_label(I18N.format(
+                                        "ui-optional-clear-value",
+                                        [("v0", I18N.text(&caption).into())],
+                                    ))
                                     .on_click(move || match caption {
-                                        "Clear" => {
+                                        "ui-clear" => {
                                             state.with_mut(DatePickerState::clear_selected_date)
                                         }
-                                        "Cancel" => {
+                                        "ui-cancel" => {
                                             if let Some(date) = committed.get() {
                                                 state.with_mut(|state| {
                                                     state.set_selected_date(date)
@@ -593,7 +601,7 @@ fn optional_clear() {
                                             .set(state.with(DatePickerState::selected_date)),
                                     })
                                     .child(move || {
-                                        text().content(caption);
+                                        text().content(I18N.text(caption));
                                     });
                             }
                         });
@@ -636,7 +644,7 @@ fn field_labels(
     let view = remember(|| DockedDatePickerView::Month);
     let scheme = use_context::<MaterialTheme>().unwrap().get().color_scheme;
     hosted_dialog(chooser).modal_controller_optional(modal_controller)
-        .accessibility_label("Labeled date calendar chooser")
+        .accessibility_label(I18N.text("ui-labeled-date-calendar-chooser"))
         .on_close_request(move || chooser.set(false))
         .dialog_content(move |_| {
             docked_date_picker()
@@ -655,7 +663,7 @@ fn field_labels(
         })
         .main_content(move || {
             canvas(
-                "Accessible date label diagram".into(),
+                "ui-accessible-date-label-diagram".into(),
                 geometry,
                 RenderSlot::new(move || {
                     boxed()
@@ -671,17 +679,17 @@ fn field_labels(
                         )
                         .children(move || {
                             for (value, y, emphasized) in [
-                                ("Label", 23.0, false),
-                                ("UI text (“Event date, YYYY/MM/DD”)", 45.0, true),
-                                ("Role", 79.0, false),
-                                ("Combo box", 103.0, true),
+                                ("ui-label", 23.0, false),
+                                ("ui-ui-text-event-date-yyyy-mm-dd", 45.0, true),
+                                ("ui-role", 79.0, false),
+                                ("ui-combo-box", 103.0, true),
                             ] {
                                 let mut style = type_style(16.0, 24.0);
                                 if emphasized {
                                     style.font_weight = 700;
                                 }
                                 text()
-                                    .content(value)
+                                    .content(I18N.text(value))
                                     .style(style)
                                     .color(if emphasized {
                                         scheme.primary
@@ -713,7 +721,7 @@ fn field_labels(
                                 })
                                 .clickable_with(ClickableArgs {
                                     role: Some(Role::ComboBox),
-                                    label: Some("Event date, YYYY/MM/DD".into()),
+                                    label: Some(I18N.text("ui-event-date-yyyy-mm-dd")),
                                     on_click: Callback::new(move || {
                                         view.set(DockedDatePickerView::Calendar);
                                         chooser.set(true);
@@ -728,8 +736,8 @@ fn field_labels(
                                 chooser,
                                 geometry,
                                 FieldGeometry::Field,
-                                "Event Date".into(),
-                                "Event date".into(),
+                                "ui-event-date".into(),
+                                "ui-event-date-1862".into(),
                                 "YYYY/MM/DD".into(),
                                 0.0,
                                 0.0,
@@ -746,7 +754,7 @@ fn field_labels(
                                         draft.set(value.clone());
                                         controller.with_mut(|c| c.set_text(&value));
                                     } else {
-                                        error.set("Enter a valid date (YYYY/MM/DD)".into());
+                                        error.set("ui-enter-a-valid-date-yyyy-mm-dd".into());
                                     }
                                 }),
                             )
@@ -772,7 +780,8 @@ fn visible_calendar_header(
     let theme = use_context::<MaterialTheme>().unwrap().get();
     let month = state.with(DatePickerState::displayed_month);
     let months = [
-        "Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec",
+        "ui-jan", "ui-feb", "ui-mar", "ui-apr", "ui-may", "ui-jun", "ui-jul", "ui-aug", "ui-sep",
+        "ui-oct", "ui-nov", "ui-dec",
     ];
     boxed()
         .modifier(
@@ -786,14 +795,14 @@ fn visible_calendar_header(
         )
         .children(move || {
             for (x, name, year) in [
-                (0.0, "Previous labeled month", false),
-                (192.0, "Previous labeled year", true),
+                (0.0, "ui-previous-labeled-month", false),
+                (192.0, "ui-previous-labeled-year", true),
             ] {
                 icon_button()
                     .standard()
                     .icon(filled::CHEVRON_LEFT_SVG)
                     .modifier(Modifier::new().offset(Dp(x), Dp(8.0)))
-                    .accessibility_label(name)
+                    .accessibility_label(I18N.text(name))
                     .enabled(if year {
                         month.year() > 2020
                     } else {
@@ -817,7 +826,7 @@ fn visible_calendar_header(
                 .standard()
                 .icon(filled::CHEVRON_RIGHT_SVG)
                 .modifier(Modifier::new().offset(Dp(112.0), Dp(8.0)))
-                .accessibility_label("Next labeled month")
+                .accessibility_label(I18N.text("ui-next-labeled-month"))
                 .enabled(month.year() < 2030 || month.month() < 12)
                 .on_click(move || state.with_mut(DatePickerState::next_month));
             for (x, width, label, target) in [
@@ -843,11 +852,11 @@ fn visible_calendar_header(
                             .offset(Dp(x), Dp(8.0))
                             .size(Dp(width), Dp(48.0)),
                     )
-                    .accessibility_label(if target == DockedDatePickerView::Month {
-                        "Choose labeled month"
+                    .accessibility_label(I18N.text(if target == DockedDatePickerView::Month {
+                        "ui-choose-labeled-month"
                     } else {
-                        "Choose labeled year"
-                    })
+                        "ui-choose-labeled-year"
+                    }))
                     .on_click(move || {
                         view.set(target);
                         chooser.set(true);
@@ -861,7 +870,7 @@ fn visible_calendar_header(
                             )
                             .children(move || {
                                 text()
-                                    .content(label.clone())
+                                    .content(I18N.text(&(label)))
                                     .style(theme.typography.label_large);
                                 boxed().modifier(Modifier::new().width(Dp(4.0)));
                                 icon().vector(filled::ARROW_DROP_DOWN_SVG).size(Dp(18.0));
@@ -877,7 +886,9 @@ fn visible_calendar_header(
                     )
                     .alignment(tessera_components::alignment::Alignment::Center)
                     .children(move || {
-                        text().content(name).style(theme.typography.body_large);
+                        text()
+                            .content(I18N.text(name))
+                            .style(theme.typography.body_large);
                     });
             }
         });

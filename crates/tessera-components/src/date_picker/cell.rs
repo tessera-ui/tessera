@@ -17,6 +17,7 @@ use crate::{
         InteractionState, InteractionVisualState, ModifierExt as _, SelectableArgs, SemanticsArgs,
     },
     pipelines::shape::command::ShapeCommand,
+    res::I18N,
     shape_def::{ResolvedShape, Shape},
     surface::record_focus_indicator,
     text::text,
@@ -169,11 +170,13 @@ pub fn date_picker_day(
                     interaction_state: Some(interaction),
                     focus_requester: Some(focus),
                     label: Some(accessibility_label.unwrap_or_else(|| {
-                        format!(
-                            "{} {}, {}",
-                            format_month_name(date.month()),
-                            date.day(),
-                            date.year()
+                        I18N.format(
+                            "md3-full-date",
+                            [
+                                ("month", format_month_name(date.month()).into()),
+                                ("day", date.day().into()),
+                                ("year", date.year().to_string().into()),
+                            ],
                         )
                     })),
                     description: accessibility_description,

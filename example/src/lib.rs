@@ -11,9 +11,10 @@ use tessera_ui::{
     renderer::{TesseraConfig, WindowConfig},
 };
 
+use pages::custom_shader::CustomShaderPackage;
+
 #[cfg(not(all(target_family = "wasm", feature = "md3-diagnostics")))]
 use app::app;
-use pages::custom_shader::CustomShaderPackage;
 
 #[cfg(target_family = "wasm")]
 use tessera_ui::renderer::WebConfig;
@@ -38,7 +39,7 @@ pub fn run() -> EntryPoint {
             ..Default::default()
         })
         .package(tessera_components::ComponentsPackage)
-        .package(tessera_platform::PlatformPackage)
+        .package(res::i18n())
         .package(CustomShaderPackage)
 }
 

@@ -22,6 +22,8 @@ use tessera_components::{
 };
 use tessera_ui::{Dp, Modifier, RenderSlot, State, remember, tessera, use_context};
 
+use crate::res::I18N;
+
 use super::{
     ACCENT,
     annotations::{self, Geometry, SpaceGeometry, dotted, relative, watch, watch_in_space},
@@ -41,62 +43,62 @@ const VARIANTS: [CardVariant; 3] = [
 
 fn name(variant: CardVariant) -> &'static str {
     match variant {
-        CardVariant::Elevated => "Elevated",
-        CardVariant::Filled => "Filled",
-        CardVariant::Outlined => "Outlined",
+        CardVariant::Elevated => "ui-elevated",
+        CardVariant::Filled => "ui-filled",
+        CardVariant::Outlined => "ui-outlined",
     }
 }
 
 #[tessera]
 pub(super) fn cards_spec(route: Option<crate::pages::material_spec::article::ArticleRoute>) {
     article(
-        "Cards",
-        "Present content and actions about one subject in a distinct container.",
+        "ui-cards",
+        "ui-present-content-and-actions-about-one-subject-in-a-distinct-container",
         vec![
             SpecSection {
-                title: "Tokens & specs",
+                title: "ui-tokens-specs",
                 content: RenderSlot::new(tokens),
             },
             SpecSection {
-                title: "Elevated card",
+                title: "ui-elevated-card",
                 content: RenderSlot::new(|| {
                     detail(CardVariant::Elevated);
                 }),
             },
             SpecSection {
-                title: "Filled card",
+                title: "ui-filled-card",
                 content: RenderSlot::new(|| {
                     detail(CardVariant::Filled);
                 }),
             },
             SpecSection {
-                title: "Outlined card",
+                title: "ui-outlined-card",
                 content: RenderSlot::new(|| {
                     detail(CardVariant::Outlined);
                 }),
             },
             SpecSection {
-                title: "Measurements",
+                title: "ui-measurements",
                 content: RenderSlot::new(measurements),
             },
         ],
     ).route_optional(route).pages(vec![
-        ArticlePage {title:"Overview",intro:Some(RenderSlot::new(|| {prose("Cards contain related elements about a single subject. They can hold images, headlines, supporting text, buttons and lists, and their layout adapts to their contents.");gap(Dp(24.0));card_variants();})),sections:vec![
-            SpecSection {title:"Differences from M2",content:RenderSlot::new(|| {prose("Cards use dynamic color mappings and lower resting elevation. Choose elevated, filled or outlined containment according to the visual emphasis needed.");gap(Dp(24.0));card_variants();})},
+        ArticlePage {title:"ui-overview",intro:Some(RenderSlot::new(|| {prose("ui-cards-contain-related-elements-about-a-single-subject-they-can-hold-images-headlines-suppo");gap(Dp(24.0));card_variants();})),sections:vec![
+            SpecSection {title:"ui-differences-from-m2",content:RenderSlot::new(|| {prose("ui-cards-use-dynamic-color-mappings-and-lower-resting-elevation-choose-elevated-filled-or-out");gap(Dp(24.0));card_variants();})},
         ]},
-        ArticlePage {title:"Guidelines",intro:None,sections:vec![
-            SpecSection {title:"Usage",content:RenderSlot::new(|| {prose("Keep each card about one subject. Establish a readable hierarchy and use a collection when several subjects belong together. Prefer spacing or dividers when a container would add unnecessary complexity.");gap(Dp(24.0));card_variants();})},
-            SpecSection {title:"Anatomy",content:RenderSlot::new(card_guideline_anatomy)},
-            SpecSection {title:"Cards in a collection",content:RenderSlot::new(card_collections)},
-            SpecSection {title:"Adaptive design",content:RenderSlot::new(card_adaptive)},
-            SpecSection {title:"Behavior",content:RenderSlot::new(card_behavior)},
+        ArticlePage {title:"ui-guidelines",intro:None,sections:vec![
+            SpecSection {title:"ui-usage",content:RenderSlot::new(|| {prose("ui-keep-each-card-about-one-subject-establish-a-readable-hierarchy-and-use-a-collection-when");gap(Dp(24.0));card_variants();})},
+            SpecSection {title:"ui-anatomy",content:RenderSlot::new(card_guideline_anatomy)},
+            SpecSection {title:"ui-cards-in-a-collection",content:RenderSlot::new(card_collections)},
+            SpecSection {title:"ui-adaptive-design",content:RenderSlot::new(card_adaptive)},
+            SpecSection {title:"ui-behavior",content:RenderSlot::new(card_behavior)},
         ]},
-        ArticlePage {title:"Accessibility",intro:None,sections:vec![
-            SpecSection {title:"Use cases",content:RenderSlot::new(|| {prose("People must be able to reach a card and its controls, understand its content and receive feedback appropriate to touch, pointer or keyboard input.");gap(Dp(24.0));action_models();})},
-            SpecSection {title:"Interaction & style",content:RenderSlot::new(card_interaction)},
-            SpecSection {title:"Focus",content:RenderSlot::new(|| {prose("A directly actionable card is one tab stop. A passive card is skipped while its buttons and links remain individual tab stops. Avoid nesting controls inside an actionable card.");gap(Dp(24.0));action_models();})},
-            SpecSection {title:"Keyboard navigation",content:RenderSlot::new(|| {spec_table(vec!["Keys".into(),"Action".into()],vec![vec!["Tab".into(),"Next actionable card or contained control".into()],vec!["Space or Enter".into(),"Activate the focused action".into()]]);})},
-            SpecSection {title:"Labeling elements",content:RenderSlot::new(|| {prose("Expose meaningful headings, text and actions in reading order. Hide purely decorative media. Name directly actionable cards by their destination; passive card containers do not need an interactive role.");gap(Dp(24.0));card_figure(true);})},
+        ArticlePage {title:"ui-accessibility",intro:None,sections:vec![
+            SpecSection {title:"ui-use-cases",content:RenderSlot::new(|| {prose("ui-people-must-be-able-to-reach-a-card-and-its-controls-understand-its-content-and-receive-fe");gap(Dp(24.0));action_models();})},
+            SpecSection {title:"ui-interaction-style",content:RenderSlot::new(card_interaction)},
+            SpecSection {title:"ui-focus",content:RenderSlot::new(|| {prose("ui-a-directly-actionable-card-is-one-tab-stop-a-passive-card-is-skipped-while-its-buttons-and");gap(Dp(24.0));action_models();})},
+            SpecSection {title:"ui-keyboard-navigation",content:RenderSlot::new(|| {spec_table(vec!["ui-keys".into(),"ui-action".into()],vec![vec!["ui-tab".into(),"ui-next-actionable-card-or-contained-control".into()],vec!["ui-space-or-enter".into(),"ui-activate-the-focused-action".into()]]);})},
+            SpecSection {title:"ui-labeling-elements",content:RenderSlot::new(|| {prose("ui-expose-meaningful-headings-text-and-actions-in-reading-order-hide-purely-decorative-media");gap(Dp(24.0));card_figure(true);})},
         ]},
     ]);
 }
@@ -116,14 +118,20 @@ fn sample(
             .variant(variant)
             .enabled(enabled)
             .modifier(modifier.clone().unwrap_or_default().width(Dp(280.0)))
-            .accessibility_label(label.clone())
+            .accessibility_label(I18N.text(&(label)))
             .on_click(move || actions.set(actions.get() + 1))
             .content(move || {
                 body(label.clone());
             });
         gap(Dp(8.0));
         text()
-            .content(format!("{caption} activations: {}", actions.get()))
+            .content(I18N.format(
+                "ui-value-activations-value",
+                [
+                    ("v0", I18N.text(&caption).into()),
+                    ("v1", (actions.get()).into()),
+                ],
+            ))
             .style(type_style(12.0, 16.0));
     });
 }
@@ -133,10 +141,12 @@ fn body(#[prop(into)] label: String) {
     column()
         .modifier(Modifier::new().fill_max_width().padding_all(Dp(16.0)))
         .children(move || {
-            text().content(label.clone()).style(type_style(24.0, 32.0));
+            text()
+                .content(I18N.text(&(label)))
+                .style(type_style(24.0, 32.0));
             gap(Dp(8.0));
             text()
-                .content("A focused collection of related content.")
+                .content(I18N.text("ui-a-focused-collection-of-related-content"))
                 .style(type_style(16.0, 24.0));
         });
 }
@@ -148,110 +158,125 @@ fn tokens() {
         for style in VARIANTS {
             button()
                 .selected(variant.get() == style)
-                .accessibility_label(format!("{} card tokens", name(style)))
+                .accessibility_label(I18N.format(
+                    "ui-value-card-tokens",
+                    [("v0", I18N.text(&name(style)).into())],
+                ))
                 .on_click(move || variant.set(style))
                 .child(move || {
-                    text().content(name(style));
+                    text().content(I18N.text(name(style)));
                 });
         }
     });
     gap(Dp(24.0));
     let (container, outline, shadow, tint, resting, hover, dragged) = match variant.get() {
         CardVariant::Elevated => (
-            "Surface container low",
-            "None",
+            "ui-surface-container-low",
+            "ui-none",
             "#000000",
-            "Primary",
+            "ui-primary",
             "1dp",
             "2dp",
             "4dp",
         ),
         CardVariant::Filled => (
-            "Surface container highest",
-            "None",
-            "None",
-            "None",
+            "ui-surface-container-highest",
+            "ui-none",
+            "ui-none",
+            "ui-none",
             "0dp",
             "1dp",
             "3dp",
         ),
         CardVariant::Outlined => (
-            "Surface",
-            "Outline variant · 1dp",
-            "None",
-            "None",
+            "ui-surface",
+            "ui-outline-variant-1dp",
+            "ui-none",
+            "ui-none",
             "0dp",
             "1dp",
             "3dp",
         ),
     };
-    subheading("Element tokens".to_owned());
+    subheading("ui-element-tokens".to_owned());
     gap(Dp(16.0));
     spec_table(
-        vec!["Element".into(), "Token".into(), "Value".into()],
+        vec!["ui-element".into(), "ui-token".into(), "ui-value".into()],
         vec![
             vec![
-                "Container".into(),
-                "Container color".into(),
+                "ui-container".into(),
+                "ui-container-color".into(),
                 container.into(),
             ],
             vec![
-                "Outline".into(),
-                "Outline color and width".into(),
+                "ui-outline".into(),
+                "ui-outline-color-and-width".into(),
                 outline.into(),
             ],
             vec![
-                "Shape".into(),
-                "Container shape".into(),
-                "12dp corners".into(),
+                "ui-shape".into(),
+                "ui-container-shape".into(),
+                "ui-12dp-corners".into(),
             ],
-            vec!["Shadow".into(), "Shadow color".into(), shadow.into()],
+            vec!["ui-shadow".into(), "ui-shadow-color".into(), shadow.into()],
             vec![
-                "Tint".into(),
-                "Surface tint layer color".into(),
+                "ui-tint".into(),
+                "ui-surface-tint-layer-color".into(),
                 tint.into(),
             ],
             vec![
-                "Label".into(),
-                "Label text color".into(),
-                "On surface".into(),
+                "ui-label".into(),
+                "ui-label-text-color".into(),
+                "ui-on-surface".into(),
             ],
             vec![
-                "Icon".into(),
-                "Icon color and size".into(),
-                "On surface variant · 24dp".into(),
+                "ui-icon".into(),
+                "ui-icon-color-and-size".into(),
+                "ui-on-surface-variant-24dp".into(),
             ],
         ],
     );
     gap(Dp(32.0));
-    subheading("State tokens".to_owned());
+    subheading("ui-state-tokens".to_owned());
     gap(Dp(16.0));
     spec_table(
-        vec!["State".into(), "Change".into()],
+        vec!["ui-state".into(), "ui-change".into()],
         vec![
             vec![
-                "Enabled".into(),
-                format!("{resting} resting elevation with the element tokens above"),
+                "ui-enabled".into(),
+                I18N.format(
+                    "ui-value-resting-elevation-with-the-element-tokens-above",
+                    [("v0", I18N.text(&resting).into())],
+                ),
             ],
             vec![
-                "Disabled".into(),
-                "Content at 38% with the shadow removed".into(),
+                "ui-disabled".into(),
+                "ui-content-at-38-with-the-shadow-removed".into(),
             ],
             vec![
-                "Hovered".into(),
-                format!("{hover} elevation and an 8% state layer"),
+                "ui-hovered".into(),
+                I18N.format(
+                    "ui-value-elevation-and-an-8-state-layer",
+                    [("v0", I18N.text(&hover).into())],
+                ),
             ],
             vec![
-                "Focused".into(),
-                format!("3dp focus indicator at {resting} elevation"),
+                "ui-focused".into(),
+                I18N.format(
+                    "ui-3dp-focus-indicator-at-value-elevation",
+                    [("v0", I18N.text(&resting).into())],
+                ),
             ],
             vec![
-                "Pressed (ripple)".into(),
-                "10% state layer with the ripple".into(),
+                "ui-pressed-ripple".into(),
+                "ui-10-state-layer-with-the-ripple".into(),
             ],
             vec![
-                "Dragged".into(),
-                format!("{dragged} elevation without a state layer"),
+                "ui-dragged".into(),
+                I18N.format(
+                    "ui-value-elevation-without-a-state-layer",
+                    [("v0", I18N.text(&dragged).into())],
+                ),
             ],
         ],
     );
@@ -272,15 +297,34 @@ fn scheme(variant: CardVariant, dark: bool) {
                     column()
                         .modifier(Modifier::new().fill_max_width().padding_all(Dp(24.0)))
                         .children(move || {
-                            subheading(if dark { "Dark theme" } else { "Light theme" }.to_owned());
+                            subheading(
+                                if dark {
+                                    "ui-dark-theme"
+                                } else {
+                                    "ui-light-theme"
+                                }
+                                .to_owned(),
+                            );
                             gap(Dp(24.0));
                             sample(
                                 variant,
                                 true,
-                                format!(
-                                    "{} · {}",
-                                    name(variant),
-                                    if dark { "dark" } else { "light" }
+                                I18N.format(
+                                    "ui-value-value-format-25",
+                                    [
+                                        ("v0", I18N.text(&name(variant)).into()),
+                                        (
+                                            "v1",
+                                            I18N.text(
+                                                &(if dark {
+                                                    "ui-dark-7069"
+                                                } else {
+                                                    "ui-light-7070"
+                                                }),
+                                            )
+                                            .into(),
+                                        ),
+                                    ],
                                 ),
                             );
                         });
@@ -295,8 +339,12 @@ fn detail(variant: CardVariant) {
         .modifier(watch_in_space(geometry, "figure").fill_max_width())
         .children(move || {
             panel(RenderSlot::new(move || {
-                sample(variant, true, format!("{} card", name(variant)))
-                    .modifier(watch_in_space(geometry, "container"));
+                sample(
+                    variant,
+                    true,
+                    I18N.format("ui-value-card", [("v0", I18N.text(&name(variant)).into())]),
+                )
+                .modifier(watch_in_space(geometry, "container"));
             }));
             boxed()
                 .modifier(Modifier::new().fill_max_size())
@@ -306,22 +354,28 @@ fn detail(variant: CardVariant) {
         });
     gap(Dp(24.0));
     text()
-        .content(if variant == CardVariant::Outlined {
-            "1  Container    2  Outline"
+        .content(I18N.text(if variant == CardVariant::Outlined {
+            "ui-1-container-2-outline"
         } else {
-            "1  Container"
-        })
+            "ui-1-container"
+        }))
         .style(type_style(16.0, 24.0));
     gap(Dp(48.0));
-    subheading(format!("{} card color", name(variant)));
+    subheading(I18N.format(
+        "ui-value-card-color",
+        [("v0", I18N.text(&name(variant)).into())],
+    ));
     gap(Dp(24.0));
     scheme(variant, false);
     gap(Dp(24.0));
     scheme(variant, true);
     gap(Dp(48.0));
-    subheading(format!("{} card states", name(variant)));
+    subheading(I18N.format(
+        "ui-value-card-states",
+        [("v0", I18N.text(&name(variant)).into())],
+    ));
     gap(Dp(24.0));
-    text().content("Hover, focus with Tab, or hold a card to inspect actual feedback. Disabled cards do not activate.")
+    text().content(I18N.text("ui-hover-focus-with-tab-or-hold-a-card-to-inspect-actual-feedback-disabled-cards-do-not-activ"))
         .style(type_style(16.0, 24.0));
     gap(Dp(24.0));
     panel(RenderSlot::new(move || {
@@ -329,8 +383,22 @@ fn detail(variant: CardVariant) {
             .item_spacing(Dp(8.0))
             .line_spacing(Dp(8.0))
             .children(move || {
-                sample(variant, true, format!("{} enabled", name(variant)));
-                sample(variant, false, format!("{} disabled", name(variant)));
+                sample(
+                    variant,
+                    true,
+                    I18N.format(
+                        "ui-value-enabled",
+                        [("v0", I18N.text(&name(variant)).into())],
+                    ),
+                );
+                sample(
+                    variant,
+                    false,
+                    I18N.format(
+                        "ui-value-disabled",
+                        [("v0", I18N.text(&name(variant)).into())],
+                    ),
+                );
             });
     }));
 }
@@ -368,36 +436,45 @@ fn measurements() {
             .item_spacing(Dp(8.0))
             .line_spacing(Dp(8.0))
             .children(|| {
-                sample(CardVariant::Outlined, true, "First card");
-                sample(CardVariant::Outlined, true, "Second card");
+                sample(CardVariant::Outlined, true, "ui-first-card");
+                sample(CardVariant::Outlined, true, "ui-second-card");
             });
     }));
     gap(Dp(24.0));
     spec_table(
-        vec!["Attribute".into(), "Value".into()],
+        vec!["ui-attribute".into(), "ui-value".into()],
         vec![
-            vec!["Shape".into(), "12dp corner radius".into()],
-            vec!["Content left / right padding".into(), "16dp".into()],
-            vec!["Between cards".into(), "8dp maximum".into()],
-            vec!["Label alignment".into(), "Start-aligned".into()],
+            vec!["ui-shape".into(), "ui-12dp-corner-radius".into()],
+            vec!["ui-content-left-right-padding".into(), "16dp".into()],
+            vec!["ui-between-cards".into(), "ui-8dp-maximum".into()],
+            vec!["ui-label-alignment".into(), "ui-start-aligned".into()],
         ],
     );
 }
 
 #[tessera]
 fn prose(#[prop(into)] value: String) {
-    text().content(value).style(type_style(16.0, 24.0));
+    text()
+        .content(I18N.text(value))
+        .style(type_style(16.0, 24.0));
 }
 
 #[tessera]
 fn card_variants() {
-    panel(RenderSlot::new(|| {
+    panel(RenderSlot::new(move || {
         flow_row()
             .item_spacing(Dp(24.0))
             .line_spacing(Dp(24.0))
-            .children(|| {
+            .children(move || {
                 for variant in VARIANTS {
-                    sample(variant, true, format!("{} overview card", name(variant)));
+                    sample(
+                        variant,
+                        true,
+                        I18N.format(
+                            "ui-value-overview-card",
+                            [("v0", I18N.text(&name(variant)).into())],
+                        ),
+                    );
                 }
             });
     }));
@@ -415,16 +492,16 @@ fn card_figure(annotated: bool) {
                 column().modifier(Modifier::new().fill_max_width()).children(move || {
                     spacer().modifier(watch(geometry,"media").fill_max_width().height(Dp(194.0)).background(scheme.tertiary_container));
                     column().modifier(Modifier::new().fill_max_width().padding_all(Dp(16.0))).children(move || {
-                        text().content("Headline").style(type_style(40.0,48.0)).modifier(watch(geometry,"headline"));
-                        text().content("Subhead").style(type_style(24.0,32.0)).modifier(watch(geometry,"subhead"));
+                        text().content(I18N.text("ui-headline")).style(type_style(40.0,48.0)).modifier(watch(geometry,"headline"));
+                        text().content(I18N.text("ui-subhead")).style(type_style(24.0,32.0)).modifier(watch(geometry,"subhead"));
                         gap(Dp(32.0));
-                        text().content("Explain more about the topic shown in the headline and subhead through supporting text.")
+                        text().content(I18N.text("ui-explain-more-about-the-topic-shown-in-the-headline-and-subhead-through-supporting-text"))
                             .style(type_style(14.0,20.0)).modifier(watch(geometry,"support"));
                         gap(Dp(32.0));
                         row().main_axis_alignment(MainAxisAlignment::End).modifier(Modifier::new().fill_max_width()).children(move || {
-                            button().outlined().accessibility_label("Card secondary action").on_click(move || calls.set(calls.get()+1)).child(|| {text().content("Action");});
+                            button().outlined().accessibility_label(I18N.text("ui-card-secondary-action")).on_click(move || calls.set(calls.get()+1)).child(move || {text().content(I18N.text("ui-action"));});
                             spacer().modifier(Modifier::new().width(Dp(8.0)));
-                            button().modifier(watch(geometry,"action")).accessibility_label("Card primary button").on_click(move || calls.set(calls.get()+1)).child(|| {text().content("Action");});
+                            button().modifier(watch(geometry,"action")).accessibility_label(I18N.text("ui-card-primary-button")).on_click(move || calls.set(calls.get()+1)).child(move || {text().content(I18N.text("ui-action"));});
                         });
                     });
                 });
@@ -433,7 +510,10 @@ fn card_figure(annotated: bool) {
         });
     gap(Dp(8.0));
     text()
-        .content(format!("Card button actions: {}", calls.get()))
+        .content(I18N.format(
+            "ui-card-button-actions-value",
+            [("v0", (calls.get()).into())],
+        ))
         .style(type_style(12.0, 16.0));
 }
 
@@ -506,37 +586,37 @@ fn card_callouts(geometry: State<Geometry>) {
 #[tessera]
 fn card_guideline_anatomy() {
     prose(
-        "Only the container is required. Optional content blocks establish hierarchy through media, a headline, subhead, supporting text and actions.",
+        "ui-only-the-container-is-required-optional-content-blocks-establish-hierarchy-through-media-a",
     );
     gap(Dp(24.0));
     card_figure(true);
     gap(Dp(24.0));
-    subheading("Container".into());
+    subheading("ui-container".into());
     prose(
-        "The content determines the container's dimensions. Its surface and elevation distinguish the card from its surroundings.",
+        "ui-the-content-determines-the-container-s-dimensions-its-surface-and-elevation-distinguish-th",
     );
     gap(Dp(24.0));
-    subheading("Content blocks".into());
+    subheading("ui-content-blocks".into());
     prose(
-        "Group related elements into clear blocks and give the most important information stronger visual emphasis.",
+        "ui-group-related-elements-into-clear-blocks-and-give-the-most-important-information-stronger",
     );
     gap(Dp(24.0));
-    subheading("Dividers".into());
+    subheading("ui-dividers".into());
     prose(
-        "Use full-width dividers around expandable content and inset dividers between related regions.",
+        "ui-use-full-width-dividers-around-expandable-content-and-inset-dividers-between-related-regio",
     );
     gap(Dp(24.0));
-    subheading("Media".into());
+    subheading("ui-media".into());
     prose(
-        "A card can contain a thumbnail, image, illustration or video. Keep decorative media outside the accessibility reading order.",
+        "ui-a-card-can-contain-a-thumbnail-image-illustration-or-video-keep-decorative-media-outside-t",
     );
     gap(Dp(24.0));
-    subheading("Text".into());
+    subheading("ui-text".into());
     prose(
-        "Use the headline for the subject, a subhead for context and supporting text for details. Prefer placing text on a solid surface instead of over an image.",
+        "ui-use-the-headline-for-the-subject-a-subhead-for-context-and-supporting-text-for-details-pre",
     );
     gap(Dp(24.0));
-    subheading("Actions".into());
+    subheading("ui-actions".into());
     action_models();
 }
 
@@ -559,7 +639,7 @@ fn collection_card(index: usize) {
                         }),
                 );
                 text()
-                    .content(format!("Collection {}", index + 1))
+                    .content(I18N.format("ui-collection-value", [("v0", (index + 1).into())]))
                     .style(type_style(18.0, 24.0))
                     .modifier(Modifier::new().padding_all(Dp(16.0)));
             });
@@ -569,10 +649,10 @@ fn collection_card(index: usize) {
 #[tessera]
 fn card_collections() {
     prose(
-        "A collection shares a resting elevation. Place sorting and filtering controls outside the cards and apply them to the whole collection.",
+        "ui-a-collection-shares-a-resting-elevation-place-sorting-and-filtering-controls-outside-the-c",
     );
     gap(Dp(24.0));
-    subheading("Grid".into());
+    subheading("ui-grid".into());
     panel(RenderSlot::new(|| {
         flow_row()
             .item_spacing(Dp(8.0))
@@ -584,7 +664,7 @@ fn card_collections() {
             });
     }));
     gap(Dp(24.0));
-    subheading("Vertical list".into());
+    subheading("ui-vertical-list".into());
     panel(RenderSlot::new(|| {
         column().children(|| {
             for index in 0..3 {
@@ -594,14 +674,14 @@ fn card_collections() {
         });
     }));
     gap(Dp(24.0));
-    subheading("Carousel".into());
-    panel(RenderSlot::new(|| {
+    subheading("ui-carousel".into());
+    panel(RenderSlot::new(move || {
         carousel(5)
             .variant(CarouselVariant::Uncontained)
             .height(Dp(152.0))
             .preferred_item_width(Dp(176.0))
             .item_spacing(Dp(8.0))
-            .accessibility_label("Card collection carousel")
+            .accessibility_label(I18N.text("ui-card-collection-carousel"))
             .content(|item| {
                 collection_card(item.index);
             });
@@ -610,18 +690,20 @@ fn card_collections() {
 
 #[tessera]
 fn card_adaptive() {
-    subheading("Ergonomics".into());
+    subheading("ui-ergonomics".into());
     prose(
-        "Adapt the orientation and size of content blocks to the available space, keeping the main content prominent.",
+        "ui-adapt-the-orientation-and-size-of-content-blocks-to-the-available-space-keeping-the-main-c",
     );
     gap(Dp(24.0));
-    subheading("Visual presentation".into());
+    subheading("ui-visual-presentation".into());
     prose(
-        "Adjust spacing before stretching text-heavy cards. Let media and content blocks respond to the window's proportions.",
+        "ui-adjust-spacing-before-stretching-text-heavy-cards-let-media-and-content-blocks-respond-to",
     );
     gap(Dp(24.0));
-    subheading("Column-based layouts".into());
-    prose("Use multiple columns on wide screens and a single readable column in compact layouts.");
+    subheading("ui-column-based-layouts".into());
+    prose(
+        "ui-use-multiple-columns-on-wide-screens-and-a-single-readable-column-in-compact-layouts",
+    );
     gap(Dp(24.0));
     panel(RenderSlot::new(|| {
         flow_row()
@@ -634,9 +716,9 @@ fn card_adaptive() {
             });
     }));
     gap(Dp(24.0));
-    subheading("Small screens".into());
+    subheading("ui-small-screens".into());
     prose(
-        "A compact list can replace a card collection when space is limited. Preserve the same information and actions.",
+        "ui-a-compact-list-can-replace-a-card-collection-when-space-is-limited-preserve-the-same-infor",
     );
 }
 
@@ -656,47 +738,47 @@ fn action_models() {
                             .modifier(Modifier::new().padding_all(Dp(16.0)))
                             .children(move || {
                                 text()
-                                    .content("Non-actionable card")
+                                    .content(I18N.text("ui-non-actionable-card"))
                                     .style(type_style(20.0, 28.0));
                                 gap(Dp(16.0));
                                 button()
                                     .on_click(move || clicks.set(clicks.get() + 1))
-                                    .child(|| {
-                                        text().content("Action");
+                                    .child(move || {
+                                        text().content(I18N.text("ui-action"));
                                     });
                             });
                     });
                 card()
                     .outlined()
                     .modifier(Modifier::new().width(Dp(248.0)))
-                    .accessibility_label("Open card details")
+                    .accessibility_label(I18N.text("ui-open-card-details"))
                     .on_click(move || clicks.set(clicks.get() + 1))
                     .content(|| {
-                        body("Directly actionable card");
+                        body("ui-directly-actionable-card");
                     });
             });
         gap(Dp(16.0));
-        prose(format!("Card actions: {}", clicks.get()));
+        prose(I18N.format("ui-card-actions-value", [("v0", (clicks.get()).into())]));
     }));
 }
 
 #[tessera]
 fn card_behavior() {
-    subheading("Expanding".into());
+    subheading("ui-expanding".into());
     prose(
-        "Reveal additional content by expanding the card. Avoid an independent scrolling region inside a card on compact screens.",
+        "ui-reveal-additional-content-by-expanding-the-card-avoid-an-independent-scrolling-region-insi",
     );
     gap(Dp(24.0));
     expanding_card();
     gap(Dp(24.0));
-    subheading("Navigation".into());
+    subheading("ui-navigation".into());
     prose(
-        "A card may navigate to details at the next level of hierarchy. Keep its destination clear from the headline and accessible name.",
+        "ui-a-card-may-navigate-to-details-at-the-next-level-of-hierarchy-keep-its-destination-clear-f",
     );
     gap(Dp(24.0));
-    subheading("Gestures".into());
+    subheading("ui-gestures".into());
     prose(
-        "Assign one swipe action per card and provide a visible alternative for moving or dismissing it. A dragged card rises above its neighbors without displacing them.",
+        "ui-assign-one-swipe-action-per-card-and-provide-a-visible-alternative-for-moving-or-dismissin",
     );
 }
 
@@ -704,31 +786,31 @@ fn card_behavior() {
 fn expanding_card() {
     let expanded = remember(|| false);
     panel(RenderSlot::new(move || {
-        card().outlined().modifier(Modifier::new().width(Dp(360.0))).content(move || {column().modifier(Modifier::new().padding_all(Dp(16.0))).children(move || {text().content("Explore the details").style(type_style(24.0,32.0));gap(Dp(16.0));if expanded.get() {prose("Expanded content stays within the card's hierarchy and grows the card instead of introducing a nested scrolling area.");gap(Dp(16.0));}button().text().accessibility_label("Toggle card details").on_click(move || expanded.set(!expanded.get())).child(move || {text().content(if expanded.get() {"Show less"} else {"Learn more"});});});});
+        card().outlined().modifier(Modifier::new().width(Dp(360.0))).content(move || {column().modifier(Modifier::new().padding_all(Dp(16.0))).children(move || {text().content(I18N.text("ui-explore-the-details")).style(type_style(24.0,32.0));gap(Dp(16.0));if expanded.get() {prose("ui-expanded-content-stays-within-the-card-s-hierarchy-and-grows-the-card-instead-of-introduci");gap(Dp(16.0));}button().text().accessibility_label(I18N.text("ui-toggle-card-details")).on_click(move || expanded.set(!expanded.get())).child(move || {text().content(I18N.text(if expanded.get() {"ui-show-less"} else {"ui-learn-more"}));});});});
     }));
 }
 
 #[tessera]
 fn card_interaction() {
     prose(
-        "Use either a directly actionable card or a passive container with internal actions. Avoid stacking actions on an actionable surface.",
+        "ui-use-either-a-directly-actionable-card-or-a-passive-container-with-internal-actions-avoid-s",
     );
     gap(Dp(24.0));
-    subheading("Touch".into());
+    subheading("ui-touch".into());
     prose(
-        "Directly actionable cards ripple across their surface. Passive cards leave feedback to their controls.",
+        "ui-directly-actionable-cards-ripple-across-their-surface-passive-cards-leave-feedback-to-thei",
     );
     gap(Dp(24.0));
-    subheading("Dragging and dismissing".into());
+    subheading("ui-dragging-and-dismissing".into());
     prose(
-        "Offer a single-pointer action as an alternative to dragging or swiping. Keep that action reachable without covering the dragged card.",
+        "ui-offer-a-single-pointer-action-as-an-alternative-to-dragging-or-swiping-keep-that-action-re",
     );
     gap(Dp(24.0));
-    subheading("Cursor".into());
-    prose("Hover and click feedback belong to the actionable surface or control.");
+    subheading("ui-cursor".into());
+    prose("ui-hover-and-click-feedback-belong-to-the-actionable-surface-or-control");
     gap(Dp(24.0));
-    subheading("Keyboard".into());
-    prose("Tab reaches every action. Space or Enter activates the focused card or button.");
+    subheading("ui-keyboard".into());
+    prose("ui-tab-reaches-every-action-space-or-enter-activates-the-focused-card-or-button");
     gap(Dp(24.0));
     action_models();
 }

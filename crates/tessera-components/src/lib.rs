@@ -1,5 +1,7 @@
 //! Basic components for the Tessera UI framework.
 //!
+//! Built-in labels follow the language registered with the application entry.
+//!
 //! # Usage
 //!
 //! First, add the package (recommended) or render module provided by this crate

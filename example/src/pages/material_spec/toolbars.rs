@@ -33,6 +33,8 @@ use tessera_ui::{
     modifier::FocusModifierExt as _, remember, tessera, use_context,
 };
 
+use crate::res::I18N;
+
 use super::{
     INK,
     annotations::{self, Geometry, dotted, relative, watch},
@@ -56,35 +58,35 @@ enum Variant {
 #[tessera]
 pub(super) fn toolbars_spec(route: Option<crate::pages::material_spec::article::ArticleRoute>) {
     article(
-        "Toolbars",
-        "Toolbars display frequently used actions relevant to the current page",
+        "ui-toolbars",
+        "ui-toolbars-display-frequently-used-actions-relevant-to-the-current-page",
         vec![
             SpecSection {
-                title: "Variants",
+                title: "ui-variants",
                 content: RenderSlot::new(spec_variants),
             },
             SpecSection {
-                title: "Configurations",
+                title: "ui-configurations",
                 content: RenderSlot::new(spec_configurations),
             },
             SpecSection {
-                title: "Tokens & specs",
+                title: "ui-tokens-specs",
                 content: RenderSlot::new(tokens),
             },
             SpecSection {
-                title: "Anatomy",
+                title: "ui-anatomy",
                 content: RenderSlot::new(spec_anatomy),
             },
             SpecSection {
-                title: "Color",
+                title: "ui-color",
                 content: RenderSlot::new(spec_color),
             },
             SpecSection {
-                title: "Measurements",
+                title: "ui-measurements",
                 content: RenderSlot::new(measurements),
             },
             SpecSection {
-                title: "Bottom app bar (baseline)",
+                title: "ui-bottom-app-bar-baseline",
                 content: RenderSlot::new(baseline_specs),
             },
         ],
@@ -92,67 +94,67 @@ pub(super) fn toolbars_spec(route: Option<crate::pages::material_spec::article::
     .route_optional(route.clone())
     .pages(vec![
         ArticlePage {
-            title: "Overview",
+            title: "ui-overview",
             intro: Some(RenderSlot::new(overview)),
             sections: vec![
                 SpecSection {
-                    title: "Availability & resources",
+                    title: "ui-availability-resources",
                     content: RenderSlot::new(availability),
                 },
                 SpecSection {
-                    title: "M3 Expressive update",
+                    title: "ui-m3-expressive-update",
                     content: RenderSlot::new(expressive_update),
                 },
                 SpecSection {
-                    title: "Differences from M2",
+                    title: "ui-differences-from-m2",
                     content: RenderSlot::new(differences),
                 },
             ],
         },
         ArticlePage {
-            title: "Guidelines",
+            title: "ui-guidelines",
             intro: Some(RenderSlot::new(|| {
                 gallery(GalleryKind::UseCases);
                 gap(Dp(16.0));
-                caption("Toolbars can be used for a wide variety of use cases");
+                caption("ui-toolbars-can-be-used-for-a-wide-variety-of-use-cases");
             })),
             sections: vec![
                 SpecSection {
-                    title: "Usage",
+                    title: "ui-usage",
                     content: RenderSlot::new(usage),
                 },
                 SpecSection {
-                    title: "Anatomy",
+                    title: "ui-anatomy",
                     content: RenderSlot::new(guide_anatomy),
                 },
                 SpecSection {
-                    title: "Position & orientation",
+                    title: "ui-position-orientation",
                     content: RenderSlot::new(position),
                 },
                 SpecSection {
-                    title: "Adaptive design",
+                    title: "ui-adaptive-design",
                     content: RenderSlot::new(adaptive),
                 },
                 SpecSection {
-                    title: "Behavior",
+                    title: "ui-behavior",
                     content: RenderSlot::new(behavior),
                 },
             ],
         },
         ArticlePage {
-            title: "Accessibility",
+            title: "ui-accessibility",
             intro: None,
             sections: vec![
                 SpecSection {
-                    title: "Use cases",
+                    title: "ui-use-cases",
                     content: RenderSlot::new(use_cases),
                 },
                 SpecSection {
-                    title: "Interaction & style",
+                    title: "ui-interaction-style",
                     content: RenderSlot::new(interaction_style),
                 },
                 SpecSection {
-                    title: "Keyboard navigation",
+                    title: "ui-keyboard-navigation",
                     content: RenderSlot::new(keyboard),
                 },
             ],
@@ -162,7 +164,9 @@ pub(super) fn toolbars_spec(route: Option<crate::pages::material_spec::article::
 
 #[tessera]
 fn paragraph(content: String) {
-    text().content(content).style(type_style(16.0, 24.0));
+    text()
+        .content(I18N.text(content))
+        .style(type_style(16.0, 24.0));
 }
 
 #[tessera]
@@ -175,10 +179,10 @@ fn toolbar_control(
 ) {
     let scheme = use_context::<MaterialTheme>().unwrap().get().color_scheme;
     let (label, vector) = match index {
-        0 => ("Select", filled::CHECK_BOX_SVG),
-        1 => ("Brush", filled::BRUSH_SVG),
-        2 => ("Record", filled::MIC_SVG),
-        _ => ("Add image", filled::IMAGE_SVG),
+        0 => ("ui-select", filled::CHECK_BOX_SVG),
+        1 => ("ui-brush", filled::BRUSH_SVG),
+        2 => ("ui-record", filled::MIC_SVG),
+        _ => ("ui-add-image", filled::IMAGE_SVG),
     };
     if index == 0 {
         icon_button()
@@ -193,10 +197,10 @@ fn toolbar_control(
                     }),
             )
             .icon(vector)
-            .accessibility_label(label)
+            .accessibility_label(I18N.text(label))
             .on_click(move || {
                 selected.set(!selected.get());
-                notice.set(format!("{label} activated"));
+                notice.set(I18N.format("ui-value-activated", [("v0", I18N.text(&label).into())]));
             })
             .filled_tonal()
             .selected(selected.get())
@@ -223,9 +227,9 @@ fn toolbar_control(
                     }),
             )
             .icon(vector)
-            .accessibility_label(label)
+            .accessibility_label(I18N.text(label))
             .on_click(move || {
-                notice.set(format!("{label} activated"));
+                notice.set(I18N.format("ui-value-activated", [("v0", I18N.text(&label).into())]));
             })
             .filled();
     } else {
@@ -241,9 +245,9 @@ fn toolbar_control(
                     }),
             )
             .icon(vector)
-            .accessibility_label(label)
+            .accessibility_label(I18N.text(label))
             .on_click(move || {
-                notice.set(format!("{label} activated"));
+                notice.set(I18N.format("ui-value-activated", [("v0", I18N.text(&label).into())]));
             })
             .standard()
             .content_color(if vibrant {
@@ -276,7 +280,7 @@ fn toolbar_content(
         docked_toolbar()
             .modifier(modifier.fill_max_width())
             .color_style(color)
-            .accessibility_label("Docked editing actions")
+            .accessibility_label(I18N.text("ui-docked-editing-actions"))
             .content(move || {
                 for index in 0..4 {
                     toolbar_control(index, vibrant, selected, notice).geometry_optional(geometry);
@@ -292,7 +296,7 @@ fn toolbar_content(
                 ToolbarOrientation::Horizontal
             })
             .expanded(expanded)
-            .accessibility_label("Floating editing actions")
+            .accessibility_label(I18N.text("ui-floating-editing-actions"))
             .content(move || {
                 toolbar_control(0, vibrant, selected, notice).geometry_optional(geometry);
             })
@@ -338,7 +342,7 @@ fn baseline_figure() {
                                 .height(Dp(80.0))
                                 .semantics(SemanticsArgs {
                                     role: Some(Role::Toolbar),
-                                    label: Some("Baseline bottom app bar".into()),
+                                    label: Some(I18N.text("ui-baseline-bottom-app-bar")),
                                     test_tag: Some("baseline-bottom-bar".into()),
                                     ..Default::default()
                                 }),
@@ -354,10 +358,10 @@ fn baseline_figure() {
                                 .cross_axis_alignment(CrossAxisAlignment::Center)
                                 .children(move || {
                                     for (index, (label, vector)) in [
-                                        ("Select", filled::CHECK_SVG),
-                                        ("Search", filled::SEARCH_SVG),
-                                        ("Record", filled::MIC_SVG),
-                                        ("Image", filled::IMAGE_SVG),
+                                        ("ui-select", filled::CHECK_SVG),
+                                        ("ui-search", filled::SEARCH_SVG),
+                                        ("ui-record", filled::MIC_SVG),
+                                        ("ui-image", filled::IMAGE_SVG),
                                     ]
                                     .into_iter()
                                     .enumerate()
@@ -380,9 +384,15 @@ fn baseline_figure() {
                                             )
                                             .standard()
                                             .icon(vector)
-                                            .accessibility_label(format!("Baseline {label}"))
+                                            .accessibility_label(I18N.format(
+                                                "ui-baseline-value-format-430",
+                                                [("v0", I18N.text(&label).into())],
+                                            ))
                                             .on_click(move || {
-                                                notice.set(format!("Baseline {label} activated"))
+                                                notice.set(I18N.format(
+                                                    "ui-baseline-value-activated",
+                                                    [("v0", I18N.text(&label).into())],
+                                                ))
                                             });
                                     }
                                     spacer().modifier(Modifier::new().weight(1.0));
@@ -391,9 +401,9 @@ fn baseline_figure() {
                                             test_tag: Some("baseline-fab".into()),
                                             ..Default::default()
                                         }))
-                                        .accessibility_label("Baseline create")
+                                        .accessibility_label(I18N.text("ui-baseline-create"))
                                         .on_click(move || {
-                                            notice.set("Baseline create activated".into())
+                                            notice.set("ui-baseline-create-activated".into())
                                         })
                                         .content(|| {
                                             icon().vector(filled::ADD_SVG);
@@ -492,14 +502,22 @@ fn figure(variant: Variant, color: ToolbarColorStyle, measurements: bool) {
                             role: Some(Role::Group),
                             test_tag: Some("spec-toolbar-figure".into()),
                             merge_descendants: true,
-                            label: Some(format!(
-                                "Toolbar {} figure",
-                                if measurements {
-                                    "measurement"
-                                } else {
-                                    "anatomy"
-                                }
-                            )),
+                            label: Some(
+                                I18N.format(
+                                    "ui-toolbar-value-figure",
+                                    [(
+                                        "v0",
+                                        I18N.text(
+                                            &(if measurements {
+                                                "ui-measurement-7071"
+                                            } else {
+                                                "ui-anatomy-7072"
+                                            }),
+                                        )
+                                        .into(),
+                                    )],
+                                ),
+                            ),
                             ..Default::default()
                         }),
                 )
@@ -537,7 +555,9 @@ fn figure(variant: Variant, color: ToolbarColorStyle, measurements: bool) {
                                                                 ..Default::default()
                                                             },
                                                         ))
-                                                        .accessibility_label("Create item")
+                                                        .accessibility_label(
+                                                            I18N.text("ui-create-item"),
+                                                        )
                                                         .elevation(
                                                             FloatingActionButtonElevation::new(
                                                                 Dp(1.0),
@@ -547,8 +567,9 @@ fn figure(variant: Variant, color: ToolbarColorStyle, measurements: bool) {
                                                             ),
                                                         )
                                                         .on_click(move || {
-                                                            notice
-                                                                .set("Create item activated".into())
+                                                            notice.set(
+                                                                "ui-create-item-activated".into(),
+                                                            )
                                                         })
                                                         .content(|| {
                                                             icon()
@@ -564,10 +585,12 @@ fn figure(variant: Variant, color: ToolbarColorStyle, measurements: bool) {
                 });
             if !measurements {
                 gap(Dp(16.0));
-                legend(vec!["Container".into(), "Placed components".into()]);
+                legend(vec!["ui-container".into(), "ui-placed-components".into()]);
             }
             if !notice.get().is_empty() {
-                text().content(notice.get()).style(type_style(14.0, 20.0));
+                text()
+                    .content(I18N.text(notice.get()))
+                    .style(type_style(14.0, 20.0));
             }
         });
 }
@@ -693,14 +716,16 @@ fn toolbar_annotations(geometry: State<Geometry>, measurements: bool, variant: V
 
 #[tessera]
 fn prose(#[prop(into)] value: String) {
-    text().content(value).style(type_style(16.0, 24.0));
+    text()
+        .content(I18N.text(value))
+        .style(type_style(16.0, 24.0));
 }
 
 #[tessera]
 fn caption(#[prop(into)] value: String) {
     let scheme = use_context::<MaterialTheme>().unwrap().get().color_scheme;
     text()
-        .content(value)
+        .content(I18N.text(value))
         .color(scheme.on_surface_variant)
         .style(type_style(14.0, 20.0));
 }
@@ -711,12 +736,13 @@ fn bullets(items: Vec<String>) {
         .modifier(Modifier::new().fill_max_width())
         .children(move || {
             for item in items.clone() {
+                let item = I18N.text(item);
                 let (indent, item) = match item.strip_prefix("- ") {
                     Some(nested) => (Dp(24.0), nested.to_string()),
                     None => (Dp::ZERO, item),
                 };
                 text()
-                    .content(format!("•  {item}"))
+                    .content(format!("•  {}", I18N.text(item)))
                     .modifier(Modifier::new().padding(Padding::new(
                         indent,
                         Dp::ZERO,
@@ -740,7 +766,7 @@ fn number_badge(number: usize) {
         )
         .children(move || {
             text()
-                .content(number.to_string())
+                .content((number).to_string())
                 .style(type_style(12.0, 16.0))
                 .color(Color::WHITE);
         });
@@ -763,7 +789,7 @@ fn legend(items: Vec<String>) {
                         number_badge(index + 1);
                         spacer().modifier(Modifier::new().width(Dp(12.0)));
                         text()
-                            .content(label.clone())
+                            .content(I18N.text(&(label)))
                             .modifier(Modifier::new().weight(1.0))
                             .style(type_style(14.0, 20.0));
                     });
@@ -788,13 +814,13 @@ fn guidance(#[prop(into)] mark: String, #[prop(into)] note: String, color: Color
                 )
                 .children(move || {
                     text()
-                        .content(mark.clone())
+                        .content(I18N.text(&(mark)))
                         .style(type_style(14.0, 20.0))
                         .color(Color::WHITE);
                 });
             spacer().modifier(Modifier::new().width(Dp(12.0)));
             text()
-                .content(note.clone())
+                .content(I18N.text(&(note)))
                 .modifier(Modifier::new().weight(1.0))
                 .color(scheme.on_surface_variant)
                 .style(type_style(14.0, 20.0));
@@ -813,7 +839,7 @@ fn dont_note(#[prop(into)] note: String) {
 
 #[tessera]
 fn caution_note(#[prop(into)] note: String) {
-    guidance("Caution", note, CAUTION_COLOR);
+    guidance("ui-caution", note, CAUTION_COLOR);
 }
 
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
@@ -851,82 +877,82 @@ fn sample_actions(sample: Sample) -> Vec<SampleAction> {
     use Emphasis::{Filled, Standard, Toggle};
     match sample {
         Sample::Mail => vec![
-            action("Archive", Standard),
-            action("Delete", Standard),
-            action("Mark unread", Standard),
-            action("Snooze", Standard),
-            action("Star", Standard),
+            action("ui-archive", Standard),
+            action("ui-delete", Standard),
+            action("ui-mark-unread", Standard),
+            action("ui-snooze", Standard),
+            action("ui-star", Standard),
         ],
         Sample::Format => vec![
-            action("Bold", Toggle),
-            action("Italic", Standard),
-            action("Underline", Standard),
-            action("Text color", Standard),
-            action("Highlight", Standard),
-            action("More options", Standard),
+            action("ui-bold", Toggle),
+            action("ui-italic", Standard),
+            action("ui-underline", Standard),
+            action("ui-text-color", Standard),
+            action("ui-highlight", Standard),
+            action("ui-more-options", Standard),
         ],
         Sample::FormatTonal => vec![
-            action("Bold", Toggle),
-            action("Italic", Toggle),
-            action("Underline", Standard),
-            action("Text color", Standard),
-            action("More options", Standard),
+            action("ui-bold", Toggle),
+            action("ui-italic", Toggle),
+            action("ui-underline", Standard),
+            action("ui-text-color", Standard),
+            action("ui-more-options", Standard),
         ],
         Sample::Navigate => vec![
-            action("Back", Standard),
-            action("Forward", Standard),
-            action("Add", Filled),
-            action("Picture in picture", Standard),
-            action("More options", Standard),
+            action("ui-back", Standard),
+            action("ui-forward", Standard),
+            action("ui-add", Filled),
+            action("ui-picture-in-picture", Standard),
+            action("ui-more-options", Standard),
         ],
         Sample::Edit => vec![
-            action("Camera off", Standard),
-            action("Microphone", Standard),
-            action("Raise hand", Toggle),
-            action("More options", Standard),
+            action("ui-camera-off", Standard),
+            action("ui-microphone", Standard),
+            action("ui-raise-hand", Toggle),
+            action("ui-more-options", Standard),
         ],
         Sample::Vertical => vec![
-            action("Undo", Standard),
-            action("Redo", Standard),
-            action("Add", Standard),
-            action("Text color", Standard),
-            action("More options", Standard),
+            action("ui-undo", Standard),
+            action("ui-redo", Standard),
+            action("ui-add", Standard),
+            action("ui-text-color", Standard),
+            action("ui-more-options", Standard),
         ],
-        Sample::History => vec![action("Undo", Standard), action("Redo", Standard)],
+        Sample::History => vec![action("ui-undo", Standard), action("ui-redo", Standard)],
         Sample::ColorRoles => vec![
-            action("Add", Filled),
-            action("Bold", Toggle),
-            action("Italic", Standard),
-            action("Underline", Standard),
+            action("ui-add", Filled),
+            action("ui-bold", Toggle),
+            action("ui-italic", Standard),
+            action("ui-underline", Standard),
         ],
     }
 }
 
 fn action_icon(label: &str) -> tessera_components::material_icons::Asset {
     match label {
-        "Archive" => filled::ARCHIVE_SVG,
-        "Delete" => filled::DELETE_SVG,
-        "Mark unread" => filled::MARK_EMAIL_UNREAD_SVG,
-        "Snooze" => filled::SNOOZE_SVG,
-        "Star" => filled::STAR_SVG,
-        "Bold" => filled::FORMAT_BOLD_SVG,
-        "Italic" => filled::FORMAT_ITALIC_SVG,
-        "Underline" => filled::FORMAT_UNDERLINED_SVG,
-        "Text color" => filled::FORMAT_COLOR_TEXT_SVG,
-        "Highlight" => filled::FORMAT_COLOR_FILL_SVG,
-        "Back" => filled::ARROW_BACK_SVG,
-        "Forward" => filled::ARROW_FORWARD_SVG,
-        "Add" => filled::ADD_SVG,
-        "Picture in picture" => filled::PICTURE_IN_PICTURE_SVG,
-        "Camera off" => filled::VIDEOCAM_OFF_SVG,
-        "Microphone" => filled::MIC_SVG,
-        "Raise hand" => filled::BACK_HAND_SVG,
-        "Mail" => filled::MAIL_SVG,
-        "Chat" => filled::PEOPLE_SVG,
-        "Settings" => filled::SETTINGS_SVG,
-        "Reply" => filled::REPLY_SVG,
-        "Undo" => filled::UNDO_SVG,
-        "Redo" => filled::REDO_SVG,
+        "ui-archive" => filled::ARCHIVE_SVG,
+        "ui-delete" => filled::DELETE_SVG,
+        "ui-mark-unread" => filled::MARK_EMAIL_UNREAD_SVG,
+        "ui-snooze" => filled::SNOOZE_SVG,
+        "ui-star" => filled::STAR_SVG,
+        "ui-bold" => filled::FORMAT_BOLD_SVG,
+        "ui-italic" => filled::FORMAT_ITALIC_SVG,
+        "ui-underline" => filled::FORMAT_UNDERLINED_SVG,
+        "ui-text-color" => filled::FORMAT_COLOR_TEXT_SVG,
+        "ui-highlight" => filled::FORMAT_COLOR_FILL_SVG,
+        "ui-back" => filled::ARROW_BACK_SVG,
+        "ui-forward" => filled::ARROW_FORWARD_SVG,
+        "ui-add" => filled::ADD_SVG,
+        "ui-picture-in-picture" => filled::PICTURE_IN_PICTURE_SVG,
+        "ui-camera-off" => filled::VIDEOCAM_OFF_SVG,
+        "ui-microphone" => filled::MIC_SVG,
+        "ui-raise-hand" => filled::BACK_HAND_SVG,
+        "ui-mail" => filled::MAIL_SVG,
+        "ui-chat" => filled::PEOPLE_SVG,
+        "ui-settings" => filled::SETTINGS_SVG,
+        "ui-reply" => filled::REPLY_SVG,
+        "ui-undo" => filled::UNDO_SVG,
+        "ui-redo" => filled::REDO_SVG,
         _ => filled::MORE_VERT_SVG,
     }
 }
@@ -938,7 +964,7 @@ fn visible_actions(actions: Vec<SampleAction>, limit: usize) -> Vec<SampleAction
         return actions;
     }
     match actions.last().copied() {
-        Some(last) if last.label == "More options" => {
+        Some(last) if last.label == "ui-more-options" => {
             let mut kept = actions[..limit - 1].to_vec();
             kept.push(last);
             kept
@@ -955,13 +981,13 @@ fn actions_that_fit(width: Dp, padding: f64) -> usize {
 
 fn sample_label(sample: Sample) -> &'static str {
     match sample {
-        Sample::Mail => "Mail actions",
-        Sample::Format | Sample::FormatTonal => "Formatting actions",
-        Sample::Navigate => "Browsing actions",
-        Sample::Edit => "Call actions",
-        Sample::Vertical => "Canvas actions",
-        Sample::History => "History actions",
-        Sample::ColorRoles => "Color role actions",
+        Sample::Mail => "ui-mail-actions",
+        Sample::Format | Sample::FormatTonal => "ui-formatting-actions",
+        Sample::Navigate => "ui-browsing-actions",
+        Sample::Edit => "ui-call-actions",
+        Sample::Vertical => "ui-canvas-actions",
+        Sample::History => "ui-history-actions",
+        Sample::ColorRoles => "ui-color-role-actions",
     }
 }
 
@@ -987,14 +1013,14 @@ fn sample_action(
 ) {
     let scheme = use_context::<MaterialTheme>().unwrap().get().color_scheme;
     let vector = action_icon(&label);
-    let message = format!("{label} activated");
+    let message = I18N.format("ui-value-activated", [("v0", I18N.text(&label).into())]);
     let modifier = tagged(tag);
     match emphasis {
         Emphasis::Toggle => {
             icon_button()
                 .modifier(modifier)
                 .icon(vector)
-                .accessibility_label(label.clone())
+                .accessibility_label(I18N.text(&(label)))
                 .on_click(move || {
                     selected.set(!selected.get());
                     notice.set(message.clone());
@@ -1016,7 +1042,7 @@ fn sample_action(
             icon_button()
                 .modifier(modifier)
                 .icon(vector)
-                .accessibility_label(label.clone())
+                .accessibility_label(I18N.text(&(label)))
                 .on_click(move || notice.set(message.clone()))
                 .filled();
         }
@@ -1024,7 +1050,7 @@ fn sample_action(
             icon_button()
                 .modifier(modifier)
                 .icon(vector)
-                .accessibility_label(label.clone())
+                .accessibility_label(I18N.text(&(label)))
                 .on_click(move || notice.set(message.clone()))
                 .standard()
                 .content_color(if vibrant {
@@ -1086,7 +1112,7 @@ fn sample_toolbar(
         docked_toolbar()
             .modifier(modifier)
             .color_style(color)
-            .accessibility_label(sample_label(sample))
+            .accessibility_label(I18N.text(sample_label(sample)))
             .content_shared(content);
     } else {
         floating_toolbar()
@@ -1097,7 +1123,7 @@ fn sample_toolbar(
                 ToolbarOrientation::Horizontal
             })
             .elevation(elevation.unwrap_or(Dp(6.0)))
-            .accessibility_label(sample_label(sample))
+            .accessibility_label(I18N.text(sample_label(sample)))
             .content_shared(content);
     }
 }
@@ -1126,27 +1152,27 @@ fn fab_pair(
     let fab_tag = gallery_tag.map(|item| format!("toolbar-gallery-{item}-fab"));
     let (label, container, content) = match fab {
         FabKind::EndCall => (
-            "End call",
+            "ui-end-call",
             scheme.error_container,
             scheme.on_error_container,
         ),
         FabKind::Reply if vibrant => (
-            "Reply",
+            "ui-reply",
             scheme.tertiary_container,
             scheme.on_tertiary_container,
         ),
         FabKind::Add if vibrant => (
-            "Create",
+            "ui-create",
             scheme.tertiary_container,
             scheme.on_tertiary_container,
         ),
         FabKind::Reply => (
-            "Reply",
+            "ui-reply",
             scheme.secondary_container,
             scheme.on_secondary_container,
         ),
         FabKind::Add => (
-            "Create",
+            "ui-create",
             scheme.secondary_container,
             scheme.on_secondary_container,
         ),
@@ -1165,14 +1191,17 @@ fn fab_pair(
                 .size(FloatingActionButtonSize::Standard)
                 .container_color(container)
                 .content_color(content)
-                .accessibility_label(label)
+                .accessibility_label(I18N.text(label))
                 .elevation(FloatingActionButtonElevation::new(
                     Dp(1.0),
                     Dp(1.0),
                     Dp(3.0),
                     Dp(1.0),
                 ))
-                .on_click(move || notice.set(format!("{label} activated")))
+                .on_click(move || {
+                    notice
+                        .set(I18N.format("ui-value-activated", [("v0", I18N.text(&label).into())]))
+                })
                 .content(move || {
                     icon()
                         .vector(match fab {
@@ -1488,7 +1517,7 @@ fn gallery(kind: GalleryKind) {
                         .notice(notice);
                 });
                 gap(Dp(12.0));
-                caption("Docked toolbar shows global controls");
+                caption("ui-docked-toolbar-shows-global-controls");
                 gap(Dp(32.0));
                 gallery_item(1).content(move |gallery_tag| {
                     sample_toolbar(Sample::Format)
@@ -1497,7 +1526,7 @@ fn gallery(kind: GalleryKind) {
                         .notice(notice);
                 });
                 gap(Dp(12.0));
-                caption("Floating toolbar shows controls relevant to the current page");
+                caption("ui-floating-toolbar-shows-controls-relevant-to-the-current-page");
             }
             GalleryKind::ColorEmphasis => {
                 gallery_item(0).content(move |gallery_tag| {
@@ -1508,7 +1537,7 @@ fn gallery(kind: GalleryKind) {
                 });
                 gap(Dp(12.0));
                 caption(
-                    "Use the standard color scheme to draw focus to content outside the toolbar",
+                    "ui-use-the-standard-color-scheme-to-draw-focus-to-content-outside-the-toolbar",
                 );
                 gap(Dp(32.0));
                 gallery_item(1).content(move |gallery_tag| {
@@ -1519,7 +1548,7 @@ fn gallery(kind: GalleryKind) {
                         .notice(notice);
                 });
                 gap(Dp(12.0));
-                caption("Use the vibrant color scheme to emphasize controls or actions");
+                caption("ui-use-the-vibrant-color-scheme-to-emphasize-controls-or-actions");
             }
             GalleryKind::Corners => {
                 gallery_item(0).fill(true).content(move |gallery_tag| {
@@ -1530,7 +1559,7 @@ fn gallery(kind: GalleryKind) {
                         .notice(notice);
                 });
                 gap(Dp(12.0));
-                do_note("Use straight corners for docked toolbars");
+                do_note("ui-use-straight-corners-for-docked-toolbars");
                 gap(Dp(32.0));
                 gallery_item(1).fill(true).content(move |gallery_tag| {
                     sample_toolbar(Sample::Mail)
@@ -1541,7 +1570,7 @@ fn gallery(kind: GalleryKind) {
                         .notice(notice);
                 });
                 gap(Dp(12.0));
-                dont_note("Avoid modifying the container shape");
+                dont_note("ui-avoid-modifying-the-container-shape");
             }
             GalleryKind::Elevation => {
                 gallery_item(0).content(move |gallery_tag| {
@@ -1652,11 +1681,11 @@ fn text_nav_toolbar(rtl: bool, notice: Option<State<String>>, gallery_tag: Optio
     let local = remember(String::new);
     let notice = notice.unwrap_or(local);
     docked_toolbar()
-        .accessibility_label(if rtl {
-            "Mirrored page navigation"
+        .accessibility_label(I18N.text(if rtl {
+            "ui-mirrored-page-navigation"
         } else {
-            "Page navigation"
-        })
+            "ui-page-navigation"
+        }))
         .content(move || {
             row()
                 .modifier(Modifier::new().fill_max_width())
@@ -1675,24 +1704,28 @@ fn text_nav_toolbar(rtl: bool, notice: Option<State<String>>, gallery_tag: Optio
 
 #[tessera]
 fn nav_button(next: bool, notice: State<String>, tag: Option<String>) {
-    let label = if next { "Next" } else { "Back" };
+    let label = if next { "ui-next" } else { "ui-back" };
     if next {
         button()
             .modifier(tagged(tag))
             .filled()
-            .accessibility_label(label)
-            .on_click(move || notice.set(format!("{label} activated")))
+            .accessibility_label(I18N.text(label))
+            .on_click(move || {
+                notice.set(I18N.format("ui-value-activated", [("v0", I18N.text(&label).into())]))
+            })
             .child(move || {
-                text().content(label);
+                text().content(I18N.text(label));
             });
     } else {
         button()
             .modifier(tagged(tag))
             .text()
-            .accessibility_label(label)
-            .on_click(move || notice.set(format!("{label} activated")))
+            .accessibility_label(I18N.text(label))
+            .on_click(move || {
+                notice.set(I18N.format("ui-value-activated", [("v0", I18N.text(&label).into())]))
+            })
             .child(move || {
-                text().content(label);
+                text().content(I18N.text(label));
             });
     }
 }
@@ -1709,17 +1742,17 @@ fn color_roles(vibrant: bool) {
     gap(Dp(16.0));
     legend(if vibrant {
         vec![
-            "Primary container".into(),
-            "Filled button (Primary, On primary)".into(),
-            "Toggle tonal button (Surface container, On surface)".into(),
-            "Standard button (On primary container)".into(),
+            "ui-primary-container".into(),
+            "ui-filled-button-primary-on-primary".into(),
+            "ui-toggle-tonal-button-surface-container-on-surface".into(),
+            "ui-standard-button-on-primary-container".into(),
         ]
     } else {
         vec![
-            "Surface container".into(),
-            "Filled button (Primary, On primary)".into(),
-            "Toggle tonal button (Secondary container, On secondary container)".into(),
-            "Standard button (On surface variant)".into(),
+            "ui-surface-container".into(),
+            "ui-filled-button-primary-on-primary".into(),
+            "ui-toggle-tonal-button-secondary-container-on-secondary-container".into(),
+            "ui-standard-button-on-surface-variant".into(),
         ]
     });
 }
@@ -1760,14 +1793,11 @@ fn placement_figure(placement: Placement) {
                 )
                 .semantics(SemanticsArgs {
                     role: Some(Role::Group),
-                    label: Some(
-                        match placement {
-                            Placement::Docked => "Docked toolbar at the bottom of the window",
-                            Placement::Horizontal => "Horizontal floating toolbar margins",
-                            Placement::Vertical => "Vertical floating toolbar margins",
-                        }
-                        .into(),
-                    ),
+                    label: Some(I18N.text(match placement {
+                        Placement::Docked => "ui-docked-toolbar-at-the-bottom-of-the-window",
+                        Placement::Horizontal => "ui-horizontal-floating-toolbar-margins",
+                        Placement::Vertical => "ui-vertical-floating-toolbar-margins",
+                    })),
                     test_tag: Some("placement-figure".into()),
                     ..Default::default()
                 }),
@@ -1833,7 +1863,7 @@ fn placement_figure(placement: Placement) {
                                             ))
                                             .semantics(SemanticsArgs {
                                                 role: Some(Role::Group),
-                                                label: Some("Navigation rail".into()),
+                                                label: Some(I18N.text("ui-navigation-rail")),
                                                 ..Default::default()
                                             }),
                                     )
@@ -1919,19 +1949,19 @@ fn layout_action(index: usize, #[prop(into)] label: String, filled: bool, notice
         test_tag: Some(format!("layout-action-{index}")),
         ..Default::default()
     });
-    let message = format!("{label} activated");
+    let message = I18N.format("ui-value-activated", [("v0", I18N.text(&label).into())]);
     if filled {
         icon_button()
             .modifier(modifier)
             .icon(vector)
-            .accessibility_label(label.clone())
+            .accessibility_label(I18N.text(&(label)))
             .on_click(move || notice.set(message.clone()))
             .filled();
     } else {
         icon_button()
             .modifier(modifier)
             .icon(vector)
-            .accessibility_label(label.clone())
+            .accessibility_label(I18N.text(&(label)))
             .on_click(move || notice.set(message.clone()))
             .standard();
     }
@@ -1942,14 +1972,14 @@ fn docked_layout_figure(layout: DockedLayout) {
     let width = remember(|| Dp::ZERO);
     let notice = remember(String::new);
     let labels: Vec<&'static str> = if compact(width.get()) {
-        vec!["Back", "Add", "More options"]
+        vec!["ui-back", "ui-add", "ui-more-options"]
     } else {
         vec![
-            "Back",
-            "Forward",
-            "Add",
-            "Picture in picture",
-            "More options",
+            "ui-back",
+            "ui-forward",
+            "ui-add",
+            "ui-picture-in-picture",
+            "ui-more-options",
         ]
     };
     stage(
@@ -1964,10 +1994,10 @@ fn docked_layout_figure(layout: DockedLayout) {
                 .children(move || {
                     let labels = labels.clone();
                     docked_toolbar()
-                        .accessibility_label(match layout {
-                            DockedLayout::Edges => "Edge-aligned docked toolbar",
-                            DockedLayout::Centered => "Center-aligned docked toolbar",
-                        })
+                        .accessibility_label(I18N.text(match layout {
+                            DockedLayout::Edges => "ui-edge-aligned-docked-toolbar",
+                            DockedLayout::Centered => "ui-center-aligned-docked-toolbar",
+                        }))
                         .content(move || {
                             let labels = labels.clone();
                             match layout {
@@ -1982,7 +2012,12 @@ fn docked_layout_figure(layout: DockedLayout) {
                                                     spacer()
                                                         .modifier(Modifier::new().width(Dp(8.0)));
                                                 }
-                                                layout_action(index, label, label == "Add", notice);
+                                                layout_action(
+                                                    index,
+                                                    label,
+                                                    label == "ui-add",
+                                                    notice,
+                                                );
                                             }
                                         });
                                 }
@@ -1994,7 +2029,7 @@ fn docked_layout_figure(layout: DockedLayout) {
                                             for (index, label) in
                                                 labels.clone().into_iter().enumerate()
                                             {
-                                                let center = label == "Add";
+                                                let center = label == "ui-add";
                                                 if center {
                                                     spacer().modifier(Modifier::new().weight(1.0));
                                                 }
@@ -2026,23 +2061,26 @@ fn overflow_example() {
         width,
         RenderSlot::new(move || {
             floating_toolbar()
-                .accessibility_label("Mailbox destinations")
+                .accessibility_label(I18N.text("ui-mailbox-destinations"))
                 .content(move || {
-                    for label in ["Inbox", "Starred"] {
+                    for label in ["ui-inbox", "ui-starred"] {
                         button()
                             .text()
-                            .accessibility_label(label)
+                            .accessibility_label(I18N.text(label))
                             .on_click(move || {
-                                notice.set(format!("{label} selected"));
+                                notice.set(I18N.format(
+                                    "ui-value-selected",
+                                    [("v0", I18N.text(&label).into())],
+                                ));
                                 open.set(false);
                             })
                             .child(move || {
-                                text().content(label);
+                                text().content(I18N.text(label));
                             });
                     }
                     icon_button()
                         .icon(filled::MORE_VERT_SVG)
-                        .accessibility_label("More destinations")
+                        .accessibility_label(I18N.text("ui-more-destinations"))
                         .on_click(move || open.set(!open.get()))
                         .standard()
                         .selected(open.get());
@@ -2056,21 +2094,24 @@ fn overflow_example() {
                     .shape(Shape::rounded_rectangle(Dp(16.0)))
                     .elevation(Dp(3.0))
                     .accessibility_role(Role::Menu)
-                    .accessibility_label("More destinations")
+                    .accessibility_label(I18N.text("ui-more-destinations"))
                     .child(move || {
                         column()
                             .modifier(Modifier::new().padding_symmetric(Dp::ZERO, Dp(8.0)))
                             .children(move || {
-                                for label in ["Sent", "Drafts", "Spam"] {
+                                for label in ["ui-sent", "ui-drafts", "ui-spam"] {
                                     button()
                                         .text()
-                                        .accessibility_label(label)
+                                        .accessibility_label(I18N.text(label))
                                         .on_click(move || {
-                                            notice.set(format!("{label} selected"));
+                                            notice.set(I18N.format(
+                                                "ui-value-selected",
+                                                [("v0", I18N.text(&label).into())],
+                                            ));
                                             open.set(false);
                                         })
                                         .child(move || {
-                                            text().content(label);
+                                            text().content(I18N.text(label));
                                         });
                                 }
                             });
@@ -2080,7 +2121,7 @@ fn overflow_example() {
     );
     gap(Dp(12.0));
     caption(if notice.get().is_empty() {
-        "Toolbar actions can open a menu".to_string()
+        "ui-toolbar-actions-can-open-a-menu".to_string()
     } else {
         notice.get()
     });
@@ -2095,14 +2136,14 @@ fn overflow_collapse_example() {
         .children(move || {
             button()
                 .outlined()
-                .accessibility_label("Toggle window size")
+                .accessibility_label(I18N.text("ui-toggle-window-size"))
                 .on_click(move || compact_window.set(!compact_window.get()))
                 .child(move || {
-                    text().content(if compact_window.get() {
-                        "Show larger window"
+                    text().content(I18N.text(if compact_window.get() {
+                        "ui-show-larger-window"
                     } else {
-                        "Show compact window"
-                    });
+                        "ui-show-compact-window"
+                    }));
                 });
             gap(Dp(16.0));
             stage(
@@ -2127,13 +2168,13 @@ fn rtl_example() {
             text_nav_toolbar(false).notice(notice);
             gap(Dp(12.0));
             caption(
-                "In LTR languages, the Next button is intentionally placed on the trailing (right) edge",
+                "ui-in-ltr-languages-the-next-button-is-intentionally-placed-on-the-trailing-right-edge",
             );
             gap(Dp(24.0));
             text_nav_toolbar(true).notice(notice);
             gap(Dp(12.0));
             caption(
-                "In RTL languages, reverse the order so Next remains on the trailing edge, now on the left",
+                "ui-in-rtl-languages-reverse-the-order-so-next-remains-on-the-trailing-edge-now-on-the-left",
             );
         }),
     );
@@ -2152,11 +2193,11 @@ fn bottom_bar(icons: usize, fab: bool, notice: State<String>) {
                 .height(Dp(80.0))
                 .semantics(SemanticsArgs {
                     role: Some(Role::Toolbar),
-                    label: Some(if fab {
-                        "Bottom app bar with FAB".into()
+                    label: Some(I18N.text(if fab {
+                        "ui-bottom-app-bar-with-fab"
                     } else {
-                        "Bottom app bar".into()
-                    }),
+                        "ui-bottom-app-bar"
+                    })),
                     ..Default::default()
                 }),
         )
@@ -2170,21 +2211,26 @@ fn bottom_bar(icons: usize, fab: bool, notice: State<String>) {
                 )))
                 .cross_axis_alignment(CrossAxisAlignment::Center)
                 .children(move || {
-                    for label in ["Archive", "Delete", "Mark unread", "Snooze"]
+                    for label in ["ui-archive", "ui-delete", "ui-mark-unread", "ui-snooze"]
                         .into_iter()
                         .take(icons)
                     {
                         icon_button()
                             .icon(action_icon(label))
-                            .accessibility_label(label)
-                            .on_click(move || notice.set(format!("{label} activated")))
+                            .accessibility_label(I18N.text(label))
+                            .on_click(move || {
+                                notice.set(I18N.format(
+                                    "ui-value-activated",
+                                    [("v0", I18N.text(&label).into())],
+                                ))
+                            })
                             .standard();
                     }
                     if fab {
                         spacer().modifier(Modifier::new().weight(1.0));
                         floating_action_button()
-                            .accessibility_label("Compose")
-                            .on_click(move || notice.set("Compose activated".into()))
+                            .accessibility_label(I18N.text("ui-compose"))
+                            .on_click(move || notice.set("ui-compose-activated".into()))
                             .content(|| {
                                 icon().vector(filled::ADD_SVG);
                             });
@@ -2212,8 +2258,8 @@ fn baseline_layouts() {
     );
     gap(Dp(16.0));
     legend(vec![
-        "Icon buttons and FAB".into(),
-        "Icon buttons and no FAB".into(),
+        "ui-icon-buttons-and-fab".into(),
+        "ui-icon-buttons-and-no-fab".into(),
     ]);
     if !notice.get().is_empty() {
         gap(Dp(12.0));
@@ -2224,55 +2270,55 @@ fn baseline_layouts() {
 #[tessera]
 fn overview() {
     bullets(vec![
-        "Two expressive variants: docked toolbar and floating toolbar".into(),
-        "Use the vibrant color style for greater emphasis".into(),
-        "Can display a wide variety of control types, like buttons, icon buttons, and text fields"
+        "ui-two-expressive-variants-docked-toolbar-and-floating-toolbar".into(),
+        "ui-use-the-vibrant-color-style-for-greater-emphasis".into(),
+        "ui-can-display-a-wide-variety-of-control-types-like-buttons-icon-buttons-and-text-fields"
             .into(),
-        "Can be paired with FABs to emphasize certain actions".into(),
-        "Don't show at the same time as a navigation bar".into(),
+        "ui-can-be-paired-with-fabs-to-emphasize-certain-actions".into(),
+        "ui-don-t-show-at-the-same-time-as-a-navigation-bar".into(),
     ]);
     gap(Dp(32.0));
     gallery(GalleryKind::Overview);
     gap(Dp(16.0));
-    caption("Configurations of floating toolbars");
+    caption("ui-configurations-of-floating-toolbars");
 }
 
 #[tessera]
 fn availability() {
     let rows = [
-        ("Design", "Design Kit (Figma)", "Available"),
+        ("ui-design", "ui-design-kit-figma", "ui-available"),
         (
-            "Implementation",
-            "Jetpack Compose - Bottom app bar",
-            "Available",
+            "ui-implementation",
+            "ui-jetpack-compose-bottom-app-bar",
+            "ui-available",
         ),
         (
             "",
-            "Jetpack Compose: Expressive - Docked toolbar",
-            "Available",
+            "ui-jetpack-compose-expressive-docked-toolbar",
+            "ui-available",
         ),
         (
             "",
-            "Jetpack Compose: Expressive - Floating toolbar",
-            "Available",
+            "ui-jetpack-compose-expressive-floating-toolbar",
+            "ui-available",
         ),
         (
             "",
-            "Android Views (MDC-Android) - Bottom app bar",
-            "Available",
+            "ui-android-views-mdc-android-bottom-app-bar",
+            "ui-available",
         ),
         (
             "",
-            "Android Views (MDC-Android): Expressive - Docked toolbar",
-            "Available",
+            "ui-android-views-mdc-android-expressive-docked-toolbar",
+            "ui-available",
         ),
         (
             "",
-            "Android Views (MDC-Android): Expressive - Floating toolbar",
-            "Available",
+            "ui-android-views-mdc-android-expressive-floating-toolbar",
+            "ui-available",
         ),
-        ("", "Flutter - Bottom app bar", "Available"),
-        ("", "Web", "Unavailable"),
+        ("", "ui-flutter-bottom-app-bar", "ui-available"),
+        ("", "ui-web", "ui-unavailable"),
     ];
     let mut cells = Vec::new();
     for (index, (kind, resource, status)) in rows.into_iter().enumerate() {
@@ -2300,49 +2346,49 @@ fn availability() {
         });
     }
     spec_table_cells(
-        vec!["Type".into(), "Resource".into(), "Status".into()],
+        vec!["ui-type".into(), "ui-resource".into(), "ui-status".into()],
         cells,
     );
     gap(Dp(24.0));
     prose(
-        "The live examples on this page use Tessera's docked_toolbar and floating_toolbar components with standard and vibrant colors, horizontal and vertical layouts, and paired FABs.",
+        "ui-the-live-examples-on-this-page-use-tessera-s-docked-toolbar-and-floating-toolbar-comp",
     );
 }
 
 #[tessera]
 fn expressive_update() {
     prose(
-        "The bottom app bar is no longer recommended and should be replaced with the docked toolbar, which functions similarly, but is shorter and has more flexibility. The floating toolbar was created for more versatility, greater amounts of actions, and more variety in where it's placed.",
+        "ui-the-bottom-app-bar-is-no-longer-recommended-and-should-be-replaced-with-the-docked-toolbar",
     );
     gap(Dp(24.0));
-    prose("Variants and naming:");
+    prose("ui-variants-and-naming-921");
     gap(Dp(8.0));
     bullets(vec![
-        "Added docked toolbar to replace bottom app bar".into(),
-        "- Size: Shorter height".into(),
-        "- Color: Standard or vibrant".into(),
-        "- Flexibility: More layout and element options".into(),
-        "Added floating toolbar with the following configurations:".into(),
-        "- Layout: Horizontal or vertical".into(),
-        "- Color: Standard or vibrant".into(),
-        "- Flexibility: Can hold many elements and components. Can be paired with FAB.".into(),
-        "Bottom app bar is still available, but not recommended".into(),
+        "ui-added-docked-toolbar-to-replace-bottom-app-bar".into(),
+        "ui-size-shorter-height".into(),
+        "ui-color-standard-or-vibrant".into(),
+        "ui-flexibility-more-layout-and-element-options".into(),
+        "ui-added-floating-toolbar-with-the-following-configurations".into(),
+        "ui-layout-horizontal-or-vertical".into(),
+        "ui-color-standard-or-vibrant".into(),
+        "ui-flexibility-can-hold-many-elements-and-components-can-be-paired-with-fab".into(),
+        "ui-bottom-app-bar-is-still-available-but-not-recommended".into(),
     ]);
     gap(Dp(24.0));
     gallery(GalleryKind::Expressive);
     gap(Dp(16.0));
     legend(vec![
-        "Floating, vibrant color scheme and paired with FAB".into(),
-        "Docked with embedded primary action instead of FAB".into(),
+        "ui-floating-vibrant-color-scheme-and-paired-with-fab".into(),
+        "ui-docked-with-embedded-primary-action-instead-of-fab".into(),
     ]);
 }
 
 #[tessera]
 fn differences() {
     bullets(vec![
-        "Color: New color mappings and compatibility with dynamic color".into(),
-        "Elevation: No shadow".into(),
-        "Layout: Container height is taller and the FAB is now contained within the app bar container".into(),
+        "ui-color-new-color-mappings-and-compatibility-with-dynamic-color".into(),
+        "ui-elevation-no-shadow".into(),
+        "ui-layout-container-height-is-taller-and-the-fab-is-now-contained-within-the-app-bar-containe".into(),
     ]);
     gap(Dp(24.0));
     m2_comparison();
@@ -2352,33 +2398,44 @@ fn differences() {
 fn spec_variants() {
     gallery(GalleryKind::Variants);
     gap(Dp(16.0));
-    legend(vec!["Docked toolbar".into(), "Floating toolbar".into()]);
+    legend(vec![
+        "ui-docked-toolbar".into(),
+        "ui-floating-toolbar".into(),
+    ]);
     gap(Dp(32.0));
-    subheading("Baseline variant".into());
+    subheading("ui-baseline-variant".into());
     gap(Dp(16.0));
     prose(
-        "The baseline bottom app bar is no longer recommended. It should be replaced with the docked toolbar, which is very similar and more flexible.",
+        "ui-the-baseline-bottom-app-bar-is-no-longer-recommended-it-should-be-replaced-with-the-docked",
     );
     gap(Dp(24.0));
     baseline_figure();
     gap(Dp(16.0));
-    caption("Bottom app bar (not recommended)");
+    caption("ui-bottom-app-bar-not-recommended");
     gap(Dp(32.0));
     spec_table(
-        vec!["Variant".into(), "M3".into(), "M3 Expressive".into()],
+        vec!["ui-variant".into(), "M3".into(), "ui-m3-expressive".into()],
         vec![
-            vec!["Docked toolbar".into(), "--".into(), "Available".into()],
-            vec!["Floating toolbar".into(), "--".into(), "Available".into()],
             vec![
-                "Bottom app bar".into(),
-                "Available".into(),
-                "Not recommended. Use docked toolbar.".into(),
+                "ui-docked-toolbar".into(),
+                "--".into(),
+                "ui-available".into(),
+            ],
+            vec![
+                "ui-floating-toolbar".into(),
+                "--".into(),
+                "ui-available".into(),
+            ],
+            vec![
+                "ui-bottom-app-bar".into(),
+                "ui-available".into(),
+                "ui-not-recommended-use-docked-toolbar".into(),
             ],
         ],
     );
     gap(Dp(24.0));
     prose(
-        "Note: Implementation differs per platform. In Tessera, docked_toolbar and floating_toolbar are separate components; the baseline bottom app bar is composed from a surface, icon buttons and a FAB.",
+        "ui-note-implementation-differs-per-platform-in-tessera-docked-toolbar-and-floating-toolb",
     );
 }
 
@@ -2397,42 +2454,42 @@ fn spec_configurations() {
     gallery(GalleryKind::Configurations);
     gap(Dp(16.0));
     legend(vec![
-        "Standard and vibrant toolbars".into(),
-        "Vertical floating toolbar".into(),
-        "Floating toolbar with FAB".into(),
+        "ui-standard-and-vibrant-toolbars".into(),
+        "ui-vertical-floating-toolbar".into(),
+        "ui-floating-toolbar-with-fab".into(),
     ]);
     gap(Dp(32.0));
     spec_table_cells(
         vec![
-            "Category".into(),
-            "Configuration".into(),
+            "ui-category".into(),
+            "ui-configuration".into(),
             "M3".into(),
-            "M3 Expressive".into(),
+            "ui-m3-expressive".into(),
         ],
         vec![
-            table_cell("Color", 1, 0, 2),
-            table_cell("Standard (default)", 1, 1, 1),
-            table_cell("Available as bottom app bar", 1, 2, 1),
-            table_cell("Available", 1, 3, 1),
-            table_cell("Vibrant", 2, 1, 1),
+            table_cell("ui-color", 1, 0, 2),
+            table_cell("ui-standard-default", 1, 1, 1),
+            table_cell("ui-available-as-bottom-app-bar", 1, 2, 1),
+            table_cell("ui-available", 1, 3, 1),
+            table_cell("ui-vibrant", 2, 1, 1),
             table_cell("--", 2, 2, 1),
-            table_cell("Available", 2, 3, 1),
-            table_cell("Floating toolbar layout", 3, 0, 2),
-            table_cell("Horizontal (default)", 3, 1, 1),
+            table_cell("ui-available", 2, 3, 1),
+            table_cell("ui-floating-toolbar-layout", 3, 0, 2),
+            table_cell("ui-horizontal-default", 3, 1, 1),
             table_cell("--", 3, 2, 1),
-            table_cell("Available", 3, 3, 1),
-            table_cell("Vertical", 4, 1, 1),
+            table_cell("ui-available", 3, 3, 1),
+            table_cell("ui-vertical", 4, 1, 1),
             table_cell("--", 4, 2, 1),
-            table_cell("Available", 4, 3, 1),
-            table_cell("Other elements", 5, 0, 1),
-            table_cell("With FAB", 5, 1, 1),
-            table_cell("Available as bottom app bar", 5, 2, 1),
+            table_cell("ui-available", 4, 3, 1),
+            table_cell("ui-other-elements", 5, 0, 1),
+            table_cell("ui-with-fab", 5, 1, 1),
+            table_cell("ui-available-as-bottom-app-bar", 5, 2, 1),
             table_cell("Available*", 5, 3, 1),
         ],
     );
     gap(Dp(24.0));
     prose(
-        "Note: *Implementation differs per platform. In Tessera, the FAB is placed next to the floating toolbar as a separate component, 8dp from its container.",
+        "ui-note-implementation-differs-per-platform-in-tessera-the-fab-is-placed-next-to-the-floating",
     );
 }
 
@@ -2449,101 +2506,110 @@ enum TokenSet {
 fn token_rows(set: TokenSet) -> Vec<Vec<String>> {
     let rows: &[(&str, &str)] = match set {
         TokenSet::Standard => &[
-            ("Toolbar standard container color", "Surface container"),
             (
-                "Toolbar standard button container color",
-                "Surface container",
+                "ui-toolbar-standard-container-color",
+                "ui-surface-container",
             ),
             (
-                "Toolbar standard selected button container color",
-                "Secondary container",
+                "ui-toolbar-standard-button-container-color",
+                "ui-surface-container",
             ),
-            ("Toolbar standard icon color", "On surface variant"),
             (
-                "Toolbar standard selected icon color",
-                "On secondary container",
+                "ui-toolbar-standard-selected-button-container-color",
+                "ui-secondary-container",
             ),
-            ("Toolbar standard label color", "On surface variant"),
+            ("ui-toolbar-standard-icon-color", "ui-on-surface-variant"),
             (
-                "Toolbar standard selected label color",
-                "On secondary container",
+                "ui-toolbar-standard-selected-icon-color",
+                "ui-on-secondary-container",
             ),
-            ("Toolbar standard container shape", "Full"),
-            ("Toolbar standard disabled icon color", "On surface"),
-            ("Toolbar standard disabled icon opacity", "0.38"),
+            ("ui-toolbar-standard-label-color", "ui-on-surface-variant"),
+            (
+                "ui-toolbar-standard-selected-label-color",
+                "ui-on-secondary-container",
+            ),
+            ("ui-toolbar-standard-container-shape", "ui-full"),
+            ("ui-toolbar-standard-disabled-icon-color", "ui-on-surface"),
+            ("ui-toolbar-standard-disabled-icon-opacity", "0.38"),
         ],
         TokenSet::Vibrant => &[
-            ("Toolbar vibrant container color", "Primary container"),
+            ("ui-toolbar-vibrant-container-color", "ui-primary-container"),
             (
-                "Toolbar vibrant button container color",
-                "Primary container",
+                "ui-toolbar-vibrant-button-container-color",
+                "ui-primary-container",
             ),
             (
-                "Toolbar vibrant selected button container color",
-                "Surface container",
+                "ui-toolbar-vibrant-selected-button-container-color",
+                "ui-surface-container",
             ),
-            ("Toolbar vibrant icon color", "On primary container"),
-            ("Toolbar vibrant selected icon color", "On surface"),
-            ("Toolbar vibrant label color", "On primary container"),
-            ("Toolbar vibrant selected label color", "On surface"),
-            ("Toolbar vibrant container shape", "Full"),
+            ("ui-toolbar-vibrant-icon-color", "ui-on-primary-container"),
+            ("ui-toolbar-vibrant-selected-icon-color", "ui-on-surface"),
+            ("ui-toolbar-vibrant-label-color", "ui-on-primary-container"),
+            ("ui-toolbar-vibrant-selected-label-color", "ui-on-surface"),
+            ("ui-toolbar-vibrant-container-shape", "ui-full"),
         ],
         TokenSet::Docked => &[
-            ("Docked toolbar container color", "Surface container"),
-            ("Docked toolbar container height", "64dp"),
-            ("Docked toolbar leading padding", "16dp"),
-            ("Docked toolbar trailing padding", "16dp"),
-            ("Docked toolbar max space between actions", "32dp"),
-            ("Docked toolbar min space between actions", "4dp"),
-            ("Docked toolbar container shape", "None (rectangle)"),
+            ("ui-docked-toolbar-container-color", "ui-surface-container"),
+            ("ui-docked-toolbar-container-height", "64dp"),
+            ("ui-docked-toolbar-leading-padding", "16dp"),
+            ("ui-docked-toolbar-trailing-padding", "16dp"),
+            ("ui-docked-toolbar-max-space-between-actions", "32dp"),
+            ("ui-docked-toolbar-min-space-between-actions", "4dp"),
+            ("ui-docked-toolbar-container-shape", "ui-none-rectangle"),
         ],
         TokenSet::Floating => &[
-            ("Floating toolbar standard color", "Surface container"),
-            ("Floating toolbar vibrant color", "Primary container"),
-            ("Floating toolbar container height - horizontal", "64dp"),
-            ("Floating toolbar container width - vertical", "64dp"),
-            ("Floating toolbar leading space", "8dp"),
-            ("Floating toolbar trailing space", "8dp"),
+            ("ui-floating-toolbar-standard-color", "ui-surface-container"),
+            ("ui-floating-toolbar-vibrant-color", "ui-primary-container"),
+            ("ui-floating-toolbar-container-height-horizontal", "64dp"),
+            ("ui-floating-toolbar-container-width-vertical", "64dp"),
+            ("ui-floating-toolbar-leading-space", "8dp"),
+            ("ui-floating-toolbar-trailing-space", "8dp"),
             (
-                "Floating toolbar margin from screen edge - horizontal",
+                "ui-floating-toolbar-margin-from-screen-edge-horizontal",
                 "16dp",
             ),
             (
-                "Floating toolbar margin from screen edge - vertical",
+                "ui-floating-toolbar-margin-from-screen-edge-vertical",
                 "24dp",
             ),
-            ("Floating toolbar space between actions", "4dp"),
-            ("Floating toolbar container shape", "Full"),
-            ("Floating toolbar container elevation", "Level 3 (6dp)"),
+            ("ui-floating-toolbar-space-between-actions", "4dp"),
+            ("ui-floating-toolbar-container-shape", "ui-full"),
+            (
+                "ui-floating-toolbar-container-elevation",
+                "ui-level-3-6dp-6307",
+            ),
         ],
         TokenSet::FloatingFab => &[
-            ("Toolbar floating FAB space between toolbar and FAB", "8dp"),
             (
-                "Toolbar floating FAB standard container color",
-                "Secondary container",
+                "ui-toolbar-floating-fab-space-between-toolbar-and-fab",
+                "8dp",
             ),
             (
-                "Toolbar floating FAB standard icon color",
-                "On secondary container",
+                "ui-toolbar-floating-fab-standard-container-color",
+                "ui-secondary-container",
             ),
             (
-                "Toolbar floating FAB vibrant container color",
-                "Tertiary container",
+                "ui-toolbar-floating-fab-standard-icon-color",
+                "ui-on-secondary-container",
             ),
             (
-                "Toolbar floating FAB vibrant icon color",
-                "On tertiary container",
+                "ui-toolbar-floating-fab-vibrant-container-color",
+                "ui-tertiary-container",
             ),
             (
-                "Toolbar floating FAB container size (expanded)",
+                "ui-toolbar-floating-fab-vibrant-icon-color",
+                "ui-on-tertiary-container",
+            ),
+            (
+                "ui-toolbar-floating-fab-container-size-expanded",
                 "56dp × 56dp",
             ),
-            ("Toolbar floating FAB icon size (expanded)", "24dp"),
+            ("ui-toolbar-floating-fab-icon-size-expanded", "24dp"),
             (
-                "Toolbar floating FAB medium container size (collapsed)",
+                "ui-toolbar-floating-fab-medium-container-size-collapsed",
                 "80dp × 80dp",
             ),
-            ("Toolbar floating FAB medium icon size (collapsed)", "28dp"),
+            ("ui-toolbar-floating-fab-medium-icon-size-collapsed", "28dp"),
         ],
     };
     rows.iter()
@@ -2553,11 +2619,11 @@ fn token_rows(set: TokenSet) -> Vec<Vec<String>> {
 
 fn token_set_label(set: TokenSet) -> &'static str {
     match set {
-        TokenSet::Standard => "Toolbar - Color - Standard",
-        TokenSet::Vibrant => "Toolbar - Color - Vibrant",
-        TokenSet::Docked => "Toolbar - Docked",
-        TokenSet::Floating => "Toolbar - Floating",
-        TokenSet::FloatingFab => "Toolbar - Floating - FAB",
+        TokenSet::Standard => "ui-toolbar-color-standard",
+        TokenSet::Vibrant => "ui-toolbar-color-vibrant",
+        TokenSet::Docked => "ui-toolbar-docked",
+        TokenSet::Floating => "ui-toolbar-floating",
+        TokenSet::FloatingFab => "ui-toolbar-floating-fab",
     }
 }
 
@@ -2568,19 +2634,19 @@ fn token_chip(set: TokenSet, selected: State<TokenSet>) {
         button()
             .tonal()
             .selected(true)
-            .accessibility_label(label)
+            .accessibility_label(I18N.text(label))
             .on_click(move || selected.set(set))
             .child(move || {
-                text().content(label);
+                text().content(I18N.text(label));
             });
     } else {
         button()
             .outlined()
             .selected(false)
-            .accessibility_label(label)
+            .accessibility_label(I18N.text(label))
             .on_click(move || selected.set(set))
             .child(move || {
-                text().content(label);
+                text().content(I18N.text(label));
             });
     }
 }
@@ -2589,7 +2655,7 @@ fn token_chip(set: TokenSet, selected: State<TokenSet>) {
 fn tokens() {
     let selected = remember(TokenSet::default);
     prose(
-        "Browse the component elements, attributes, tokens, and their values. Color tokens resolve through the active Material theme; the baseline bottom app bar specs follow at the end of this tab.",
+        "ui-browse-the-component-elements-attributes-tokens-and-their-values-color-tokens-resolve-thro",
     );
     gap(Dp(24.0));
     flow_row()
@@ -2609,7 +2675,7 @@ fn tokens() {
         });
     gap(Dp(24.0));
     spec_table(
-        vec!["Token".into(), "Value".into()],
+        vec!["ui-token".into(), "ui-value".into()],
         token_rows(selected.get()),
     );
 }
@@ -2618,15 +2684,15 @@ fn tokens() {
 fn spec_anatomy() {
     figure(Variant::Floating, ToolbarColorStyle::Standard, false);
     gap(Dp(32.0));
-    subheading("Flexibility & slots".into());
+    subheading("ui-flexibility-slots".into());
     gap(Dp(16.0));
     prose(
-        "When configuring a toolbar, think of it as a container with several slots. Each slot can be a different element. The most common elements are icon buttons, buttons, and text fields.",
+        "ui-when-configuring-a-toolbar-think-of-it-as-a-container-with-several-slots-each-slot-can-be",
     );
     gap(Dp(24.0));
     slots();
     gap(Dp(16.0));
-    caption("A toolbar is essentially a container with configurable slots");
+    caption("ui-a-toolbar-is-essentially-a-container-with-configurable-slots");
     gap(Dp(24.0));
     search_example();
 }
@@ -2634,18 +2700,18 @@ fn spec_anatomy() {
 #[tessera]
 fn spec_color() {
     prose(
-        "Color values are implemented through design tokens. For design, this means working with color values that correspond with tokens. For implementation, a color value will be a token that references a value.",
+        "ui-color-values-are-implemented-through-design-tokens-for-design-this-means-working-with-colo",
     );
     gap(Dp(32.0));
-    subheading("Standard".into());
+    subheading("ui-standard".into());
     gap(Dp(16.0));
-    prose("Standard color schemes and icon button types:");
+    prose("ui-standard-color-schemes-and-icon-button-types");
     gap(Dp(16.0));
     color_roles(false);
     gap(Dp(32.0));
-    subheading("Vibrant".into());
+    subheading("ui-vibrant".into());
     gap(Dp(16.0));
-    prose("Vibrant color scheme and icon button types:");
+    prose("ui-vibrant-color-scheme-and-icon-button-types");
     gap(Dp(16.0));
     color_roles(true);
 }
@@ -2653,53 +2719,62 @@ fn spec_color() {
 #[tessera]
 fn measurements() {
     prose(
-        "By default all toolbars are 64dp high, center-aligned, have equal padding between items, and have a minimum outside padding of 16dp.",
+        "ui-by-default-all-toolbars-are-64dp-high-center-aligned-have-equal-padding-between-items-and",
     );
     gap(Dp(32.0));
-    subheading("Docked toolbar".into());
+    subheading("ui-docked-toolbar".into());
     gap(Dp(24.0));
     figure(Variant::Docked, ToolbarColorStyle::Standard, true);
     gap(Dp(16.0));
-    caption("Default margins and padding");
+    caption("ui-default-margins-and-padding");
     gap(Dp(32.0));
-    prose("Alignment and padding can be configured to create unique layouts:");
+    prose("ui-alignment-and-padding-can-be-configured-to-create-unique-layouts");
     gap(Dp(24.0));
     docked_layout_figure(DockedLayout::Edges);
     gap(Dp(16.0));
-    caption("Left and right alignment");
+    caption("ui-left-and-right-alignment");
     gap(Dp(24.0));
     docked_layout_figure(DockedLayout::Centered);
     gap(Dp(16.0));
-    caption("Center-aligned, 8dp padding between items");
+    caption("ui-center-aligned-8dp-padding-between-items");
     gap(Dp(32.0));
-    subheading("Floating toolbar".into());
+    subheading("ui-floating-toolbar".into());
     gap(Dp(24.0));
     figure(Variant::Floating, ToolbarColorStyle::Standard, true);
     gap(Dp(16.0));
-    caption("Default padding of floating toolbar");
+    caption("ui-default-padding-of-floating-toolbar");
     gap(Dp(24.0));
     figure(Variant::WithFab, ToolbarColorStyle::Standard, true);
     gap(Dp(16.0));
-    caption("Floating toolbar size and padding measurements");
+    caption("ui-floating-toolbar-size-and-padding-measurements");
     gap(Dp(24.0));
     placement_figure(Placement::Horizontal);
     gap(Dp(16.0));
     placement_figure(Placement::Vertical);
     gap(Dp(16.0));
-    caption("Floating toolbar margins");
+    caption("ui-floating-toolbar-margins");
     gap(Dp(32.0));
     spec_table(
-        vec!["Attribute".into(), "Value".into()],
+        vec!["ui-attribute".into(), "ui-value".into()],
         vec![
-            vec!["Container height / vertical width".into(), "64dp".into()],
-            vec!["Floating internal padding".into(), "8dp".into()],
-            vec!["Floating space between actions".into(), "4dp".into()],
-            vec!["Docked leading/trailing padding".into(), "16dp".into()],
-            vec!["Docked space between actions".into(), "4dp - 32dp".into()],
-            vec!["Horizontal outside margins".into(), "At least 16dp".into()],
-            vec!["Vertical outside margins".into(), "At least 24dp".into()],
-            vec!["FAB spacing".into(), "8dp".into()],
-            vec!["Interactive target".into(), "At least 48×48dp".into()],
+            vec!["ui-container-height-vertical-width".into(), "64dp".into()],
+            vec!["ui-floating-internal-padding".into(), "8dp".into()],
+            vec!["ui-floating-space-between-actions".into(), "4dp".into()],
+            vec!["ui-docked-leading-trailing-padding".into(), "16dp".into()],
+            vec![
+                "ui-docked-space-between-actions".into(),
+                "4dp - 32dp".into(),
+            ],
+            vec![
+                "ui-horizontal-outside-margins".into(),
+                "ui-at-least-16dp".into(),
+            ],
+            vec![
+                "ui-vertical-outside-margins".into(),
+                "ui-at-least-24dp".into(),
+            ],
+            vec!["ui-fab-spacing".into(), "8dp".into()],
+            vec!["ui-interactive-target".into(), "ui-at-least-48-48dp".into()],
         ],
     );
 }
@@ -2707,51 +2782,51 @@ fn measurements() {
 #[tessera]
 fn baseline_specs() {
     prose(
-        "The baseline bottom app bar is no longer recommended. Use the docked toolbar for new page actions.",
+        "ui-the-baseline-bottom-app-bar-is-no-longer-recommended-use-the-docked-toolbar-for-new-page-a",
     );
     gap(Dp(24.0));
     baseline_figure();
     gap(Dp(16.0));
-    caption("Container");
+    caption("ui-container");
     gap(Dp(32.0));
-    subheading("Tokens & specs".into());
+    subheading("ui-tokens-specs".into());
     gap(Dp(16.0));
-    prose("Bottom app bar tokens are in one token set.");
+    prose("ui-bottom-app-bar-tokens-are-in-one-token-set");
     gap(Dp(16.0));
     spec_table(
-        vec!["Token".into(), "Value".into()],
+        vec!["ui-token".into(), "ui-value".into()],
         vec![
             vec![
-                "Bottom app bar container color".into(),
-                "Surface container".into(),
+                "ui-bottom-app-bar-container-color".into(),
+                "ui-surface-container".into(),
             ],
-            vec!["Bottom app bar container height".into(), "80dp".into()],
+            vec!["ui-bottom-app-bar-container-height".into(), "80dp".into()],
             vec![
-                "Bottom app bar container shape".into(),
-                "None (rectangle)".into(),
+                "ui-bottom-app-bar-container-shape".into(),
+                "ui-none-rectangle".into(),
             ],
-            vec!["Bottom app bar icon button target".into(), "48dp".into()],
+            vec!["ui-bottom-app-bar-icon-button-target".into(), "48dp".into()],
             vec![
-                "Bottom app bar icon color".into(),
-                "On surface variant".into(),
+                "ui-bottom-app-bar-icon-color".into(),
+                "ui-on-surface-variant".into(),
             ],
-            vec!["Bottom app bar FAB size".into(), "56dp".into()],
+            vec!["ui-bottom-app-bar-fab-size".into(), "56dp".into()],
         ],
     );
     gap(Dp(32.0));
-    subheading("Color".into());
+    subheading("ui-color".into());
     gap(Dp(16.0));
     prose(
-        "Color values are implemented through design tokens. Bottom app bar color role used for light and dark themes: Surface container.",
+        "ui-color-values-are-implemented-through-design-tokens-bottom-app-bar-color-role-used-for-ligh",
     );
     gap(Dp(32.0));
-    subheading("Measurements".into());
+    subheading("ui-measurements".into());
     gap(Dp(16.0));
     prose(
-        "The baseline bottom app bar uses an 80dp container with 48dp action targets, a 4dp leading inset, and a 56dp FAB 12dp from the top and 16dp from the trailing edge. The container figure above shows these padding and size measurements.",
+        "ui-the-baseline-bottom-app-bar-uses-an-80dp-container-with-48dp-action-targets-a-4dp-leading",
     );
     gap(Dp(32.0));
-    subheading("Common layouts".into());
+    subheading("ui-common-layouts".into());
     gap(Dp(24.0));
     baseline_layouts();
 }
@@ -2759,65 +2834,65 @@ fn baseline_specs() {
 #[tessera]
 fn usage() {
     prose(
-        "Use a toolbar to provide actions related to the current page. Toolbars can contain many actions and can scale to show more actions in larger windows.",
+        "ui-use-a-toolbar-to-provide-actions-related-to-the-current-page-toolbars-can-contain-many-act",
     );
     gap(Dp(24.0));
     gallery(GalleryKind::Elevation);
     gap(Dp(16.0));
-    caption("A toolbar provides actions related to the current page");
+    caption("ui-a-toolbar-provides-actions-related-to-the-current-page");
     gap(Dp(32.0));
-    prose("There are two variants of toolbars:");
+    prose("ui-there-are-two-variants-of-toolbars");
     gap(Dp(8.0));
     bullets(vec![
-        "Docked toolbar: Spans the full width of the window. It's best used for global actions that remain the same across multiple pages.".into(),
-        "Floating toolbar: Floats above the body content. It's best used for contextual actions relevant to the body content or the specific page.".into(),
+        "ui-docked-toolbar-spans-the-full-width-of-the-window-it-s-best-used-for-global-actions-that-r".into(),
+        "ui-floating-toolbar-floats-above-the-body-content-it-s-best-used-for-contextual-actions-relev".into(),
     ]);
     gap(Dp(8.0));
-    prose("The baseline bottom app bar is no longer recommended, but is still supported.");
+    prose("ui-the-baseline-bottom-app-bar-is-no-longer-recommended-but-is-still-supported");
     gap(Dp(24.0));
     gallery(GalleryKind::DockedVsFloating);
     gap(Dp(32.0));
-    prose("When actions don't fit in a toolbar, add a menu.");
+    prose("ui-when-actions-don-t-fit-in-a-toolbar-add-a-menu");
     gap(Dp(24.0));
     overflow_example();
     gap(Dp(32.0));
-    prose("There are two color configurations:");
+    prose("ui-there-are-two-color-configurations");
     gap(Dp(8.0));
     bullets(vec![
-        "Standard: A low-emphasis color scheme best used for focusing attention on the body content.".into(),
-        "Vibrant: A high-emphasis color scheme that draws attention to the controls. It can also indicate a temporary change in the page behavior, such as entering edit mode.".into(),
+        "ui-standard-a-low-emphasis-color-scheme-best-used-for-focusing-attention-on-the-body-content".into(),
+        "ui-vibrant-a-high-emphasis-color-scheme-that-draws-attention-to-the-controls-it-can-also-indi".into(),
     ]);
     gap(Dp(8.0));
     prose(
-        "Consider using alternative color roles to create greater or lesser emphasis depending on the needs of the app.",
+        "ui-consider-using-alternative-color-roles-to-create-greater-or-lesser-emphasis-depending-on-t",
     );
     gap(Dp(24.0));
     gallery(GalleryKind::ColorEmphasis);
     gap(Dp(32.0));
-    subheading("Toolbars & navigation bars".into());
+    subheading("ui-toolbars-navigation-bars".into());
     gap(Dp(16.0));
     prose(
-        "The toolbar and navigation bar are both placed at the bottom of the window, so should not be shown at the same time. Show the navigation bar on primary pages, and toolbars on subsequent pages with actions.",
+        "ui-the-toolbar-and-navigation-bar-are-both-placed-at-the-bottom-of-the-window-so-should-not-b",
     );
     gap(Dp(24.0));
     navigation_diagram(NavDiagram::Pages);
     gap(Dp(32.0));
     prose(
-        "Floating toolbars can be used as tabs between related subsequent pages in the product hierarchy. This helps group similar pages together, and shows that the selection affects the body content underneath.",
+        "ui-floating-toolbars-can-be-used-as-tabs-between-related-subsequent-pages-in-the-product-hier",
     );
     gap(Dp(24.0));
     navigation_diagram(NavDiagram::LocalNavigation);
     gap(Dp(16.0));
     do_note(
-        "Keep navigation distinct, and use a toolbar to display local navigation on a specific page",
+        "ui-keep-navigation-distinct-and-use-a-toolbar-to-display-local-navigation-on-a-specific-page",
     );
     gap(Dp(12.0));
     prose(
-        "Consider the existing app hierarchy when using a toolbar for local navigation. Avoid redundant or confusing navigation combinations in the same view.",
+        "ui-consider-the-existing-app-hierarchy-when-using-a-toolbar-for-local-navigation-avoid-redund",
     );
     gap(Dp(12.0));
     dont_note(
-        "Don't show a navigation bar and a toolbar with navigation controls at the same time",
+        "ui-don-t-show-a-navigation-bar-and-a-toolbar-with-navigation-controls-at-the-same-time",
     );
 }
 
@@ -2825,220 +2900,222 @@ fn usage() {
 fn guide_anatomy() {
     figure(Variant::Floating, ToolbarColorStyle::Standard, false);
     gap(Dp(32.0));
-    subheading("Container".into());
+    subheading("ui-container".into());
     gap(Dp(16.0));
     prose(
-        "The docked toolbar's container spans the full width of the window. Avoid applying rounded corners to the container. This can imply the container expands or changes upon interaction.",
+        "ui-the-docked-toolbar-s-container-spans-the-full-width-of-the-window-avoid-applying-rounded-c",
     );
     gap(Dp(24.0));
     gallery(GalleryKind::Corners);
     gap(Dp(32.0));
     prose(
-        "As long as there's a minimum of 16dp padding on the leading and trailing edge, arrange controls inside however you see fit. The 32dp padding between items is just the default. All elements need a minimum 48x48dp target area to be accessible.",
+        "ui-as-long-as-there-s-a-minimum-of-16dp-padding-on-the-leading-and-trailing-edge-arrange-cont",
     );
     gap(Dp(16.0));
-    prose("Be cautious of including too many controls as it can be overwhelming.");
+    prose("ui-be-cautious-of-including-too-many-controls-as-it-can-be-overwhelming");
     gap(Dp(12.0));
-    dont_note("Don't overwhelm people with too many controls");
+    dont_note("ui-don-t-overwhelm-people-with-too-many-controls");
     gap(Dp(32.0));
     prose(
-        "The floating toolbar's container should be fully visible on screen. If more actions are needed, use an overflow menu.",
+        "ui-the-floating-toolbar-s-container-should-be-fully-visible-on-screen-if-more-actions-are-nee",
     );
     gap(Dp(12.0));
-    do_note("Choose the most essential actions to show on screen by default");
+    do_note("ui-choose-the-most-essential-actions-to-show-on-screen-by-default");
     gap(Dp(12.0));
-    dont_note("Floating toolbars shouldn't exceed the edge of the window or pane");
+    dont_note("ui-floating-toolbars-shouldn-t-exceed-the-edge-of-the-window-or-pane");
     gap(Dp(32.0));
-    subheading("Elevation".into());
+    subheading("ui-elevation".into());
     gap(Dp(16.0));
     prose(
-        "Floating toolbars have elevation by default. If the content beneath the toolbar is visually distinct, elevation can be removed.",
+        "ui-floating-toolbars-have-elevation-by-default-if-the-content-beneath-the-toolbar-is-visually",
     );
     gap(Dp(24.0));
     gallery(GalleryKind::Elevation);
     gap(Dp(16.0));
     caption(
-        "The elevation on floating toolbars can be removed if on a visually distinct background",
+        "ui-the-elevation-on-floating-toolbars-can-be-removed-if-on-a-visually-distinct-background",
     );
     gap(Dp(32.0));
-    subheading("Flexibility & slots".into());
+    subheading("ui-flexibility-slots".into());
     gap(Dp(16.0));
     prose(
-        "When configuring a toolbar, think of it as a container with several slots. These slots can be populated by buttons, icon buttons, images, text fields, or any kind of custom component. Icon buttons provide an even hierarchy of controls. Mixing in a filled icon button can help add emphasis to a single action.",
+        "ui-when-configuring-a-toolbar-think-of-it-as-a-container-with-several-slots-these-slots-can-b",
     );
     gap(Dp(24.0));
     gallery(GalleryKind::Slots);
     gap(Dp(16.0));
-    caption("Toolbars are made of slots that can contain many kinds of actions");
+    caption("ui-toolbars-are-made-of-slots-that-can-contain-many-kinds-of-actions");
     gap(Dp(32.0));
     prose(
-        "Visually emphasizing a single action more than others is an effective way to create hierarchy and guide people to controls they use most often. Avoid emphasizing more than one action at a time. Some common ways to add emphasis to toolbar actions include:",
+        "ui-visually-emphasizing-a-single-action-more-than-others-is-an-effective-way-to-create-hierar",
     );
     gap(Dp(8.0));
     bullets(vec![
-        "Use different icon button color styles, such as filled, tonal, and standard".into(),
-        "Customize the color roles of a single action, such as a primary or secondary palette"
+        "ui-use-different-icon-button-color-styles-such-as-filled-tonal-and-standard".into(),
+        "ui-customize-the-color-roles-of-a-single-action-such-as-a-primary-or-secondary-palette"
             .into(),
-        "Use wide and narrow icon buttons".into(),
-        "Pair the toolbar with a FAB".into(),
+        "ui-use-wide-and-narrow-icon-buttons".into(),
+        "ui-pair-the-toolbar-with-a-fab".into(),
     ]);
     gap(Dp(24.0));
     gallery(GalleryKind::Emphasis);
     gap(Dp(16.0));
-    caption("Two different ways to create a high emphasis action in toolbars");
+    caption("ui-two-different-ways-to-create-a-high-emphasis-action-in-toolbars");
     gap(Dp(32.0));
     gallery(GalleryKind::EmphasisDont);
     gap(Dp(12.0));
     dont_note(
-        "Don't emphasize multiple buttons with bold, primary colors, such as a button and FAB together. Emphasize one action at a time.",
+        "ui-don-t-emphasize-multiple-buttons-with-bold-primary-colors-such-as-a-button-and-fab-togethe",
     );
     gap(Dp(12.0));
     dont_note(
-        "Avoid mixing too many different controls in the same toolbar. A consistent control design keeps things clear.",
+        "ui-avoid-mixing-too-many-different-controls-in-the-same-toolbar-a-consistent-control-design-k",
     );
     gap(Dp(12.0));
     prose(
-        "Avoid using square icon buttons in floating toolbars. Their square shape conflicts with the fully-rounded shape of the floating toolbar container. Square buttons can be used in the docked toolbar.",
+        "ui-avoid-using-square-icon-buttons-in-floating-toolbars-their-square-shape-conflicts-with-the",
     );
     gap(Dp(12.0));
-    dont_note("Don't use square filled icon buttons in floating toolbars");
+    dont_note("ui-don-t-use-square-filled-icon-buttons-in-floating-toolbars");
     gap(Dp(32.0));
-    subheading("Floating toolbar with FAB".into());
+    subheading("ui-floating-toolbar-with-fab".into());
     gap(Dp(16.0));
     prose(
-        "A FAB can be placed next to a floating toolbar to present one high-priority action alongside a unified set of toolbar actions. Use a FAB for the highest-priority action in the view, or to complement the controls.",
+        "ui-a-fab-can-be-placed-next-to-a-floating-toolbar-to-present-one-high-priority-action-alongsi",
     );
     gap(Dp(24.0));
     figure(Variant::WithFab, ToolbarColorStyle::Vibrant, false);
     gap(Dp(16.0));
-    caption("Floating toolbars can be paired with FABs");
+    caption("ui-floating-toolbars-can-be-paired-with-fabs");
 }
 
 #[tessera]
 fn position() {
     prose(
-        "Only place docked toolbars at the bottom of the window. If using other bottom-aligned elements, such as a navigation bar, don't use a docked toolbar.",
+        "ui-only-place-docked-toolbars-at-the-bottom-of-the-window-if-using-other-bottom-aligned-eleme",
     );
     gap(Dp(24.0));
     placement_figure(Placement::Docked);
     gap(Dp(16.0));
-    caption("Docked toolbars are always at the bottom of the window");
+    caption("ui-docked-toolbars-are-always-at-the-bottom-of-the-window");
     gap(Dp(32.0));
     prose(
-        "Floating toolbars can be horizontal or vertical. Horizontal toolbars should have a minimum 16dp margin from the edge of the window.",
+        "ui-floating-toolbars-can-be-horizontal-or-vertical-horizontal-toolbars-should-have-a-minimum",
     );
     gap(Dp(24.0));
     placement_figure(Placement::Horizontal);
     gap(Dp(16.0));
-    caption("Horizontal floating toolbars should be at least 16dp from the edge of the window");
+    caption("ui-horizontal-floating-toolbars-should-be-at-least-16dp-from-the-edge-of-the-window");
     gap(Dp(32.0));
     prose(
-        "In larger breakpoints, floating toolbars can be vertical and placed on either side of the screen. Vertical toolbars should have a minimum 24dp margin.",
+        "ui-in-larger-breakpoints-floating-toolbars-can-be-vertical-and-placed-on-either-side-of-the-s",
     );
     gap(Dp(24.0));
     figure(Variant::Vertical, ToolbarColorStyle::Standard, true);
     gap(Dp(16.0));
-    caption("Maintain at least a 24dp margin for vertical toolbars");
+    caption("ui-maintain-at-least-a-24dp-margin-for-vertical-toolbars");
     gap(Dp(32.0));
     prose(
-        "To keep vertical toolbars compact, don't use wide icon buttons. Use narrow or default icon buttons instead.",
+        "ui-to-keep-vertical-toolbars-compact-don-t-use-wide-icon-buttons-use-narrow-or-default-icon-b",
     );
     gap(Dp(12.0));
     dont_note(
-        "Using wide buttons with vertical toolbars can unnecessarily widen toolbar containers and hide other UI elements",
+        "ui-using-wide-buttons-with-vertical-toolbars-can-unnecessarily-widen-toolbar-containers-and-h",
     );
     gap(Dp(32.0));
     prose(
-        "Vertical toolbars should be positioned opposite the navigation rail to balance out the screen and keep actions easy to access. When showing a navigation rail and vertical floating toolbar at once, use the centered configuration of the navigation rail.",
+        "ui-vertical-toolbars-should-be-positioned-opposite-the-navigation-rail-to-balance-out-the-scr",
     );
     gap(Dp(24.0));
     placement_figure(Placement::Vertical);
     gap(Dp(16.0));
     caption(
-        "When a nav rail is visible, the floating toolbar should be vertical on the opposite edge of the window",
+        "ui-when-a-nav-rail-is-visible-the-floating-toolbar-should-be-vertical-on-the-opposite-edge-of",
     );
 }
 
 #[tessera]
 fn adaptive() {
     prose(
-        "Adaptive design allows an interface to respond or change based on context, such as the user, device, and usage.",
+        "ui-adaptive-design-allows-an-interface-to-respond-or-change-based-on-context-such-as-the-user",
     );
     gap(Dp(32.0));
-    subheading("Resizing".into());
+    subheading("ui-resizing".into());
     gap(Dp(16.0));
     prose(
-        "Docked: The docked toolbar should always span 100% of the screen width. In compact breakpoints, elements in the toolbar should be evenly spaced. In medium breakpoints and larger, adjust the padding between controls to create a comfortable layout by centering all elements, or by centering a key action and aligning other elements to the edges.",
+        "ui-docked-the-docked-toolbar-should-always-span-100-of-the-screen-width-in-compact-breakpoint",
     );
     gap(Dp(24.0));
     figure(Variant::Docked, ToolbarColorStyle::Standard, false);
     gap(Dp(16.0));
-    caption("Docked toolbar items should be evenly spaced in compact windows");
+    caption("ui-docked-toolbar-items-should-be-evenly-spaced-in-compact-windows");
     gap(Dp(24.0));
     docked_layout_figure(DockedLayout::Centered);
     gap(Dp(16.0));
-    caption("In medium breakpoints and larger, create a spacious layout by centering all elements");
+    caption(
+        "ui-in-medium-breakpoints-and-larger-create-a-spacious-layout-by-centering-all-elements",
+    );
     gap(Dp(24.0));
     docked_layout_figure(DockedLayout::Edges);
     gap(Dp(16.0));
     caption(
-        "Align controls to the edge of the screen to make them easier to reach on tablets, and to better highlight a primary action in the middle",
+        "ui-align-controls-to-the-edge-of-the-screen-to-make-them-easier-to-reach-on-tablets-and-to-be",
     );
     gap(Dp(32.0));
     prose(
-        "On web and large screens, the docked toolbar can be rounded. Dividers can be used to organize large amounts of items. Only shrink the height and use extra small buttons if vertical space is limited.",
+        "ui-on-web-and-large-screens-the-docked-toolbar-can-be-rounded-dividers-can-be-used-to-organiz",
     );
     gap(Dp(24.0));
     gallery(GalleryKind::RoundedDocked);
     gap(Dp(16.0));
     caption(
-        "On web and other large screens, docked toolbars can be rounded and placed in different parts of the page",
+        "ui-on-web-and-other-large-screens-docked-toolbars-can-be-rounded-and-placed-in-different-part",
     );
     gap(Dp(32.0));
     prose(
-        "Floating: The container should only be as big as needed to hold the items inside before reaching the 16dp margin. If there's not enough space for all items, put them in an overflow menu in the trailing slot. As the breakpoint expands, more actions can be revealed. The floating toolbar width can also be capped to keep it smaller and hide more elements.",
+        "ui-floating-the-container-should-only-be-as-big-as-needed-to-hold-the-items-inside-before-rea",
     );
     gap(Dp(12.0));
-    dont_note("Don't add extra space to a toolbar beyond its necessary items");
+    dont_note("ui-don-t-add-extra-space-to-a-toolbar-beyond-its-necessary-items");
     gap(Dp(24.0));
     overflow_collapse_example();
     gap(Dp(16.0));
     caption(
-        "At larger screen sizes, the container can display more controls before hitting the 16dp margin",
+        "ui-at-larger-screen-sizes-the-container-can-display-more-controls-before-hitting-the-16dp-mar",
     );
     gap(Dp(32.0));
     prose(
-        "Vertical toolbars aren't recommended for compact windows. They take up a significant area of the screen and may feel visually overwhelming, especially on screens with complex layouts. Only use them when the screen is simple or when the toolbar has a few controls.",
+        "ui-vertical-toolbars-aren-t-recommended-for-compact-windows-they-take-up-a-significant-area-o",
     );
     gap(Dp(12.0));
-    caution_note("Vertical toolbars can cover important content in compact windows");
+    caution_note("ui-vertical-toolbars-can-cover-important-content-in-compact-windows");
     gap(Dp(32.0));
-    subheading("Presentation".into());
+    subheading("ui-presentation".into());
     gap(Dp(16.0));
     prose(
-        "In larger breakpoints, floating toolbars can be aligned to opposite edges of the screen so they're easy to reach and group similar actions. For example, consider placing the undo and redo actions in one toolbar, and editing controls in another. Stylistic differences can help emphasize each toolbar's purpose and clarify hierarchy.",
+        "ui-in-larger-breakpoints-floating-toolbars-can-be-aligned-to-opposite-edges-of-the-screen-so",
     );
     gap(Dp(24.0));
     gallery(GalleryKind::Presentation);
     gap(Dp(16.0));
     caption(
-        "Multiple toolbars with different stylistic treatments can create hierarchy and distinguish different kinds of actions",
+        "ui-multiple-toolbars-with-different-stylistic-treatments-can-create-hierarchy-and-distinguish",
     );
     gap(Dp(24.0));
     prose(
-        "Don't use multiple toolbars in compact windows. There typically isn't enough room on screen. Instead, use one toolbar for all actions.",
+        "ui-don-t-use-multiple-toolbars-in-compact-windows-there-typically-isn-t-enough-room-on-screen",
     );
     gap(Dp(12.0));
-    dont_note("Avoid using multiple toolbars in smaller windows");
+    dont_note("ui-avoid-using-multiple-toolbars-in-smaller-windows");
     gap(Dp(24.0));
     prose(
-        "Actions at the trailing edge of the toolbar can collapse into an overflow menu at smaller breakpoints, and become visible again at larger sizes. Use the window size control above to compare both states.",
+        "ui-actions-at-the-trailing-edge-of-the-toolbar-can-collapse-into-an-overflow-menu-at-smaller",
     );
     gap(Dp(32.0));
-    subheading("Right-to-left languages".into());
+    subheading("ui-right-to-left-languages".into());
     gap(Dp(16.0));
     prose(
-        "In right-to-left (RTL) languages, mirror individual items that need it, like icons and text direction. If the order of actions is important, flip the order of the actions as well.",
+        "ui-in-right-to-left-rtl-languages-mirror-individual-items-that-need-it-like-icons-and-text-di",
     );
     gap(Dp(24.0));
     rtl_example();
@@ -3046,55 +3123,55 @@ fn adaptive() {
 
 #[tessera]
 fn behavior() {
-    subheading("Scrolling".into());
+    subheading("ui-scrolling".into());
     gap(Dp(16.0));
     prose(
-        "Docked toolbars can either remain on the screen during scroll, or animate offscreen. Floating toolbars can remain on the screen, animate offscreen, or collapse into a single, high-emphasis action on scroll.",
+        "ui-docked-toolbars-can-either-remain-on-the-screen-during-scroll-or-animate-offscreen-floatin",
     );
     gap(Dp(16.0));
     prose(
-        "Use the controls below to move the toolbar offscreen or collapse it to its key action. Only one transition is available at a time.",
+        "ui-use-the-controls-below-to-move-the-toolbar-offscreen-or-collapse-it-to-its-key-action-only",
     );
     gap(Dp(24.0));
     collapsing_example();
     gap(Dp(16.0));
-    dont_note("Toolbars shouldn't both collapse and transition off page");
+    dont_note("ui-toolbars-shouldn-t-both-collapse-and-transition-off-page");
 }
 
 #[tessera]
 fn use_cases() {
-    prose("People should be able to do the following with assistive technology:");
+    prose("ui-people-should-be-able-to-do-the-following-with-assistive-technology");
     gap(Dp(8.0));
     bullets(vec![
-        "Navigate and activate any actions in the toolbar".into(),
-        "Select a destination from a menu".into(),
-        "Activate a back button".into(),
-        "Maintain access to toolbar controls when the content is scrolled or collapsed".into(),
+        "ui-navigate-and-activate-any-actions-in-the-toolbar".into(),
+        "ui-select-a-destination-from-a-menu".into(),
+        "ui-activate-a-back-button".into(),
+        "ui-maintain-access-to-toolbar-controls-when-the-content-is-scrolled-or-collapsed".into(),
     ]);
 }
 
 #[tessera]
 fn interaction_style() {
     prose(
-        "The toolbar has no interactions by default. All interactions are with the elements placed inside.",
+        "ui-the-toolbar-has-no-interactions-by-default-all-interactions-are-with-the-elements-placed-i",
     );
     gap(Dp(32.0));
-    subheading("Touch".into());
+    subheading("ui-touch".into());
     gap(Dp(16.0));
     prose(
-        "When tapping on an icon button in the toolbar, a touch ripple appears, indicating interaction feedback.",
+        "ui-when-tapping-on-an-icon-button-in-the-toolbar-a-touch-ripple-appears-indicating-interactio",
     );
     gap(Dp(32.0));
-    subheading("Cursor".into());
+    subheading("ui-cursor".into());
     gap(Dp(16.0));
     prose(
-        "When hovered, the hover state provides a visual cue to the user that the element is interactive. When clicked (in both active and inactive states), a ripple appears, showing the user feedback.",
+        "ui-when-hovered-the-hover-state-provides-a-visual-cue-to-the-user-that-the-element-is-interac-6431",
     );
     gap(Dp(32.0));
-    subheading("Initial focus".into());
+    subheading("ui-initial-focus".into());
     gap(Dp(16.0));
     prose(
-        "Focus lands on the first interactive element. Use Tab to navigate through all other actions, and Space or Enter to activate them. Try it on the toolbar below.",
+        "ui-focus-lands-on-the-first-interactive-element-use-tab-to-navigate-through-all-other-actions",
     );
     gap(Dp(24.0));
     focus_example();
@@ -3112,7 +3189,7 @@ fn focus_example() {
     );
     gap(Dp(12.0));
     caption(if notice.get().is_empty() {
-        "Use Tab to navigate through interactive elements; use Space or Enter to activate actions"
+        "ui-use-tab-to-navigate-through-interactive-elements-use-space-or-enter-to-activate-actions"
             .to_string()
     } else {
         notice.get()
@@ -3122,27 +3199,27 @@ fn focus_example() {
 #[tessera]
 fn keyboard() {
     spec_table(
-        vec!["Keys".into(), "Actions".into()],
+        vec!["ui-keys".into(), "ui-actions".into()],
         vec![
             vec![
-                "Tab or Arrows".into(),
-                "Navigate between interactive elements".into(),
+                "ui-tab-or-arrows".into(),
+                "ui-navigate-between-interactive-elements".into(),
             ],
             vec![
-                "Space or Enter".into(),
-                "Activate the focused element".into(),
+                "ui-space-or-enter".into(),
+                "ui-activate-the-focused-element".into(),
             ],
         ],
     );
     gap(Dp(32.0));
-    subheading("Labeling elements".into());
+    subheading("ui-labeling-elements".into());
     gap(Dp(16.0));
     prose(
-        "On web, the toolbar container should have the toolbar role. On mobile, it can be a generic container. All actions inside the toolbar should follow their respective accessibility guidelines.",
+        "ui-on-web-the-toolbar-container-should-have-the-toolbar-role-on-mobile-it-can-be-a-generic-co",
     );
     gap(Dp(16.0));
     prose(
-        "Tessera exposes the toolbar role on the container, labels it, and labels each action. Toggle actions also publish their toggled state.",
+        "ui-tessera-exposes-the-toolbar-role-on-the-container-labels-it-and-labels-each-action-toggle",
     );
     gap(Dp(24.0));
     collapsing_example();
@@ -3169,7 +3246,7 @@ fn slots() {
                         )
                         .children(move || {
                             text()
-                                .content(index.to_string())
+                                .content((index).to_string())
                                 .style(type_style(16.0, 24.0));
                         });
                 }
@@ -3185,35 +3262,42 @@ fn search_toolbar(notice: State<String>, gallery_tag: Option<usize>) {
     let selected = remember(|| false);
     let tag = gallery_tag;
     docked_toolbar()
-        .accessibility_label("Search actions")
+        .accessibility_label(I18N.text("ui-search-actions"))
         .content(move || {
             row()
                 .modifier(Modifier::new().fill_max_width())
                 .cross_axis_alignment(CrossAxisAlignment::Center)
                 .children(move || {
-                    sample_action("Back", Emphasis::Standard, false, selected, notice)
+                    sample_action("ui-back", Emphasis::Standard, false, selected, notice)
                         .tag_optional(tag.map(|item| format!("toolbar-gallery-{item}-first")));
                     spacer().modifier(Modifier::new().width(Dp(4.0)));
                     boxed()
                         .modifier(Modifier::new().weight(1.0))
                         .children(move || {
                             text_field()
-                                .placeholder("Search mail")
-                                .accessibility_label("Search mail")
+                                .placeholder(I18N.text("ui-search-mail"))
+                                .accessibility_label(I18N.text("ui-search-mail"))
                                 .shape(Shape::CAPSULE)
                                 .min_width(Dp::ZERO)
                                 .min_height(Dp(40.0))
                                 .controller(controller)
                                 .on_submit(move || {
-                                    notice.set(format!(
-                                        "Searched for \"{}\"",
-                                        controller.with(|controller| controller.text())
-                                    ))
+                                    notice.set(
+                                        I18N.format(
+                                            "ui-searched-for-value",
+                                            [(
+                                                "v0",
+                                                (controller.with(|controller| controller.text()))
+                                                    .to_string()
+                                                    .into(),
+                                            )],
+                                        ),
+                                    )
                                 })
                                 .modifier(Modifier::new().fill_max_width());
                         });
                     spacer().modifier(Modifier::new().width(Dp(4.0)));
-                    sample_action("Microphone", Emphasis::Standard, false, selected, notice)
+                    sample_action("ui-microphone", Emphasis::Standard, false, selected, notice)
                         .tag_optional(tag.map(|item| format!("toolbar-gallery-{item}-last")));
                 });
         });
@@ -3231,7 +3315,7 @@ fn search_example() {
     );
     gap(Dp(12.0));
     caption(if notice.get().is_empty() {
-        "A text field placed in a toolbar slot between icon buttons".to_string()
+        "ui-a-text-field-placed-in-a-toolbar-slot-between-icon-buttons".to_string()
     } else {
         notice.get()
     });
@@ -3260,7 +3344,10 @@ fn mock_toolbar(kind: MockBar) {
         )
         .children(move || {
             if kind == MockBar::Tabs {
-                for (index, label) in ["All", "Unread", "Starred"].into_iter().enumerate() {
+                for (index, label) in ["ui-all", "ui-unread", "ui-starred"]
+                    .into_iter()
+                    .enumerate()
+                {
                     let selected = index == 0;
                     let pill = Modifier::new().padding_symmetric(Dp(10.0), Dp(4.0));
                     let pill = if selected {
@@ -3272,17 +3359,18 @@ fn mock_toolbar(kind: MockBar) {
                         .alignment(Alignment::Center)
                         .modifier(pill)
                         .children(move || {
-                            text().content(label).style(type_style(12.0, 16.0)).color(
-                                if selected {
+                            text()
+                                .content(I18N.text(label))
+                                .style(type_style(12.0, 16.0))
+                                .color(if selected {
                                     scheme.on_surface
                                 } else {
                                     scheme.on_primary_container
-                                },
-                            );
+                                });
                         });
                 }
             } else {
-                for (index, label) in ["Archive", "Delete", "Reply", "More options"]
+                for (index, label) in ["ui-archive", "ui-delete", "ui-reply", "ui-more-options"]
                     .into_iter()
                     .enumerate()
                 {
@@ -3310,7 +3398,10 @@ fn mock_nav_bar() {
         )
         .cross_axis_alignment(CrossAxisAlignment::Center)
         .children(move || {
-            for (index, label) in ["Mail", "Chat", "Settings"].into_iter().enumerate() {
+            for (index, label) in ["ui-mail", "ui-chat", "ui-settings"]
+                .into_iter()
+                .enumerate()
+            {
                 let selected = index == 0;
                 column()
                     .modifier(Modifier::new().weight(1.0))
@@ -3336,7 +3427,7 @@ fn mock_nav_bar() {
                                 );
                             });
                         text()
-                            .content(label)
+                            .content(I18N.text(label))
                             .style(type_style(11.0, 14.0))
                             .color(scheme.on_surface_variant);
                     });
@@ -3347,18 +3438,33 @@ fn mock_nav_bar() {
 #[tessera]
 fn phone_mock(#[prop(into)] title: String, toolbar: MockBar, nav_bar: bool) {
     let scheme = use_context::<MaterialTheme>().unwrap().get().color_scheme;
-    let description = format!(
-        "{title} screen{}{}",
-        match toolbar {
-            MockBar::None => "",
-            MockBar::Actions => " with a floating toolbar of actions",
-            MockBar::Tabs => " with a floating toolbar of local navigation",
-        },
-        if nav_bar {
-            " above a navigation bar"
-        } else {
-            ""
-        }
+    let description = I18N.format(
+        "ui-value-screenvaluevalue",
+        [
+            ("v0", I18N.text(&title).into()),
+            (
+                "v1",
+                I18N.text(
+                    &(match toolbar {
+                        MockBar::None => "",
+                        MockBar::Actions => "ui-with-a-floating-toolbar-of-actions",
+                        MockBar::Tabs => "ui-with-a-floating-toolbar-of-local-navigation",
+                    }),
+                )
+                .into(),
+            ),
+            (
+                "v2",
+                I18N.text(
+                    &(if nav_bar {
+                        "ui-above-a-navigation-bar"
+                    } else {
+                        ""
+                    }),
+                )
+                .into(),
+            ),
+        ],
     );
     boxed()
         .alignment(Alignment::Center)
@@ -3368,7 +3474,7 @@ fn phone_mock(#[prop(into)] title: String, toolbar: MockBar, nav_bar: bool) {
                 .background_with_shape(scheme.outline_variant, Shape::rounded_rectangle(Dp(28.0)))
                 .semantics(SemanticsArgs {
                     role: Some(Role::Image),
-                    label: Some(description),
+                    label: Some(I18N.text(description)),
                     merge_descendants: true,
                     ..Default::default()
                 }),
@@ -3385,7 +3491,7 @@ fn phone_mock(#[prop(into)] title: String, toolbar: MockBar, nav_bar: bool) {
                 .cross_axis_alignment(CrossAxisAlignment::Center)
                 .children(move || {
                     text()
-                        .content(title.clone())
+                        .content(I18N.text(&(title)))
                         .style(type_style(16.0, 24.0))
                         .modifier(Modifier::new().fill_max_width().padding(Padding::new(
                             Dp(16.0),
@@ -3451,30 +3557,30 @@ fn navigation_diagram(kind: NavDiagram) {
             floating_group(RenderSlot::new(move || match kind {
                 NavDiagram::Pages => {
                     mock_screen(
-                        "Inbox",
+                        "ui-inbox",
                         MockBar::None,
                         true,
-                        "Navigation bar on a primary page",
+                        "ui-navigation-bar-on-a-primary-page",
                     );
                     mock_screen(
-                        "Message",
+                        "ui-message",
                         MockBar::Actions,
                         false,
-                        "Toolbar on a secondary page with contextual actions",
+                        "ui-toolbar-on-a-secondary-page-with-contextual-actions",
                     );
                 }
                 NavDiagram::LocalNavigation => {
                     mock_screen(
-                        "Inbox",
+                        "ui-inbox",
                         MockBar::Tabs,
                         false,
-                        "Do: Use a toolbar to display local navigation on a specific page",
+                        "ui-do-use-a-toolbar-to-display-local-navigation-on-a-specific-page",
                     );
                     mock_screen(
-                        "Inbox",
+                        "ui-inbox",
                         MockBar::Tabs,
                         true,
-                        "Don't: Show a navigation bar and a toolbar with navigation controls at the same time",
+                        "ui-don-t-show-a-navigation-bar-and-a-toolbar-with-navigation-controls-at-the-same-time-6443",
                     );
                 }
             }));
@@ -3494,8 +3600,7 @@ fn m2_bar(icons: usize) {
                 .semantics(SemanticsArgs {
                     role: Some(Role::Image),
                     label: Some(
-                        "M2 bottom app bar in the primary color with 8dp elevation and a FAB overlapping its top edge"
-                            .into(),
+                        I18N.text("ui-m2-bottom-app-bar-in-the-primary-color-with-8dp-elevation-and-a-fab-overlapping-its-top-ed"),
                     ),
                     merge_descendants: true,
                     ..Default::default()
@@ -3522,7 +3627,7 @@ fn m2_bar(icons: usize) {
                         )
                         .cross_axis_alignment(CrossAxisAlignment::Center)
                         .children(move || {
-                            for (index, label) in ["Archive", "Delete", "Mark unread", "Snooze"]
+                            for (index, label) in ["ui-archive", "ui-delete", "ui-mark-unread", "ui-snooze"]
                                 .into_iter()
                                 .take(icons)
                                 .enumerate()
@@ -3574,8 +3679,8 @@ fn m2_comparison() {
     );
     gap(Dp(16.0));
     legend(vec![
-        "M2: Bottom app bar had higher elevation of 8dp and didn't contain the FAB".into(),
-        "M3: Bottom app bar has new colors, a taller container, no elevation or shadow, and contains the FAB".into(),
+        "ui-m2-bottom-app-bar-had-higher-elevation-of-8dp-and-didn-t-contain-the-fab".into(),
+        "ui-m3-bottom-app-bar-has-new-colors-a-taller-container-no-elevation-or-shadow-and-contains-th".into(),
     ]);
     if !notice.get().is_empty() {
         gap(Dp(12.0));
@@ -3598,26 +3703,26 @@ fn collapsing_example() {
                     button()
                         .text()
                         .enabled(visible.get())
-                        .accessibility_label("Toggle toolbar expansion")
+                        .accessibility_label(I18N.text("ui-toggle-toolbar-expansion"))
                         .on_click(move || expanded.set(!expanded.get()))
                         .child(move || {
-                            text().content(if expanded.get() {
-                                "Collapse actions"
+                            text().content(I18N.text(if expanded.get() {
+                                "ui-collapse-actions"
                             } else {
-                                "Expand actions"
-                            });
+                                "ui-expand-actions"
+                            }));
                         });
                     button()
                         .text()
                         .enabled(expanded.get())
-                        .accessibility_label("Toggle toolbar visibility")
+                        .accessibility_label(I18N.text("ui-toggle-toolbar-visibility"))
                         .on_click(move || visible.set(!visible.get()))
                         .child(move || {
-                            text().content(if visible.get() {
-                                "Move offscreen"
+                            text().content(I18N.text(if visible.get() {
+                                "ui-move-offscreen"
                             } else {
-                                "Show toolbar"
-                            });
+                                "ui-show-toolbar"
+                            }));
                         });
                 });
             gap(Dp(24.0));
@@ -3635,11 +3740,11 @@ fn collapsing_example() {
             }));
             gap(Dp(16.0));
             text()
-                .content(if notice.get().is_empty() {
-                    "No toolbar action yet".into()
+                .content(I18N.text(if notice.get().is_empty() {
+                    "ui-no-toolbar-action-yet".to_owned()
                 } else {
                     notice.get()
-                })
+                }))
                 .style(type_style(14.0, 20.0));
         });
 }
@@ -4033,20 +4138,11 @@ mod tests {
 
     #[test]
     fn collapsed_sample_actions_keep_leading_actions_and_trailing_overflow() {
-        let labels = |sample, limit| {
-            visible_actions(sample_actions(sample), limit)
-                .into_iter()
-                .map(|action| action.label)
-                .collect::<Vec<_>>()
-        };
-        assert_eq!(
-            labels(Sample::Format, 3),
-            ["Bold", "Italic", "More options"]
-        );
-        assert_eq!(
-            labels(Sample::Mail, 3),
-            ["Archive", "Delete", "Mark unread"]
-        );
-        assert_eq!(labels(Sample::History, 6), ["Undo", "Redo"]);
+        let first = action("first", Emphasis::Standard);
+        let second = action("second", Emphasis::Toggle);
+        let last = action("ui-more-options", Emphasis::Filled);
+        assert_eq!(visible_actions(vec![first, second, last], 2), [first, last]);
+        assert_eq!(visible_actions(vec![first, second], 1), [first]);
+        assert_eq!(visible_actions(vec![first, second], 6), [first, second]);
     }
 }

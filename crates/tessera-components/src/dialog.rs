@@ -28,6 +28,7 @@ use crate::{
     modal_focus::{ModalFocusState, modal_focus_modifier},
     modifier::{ModifierExt, SemanticsArgs, with_keyboard_input},
     overlay_semantics::overlay_background,
+    res::I18N,
     scrollable::ScrollableController,
     shape_def::{RoundedCorner, Shape},
     spacer::spacer,
@@ -587,7 +588,7 @@ pub fn full_screen_dialog(
         .dialog_optional(dialog)
         .label_optional(title.clone());
     let title = title.unwrap_or_default();
-    let confirm_label = confirm_label.unwrap_or_else(|| "Save".to_owned());
+    let confirm_label = confirm_label.unwrap_or_else(|| I18N.text("md3-save"));
     let content = content.unwrap_or_else(RenderSlot::empty);
     let scroll = remember(ScrollableController::new);
     let scheme = use_context::<MaterialTheme>()
@@ -613,7 +614,7 @@ pub fn full_screen_dialog(
                                 .standard()
                                 .color_style(IconButtonColorStyle::Inherited)
                                 .icon(filled::CLOSE_SVG)
-                                .accessibility_label("Close dialog")
+                                .accessibility_label(I18N.text("md3-close-dialog"))
                                 .on_click_shared(on_close);
                         });
                     if let Some(on_confirm) = on_confirm {

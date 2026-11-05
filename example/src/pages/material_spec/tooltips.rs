@@ -34,6 +34,8 @@ use tessera_ui::{
     remember, scaled_box, tessera, use_context,
 };
 
+use crate::res::I18N;
+
 use super::{
     ACCENT,
     annotations::{self, Rect, SpaceGeometry, dotted, space_geometry, watch_in_space},
@@ -44,38 +46,38 @@ use super::{
 #[tessera]
 pub(super) fn tooltips_spec(route: Option<crate::pages::material_spec::article::ArticleRoute>) {
     article(
-        "Tooltips",
-        "Tooltips display brief labels or messages",
+        "ui-tooltips",
+        "ui-tooltips-display-brief-labels-or-messages",
         vec![
-            section("Tokens & specs", RenderSlot::new(tokens)),
-            section("Plain tooltip", RenderSlot::new(|| {
+            section("ui-tokens-specs", RenderSlot::new(tokens)),
+            section("ui-plain-tooltip", RenderSlot::new(|| {
                 detail(false);
             })),
-            section("Rich tooltip", RenderSlot::new(|| {
+            section("ui-rich-tooltip", RenderSlot::new(|| {
                 detail(true);
             })),
         ],
     ).route_optional(route)
     .pages(vec![
         ArticlePage {
-            title: "Overview",
+            title: "ui-overview",
             intro: Some(RenderSlot::new(|| {
                 tooltip_points(vec![
-                    "Use tooltips to add additional context to a button or other UI element",
-                    "Two variants: plain and rich",
-                    "Use plain tooltips to describe elements or actions of icon buttons",
-                    "Use rich tooltips to provide more details, like describing the value of a feature",
-                    "Rich tooltips can include an optional title, link, and buttons",
+                    "ui-use-tooltips-to-add-additional-context-to-a-button-or-other-ui-element",
+                    "ui-two-variants-plain-and-rich",
+                    "ui-use-plain-tooltips-to-describe-elements-or-actions-of-icon-buttons",
+                    "ui-use-rich-tooltips-to-provide-more-details-like-describing-the-value-of-a-feature",
+                    "ui-rich-tooltips-can-include-an-optional-title-link-and-buttons",
                 ]);
                 gap(Dp(32.0));
                 tooltip_variant_examples();
             })),
             sections: vec![
-                section("Availability & resources", RenderSlot::new(tooltip_availability)),
-                section("Differences from M2", RenderSlot::new(|| {
+                section("ui-availability-resources", RenderSlot::new(tooltip_availability)),
+                section("ui-differences-from-m2", RenderSlot::new(|| {
                     tooltip_points(vec![
-                        "Color: New color mappings and compatibility with dynamic color",
-                        "Shape: Rich tooltips have more rounded corners",
+                        "ui-color-new-color-mappings-and-compatibility-with-dynamic-color",
+                        "ui-shape-rich-tooltips-have-more-rounded-corners",
                     ]);
                     gap(Dp(24.0));
                     tooltip_material_comparison();
@@ -83,53 +85,53 @@ pub(super) fn tooltips_spec(route: Option<crate::pages::material_spec::article::
             ],
         },
         ArticlePage {
-            title: "Guidelines",
+            title: "ui-guidelines",
             intro: Some(RenderSlot::new(tooltip_guidelines_intro)),
             sections: vec![
-                section("Usage", RenderSlot::new(tooltip_usage)),
-                section("Anatomy", RenderSlot::new(tooltip_anatomy)),
-                section("Placement", RenderSlot::new(tooltip_placement)),
-                section("Behavior", RenderSlot::new(tooltip_behavior)),
+                section("ui-usage", RenderSlot::new(tooltip_usage)),
+                section("ui-anatomy", RenderSlot::new(tooltip_anatomy)),
+                section("ui-placement", RenderSlot::new(tooltip_placement)),
+                section("ui-behavior", RenderSlot::new(tooltip_behavior)),
             ],
         },
         ArticlePage {
-            title: "Accessibility",
+            title: "ui-accessibility",
             intro: None,
             sections: vec![
-                section("Use cases", RenderSlot::new(|| {
-                    prose("People should be able to do the following using assistive technology:".into());
+                section("ui-use-cases", RenderSlot::new(|| {
+                    prose("ui-people-should-be-able-to-do-the-following-using-assistive-technology".into());
                     gap(Dp(16.0));
                     tooltip_points(vec![
-                        "Receive a tooltip message",
-                        "Activate a tooltip with a keyboard or switch input",
+                        "ui-receive-a-tooltip-message",
+                        "ui-activate-a-tooltip-with-a-keyboard-or-switch-input",
                     ]);
                 })),
-                section("Interaction & style", RenderSlot::new(tooltip_accessibility_interaction)),
-                section("Focus order", RenderSlot::new(|| {
+                section("ui-interaction-style", RenderSlot::new(tooltip_accessibility_interaction)),
+                section("ui-focus-order", RenderSlot::new(|| {
                     tooltip_split()
                         .lead(|| {
-                            prose("Tooltip containers should not block important information or prevent a person from completing an action.".into());
+                            prose("ui-tooltip-containers-should-not-block-important-information-or-prevent-a-person-from-complet".into());
                             gap(Dp(16.0));
-                            prose("Focus order within the rich tooltip moves top to bottom between interactive elements.".into());
+                            prose("ui-focus-order-within-the-rich-tooltip-moves-top-to-bottom-between-interactive-elements".into());
                             gap(Dp(16.0));
-                            prose("Avoid trapping screen reader and keyboard focus on rich tooltips.".into());
+                            prose("ui-avoid-trapping-screen-reader-and-keyboard-focus-on-rich-tooltips".into());
                             gap(Dp(16.0));
-                            prose("People should be able to move linearly through the rest of the page.".into());
+                            prose("ui-people-should-be-able-to-move-linearly-through-the-rest-of-the-page".into());
                         })
                         .figure(tooltip_focus_sequence);
                 })),
-                section("Keyboard navigation", RenderSlot::new(tooltip_keyboard_table)),
-                section("Labeling elements", RenderSlot::new(|| {
+                section("ui-keyboard-navigation", RenderSlot::new(tooltip_keyboard_table)),
+                section("ui-labeling-elements", RenderSlot::new(|| {
                     tooltip_split()
                         .lead(|| {
-                            prose("Tooltips should have the Tooltip role, or similar.".into());
+                            prose("ui-tooltips-should-have-the-tooltip-role-or-similar".into());
                             gap(Dp(16.0));
-                            prose("Label all elements in the tooltip according to their own accessibility guidance.".into());
+                            prose("ui-label-all-elements-in-the-tooltip-according-to-their-own-accessibility-guidance".into());
                         })
                         .figure(|| {
                             tooltip_labeling_diagram();
                             gap(Dp(16.0));
-                            tooltip_caption("The tooltip container should have the Tooltip role".into());
+                            tooltip_caption("ui-the-tooltip-container-should-have-the-tooltip-role".into());
                         });
                 })),
             ],
@@ -143,7 +145,9 @@ fn section(title: &'static str, content: RenderSlot) -> SpecSection {
 
 #[tessera]
 fn prose(content: String) {
-    text().content(content).style(type_style(16.0, 24.0));
+    text()
+        .content(I18N.text(content))
+        .style(type_style(16.0, 24.0));
 }
 
 #[tessera]
@@ -161,29 +165,33 @@ fn tooltip_points(items: Vec<&'static str>) {
 #[tessera]
 fn tooltip_availability() {
     spec_table(
-        vec!["Type".into(), "Resource".into(), "Status".into()],
+        vec!["ui-type".into(), "ui-resource".into(), "ui-status".into()],
         vec![
             vec![
-                "Design".into(),
-                "Design Kit (Figma)".into(),
-                "Available".into(),
+                "ui-design".into(),
+                "ui-design-kit-figma".into(),
+                "ui-available".into(),
             ],
             vec![
-                "Implementation".into(),
-                "Flutter".into(),
-                "Unavailable".into(),
+                "ui-implementation".into(),
+                "ui-flutter".into(),
+                "ui-unavailable".into(),
             ],
             vec![
-                "Implementation".into(),
-                "Jetpack Compose".into(),
-                "Available".into(),
+                "ui-implementation".into(),
+                "ui-jetpack-compose".into(),
+                "ui-available".into(),
             ],
             vec![
-                "Implementation".into(),
-                "Android Views (MDC-Android)".into(),
-                "Unavailable".into(),
+                "ui-implementation".into(),
+                "ui-android-views-mdc-android".into(),
+                "ui-unavailable".into(),
             ],
-            vec!["Implementation".into(), "Web".into(), "Unavailable".into()],
+            vec![
+                "ui-implementation".into(),
+                "ui-web".into(),
+                "ui-unavailable".into(),
+            ],
         ],
     );
 }
@@ -229,7 +237,9 @@ fn tooltip_split(lead: Option<RenderSlot>, figure: Option<RenderSlot>) {
 
 #[tessera]
 fn tooltip_term(title: String, body: String) {
-    text().content(title).style(emphasis_style(16.0, 24.0));
+    text()
+        .content(I18N.text(title))
+        .style(emphasis_style(16.0, 24.0));
     prose(body);
 }
 
@@ -249,7 +259,7 @@ fn tooltip_caption(content: String) {
         .modifier(Modifier::new().padding_symmetric(Dp(8.0), Dp::ZERO))
         .children(move || {
             text()
-                .content(content.clone())
+                .content(I18N.text(&(content)))
                 .style(type_style(16.0, 24.0))
                 .color(scheme.on_surface_variant);
         });
@@ -258,7 +268,7 @@ fn tooltip_caption(content: String) {
 fn tooltip_advice_label(tone: usize) -> &'static str {
     match tone {
         0 => "Do",
-        1 => "Caution",
+        1 => "ui-caution",
         _ => "Don't",
     }
 }
@@ -304,7 +314,7 @@ fn tooltip_guidance(
                 });
             gap(Dp(16.0));
             text()
-                .content(caption.clone())
+                .content(I18N.text(&(caption)))
                 .style(type_style(16.0, 24.0))
                 .color(scheme.on_surface_variant)
                 .modifier(Modifier::new().padding_symmetric(Dp(8.0), Dp::ZERO));
@@ -313,33 +323,33 @@ fn tooltip_guidance(
 
 fn tooltip_guidance_text(kind: usize) -> (usize, &'static str) {
     match kind {
-        1 => (0, "Use plain tooltips to label icon-only buttons"),
+        1 => (0, "ui-use-plain-tooltips-to-label-icon-only-buttons"),
         2 => (
             2,
-            "Plain tooltips aren't needed when the UI element already has label text",
+            "ui-plain-tooltips-aren-t-needed-when-the-ui-element-already-has-label-text",
         ),
         3 => (
             0,
-            "Use rich tooltips to provide extra information and actions about a UI element or new feature",
+            "ui-use-rich-tooltips-to-provide-extra-information-and-actions-about-a-ui-element-or-new-featu",
         ),
         4 => (
             2,
-            "Don't hide critical information within tooltips as it's easy to miss. Use an interruptive dialog instead.",
+            "ui-don-t-hide-critical-information-within-tooltips-as-it-s-easy-to-miss-use-an-interruptive-d",
         ),
-        5 => (0, "Briefly describe a UI element"),
+        5 => (0, "ui-briefly-describe-a-ui-element"),
         6 => (
             1,
-            "Avoid wrapping text to multiple lines or including many pieces of information",
+            "ui-avoid-wrapping-text-to-multiple-lines-or-including-many-pieces-of-information",
         ),
-        7 => (0, "Summarize the message in a few words"),
-        8 => (2, "Avoid wrapping to more than one line"),
-        9 => (1, "Avoid stacking buttons"),
-        10 => (2, "Don't use a persistent rich tooltip on icon buttons"),
+        7 => (0, "ui-summarize-the-message-in-a-few-words"),
+        8 => (2, "ui-avoid-wrapping-to-more-than-one-line"),
+        9 => (1, "ui-avoid-stacking-buttons"),
+        10 => (2, "ui-don-t-use-a-persistent-rich-tooltip-on-icon-buttons"),
         11 => (
             3,
-            "Tooltips can appear on hover or focus to explain actions",
+            "ui-tooltips-can-appear-on-hover-or-focus-to-explain-actions",
         ),
-        _ => (3, "Rich tooltips can appear when an element is selected"),
+        _ => (3, "ui-rich-tooltips-can-appear-when-an-element-is-selected"),
     }
 }
 
@@ -404,26 +414,26 @@ fn tooltip_guidelines_intro() {
             }
         });
     gap(Dp(16.0));
-    tooltip_caption("Plain and rich tooltips serve different purposes".into());
+    tooltip_caption("ui-plain-and-rich-tooltips-serve-different-purposes".into());
 }
 
 #[tessera]
 fn tooltip_usage() {
     tooltip_split()
         .lead(|| {
-            prose("A tooltip provides additional context for a UI element.".into());
+            prose("ui-a-tooltip-provides-additional-context-for-a-ui-element".into());
             gap(Dp(16.0));
             tooltip_term(
-                "Plain tooltips".into(),
-                "Plain tooltips briefly describe a UI element. They're best used for labelling UI elements with no text, like icon-only buttons and fields.".into(),
+                "ui-plain-tooltips".into(),
+                "ui-plain-tooltips-briefly-describe-a-ui-element-they-re-best-used-for-labelling-ui-elements-w".into(),
             );
             gap(Dp(16.0));
             tooltip_term(
-                "Rich tooltips".into(),
-                "Rich tooltips provide additional context about a UI element. They can optionally contain a subhead, buttons, and hyperlinks.".into(),
+                "ui-rich-tooltips".into(),
+                "ui-rich-tooltips-provide-additional-context-about-a-ui-element-they-can-optionally-contain-a".into(),
             );
             gap(Dp(16.0));
-            prose("Rich tooltips are best used for longer text like definitions or explanations.".into());
+            prose("ui-rich-tooltips-are-best-used-for-longer-text-like-definitions-or-explanations".into());
         })
         .figure(|| {
             tooltip_variant_examples().guidelines(true);
@@ -436,25 +446,25 @@ fn tooltip_usage() {
 
 #[tessera]
 fn tooltip_anatomy() {
-    subheading("Plain tooltip".into());
+    subheading("ui-plain-tooltip".into());
     gap(Dp(24.0));
     tooltip_figure(false, false).guidelines(true);
     gap(Dp(48.0));
-    subheading("Supporting text".into());
+    subheading("ui-supporting-text".into());
     gap(Dp(24.0));
     tooltip_writing_examples(false);
     gap(Dp(48.0));
-    subheading("Rich tooltip".into());
+    subheading("ui-rich-tooltip".into());
     gap(Dp(24.0));
     tooltip_figure(true, false).guidelines(true);
     gap(Dp(48.0));
     tooltip_split()
         .lead(|| {
-            subheading("Subhead (optional)".into());
+            subheading("ui-subhead-optional".into());
             gap(Dp(16.0));
-            prose("Keep subheads brief, ideally to one line. They should summarize or describe the message of the rich tooltip.".into());
+            prose("ui-keep-subheads-brief-ideally-to-one-line-they-should-summarize-or-describe-the-message-of-t".into());
             gap(Dp(16.0));
-            prose("Subheads are important to include when the rich tooltip appears automatically, like when the page loads.".into());
+            prose("ui-subheads-are-important-to-include-when-the-rich-tooltip-appears-automatically-like-when-th".into());
         })
         .figure(|| {
             tooltip_writing_examples(true);
@@ -462,11 +472,11 @@ fn tooltip_anatomy() {
     gap(Dp(48.0));
     tooltip_split()
         .lead(|| {
-            subheading("Text buttons (optional)".into());
+            subheading("ui-text-buttons-optional".into());
             gap(Dp(16.0));
-            prose("Rich tooltips can have up to two text buttons. These should be brief and relevant to the message in the supporting text.".into());
+            prose("ui-rich-tooltips-can-have-up-to-two-text-buttons-these-should-be-brief-and-relevant-to-the-me".into());
             gap(Dp(16.0));
-            prose("Keep buttons short so they can be side by side. Avoid stacking them when possible.".into());
+            prose("ui-keep-buttons-short-so-they-can-be-side-by-side-avoid-stacking-them-when-possible".into());
         })
         .figure(|| {
             tooltip_guidance_card(9);
@@ -477,82 +487,82 @@ fn tooltip_anatomy() {
 fn tooltip_placement() {
     tooltip_split()
         .lead(|| {
-            subheading("Plain tooltips".into());
+            subheading("ui-plain-tooltips".into());
             gap(Dp(16.0));
-            prose("By default, plain tooltips are positioned directly above the parent element.".into());
+            prose("ui-by-default-plain-tooltips-are-positioned-directly-above-the-parent-element".into());
             gap(Dp(16.0));
             tooltip_points(vec![
-                "If there's a visual boundary, like a button, the distance is 4dp",
-                "If there's no visual boundary, like with text baselines, the distance is 8dp",
+                "ui-if-there-s-a-visual-boundary-like-a-button-the-distance-is-4dp",
+                "ui-if-there-s-no-visual-boundary-like-with-text-baselines-the-distance-is-8dp",
             ]);
             gap(Dp(4.0));
-            prose("If the element is in an app bar, the plain tooltip appears below the element at the same distance.".into());
+            prose("ui-if-the-element-is-in-an-app-bar-the-plain-tooltip-appears-below-the-element-at-the-same-di".into());
         })
         .figure(|| {
             tooltip_plain_placement();
             gap(Dp(16.0));
-            tooltip_caption("Plain tooltip with a 4dp distance between the target and tooltip".into());
+            tooltip_caption("ui-plain-tooltip-with-a-4dp-distance-between-the-target-and-tooltip".into());
         });
     gap(Dp(48.0));
     tooltip_split()
         .lead(|| {
-            subheading("Rich tooltips".into());
+            subheading("ui-rich-tooltips".into());
             gap(Dp(16.0));
-            prose("By default, rich tooltips are positioned to the bottom right of the parent element. They adjust position to avoid going off screen. Tooltips shouldn't cover the parent element.".into());
+            prose("ui-by-default-rich-tooltips-are-positioned-to-the-bottom-right-of-the-parent-element-they-adj".into());
             gap(Dp(16.0));
             tooltip_term(
-                "Dynamic positioning".into(),
-                "The position of the tooltip adjusts in increments of 8dp to avoid going off-screen.".into(),
+                "ui-dynamic-positioning".into(),
+                "ui-the-position-of-the-tooltip-adjusts-in-increments-of-8dp-to-avoid-going-off-screen".into(),
             );
             gap(Dp(16.0));
             tooltip_term(
-                "Desktop placement".into(),
-                "On desktop, tooltips may appear centered below the parent element and remain visible while moving within the target region.".into(),
+                "ui-desktop-placement".into(),
+                "ui-on-desktop-tooltips-may-appear-centered-below-the-parent-element-and-remain-visible-while".into(),
             );
         })
         .figure(|| {
             placement_examples();
             gap(Dp(16.0));
-            tooltip_caption("Four different rich tooltip locations based on dynamic positioning".into());
+            tooltip_caption("ui-four-different-rich-tooltip-locations-based-on-dynamic-positioning".into());
         });
 }
 
 #[tessera]
 fn tooltip_behavior() {
-    prose("To show a tooltip, hover on the parent element on desktop, or tap and hold the element on mobile. Persistent rich tooltips only appear when clicked or tapped.".into());
+    prose("ui-to-show-a-tooltip-hover-on-the-parent-element-on-desktop-or-tap-and-hold-the-element-on-mo".into());
     gap(Dp(48.0));
     tooltip_split()
         .lead(|| {
-            subheading("Transient by default".into());
+            subheading("ui-transient-by-default".into());
             gap(Dp(16.0));
-            prose("Both plain and rich tooltips disappear 1.5 seconds after navigating away from the target region.".into());
+            prose("ui-both-plain-and-rich-tooltips-disappear-1-5-seconds-after-navigating-away-from-the-target-r".into());
             gap(Dp(16.0));
-            prose("Triggering a new tooltip immediately closes any other open tooltip.".into());
+            prose("ui-triggering-a-new-tooltip-immediately-closes-any-other-open-tooltip".into());
         })
         .figure(|| {
             live_tooltips();
             gap(Dp(16.0));
-            tooltip_caption("Tooltips disappear after a 1.5 second delay when no other element is hovered".into());
+            tooltip_caption("ui-tooltips-disappear-after-a-1-5-second-delay-when-no-other-element-is-hovered".into());
         });
     gap(Dp(48.0));
     tooltip_one_at_a_time();
     gap(Dp(48.0));
     tooltip_split()
         .lead(|| {
-            subheading("Persistent rich tooltips".into());
+            subheading("ui-persistent-rich-tooltips".into());
             gap(Dp(16.0));
-            prose("Persistent rich tooltips appear when either:".into());
+            prose("ui-persistent-rich-tooltips-appear-when-either".into());
             gap(Dp(16.0));
             tooltip_points(vec![
-                "The parent element is clicked",
-                "The page loads and a new feature is being explained",
+                "ui-the-parent-element-is-clicked",
+                "ui-the-page-loads-and-a-new-feature-is-being-explained",
             ]);
             gap(Dp(4.0));
-            prose("Persistent rich tooltips remain active even when leaving the target region. They only disappear once a person interacts with another UI element. Hovering doesn't trigger the tooltip.".into());
+            prose("ui-persistent-rich-tooltips-remain-active-even-when-leaving-the-target-region-they-only-disap".into());
             gap(Dp(16.0));
-            prose("When appearing on page load, the tooltip can introduce and explain new features on various parent elements.".into());
+            prose("ui-when-appearing-on-page-load-the-tooltip-can-introduce-and-explain-new-features-on-various".into());
             gap(Dp(16.0));
-            prose("Avoid using persistent rich tooltips on icon buttons.".into());
+            prose("ui-avoid-using-persistent-rich-tooltips-on-icon-buttons".into());
         })
         .figure(|| {
             tooltip_guidance_card(10);
@@ -563,12 +573,12 @@ fn tooltip_behavior() {
 fn tooltip_accessibility_interaction() {
     tooltip_split()
         .lead(|| {
-            prose("Plain and rich tooltips without required actions should remain on screen long enough for people to receive the information without disrupting their existing flow or task.".into());
+            prose("ui-plain-and-rich-tooltips-without-required-actions-should-remain-on-screen-long-enough-for-p".into());
         })
         .figure(|| {
             tooltip_guidance(
                 0,
-                "Plain tooltips should remain on the screen temporarily after the cursor moves away"
+                "ui-plain-tooltips-should-remain-on-the-screen-temporarily-after-the-cursor-moves-away"
                     .into(),
             )
             .figure(|| {
@@ -578,9 +588,9 @@ fn tooltip_accessibility_interaction() {
     gap(Dp(48.0));
     tooltip_split()
         .lead(|| {
-            prose("Tooltips can appear when an actionable element, like a button or navigation rail, is hovered or focused. However, this tooltip shouldn't hide crucial information.".into());
+            prose("ui-tooltips-can-appear-when-an-actionable-element-like-a-button-or-navigation-rail-is-hovered".into());
             gap(Dp(16.0));
-            prose("Rich tooltips can also appear by selecting an element instead of hovering or focusing on it.".into());
+            prose("ui-rich-tooltips-can-also-appear-by-selecting-an-element-instead-of-hovering-or-focusing-on-i".into());
         })
         .figure(|| {
             tooltip_guidance_pair(11, 12);
@@ -596,7 +606,7 @@ fn tooltip_plain_mock(label: String) {
         .shape(Shape::rounded_rectangle(Dp(4.0)))
         .modifier(Modifier::new().semantics(SemanticsArgs {
             role: Some(Role::Tooltip),
-            label: Some(label.clone()),
+            label: Some(I18N.text(&(label))),
             merge_descendants: true,
             ..Default::default()
         }))
@@ -605,7 +615,9 @@ fn tooltip_plain_mock(label: String) {
             boxed()
                 .modifier(Modifier::new().padding_symmetric(Dp(8.0), Dp(4.0)))
                 .children(move || {
-                    text().content(label.clone()).style(type_style(12.0, 16.0));
+                    text()
+                        .content(I18N.text(&(label)))
+                        .style(type_style(12.0, 16.0));
                 });
         });
 }
@@ -652,12 +664,12 @@ fn tooltip_rich_mock(
                         .children(move || {
                             if !headline.is_empty() {
                                 text()
-                                    .content(headline.clone())
+                                    .content(I18N.text(&(headline)))
                                     .style(emphasis_style(14.0, 20.0));
                                 gap(Dp(4.0));
                             }
                             text()
-                                .content(message.clone())
+                                .content(I18N.text(&(message)))
                                 .style(type_style(14.0, 20.0));
                         });
                     if !actions.is_empty() {
@@ -713,9 +725,9 @@ fn tooltip_rich_mock_action(label: String, geometry: Option<State<SpaceGeometry>
     button()
         .text()
         .modifier(modifier)
-        .accessibility_label(label.clone())
+        .accessibility_label(I18N.text(&(label)))
         .child(move || {
-            text().content(label.clone());
+            text().content(I18N.text(&(label)));
         });
 }
 
@@ -785,7 +797,7 @@ fn tooltip_mock(kind: usize) {
             column()
                 .cross_axis_alignment(CrossAxisAlignment::Center)
                 .children(move || {
-                    tooltip_plain_mock("Present now".into());
+                    tooltip_plain_mock("ui-present-now".into());
                     gap(Dp(4.0));
                     row()
                         .cross_axis_alignment(CrossAxisAlignment::Center)
@@ -814,7 +826,7 @@ fn tooltip_mock(kind: usize) {
             column()
                 .cross_axis_alignment(CrossAxisAlignment::Center)
                 .children(move || {
-                    tooltip_plain_mock("Edit".into());
+                    tooltip_plain_mock("ui-edit".into());
                     gap(Dp(4.0));
                     row()
                         .cross_axis_alignment(CrossAxisAlignment::Center)
@@ -833,7 +845,7 @@ fn tooltip_mock(kind: usize) {
                                 .tint(scheme.primary);
                             spacer().modifier(Modifier::new().width(Dp(8.0)));
                             text()
-                                .content("Edit")
+                                .content(I18N.text("ui-edit"))
                                 .style(type_style(14.0, 20.0))
                                 .color(scheme.primary);
                         });
@@ -864,15 +876,15 @@ fn tooltip_mock(kind: usize) {
                     gap(Dp(if kind == 3 { 32.0 } else { 76.0 }));
                     if kind == 3 {
                         tooltip_rich_mock(
-                            "Add others".into(),
-                            "Share this collection with friends and family. People you add to this album will also be able to add and delete media.".into(),
+                            "ui-add-others".into(),
+                            "ui-share-this-collection-with-friends-and-family-people-you-add-to-this-album-will-also-be-ab".into(),
                         )
-                        .actions(vec!["Learn more".into()])
+                        .actions(vec!["ui-learn-more".into()])
                         .width(220.0);
                     } else {
                         tooltip_rich_mock(
-                            "Auto-delete all".into(),
-                            "Immediately deletes all photos in this collection. You can't undo this action.".into(),
+                            "ui-auto-delete-all".into(),
+                            "ui-immediately-deletes-all-photos-in-this-collection-you-can-t-undo-this-action".into(),
                         )
                         .width(220.0);
                     }
@@ -893,9 +905,9 @@ fn tooltip_mock(kind: usize) {
                     gap(Dp(4.0));
                     tooltip_plain_mock(
                         if kind == 5 {
-                            "Notifications"
+                            "ui-notifications"
                         } else {
-                            "Lee Villanueva\nlortega@gmail.com"
+                            "ui-lee-villanueva-lortega-gmail-com"
                         }
                         .into(),
                     );
@@ -904,22 +916,22 @@ fn tooltip_mock(kind: usize) {
         7 | 8 => {
             tooltip_rich_mock(
                 if kind == 7 {
-                    "New settings available"
+                    "ui-new-settings-available"
                 } else {
-                    "There are new settings available for image quality."
+                    "ui-there-are-new-settings-available-for-image-quality"
                 }
                 .into(),
-                "Now you can adjust the uploaded image quality, and upgrade your available storage space.".into(),
+                "ui-now-you-can-adjust-the-uploaded-image-quality-and-upgrade-your-available-storage-space".into(),
             )
-            .actions(vec!["Learn more".into()])
+            .actions(vec!["ui-learn-more".into()])
             .width(240.0);
         }
         9 => {
             tooltip_rich_mock(
-                "New settings available".into(),
-                "Now you can adjust the uploaded image quality, and upgrade your available storage space.".into(),
+                "ui-new-settings-available".into(),
+                "ui-now-you-can-adjust-the-uploaded-image-quality-and-upgrade-your-available-storage-space".into(),
             )
-            .actions(vec!["Learn more".into(), "Go to settings".into()])
+            .actions(vec!["ui-learn-more".into(), "ui-go-to-settings".into()])
             .width(240.0)
             .stacked(true);
         }
@@ -936,10 +948,10 @@ fn tooltip_mock(kind: usize) {
                         });
                     gap(Dp(4.0));
                     tooltip_rich_mock(
-                        "Share with friends".into(),
-                        "Share some of your best memories with friends.".into(),
+                        "ui-share-with-friends".into(),
+                        "ui-share-some-of-your-best-memories-with-friends".into(),
                     )
-                    .actions(vec!["Learn more".into()])
+                    .actions(vec!["ui-learn-more".into()])
                     .width(200.0);
                 });
         }
@@ -953,8 +965,8 @@ fn tooltip_mock(kind: usize) {
                 column().children(move || {
                     gap(Dp(32.0));
                     tooltip_rich_mock(
-                        "Favorite".into(),
-                        "Find this later in your favorites.".into(),
+                        "ui-favorite".into(),
+                        "ui-find-this-later-in-your-favorites".into(),
                     )
                     .width(160.0);
                 });
@@ -964,7 +976,7 @@ fn tooltip_mock(kind: usize) {
             column()
                 .cross_axis_alignment(CrossAxisAlignment::Center)
                 .children(move || {
-                    tooltip_plain_mock("Upload".into());
+                    tooltip_plain_mock("ui-upload".into());
                     gap(Dp(4.0));
                     tooltip_mock_icon(0, 3);
                 });
@@ -974,10 +986,10 @@ fn tooltip_mock(kind: usize) {
                 .cross_axis_alignment(CrossAxisAlignment::Start)
                 .children(move || {
                     tooltip_rich_mock(
-                        "New settings available".into(),
-                        "Now you can adjust the uploaded image quality, and upgrade your available storage space.".into(),
+                        "ui-new-settings-available".into(),
+                        "ui-now-you-can-adjust-the-uploaded-image-quality-and-upgrade-your-available-storage-space".into(),
                     )
-                    .actions(vec!["Learn more".into()])
+                    .actions(vec!["ui-learn-more".into()])
                     .width(240.0);
                     gap(Dp(8.0));
                     tooltip_mock_icon(1, 1);
@@ -1003,7 +1015,7 @@ fn tooltip_variant_examples(guidelines: Option<bool>) {
             tooltip_stage(
                 width,
                 height,
-                "Plain and rich tooltip variants".into(),
+                "ui-plain-and-rich-tooltip-variants".into(),
                 geometry,
             )
             .child(move || {
@@ -1029,9 +1041,9 @@ fn tooltip_variant_examples(guidelines: Option<bool>) {
                     false,
                     false,
                     if guidelines {
-                        "Plain Tooltip".into()
+                        "ui-plain-tooltip-6538".into()
                     } else {
-                        "Plain tooltip".into()
+                        "ui-plain-tooltip".into()
                     },
                     plain_x,
                     center_y,
@@ -1068,7 +1080,7 @@ fn tooltip_variant_examples(guidelines: Option<bool>) {
                         )
                         .children(move || {
                             text()
-                                .content(number.to_string())
+                                .content((number).to_string())
                                 .style(type_style(16.0, 24.0))
                                 .color(srgb(255, 255, 255));
                         });
@@ -1076,7 +1088,7 @@ fn tooltip_variant_examples(guidelines: Option<bool>) {
             });
         });
     gap(Dp(16.0));
-    tooltip_legend(vec!["Plain tooltip".into(), "Rich tooltip".into()]);
+    tooltip_legend(vec!["ui-plain-tooltip".into(), "ui-rich-tooltip".into()]);
 }
 
 #[tessera]
@@ -1100,7 +1112,7 @@ fn tooltip_legend(labels: Vec<String>) {
                             .color(scheme.surface);
                     });
                 text()
-                    .content(label.clone())
+                    .content(I18N.text(&(label)))
                     .style(type_style(16.0, 24.0))
                     .modifier(Modifier::new().padding_symmetric(Dp(12.0), Dp(4.0)));
             });
@@ -1112,12 +1124,12 @@ fn tooltip_legend(labels: Vec<String>) {
 fn tooltip_material_comparison() {
     material_theme()
         .theme(|| tooltip_reference_theme(false))
-        .child(|| {
+        .child(move || {
             let geometry = remember(SpaceGeometry::new);
             tooltip_stage(
                 1024.0,
                 302.0,
-                "Material 2 and Material 3 tooltip comparison".into(),
+                "ui-material-2-and-material-3-tooltip-comparison".into(),
                 geometry,
             )
             .child(move || {
@@ -1130,30 +1142,30 @@ fn tooltip_material_comparison() {
                                 Shape::rounded_rectangle(Dp(24.0)),
                             ),
                     )
-                    .children(|| {
+                    .children(move || {
                         surface()
                             .modifier(Modifier::new().offset(Dp(94.0), Dp(64.0)).width(Dp(312.0)))
                             .style(srgb(255, 255, 255).into())
                             .shape(Shape::rounded_rectangle(Dp(8.0)))
                             .elevation(Dp(3.0))
-                            .child(|| {
+                            .child(move || {
                                 column()
                                     .modifier(Modifier::new().padding_symmetric(Dp(16.0), Dp(12.0)))
-                                    .children(|| {
+                                    .children(move || {
                                         text()
-                                            .content("Rich tooltip")
+                                            .content(I18N.text("ui-rich-tooltip"))
                                             .style(type_style(14.0, 20.0))
                                             .color(srgb(60, 64, 67));
                                         gap(Dp(4.0));
                                         text()
-                                            .content(RICH_OVERVIEW_MESSAGE)
+                                            .content(I18N.text(RICH_OVERVIEW_MESSAGE))
                                             .style(type_style(14.0, 20.0))
                                             .color(srgb(60, 64, 67));
                                         gap(Dp(20.0));
-                                        row().children(|| {
+                                        row().children(move || {
                                             for _ in 0..2 {
                                                 text()
-                                                    .content("Action")
+                                                    .content(I18N.text("ui-action"))
                                                     .style(type_style(14.0, 20.0))
                                                     .color(srgb(26, 115, 232))
                                                     .modifier(
@@ -1191,8 +1203,8 @@ fn tooltip_material_comparison() {
         .modifier(Modifier::new().fill_max_width())
         .children(|| {
             for (index, caption) in [
-                "M2: Rich tooltips have slightly rounded corners",
-                "M3: Rich tooltips have more rounded corners and support dynamic color",
+                "ui-m2-rich-tooltips-have-slightly-rounded-corners",
+                "ui-m3-rich-tooltips-have-more-rounded-corners-and-support-dynamic-color",
             ]
             .into_iter()
             .enumerate()
@@ -1234,7 +1246,7 @@ fn tooltip_advice_bar(label: String, tone: usize) {
                 .size(Dp(20.0))
                 .tint(ink);
             text()
-                .content(label.clone())
+                .content(I18N.text(&(label)))
                 .style(type_style(16.0, 24.0))
                 .color(ink)
                 .modifier(Modifier::new().padding_symmetric(Dp(8.0), Dp::ZERO));
@@ -1245,7 +1257,7 @@ fn tooltip_advice_bar(label: String, tone: usize) {
 fn tooltip_plain_placement() {
     material_theme()
         .theme(|| tooltip_reference_theme(false))
-        .child(|| {
+        .child(move || {
             let geometry = remember(SpaceGeometry::new);
             let controller = remember(|| {
                 let mut value = TooltipController::new();
@@ -1255,7 +1267,7 @@ fn tooltip_plain_placement() {
             tooltip_stage(
                 1024.0,
                 300.0,
-                "Plain tooltip target placement".into(),
+                "ui-plain-tooltip-target-placement".into(),
                 geometry,
             )
             .child(move || {
@@ -1267,7 +1279,7 @@ fn tooltip_plain_placement() {
                             Shape::rounded_rectangle(Dp(24.0)),
                         ),
                 );
-                tooltip_provider("Add to list")
+                tooltip_provider("ui-add-to-list")
                     .controller(controller)
                     .placement(TooltipPlacement::Above)
                     .popup_modifier(watch_in_space(geometry, "placement_popup"))
@@ -1281,7 +1293,7 @@ fn tooltip_plain_placement() {
                                         icon_button()
                                             .standard()
                                             .icon(filled::PLAYLIST_ADD_SVG)
-                                            .accessibility_label("Add to list")
+                                            .accessibility_label(I18N.text("ui-add-to-list"))
                                             .modifier(watch_in_space(geometry, "placement_target"));
                                     });
                             });
@@ -1364,7 +1376,7 @@ fn tooltip_keyboard_table() {
                         })
                         .semantics(SemanticsArgs {
                             role: Some(Role::Table),
-                            label: Some("Tooltip keyboard navigation".into()),
+                            label: Some(I18N.text("ui-tooltip-keyboard-navigation")),
                             merge_descendants: true,
                             collection_info: Some((3, 2, false)),
                             ..Default::default()
@@ -1375,9 +1387,9 @@ fn tooltip_keyboard_table() {
                         .modifier(Modifier::new().fill_max_width())
                         .children(move || {
                             for (index, key, action) in [
-                                (0, "Keys", "Actions"),
-                                (1, "Tab", "Focus lands on button, if available"),
-                                (2, "Space or Enter", "Activates the focused element"),
+                                (0, "ui-keys", "ui-actions"),
+                                (1, "ui-tab", "ui-focus-lands-on-button-if-available"),
+                                (2, "ui-space-or-enter", "ui-activates-the-focused-element"),
                             ] {
                                 if index > 0 {
                                     spacer().modifier(
@@ -1439,7 +1451,7 @@ fn tooltip_keyboard_table() {
                                                                 1,
                                                                 false,
                                                             )),
-                                                            label: Some(content.into()),
+                                                            label: Some(I18N.text(content)),
                                                             merge_descendants: false,
                                                             ..Default::default()
                                                         }),
@@ -1457,7 +1469,7 @@ fn tooltip_keyboard_table() {
                                                     } else { modifier };
                                                     text()
                                                         .modifier(modifier)
-                                                        .content(content)
+                                                        .content(I18N.text(content))
                                                         .style(style)
                                                         .color(scheme.on_surface);
                                                 });
@@ -1485,14 +1497,16 @@ fn tooltip_focus_marker(number: usize, x: f64, y: f64) {
                 .background_with_shape(srgb(29, 27, 32), Shape::Ellipse)
                 .semantics(SemanticsArgs {
                     role: Some(Role::Note),
-                    label: Some(format!("Focus order marker {number}")),
+                    label: Some(
+                        I18N.format("ui-focus-order-marker-value", [("v0", (number).into())]),
+                    ),
                     merge_descendants: true,
                     ..Default::default()
                 }),
         )
         .children(move || {
             text()
-                .content(number.to_string())
+                .content((number).to_string())
                 .style(type_style(12.0, 16.0))
                 .color(srgb(255, 255, 255));
         });
@@ -1500,10 +1514,10 @@ fn tooltip_focus_marker(number: usize, x: f64, y: f64) {
 
 #[tessera]
 fn tooltip_focus_sequence() {
-    material_theme().theme(|| tooltip_reference_theme(false)).child(|| {
+    material_theme().theme(|| tooltip_reference_theme(false)).child(move || {
         let geometry = remember(SpaceGeometry::new);
         let ring = srgb(130, 64, 150);
-        tooltip_stage(512.0, 300.0, "Rich tooltip focus order illustration".into(), geometry).child(move || {
+        tooltip_stage(512.0, 300.0, "ui-rich-tooltip-focus-order-illustration".into(), geometry).child(move || {
             tooltip_grid(Dp(512.0), Dp(300.0));
             boxed()
                 .alignment(Alignment::Center)
@@ -1513,12 +1527,12 @@ fn tooltip_focus_sequence() {
                         .size(Dp(48.0), Dp(48.0))
                         .border_with_shape(Dp(3.0), ring, Shape::Ellipse),
                 )
-                .children(|| {
-                    let content = RenderSlot::new(|| {
+                .children(move || {
+                    let content = RenderSlot::new(move || {
                         icon_button()
                             .standard()
                             .icon(filled::LOCK_SVG)
-                            .accessibility_label("Permissions illustration");
+                            .accessibility_label(I18N.text("ui-permissions-illustration"));
                     });
                     content.render();
                 });
@@ -1537,16 +1551,16 @@ fn tooltip_focus_sequence() {
                                 .modifier(Modifier::new().padding_symmetric(Dp(16.0), Dp::ZERO))
                                 .children(move || {
                                     text()
-                                        .content("Permissions")
+                                        .content(I18N.text("ui-permissions"))
                                         .style(emphasis_style(14.0, 20.0));
                                     gap(Dp(4.0));
                                     text()
-                                        .content("Configure permissions for selected service accounts. You can add and remove service account members and assign roles to them.")
+                                        .content(I18N.text("ui-configure-permissions-for-selected-service-accounts-you-can-add-and-remove-service-account"))
                                         .style(type_style(14.0, 20.0));
                                     row()
                                         .cross_axis_alignment(CrossAxisAlignment::Center)
                                         .children(move || {
-                                            text().content("Visit ").style(type_style(14.0, 20.0));
+                                            text().content(I18N.text("Visit ")).style(type_style(14.0, 20.0));
                                             boxed()
                                                 .modifier(
                                                     watch_in_space(geometry, "focus_link")
@@ -1558,18 +1572,18 @@ fn tooltip_focus_sequence() {
                                                         .padding_symmetric(Dp(2.0), Dp::ZERO)
                                                         .semantics(SemanticsArgs {
                                                             role: Some(Role::Link),
-                                                            label: Some("permission settings link illustration".into()),
+                                                            label: Some(I18N.text("ui-permission-settings-link-illustration")),
                                                             merge_descendants: true,
                                                             ..Default::default()
                                                         }),
                                                 )
                                                 .children(move || {
                                                     text()
-                                                        .content("permission settings")
+                                                        .content(I18N.text("ui-permission-settings"))
                                                         .style(type_style(14.0, 20.0))
                                                         .color(scheme.primary);
                                                 });
-                                            text().content(" for details.").style(type_style(14.0, 20.0));
+                                            text().content(I18N.text("ui-for-details")).style(type_style(14.0, 20.0));
                                         });
                                 });
                             gap(Dp(8.0));
@@ -1579,13 +1593,13 @@ fn tooltip_focus_sequence() {
                                         .padding_symmetric(Dp(8.0), Dp::ZERO)
                                         .border_with_shape(Dp(2.0), ring, Shape::CAPSULE),
                                 )
-                                .children(|| {
-                                    let content = RenderSlot::new(|| {
+                                .children(move || {
+                                    let content = RenderSlot::new(move || {
                                         button()
                                             .text()
-                                            .accessibility_label("Request access action illustration")
-                                            .child(|| {
-                                                text().content("Request access");
+                                            .accessibility_label(I18N.text("ui-request-access-action-illustration"))
+                                            .child(move || {
+                                                text().content(I18N.text("ui-request-access"));
                                             });
                                     });
                                     content.render();
@@ -1597,9 +1611,9 @@ fn tooltip_focus_sequence() {
     });
     gap(Dp(16.0));
     tooltip_legend(vec![
-        "Parent element".into(),
-        "Inline link".into(),
-        "Text button".into(),
+        "ui-parent-element".into(),
+        "ui-inline-link".into(),
+        "ui-text-button".into(),
     ]);
 }
 
@@ -1623,7 +1637,7 @@ fn tooltip_labeling_diagram() {
             tooltip_stage(
                 512.0,
                 500.0,
-                "Tooltip roles and labels illustration".into(),
+                "ui-tooltip-roles-and-labels-illustration".into(),
                 geometry,
             )
             .child(move || {
@@ -1638,16 +1652,16 @@ fn tooltip_labeling_diagram() {
                 boxed()
                     .modifier(Modifier::new().offset(Dp(300.0), Dp(44.0)))
                     .children(|| {
-                        tooltip_plain_mock("Supporting text".into());
+                        tooltip_plain_mock("ui-supporting-text".into());
                     });
                 boxed()
                     .modifier(watch_in_space(geometry, "labeling_rich").offset(Dp(244.0), Dp(170.0)))
                     .children(move || {
                         tooltip_rich_mock(
-                            "Add others".into(),
-                            "Share this collection with friends and family. People you add to this album will also be able to add and delete media.".into(),
+                            "ui-add-others".into(),
+                            "ui-share-this-collection-with-friends-and-family-people-you-add-to-this-album-will-also-be-ab".into(),
                         )
-                        .actions(vec!["Learn more".into()])
+                        .actions(vec!["ui-learn-more".into()])
                         .width(232.0)
                         .geometry(geometry);
                     });
@@ -1689,17 +1703,22 @@ fn tooltip_labeling_annotations(geometry: State<SpaceGeometry>) {
         line_top = action.y + action.h + 2.0,
     );
     annotations::lines(Dp(512.0), Dp(500.0), svg);
-    tooltip_role_box(vec![("Role".into(), "Tooltip".into())], 24.0, 24.0, 136.0);
     tooltip_role_box(
-        vec![("Role".into(), "Tooltip".into())],
+        vec![("ui-role".into(), "ui-tooltip".into())],
+        24.0,
+        24.0,
+        136.0,
+    );
+    tooltip_role_box(
+        vec![("ui-role".into(), "ui-tooltip".into())],
         24.0,
         rich_center - 32.0,
         172.0,
     );
     tooltip_role_box(
         vec![
-            ("Label".into(), "Learn more".into()),
-            ("Role".into(), "Button".into()),
+            ("ui-label".into(), "ui-learn-more".into()),
+            ("ui-role".into(), "ui-button".into()),
         ],
         action_center - 72.0,
         label_top,
@@ -1725,7 +1744,7 @@ fn tooltip_role_box(entries: Vec<(String, String)>, x: f64, y: f64, width: f64) 
                 .padding_symmetric(Dp(16.0), Dp(12.0))
                 .semantics(SemanticsArgs {
                     role: Some(Role::Note),
-                    label: Some(label),
+                    label: Some(I18N.text(label)),
                     merge_descendants: true,
                     ..Default::default()
                 }),
@@ -1736,11 +1755,11 @@ fn tooltip_role_box(entries: Vec<(String, String)>, x: f64, y: f64, width: f64) 
                     gap(Dp(8.0));
                 }
                 text()
-                    .content(name.clone())
+                    .content(I18N.text(&(name)))
                     .style(type_style(14.0, 20.0))
                     .color(srgb(230, 224, 233));
                 text()
-                    .content(value.clone())
+                    .content(I18N.text(&(value)))
                     .style(emphasis_style(14.0, 20.0))
                     .color(pink);
             }
@@ -1749,7 +1768,7 @@ fn tooltip_role_box(entries: Vec<(String, String)>, x: f64, y: f64, width: f64) 
 
 #[tessera]
 fn tooltip_one_at_a_time() {
-    tooltip_guidance(2, "Only display one tooltip at a time".into()).figure(|| {
+    tooltip_guidance(2, "ui-only-display-one-tooltip-at-a-time".into()).figure(|| {
         tooltip_one_at_a_time_stage();
     });
 }
@@ -1774,9 +1793,9 @@ fn tooltip_one_at_a_time_stage(more: Option<bool>) {
                 1024.0,
                 300.0,
                 if more {
-                    "Multiple tooltips caution illustration"
+                    "ui-multiple-tooltips-caution-illustration"
                 } else {
-                    "Lingering plain tooltip illustration"
+                    "ui-lingering-plain-tooltip-illustration"
                 }
                 .into(),
                 geometry,
@@ -1787,7 +1806,7 @@ fn tooltip_one_at_a_time_stage(more: Option<bool>) {
                     geometry,
                     false,
                     false,
-                    "Star".into(),
+                    "ui-star".into(),
                     840.0,
                     166.0,
                     1024.0,
@@ -1798,7 +1817,7 @@ fn tooltip_one_at_a_time_stage(more: Option<bool>) {
                         geometry,
                         true,
                         false,
-                        "More".into(),
+                        "ui-more".into(),
                         896.0,
                         166.0,
                         1024.0,
@@ -1806,8 +1825,8 @@ fn tooltip_one_at_a_time_stage(more: Option<bool>) {
                     );
                 }
                 for (icon, label, x) in [
-                    (filled::STAR_BORDER_SVG, "Star illustration", 816.0),
-                    (filled::MORE_VERT_SVG, "More illustration", 872.0),
+                    (filled::STAR_BORDER_SVG, "ui-star-illustration", 816.0),
+                    (filled::MORE_VERT_SVG, "ui-more-illustration", 872.0),
                 ] {
                     boxed()
                         .modifier(Modifier::new().offset(Dp(x), Dp(112.0)))
@@ -1815,7 +1834,7 @@ fn tooltip_one_at_a_time_stage(more: Option<bool>) {
                             icon_button()
                                 .standard()
                                 .icon(icon)
-                                .accessibility_label(label);
+                                .accessibility_label(I18N.text(label));
                         });
                 }
             });
@@ -1877,9 +1896,9 @@ fn tooltip_browser_mock() {
                 .size(Dp(24.0), Dp(24.0))
                 .background_with_shape(srgb(120, 116, 126), Shape::Ellipse),
         )
-        .children(|| {
+        .children(move || {
             text()
-                .content("M")
+                .content(I18N.text("M"))
                 .style(type_style(12.0, 16.0))
                 .color(srgb(255, 255, 255));
         });
@@ -1887,7 +1906,7 @@ fn tooltip_browser_mock() {
         .modifier(Modifier::new().offset(Dp(144.0), Dp(118.0)))
         .children(move || {
             text()
-                .content("Lunch at Lee's")
+                .content(I18N.text("ui-lunch-at-lee-s"))
                 .style(type_style(22.0, 28.0))
                 .color(scheme.on_surface);
         });
@@ -1907,53 +1926,61 @@ fn tooltip_browser_mock() {
 #[tessera]
 fn tokens() {
     let rich = remember(|| false);
-    prose("Select a component variant below to see its attributes, tokens, and values.".into());
+    prose("ui-select-a-component-variant-below-to-see-its-attributes-tokens-and-values".into());
     gap(Dp(24.0));
     flow_row()
         .item_spacing(Dp(8.0))
         .line_spacing(Dp(8.0))
         .children(move || {
-            for (label, value) in [("Plain tooltip", false), ("Rich tooltip", true)] {
+            for (label, value) in [("ui-plain-tooltip", false), ("ui-rich-tooltip", true)] {
                 button()
                     .tonal()
                     .selected(rich.get() == value)
-                    .accessibility_label(format!("Show {label} tokens"))
+                    .accessibility_label(
+                        I18N.format("ui-show-value-tokens", [("v0", I18N.text(&label).into())]),
+                    )
                     .on_click(move || rich.set(value))
                     .child(move || {
-                        text().content(label);
+                        text().content(I18N.text(label));
                     });
             }
         });
     gap(Dp(24.0));
     spec_table(
-        vec!["Element".into(), "Token value".into()],
+        vec!["ui-element".into(), "ui-token-value".into()],
         if rich.get() {
             vec![
-                vec!["Container color".into(), "Surface container".into()],
+                vec!["ui-container-color".into(), "ui-surface-container".into()],
                 vec![
-                    "Subhead / supporting text color".into(),
-                    "On surface variant".into(),
+                    "ui-subhead-supporting-text-color".into(),
+                    "ui-on-surface-variant".into(),
                 ],
-                vec!["Action color".into(), "Primary".into()],
-                vec!["Subhead type".into(), "Title small · 14sp / 20sp".into()],
+                vec!["ui-action-color".into(), "ui-primary".into()],
+                vec!["ui-subhead-type".into(), "ui-title-small-14sp-20sp".into()],
                 vec![
-                    "Supporting text type".into(),
-                    "Body medium · 14sp / 20sp".into(),
+                    "ui-supporting-text-type".into(),
+                    "ui-body-medium-14sp-20sp".into(),
                 ],
-                vec!["Action type".into(), "Label large · 14sp / 20sp".into()],
-                vec!["Container corner size".into(), "12dp".into()],
-                vec!["Container elevation".into(), "Level 2 · 3dp".into()],
+                vec!["ui-action-type".into(), "ui-label-large-14sp-20sp".into()],
+                vec!["ui-container-corner-size".into(), "12dp".into()],
+                vec![
+                    "ui-container-elevation".into(),
+                    "ui-level-2-3dp-6571".into(),
+                ],
             ]
         } else {
             vec![
-                vec!["Container color".into(), "Inverse surface".into()],
-                vec!["Supporting text color".into(), "Inverse on surface".into()],
+                vec!["ui-container-color".into(), "ui-inverse-surface".into()],
                 vec![
-                    "Supporting text type".into(),
-                    "Body small · 12sp / 16sp".into(),
+                    "ui-supporting-text-color".into(),
+                    "ui-inverse-on-surface".into(),
                 ],
-                vec!["Container corner size".into(), "4dp".into()],
-                vec!["Container elevation".into(), "Level 0 · 0dp".into()],
+                vec![
+                    "ui-supporting-text-type".into(),
+                    "ui-body-small-12sp-16sp".into(),
+                ],
+                vec!["ui-container-corner-size".into(), "4dp".into()],
+                vec!["ui-container-elevation".into(), "ui-level-0-0dp".into()],
             ]
         },
     );
@@ -1965,42 +1992,42 @@ fn detail(rich: bool) {
         .modifier(Modifier::new().fill_max_width())
         .children(move || {
             tooltip_figure(rich, false);
-            let title = if rich { "Rich tooltip" } else { "Plain tooltip" };
+            let title = if rich { "ui-rich-tooltip" } else { "ui-plain-tooltip" };
             let scheme = use_context::<MaterialTheme>().unwrap().get().color_scheme;
             gap(Dp(112.0));
-            subheading(format!("{title} colors"));
+            subheading(I18N.format("ui-value-colors", [("v0", I18N.text(&title).into())]));
             gap(Dp(24.0));
-            prose("Color values are implemented through design tokens. For design, this means working with color values that correspond with tokens. For implementation, a color value will be a token that references a value.".into());
+            prose("ui-color-values-are-implemented-through-design-tokens-for-design-this-means-working-with-colo".into());
             gap(Dp(16.0));
             text()
-                .content("Learn more about design tokens")
+                .content(I18N.text("ui-learn-more-about-design-tokens"))
                 .style(type_style(16.0, 24.0))
                 .color(scheme.primary);
             gap(Dp(24.0));
             tooltip_color_pair(rich);
             gap(Dp(88.0));
-            subheading(format!("{title} measurements"));
+            subheading(I18N.format("ui-value-measurements", [("v0", I18N.text(&title).into())]));
             gap(Dp(24.0));
             tooltip_figure(rich, true);
             gap(Dp(24.0));
             spec_table(
-                vec!["Attribute".into(), "Value".into()],
+                vec!["ui-attribute".into(), "ui-value".into()],
                 if rich {
                     vec![
-                        vec!["Top padding".into(), "12dp".into()],
-                        vec!["Bottom padding".into(), "8dp".into()],
-                        vec!["Left and right padding".into(), "16dp".into()],
+                        vec!["ui-top-padding".into(), "12dp".into()],
+                        vec!["ui-bottom-padding".into(), "8dp".into()],
+                        vec!["ui-left-and-right-padding".into(), "16dp".into()],
                     ]
                 } else {
                     vec![
-                        vec!["Container height".into(), "24dp".into()],
-                        vec!["Padding".into(), "8dp".into()],
+                        vec!["ui-container-height".into(), "24dp".into()],
+                        vec!["ui-padding".into(), "8dp".into()],
                     ]
                 },
             );
             if rich {
                 gap(Dp(112.0));
-                subheading("Rich tooltip configurations".to_owned());
+                subheading("ui-rich-tooltip-configurations".to_owned());
                 gap(Dp(24.0));
                 tooltip_configurations();
             }
@@ -2010,13 +2037,13 @@ fn detail(rich: bool) {
 fn tooltip_color_labels(rich: bool) -> Vec<&'static str> {
     if rich {
         vec![
-            "On surface variant",
-            "Surface container",
-            "On surface variant",
-            "Primary",
+            "ui-on-surface-variant",
+            "ui-surface-container",
+            "ui-on-surface-variant",
+            "ui-primary",
         ]
     } else {
-        vec!["Inverse on surface", "Inverse surface"]
+        vec!["ui-inverse-on-surface", "ui-inverse-surface"]
     }
 }
 
@@ -2030,10 +2057,16 @@ fn tooltip_color_pair(rich: bool) {
                 .clip_shape(Shape::rounded_rectangle(Dp(24.0)))
                 .semantics(SemanticsArgs {
                     role: Some(Role::Group),
-                    label: Some(format!(
-                        "{} tooltip color roles",
-                        if rich { "Rich" } else { "Plain" }
-                    )),
+                    label: Some(
+                        I18N.format(
+                            "ui-value-tooltip-color-roles",
+                            [(
+                                "v0",
+                                I18N.text(&(if rich { "ui-rich" } else { "ui-plain" }))
+                                    .into(),
+                            )],
+                        ),
+                    ),
                     merge_descendants: true,
                     ..Default::default()
                 }),
@@ -2044,16 +2077,42 @@ fn tooltip_color_pair(rich: bool) {
                 .children(move || {
                     for dark in [false, true] {
                         column()
-                            .modifier(Modifier::new().weight(1.0).semantics(SemanticsArgs {
-                                role: Some(Role::Group),
-                                label: Some(format!(
-                                    "{} {} tooltip color example",
-                                    if dark { "Dark" } else { "Light" },
-                                    if rich { "rich" } else { "plain" }
-                                )),
-                                merge_descendants: true,
-                                ..Default::default()
-                            }))
+                            .modifier(
+                                Modifier::new().weight(1.0).semantics(SemanticsArgs {
+                                    role: Some(Role::Group),
+                                    label: Some(
+                                        I18N.format(
+                                            "ui-value-value-tooltip-color-example",
+                                            [
+                                                (
+                                                    "v0",
+                                                    I18N.text(
+                                                        &(if dark {
+                                                            "ui-dark"
+                                                        } else {
+                                                            "ui-light"
+                                                        }),
+                                                    )
+                                                    .into(),
+                                                ),
+                                                (
+                                                    "v1",
+                                                    I18N.text(
+                                                        &(if rich {
+                                                            "ui-rich-7121"
+                                                        } else {
+                                                            "ui-plain-7122"
+                                                        }),
+                                                    )
+                                                    .into(),
+                                                ),
+                                            ],
+                                        ),
+                                    ),
+                                    merge_descendants: true,
+                                    ..Default::default()
+                                }),
+                            )
                             .children(move || {
                                 material_theme()
                                     .theme(move || tooltip_reference_theme(dark))
@@ -2065,10 +2124,16 @@ fn tooltip_color_pair(rich: bool) {
                 });
         });
     gap(Dp(24.0));
-    prose(format!(
-        "{} tooltip color roles used for light and dark themes:",
-        if rich { "Rich" } else { "Plain" }
-    ));
+    prose(
+        I18N.format(
+            "ui-value-tooltip-color-roles-used-for-light-and-dark-themes",
+            [(
+                "v0",
+                I18N.text(&(if rich { "ui-rich" } else { "ui-plain" }))
+                    .into(),
+            )],
+        ),
+    );
     gap(Dp(16.0));
     for (index, label) in tooltip_color_labels(rich).into_iter().enumerate() {
         row()
@@ -2088,7 +2153,7 @@ fn tooltip_color_pair(rich: bool) {
                             .color(scheme.surface);
                     });
                 text()
-                    .content(label)
+                    .content(I18N.text(label))
                     .style(type_style(16.0, 24.0))
                     .modifier(Modifier::new().padding_symmetric(Dp(12.0), Dp(4.0)));
             });
@@ -2098,18 +2163,18 @@ fn tooltip_color_pair(rich: bool) {
 
 #[tessera]
 fn tooltip_configurations() {
-    prose("Rich tooltips can have a headline, body, and up to two buttons. The headline and number of buttons can be configured.".into());
+    prose("ui-rich-tooltips-can-have-a-headline-body-and-up-to-two-buttons-the-headline-and-number-of-bu".into());
     gap(Dp(24.0));
     material_theme()
         .theme(|| tooltip_reference_theme(true))
         .child(tooltip_configuration_canvas);
     gap(Dp(16.0));
     tooltip_legend(vec![
-        "Subhead, supporting text, and two buttons".into(),
-        "Subhead, supporting text, and one button".into(),
-        "Subhead and supporting text".into(),
-        "Supporting text and one button".into(),
-        "Supporting text and two buttons".into(),
+        "ui-subhead-supporting-text-and-two-buttons".into(),
+        "ui-subhead-supporting-text-and-one-button".into(),
+        "ui-subhead-and-supporting-text".into(),
+        "ui-supporting-text-and-one-button".into(),
+        "ui-supporting-text-and-two-buttons".into(),
     ]);
 }
 
@@ -2119,7 +2184,7 @@ fn tooltip_configuration_canvas() {
     tooltip_stage(
         1024.0,
         697.0,
-        "Rich tooltip five configurations".into(),
+        "ui-rich-tooltip-five-configurations".into(),
         geometry,
     )
     .child(move || {
@@ -2159,22 +2224,22 @@ fn tooltip_configuration(number: usize, headline: bool, actions: usize, x: Dp, y
             132.0
         });
     boxed().modifier(Modifier::new().offset(Dp(x.0-8.0),Dp(y.0-48.0)).required_size(Dp(328.0),Dp(popup_height+56.0)).semantics(SemanticsArgs {
-        role:Some(Role::Group),label:Some(format!("Rich tooltip configuration {number}")),merge_descendants:true,..Default::default()
+        role:Some(Role::Group),label:Some(I18N.format("ui-rich-tooltip-configuration-value", [("v0", (number).into())])),merge_descendants:true,..Default::default()
     })).children(move || {
         let content = RenderSlot::new(move || {
-            let provider = tooltip_provider("Rich tooltips bring attention to a particular element or feature that warrants a person’s focus.")
+            let provider = tooltip_provider("ui-rich-tooltips-bring-attention-to-a-particular-element-or-feature-that-warrants-a-person-s")
                 .controller(controller)
                 .variant(TooltipVariant::Rich);
             if headline {
-                provider.headline("Rich tooltip");
+                provider.headline(I18N.text("ui-rich-tooltip"));
             }
             if actions > 0 {
                 provider.actions(move || {
                     row().children(move || {
                         for action in 1..=actions {
                             button().text()
-                                .accessibility_label(format!("Tooltip configuration {number} action {action}"))
-                                .child(|| { text().content("Action"); });
+                                .accessibility_label(I18N.format("ui-tooltip-configuration-value-action-value", [("v0", (number).into()), ("v1", (action).into())]))
+                                .child(move || { text().content(I18N.text("ui-action")); });
                         }
                     });
                 });
@@ -2197,7 +2262,7 @@ fn tooltip_configuration(number: usize, headline: bool, actions: usize, x: Dp, y
                                                 .modifier(Modifier::new().required_size(Dp(24.0), Dp(24.0))
                                                     .border_with_shape(Dp(1.0), scheme.on_surface, Shape::Ellipse))
                                                 .children(move || {
-                                                    text().content(number.to_string())
+                                                    text().content((number).to_string())
                                                         .style(type_style(14.0, 20.0))
                                                         .color(scheme.on_surface);
                                                 });
@@ -2287,7 +2352,7 @@ fn tooltip_stage(
                             )
                             .semantics(SemanticsArgs {
                                 role: Some(Role::Group),
-                                label: Some(label.clone()),
+                                label: Some(I18N.text(&(label))),
                                 merge_descendants: true,
                                 ..Default::default()
                             }),
@@ -2317,9 +2382,10 @@ fn tooltip_figure(
     }
 }
 
-const RICH_REFERENCE_MESSAGE: &str = "Rich tooltips bring attention to a particular element or feature that warrants a person's focus.";
-const RICH_USAGE_MESSAGE: &str = "Rich tooltips bring attention to a particular element or feature that warrants the user's focus.";
-const RICH_OVERVIEW_MESSAGE: &str = "Rich tooltips bring attention to a particular element or feature that warrants the user's focus. It supports multiple lines of informational text.";
+const RICH_REFERENCE_MESSAGE: &str = "ui-rich-tooltips-bring-attention-to-a-particular-element-or-feature-that-warrants-a-person-s-6584";
+const RICH_USAGE_MESSAGE: &str =
+    "ui-rich-tooltips-bring-attention-to-a-particular-element-or-feature-that-warrants-the-user-s";
+const RICH_OVERVIEW_MESSAGE: &str = "ui-rich-tooltips-bring-attention-to-a-particular-element-or-feature-that-warrants-the-user-s-6586";
 
 #[tessera]
 fn tooltip_reference_popup(
@@ -2335,11 +2401,15 @@ fn tooltip_reference_popup(
 ) {
     let guidelines = guidelines.unwrap_or(false);
     let headline = if guidelines {
-        "New settings available"
+        "ui-new-settings-available"
     } else {
-        "Rich tooltip"
+        "ui-rich-tooltip"
     };
-    let action_text = if guidelines { "Learn more" } else { "Action" };
+    let action_text = if guidelines {
+        "ui-learn-more"
+    } else {
+        "ui-action"
+    };
     let name = if secondary {
         "secondary_popup"
     } else {
@@ -2383,13 +2453,13 @@ fn tooltip_reference_popup(
             tooltip_provider(message.clone())
                 .controller(controller)
                 .variant(TooltipVariant::Rich)
-                .headline(headline)
+                .headline(I18N.text(headline))
                 .popup_modifier(modifier.clone())
                 .actions(move || {
                     button()
                         .text()
                         .modifier(watch_in_space(geometry, "action"))
-                        .accessibility_label(action_text)
+                        .accessibility_label(I18N.text(action_text))
                         .child(move || {
                             let style = use_context::<MaterialTheme>()
                                 .unwrap()
@@ -2397,7 +2467,7 @@ fn tooltip_reference_popup(
                                 .typography
                                 .label_large;
                             text()
-                                .content(action_text)
+                                .content(I18N.text(action_text))
                                 .style(style)
                                 .modifier(watch_in_space(geometry, "action_label"));
                         });
@@ -2426,7 +2496,7 @@ fn tooltip_reference_popup(
             .title_small;
         // The provider exposes a title string, so annotations measure an
         // equivalent hidden label.
-        text().content(headline).style(style).modifier(
+        text().content(I18N.text(headline)).style(style).modifier(
             watch_in_space(geometry, "headline_label")
                 .size_in(None, Some(Dp(280.0)), None, None)
                 .alpha(0.0)
@@ -2443,17 +2513,17 @@ fn tooltip_figure_canvas(rich: bool, measurements: bool, color_roles: bool, guid
     let geometry = remember(SpaceGeometry::new);
     let width = if color_roles { 512.0 } else { 1024.0 };
     let height = if color_roles && rich { 338.0 } else { 300.0 };
-    tooltip_stage(width, height, format!("{} tooltip {} figure", if rich { "Rich" } else { "Plain" }, if color_roles { "color" } else if measurements { "measurement" } else { "anatomy" }), geometry).child(move || {
+    tooltip_stage(width, height, I18N.format("ui-value-tooltip-value-figure", [("v0", I18N.text(&(if rich { "ui-rich" } else { "ui-plain" })).into()), ("v1", I18N.text(&(if color_roles { "ui-color-7123" } else if measurements { "ui-measurement-7071" } else { "ui-anatomy-7072" })).into())]), geometry).child(move || {
         if guidelines {
             boxed().modifier(Modifier::new().required_size(Dp(width), Dp(height)).background_with_shape(srgb(247, 242, 250), Shape::rounded_rectangle(Dp(24.0))));
         } else {
             tooltip_grid(Dp(width), Dp(height));
         }
         if !rich && measurements {
-            tooltip_reference_popup(geometry, false, false, "Save to favorites".into(), 282.0, 150.0, width, height);
-            tooltip_reference_popup(geometry, true, false, "Grant value is calculated using the closing stock price from the day before the grant date. Amounts do not reflect tax withholdings.".into(), 710.0, 150.0, width, height);
+            tooltip_reference_popup(geometry, false, false, "ui-save-to-favorites".into(), 282.0, 150.0, width, height);
+            tooltip_reference_popup(geometry, true, false, "ui-grant-value-is-calculated-using-the-closing-stock-price-from-the-day-before-the-grant-date".into(), 710.0, 150.0, width, height);
         } else {
-            tooltip_reference_popup(geometry, false, rich, if rich { if guidelines { "Now you can adjust the uploaded image quality, and upgrade your available storage space.".into() } else { RICH_REFERENCE_MESSAGE.into() } } else { "Plain tooltip".into() }, width * 0.5, height * 0.5, width, height).guidelines(guidelines);
+            tooltip_reference_popup(geometry, false, rich, if rich { if guidelines { "ui-now-you-can-adjust-the-uploaded-image-quality-and-upgrade-your-available-storage-space".into() } else { RICH_REFERENCE_MESSAGE.into() } } else { "ui-plain-tooltip".into() }, width * 0.5, height * 0.5, width, height).guidelines(guidelines);
         }
         boxed().modifier(Modifier::new().required_size(Dp(width), Dp(height))).children(move || {
             tooltip_annotations(geometry, rich, measurements).color_roles(color_roles).guidelines(guidelines);
@@ -2464,29 +2534,35 @@ fn tooltip_figure_canvas(rich: bool, measurements: bool, color_roles: bool, guid
         if guidelines && !measurements {
             tooltip_legend(if rich {
                 vec![
-                    "Subhead (optional)".into(),
-                    "Container".into(),
-                    "Supporting text".into(),
-                    "Text button (optional)".into(),
+                    "ui-subhead-optional".into(),
+                    "ui-container".into(),
+                    "ui-supporting-text".into(),
+                    "ui-text-button-optional".into(),
                 ]
             } else {
-                vec!["Container".into(), "Supporting text".into()]
+                vec!["ui-container".into(), "ui-supporting-text".into()]
             });
         } else if measurements {
-            prose(format!(
-                "{} tooltip padding and size measurements",
-                if rich { "Rich" } else { "Plain" }
-            ));
+            prose(
+                I18N.format(
+                    "ui-value-tooltip-padding-and-size-measurements",
+                    [(
+                        "v0",
+                        I18N.text(&(if rich { "ui-rich" } else { "ui-plain" }))
+                            .into(),
+                    )],
+                ),
+            );
         } else {
             tooltip_legend(if rich {
                 vec![
-                    "Subhead".into(),
-                    "Container".into(),
-                    "Supporting text".into(),
-                    "Text button".into(),
+                    "ui-subhead".into(),
+                    "ui-container".into(),
+                    "ui-supporting-text".into(),
+                    "ui-text-button".into(),
                 ]
             } else {
-                vec!["Supporting text".into(), "Container".into()]
+                vec!["ui-supporting-text".into(), "ui-container".into()]
             });
         }
     }
@@ -2867,14 +2943,17 @@ fn tooltip_color_marker(number: usize, label: String, x: Dp, y: Dp) {
                 .background_with_shape(scheme.on_surface, Shape::CAPSULE)
                 .semantics(SemanticsArgs {
                     role: Some(Role::Note),
-                    label: Some(format!("Tooltip color role {number}: {label}")),
+                    label: Some(I18N.format(
+                        "ui-tooltip-color-role-value-value",
+                        [("v0", (number).into()), ("v1", I18N.text(&label).into())],
+                    )),
                     merge_descendants: true,
                     ..Default::default()
                 }),
         )
         .children(move || {
             text()
-                .content(number.to_string())
+                .content((number).to_string())
                 .style(type_style(14.0, 20.0))
                 .color(scheme.surface);
         });
@@ -2889,22 +2968,22 @@ fn live_tooltips(on_acknowledge: Option<tessera_ui::Callback>) {
     let acknowledged = remember(|| false);
     let scheme = use_context::<MaterialTheme>().unwrap().get().color_scheme;
     tooltip_provider(if favorite.get() {
-        "Remove from favorites"
+        "ui-remove-from-favorites"
     } else {
-        "Add to favorites"
+        "ui-add-to-favorites"
     })
     .controller(plain)
     .group(group)
     .persistent(false)
     .child(move |_| {
-        tooltip_provider("Keep related items together so you can find them again.")
+        tooltip_provider("ui-keep-related-items-together-so-you-can-find-them-again")
             .controller(rich)
             .group(group)
             .variant(TooltipVariant::Rich)
-            .headline("Collections")
+            .headline(I18N.text("ui-collections"))
             .placement(TooltipPlacement::Below)
             .persistent(true)
-            .action_label("Got it")
+            .action_label(I18N.text("ui-got-it"))
             .on_action(move || {
                 acknowledged.set(true);
                 if let Some(callback) = on_acknowledge {
@@ -2939,20 +3018,20 @@ fn live_tooltips(on_acknowledge: Option<tessera_ui::Callback>) {
                                         } else {
                                             filled::FAVORITE_BORDER_SVG
                                         })
-                                        .accessibility_label(if favorite.get() {
-                                            "Remove from favorites"
+                                        .accessibility_label(I18N.text(if favorite.get() {
+                                            "ui-remove-from-favorites"
                                         } else {
-                                            "Add to favorites"
-                                        })
+                                            "ui-add-to-favorites"
+                                        }))
                                         .on_click(move || favorite.set(!favorite.get()));
                                 });
                                 tooltip_anchor(rich).child(move || {
                                     button()
                                         .text()
-                                        .accessibility_label("About collections")
+                                        .accessibility_label(I18N.text("ui-about-collections"))
                                         .on_click(move || rich.with_mut(TooltipController::show))
-                                        .child(|| {
-                                            text().content("About collections");
+                                        .child(move || {
+                                            text().content(I18N.text("ui-about-collections"));
                                         });
                                 });
                             });
@@ -2962,7 +3041,7 @@ fn live_tooltips(on_acknowledge: Option<tessera_ui::Callback>) {
     });
     if acknowledged.get() {
         gap(Dp(16.0));
-        prose("Collection guidance acknowledged.".into());
+        prose("ui-collection-guidance-acknowledged".into());
     }
 }
 
@@ -2992,7 +3071,10 @@ fn placement_examples() {
                             .clip_to_bounds()
                             .semantics(SemanticsArgs {
                                 role: Some(Role::Group),
-                                label: Some(format!("Placement preview {alignment:?}")),
+                                label: Some(I18N.format(
+                                    "ui-placement-preview-value",
+                                    [("v0", format!("{:?}", alignment).into())],
+                                )),
                                 merge_descendants: true,
                                 ..Default::default()
                             }),
@@ -3025,17 +3107,20 @@ fn placement_examples() {
                                     ),
                                 );
                             });
-                        tooltip_provider("Add annotations and highlights with the paint tool.")
+                        tooltip_provider("ui-add-annotations-and-highlights-with-the-paint-tool")
                             .controller(controller)
                             .variant(TooltipVariant::Rich)
-                            .headline("Paint Tool")
+                            .headline(I18N.text("ui-paint-tool"))
                             .placement(placement)
                             .persistent(false)
                             .modifier(Modifier::new().fill_max_size())
-                            .actions(|| {
-                                button().text().accessibility_label("Learn more").child(|| {
-                                    text().content("Learn more");
-                                });
+                            .actions(move || {
+                                button()
+                                    .text()
+                                    .accessibility_label(I18N.text("ui-learn-more"))
+                                    .child(move || {
+                                        text().content(I18N.text("ui-learn-more"));
+                                    });
                             })
                             .child(move |_| {
                                 boxed()
@@ -3047,8 +3132,9 @@ fn placement_examples() {
                                                 icon_button()
                                                     .standard()
                                                     .icon(filled::BRUSH_SVG)
-                                                    .accessibility_label(format!(
-                                                        "Corner tooltip {alignment:?}"
+                                                    .accessibility_label(I18N.format(
+                                                        "ui-corner-tooltip-value",
+                                                        [("v0", format!("{:?}", alignment).into())],
                                                     ))
                                                     .on_click(move || {
                                                         controller.with_mut(TooltipController::show)

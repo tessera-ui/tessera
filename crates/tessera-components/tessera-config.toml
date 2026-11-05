@@ -1,2 +1,5 @@
 [assets]
 dir = "assets"
+
+[i18n]
+fallback = "en"

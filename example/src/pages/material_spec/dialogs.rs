@@ -31,6 +31,8 @@ use tessera_ui::{
     accesskit::Role, modifier::FocusModifierExt as _, remember, scaled_box, tessera, use_context,
 };
 
+use crate::res::I18N;
+
 use super::{
     INK,
     annotations::{self, PreciseGeometry as Geometry, Rect, dotted, watch_precise as watch},
@@ -65,8 +67,8 @@ impl Default for EventDraft {
     fn default() -> Self {
         Self {
             name: String::new(),
-            from: "Mon, May 18".into(),
-            to: "Mon, May 18".into(),
+            from: "ui-mon-may-18".into(),
+            to: "ui-mon-may-18".into(),
             time_zone: "GMT-07:00".into(),
             all_day: false,
         }
@@ -108,74 +110,74 @@ pub(super) fn dialogs_spec(route: Option<crate::pages::material_spec::article::A
         })
         .is_open(open.get())
         .full_screen(full.get())
-        .accessibility_label(if full.get() {
-            "New event"
+        .accessibility_label(I18N.text(if full.get() {
+            "ui-new-event"
         } else {
-            "Reset settings?"
-        })
+            "ui-reset-settings"
+        }))
         .on_close_request_shared(close)
         .main_content(move || {
             article(
-                "Dialogs",
-                "Dialogs provide important prompts in a user flow",
+                "ui-dialogs",
+                "ui-dialogs-provide-important-prompts-in-a-user-flow",
                 vec![
                     SpecSection {
-                        title: "Tokens & specs",
+                        title: "ui-tokens-specs",
                         content: RenderSlot::new(token_sets::tokens),
                     },
                     SpecSection {
-                        title: "Basic dialogs",
+                        title: "ui-basic-dialogs",
                         content: RenderSlot::new(basic_specs),
                     },
                     SpecSection {
-                        title: "Full-screen dialogs",
+                        title: "ui-full-screen-dialogs",
                         content: RenderSlot::new(full_specs),
                     },
                 ],
             ).route_optional(route.clone())
             .pages(vec![
                 ArticlePage {
-                    title: "Overview",
+                    title: "ui-overview",
                     intro: Some(RenderSlot::new(move || {
                         overview_intro(open, full, saved);
                     })),
                     sections: vec![
                         SpecSection {
-                            title: "Availability & resources",
+                            title: "ui-availability-resources",
                             content: RenderSlot::new(availability),
                         },
                         SpecSection {
-                            title: "Differences from M2",
+                            title: "ui-differences-from-m2",
                             content: RenderSlot::new(differences),
                         },
                     ],
                 },
                 ArticlePage {
-                    title: "Guidelines",
+                    title: "ui-guidelines",
                     intro: Some(RenderSlot::new(guideline_hero)),
                     sections: vec![
                         SpecSection {
-                            title: "Usage",
+                            title: "ui-usage",
                             content: RenderSlot::new(usage_section),
                         },
                         SpecSection {
-                            title: "Anatomy",
+                            title: "ui-anatomy",
                             content: RenderSlot::new(anatomy_section),
                         },
                         SpecSection {
-                            title: "Basic dialog",
+                            title: "ui-basic-dialog",
                             content: RenderSlot::new(basic_guidance),
                         },
                         SpecSection {
-                            title: "Full-screen dialog",
+                            title: "ui-full-screen-dialog",
                             content: RenderSlot::new(full_guidance),
                         },
                         SpecSection {
-                            title: "Adaptive design",
+                            title: "ui-adaptive-design",
                             content: RenderSlot::new(adaptive_section),
                         },
                         SpecSection {
-                            title: "Behavior",
+                            title: "ui-behavior",
                             content: RenderSlot::new(move || {
                                 behavior_section(open, full, saved);
                             }),
@@ -183,29 +185,29 @@ pub(super) fn dialogs_spec(route: Option<crate::pages::material_spec::article::A
                     ],
                 },
                 ArticlePage {
-                    title: "Accessibility",
+                    title: "ui-accessibility",
                     intro: None,
                     sections: vec![
                         SpecSection {
-                            title: "Use cases",
+                            title: "ui-use-cases",
                             content: RenderSlot::new(move || {
                                 use_cases(open, full, saved);
                             }),
                         },
                         SpecSection {
-                            title: "Interaction & style",
+                            title: "ui-interaction-style",
                             content: RenderSlot::new(interaction_style_section),
                         },
                         SpecSection {
-                            title: "Initial focus",
+                            title: "ui-initial-focus",
                             content: RenderSlot::new(initial_focus_section),
                         },
                         SpecSection {
-                            title: "Keyboard navigation",
+                            title: "ui-keyboard-navigation",
                             content: RenderSlot::new(keyboard_section),
                         },
                         SpecSection {
-                            title: "Labeling elements",
+                            title: "ui-labeling-elements",
                             content: RenderSlot::new(labeling_section),
                         },
                     ],
@@ -217,16 +219,16 @@ pub(super) fn dialogs_spec(route: Option<crate::pages::material_spec::article::A
                 event_dialog(draft, open, saved, discard, close).dialog(dialog_scope);
             } else {
                 basic_dialog().dialog(dialog_scope)
-                    .headline("Reset settings?")
+                    .headline(I18N.text("ui-reset-settings"))
                     .supporting_text(
-                        "This will reset your app preferences back to their default settings. The following accounts will also be signed out.",
+                        I18N.text("ui-this-will-reset-your-app-preferences-back-to-their-default-settings-the-following-accounts"),
                     )
                     .dismiss_button(move || {
-                        action("Cancel".into(), Callback::new(move || open.set(false)));
+                        action("ui-cancel".into(), Callback::new(move || open.set(false)));
                     })
                     .confirm_button(move || {
                         action(
-                            "Accept".into(),
+                            "ui-accept".into(),
                             Callback::new(move || {
                                 saved.set(true);
                                 open.set(false);
@@ -246,7 +248,7 @@ fn bullets(items: Vec<String>) {
     column().children(move || {
         for item in items.clone() {
             text()
-                .content(format!("•  {item}"))
+                .content(format!("•  {}", I18N.text(item)))
                 .style(type_style(16.0, 24.0))
                 .color(INK);
             gap(Dp(8.0));
@@ -258,7 +260,7 @@ fn bullets(items: Vec<String>) {
 fn caption(#[prop(into)] value: String) {
     let scheme = use_context::<MaterialTheme>().unwrap().get().color_scheme;
     text()
-        .content(value)
+        .content(I18N.text(value))
         .color(scheme.on_surface_variant)
         .style(type_style(14.0, 20.0));
 }
@@ -280,13 +282,13 @@ fn guidance_line(#[prop(into)] mark: String, #[prop(into)] note: String, color: 
                 )
                 .children(move || {
                     text()
-                        .content(mark.clone())
+                        .content(I18N.text(&(mark)))
                         .style(type_style(14.0, 20.0))
                         .color(Color::WHITE);
                 });
             spacer().modifier(Modifier::new().width(Dp(12.0)));
             text()
-                .content(note.clone())
+                .content(I18N.text(&(note)))
                 .color(scheme.on_surface_variant)
                 .style(type_style(14.0, 20.0))
                 .modifier(Modifier::new().weight(1.0));
@@ -319,7 +321,7 @@ fn legend(items: Vec<String>) {
                         });
                     spacer().modifier(Modifier::new().width(Dp(12.0)));
                     text()
-                        .content(item.clone())
+                        .content(I18N.text(&(item)))
                         .style(type_style(14.0, 20.0))
                         .color(scheme.on_surface_variant);
                 });
@@ -371,8 +373,8 @@ fn verdict_band(verdict: Verdict) {
     let (color, vector, label) = match verdict {
         Verdict::Do => (DO_COLOR, filled::CHECK_CIRCLE_SVG, "Do"),
         Verdict::Dont => (DONT_COLOR, filled::CANCEL_SVG, "Don't"),
-        Verdict::Caution => (CAUTION_COLOR, filled::WARNING_SVG, "Caution"),
-        Verdict::Note => (INK, filled::INFO_SVG, "Note"),
+        Verdict::Caution => (CAUTION_COLOR, filled::WARNING_SVG, "ui-caution"),
+        Verdict::Note => (INK, filled::INFO_SVG, "ui-note"),
     };
     column()
         .modifier(Modifier::new().fill_max_width())
@@ -390,7 +392,7 @@ fn verdict_band(verdict: Verdict) {
                     icon().vector(vector).tint(color).size(Dp(20.0));
                     spacer().modifier(Modifier::new().width(Dp(8.0)));
                     text()
-                        .content(label)
+                        .content(I18N.text(label))
                         .color(color)
                         .style(type_style(16.0, 24.0));
                 });
@@ -491,13 +493,13 @@ fn guide_marker() {
                 .background_with_shape(scheme.on_surface, Shape::Ellipse)
                 .semantics(SemanticsArgs {
                     role: Some(Role::Note),
-                    label: Some("Marker 1".into()),
+                    label: Some(I18N.text("ui-marker-1")),
                     ..Default::default()
                 }),
         )
         .children(move || {
             text()
-                .content("1")
+                .content(I18N.text("1"))
                 .style(type_style(12.0, 16.0))
                 .color(scheme.surface);
         });
@@ -530,7 +532,7 @@ fn mock_action(label: String, disabled: bool, marked: bool) {
                 spacer().modifier(Modifier::new().width(Dp(8.0)));
             }
             text()
-                .content(label.clone())
+                .content(I18N.text(&(label)))
                 .style(type_style(14.0, 20.0))
                 .color(color);
         });
@@ -549,7 +551,10 @@ fn mock_dialog(
 ) {
     let scheme = use_context::<MaterialTheme>().unwrap().get().color_scheme;
     let stacked = stacked.unwrap_or(false);
-    let label = format!("Example dialog: {headline}");
+    let label = I18N.format(
+        "ui-example-dialog-value",
+        [("v0", I18N.text(&headline).into())],
+    );
     column()
         .modifier(
             Modifier::new()
@@ -561,7 +566,7 @@ fn mock_dialog(
                 .padding_all(Dp(24.0))
                 .semantics(SemanticsArgs {
                     role: Some(Role::Group),
-                    label: Some(label),
+                    label: Some(I18N.text(label)),
                     merge_descendants: true,
                     ..Default::default()
                 }),
@@ -569,13 +574,13 @@ fn mock_dialog(
         .children(move || {
             let (actions, content) = (actions.clone(), content.clone());
             text()
-                .content(headline.clone())
+                .content(I18N.text(&(headline)))
                 .style(type_style(24.0, 32.0))
                 .color(scheme.on_surface);
             if let Some(body) = body.clone() {
                 gap(Dp(16.0));
                 text()
-                    .content(body)
+                    .content(I18N.text(body))
                     .style(type_style(14.0, 20.0))
                     .color(scheme.on_surface_variant);
             }
@@ -701,7 +706,10 @@ fn radio_options(selected: Option<usize>) {
     column()
         .modifier(Modifier::new().fill_max_width())
         .children(move || {
-            for (index, label) in ["Callisto", "Ganymede", "Luna"].into_iter().enumerate() {
+            for (index, label) in ["ui-callisto", "ui-ganymede", "ui-luna"]
+                .into_iter()
+                .enumerate()
+            {
                 let chosen = selected == Some(index);
                 let ring = if chosen {
                     scheme.primary
@@ -730,7 +738,7 @@ fn radio_options(selected: Option<usize>) {
                             });
                         spacer().modifier(Modifier::new().width(Dp(16.0)));
                         text()
-                            .content(label)
+                            .content(I18N.text(label))
                             .style(type_style(16.0, 24.0))
                             .color(scheme.on_surface);
                     });
@@ -778,7 +786,7 @@ fn full_screen_scene(
                                 .tint(scheme.on_surface);
                             spacer().modifier(Modifier::new().width(Dp(16.0)));
                             text()
-                                .content(title.clone())
+                                .content(I18N.text(&(title)))
                                 .style(type_style(22.0, 28.0))
                                 .color(scheme.on_surface);
                             if mark_title {
@@ -787,7 +795,7 @@ fn full_screen_scene(
                             }
                             spacer().modifier(Modifier::new().weight(1.0));
                             text()
-                                .content(action.clone())
+                                .content(I18N.text(&(action)))
                                 .style(type_style(14.0, 20.0))
                                 .color(scheme.primary);
                         });
@@ -800,7 +808,7 @@ fn full_screen_scene(
                                     .modifier(Modifier::new().fill_max_width())
                                     .children(move || {
                                         text()
-                                            .content(headline.clone())
+                                            .content(I18N.text(&(headline)))
                                             .style(type_style(24.0, 32.0))
                                             .color(scheme.on_surface)
                                             .modifier(Modifier::new().weight(1.0));
@@ -812,16 +820,16 @@ fn full_screen_scene(
                                 gap(Dp(24.0));
                             }
                             for (caption, value) in [
-                                ("Location", "Mountain View"),
-                                ("Date", "Fri, Aug 8, 7:00 PM"),
+                                ("ui-location", "ui-mountain-view"),
+                                ("ui-date", "ui-fri-aug-8-7-00-pm"),
                             ] {
                                 text()
-                                    .content(caption)
+                                    .content(I18N.text(caption))
                                     .style(type_style(12.0, 16.0))
                                     .color(scheme.on_surface_variant);
                                 gap(Dp(4.0));
                                 text()
-                                    .content(value)
+                                    .content(I18N.text(value))
                                     .style(type_style(16.0, 24.0))
                                     .color(scheme.on_surface);
                                 gap(Dp(8.0));
@@ -856,7 +864,7 @@ fn calendar_scene() {
                 .modifier(Modifier::new().fill_max_width())
                 .children(move || {
                     text()
-                        .content("August 2025")
+                        .content(I18N.text("ui-august-2025"))
                         .style(type_style(22.0, 28.0))
                         .color(scheme.on_surface);
                     gap(Dp(12.0));
@@ -869,7 +877,7 @@ fn calendar_scene() {
                                     .modifier(Modifier::new().weight(1.0).height(Dp(24.0)))
                                     .children(move || {
                                         text()
-                                            .content(day)
+                                            .content(I18N.text(day))
                                             .style(type_style(12.0, 16.0))
                                             .color(scheme.on_surface_variant);
                                     });
@@ -888,7 +896,7 @@ fn calendar_scene() {
                                         .children(move || {
                                             if (1..=31).contains(&date) {
                                                 text()
-                                                    .content(date.to_string())
+                                                    .content((date).to_string())
                                                     .style(type_style(14.0, 20.0))
                                                     .color(scheme.on_surface);
                                             }
@@ -912,7 +920,7 @@ fn calendar_scene() {
                                 )
                                 .semantics(SemanticsArgs {
                                     role: Some(Role::Image),
-                                    label: Some("Floating action button".into()),
+                                    label: Some(I18N.text("ui-floating-action-button")),
                                     ..Default::default()
                                 }),
                         )
@@ -956,13 +964,13 @@ fn saving_scene() {
                         .clip_shape(Shape::rounded_rectangle(Dp(16.0))),
                 )
                 .children(|| {
-                    full_screen_scene("New event", "Save").overlay(|| {
+                    full_screen_scene("ui-new-event", "ui-save").overlay(|| {
                         mock_dialog(
-                            "Discard changes?",
+                            "ui-discard-changes",
                             280.0,
-                            labels(&["Keep editing", "Discard"]),
+                            labels(&["ui-keep-editing", "ui-discard"]),
                         )
-                        .body("Discard the changes you've made to this event?");
+                        .body(I18N.text("ui-discard-the-changes-you-ve-made-to-this-event"));
                     });
                 });
         });
@@ -972,9 +980,12 @@ fn saving_scene() {
 fn variant_pair() {
     dialog_overview_pair();
     gap(Dp(16.0));
-    caption("Basic and full-screen dialog.");
+    caption("ui-basic-and-full-screen-dialog");
     gap(Dp(12.0));
-    legend(vec!["Basic dialog".into(), "Full-screen dialog".into()]);
+    legend(vec![
+        "ui-basic-dialog".into(),
+        "ui-full-screen-dialog".into(),
+    ]);
 }
 
 #[tessera]
@@ -1004,18 +1015,18 @@ fn guideline_hero() {
                         .padding_all(Dp(24.0))
                         .semantics(SemanticsArgs {
                             role: Some(Role::Group),
-                            label: Some("Basic dialog in isolation".into()),
+                            label: Some(I18N.text("ui-basic-dialog-in-isolation")),
                             ..Default::default()
                         }),
                 )
                 .children(move || {
                     text()
-                        .content("Basic dialog title")
+                        .content(I18N.text("ui-basic-dialog-title"))
                         .style(type_style(24.0, 32.0))
                         .color(scheme.on_surface);
                     gap(Dp(16.0));
                     text()
-                        .content("A dialog is a type of modal window that appears in front of app content to provide critical information, or prompt for a decision to be made.")
+                        .content(I18N.text("ui-a-dialog-is-a-type-of-modal-window-that-appears-in-front-of-app-content-to-provide-critica"))
                         .style(type_style(14.0, 20.0))
                         .color(scheme.on_surface_variant);
                     gap(Dp(24.0));
@@ -1024,20 +1035,20 @@ fn guideline_hero() {
                         .modifier(Modifier::new().fill_max_width())
                         .children(move || {
                             action(
-                                "Action 2".into(),
-                                Callback::new(move || notice.set("Action 2 selected".into())),
+                                "ui-action-2".into(),
+                                Callback::new(move || notice.set("ui-action-2-selected".into())),
                             );
                             spacer().modifier(Modifier::new().width(Dp(8.0)));
                             action(
-                                "Action 1".into(),
-                                Callback::new(move || notice.set("Action 1 selected".into())),
+                                "ui-action-1".into(),
+                                Callback::new(move || notice.set("ui-action-1-selected".into())),
                             );
                         });
                 });
         });
     gap(Dp(16.0));
     caption(if notice.with(String::is_empty) {
-        "A basic dialog".to_owned()
+        "ui-a-basic-dialog".to_owned()
     } else {
         notice.get()
     });
@@ -1045,13 +1056,13 @@ fn guideline_hero() {
 
 #[tessera]
 fn overview_intro(open: State<bool>, full: State<bool>, saved: State<bool>) {
-    prose("Use dialogs to make sure users act on information.");
+    prose("ui-use-dialogs-to-make-sure-users-act-on-information");
     gap(Dp(16.0));
     bullets(vec![
-        "Two variants: basic dialogs interrupt users with urgent information, details, or actions. They're often used for alerts, quick selection, or confirmation. Full-screen dialogs fill the entire screen, displaying actions that require a series of tasks to complete. They're often used for creating a calendar entry.".into(),
-        "Should be dedicated to completing a single task".into(),
-        "Can also display information relevant to the task".into(),
-        "Commonly used to confirm high-risk actions like deleting progress".into(),
+        "ui-two-variants-basic-dialogs-interrupt-users-with-urgent-information-details-or-actions-they".into(),
+        "ui-should-be-dedicated-to-completing-a-single-task".into(),
+        "ui-can-also-display-information-relevant-to-the-task".into(),
+        "ui-commonly-used-to-confirm-high-risk-actions-like-deleting-progress".into(),
     ]);
     gap(Dp(32.0));
     variant_pair();
@@ -1062,29 +1073,33 @@ fn overview_intro(open: State<bool>, full: State<bool>, saved: State<bool>) {
 #[tessera]
 fn availability() {
     spec_table(
-        vec!["Type".into(), "Resource".into(), "Status".into()],
+        vec!["ui-type".into(), "ui-resource".into(), "ui-status".into()],
         vec![
             vec![
-                "Design".into(),
-                "Design Kit (Figma)".into(),
-                "Available".into(),
+                "ui-design".into(),
+                "ui-design-kit-figma".into(),
+                "ui-available".into(),
             ],
             vec![
-                "Implementation".into(),
-                "Flutter".into(),
-                "Available".into(),
+                "ui-implementation".into(),
+                "ui-flutter".into(),
+                "ui-available".into(),
             ],
             vec![
-                "Implementation".into(),
-                "Jetpack Compose".into(),
-                "Available".into(),
+                "ui-implementation".into(),
+                "ui-jetpack-compose".into(),
+                "ui-available".into(),
             ],
             vec![
-                "Implementation".into(),
-                "Android Views (MDC-Android)".into(),
-                "Available".into(),
+                "ui-implementation".into(),
+                "ui-android-views-mdc-android".into(),
+                "ui-available".into(),
             ],
-            vec!["Implementation".into(), "Web".into(), "Available".into()],
+            vec![
+                "ui-implementation".into(),
+                "ui-web".into(),
+                "ui-available".into(),
+            ],
         ],
     );
 }
@@ -1092,66 +1107,70 @@ fn availability() {
 #[tessera]
 fn differences() {
     bullets(vec![
-        "Color: new color mappings and compatibility with dynamic color".into(),
-        "Layout: greater padding to account for the increased corner-radius and title size".into(),
-        "Position: option for custom basic dialog positioning".into(),
-        "Shape: increased corner-radius".into(),
-        "Typography: larger and darker headline".into(),
+        "ui-color-new-color-mappings-and-compatibility-with-dynamic-color-2123".into(),
+        "ui-layout-greater-padding-to-account-for-the-increased-corner-radius-and-title-size"
+            .into(),
+        "ui-position-option-for-custom-basic-dialog-positioning".into(),
+        "ui-shape-increased-corner-radius".into(),
+        "ui-typography-larger-and-darker-headline".into(),
     ]);
     gap(Dp(24.0));
     basic_figure(false);
     gap(Dp(16.0));
-    caption("New updates to color, layout, position, shape, and typography");
+    caption("ui-new-updates-to-color-layout-position-shape-and-typography");
 }
 
 #[tessera]
 fn usage_section() {
     prose(
-        "A dialog is a modal window that appears in front of app content to provide critical information or ask for a decision. Dialogs disable all app functionality when they appear, and remain on screen until confirmed, dismissed, or a required action has been taken.",
+        "ui-a-dialog-is-a-modal-window-that-appears-in-front-of-app-content-to-provide-critical-inform",
     );
     gap(Dp(16.0));
     prose(
-        "Dialogs are purposefully interruptive, so they should be used sparingly. A less disruptive alternative is to use a dropdown menu, which provides options without interrupting a user's experience.",
+        "ui-dialogs-are-purposefully-interruptive-so-they-should-be-used-sparingly-a-less-disruptive-a",
     );
     gap(Dp(24.0));
     dialog_overview_pair();
     gap(Dp(16.0));
-    caption("There are two variants of dialogs:");
+    caption("ui-there-are-two-variants-of-dialogs");
     gap(Dp(12.0));
-    legend(vec!["Basic dialog".into(), "Full-screen dialog".into()]);
+    legend(vec![
+        "ui-basic-dialog".into(),
+        "ui-full-screen-dialog".into(),
+    ]);
     gap(Dp(32.0));
     guidance_pair(
         Verdict::Do,
-        "Use dialogs for prompts that block an app's normal operation, and for critical information that requires a specific user task, decision, or acknowledgement",
+        "ui-use-dialogs-for-prompts-that-block-an-app-s-normal-operation-and-for-critical-information",
         RenderSlot::new(|| {
             backdrop_scene(Backdrop::Photos).dialog(|| {
                 mock_dialog(
-                    "Delete selected images?",
+                    "ui-delete-selected-images",
                     312.0,
-                    labels(&["Cancel", "Delete"]),
+                    labels(&["ui-cancel", "ui-delete"]),
                 );
             });
         }),
         Verdict::Dont,
-        "Don't use dialogs for low- or medium-priority information. Instead use a snackbar, which can be dismissed or disappear automatically.",
+        "ui-don-t-use-dialogs-for-low-or-medium-priority-information-instead-use-a-snackbar-which-can",
         RenderSlot::new(|| {
             backdrop_scene(Backdrop::Photos).dialog(|| {
-                mock_dialog("Upload completed", 312.0, labels(&["OK"]));
+                mock_dialog("ui-upload-completed", 312.0, labels(&["ui-ok"]));
             });
         }),
     );
     gap(Dp(32.0));
-    subheading("Similar components".into());
+    subheading("ui-similar-components".into());
     gap(Dp(12.0));
-    prose("Snackbars are also designed to show important messages.");
+    prose("ui-snackbars-are-also-designed-to-show-important-messages");
     gap(Dp(12.0));
     prose(
-        "Choose the right component based on the importance of the message. This component messaging strategy helps avoid overusing dialogs.",
+        "ui-choose-the-right-component-based-on-the-importance-of-the-message-this-component-messaging",
     );
     gap(Dp(16.0));
     guidance_card(
         Verdict::Note,
-        "Snackbars can disappear automatically",
+        "ui-snackbars-can-disappear-automatically",
         RenderSlot::new(|| {
             backdrop_scene(Backdrop::Snackbar);
         }),
@@ -1160,20 +1179,21 @@ fn usage_section() {
     gap(Dp(16.0));
     spec_table(
         vec![
-            "Component".into(),
-            "Importance".into(),
-            "Action needed".into(),
+            "ui-component".into(),
+            "ui-importance".into(),
+            "ui-action-needed".into(),
         ],
         vec![
             vec![
-                "Snackbar".into(),
-                "Low importance".into(),
-                "Optional: Snackbars may not have a button, and can disappear automatically".into(),
+                "ui-snackbar".into(),
+                "ui-low-importance".into(),
+                "ui-optional-snackbars-may-not-have-a-button-and-can-disappear-automatically"
+                    .into(),
             ],
             vec![
-                "Dialog".into(),
-                "High importance".into(),
-                "Required: Dialogs block the main content until an action is confirmed".into(),
+                "ui-dialog".into(),
+                "ui-high-importance".into(),
+                "ui-required-dialogs-block-the-main-content-until-an-action-is-confirmed".into(),
             ],
         ],
     );
@@ -1181,137 +1201,142 @@ fn usage_section() {
 
 #[tessera]
 fn anatomy_section() {
-    subheading("Basic dialog".into());
+    subheading("ui-basic-dialog".into());
     gap(Dp(16.0));
     basic_figure(false);
     gap(Dp(16.0));
     legend(
         [
-            "Container",
-            "Icon (optional)",
-            "Headline (optional)",
-            "Supporting text",
-            "Divider (optional)",
-            "Buttons label text",
-            "Scrim",
+            "ui-container",
+            "ui-icon-optional",
+            "ui-headline-optional",
+            "ui-supporting-text",
+            "ui-divider-optional",
+            "ui-buttons-label-text",
+            "ui-scrim",
         ]
         .map(String::from)
         .to_vec(),
     );
     gap(Dp(32.0));
-    subheading("Full-screen dialog".into());
+    subheading("ui-full-screen-dialog".into());
     gap(Dp(16.0));
     full_spec_figure(0);
     gap(Dp(16.0));
     legend(
         [
-            "Container",
-            "Header region",
-            "Icon (close affordance)",
-            "Headline (optional)",
-            "Button label text",
-            "Divider (optional)",
+            "ui-container",
+            "ui-header-region",
+            "ui-icon-close-affordance",
+            "ui-headline-optional",
+            "ui-button-label-text",
+            "ui-divider-optional",
         ]
         .map(String::from)
         .to_vec(),
     );
     gap(Dp(32.0));
-    subheading("Container and scrim".into());
+    subheading("ui-container-and-scrim".into());
     gap(Dp(12.0));
     prose(
-        "Dialog containers appear above other screen elements and hold the dialog's headline, text, buttons, and list items.",
+        "ui-dialog-containers-appear-above-other-screen-elements-and-hold-the-dialog-s-headline-text-b",
     );
     gap(Dp(12.0));
     prose(
-        "To focus attention on the dialog, surfaces behind the container are scrimmed with a temporary overlay to make them less prominent.",
+        "ui-to-focus-attention-on-the-dialog-surfaces-behind-the-container-are-scrimmed-with-a-tempora",
     );
     gap(Dp(12.0));
     guidance_card(
         Verdict::Note,
-        "Basic dialogs appear over a background scrim",
+        "ui-basic-dialogs-appear-over-a-background-scrim",
         RenderSlot::new(|| {
             backdrop_scene(Backdrop::Photos).dialog(|| {
-                mock_dialog("Permanently delete?", 312.0, labels(&["Cancel", "Delete"]));
+                mock_dialog(
+                    "ui-permanently-delete",
+                    312.0,
+                    labels(&["ui-cancel", "ui-delete"]),
+                );
             });
         }),
     )
     .wide(true);
     gap(Dp(32.0));
-    subheading("Headline (optional)".into());
+    subheading("ui-headline-optional".into());
     gap(Dp(12.0));
     prose(
-        "A dialog's purpose should be communicated by its headline and buttons or actionable items.",
+        "ui-a-dialog-s-purpose-should-be-communicated-by-its-headline-and-buttons-or-actionable-items",
     );
     gap(Dp(12.0));
-    prose("Headlines should:");
+    prose("ui-headlines-should");
     gap(Dp(8.0));
     bullets(vec![
-        "Contain a brief, clear statement or question".into(),
-        "Avoid apologies (\u{201c}Sorry for the interruption\u{201d}), alarm (\u{201c}Warning!\u{201d}), or ambiguity (\u{201c}Are you sure?\u{201d})".into(),
+        "ui-contain-a-brief-clear-statement-or-question".into(),
+        "ui-avoid-apologies-sorry-for-the-interruption-alarm-warning-or-ambiguity-are-you-sure"
+            .into(),
     ]);
     gap(Dp(16.0));
     guidance_pair(
         Verdict::Do,
-        "This dialog title poses a specific question, concisely explains what's involved in the request, and provides clear actions",
+        "ui-this-dialog-title-poses-a-specific-question-concisely-explains-what-s-involved-in-the-requ",
         RenderSlot::new(|| {
             backdrop_scene(Backdrop::Surface).dialog(|| {
-                mock_dialog("Use location service?", 312.0, labels(&["Disagree", "Agree"])).body(
-                    "Let Google help apps determine location. This means sending anonymous location data to Google, even when no apps are running.",
+                mock_dialog("ui-use-location-service", 312.0, labels(&["ui-disagree", "ui-agree"])).body(
+                    I18N.text("ui-let-google-help-apps-determine-location-this-means-sending-anonymous-location-data-to-goog"),
                 );
             });
         }),
         Verdict::Dont,
-        "Don't use dialog titles that pose an ambiguous question",
+        "ui-don-t-use-dialog-titles-that-pose-an-ambiguous-question",
         RenderSlot::new(|| {
             backdrop_scene(Backdrop::Surface).dialog(|| {
-                mock_dialog("Are you sure?", 312.0, labels(&["No", "Yes"]));
+                mock_dialog("ui-are-you-sure", 312.0, labels(&["ui-no", "ui-yes"]));
             });
         }),
     );
     gap(Dp(24.0));
     prose(
-        "Headlines should always be succinct. They can wrap to a second line if necessary, and be truncated.",
+        "ui-headlines-should-always-be-succinct-they-can-wrap-to-a-second-line-if-necessary-and-be-tru",
     );
     gap(Dp(12.0));
     prose(
-        "In full-screen dialogs, long headlines or headlines of variable lengths (such as translations), can be placed in the content area instead of the app bar.",
+        "ui-in-full-screen-dialogs-long-headlines-or-headlines-of-variable-lengths-such-as-translation",
     );
     gap(Dp(16.0));
     guidance_pair(
         Verdict::Caution,
-        "Avoid placing long headlines in a full-screen dialog's app bar (1), as the truncated text may lead to misunderstanding",
+        "ui-avoid-placing-long-headlines-in-a-full-screen-dialog-s-app-bar-1-as-the-truncated-text-may",
         RenderSlot::new(|| {
-            full_screen_scene("Reserve a table fo\u{2026}", "Save").marked(true);
+            full_screen_scene("ui-reserve-a-table-fo", "ui-save").marked(true);
         }),
         Verdict::Do,
-        "Find ways to shorten app bar text, and place longer headlines into the content area (1) of a full-screen dialog",
-        RenderSlot::new(|| {
-            full_screen_scene("New booking", "Save")
-                .headline("Reserve a table for four at Mountain View Bistro")
+        "ui-find-ways-to-shorten-app-bar-text-and-place-longer-headlines-into-the-content-area-1-of-a",
+        RenderSlot::new(move || {
+            full_screen_scene("ui-new-booking", "ui-save")
+                .headline(I18N.text("ui-reserve-a-table-for-four-at-mountain-view-bistro"))
                 .marked(true);
         }),
     );
     gap(Dp(32.0));
-    subheading("Buttons".into());
+    subheading("ui-buttons".into());
     gap(Dp(12.0));
     prose(
-        "Dialog actions are most often represented as buttons and allow users to confirm, dismiss, or acknowledge something.",
+        "ui-dialog-actions-are-most-often-represented-as-buttons-and-allow-users-to-confirm-dismiss-or",
     );
     gap(Dp(12.0));
     prose(
-        "Buttons are aligned to the trailing edge of the dialog for easier interaction. The confirmation button is always closest to the edge.",
+        "ui-buttons-are-aligned-to-the-trailing-edge-of-the-dialog-for-easier-interaction-the-confirma",
     );
     gap(Dp(12.0));
     prose(
-        "Button alignment responds automatically for right-to-left languages, where the confirmation button is aligned to the left edge.",
+        "ui-button-alignment-responds-automatically-for-right-to-left-languages-where-the-confirmation",
     );
     gap(Dp(16.0));
     guidance_pair(
         Verdict::Do,
-        "Disable confirming actions (1) until a choice is made. Dismissive actions are never disabled.",
+        "ui-disable-confirming-actions-1-until-a-choice-is-made-dismissive-actions-are-never-disabled",
         RenderSlot::new(|| {
             backdrop_scene(Backdrop::Surface).dialog(|| {
-                mock_dialog("Phone ringtone", 312.0, labels(&["Cancel", "OK"]))
+                mock_dialog("ui-phone-ringtone", 312.0, labels(&["ui-cancel", "ui-ok"]))
                     .disabled(1)
                     .marked(1)
                     .content(|| {
@@ -1320,10 +1345,10 @@ fn anatomy_section() {
             });
         }),
         Verdict::Dont,
-        "Don't place dismissive actions (1) to the right of confirming actions. Instead, place them to the left of confirming actions.",
+        "ui-don-t-place-dismissive-actions-1-to-the-right-of-confirming-actions-instead-place-them-to",
         RenderSlot::new(|| {
             backdrop_scene(Backdrop::Surface).dialog(|| {
-                mock_dialog("Phone ringtone", 312.0, labels(&["OK", "Cancel"]))
+                mock_dialog("ui-phone-ringtone", 312.0, labels(&["ui-ok", "ui-cancel"]))
                     .marked(1)
                     .content(|| {
                         radio_options().selected(1);
@@ -1334,47 +1359,51 @@ fn anatomy_section() {
     gap(Dp(32.0));
     guidance_pair(
         Verdict::Do,
-        "A single action may be provided only if it's an acknowledgement",
+        "ui-a-single-action-may-be-provided-only-if-it-s-an-acknowledgement",
         RenderSlot::new(|| {
             backdrop_scene(Backdrop::Product);
         }),
         Verdict::Dont,
-        "Avoid presenting people with unclear choices. Cancel doesn't make sense here because no clear action is proposed.",
+        "ui-avoid-presenting-people-with-unclear-choices-cancel-doesn-t-make-sense-here-because-no-cle",
         RenderSlot::new(|| {
             backdrop_scene(Backdrop::Surface).dialog(|| {
-                mock_dialog("Out of stock", 312.0, labels(&["Cancel", "Got it"]))
-                    .body("The item in your cart is no longer available");
+                mock_dialog(
+                    "ui-out-of-stock",
+                    312.0,
+                    labels(&["ui-cancel", "ui-got-it"]),
+                )
+                .body(I18N.text("ui-the-item-in-your-cart-is-no-longer-available"));
             });
         }),
     );
     gap(Dp(24.0));
-    prose("Dialogs should contain a maximum of two actions.");
+    prose("ui-dialogs-should-contain-a-maximum-of-two-actions");
     gap(Dp(8.0));
     bullets(vec![
-        "If a single action is provided, it must be an acknowledgement action".into(),
-        "If two actions are provided, one must be a confirming action, and the other a dismissing action".into(),
+        "ui-if-a-single-action-is-provided-it-must-be-an-acknowledgement-action".into(),
+        "ui-if-two-actions-are-provided-one-must-be-a-confirming-action-and-the-other-a-dismissing-act".into(),
     ]);
     gap(Dp(16.0));
     guidance_pair(
         Verdict::Do,
-        "Display two text buttons next to one another",
+        "ui-display-two-text-buttons-next-to-one-another",
         RenderSlot::new(|| {
             backdrop_scene(Backdrop::Surface).dialog(|| {
                 mock_dialog(
-                    "Use location service?",
+                    "ui-use-location-service",
                     312.0,
-                    labels(&["Disagree", "Agree"]),
+                    labels(&["ui-disagree", "ui-agree"]),
                 );
             });
         }),
         Verdict::Caution,
-        "Stacked buttons accommodate longer button text, but take up more room. Confirming actions appear above dismissive actions.",
+        "ui-stacked-buttons-accommodate-longer-button-text-but-take-up-more-room-confirming-actions-ap",
         RenderSlot::new(|| {
             backdrop_scene(Backdrop::Surface).dialog(|| {
                 mock_dialog(
-                    "Turn on speed boost?",
+                    "ui-turn-on-speed-boost",
                     312.0,
-                    labels(&["Turn on speed boost", "No thanks"]),
+                    labels(&["ui-turn-on-speed-boost-2194", "ui-no-thanks"]),
                 )
                 .stacked(true);
             });
@@ -1382,22 +1411,22 @@ fn anatomy_section() {
     );
     gap(Dp(24.0));
     prose(
-        "Providing a third action, such as Learn more, is not recommended as it navigates the user away from the dialog, leaving the dialog task unfinished.",
+        "ui-providing-a-third-action-such-as-learn-more-is-not-recommended-as-it-navigates-the-user-aw",
     );
     gap(Dp(12.0));
     prose(
-        "Rather than adding a third action, an inline expansion can display more information. If more extensive information is needed, provide it prior to entering the dialog.",
+        "ui-rather-than-adding-a-third-action-an-inline-expansion-can-display-more-information-if-more",
     );
     gap(Dp(16.0));
     guidance_card(
         Verdict::Caution,
-        "The Learn more action (1) navigates away from this dialog, potentially leaving it in an indeterminate state",
+        "ui-the-learn-more-action-1-navigates-away-from-this-dialog-potentially-leaving-it-in-an-indet",
         RenderSlot::new(|| {
             backdrop_scene(Backdrop::Surface).dialog(|| {
                 mock_dialog(
-                    "Use location service?",
+                    "ui-use-location-service",
                     360.0,
-                    labels(&["Learn more", "Disagree", "Agree"]),
+                    labels(&["ui-learn-more", "ui-disagree", "ui-agree"]),
                 )
                 .marked(0);
             });
@@ -1409,51 +1438,52 @@ fn anatomy_section() {
 #[tessera]
 fn basic_guidance() {
     prose(
-        "Basic dialogs interrupt users with urgent information, details, or actions. Common use cases for basic dialogs include alerts, quick selection, and confirmation.",
+        "ui-basic-dialogs-interrupt-users-with-urgent-information-details-or-actions-common-use-cases",
     );
     gap(Dp(16.0));
-    caption("Basic dialogs require a person to take action before it will close");
+    caption("ui-basic-dialogs-require-a-person-to-take-action-before-it-will-close");
     gap(Dp(8.0));
     caption(
-        "Basic dialogs can give people the ability to provide confirmation of a choice before committing to it",
+        "ui-basic-dialogs-can-give-people-the-ability-to-provide-confirmation-of-a-choice-before-commi",
     );
     gap(Dp(16.0));
     prose(
-        "Basic dialogs most often appear as alerts or lists, but can have a variety of layouts and component combinations, including date pickers and time pickers.",
+        "ui-basic-dialogs-most-often-appear-as-alerts-or-lists-but-can-have-a-variety-of-layouts-and-c",
     );
 }
 
 #[tessera]
 fn full_guidance() {
     prose(
-        "Full-screen dialogs fill the entire screen, containing actions that require a series of tasks to complete. One example is creating a calendar entry with the event title, date, location and time.",
+        "ui-full-screen-dialogs-fill-the-entire-screen-containing-actions-that-require-a-series-of-tas",
     );
     gap(Dp(16.0));
     prose(
-        "Because they take up the entire screen, full-screen dialogs are the only dialogs over which other dialogs can appear. Use a container transform pattern to transition a FAB into a full-screen dialog.",
+        "ui-because-they-take-up-the-entire-screen-full-screen-dialogs-are-the-only-dialogs-over-which",
     );
     gap(Dp(24.0));
-    subheading("When to use".into());
+    subheading("ui-when-to-use".into());
     gap(Dp(12.0));
     bullets(vec![
-        "Dialogs that include components which require keyboard input, such as form fields".into(),
-        "When changes aren't saved instantly".into(),
-        "When components within the dialog open additional dialogs".into(),
+        "ui-dialogs-that-include-components-which-require-keyboard-input-such-as-form-fields"
+            .into(),
+        "ui-when-changes-aren-t-saved-instantly".into(),
+        "ui-when-components-within-the-dialog-open-additional-dialogs".into(),
     ]);
     gap(Dp(16.0));
     prose(
-        "Full-screen dialogs are for compact breakpoints only, such as mobile devices. For medium and expanded breakpoints, use a basic dialog.",
+        "ui-full-screen-dialogs-are-for-compact-breakpoints-only-such-as-mobile-devices-for-medium-and",
     );
     gap(Dp(24.0));
-    subheading("Saving selections".into());
+    subheading("ui-saving-selections".into());
     gap(Dp(12.0));
     prose(
-        "To save a selection in a full-screen dialog, use Save. The close icon dismisses the dialog; when a full-screen dialog is closed without being saved, a basic dialog appears in front of it to confirm that its selections should be discarded without saving changes.",
+        "ui-to-save-a-selection-in-a-full-screen-dialog-use-save-the-close-icon-dismisses-the-dialog-w",
     );
     gap(Dp(16.0));
     guidance_card(
         Verdict::Note,
-        "When a full-screen dialog is closed without saving, a basic dialog confirms that changes should be discarded",
+        "ui-when-a-full-screen-dialog-is-closed-without-saving-a-basic-dialog-confirms-that-changes-sh",
         RenderSlot::new(|| {
             saving_scene();
         }),
@@ -1462,23 +1492,23 @@ fn full_guidance() {
     gap(Dp(32.0));
     guidance_pair(
         Verdict::Do,
-        "A clearly named action such as Create makes it clear that the event will be created.",
+        "ui-a-clearly-named-action-such-as-create-makes-it-clear-that-the-event-will-be-created",
         RenderSlot::new(|| {
-            full_screen_scene("New event", "Create");
+            full_screen_scene("ui-new-event", "ui-create");
         }),
         Verdict::Dont,
-        "Don't trigger a basic dialog when the confirming action is selected, and don't use the confirming action to dismiss the full-screen dialog.",
+        "ui-don-t-trigger-a-basic-dialog-when-the-confirming-action-is-selected-and-don-t-use-the-conf",
         RenderSlot::new(|| {
-            full_screen_scene("New event", "Save").overlay(|| {
-                mock_dialog("Save event?", 280.0, labels(&["Cancel", "Save"]));
+            full_screen_scene("ui-new-event", "ui-save").overlay(|| {
+                mock_dialog("ui-save-event", 280.0, labels(&["ui-cancel", "ui-save"]));
             });
         }),
     );
     gap(Dp(24.0));
-    subheading("Error messages".into());
+    subheading("ui-error-messages".into());
     gap(Dp(12.0));
     prose(
-        "Errors about the dialog fields should always appear inline where they occur. General errors such as network issues preventing saving or submitting should appear in a basic dialog when the confirming action fails. Show all errors on the page at once so people can fix everything before trying again.",
+        "ui-errors-about-the-dialog-fields-should-always-appear-inline-where-they-occur-general-errors",
     );
     gap(Dp(24.0));
     full_figure();
@@ -1486,56 +1516,56 @@ fn full_guidance() {
 
 #[tessera]
 fn adaptive_section() {
-    subheading("Medium breakpoint".into());
+    subheading("ui-medium-breakpoint".into());
     gap(Dp(12.0));
     prose(
-        "Basic dialogs appear in a center position by default. Their position can be overridden to provide a more ergonomic experience.",
+        "ui-basic-dialogs-appear-in-a-center-position-by-default-their-position-can-be-overridden-to-p",
     );
     gap(Dp(24.0));
-    subheading("Expanded breakpoint".into());
+    subheading("ui-expanded-breakpoint".into());
     gap(Dp(12.0));
     prose(
-        "Dialogs on expanded breakpoints, like desktop, are modal windows above a scrim. This puts the dialog at the forefront of a person's view, calling attention to the action prompted in the dialog.",
+        "ui-dialogs-on-expanded-breakpoints-like-desktop-are-modal-windows-above-a-scrim-this-puts-the",
     );
     gap(Dp(16.0));
     prose(
-        "Basic dialogs can be custom-positioned anywhere on larger screens, respecting margins to prevent edge collision.",
+        "ui-basic-dialogs-can-be-custom-positioned-anywhere-on-larger-screens-respecting-margins-to-pr",
     );
     gap(Dp(24.0));
     spec_table(
-        vec!["Attribute".into(), "Value".into()],
+        vec!["ui-attribute".into(), "ui-value".into()],
         vec![
-            vec!["Default position".into(), "Center".into()],
+            vec!["ui-default-position".into(), "ui-center".into()],
             vec![
-                "Custom placement margin".into(),
-                "56dp from screen edges".into(),
+                "ui-custom-placement-margin".into(),
+                "ui-56dp-from-screen-edges".into(),
             ],
         ],
     );
     gap(Dp(16.0));
     caption(
-        "Custom placement area for basic dialogs that respects a 56dp margin from the edges of the screen",
+        "ui-custom-placement-area-for-basic-dialogs-that-respects-a-56dp-margin-from-the-edges-of-the",
     );
 }
 
 #[tessera]
 fn behavior_section(open: State<bool>, full: State<bool>, saved: State<bool>) {
-    subheading("Appearing".into());
+    subheading("ui-appearing".into());
     gap(Dp(12.0));
     prose(
-        "Dialogs appear without warning, requiring users to stop their current task. They should be used sparingly, as not every choice or setting warrants interruption. Dialogs use an enter and exit transition pattern to appear on screen.",
+        "ui-dialogs-appear-without-warning-requiring-users-to-stop-their-current-task-they-should-be-u",
     );
     gap(Dp(24.0));
-    subheading("Position".into());
+    subheading("ui-position".into());
     gap(Dp(12.0));
     prose(
-        "Dialogs retain focus until dismissed or an action has been taken, such as choosing a setting. They shouldn't be obscured by other elements or appear partially on screen, with the exception of full-screen dialogs.",
+        "ui-dialogs-retain-focus-until-dismissed-or-an-action-has-been-taken-such-as-choosing-a-settin",
     );
     gap(Dp(24.0));
-    subheading("Scrolling".into());
+    subheading("ui-scrolling".into());
     gap(Dp(12.0));
     prose(
-        "Most dialog content should avoid scrolling. Even when scrolling is required, the dialog title is pinned at the top, with buttons pinned at the bottom. Dialogs don't scroll with elements outside of the dialog, such as the background.",
+        "ui-most-dialog-content-should-avoid-scrolling-even-when-scrolling-is-required-the-dialog-titl",
     );
     gap(Dp(24.0));
     launch(open, full, saved);
@@ -1543,12 +1573,12 @@ fn behavior_section(open: State<bool>, full: State<bool>, saved: State<bool>) {
 
 #[tessera]
 fn use_cases(open: State<bool>, full: State<bool>, saved: State<bool>) {
-    prose("People should be able to use assistive technology to:");
+    prose("ui-people-should-be-able-to-use-assistive-technology-to");
     gap(Dp(12.0));
     bullets(vec![
-        "Open and close a dialog".into(),
-        "Provide and submit other inputs if the dialog is interactive, such as a text field or selectable list".into(),
-        "Scroll the dialog to access all of its contents if that content extends beyond the container of the dialog".into(),
+        "ui-open-and-close-a-dialog".into(),
+        "ui-provide-and-submit-other-inputs-if-the-dialog-is-interactive-such-as-a-text-field-or-selec".into(),
+        "ui-scroll-the-dialog-to-access-all-of-its-contents-if-that-content-extends-beyond-the-contain".into(),
     ]);
     gap(Dp(24.0));
     launch(open, full, saved);
@@ -1556,31 +1586,31 @@ fn use_cases(open: State<bool>, full: State<bool>, saved: State<bool>) {
 
 #[tessera]
 fn interaction_style_section() {
-    subheading("Use sparingly".into());
+    subheading("ui-use-sparingly".into());
     gap(Dp(12.0));
     prose(
-        "Dialogs are purposefully interruptive. This means they appear in front of app content and disrupt the flow of content for people who may, for example, be using a screen reader to navigate the page.",
+        "ui-dialogs-are-purposefully-interruptive-this-means-they-appear-in-front-of-app-content-and-d",
     );
     gap(Dp(16.0));
     prose(
-        "As such, dialogs should be used sparingly and only to provide critical information. Less critical information should be presented in a non-blocking way within the flow of app content.",
+        "ui-as-such-dialogs-should-be-used-sparingly-and-only-to-provide-critical-information-less-cri",
     );
     gap(Dp(16.0));
     do_dont(
-        "Present non-critical information using other UI within the flow of app content.",
-        "Avoid putting non-critical information in a dialog.",
+        "ui-present-non-critical-information-using-other-ui-within-the-flow-of-app-content",
+        "ui-avoid-putting-non-critical-information-in-a-dialog",
     );
     gap(Dp(32.0));
-    subheading("200% text size".into());
+    subheading("ui-200-text-size".into());
     gap(Dp(12.0));
     prose(
-        "Avoid excessive text wrapping or truncation by choosing concise strings. On Android, headlines should be kept concise enough to fit within four lines after the text size is increased to 200%. If a headline exceeds this limit and gets truncated, provide an alternative way to access the full content in a single tap.",
+        "ui-avoid-excessive-text-wrapping-or-truncation-by-choosing-concise-strings-on-android-headlin",
     );
     gap(Dp(32.0));
-    subheading("Elements within dialogs".into());
+    subheading("ui-elements-within-dialogs".into());
     gap(Dp(12.0));
     prose(
-        "Because dialogs can contain various elements within them, refer to the relevant accessibility guidelines for each element. Common examples include text fields, typography and buttons.",
+        "ui-because-dialogs-can-contain-various-elements-within-them-refer-to-the-relevant-accessibili",
     );
     gap(Dp(24.0));
     accessibility::interaction_style();
@@ -1589,11 +1619,11 @@ fn interaction_style_section() {
 #[tessera]
 fn initial_focus_section() {
     prose(
-        "When a dialog appears, focus should automatically land on the first interactive element within the dialog.",
+        "ui-when-a-dialog-appears-focus-should-automatically-land-on-the-first-interactive-element-wit",
     );
     gap(Dp(16.0));
     prose(
-        "The tab key moves focus through the next interactive elements in a cycle, and the shift and tab keys together move focus in the opposite direction. The space or enter key triggers or commits the action of the focused element.",
+        "ui-the-tab-key-moves-focus-through-the-next-interactive-elements-in-a-cycle-and-the-shift-and",
     );
     gap(Dp(24.0));
     accessibility::initial_focus();
@@ -1602,21 +1632,21 @@ fn initial_focus_section() {
 #[tessera]
 fn keyboard_section() {
     spec_table(
-        vec!["Keys".into(), "Actions".into()],
+        vec!["ui-keys".into(), "ui-actions".into()],
         vec![
             vec![
-                "Tab".into(),
-                "Focus lands on the next interactive element contained in the dialog, or the first element if focus is currently on the last element".into(),
+                "ui-tab".into(),
+                "ui-focus-lands-on-the-next-interactive-element-contained-in-the-dialog-or-the-first-element-i".into(),
             ],
             vec![
-                "Shift + Tab".into(),
-                "Focus lands on the previous interactive element contained in the dialog, or the last element if focus is currently on the first element".into(),
+                "ui-shift-tab".into(),
+                "ui-focus-lands-on-the-previous-interactive-element-contained-in-the-dialog-or-the-last-elemen".into(),
             ],
             vec![
-                "Space or Enter".into(),
-                "Triggers or commits the action of the focused element".into(),
+                "ui-space-or-enter".into(),
+                "ui-triggers-or-commits-the-action-of-the-focused-element".into(),
             ],
-            vec!["Escape".into(), "Closes the dialog".into()],
+            vec!["ui-escape".into(), "ui-closes-the-dialog".into()],
         ],
     );
 }
@@ -1624,7 +1654,7 @@ fn keyboard_section() {
 #[tessera]
 fn labeling_section() {
     prose(
-        "The accessibility label for a dialog is typically the same as the dialog's title or headline. On web, basic dialogs should have the alert dialog role.",
+        "ui-the-accessibility-label-for-a-dialog-is-typically-the-same-as-the-dialog-s-title-or-headli",
     );
     gap(Dp(24.0));
     accessibility::labeling();
@@ -1642,12 +1672,12 @@ fn event_dialog(
     dialog_provider()
         .role(DialogRole::AlertDialog)
         .is_open(discard.get())
-        .accessibility_label("Discard changes?")
+        .accessibility_label(I18N.text("ui-discard-changes"))
         .on_close_request(move || discard.set(false))
         .main_content(move || {
             full_screen_dialog(close)
                 .dialog_optional(dialog)
-                .title("New event")
+                .title(I18N.text("ui-new-event"))
                 .on_confirm(move || {
                     draft.set(EventDraft::default());
                     saved.set(true);
@@ -1661,17 +1691,17 @@ fn event_dialog(
         .dialog_content(move |dialog_scope| {
             basic_dialog()
                 .dialog(dialog_scope)
-                .headline("Discard changes?")
-                .supporting_text("Discard the changes you've made to this event?")
+                .headline(I18N.text("ui-discard-changes"))
+                .supporting_text(I18N.text("ui-discard-the-changes-you-ve-made-to-this-event"))
                 .dismiss_button(move || {
                     action(
-                        "Keep editing".into(),
+                        "ui-keep-editing".into(),
                         Callback::new(move || discard.set(false)),
                     );
                 })
                 .confirm_button(move || {
                     action(
-                        "Discard".into(),
+                        "ui-discard".into(),
                         Callback::new(move || {
                             draft.set(EventDraft::default());
                             discard.set(false);
@@ -1685,7 +1715,7 @@ fn event_dialog(
 #[tessera]
 fn prose(#[prop(into)] value: String) {
     text()
-        .content(value)
+        .content(I18N.text(value))
         .style(type_style(16.0, 24.0))
         .color(INK);
 }
@@ -1695,30 +1725,30 @@ fn launch(open: State<bool>, full: State<bool>, saved: State<bool>) {
     column().children(move || {
         button()
             .outlined()
-            .accessibility_label("Open basic dialog")
+            .accessibility_label(I18N.text("ui-open-basic-dialog"))
             .on_click(move || {
                 full.set(false);
                 saved.set(false);
                 open.set(true);
             })
-            .child(|| {
-                text().content("Open basic dialog");
+            .child(move || {
+                text().content(I18N.text("ui-open-basic-dialog"));
             });
         gap(Dp(12.0));
         button()
             .outlined()
-            .accessibility_label("Open full-screen dialog")
+            .accessibility_label(I18N.text("ui-open-full-screen-dialog"))
             .on_click(move || {
                 full.set(true);
                 saved.set(false);
                 open.set(true);
             })
-            .child(|| {
-                text().content("Open full-screen dialog");
+            .child(move || {
+                text().content(I18N.text("ui-open-full-screen-dialog"));
             });
         if saved.get() {
             gap(Dp(12.0));
-            prose("Changes saved");
+            prose("ui-changes-saved");
         }
     });
 }
@@ -1727,10 +1757,10 @@ fn launch(open: State<bool>, full: State<bool>, saved: State<bool>) {
 fn action(label: String, callback: Callback) {
     button()
         .text()
-        .accessibility_label(label.clone())
+        .accessibility_label(I18N.text(&(label)))
         .on_click_shared(callback)
         .child(move || {
-            text().content(label.clone());
+            text().content(I18N.text(&(label)));
         });
 }
 
@@ -1743,43 +1773,46 @@ fn basic_specs() {
             gap(Dp(24.0));
             legend(
                 [
-                    "Container",
-                    "Icon (optional)",
-                    "Headline (optional)",
-                    "Supporting text",
-                    "Divider (optional)",
-                    "Button label text",
-                    "Scrim",
+                    "ui-container",
+                    "ui-icon-optional",
+                    "ui-headline-optional",
+                    "ui-supporting-text",
+                    "ui-divider-optional",
+                    "ui-button-label-text",
+                    "ui-scrim",
                 ]
                 .map(String::from)
                 .to_vec(),
             );
             gap(Dp(56.0));
-            subheading("Basic dialog color".into());
+            subheading("ui-basic-dialog-color".into());
             gap(Dp(24.0));
             basic_color_figure();
             gap(Dp(56.0));
-            subheading("Basic dialog measurements".into());
+            subheading("ui-basic-dialog-measurements".into());
             gap(Dp(32.0));
             basic_figure(true);
             gap(Dp(24.0));
-            prose("Basic dialog padding and size measurements");
+            prose("ui-basic-dialog-padding-and-size-measurements");
             gap(Dp(32.0));
             spec_table(
-                vec!["Attribute".into(), "Value".into()],
+                vec!["ui-attribute".into(), "ui-value".into()],
                 vec![
-                    vec!["Container shape".into(), "28dp corner radius".into()],
-                    vec!["Container height".into(), "Dynamic".into()],
-                    vec!["Container width".into(), "Min 280dp; Max 560dp".into()],
-                    vec!["Divider height".into(), "1dp".into()],
-                    vec!["Icon size".into(), "24dp".into()],
-                    vec!["Alignment with icon".into(), "Center-aligned".into()],
-                    vec!["Alignment without icon".into(), "Start-aligned".into()],
-                    vec!["Top/left/right/bottom padding".into(), "24dp".into()],
-                    vec!["Padding between buttons".into(), "8dp".into()],
-                    vec!["Padding between title and body".into(), "16dp".into()],
-                    vec!["Padding between icon and title".into(), "16dp".into()],
-                    vec!["Padding between body and actions".into(), "24dp".into()],
+                    vec!["ui-container-shape".into(), "ui-28dp-corner-radius".into()],
+                    vec!["ui-container-height".into(), "ui-dynamic".into()],
+                    vec!["ui-container-width".into(), "ui-min-280dp-max-560dp".into()],
+                    vec!["ui-divider-height".into(), "1dp".into()],
+                    vec!["ui-icon-size".into(), "24dp".into()],
+                    vec!["ui-alignment-with-icon".into(), "ui-center-aligned".into()],
+                    vec![
+                        "ui-alignment-without-icon".into(),
+                        "ui-start-aligned".into(),
+                    ],
+                    vec!["ui-top-left-right-bottom-padding".into(), "24dp".into()],
+                    vec!["ui-padding-between-buttons".into(), "8dp".into()],
+                    vec!["ui-padding-between-title-and-body".into(), "16dp".into()],
+                    vec!["ui-padding-between-icon-and-title".into(), "16dp".into()],
+                    vec!["ui-padding-between-body-and-actions".into(), "24dp".into()],
                 ],
             );
         });
@@ -1811,14 +1844,11 @@ fn basic_figure(measurements: bool) {
                                     test_tag: Some("dialog-figure-figure".into()),
                                     role: Some(Role::Group),
                                     merge_descendants: true,
-                                    label: Some(
-                                        if measurements {
-                                            "Basic dialog measurement figure"
-                                        } else {
-                                            "Basic dialog anatomy figure"
-                                        }
-                                        .into(),
-                                    ),
+                                    label: Some(I18N.text(if measurements {
+                                        "ui-basic-dialog-measurement-figure"
+                                    } else {
+                                        "ui-basic-dialog-anatomy-figure"
+                                    })),
                                     ..Default::default()
                                 }),
                         )
@@ -1848,14 +1878,11 @@ fn basic_figure(measurements: bool) {
                                             test_tag: Some("dialog-figure-container".into()),
                                             role: Some(Role::Group),
                                             merge_descendants: true,
-                                            label: Some(
-                                                if measurements {
-                                                    "Basic dialog measurement container"
-                                                } else {
-                                                    "Basic dialog anatomy container"
-                                                }
-                                                .into(),
-                                            ),
+                                            label: Some(I18N.text(if measurements {
+                                                "ui-basic-dialog-measurement-container"
+                                            } else {
+                                                "ui-basic-dialog-anatomy-container"
+                                            })),
                                             ..Default::default()
                                         }),
                                 )
@@ -1892,11 +1919,11 @@ fn basic_figure(measurements: bool) {
                                                     gap(Dp(16.0 * scale));
                                                 }
                                                 text()
-                                                    .content(if measurements {
-                                                        "Basic dialog title"
+                                                    .content(I18N.text(if measurements {
+                                                        "ui-basic-dialog-title"
                                                     } else {
-                                                        "Reset settings?"
-                                                    })
+                                                        "ui-reset-settings"
+                                                    }))
                                                     .style(dialog_type_style(24.0, 32.0, scale))
                                                     .color(scheme.on_surface)
                                                     .modifier(if measurements {
@@ -1929,16 +1956,16 @@ fn basic_figure(measurements: bool) {
                                                     .children(move || {
                                                         dialog_figure_action(
                                                             if measurements {
-                                                                "Action 2"
+                                                                "ui-action-2"
                                                             } else {
-                                                                "Cancel"
+                                                                "ui-cancel"
                                                             }
                                                             .into(),
                                                             geometry,
                                                             false,
                                                             scale,
                                                             Callback::new(move || {
-                                                                notice.set("Dismissed".into())
+                                                                notice.set("ui-dismissed".into())
                                                             }),
                                                         );
                                                         spacer().modifier(
@@ -1946,16 +1973,16 @@ fn basic_figure(measurements: bool) {
                                                         );
                                                         dialog_figure_action(
                                                             if measurements {
-                                                                "Action 1"
+                                                                "ui-action-1"
                                                             } else {
-                                                                "Accept"
+                                                                "ui-accept"
                                                             }
                                                             .into(),
                                                             geometry,
                                                             true,
                                                             scale,
                                                             Callback::new(move || {
-                                                                notice.set("Accepted".into())
+                                                                notice.set("ui-accepted".into())
                                                             }),
                                                         );
                                                     });
@@ -1998,7 +2025,7 @@ fn dialog_figure_action(
         .modifier(
             watch(geometry, if confirm { "confirm" } else { "dismiss" })
                 .height(Dp(40.0 * scale))
-                .width(Dp(if label.starts_with("Action") {
+                .width(Dp(if label.starts_with("ui-action") {
                     84.0
                 } else if confirm {
                     80.0
@@ -2007,12 +2034,12 @@ fn dialog_figure_action(
                 } * scale)),
         )
         .content_padding(Padding::symmetric(Dp(16.0 * scale), Dp::ZERO))
-        .accessibility_label(label.clone())
+        .accessibility_label(I18N.text(&(label)))
         .on_click_shared(callback)
         .child(move || {
             let mut style = dialog_type_style(14.0, 20.0, scale);
             style.font_weight = 500;
-            text().content(label.clone()).style(style);
+            text().content(I18N.text(&(label))).style(style);
         });
 }
 
@@ -2033,7 +2060,9 @@ fn dialog_account_avatar(index: usize, scale: f64) {
                 .clip_shape(Shape::Ellipse)
                 .semantics(SemanticsArgs {
                     role: Some(Role::Image),
-                    label: Some(format!("Account photo {}", index + 1)),
+                    label: Some(
+                        I18N.format("ui-account-photo-value", [("v0", (index + 1).into())]),
+                    ),
                     ..Default::default()
                 }),
         )
@@ -2053,11 +2082,11 @@ fn dialog_account_avatar(index: usize, scale: f64) {
 fn dialog_body(geometry: State<Geometry>, measurements: bool, scale: f64) {
     let scheme = use_context::<MaterialTheme>().unwrap().get().color_scheme;
     column().modifier(Modifier::new().fill_max_width()).children(move || {
-        text().content(if measurements {
-            "A dialog is a modal window that appears in front of app content to provide critical information or prompt for a decision to be made."
+        text().content(I18N.text(if measurements {
+            "ui-a-dialog-is-a-modal-window-that-appears-in-front-of-app-content-to-provide-critical-inform-2275"
         } else {
-            "This will reset your app preferences back to their default settings. The following accounts will also be signed out:"
-        }).style(dialog_type_style(14.0, 20.0, scale)).color(scheme.on_surface_variant)
+            "ui-this-will-reset-your-app-preferences-back-to-their-default-settings-the-following-accounts-2276"
+        })).style(dialog_type_style(14.0, 20.0, scale)).color(scheme.on_surface_variant)
             .modifier(watch(geometry, "body").semantics(SemanticsArgs { test_tag: Some("dialog-figure-body".into()), merge_descendants: true,
 ..Default::default() }).fill_max_width());
         if !measurements {
@@ -2070,7 +2099,7 @@ fn dialog_body(geometry: State<Geometry>, measurements: bool, scale: f64) {
                     .modifier(Modifier::new().fill_max_width().height(Dp(56.0 * scale))).children(move || {
                         dialog_account_avatar(index, scale);
                         spacer().modifier(Modifier::new().width(Dp(16.0 * scale)));
-                        text().content(email).style(dialog_type_style(14.0, 20.0, scale)).color(scheme.on_surface)
+                        text().content(I18N.text(email)).style(dialog_type_style(14.0, 20.0, scale)).color(scheme.on_surface)
                             .modifier(Modifier::new().weight(1.0));
                     });
             }
@@ -2304,14 +2333,14 @@ fn dialog_marker(number: usize, x: f64, y: f64, scale: f64) {
                 .border_with_shape(Dp(scale), INK, Shape::CAPSULE)
                 .semantics(SemanticsArgs {
                     role: Some(Role::Note),
-                    label: Some(format!("Anatomy marker {number}")),
+                    label: Some(I18N.format("ui-anatomy-marker-value", [("v0", (number).into())])),
                     merge_descendants: true,
                     ..Default::default()
                 }),
         )
         .children(move || {
             text()
-                .content(number.to_string())
+                .content((number).to_string())
                 .style(dialog_type_style(14.0, 20.0, scale))
                 .color(INK);
         });
@@ -2320,7 +2349,7 @@ fn dialog_marker(number: usize, x: f64, y: f64, scale: f64) {
 #[tessera]
 fn dialog_dimension(label: String, x: f64, y: f64, scale: f64) {
     text()
-        .content(label.clone())
+        .content(I18N.text(&(label)))
         .style(dialog_type_style(14.0, 20.0, scale))
         .color(INK)
         .modifier(
@@ -2328,7 +2357,9 @@ fn dialog_dimension(label: String, x: f64, y: f64, scale: f64) {
                 .offset(Dp(x), Dp(y))
                 .semantics(SemanticsArgs {
                     role: Some(Role::Note),
-                    label: Some(format!("Dimension {label}")),
+                    label: Some(
+                        I18N.format("ui-dimension-value", [("v0", I18N.text(&label).into())]),
+                    ),
                     ..Default::default()
                 }),
         );
@@ -2368,7 +2399,7 @@ dialog_canvas(1024.0, 622.0, RenderSlot::new(move || {
         boxed().modifier(Modifier::new().fill_max_width().height(Dp(622.0 * scale))
             .semantics(SemanticsArgs {
                 role: Some(Role::Group),
-                label: Some("Dialogs overview figure".into()),
+                label: Some(I18N.text("ui-dialogs-overview-figure")),
                 merge_descendants: true,
                 ..Default::default()
             })
@@ -2386,32 +2417,32 @@ dialog_canvas(1024.0, 622.0, RenderSlot::new(move || {
                                 .background_with_shape(scheme.surface_container_high, Shape::rounded_rectangle(Dp(28.0 * scale)))
                                 .padding_all(Dp(24.0 * scale)))
                                 .children(move || {
-                                    text().content("Basic dialog title").style(dialog_type_style(24.0, 32.0, scale)).color(scheme.on_surface);
-                                    text().content("A dialog is a modal window that appears in front of app content to provide critical information or ask for a decision")
+                                    text().content(I18N.text("ui-basic-dialog-title")).style(dialog_type_style(24.0, 32.0, scale)).color(scheme.on_surface);
+                                    text().content(I18N.text("ui-a-dialog-is-a-modal-window-that-appears-in-front-of-app-content-to-provide-critical-inform-2278"))
                                         .style(dialog_type_style(14.0, 20.0, scale)).color(scheme.on_surface_variant)
                                         .modifier(Modifier::new().offset(Dp::ZERO, Dp(52.0 * scale)).width(Dp(264.0 * scale)));
-                                    dialog_scene_action("Text button".into(), "Overview basic dismiss".into(), 40.0, 132.0, 112.0, scale,
-                                        Callback::new(move || notice.set("Basic dialog dismissed".into())));
-                                    dialog_scene_action("Text button".into(), "Overview basic confirm".into(), 156.0, 132.0, 112.0, scale,
-                                        Callback::new(move || notice.set("Basic dialog accepted".into())));
+                                    dialog_scene_action("ui-text-button".into(), "ui-overview-basic-dismiss".into(), 40.0, 132.0, 112.0, scale,
+                                        Callback::new(move || notice.set("ui-basic-dialog-dismissed".into())));
+                                    dialog_scene_action("ui-text-button".into(), "ui-overview-basic-confirm".into(), 156.0, 132.0, 112.0, scale,
+                                        Callback::new(move || notice.set("ui-basic-dialog-accepted".into())));
                                 });
                         }));
                         dialog_phone_frame(542.0, 88.0, 908.0, scale, RenderSlot::new(move || {
                             dialog_phone_status(scale);
-                            dialog_phone_header("Full-screen dialog title".into(), scale,
-                                Callback::new(move || notice.set("Full-screen dialog closed".into())),
-                                Callback::new(move || notice.set("Event saved".into())));
-                            dialog_scene_input(24.0, 144.0, 364.0, "Label".into(), "Input".into(), "Overview dialog category".into(), true, scale);
-                            dialog_plain_input(24.0, 216.0, 364.0, "Event name".into(), "".into(), "Overview event name".into(), scale);
+                            dialog_phone_header("ui-full-screen-dialog-title".into(), scale,
+                                Callback::new(move || notice.set("ui-full-screen-dialog-closed".into())),
+                                Callback::new(move || notice.set("ui-event-saved".into())));
+                            dialog_scene_input(24.0, 144.0, 364.0, "ui-label".into(), "ui-input".into(), "ui-overview-dialog-category".into(), true, scale);
+                            dialog_plain_input(24.0, 216.0, 364.0, "ui-event-name".into(), "".into(), "ui-overview-event-name".into(), scale);
                             spacer().modifier(Modifier::new().offset(Dp(24.0 * scale), Dp(295.0 * scale))
                                 .size(Dp(364.0 * scale), Dp(scale)).background(scheme.outline_variant));
-                            for (index, caption) in ["From", "To"].into_iter().enumerate() {
+                            for (index, caption) in ["ui-from", "To"].into_iter().enumerate() {
                                 let y = 318.0 + index as f64 * 104.0;
-                                text().content(caption).style(dialog_type_style(12.0, 16.0, scale)).color(scheme.on_surface_variant)
+                                text().content(I18N.text(caption)).style(dialog_type_style(12.0, 16.0, scale)).color(scheme.on_surface_variant)
                                     .modifier(Modifier::new().offset(Dp(24.0 * scale), Dp(y * scale)));
                                 for (column, kind) in ["date", "time"].into_iter().enumerate() {
                                     dialog_scene_input(24.0 + column as f64 * 185.0, y + 25.0, 177.0,
-                                        "Label".into(), "Input".into(), format!("Overview {caption} {kind}"), true, scale);
+                                        "ui-label".into(), "ui-input".into(), I18N.format("ui-overview-value-value", [("v0", I18N.text(&caption).into()), ("v1", I18N.text(&kind).into())]), true, scale);
                                 }
                             }
                         }));
@@ -2435,13 +2466,13 @@ fn dialog_overview_badge(number: usize, center: f64, scale: f64) {
                 .background_with_shape(scheme.on_surface, Shape::Ellipse)
                 .semantics(SemanticsArgs {
                     role: Some(Role::Note),
-                    label: Some(format!("Dialog variant {number}")),
+                    label: Some(I18N.format("ui-dialog-variant-value", [("v0", (number).into())])),
                     ..Default::default()
                 }),
         )
         .children(move || {
             text()
-                .content(number.to_string())
+                .content((number).to_string())
                 .style(dialog_type_style(16.0, 24.0, scale))
                 .color(scheme.surface);
         });
@@ -2477,7 +2508,7 @@ fn dialog_phone_frame(x: f64, y: f64, height: f64, scale: f64, child: RenderSlot
 fn dialog_phone_status(scale: f64) {
     let scheme = use_context::<MaterialTheme>().unwrap().get().color_scheme;
     text()
-        .content("9:30")
+        .content(I18N.text("9:30"))
         .style(dialog_type_style(14.0, 20.0, scale))
         .color(scheme.on_surface)
         .modifier(Modifier::new().offset(Dp(24.0 * scale), Dp(23.0 * scale)));
@@ -2508,7 +2539,7 @@ fn dialog_phone_header(title: String, scale: f64, close: Callback, save: Callbac
                 .size(Dp(48.0 * scale), Dp(64.0 * scale)),
         )
         .content_padding(Padding::all(Dp::ZERO))
-        .accessibility_label("Close overview dialog")
+        .accessibility_label(I18N.text("ui-close-overview-dialog"))
         .on_click_shared(close)
         .child(move || {
             icon()
@@ -2517,13 +2548,13 @@ fn dialog_phone_header(title: String, scale: f64, close: Callback, save: Callbac
                 .tint(scheme.on_surface);
         });
     text()
-        .content(title)
+        .content(I18N.text(title))
         .style(dialog_type_style(22.0, 28.0, scale))
         .color(scheme.on_surface)
         .modifier(Modifier::new().offset(Dp(56.0 * scale), Dp(74.0 * scale)));
     dialog_scene_action(
-        "Save".into(),
-        "Save overview event".into(),
+        "ui-save".into(),
+        "ui-save-overview-event".into(),
         334.0,
         68.0,
         64.0,
@@ -2544,7 +2575,7 @@ fn dialog_scene_action(
 ) {
     button()
         .text()
-        .accessibility_label(name)
+        .accessibility_label(I18N.text(name))
         .on_click_shared(callback)
         .modifier(
             Modifier::new()
@@ -2555,7 +2586,7 @@ fn dialog_scene_action(
         .child(move || {
             let mut style = dialog_type_style(14.0, 20.0, scale);
             style.font_weight = 500;
-            text().content(label.clone()).style(style);
+            text().content(I18N.text(&(label))).style(style);
         });
 }
 
@@ -2572,7 +2603,7 @@ fn dialog_scene_input(
 ) {
     let controller = remember(|| {
         let mut controller = TextInputController::new(Dp(16.0 * scale), Some(Dp(24.0 * scale)));
-        controller.set_text(initial.as_str());
+        controller.set_text(&I18N.text(&initial));
         controller
     });
     let menu = remember(MenuController::new);
@@ -2585,34 +2616,38 @@ fn dialog_scene_input(
                 .size(Dp(width * scale), Dp(56.0 * scale)),
         )
         .children(move || {
-            let content = RenderSlot::new(move || {
-                let field = text_field()
-                    .outlined()
-                    .controller(controller)
-                    .label(label.get())
-                    .accessibility_label(name.get())
-                    .min_width(Dp::ZERO)
-                    .min_height(Dp(56.0 * scale))
-                    .padding(Dp(16.0 * scale))
-                    .font_size(Dp(16.0 * scale))
-                    .line_height(Dp(24.0 * scale))
-                    .modifier(Modifier::new().size(Dp(width * scale), Dp(56.0 * scale)));
-                if dropdown {
-                    field.trailing_icon(move || {
-                        button()
-                            .text()
-                            .accessibility_label(format!("Choose {}", name.get()))
-                            .modifier(Modifier::new().size(Dp(32.0 * scale), Dp(40.0 * scale)))
-                            .content_padding(Padding::all(Dp::ZERO))
-                            .on_click(move || menu.with_mut(MenuController::toggle))
-                            .child(move || {
-                                icon()
-                                    .vector(filled::ARROW_DROP_DOWN_SVG)
-                                    .size(Dp(24.0 * scale));
-                            });
-                    });
-                }
-            });
+            let content =
+                RenderSlot::new(move || {
+                    let field = text_field()
+                        .outlined()
+                        .controller(controller)
+                        .label(I18N.text(label.get()))
+                        .accessibility_label(I18N.text(name.get()))
+                        .min_width(Dp::ZERO)
+                        .min_height(Dp(56.0 * scale))
+                        .padding(Dp(16.0 * scale))
+                        .font_size(Dp(16.0 * scale))
+                        .line_height(Dp(24.0 * scale))
+                        .modifier(Modifier::new().size(Dp(width * scale), Dp(56.0 * scale)));
+                    if dropdown {
+                        field.trailing_icon(move || {
+                            button()
+                                .text()
+                                .accessibility_label(I18N.format(
+                                    "ui-choose-value",
+                                    [("v0", I18N.text(&name.get()).into())],
+                                ))
+                                .modifier(Modifier::new().size(Dp(32.0 * scale), Dp(40.0 * scale)))
+                                .content_padding(Padding::all(Dp::ZERO))
+                                .on_click(move || menu.with_mut(MenuController::toggle))
+                                .child(move || {
+                                    icon()
+                                        .vector(filled::ARROW_DROP_DOWN_SVG)
+                                        .size(Dp(24.0 * scale));
+                                });
+                        });
+                    }
+                });
             if dropdown {
                 menu_provider()
                     .controller(menu)
@@ -2623,10 +2658,13 @@ fn dialog_scene_input(
                     .modifier(Modifier::new().size(Dp(width * scale), Dp(56.0 * scale)))
                     .main_content_shared(content)
                     .menu_content(move |menu| {
-                        for value in ["Input", "Option 2", "Option 3"] {
-                            menu_item().menu(menu).label(value).on_click(move || {
-                                controller.with_mut(|controller| controller.set_text(value))
-                            });
+                        for value in ["ui-input", "ui-option-2", "ui-option-3"] {
+                            menu_item()
+                                .menu(menu)
+                                .label(I18N.text(value))
+                                .on_click(move || {
+                                    controller.with_mut(|controller| controller.set_text(value))
+                                });
                         }
                     });
             } else {
@@ -2662,10 +2700,10 @@ dialog_canvas(1024.0, 486.0, RenderSlot::new(move || {
                                     icon().vector(filled::DONE_SVG).size(Dp(12.0 * scale)).tint(scheme.secondary);
                                 });
                             });
-                        text().content("Dialog with hero icon").style(dialog_type_style(24.0, 32.0, scale)).color(scheme.on_surface)
+                        text().content(I18N.text("ui-dialog-with-hero-icon")).style(dialog_type_style(24.0, 32.0, scale)).color(scheme.on_surface)
                             .modifier(watch(geometry, "headline").semantics(SemanticsArgs { test_tag: Some("dialog-figure-headline".into()), merge_descendants: true,
 ..Default::default() }).offset(Dp::ZERO, Dp(40.0 * scale)).align(Alignment::TopCenter));
-                        text().content("A dialog is a modal window that appears in front of app content to provide critical information or ask for a decision.")
+                        text().content(I18N.text("ui-a-dialog-is-a-modal-window-that-appears-in-front-of-app-content-to-provide-critical-inform-2295"))
                             .style(dialog_type_style(14.0, 20.0, scale)).color(scheme.on_surface_variant)
                             .modifier(watch(geometry, "body").semantics(SemanticsArgs { test_tag: Some("dialog-figure-body".into()), merge_descendants: true,
 ..Default::default() }).offset(Dp::ZERO, Dp(88.0 * scale)).width(Dp(292.0 * scale)));
@@ -2673,10 +2711,10 @@ dialog_canvas(1024.0, 486.0, RenderSlot::new(move || {
                             boxed().modifier(watch(geometry, "actions").semantics(SemanticsArgs { test_tag: Some("dialog-figure-actions".into()), merge_descendants: true,
 ..Default::default() }).offset(Dp(116.0 * scale), Dp(176.0 * scale)).size(Dp(176.0 * scale), Dp(40.0 * scale)))
                                 .children(move || {
-                                    dialog_scene_action("Cancel".into(), "Cancel color dialog".into(), 0.0, 0.0, 80.0, scale,
-                                        Callback::new(move || notice.set("Color dialog dismissed".into())));
-                                    dialog_scene_action("Accept".into(), "Accept color dialog".into(), 88.0, 0.0, 88.0, scale,
-                                        Callback::new(move || notice.set("Color dialog accepted".into())));
+                                    dialog_scene_action("ui-cancel".into(), "ui-cancel-color-dialog".into(), 0.0, 0.0, 80.0, scale,
+                                        Callback::new(move || notice.set("ui-color-dialog-dismissed".into())));
+                                    dialog_scene_action("ui-accept".into(), "ui-accept-color-dialog".into(), 88.0, 0.0, 88.0, scale,
+                                        Callback::new(move || notice.set("ui-color-dialog-accepted".into())));
                                 });
                         }));
                     });
@@ -2685,8 +2723,8 @@ dialog_canvas(1024.0, 486.0, RenderSlot::new(move || {
             }));
         if !notice.with(String::is_empty) {gap(Dp(12.0)); prose(notice.get());}
         gap(Dp(24.0));
-        for (index, role) in ["Surface container high", "Secondary", "On surface", "On surface variant", "Primary", "Scrim"].into_iter().enumerate() {
-            prose(format!("{}  {role}", index + 1));
+        for (index, role) in ["ui-surface-container-high", "ui-secondary", "ui-on-surface", "ui-on-surface-variant", "ui-primary", "ui-scrim"].into_iter().enumerate() {
+            prose(I18N.format("ui-value-value", [("v0", (index + 1).into()), ("v1", I18N.text(&role).into())]));
             gap(Dp(12.0));
         }
     });
@@ -2713,16 +2751,23 @@ fn basic_color_annotation_content(values: BTreeMap<&'static str, Rect>, scale: f
     for (number, role, x, y, tx, ty) in [
         (
             1,
-            "Surface container high",
+            "ui-surface-container-high",
             270.0,
             159.0,
             container.x + 12.0 * scale,
             container.y + 61.0 * scale,
         ),
-        (2, "Secondary", 499.0, 42.0, icon.x + icon.w / 2.0, icon.y),
+        (
+            2,
+            "ui-secondary",
+            499.0,
+            42.0,
+            icon.x + icon.w / 2.0,
+            icon.y,
+        ),
         (
             3,
-            "On surface",
+            "ui-on-surface",
             727.0,
             179.0,
             headline.x + headline.w,
@@ -2730,7 +2775,7 @@ fn basic_color_annotation_content(values: BTreeMap<&'static str, Rect>, scale: f
         ),
         (
             4,
-            "On surface variant",
+            "ui-on-surface-variant",
             727.0,
             238.0,
             body.x + body.w,
@@ -2738,13 +2783,13 @@ fn basic_color_annotation_content(values: BTreeMap<&'static str, Rect>, scale: f
         ),
         (
             5,
-            "Primary",
+            "ui-primary",
             727.0,
             315.0,
             actions.x + actions.w,
             actions.y + actions.h / 2.0,
         ),
-        (6, "Scrim", 497.0, 407.0, 509.0 * scale, 423.0 * scale),
+        (6, "ui-scrim", 497.0, 407.0, 509.0 * scale, 423.0 * scale),
     ] {
         let x = x * scale;
         let y = y * scale;
@@ -2779,13 +2824,16 @@ fn dialog_color_marker(number: usize, role: String, x: f64, y: f64, scale: f64) 
                 .border_with_shape(Dp(scale), INK, Shape::CAPSULE)
                 .semantics(SemanticsArgs {
                     role: Some(Role::Note),
-                    label: Some(format!("Color role {number}: {role}")),
+                    label: Some(I18N.format(
+                        "ui-color-role-value-value",
+                        [("v0", (number).into()), ("v1", I18N.text(&role).into())],
+                    )),
                     ..Default::default()
                 }),
         )
         .children(move || {
             text()
-                .content(number.to_string())
+                .content((number).to_string())
                 .style(dialog_type_style(14.0, 20.0, scale))
                 .color(INK);
         });
@@ -2803,14 +2851,14 @@ fn dialog_plain_input(
 ) {
     let controller = remember(|| {
         let mut controller = TextInputController::new(Dp(16.0 * scale), Some(Dp(24.0 * scale)));
-        controller.set_text(initial.as_str());
+        controller.set_text(&I18N.text(&initial));
         controller
     });
     text_field()
         .outlined()
         .controller(controller)
-        .placeholder(placeholder)
-        .accessibility_label(name)
+        .placeholder(I18N.text(placeholder))
+        .accessibility_label(I18N.text(name))
         .min_width(Dp::ZERO)
         .min_height(Dp(56.0 * scale))
         .padding(Dp(16.0 * scale))
@@ -2850,18 +2898,18 @@ fn full_spec_figure(mode: usize) {
                                 spacer().modifier(Modifier::new().fill_max_size().background(scheme.surface_container_high));
                                 dialog_phone_status(scale);
                                 let header_y = if mode == 2 {52.0} else {60.0};
-                                full_spec_header(if mode == 0 {"New event"} else {"Full-screen dialog title"}.into(),
+                                full_spec_header(if mode == 0 {"ui-new-event"} else {"ui-full-screen-dialog-title"}.into(),
                                     geometry, header_y, if mode == 2 {64.0} else {56.0}, scale,
-                                    Callback::new(move || notice.set("Full-screen dialog closed".into())),
-                                    Callback::new(move || notice.set("Event saved".into())));
+                                    Callback::new(move || notice.set("ui-full-screen-dialog-closed".into())),
+                                    Callback::new(move || notice.set("ui-event-saved".into())));
                                 let first_y = if mode == 2 {144.0} else {134.0};
                                 let x = if mode == 0 {23.0} else {24.0};
-                                dialog_scene_input(x, first_y, 364.0, "Label".into(), "Input".into(), format!("Full spec {mode} category"), true, scale);
-                                dialog_plain_input(x, first_y + 72.0, 364.0, "Event name".into(),
-                                    match mode {0 => "Carmen’s Birthday Surprise Party", 1 => "Mamá’s birthday", _ => ""}.into(),
-                                    format!("Full spec {mode} event name"), scale);
+                                dialog_scene_input(x, first_y, 364.0, "ui-label".into(), "ui-input".into(), I18N.format("ui-full-spec-value-category", [("v0", (mode).into())]), true, scale);
+                                dialog_plain_input(x, first_y + 72.0, 364.0, "ui-event-name".into(),
+                                    match mode {0 => "ui-carmen-s-birthday-surprise-party", 1 => "ui-mam-s-birthday", _ => ""}.into(),
+                                    I18N.format("ui-full-spec-value-event-name", [("v0", (mode).into())]), scale);
                                 if mode == 1 {
-                                    text().content("With mamá’s birthday around the corner, I’d like to start planning location and food. I can host en mi casa if you all help with the food. Since we all know how much she loves to eat maybe we can cook together the day before? Should")
+                                    text().content(I18N.text("ui-with-mam-s-birthday-around-the-corner-i-d-like-to-start-planning-location-and-food-i-can-h"))
                                         .style(dialog_type_style(16.0, 24.0, scale)).color(scheme.on_surface_variant)
                                         .modifier(watch(geometry, "body").semantics(SemanticsArgs { test_tag: Some("dialog-figure-body".into()), merge_descendants: true,
 ..Default::default() }).offset(Dp(24.0 * scale), Dp(280.0 * scale)).width(Dp(364.0 * scale)));
@@ -2869,28 +2917,28 @@ fn full_spec_figure(mode: usize) {
                                     spacer().modifier(watch(geometry, "divider").semantics(SemanticsArgs { test_tag: Some("dialog-figure-divider".into()), merge_descendants: true,
 ..Default::default() }).offset(Dp(if mode == 0 {27.0} else {24.0} * scale), Dp(if mode == 0 {290.0} else {295.0} * scale))
                                         .size(Dp(if mode == 0 {358.0} else {364.0} * scale), Dp(scale)).background(scheme.outline_variant));
-                                    for (row, caption) in ["From", "To"].into_iter().enumerate() {
+                                    for (row, caption) in ["ui-from", "To"].into_iter().enumerate() {
                                         if mode == 0 && row == 1 {continue;}
                                         let top = if mode == 0 {318.0} else {316.0 + row as f64 * 104.0};
-                                        text().content(caption).style(dialog_type_style(12.0, 16.0, scale)).color(scheme.on_surface_variant)
+                                        text().content(I18N.text(caption)).style(dialog_type_style(12.0, 16.0, scale)).color(scheme.on_surface_variant)
                                             .modifier(Modifier::new().offset(Dp(24.0 * scale), Dp(top * scale)));
                                         for column in 0..2 {
                                             dialog_scene_input(24.0 + column as f64 * 185.0,
                                                 if mode == 0 {343.0} else if row == 0 {344.0} else {447.0},
-                                                177.0, "Label".into(),
-                                                if row == 0 && column == 0 {"Input"} else {"All day"}.into(),
-                                                format!("Full spec {mode} {caption} {}", if column == 0 {"date"} else {"time"}), true, scale);
+                                                177.0, "ui-label".into(),
+                                                if row == 0 && column == 0 {"ui-input"} else {"ui-all-day"}.into(),
+                                                I18N.format("ui-full-spec-value-value-value", [("v0", (mode).into()), ("v1", I18N.text(&caption).into()), ("v2", I18N.text(&(if column == 0 {"ui-date-7089"} else {"ui-time"})).into())]), true, scale);
                                         }
                                     }
                                     if mode == 2 {
                                         checkbox().checked(all_day.get()).size(Dp(18.0 * scale))
-                                            .on_toggle(move |next| all_day.set(next)).accessibility_label("Measurement all day")
+                                            .on_toggle(move |next| all_day.set(next)).accessibility_label(I18N.text("ui-measurement-all-day"))
                                             .modifier(Modifier::new().offset(Dp(28.0 * scale), Dp(513.0 * scale)).size(Dp(48.0 * scale), Dp(48.0 * scale)));
-                                        text().content("All day").style(dialog_type_style(16.0, 24.0, scale)).color(scheme.on_surface_variant)
+                                        text().content(I18N.text("ui-all-day")).style(dialog_type_style(16.0, 24.0, scale)).color(scheme.on_surface_variant)
                                             .modifier(Modifier::new().offset(Dp(80.0 * scale), Dp(525.0 * scale)));
-                                        text().content("Timezone").style(dialog_type_style(12.0, 16.0, scale)).color(scheme.on_surface_variant)
+                                        text().content(I18N.text("ui-timezone")).style(dialog_type_style(12.0, 16.0, scale)).color(scheme.on_surface_variant)
                                             .modifier(Modifier::new().offset(Dp(24.0 * scale), Dp(572.0 * scale)));
-                                        dialog_scene_input(24.0, 599.0, 364.0, "Label".into(), "Input".into(), "Measurement timezone".into(), true, scale);
+                                        dialog_scene_input(24.0, 599.0, 364.0, "ui-label".into(), "ui-input".into(), "ui-measurement-timezone".into(), true, scale);
                                         spacer().modifier(Modifier::new().offset(Dp(152.0 * scale), Dp(878.0 * scale)).size(Dp(108.0 * scale), Dp(4.0 * scale))
                                             .background_with_shape(scheme.on_surface_variant, Shape::CAPSULE));
                                     }
@@ -2935,7 +2983,7 @@ fn full_spec_header(
         .children(move || {
             button()
                 .text()
-                .accessibility_label("Close spec dialog")
+                .accessibility_label(I18N.text("ui-close-spec-dialog"))
                 .on_click_shared(close)
                 .modifier(
                     watch(geometry, "close")
@@ -2955,7 +3003,7 @@ fn full_spec_header(
                         .tint(scheme.on_surface);
                 });
             text()
-                .content(title.clone())
+                .content(I18N.text(&(title)))
                 .style(dialog_type_style(22.0, 28.0, scale))
                 .color(scheme.on_surface)
                 .modifier(
@@ -2981,8 +3029,8 @@ fn full_spec_header(
                 )
                 .children(move || {
                     dialog_scene_action(
-                        "Save".into(),
-                        "Save spec event".into(),
+                        "ui-save".into(),
+                        "ui-save-spec-event".into(),
                         0.0,
                         0.0,
                         64.0,
@@ -3096,7 +3144,7 @@ fn full_spec_annotation_content(values: BTreeMap<&'static str, Rect>, mode: usiz
             vec![
                 (
                     1,
-                    "Container",
+                    "ui-container",
                     244.0,
                     254.0,
                     container.x + 8.0 * scale,
@@ -3104,7 +3152,7 @@ fn full_spec_annotation_content(values: BTreeMap<&'static str, Rect>, mode: usiz
                 ),
                 (
                     2,
-                    "Header",
+                    "ui-header",
                     244.0,
                     181.0,
                     header.x,
@@ -3112,7 +3160,7 @@ fn full_spec_annotation_content(values: BTreeMap<&'static str, Rect>, mode: usiz
                 ),
                 (
                     3,
-                    "Close affordance",
+                    "ui-close-affordance",
                     322.0,
                     44.0,
                     close.x + close.w / 2.0,
@@ -3120,7 +3168,7 @@ fn full_spec_annotation_content(values: BTreeMap<&'static str, Rect>, mode: usiz
                 ),
                 (
                     4,
-                    "Headline",
+                    "ui-headline",
                     455.0,
                     44.0,
                     headline.x + 105.0 * scale,
@@ -3128,19 +3176,19 @@ fn full_spec_annotation_content(values: BTreeMap<&'static str, Rect>, mode: usiz
                 ),
                 (
                     5,
-                    "Text button",
+                    "ui-text-button",
                     662.0,
                     44.0,
                     confirm.x + confirm.w / 2.0,
                     confirm.y,
                 ),
-                (6, "Divider", 747.0, 385.0, 705.0 * scale, 401.0 * scale),
+                (6, "ui-divider", 747.0, 385.0, 705.0 * scale, 401.0 * scale),
             ]
         } else {
             vec![
                 (
                     1,
-                    "Surface container high",
+                    "ui-surface-container-high",
                     236.0,
                     339.0,
                     container.x + 6.0 * scale,
@@ -3148,7 +3196,7 @@ fn full_spec_annotation_content(values: BTreeMap<&'static str, Rect>, mode: usiz
                 ),
                 (
                     2,
-                    "On surface",
+                    "ui-on-surface",
                     236.0,
                     174.0,
                     close.x,
@@ -3156,7 +3204,7 @@ fn full_spec_annotation_content(values: BTreeMap<&'static str, Rect>, mode: usiz
                 ),
                 (
                     3,
-                    "On surface",
+                    "ui-on-surface",
                     418.0,
                     33.0,
                     headline.x + 68.0 * scale,
@@ -3164,7 +3212,7 @@ fn full_spec_annotation_content(values: BTreeMap<&'static str, Rect>, mode: usiz
                 ),
                 (
                     4,
-                    "Primary",
+                    "ui-primary",
                     658.0,
                     33.0,
                     confirm.x + confirm.w / 2.0,
@@ -3172,7 +3220,7 @@ fn full_spec_annotation_content(values: BTreeMap<&'static str, Rect>, mode: usiz
                 ),
                 (
                     5,
-                    "On surface variant",
+                    "ui-on-surface-variant",
                     765.0,
                     419.0,
                     700.0 * scale,
@@ -3230,51 +3278,51 @@ fn full_specs() {
         gap(Dp(24.0));
         legend(
             [
-                "Container",
-                "Header",
-                "Icon (close affordance)",
-                "Headline (optional)",
-                "Text button",
-                "Divider (optional)",
+                "ui-container",
+                "ui-header",
+                "ui-icon-close-affordance",
+                "ui-headline-optional",
+                "ui-text-button",
+                "ui-divider-optional",
             ]
             .map(String::from)
             .to_vec(),
         );
         gap(Dp(56.0));
-        subheading("Full-screen dialog color".into());
+        subheading("ui-full-screen-dialog-color".into());
         gap(Dp(24.0));
         full_spec_figure(1);
         gap(Dp(24.0));
-        caption("Full-screen dialog color roles used for light and dark themes:");
+        caption("ui-full-screen-dialog-color-roles-used-for-light-and-dark-themes");
         gap(Dp(12.0));
         legend(
-            ["Surface container high", "On surface", "On surface", "Primary", "On surface variant"]
+            ["ui-surface-container-high", "ui-on-surface", "ui-on-surface", "ui-primary", "ui-on-surface-variant"]
                 .map(String::from)
                 .to_vec(),
         );
         gap(Dp(44.0));
-        subheading("Full-screen dialog measurements".into());
+        subheading("ui-full-screen-dialog-measurements".into());
         gap(Dp(24.0));
         full_spec_figure(2);
         gap(Dp(24.0));
-        prose("Full-screen dialog padding and size measurements");
+        prose("ui-full-screen-dialog-padding-and-size-measurements");
         gap(Dp(24.0));
-        spec_table(vec!["Attribute".into(), "Value".into()], vec![
-            vec!["Container shape".into(), "0dp corner radius".into()],
-            vec!["Container height".into(), "Dynamic".into()],
-            vec!["Container width".into(), "Container width; Max 560dp".into()],
-            vec!["Header height".into(), "56dp".into()],
-            vec!["Header width".into(), "Container width".into()],
-            vec!["Headline text alignment".into(), "Start-aligned".into()],
-            vec!["Divider height".into(), "1dp".into()],
-            vec!["Icon (close affordance) size".into(), "24dp".into()],
-            vec!["Bottom action bar height".into(), "56dp".into()],
-            vec!["Bottom action bar width".into(), "Container width".into()],
-            vec!["Top/left/right padding".into(), "24dp".into()],
-            vec!["Padding between elements".into(), "8dp".into()],
+        spec_table(vec!["ui-attribute".into(), "ui-value".into()], vec![
+            vec!["ui-container-shape".into(), "ui-0dp-corner-radius".into()],
+            vec!["ui-container-height".into(), "ui-dynamic".into()],
+            vec!["ui-container-width".into(), "ui-container-width-max-560dp".into()],
+            vec!["ui-header-height".into(), "56dp".into()],
+            vec!["ui-header-width".into(), "ui-container-width".into()],
+            vec!["ui-headline-text-alignment".into(), "ui-start-aligned".into()],
+            vec!["ui-divider-height".into(), "1dp".into()],
+            vec!["ui-icon-close-affordance-size".into(), "24dp".into()],
+            vec!["ui-bottom-action-bar-height".into(), "56dp".into()],
+            vec!["ui-bottom-action-bar-width".into(), "ui-container-width".into()],
+            vec!["ui-top-left-right-padding".into(), "24dp".into()],
+            vec!["ui-padding-between-elements".into(), "8dp".into()],
         ]);
         gap(Dp(24.0));
-        caption("The official measurement diagram labels the header region as 64dp, while the official table and the header container height token both specify 56dp. The table above follows the official table and token.");
+        caption("ui-the-official-measurement-diagram-labels-the-header-region-as-64dp-while-the-official-table");
     });
 }
 
@@ -3306,13 +3354,13 @@ fn full_figure() {
                             .semantics(SemanticsArgs {
                                 role: Some(Role::Group),
                                 merge_descendants: true,
-                                label: Some("Full-screen dialog figure".into()),
+                                label: Some(I18N.text("ui-full-screen-dialog-figure")),
                                 ..Default::default()
                             }),
                     )
                     .children(move || {
                         full_screen_dialog(Callback::new(move || visible.set(false)))
-                            .title("New event")
+                            .title(I18N.text("ui-new-event"))
                             .on_confirm(move || {
                                 saved.set(true);
                                 visible.set(false);
@@ -3324,9 +3372,9 @@ fn full_figure() {
             } else {
                 column().children(move || {
                     prose(if saved.get() {
-                        "Event saved"
+                        "ui-event-saved"
                     } else {
-                        "Dialog closed"
+                        "ui-dialog-closed"
                     });
                     gap(Dp(16.0));
                     button()
@@ -3335,8 +3383,8 @@ fn full_figure() {
                             saved.set(false);
                             visible.set(true);
                         })
-                        .child(|| {
-                            text().content("Show full-screen dialog");
+                        .child(move || {
+                            text().content(I18N.text("ui-show-full-screen-dialog"));
                         });
                 });
             }
@@ -3349,9 +3397,9 @@ fn event_form(draft: State<EventDraft>) {
         .modifier(Modifier::new().fill_max_width())
         .children(move || {
             text_field()
-                .label("Event name")
+                .label(I18N.text("ui-event-name"))
                 .initial_text(draft.with(|value| value.name.clone()))
-                .accessibility_label("Event name")
+                .accessibility_label(I18N.text("ui-event-name"))
                 .on_change(move |next: String| {
                     draft.with_mut(|value| value.name = next.clone());
                     next
@@ -3359,9 +3407,9 @@ fn event_form(draft: State<EventDraft>) {
                 .modifier(Modifier::new().fill_max_width());
             gap(Dp(24.0));
             text_field()
-                .label("From")
+                .label(I18N.text("ui-from"))
                 .initial_text(draft.with(|value| value.from.clone()))
-                .accessibility_label("From")
+                .accessibility_label(I18N.text("ui-from"))
                 .on_change(move |next: String| {
                     draft.with_mut(|value| value.from = next.clone());
                     next
@@ -3369,9 +3417,9 @@ fn event_form(draft: State<EventDraft>) {
                 .modifier(Modifier::new().fill_max_width());
             gap(Dp(16.0));
             text_field()
-                .label("To")
+                .label(I18N.text("ui-to"))
                 .initial_text(draft.with(|value| value.to.clone()))
-                .accessibility_label("To")
+                .accessibility_label(I18N.text("ui-to"))
                 .on_change(move |next: String| {
                     draft.with_mut(|value| value.to = next.clone());
                     next
@@ -3384,15 +3432,15 @@ fn event_form(draft: State<EventDraft>) {
                     checkbox()
                         .checked(draft.with(|value| value.all_day))
                         .on_toggle(move |next| draft.with_mut(|value| value.all_day = next))
-                        .accessibility_label("All-day");
-                    text().content("All-day");
+                        .accessibility_label(I18N.text("ui-all-day-7091"));
+                    text().content(I18N.text("ui-all-day-7091"));
                 });
             gap(Dp(16.0));
-            prose("Time zone");
+            prose("ui-time-zone");
             text_field()
-                .label("Time zone")
+                .label(I18N.text("ui-time-zone"))
                 .initial_text(draft.with(|value| value.time_zone.clone()))
-                .accessibility_label("Time zone")
+                .accessibility_label(I18N.text("ui-time-zone"))
                 .on_change(move |next: String| {
                     draft.with_mut(|value| value.time_zone = next.clone());
                     next

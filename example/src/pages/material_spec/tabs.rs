@@ -29,6 +29,8 @@ use tessera_ui::{
     Color, Dp, Modifier, RenderSlot, State, accesskit::Role, remember, tessera, use_context,
 };
 
+use crate::res::I18N;
+
 use super::{
     ACCENT,
     annotations::{self, Geometry, Rect, dotted, relative, watch},
@@ -42,39 +44,45 @@ use super::{
 #[path = "tabs_tests.rs"]
 mod tabs_tests;
 
-const DESTINATIONS: [&str; 5] = ["Flights", "Hotels", "Trains", "Buses", "Ferries"];
+const DESTINATIONS: [&str; 5] = [
+    "ui-flights",
+    "ui-hotels",
+    "ui-trains",
+    "ui-buses",
+    "ui-ferries",
+];
 const DO_COLOR: Color = Color::from_rgb(0.121, 0.478, 0.196);
 const DONT_COLOR: Color = Color::from_rgb(0.741, 0.161, 0.161);
 const SWIPE_PAGES: [(&str, &str); 3] = [
-    ("Flights", "Upcoming flights and saved routes."),
-    ("Trips", "Itineraries grouped by destination."),
-    ("Explore", "Places to visit near your next stop."),
+    ("ui-flights", "ui-upcoming-flights-and-saved-routes"),
+    ("ui-trips", "ui-itineraries-grouped-by-destination"),
+    ("ui-explore", "ui-places-to-visit-near-your-next-stop"),
 ];
 
 #[tessera]
 pub(super) fn tabs_spec(route: Option<crate::pages::material_spec::article::ArticleRoute>) {
     article(
-        "Tabs",
-        "Tabs organize content across different screens and views",
+        "ui-tabs",
+        "ui-tabs-organize-content-across-different-screens-and-views",
         vec![
             SpecSection {
-                title: "Tokens & specs",
+                title: "ui-tokens-specs",
                 content: RenderSlot::new(tokens),
             },
             SpecSection {
-                title: "Primary tabs",
+                title: "ui-primary-tabs",
                 content: RenderSlot::new(|| {
                     section(true);
                 }),
             },
             SpecSection {
-                title: "Secondary tabs",
+                title: "ui-secondary-tabs",
                 content: RenderSlot::new(|| {
                     section(false);
                 }),
             },
             SpecSection {
-                title: "Measurements",
+                title: "ui-measurements",
                 content: RenderSlot::new(measurements),
             },
         ],
@@ -82,71 +90,71 @@ pub(super) fn tabs_spec(route: Option<crate::pages::material_spec::article::Arti
     .route_optional(route)
     .pages(vec![
         ArticlePage {
-            title: "Overview",
+            title: "ui-overview",
             intro: Some(RenderSlot::new(overview_intro)),
             sections: vec![
                 SpecSection {
-                    title: "Availability & resources",
+                    title: "ui-availability-resources",
                     content: RenderSlot::new(availability),
                 },
                 SpecSection {
-                    title: "Differences from M2",
+                    title: "ui-differences-from-m2",
                     content: RenderSlot::new(differences),
                 },
             ],
         },
         ArticlePage {
-            title: "Guidelines",
+            title: "ui-guidelines",
             intro: None,
             sections: vec![
                 SpecSection {
-                    title: "Usage",
+                    title: "ui-usage",
                     content: RenderSlot::new(guidelines_usage),
                 },
                 SpecSection {
-                    title: "Anatomy",
+                    title: "ui-anatomy",
                     content: RenderSlot::new(anatomy),
                 },
                 SpecSection {
-                    title: "Choosing the tab variant",
+                    title: "ui-choosing-the-tab-variant",
                     content: RenderSlot::new(choosing_variant),
                 },
                 SpecSection {
-                    title: "Placement",
+                    title: "ui-placement",
                     content: RenderSlot::new(placement),
                 },
                 SpecSection {
-                    title: "Responsive layout",
+                    title: "ui-responsive-layout",
                     content: RenderSlot::new(responsive),
                 },
                 SpecSection {
-                    title: "Behavior",
+                    title: "ui-behavior",
                     content: RenderSlot::new(behavior),
                 },
             ],
         },
         ArticlePage {
-            title: "Accessibility",
+            title: "ui-accessibility",
             intro: None,
             sections: vec![
                 SpecSection {
-                    title: "Use cases",
+                    title: "ui-use-cases",
                     content: RenderSlot::new(use_cases),
                 },
                 SpecSection {
-                    title: "Interaction & style",
+                    title: "ui-interaction-style",
                     content: RenderSlot::new(interaction_style),
                 },
                 SpecSection {
-                    title: "Initial focus",
+                    title: "ui-initial-focus",
                     content: RenderSlot::new(initial_focus),
                 },
                 SpecSection {
-                    title: "Keyboard navigation",
+                    title: "ui-keyboard-navigation",
                     content: RenderSlot::new(keyboard_navigation),
                 },
                 SpecSection {
-                    title: "Labeling elements",
+                    title: "ui-labeling-elements",
                     content: RenderSlot::new(labelling),
                 },
             ],
@@ -157,7 +165,7 @@ pub(super) fn tabs_spec(route: Option<crate::pages::material_spec::article::Arti
 #[tessera]
 fn paragraph(value: String) {
     text()
-        .content(value)
+        .content(I18N.text(value))
         .style(type_style(16.0, 24.0))
         .modifier(Modifier::new().fill_max_width());
 }
@@ -166,7 +174,7 @@ fn paragraph(value: String) {
 fn caption(#[prop(into)] value: String) {
     let scheme = use_context::<MaterialTheme>().unwrap().get().color_scheme;
     text()
-        .content(value)
+        .content(I18N.text(value))
         .color(scheme.on_surface_variant)
         .style(type_style(14.0, 20.0))
         .modifier(Modifier::new().fill_max_width());
@@ -179,7 +187,7 @@ fn bullets(items: Vec<String>) {
         .children(move || {
             for item in items.clone() {
                 text()
-                    .content(format!("•  {item}"))
+                    .content(format!("•  {}", I18N.text(item)))
                     .style(type_style(16.0, 24.0));
                 gap(Dp(8.0));
             }
@@ -202,12 +210,14 @@ fn legend(number: usize, #[prop(into)] label: String) {
                 )
                 .children(move || {
                     text()
-                        .content(number.to_string())
+                        .content((number).to_string())
                         .style(type_style(12.0, 16.0))
                         .color(scheme.inverse_on_surface);
                 });
             spacer().modifier(Modifier::new().width(Dp(12.0)));
-            text().content(label.clone()).style(type_style(16.0, 24.0));
+            text()
+                .content(I18N.text(&(label)))
+                .style(type_style(16.0, 24.0));
         });
 }
 
@@ -239,13 +249,13 @@ fn guidance_line(#[prop(into)] mark: String, #[prop(into)] note: String, color: 
                 )
                 .children(move || {
                     text()
-                        .content(mark.clone())
+                        .content(I18N.text(&(mark)))
                         .style(type_style(14.0, 20.0))
                         .color(Color::WHITE);
                 });
             spacer().modifier(Modifier::new().width(Dp(12.0)));
             text()
-                .content(note.clone())
+                .content(I18N.text(&(note)))
                 .color(scheme.on_surface_variant)
                 .style(type_style(14.0, 20.0));
         });
@@ -289,51 +299,55 @@ fn do_dont(
 
 #[tessera]
 fn overview_intro() {
-    paragraph("Use tabs to group content into helpful categories.".into());
+    paragraph("ui-use-tabs-to-group-content-into-helpful-categories".into());
     gap(Dp(16.0));
     bullets(vec![
-        "Two variants: primary and secondary".into(),
-        "Primary tabs: Display main content destinations at the top of the screen, often under a top app bar".into(),
-        "Secondary tabs: Display related content within a content area; always placed below primary tabs".into(),
-        "Tabs can horizontally scroll, so a UI can have as many tabs as needed".into(),
-        "Place tabs next to each other as peers".into(),
+        "ui-two-variants-primary-and-secondary".into(),
+        "ui-primary-tabs-display-main-content-destinations-at-the-top-of-the-screen-often-under-a-top".into(),
+        "ui-secondary-tabs-display-related-content-within-a-content-area-always-placed-below-primary-t".into(),
+        "ui-tabs-can-horizontally-scroll-so-a-ui-can-have-as-many-tabs-as-needed".into(),
+        "ui-place-tabs-next-to-each-other-as-peers".into(),
     ]);
     gap(Dp(32.0));
     native_tabs_figure(true, true, false, 0, 3);
     gap(Dp(8.0));
-    caption("Primary tabs");
+    caption("ui-primary-tabs");
     gap(Dp(24.0));
     native_tabs_figure(false, false, false, 0, 2);
     gap(Dp(8.0));
-    caption("Secondary tabs");
+    caption("ui-secondary-tabs");
 }
 
 #[tessera]
 fn availability() {
     spec_table(
-        vec!["Type".into(), "Resource".into(), "Status".into()],
+        vec!["ui-type".into(), "ui-resource".into(), "ui-status".into()],
         vec![
             vec![
-                "Design".into(),
-                "Design Kit (Figma)".into(),
-                "Available".into(),
+                "ui-design".into(),
+                "ui-design-kit-figma".into(),
+                "ui-available".into(),
             ],
             vec![
-                "Implementation".into(),
-                "Flutter".into(),
-                "Available".into(),
+                "ui-implementation".into(),
+                "ui-flutter".into(),
+                "ui-available".into(),
             ],
             vec![
-                "Implementation".into(),
-                "Jetpack Compose".into(),
-                "Available".into(),
+                "ui-implementation".into(),
+                "ui-jetpack-compose".into(),
+                "ui-available".into(),
             ],
             vec![
-                "Implementation".into(),
-                "Android Views (MDC-Android)".into(),
-                "Available".into(),
+                "ui-implementation".into(),
+                "ui-android-views-mdc-android".into(),
+                "ui-available".into(),
             ],
-            vec!["Implementation".into(), "Web".into(), "Available".into()],
+            vec![
+                "ui-implementation".into(),
+                "ui-web".into(),
+                "ui-available".into(),
+            ],
         ],
     );
 }
@@ -341,56 +355,56 @@ fn availability() {
 #[tessera]
 fn differences() {
     bullets(vec![
-        "Color: New color mappings and compatibility with dynamic color".into(),
-        "Layout: Icons and labels are vertically centered in the container".into(),
+        "ui-color-new-color-mappings-and-compatibility-with-dynamic-color".into(),
+        "ui-layout-icons-and-labels-are-vertically-centered-in-the-container".into(),
     ]);
     gap(Dp(32.0));
     native_tabs_figure(true, true, false, 0, 3);
     gap(Dp(8.0));
-    caption("Tab icons and labels are positioned in the vertical center of the container");
+    caption("ui-tab-icons-and-labels-are-positioned-in-the-vertical-center-of-the-container");
 }
 
 #[tessera]
 fn guidelines_usage() {
     paragraph(
-        "Tabs organize groups of related content that are at the same level of hierarchy.".into(),
+        "ui-tabs-organize-groups-of-related-content-that-are-at-the-same-level-of-hierarchy".into(),
     );
     gap(Dp(32.0));
     native_tabs_figure(true, true, false, 0, 3);
     gap(Dp(8.0));
-    caption("Tab labels can include icons and text. Text labels should be short.");
+    caption("ui-tab-labels-can-include-icons-and-text-text-labels-should-be-short");
     gap(Dp(32.0));
-    subheading("Types".into());
+    subheading("ui-types".into());
     gap(Dp(16.0));
-    paragraph("There are two types of tabs:".into());
+    paragraph("ui-there-are-two-types-of-tabs".into());
     gap(Dp(8.0));
-    legend_list(vec!["Primary tabs".into(), "Secondary tabs".into()]);
+    legend_list(vec!["ui-primary-tabs".into(), "ui-secondary-tabs".into()]);
     gap(Dp(24.0));
     native_tabs_figure(true, false, false, 0, 3);
     gap(Dp(24.0));
     native_tabs_figure(false, false, false, 0, 2);
     gap(Dp(24.0));
     paragraph(
-        "Primary tabs are placed at the top of the content pane under an app bar. They display the main content destinations. Secondary tabs are used within a content area to further separate related content and establish hierarchy."
+        "ui-primary-tabs-are-placed-at-the-top-of-the-content-pane-under-an-app-bar-they-display-the-m"
             .into(),
     );
     gap(Dp(32.0));
-    subheading("Related content".into());
+    subheading("ui-related-content".into());
     gap(Dp(16.0));
     paragraph(
-        "Use tabs to group content into clearly defined sets. Tabs shouldn't be used for content that must be read in a particular order; create hierarchy with typography and open space instead."
+        "ui-use-tabs-to-group-content-into-clearly-defined-sets-tabs-shouldn-t-be-used-for-content-tha"
             .into(),
     );
     gap(Dp(16.0));
     do_dont(
-        "Use tabs to categorize related groups of content into clearly defined sets",
-        "Don't use tabs to move through sequential content that needs to be read in a particular order",
+        "ui-use-tabs-to-categorize-related-groups-of-content-into-clearly-defined-sets",
+        "ui-don-t-use-tabs-to-move-through-sequential-content-that-needs-to-be-read-in-a-particular-or",
     )
     .good_figure(|| {
-        mock_label_tabs(vec!["Flights".into(), "Trips".into(), "Explore".into()]);
+        mock_label_tabs(vec!["ui-flights".into(), "ui-trips".into(), "ui-explore".into()]);
     })
     .bad_figure(|| {
-        mock_label_tabs(vec!["Step 1".into(), "Step 2".into(), "Step 3".into()]);
+        mock_label_tabs(vec!["ui-step-1".into(), "ui-step-2".into(), "ui-step-3".into()]);
     });
 }
 
@@ -399,39 +413,39 @@ fn anatomy() {
     native_tabs_figure(true, true, false, 3, 3);
     gap(Dp(24.0));
     legend_list(vec![
-        "Container".into(),
-        "Icon (optional)".into(),
-        "Badge (optional)".into(),
-        "Label".into(),
-        "Divider".into(),
-        "Active indicator".into(),
+        "ui-container".into(),
+        "ui-icon-optional".into(),
+        "ui-badge-optional".into(),
+        "ui-label".into(),
+        "ui-divider".into(),
+        "ui-active-indicator".into(),
     ]);
     gap(Dp(32.0));
-    subheading("Container".into());
+    subheading("ui-container".into());
     gap(Dp(16.0));
     paragraph(
-        "The container holds multiple tabs, which can be fixed or scrollable. It spans the full width of the window and is divided into equal sections, one for each tab. A divider runs along its bottom edge, and the content below may scroll under it."
+        "ui-the-container-holds-multiple-tabs-which-can-be-fixed-or-scrollable-it-spans-the-full-width"
             .into(),
     );
     gap(Dp(24.0));
     native_tabs_figure(true, false, false, 0, 3);
     gap(Dp(8.0));
-    caption("The container is the area that contains the tabs directly under the title above");
+    caption("ui-the-container-is-the-area-that-contains-the-tabs-directly-under-the-title-above");
     gap(Dp(32.0));
-    subheading("Icon (optional)".into());
+    subheading("ui-icon-optional".into());
     gap(Dp(16.0));
     paragraph(
-        "Icons should be simple and recognizable, and clearly communicate the kind of content a tab holds. Icons alone are less effective than labels, so use them with caution."
+        "ui-icons-should-be-simple-and-recognizable-and-clearly-communicate-the-kind-of-content-a-tab"
             .into(),
     );
     gap(Dp(24.0));
     native_tabs_figure(true, true, false, 0, 3);
     gap(Dp(8.0));
-    caption("Tabs can use a combination of labels and icons");
+    caption("ui-tabs-can-use-a-combination-of-labels-and-icons");
     gap(Dp(16.0));
     do_dont(
-        "Use globally recognized icons when using icons alone",
-        "Don't use icons and labels on only some tabs; keep the treatment consistent across the set",
+        "ui-use-globally-recognized-icons-when-using-icons-alone",
+        "ui-don-t-use-icons-and-labels-on-only-some-tabs-keep-the-treatment-consistent-across-the-set",
     )
     .good_figure(|| {
         mock_icon_tabs(vec![false, false, false]);
@@ -440,156 +454,156 @@ fn anatomy() {
         mock_icon_tabs(vec![true, true, false]);
     });
     gap(Dp(32.0));
-    subheading("Label".into());
+    subheading("ui-label".into());
     gap(Dp(16.0));
     paragraph(
-        "Labels should clearly and succinctly describe the content of a tab and fit on a single row. A label can use a second line with truncated text, or the set can switch to scrollable tabs to fit longer titles."
+        "ui-labels-should-clearly-and-succinctly-describe-the-content-of-a-tab-and-fit-on-a-single-row"
             .into(),
     );
     gap(Dp(24.0));
     native_tabs_figure(false, false, false, 0, 2);
     gap(Dp(8.0));
     caption(
-        "Tab labels should be short and succinct. There should be a clear relationship to the title above.",
+        "ui-tab-labels-should-be-short-and-succinct-there-should-be-a-clear-relationship-to-the-title",
     );
     gap(Dp(24.0));
     paragraph(
-        "Scrollable tabs offset the first tab 52dp from the leading edge, and the width of each tab is set by its label. Avoid inconsistent padding between tabs."
+        "ui-scrollable-tabs-offset-the-first-tab-52dp-from-the-leading-edge-and-the-width-of-each-tab"
             .into(),
     );
     gap(Dp(24.0));
     native_tabs_figure(true, false, true, 0, 5);
     gap(Dp(16.0));
     do_dont(
-        "Offset the first scrollable tab 52dp from the leading edge",
-        "Don't truncate labels unless required",
+        "ui-offset-the-first-scrollable-tab-52dp-from-the-leading-edge",
+        "ui-don-t-truncate-labels-unless-required",
     )
     .good_figure(|| {
         mock_label_tabs(vec![
-            "Akita".into(),
-            "Alaskan Malamute".into(),
-            "Australian Shepherd".into(),
-            "Azawakh".into(),
+            "ui-akita".into(),
+            "ui-alaskan-malamute".into(),
+            "ui-australian-shepherd".into(),
+            "ui-azawakh".into(),
         ])
         .scrollable(true);
     })
     .bad_figure(|| {
         mock_label_tabs(vec![
-            "Akita".into(),
-            "Alaskan Malamute".into(),
-            "Australian Shepherd".into(),
-            "Azawakh".into(),
+            "ui-akita".into(),
+            "ui-alaskan-malamute".into(),
+            "ui-australian-shepherd".into(),
+            "ui-azawakh".into(),
         ])
         .width(Dp(240.0));
     });
     gap(Dp(32.0));
-    subheading("Badges (optional)".into());
+    subheading("ui-badges-optional".into());
     gap(Dp(16.0));
     paragraph(
-        "Badges show notifications or updates related to the content of one tab. Limit badge text to four characters, including a plus sign, and update or remove the badge once its content has been viewed. Both small and large badges can be used."
+        "ui-badges-show-notifications-or-updates-related-to-the-content-of-one-tab-limit-badge-text-to"
             .into(),
     );
     gap(Dp(24.0));
     native_tabs_figure(true, true, false, 0, 3);
     gap(Dp(8.0));
-    caption("Badges are used to highlight notifications related to tab specific content");
+    caption("ui-badges-are-used-to-highlight-notifications-related-to-tab-specific-content");
     gap(Dp(32.0));
-    subheading("Active indicator".into());
+    subheading("ui-active-indicator".into());
     gap(Dp(16.0));
     paragraph(
-        "The active indicator is an underline combined with a color change of the active tab's text and icon."
+        "ui-the-active-indicator-is-an-underline-combined-with-a-color-change-of-the-active-tab-s-text"
             .into(),
     );
     gap(Dp(24.0));
     native_tabs_figure(true, true, false, 0, 3);
     gap(Dp(8.0));
-    caption("An underline and color change differentiate an active tab from the inactive ones");
+    caption("ui-an-underline-and-color-change-differentiate-an-active-tab-from-the-inactive-ones");
 }
 
 #[tessera]
 fn choosing_variant() {
     paragraph(
-        "Use primary tabs when only one set of tabs is needed. Use secondary tabs when a screen needs more than one level of hierarchy; they have a simpler indicator but the same function."
+        "ui-use-primary-tabs-when-only-one-set-of-tabs-is-needed-use-secondary-tabs-when-a-screen-need"
             .into(),
     );
     gap(Dp(32.0));
     nested_tabs();
     gap(Dp(8.0));
     caption(
-        "Tabs can be joined with components like app bars, embedded in a specific UI region, or nested within components like cards and sheets. Tabs control the UI region displayed below them.",
+        "ui-tabs-can-be-joined-with-components-like-app-bars-embedded-in-a-specific-ui-region-or-neste",
     );
 }
 
 #[tessera]
 fn placement() {
     paragraph(
-        "Tabs are displayed in a single row, with each tab connected to the content it represents. As a set, all tabs are unified by a shared topic. Secondary tabs are always placed below primary tabs."
+        "ui-tabs-are-displayed-in-a-single-row-with-each-tab-connected-to-the-content-it-represents-as"
             .into(),
     );
     gap(Dp(32.0));
     tab_placement();
     gap(Dp(8.0));
-    caption("Secondary tabs are found within other content to assist users with greater detail");
+    caption("ui-secondary-tabs-are-found-within-other-content-to-assist-users-with-greater-detail");
 }
 
 #[tessera]
 fn responsive() {
     paragraph(
-        "The maximum width of fixed tabs is set by the widest tab. Fixed tabs use a fluid margin and are aligned to the center or leading edge of the body region. Avoid more than four fixed tabs; with five or more, the container becomes cramped."
+        "ui-the-maximum-width-of-fixed-tabs-is-set-by-the-widest-tab-fixed-tabs-use-a-fluid-margin-and"
             .into(),
     );
     gap(Dp(32.0));
     native_tabs_figure(true, false, false, 0, 4);
     gap(Dp(8.0));
-    caption("Tabs can grow in width in relation to the number of items contained within");
+    caption("ui-tabs-can-grow-in-width-in-relation-to-the-number-of-items-contained-within");
 }
 
 #[tessera]
 fn behavior() {
-    subheading("States".into());
+    subheading("ui-states".into());
     gap(Dp(16.0));
     paragraph(
-        "Tabs are enabled with one active tab. Each tab can also show hover, focused and pressed states."
+        "ui-tabs-are-enabled-with-one-active-tab-each-tab-can-also-show-hover-focused-and-pressed-stat"
             .into(),
     );
     gap(Dp(24.0));
     state_matrix(true);
     gap(Dp(8.0));
-    caption("Active, hover, focused, and pressed states");
+    caption("ui-active-hover-focused-and-pressed-states");
     gap(Dp(32.0));
-    subheading("Fixed tabs".into());
+    subheading("ui-fixed-tabs".into());
     gap(Dp(16.0));
     paragraph(
-        "Fixed tabs display all tabs on one screen, which suits quick switching between related content. To navigate, tap a tab or swipe left and right in the content area."
+        "ui-fixed-tabs-display-all-tabs-on-one-screen-which-suits-quick-switching-between-related-cont"
             .into(),
     );
     gap(Dp(24.0));
     native_tabs_figure(true, false, false, 0, 3);
     gap(Dp(8.0));
-    caption("Fixed tabs allow users to see all possible kinds of content available");
+    caption("ui-fixed-tabs-allow-users-to-see-all-possible-kinds-of-content-available");
     gap(Dp(32.0));
-    subheading("Tap a tab".into()).level(4);
+    subheading("ui-tap-a-tab".into()).level(4);
     gap(Dp(16.0));
-    paragraph("Navigate to a tab by tapping on it.".into());
+    paragraph("ui-navigate-to-a-tab-by-tapping-on-it".into());
     gap(Dp(24.0));
     native_tabs_figure(true, true, false, 0, 3);
     gap(Dp(8.0));
-    caption("Tapping on a tab directly");
+    caption("ui-tapping-on-a-tab-directly");
     gap(Dp(32.0));
-    subheading("Swipe within the content area".into()).level(4);
+    subheading("ui-swipe-within-the-content-area".into()).level(4);
     gap(Dp(16.0));
     paragraph(
-        "Swipe left or right in the content area to move between fixed tabs. Use caution when the content area also holds swipeable content, such as swipe-to-delete list items."
+        "ui-swipe-left-or-right-in-the-content-area-to-move-between-fixed-tabs-use-caution-when-the-co"
             .into(),
     );
     gap(Dp(24.0));
     swipe_tabs();
     gap(Dp(8.0));
-    caption("Users can swipe between fixed tabs to see related content quickly");
+    caption("ui-users-can-swipe-between-fixed-tabs-to-see-related-content-quickly");
     gap(Dp(16.0));
     do_dont(
-        "Use gestures in different directions from the tab swipe for content in the area",
-        "Don't place swipeable items in the content area of swipeable tabs",
+        "ui-use-gestures-in-different-directions-from-the-tab-swipe-for-content-in-the-area",
+        "ui-don-t-place-swipeable-items-in-the-content-area-of-swipeable-tabs",
     )
     .good_figure(|| {
         mock_tabs_with_rows(false);
@@ -598,35 +612,35 @@ fn behavior() {
         mock_tabs_with_rows(true);
     });
     gap(Dp(32.0));
-    subheading("Scrollable tabs".into());
+    subheading("ui-scrollable-tabs".into());
     gap(Dp(16.0));
     paragraph(
-        "Scrollable tabs are used when tabs can't fit on screen or have longer labels, and they are best for browsing on touch interfaces. Padding between labels stays the same as the row scrolls."
+        "ui-scrollable-tabs-are-used-when-tabs-can-t-fit-on-screen-or-have-longer-labels-and-they-are"
             .into(),
     );
     gap(Dp(24.0));
     native_tabs_figure(true, false, true, 0, 5);
     gap(Dp(8.0));
-    caption("Padding should remain the same when using scrollable tabs and long labels");
+    caption("ui-padding-should-remain-the-same-when-using-scrollable-tabs-and-long-labels");
     gap(Dp(32.0));
-    subheading("Scrolling content".into());
+    subheading("ui-scrolling-content".into());
     gap(Dp(16.0));
     paragraph(
-        "When the screen scrolls, tabs can stay fixed to the top of the screen, or scroll offscreen and reappear when the user scrolls up. Tabs attached to an app bar or other component move with it as a single unit."
+        "ui-when-the-screen-scrolls-tabs-can-stay-fixed-to-the-top-of-the-screen-or-scroll-offscreen-a"
             .into(),
     );
     gap(Dp(24.0));
     scrolling_tabs();
     gap(Dp(8.0));
-    caption("Tabs can be used to create elevation");
+    caption("ui-tabs-can-be-used-to-create-elevation");
     gap(Dp(8.0));
     caption(
-        "Scroll the list: the app bar and tabs collapse together, and scrolling back up brings them back",
+        "ui-scroll-the-list-the-app-bar-and-tabs-collapse-together-and-scrolling-back-up-brings-them-b",
     );
     gap(Dp(16.0));
     do_dont(
-        "Tabs can scroll offscreen and reappear when the user scrolls up",
-        "Don't scroll tabs behind an app bar; tabs attached to a component should move as a single unit",
+        "ui-tabs-can-scroll-offscreen-and-reappear-when-the-user-scrolls-up",
+        "ui-don-t-scroll-tabs-behind-an-app-bar-tabs-attached-to-a-component-should-move-as-a-single-u",
     )
     .good_figure(|| {
         mock_scrolled_screen(false);
@@ -638,75 +652,76 @@ fn behavior() {
 
 #[tessera]
 fn use_cases() {
-    paragraph("Users should be able to:".into());
+    paragraph("ui-users-should-be-able-to".into());
     gap(Dp(8.0));
     bullets(vec![
-        "Undertake actions or invoke navigation to a new destination with assistive technology"
+        "ui-undertake-actions-or-invoke-navigation-to-a-new-destination-with-assistive-technology"
             .into(),
-        "Select an action or destination from an off-screen tab using assistive technology".into(),
-        "Maintain access to primary actions when the content is scrolled".into(),
+        "ui-select-an-action-or-destination-from-an-off-screen-tab-using-assistive-technology"
+            .into(),
+        "ui-maintain-access-to-primary-actions-when-the-content-is-scrolled".into(),
     ]);
 }
 
 #[tessera]
 fn interaction_style() {
-    subheading("Touch".into());
+    subheading("ui-touch".into());
     gap(Dp(16.0));
     paragraph(
-        "When a user taps a tab, a touch ripple appears as interaction feedback, and the selected indicator becomes active and shifts into position once the touch has been engaged."
+        "ui-when-a-user-taps-a-tab-a-touch-ripple-appears-as-interaction-feedback-and-the-selected-ind"
             .into(),
     );
     gap(Dp(24.0));
     native_tabs_figure(true, true, false, 0, 3);
     gap(Dp(8.0));
-    caption("Touch: Tap");
+    caption("ui-touch-tap");
     gap(Dp(32.0));
-    subheading("Scrollable".into());
+    subheading("ui-scrollable".into());
     gap(Dp(16.0));
     bullets(vec![
-        "Scrollable tabs are used when tabs can't fit on screen, and are best for browsing on touch interfaces".into(),
-        "Swipe left or right, or use arrow or tab keys, to navigate through the tabs".into(),
-        "Looping the tabs infinitely is not recommended, because it traps screen reader users".into(),
-        "Select an individual tab with a tap, or with Space or Enter".into(),
-        "Horizontally scrolling tabs meet accessibility requirements because labels need room to grow".into(),
+        "ui-scrollable-tabs-are-used-when-tabs-can-t-fit-on-screen-and-are-best-for-browsing-on-touch".into(),
+        "ui-swipe-left-or-right-or-use-arrow-or-tab-keys-to-navigate-through-the-tabs".into(),
+        "ui-looping-the-tabs-infinitely-is-not-recommended-because-it-traps-screen-reader-users".into(),
+        "ui-select-an-individual-tab-with-a-tap-or-with-space-or-enter".into(),
+        "ui-horizontally-scrolling-tabs-meet-accessibility-requirements-because-labels-need-room-to-gr".into(),
     ]);
     gap(Dp(24.0));
     native_tabs_figure(true, false, true, 0, 5);
     gap(Dp(8.0));
-    caption("Scrollable: Scrollable Tabs");
+    caption("ui-scrollable-scrollable-tabs");
     gap(Dp(32.0));
-    subheading("Cursor".into());
+    subheading("ui-cursor".into());
     gap(Dp(16.0));
     paragraph(
-        "Hovering a tab shows a hover state as a visual cue that it is interactive. Clicking an active or inactive tab shows a ripple and shifts the indicator into position."
+        "ui-hovering-a-tab-shows-a-hover-state-as-a-visual-cue-that-it-is-interactive-clicking-an-acti"
             .into(),
     );
     gap(Dp(24.0));
     state_matrix(true);
     gap(Dp(8.0));
-    caption("Cursor: Hover, Click");
+    caption("ui-cursor-hover-click");
     gap(Dp(32.0));
     subheading("Keyboard/Switch".into());
     gap(Dp(16.0));
     bullets(vec![
-        "A focus indicator appears when the user tabs into the set".into(),
-        "Space or Enter on the selected tab navigates to a new destination".into(),
-        "Within the tab menu, arrow or tab keys move through items, Space or Enter selects an item, and the tab key exits the menu".into(),
+        "ui-a-focus-indicator-appears-when-the-user-tabs-into-the-set".into(),
+        "ui-space-or-enter-on-the-selected-tab-navigates-to-a-new-destination".into(),
+        "ui-within-the-tab-menu-arrow-or-tab-keys-move-through-items-space-or-enter-selects-an-item-an".into(),
     ]);
     gap(Dp(24.0));
     native_tabs_figure(true, true, false, 0, 3);
     gap(Dp(8.0));
-    caption("Keyboard/Switch: Tab, Space/Enter, Arrow");
+    caption("ui-keyboard-switch-tab-space-enter-arrow");
     gap(Dp(32.0));
-    subheading("Avoid applying density by default".into());
+    subheading("ui-avoid-applying-density-by-default".into());
     gap(Dp(16.0));
     paragraph(
-        "Don't apply density to tabs by default, because it lowers their targets below the best practice of 48x48 CSS pixels. Instead, give people a way to choose a higher density, like selecting a denser layout or changing the theme."
+        "ui-don-t-apply-density-to-tabs-by-default-because-it-lowers-their-targets-below-the-best-prac"
             .into(),
     );
     gap(Dp(16.0));
     paragraph(
-        "To ensure that the density setting can be easily reverted when it's active, keep every target that changes it at a minimum of 48x48 CSS pixels."
+        "ui-to-ensure-that-the-density-setting-can-be-easily-reverted-when-it-s-active-keep-every-targ"
             .into(),
     );
 }
@@ -714,15 +729,15 @@ fn interaction_style() {
 #[tessera]
 fn initial_focus() {
     paragraph(
-        "On arrow or tab in a tab menu, the active indicator appears on the first interactive element, providing feedback to the user that it is selected. The user can then tab to additional interactive elements until all available items within the tab menu are complete."
+        "ui-on-arrow-or-tab-in-a-tab-menu-the-active-indicator-appears-on-the-first-interactive-elemen"
             .into(),
     );
     gap(Dp(32.0));
     native_tabs_figure(true, true, false, 0, 3);
     gap(Dp(16.0));
     do_dont(
-        "Use Arrow/Tab to navigate through items",
-        "Don't use Space/Enter for navigating tabs. Space/Enter is only used for completing actions.",
+        "ui-use-arrow-tab-to-navigate-through-items",
+        "ui-don-t-use-space-enter-for-navigating-tabs-space-enter-is-only-used-for-completing-actions",
     )
     .good_figure(|| {
         mock_focus_tabs(false);
@@ -735,19 +750,19 @@ fn initial_focus() {
 #[tessera]
 fn keyboard_navigation() {
     spec_table(
-        vec!["Keys".into(), "Actions".into()],
+        vec!["ui-keys".into(), "ui-actions".into()],
         vec![
             vec![
-                "Arrow".into(),
-                "Focus lands on the next available navigation destination".into(),
+                "ui-arrow".into(),
+                "ui-focus-lands-on-the-next-available-navigation-destination".into(),
             ],
             vec![
-                "Space / Enter".into(),
-                "Activates the focused navigation destination".into(),
+                "ui-space-enter".into(),
+                "ui-activates-the-focused-navigation-destination".into(),
             ],
             vec![
-                "Arrow".into(),
-                "Allows navigation through menu items".into(),
+                "ui-arrow".into(),
+                "ui-allows-navigation-through-menu-items".into(),
             ],
         ],
     );
@@ -756,23 +771,23 @@ fn keyboard_navigation() {
 #[tessera]
 fn labelling() {
     paragraph(
-        "When the visible UI text is ambiguous, or there is no visible UI text, accessibility labels need to be more descriptive. For example, an icon that visually represents a video camera requires additional information in its accessibility label to clarify the tab's intent."
+        "ui-when-the-visible-ui-text-is-ambiguous-or-there-is-no-visible-ui-text-accessibility-labels"
             .into(),
     );
     gap(Dp(32.0));
     native_tabs_figure(true, true, false, 0, 3);
     gap(Dp(16.0));
     spec_table(
-        vec!["Element".into(), "Label".into(), "Role".into()],
+        vec!["ui-element".into(), "ui-label".into(), "ui-role".into()],
         vec![vec![
-            "Video tab".into(),
-            "Video format media content".into(),
-            "Tab".into(),
+            "ui-video-tab".into(),
+            "ui-video-format-media-content".into(),
+            "ui-tab".into(),
         ]],
     );
     gap(Dp(8.0));
     caption(
-        "While the icon visually represents a \"Video camera\", the accessibility label for this tab clarifies its function: \"Video format media content\"",
+        "ui-while-the-icon-visually-represents-a-video-camera-the-accessibility-label-for-this-tab-cla",
     );
 }
 
@@ -789,7 +804,7 @@ fn sample(#[prop(into)] label: String, primary: bool, controls: Option<bool>) {
     column()
         .modifier(Modifier::new().fill_max_width().semantics(SemanticsArgs {
             role: Some(Role::Group),
-            label: Some(format!("{label} tabs preview")),
+            label: Some(I18N.format("ui-value-tabs-preview", [("v0", I18N.text(&label).into())])),
             merge_descendants: true,
             ..Default::default()
         }))
@@ -804,55 +819,72 @@ fn sample(#[prop(into)] label: String, primary: bool, controls: Option<bool>) {
                             button()
                                 .tonal()
                                 .selected(icons.get())
-                                .accessibility_label("Show primary tab icons")
+                                .accessibility_label(I18N.text("ui-show-primary-tab-icons"))
                                 .on_click(move || icons.set(!icons.get()))
-                                .child(|| {
-                                    text().content("Icons");
+                                .child(move || {
+                                    text().content(I18N.text("ui-icons"));
                                 });
                         }
                         button()
                             .tonal()
                             .selected(badge.get())
-                            .accessibility_label(format!("{label} tab badge"))
+                            .accessibility_label(
+                                I18N.format(
+                                    "ui-value-tab-badge",
+                                    [("v0", I18N.text(&label).into())],
+                                ),
+                            )
                             .on_click(move || badge.set(!badge.get()))
-                            .child(|| {
-                                text().content("Badge");
+                            .child(move || {
+                                text().content(I18N.text("ui-badge"));
                             });
                         button()
                             .tonal()
                             .selected(scrollable.get())
-                            .accessibility_label(format!("{label} scrollable tabs"))
+                            .accessibility_label(I18N.format(
+                                "ui-value-scrollable-tabs",
+                                [("v0", I18N.text(&label).into())],
+                            ))
                             .on_click(move || {
                                 scrollable.set(!scrollable.get());
                                 if !scrollable.get() && selected.get() > 2 {
                                     selected.set(2);
                                 }
                             })
-                            .child(|| {
-                                text().content("Scrollable");
+                            .child(move || {
+                                text().content(I18N.text("ui-scrollable"));
                             });
                         button()
                             .tonal()
                             .selected(automatic.get())
-                            .accessibility_label(format!("{label} automatic activation"))
+                            .accessibility_label(I18N.format(
+                                "ui-value-automatic-activation",
+                                [("v0", I18N.text(&label).into())],
+                            ))
                             .on_click(move || automatic.set(!automatic.get()))
-                            .child(|| {
-                                text().content("Automatic activation");
+                            .child(move || {
+                                text().content(I18N.text("ui-automatic-activation"));
                             });
                         button()
                             .tonal()
                             .selected(!enabled.get())
-                            .accessibility_label(format!("{label} disable Hotels"))
+                            .accessibility_label(I18N.format(
+                                "ui-value-disable-hotels",
+                                [("v0", I18N.text(&label).into())],
+                            ))
                             .on_click(move || enabled.set(!enabled.get()))
-                            .child(|| {
-                                text().content("Disable Hotels");
+                            .child(move || {
+                                text().content(I18N.text("ui-disable-hotels"));
                             });
                         button()
                             .text()
-                            .accessibility_label(format!("{label} select final tab"))
+                            .accessibility_label(I18N.format(
+                                "ui-value-select-final-tab",
+                                [("v0", I18N.text(&label).into())],
+                            ))
                             .on_click(move || selected.set(if scrollable.get() { 4 } else { 2 }))
-                            .child(|| {
-                                text().content("Select last");
+                            .child(move || {
+                                text().content(I18N.text("ui-select-last"));
                             });
                     });
                 gap(Dp(24.0));
@@ -879,16 +911,19 @@ fn sample(#[prop(into)] label: String, primary: bool, controls: Option<bool>) {
                         if index == 1 && badge.get() {
                             tab(tab_row)
                                 .enabled(available)
-                                .accessibility_label(format!("{name}, 3 new items"))
+                                .accessibility_label(I18N.format(
+                                    "ui-value-3-new-items",
+                                    [("v0", I18N.text(&name).into())],
+                                ))
                                 .on_click(move || count.set(count.get() + 1))
                                 .title(move || {
                                     badge_title(name, icons.get() && primary, index);
                                 });
                         } else {
                             let tab = tab(tab_row)
-                                .label(name)
+                                .label(I18N.text(name))
                                 .enabled(available)
-                                .accessibility_label(name.to_string())
+                                .accessibility_label(I18N.text(&name))
                                 .on_click(move || count.set(count.get() + 1));
                             if icons.get() && primary {
                                 tab.icon(destination_asset(index));
@@ -898,25 +933,34 @@ fn sample(#[prop(into)] label: String, primary: bool, controls: Option<bool>) {
                 });
             gap(Dp(24.0));
             text()
-                .content(format!(
-                    "{prefix} content: {}",
-                    DESTINATIONS[selected.get()]
+                .content(I18N.format(
+                    "ui-value-content-value",
+                    [
+                        ("v0", I18N.text(&prefix).into()),
+                        ("v1", I18N.text(&(DESTINATIONS[selected.get()])).into()),
+                    ],
                 ))
                 .style(type_style(22.0, 30.0));
             gap(Dp(8.0));
             text()
-                .content(
+                .content(I18N.text(
                     [
-                        "Search flights and manage upcoming journeys.",
-                        "Review hotel bookings and saved stays.",
-                        "Find train departures and booked seats.",
-                        "Check bus routes and ticket details.",
-                        "View ferry crossings and boarding details.",
+                        "ui-search-flights-and-manage-upcoming-journeys",
+                        "ui-review-hotel-bookings-and-saved-stays",
+                        "ui-find-train-departures-and-booked-seats",
+                        "ui-check-bus-routes-and-ticket-details",
+                        "ui-view-ferry-crossings-and-boarding-details",
                     ][selected.get()],
-                )
+                ))
                 .style(type_style(16.0, 24.0));
             text()
-                .content(format!("{prefix} activations: {}", count.get()))
+                .content(I18N.format(
+                    "ui-value-activations-value",
+                    [
+                        ("v0", I18N.text(&prefix).into()),
+                        ("v1", (count.get()).into()),
+                    ],
+                ))
                 .style(type_style(14.0, 20.0));
         });
 }
@@ -931,21 +975,21 @@ fn badge_title(#[prop(into)] label: String, icon_shown: bool, index: usize) {
                     .content(move || {
                         icon().painter(destination_asset(index)).size(Dp(24.0));
                     })
-                    .badge(|| {
-                        badge_with_content().content(|| {
-                            text().content("3");
+                    .badge(move || {
+                        badge_with_content().content(move || {
+                            text().content(I18N.text("3"));
                         });
                     });
-                text().content(label.clone());
+                text().content(I18N.text(&(label)));
             });
     } else {
         row()
             .cross_axis_alignment(CrossAxisAlignment::Center)
             .children(move || {
-                text().content(label.clone());
+                text().content(I18N.text(&(label)));
                 spacer().modifier(Modifier::new().width(Dp(4.0)));
-                badge_with_content().content(|| {
-                    text().content("3");
+                badge_with_content().content(move || {
+                    text().content(I18N.text("3"));
                 });
             });
     }
@@ -954,37 +998,45 @@ fn badge_title(#[prop(into)] label: String, icon_shown: bool, index: usize) {
 #[tessera]
 fn section(primary: bool) {
     panel(RenderSlot::new(move || {
-        sample(if primary { "Primary" } else { "Secondary" }, primary).controls(true);
+        sample(
+            if primary {
+                "ui-primary"
+            } else {
+                "ui-secondary"
+            },
+            primary,
+        )
+        .controls(true);
     }));
     gap(Dp(32.0));
     native_tabs_figure(primary, primary, false, 1, if primary { 3 } else { 2 });
     gap(Dp(24.0));
     legend_list(if primary {
         vec![
-            "Container".into(),
-            "Badge (optional)".into(),
-            "Icon (optional)".into(),
-            "Label".into(),
-            "Divider".into(),
-            "Active indicator".into(),
+            "ui-container".into(),
+            "ui-badge-optional".into(),
+            "ui-icon-optional".into(),
+            "ui-label".into(),
+            "ui-divider".into(),
+            "ui-active-indicator".into(),
         ]
     } else {
         vec![
-            "Container".into(),
-            "Badge (optional)".into(),
-            "Label".into(),
-            "Divider".into(),
-            "Active indicator".into(),
+            "ui-container".into(),
+            "ui-badge-optional".into(),
+            "ui-label".into(),
+            "ui-divider".into(),
+            "ui-active-indicator".into(),
         ]
     });
     gap(Dp(32.0));
     subheading(if primary {
-        "Primary tabs color".into()
+        "ui-primary-tabs-color".into()
     } else {
-        "Secondary tabs color".into()
+        "ui-secondary-tabs-color".into()
     });
     gap(Dp(16.0));
-    paragraph("Color values are implemented through design tokens.".into());
+    paragraph("ui-color-values-are-implemented-through-design-tokens".into());
     gap(Dp(24.0));
     for dark in [false, true] {
         themed_panel(
@@ -997,28 +1049,28 @@ fn section(primary: bool) {
     }
     legend_list(if primary {
         vec![
-            "Surface".into(),
-            "Primary".into(),
-            "Primary".into(),
-            "On surface variant".into(),
-            "On surface variant".into(),
-            "Outline variant".into(),
-            "Primary".into(),
+            "ui-surface".into(),
+            "ui-primary".into(),
+            "ui-primary".into(),
+            "ui-on-surface-variant".into(),
+            "ui-on-surface-variant".into(),
+            "ui-outline-variant".into(),
+            "ui-primary".into(),
         ]
     } else {
         vec![
-            "Surface".into(),
-            "On surface".into(),
-            "On surface variant".into(),
-            "Outline variant".into(),
-            "Primary".into(),
+            "ui-surface".into(),
+            "ui-on-surface".into(),
+            "ui-on-surface-variant".into(),
+            "ui-outline-variant".into(),
+            "ui-primary".into(),
         ]
     });
     gap(Dp(32.0));
     subheading(if primary {
-        "Primary tabs states".into()
+        "ui-primary-tabs-states".into()
     } else {
-        "Secondary tabs states".into()
+        "ui-secondary-tabs-states".into()
     });
     gap(Dp(24.0));
     for dark in [false, true] {
@@ -1031,7 +1083,7 @@ fn section(primary: bool) {
         gap(Dp(16.0));
     }
     caption(
-        "Enabled, hover, focused, and pressed states for active and inactive destinations, in light and dark themes",
+        "ui-enabled-hover-focused-and-pressed-states-for-active-and-inactive-destinations-in-light-and",
     );
 }
 
@@ -1047,7 +1099,7 @@ fn themed_panel(dark: bool, content: RenderSlot) {
                         .modifier(Modifier::new().fill_max_width().padding_all(Dp(24.0)))
                         .children(move || {
                             text()
-                                .content(if dark { "Dark" } else { "Light" })
+                                .content(I18N.text(if dark { "ui-dark" } else { "ui-light" }))
                                 .style(type_style(14.0, 20.0));
                             gap(Dp(16.0));
                             column()
@@ -1065,11 +1117,11 @@ fn state_matrix(primary: bool) {
         .children(move || {
             for active in [true, false] {
                 text()
-                    .content(if active {
-                        "Active destination"
+                    .content(I18N.text(if active {
+                        "ui-active-destination"
                     } else {
-                        "Inactive destination"
-                    })
+                        "ui-inactive-destination"
+                    }))
                     .style(type_style(14.0, 20.0));
                 gap(Dp(8.0));
                 flow_row()
@@ -1111,7 +1163,7 @@ fn state_cell(primary: bool, active: bool, state: usize) {
         scheme.outline_variant,
     );
     let alpha = [0.0, 0.08, 0.1, 0.1][state];
-    let name = ["Enabled", "Hover", "Focused", "Pressed"][state];
+    let name = ["ui-enabled", "ui-hover", "ui-focused", "ui-pressed"][state];
     column()
         .cross_axis_alignment(CrossAxisAlignment::Center)
         .children(move || {
@@ -1134,7 +1186,7 @@ fn state_cell(primary: bool, active: bool, state: usize) {
                         );
                     }
                     text()
-                        .content("Label")
+                        .content(I18N.text("ui-label"))
                         .color(content)
                         .style(type_style(14.0, 20.0));
                     boxed()
@@ -1166,228 +1218,230 @@ fn state_cell(primary: bool, active: bool, state: usize) {
                         });
                 });
             gap(Dp(4.0));
-            text().content(name).style(type_style(12.0, 16.0));
+            text()
+                .content(I18N.text(name))
+                .style(type_style(12.0, 16.0));
         });
 }
 
 const TOKEN_GROUPS: [(&str, &[(&str, &str, &str)]); 4] = [
     (
-        "Enabled",
+        "ui-enabled",
         &[
             (
-                "Container color",
+                "ui-container-color",
                 "md.comp.primary-navigation-tab.container.color",
-                "Surface",
+                "ui-surface",
             ),
             (
-                "Container height",
+                "ui-container-height",
                 "md.comp.primary-navigation-tab.container.height",
                 "48dp",
             ),
             (
-                "Container elevation",
+                "ui-container-elevation",
                 "md.comp.primary-navigation-tab.container.elevation",
-                "Level 0",
+                "ui-level-0",
             ),
             (
-                "Container shape",
+                "ui-container-shape",
                 "md.comp.primary-navigation-tab.container.shape",
                 "0dp",
             ),
             (
-                "Icon and label container height",
+                "ui-icon-and-label-container-height",
                 "md.comp.primary-navigation-tab.with-icon-and-label-text.container.height",
                 "64dp",
             ),
             (
-                "Active indicator color",
+                "ui-active-indicator-color",
                 "md.comp.primary-navigation-tab.active-indicator.color",
-                "Primary",
+                "ui-primary",
             ),
             (
-                "Active indicator height",
+                "ui-active-indicator-height",
                 "md.comp.primary-navigation-tab.active-indicator.height",
                 "3dp",
             ),
             (
-                "Active indicator shape",
+                "ui-active-indicator-shape",
                 "md.comp.primary-navigation-tab.active-indicator.shape",
                 "3dp, 3dp, 0, 0",
             ),
             (
-                "Active label text color",
+                "ui-active-label-text-color",
                 "md.comp.primary-navigation-tab.with-label-text.active.label-text.color",
-                "Primary",
+                "ui-primary",
             ),
             (
-                "Inactive label text color",
+                "ui-inactive-label-text-color",
                 "md.comp.primary-navigation-tab.with-label-text.inactive.label-text.color",
-                "On surface variant",
+                "ui-on-surface-variant",
             ),
             (
-                "Label text font",
+                "ui-label-text-font",
                 "md.comp.primary-navigation-tab.with-label-text.label-text.font",
-                "Title small",
+                "ui-title-small",
             ),
             (
-                "Label text size",
+                "ui-label-text-size",
                 "md.comp.primary-navigation-tab.with-label-text.label-text.size",
                 "14sp",
             ),
             (
-                "Label text weight",
+                "ui-label-text-weight",
                 "md.comp.primary-navigation-tab.with-label-text.label-text.weight",
                 "500",
             ),
             (
-                "Label text line height",
+                "ui-label-text-line-height",
                 "md.comp.primary-navigation-tab.with-label-text.label-text.line-height",
                 "20sp",
             ),
             (
-                "Active icon color",
+                "ui-active-icon-color",
                 "md.comp.primary-navigation-tab.with-icon.active.icon.color",
-                "Primary",
+                "ui-primary",
             ),
             (
-                "Inactive icon color",
+                "ui-inactive-icon-color",
                 "md.comp.primary-navigation-tab.with-icon.inactive.icon.color",
-                "On surface variant",
+                "ui-on-surface-variant",
             ),
             (
-                "Icon size",
+                "ui-icon-size",
                 "md.comp.primary-navigation-tab.with-icon.icon.size",
                 "24dp",
             ),
             (
-                "Divider color",
+                "ui-divider-color",
                 "md.comp.primary-navigation-tab.divider.color",
-                "Outline variant",
+                "ui-outline-variant",
             ),
             (
-                "Divider height",
+                "ui-divider-height",
                 "md.comp.primary-navigation-tab.divider.height",
                 "1dp",
             ),
         ],
     ),
     (
-        "Hovered",
+        "ui-hovered",
         &[
             (
-                "Active state layer color",
+                "ui-active-state-layer-color",
                 "md.comp.primary-navigation-tab.active.hover.state-layer.color",
-                "Primary",
+                "ui-primary",
             ),
             (
-                "Inactive state layer color",
+                "ui-inactive-state-layer-color",
                 "md.comp.primary-navigation-tab.inactive.hover.state-layer.color",
-                "On surface",
+                "ui-on-surface",
             ),
             (
-                "State layer opacity",
+                "ui-state-layer-opacity",
                 "md.comp.primary-navigation-tab.hover.state-layer.opacity",
                 "0.08",
             ),
             (
-                "Active label text color",
+                "ui-active-label-text-color",
                 "md.comp.primary-navigation-tab.with-label-text.active.hover.label-text.color",
-                "Primary",
+                "ui-primary",
             ),
             (
-                "Inactive label text color",
+                "ui-inactive-label-text-color",
                 "md.comp.primary-navigation-tab.with-label-text.inactive.hover.label-text.color",
-                "On surface",
+                "ui-on-surface",
             ),
             (
-                "Active icon color",
+                "ui-active-icon-color",
                 "md.comp.primary-navigation-tab.with-icon.active.hover.icon.color",
-                "Primary",
+                "ui-primary",
             ),
             (
-                "Inactive icon color",
+                "ui-inactive-icon-color",
                 "md.comp.primary-navigation-tab.with-icon.inactive.hover.icon.color",
-                "On surface",
+                "ui-on-surface",
             ),
         ],
     ),
     (
-        "Focused",
+        "ui-focused",
         &[
             (
-                "Active state layer color",
+                "ui-active-state-layer-color",
                 "md.comp.primary-navigation-tab.active.focus.state-layer.color",
-                "Primary",
+                "ui-primary",
             ),
             (
-                "Inactive state layer color",
+                "ui-inactive-state-layer-color",
                 "md.comp.primary-navigation-tab.inactive.focus.state-layer.color",
-                "On surface",
+                "ui-on-surface",
             ),
             (
-                "State layer opacity",
+                "ui-state-layer-opacity",
                 "md.comp.primary-navigation-tab.focus.state-layer.opacity",
                 "0.1",
             ),
             (
-                "Active label text color",
+                "ui-active-label-text-color",
                 "md.comp.primary-navigation-tab.with-label-text.active.focus.label-text.color",
-                "Primary",
+                "ui-primary",
             ),
             (
-                "Inactive label text color",
+                "ui-inactive-label-text-color",
                 "md.comp.primary-navigation-tab.with-label-text.inactive.focus.label-text.color",
-                "On surface",
+                "ui-on-surface",
             ),
             (
-                "Active icon color",
+                "ui-active-icon-color",
                 "md.comp.primary-navigation-tab.with-icon.active.focus.icon.color",
-                "Primary",
+                "ui-primary",
             ),
             (
-                "Inactive icon color",
+                "ui-inactive-icon-color",
                 "md.comp.primary-navigation-tab.with-icon.inactive.focus.icon.color",
-                "On surface",
+                "ui-on-surface",
             ),
         ],
     ),
     (
-        "Pressed (ripple)",
+        "ui-pressed-ripple",
         &[
             (
-                "Active state layer color",
+                "ui-active-state-layer-color",
                 "md.comp.primary-navigation-tab.active.pressed.state-layer.color",
-                "Primary",
+                "ui-primary",
             ),
             (
-                "Inactive state layer color",
+                "ui-inactive-state-layer-color",
                 "md.comp.primary-navigation-tab.inactive.pressed.state-layer.color",
-                "On surface",
+                "ui-on-surface",
             ),
             (
-                "State layer opacity",
+                "ui-state-layer-opacity",
                 "md.comp.primary-navigation-tab.pressed.state-layer.opacity",
                 "0.1",
             ),
             (
-                "Active label text color",
+                "ui-active-label-text-color",
                 "md.comp.primary-navigation-tab.with-label-text.active.pressed.label-text.color",
-                "Primary",
+                "ui-primary",
             ),
             (
-                "Inactive label text color",
+                "ui-inactive-label-text-color",
                 "md.comp.primary-navigation-tab.with-label-text.inactive.pressed.label-text.color",
-                "On surface",
+                "ui-on-surface",
             ),
             (
-                "Active icon color",
+                "ui-active-icon-color",
                 "md.comp.primary-navigation-tab.with-icon.active.pressed.icon.color",
-                "Primary",
+                "ui-primary",
             ),
             (
-                "Inactive icon color",
+                "ui-inactive-icon-color",
                 "md.comp.primary-navigation-tab.with-icon.inactive.pressed.icon.color",
-                "On surface",
+                "ui-on-surface",
             ),
         ],
     ),
@@ -1395,13 +1449,13 @@ const TOKEN_GROUPS: [(&str, &[(&str, &str, &str)]); 4] = [
 
 #[tessera]
 fn tokens() {
-    subheading("Tabs - Primary navigation".into());
+    subheading("ui-tabs-primary-navigation".into());
     gap(Dp(24.0));
     for (state, rows) in TOKEN_GROUPS {
         subheading(state.to_string()).level(4);
         gap(Dp(16.0));
         spec_table(
-            vec!["Element".into(), "Token".into(), "Value".into()],
+            vec!["ui-element".into(), "ui-token".into(), "ui-value".into()],
             rows.iter()
                 .map(|(element, token, value)| {
                     vec![element.to_string(), token.to_string(), value.to_string()]
@@ -1421,41 +1475,41 @@ fn measurements() {
     secondary_measure_figure(false);
     gap(Dp(8.0));
     caption(
-        "Secondary tabs: 48dp container, 1/2 width tabs, 2dp full-width indicator, 4dp label-to-badge spacing",
+        "ui-secondary-tabs-48dp-container-1-2-width-tabs-2dp-full-width-indicator-4dp-label-to-badge-s",
     );
     gap(Dp(32.0));
     secondary_measure_figure(true);
     gap(Dp(8.0));
     caption(
-        "Secondary tabs with inline icons: 24dp icon, 8dp icon-to-label spacing, 4dp label-to-badge spacing",
+        "ui-secondary-tabs-with-inline-icons-24dp-icon-8dp-icon-to-label-spacing-4dp-label-to-badge-sp",
     );
     gap(Dp(32.0));
     badge_legend();
     gap(Dp(32.0));
     paragraph(
-        "Tabs are divided into equal sections, with labels and icons positioned vertically centered. The divider is included in the height, placed inside the container."
+        "ui-tabs-are-divided-into-equal-sections-with-labels-and-icons-positioned-vertically-centered"
             .into(),
     );
     gap(Dp(24.0));
     paragraph(
-        "Primary tab active indicators are inset 2dp on each side, have a fully rounded corner radius, and a minimum length of 24dp."
+        "ui-primary-tab-active-indicators-are-inset-2dp-on-each-side-have-a-fully-rounded-corner-radiu"
             .into(),
     );
     gap(Dp(32.0));
     spec_table(
-        vec!["Attribute".into(), "Value".into()],
+        vec!["ui-attribute".into(), "ui-value".into()],
         vec![
-            vec!["Container height (label only)".into(), "48dp".into()],
-            vec!["Container height (icon + label)".into(), "64dp".into()],
-            vec!["Icon size".into(), "24dp".into()],
-            vec!["Divider height".into(), "1dp".into()],
-            vec!["Primary indicator height".into(), "3dp".into()],
-            vec!["Secondary indicator height".into(), "2dp".into()],
-            vec!["Active indicator shape".into(), "3dp, 3dp, 0, 0".into()],
-            vec!["Active indicator minimum length".into(), "24dp".into()],
-            vec!["Inline icon-text padding".into(), "8dp".into()],
-            vec!["Inline text-badge padding".into(), "4dp".into()],
-            vec!["Badge overlap on stacked icon".into(), "6dp".into()],
+            vec!["ui-container-height-label-only".into(), "48dp".into()],
+            vec!["ui-container-height-icon-label".into(), "64dp".into()],
+            vec!["ui-icon-size".into(), "24dp".into()],
+            vec!["ui-divider-height".into(), "1dp".into()],
+            vec!["ui-primary-indicator-height".into(), "3dp".into()],
+            vec!["ui-secondary-indicator-height".into(), "2dp".into()],
+            vec!["ui-active-indicator-shape".into(), "3dp, 3dp, 0, 0".into()],
+            vec!["ui-active-indicator-minimum-length".into(), "24dp".into()],
+            vec!["ui-inline-icon-text-padding".into(), "8dp".into()],
+            vec!["ui-inline-text-badge-padding".into(), "4dp".into()],
+            vec!["ui-badge-overlap-on-stacked-icon".into(), "6dp".into()],
         ],
     );
 }
@@ -1465,12 +1519,12 @@ fn badge_legend() {
     flow_row()
         .item_spacing(Dp(32.0))
         .line_spacing(Dp(16.0))
-        .children(|| {
+        .children(move || {
             for (index, name) in [
-                "Small",
-                "Large single digit",
-                "Large multiple digits",
-                "Large 999+",
+                "ui-small",
+                "ui-large-single-digit",
+                "ui-large-multiple-digits",
+                "ui-large-999",
             ]
             .into_iter()
             .enumerate()
@@ -1486,12 +1540,14 @@ fn badge_legend() {
                                     badge();
                                 } else {
                                     badge_with_content().content(move || {
-                                        text().content(["", "3", "32", "999+"][index]);
+                                        text().content(I18N.text(["", "3", "32", "999+"][index]));
                                     });
                                 }
                             });
                         gap(Dp(8.0));
-                        text().content(name).style(type_style(14.0, 20.0));
+                        text()
+                            .content(I18N.text(name))
+                            .style(type_style(14.0, 20.0));
                     });
             }
         });
@@ -1520,7 +1576,7 @@ fn swipe_tabs(selected: Option<State<usize>>) {
                 .modifier(Modifier::new().fill_max_width())
                 .content(move |tab_row| {
                     for (name, _) in SWIPE_PAGES {
-                        tab(tab_row).label(name);
+                        tab(tab_row).label(I18N.text(name));
                     }
                 });
             let (title, detail) = SWIPE_PAGES[selected.get().min(SWIPE_PAGES.len() - 1)];
@@ -1550,18 +1606,24 @@ fn swipe_tabs(selected: Option<State<usize>>) {
                         })
                         .semantics(SemanticsArgs {
                             role: Some(Role::TabPanel),
-                            label: Some(format!("{title} content")),
+                            label: Some(
+                                I18N.format("ui-value-content", [("v0", I18N.text(&title).into())]),
+                            ),
                             ..Default::default()
                         })
                         .padding_all(Dp(24.0)),
                 )
                 .children(move || {
-                    text().content(title).style(type_style(24.0, 32.0));
+                    text()
+                        .content(I18N.text(title))
+                        .style(type_style(24.0, 32.0));
                     gap(Dp(8.0));
-                    text().content(detail).style(type_style(16.0, 24.0));
+                    text()
+                        .content(I18N.text(detail))
+                        .style(type_style(16.0, 24.0));
                     gap(Dp(16.0));
                     text()
-                        .content("Swipe left or right to change tabs")
+                        .content(I18N.text("ui-swipe-left-or-right-to-change-tabs"))
                         .color(hint)
                         .style(type_style(14.0, 20.0));
                 });
@@ -1583,9 +1645,21 @@ const ICON_KEYS: [&str; 5] = ["icon0", "icon1", "icon2", "icon3", "icon4"];
 
 fn figure_name(primary: bool, index: usize) -> &'static str {
     if primary {
-        ["Flights", "Trips", "Explore", "Buy", "Ferries"][index]
+        [
+            "ui-flights",
+            "ui-trips",
+            "ui-explore",
+            "ui-buy",
+            "ui-ferries",
+        ][index]
     } else {
-        ["Overview", "Specifications", "Details", "Updates", "More"][index]
+        [
+            "ui-overview",
+            "ui-specifications",
+            "ui-details",
+            "ui-updates",
+            "ui-more",
+        ][index]
     }
 }
 
@@ -1674,13 +1748,16 @@ fn native_tabs_figure(
                                                 .map(|index| (index, figure_name(primary, index)))
                                             {
                                                 tab(tab_row)
-                                                    .accessibility_label(
+                                                    .accessibility_label(I18N.text(
                                                         if index == 0 && unread.get() {
-                                                            format!("{name}, 3 new items")
+                                                            I18N.format(
+                                                                "ui-value-3-new-items",
+                                                                [("v0", I18N.text(&name).into())],
+                                                            )
                                                         } else {
-                                                            name.into()
+                                                            name.to_owned()
                                                         },
-                                                    )
+                                                    ))
                                                     .on_click(move || {
                                                         if index == 0 {
                                                             unread.set(false);
@@ -1718,9 +1795,12 @@ fn native_tabs_figure(
                 });
             gap(Dp(16.0));
             text()
-                .content(format!(
-                    "Figure content: {}",
-                    figure_name(primary, selected.get())
+                .content(I18N.format(
+                    "ui-figure-content-value",
+                    [(
+                        "v0",
+                        I18N.text(&figure_name(primary, selected.get())).into(),
+                    )],
                 ))
                 .style(type_style(16.0, 24.0));
         });
@@ -1765,7 +1845,7 @@ fn native_tab_title(
                     });
                 gap(Dp(2.0 * scale));
                 text()
-                    .content(figure_name(primary, index))
+                    .content(I18N.text(figure_name(primary, index)))
                     .style(style)
                     .color(color)
                     .modifier(watch(geometry, LABEL_KEYS[index]));
@@ -1785,7 +1865,7 @@ fn native_tab_title(
                             spacer().modifier(Modifier::new().width(Dp(8.0 * scale)));
                         }
                         text()
-                            .content(figure_name(primary, index))
+                            .content(I18N.text(figure_name(primary, index)))
                             .style(style)
                             .color(color)
                             .modifier(watch(geometry, LABEL_KEYS[index]));
@@ -1811,7 +1891,7 @@ fn figure_badge(geometry: State<Geometry>, scale: f64) {
         .modifier(watch(geometry, "badge").size(Dp(16.0 * scale), Dp(16.0 * scale)))
         .children(move || {
             badge_with_content().content(move || {
-                text().content("3").style(style);
+                text().content(I18N.text("3")).style(style);
             });
         });
 }
@@ -1971,8 +2051,8 @@ fn nested_tabs() {
             .selected(primary)
             .modifier(Modifier::new().fill_max_width())
             .content(move |tab_row| {
-                tab(tab_row).label("Travel");
-                tab(tab_row).label("Saved");
+                tab(tab_row).label(I18N.text("ui-travel"));
+                tab(tab_row).label(I18N.text("ui-saved"));
             });
         gap(Dp(24.0));
         tabs()
@@ -1980,24 +2060,40 @@ fn nested_tabs() {
             .selected(secondary)
             .modifier(Modifier::new().fill_max_width())
             .content(move |tab_row| {
-                tab(tab_row).label("Upcoming");
-                tab(tab_row).label("Past");
+                tab(tab_row).label(I18N.text("ui-upcoming"));
+                tab(tab_row).label(I18N.text("ui-past"));
             });
         gap(Dp(32.0));
         text()
-            .content(format!(
-                "{} · {}",
-                if primary.get() == 0 {
-                    "Travel"
-                } else {
-                    "Saved"
-                },
-                if secondary.get() == 0 {
-                    "Upcoming"
-                } else {
-                    "Past"
-                }
-            ))
+            .content(
+                I18N.format(
+                    "ui-value-value-format-25",
+                    [
+                        (
+                            "v0",
+                            I18N.text(
+                                &(if primary.get() == 0 {
+                                    "ui-travel"
+                                } else {
+                                    "ui-saved"
+                                }),
+                            )
+                            .into(),
+                        ),
+                        (
+                            "v1",
+                            I18N.text(
+                                &(if secondary.get() == 0 {
+                                    "ui-upcoming"
+                                } else {
+                                    "ui-past"
+                                }),
+                            )
+                            .into(),
+                        ),
+                    ],
+                ),
+            )
             .style(type_style(22.0, 28.0));
     }));
 }
@@ -2015,14 +2111,14 @@ fn tab_placement() {
                 .clip_shape(Shape::rounded_rectangle(Dp(24.0))),
         )
         .children(move || {
-            tessera_components::app_bar::top_app_bar().title("Travel");
+            tessera_components::app_bar::top_app_bar().title(I18N.text("ui-travel"));
             tabs()
                 .selected(selected)
                 .modifier(Modifier::new().fill_max_width())
                 .content(move |tab_row| {
-                    tab(tab_row).label("Flights");
-                    tab(tab_row).label("Hotels");
-                    tab(tab_row).label("Trains");
+                    tab(tab_row).label(I18N.text("ui-flights"));
+                    tab(tab_row).label(I18N.text("ui-hotels"));
+                    tab(tab_row).label(I18N.text("ui-trains"));
                 });
             column()
                 .modifier(
@@ -2033,11 +2129,11 @@ fn tab_placement() {
                 )
                 .children(move || {
                     text()
-                        .content(DESTINATIONS[selected.get()])
+                        .content(I18N.text(DESTINATIONS[selected.get()]))
                         .style(type_style(24.0, 32.0));
                     gap(Dp(16.0));
                     text()
-                        .content("Related content appears below the tabs.")
+                        .content(I18N.text("ui-related-content-appears-below-the-tabs"))
                         .style(type_style(16.0, 24.0));
                 });
         });
@@ -2082,14 +2178,14 @@ fn guidance_card(good: bool, #[prop(into)] note: String, figure: RenderSlot) {
                         )
                         .children(move || {
                             text()
-                                .content(if good { "✓  Do" } else { "✕  Don't" })
+                                .content(I18N.text(if good { "✓  Do" } else { "ui-don-t" }))
                                 .style(type_style(14.0, 20.0))
                                 .color(Color::WHITE);
                         });
                 });
             gap(Dp(12.0));
             text()
-                .content(note.clone())
+                .content(I18N.text(&(note)))
                 .color(hint)
                 .style(type_style(14.0, 20.0))
                 .modifier(Modifier::new().fill_max_width());
@@ -2121,7 +2217,7 @@ fn mock_label_tabs(labels: Vec<String>, scrollable: Option<bool>, width: Option<
                         .modifier(Modifier::new().fill_max_width())
                         .content(move |tab_row| {
                             for label in labels.clone() {
-                                tab(tab_row).label(label);
+                                tab(tab_row).label(I18N.text(label));
                             }
                         });
                 });
@@ -2150,11 +2246,13 @@ fn mock_icon_tabs(labelled: Vec<bool>) {
                             for (index, with_label) in labelled.clone().into_iter().enumerate() {
                                 let name = figure_name(true, index);
                                 if with_label {
-                                    tab(tab_row).label(name).icon(figure_asset(true, index));
+                                    tab(tab_row)
+                                        .label(I18N.text(name))
+                                        .icon(figure_asset(true, index));
                                 } else {
                                     tab(tab_row)
                                         .icon(figure_asset(true, index))
-                                        .accessibility_label(name.to_string());
+                                        .accessibility_label(I18N.text(&name));
                                 }
                             }
                         });
@@ -2169,7 +2267,10 @@ fn mock_list_rows(swipeable: bool) {
     column()
         .modifier(Modifier::new().fill_max_width())
         .children(move || {
-            for (index, title) in ["Lisbon", "Kyoto", "Oaxaca"].into_iter().enumerate() {
+            for (index, title) in ["ui-lisbon", "ui-kyoto", "ui-oaxaca"]
+                .into_iter()
+                .enumerate()
+            {
                 row()
                     .cross_axis_alignment(CrossAxisAlignment::Center)
                     .modifier(
@@ -2185,19 +2286,21 @@ fn mock_list_rows(swipeable: bool) {
                                 .modifier(
                                     Modifier::new().size(Dp(72.0), Dp(40.0)).background(error),
                                 )
-                                .children(|| {
+                                .children(move || {
                                     text()
-                                        .content("Delete")
+                                        .content(I18N.text("ui-delete"))
                                         .color(Color::WHITE)
                                         .style(type_style(12.0, 16.0));
                                 });
                         }
                         spacer().modifier(Modifier::new().width(Dp(16.0)));
-                        text().content(title).style(type_style(14.0, 20.0));
+                        text()
+                            .content(I18N.text(title))
+                            .style(type_style(14.0, 20.0));
                         if swipeable && index == 0 {
                             spacer().modifier(Modifier::new().width(Dp(12.0)));
                             text()
-                                .content("← swipe")
+                                .content(I18N.text("ui-swipe-5798"))
                                 .color(hint)
                                 .style(type_style(12.0, 16.0));
                         }
@@ -2212,7 +2315,11 @@ fn mock_tabs_with_rows(swipeable: bool) {
     column()
         .modifier(Modifier::new().fill_max_width())
         .children(move || {
-            mock_label_tabs(vec!["Flights".into(), "Trips".into(), "Explore".into()]);
+            mock_label_tabs(vec![
+                "ui-flights".into(),
+                "ui-trips".into(),
+                "ui-explore".into(),
+            ]);
             gap(Dp(8.0));
             mock_list_rows(swipeable);
         });
@@ -2247,9 +2354,9 @@ fn mock_scrolled_screen(behind_bar: bool) {
                                     .selected(selected)
                                     .modifier(Modifier::new().fill_max_width())
                                     .content(move |tab_row| {
-                                        tab(tab_row).label("Flights");
-                                        tab(tab_row).label("Trips");
-                                        tab(tab_row).label("Explore");
+                                        tab(tab_row).label(I18N.text("ui-flights"));
+                                        tab(tab_row).label(I18N.text("ui-trips"));
+                                        tab(tab_row).label(I18N.text("ui-explore"));
                                     });
                             });
                         boxed()
@@ -2261,20 +2368,24 @@ fn mock_scrolled_screen(behind_bar: bool) {
                                     .background(bar_color)
                                     .padding(Padding::symmetric(Dp(16.0), Dp(0.0))),
                             )
-                            .children(|| {
-                                text().content("Travel").style(type_style(22.0, 28.0));
+                            .children(move || {
+                                text()
+                                    .content(I18N.text("ui-travel"))
+                                    .style(type_style(22.0, 28.0));
                             });
                     });
             } else {
                 text()
-                    .content("Scrolled down: the app bar and tabs moved offscreen together")
+                    .content(
+                        I18N.text("ui-scrolled-down-the-app-bar-and-tabs-moved-offscreen-together"),
+                    )
                     .color(hint)
                     .style(type_style(12.0, 16.0))
                     .modifier(Modifier::new().padding(Padding::symmetric(Dp(16.0), Dp(8.0))));
             }
-            for title in ["Lisbon", "Kyoto", "Oaxaca", "Bergen"] {
+            for title in ["ui-lisbon", "ui-kyoto", "ui-oaxaca", "ui-bergen"] {
                 text()
-                    .content(title)
+                    .content(I18N.text(title))
                     .style(type_style(14.0, 20.0))
                     .modifier(Modifier::new().padding(Padding::symmetric(Dp(16.0), Dp(6.0))));
             }
@@ -2299,11 +2410,11 @@ fn mock_focus_tabs(space_enter: bool) {
                 )
                 .children(move || {
                     text()
-                        .content(if space_enter {
+                        .content(I18N.text(if space_enter {
                             "Space/Enter"
                         } else {
                             "Arrow/Tab"
-                        })
+                        }))
                         .color(key_text)
                         .style(type_style(14.0, 20.0));
                 });
@@ -2357,7 +2468,7 @@ fn secondary_measure_figure(inline_icons: bool) {
                                             for index in 0..2 {
                                                 tab(tab_row)
                                                     .accessibility_label(
-                                                        figure_name(false, index).to_string(),
+                                                        I18N.text(&figure_name(false, index)),
                                                     )
                                                     .title(move || {
                                                         native_tab_title(
@@ -2382,9 +2493,9 @@ fn secondary_measure_figure(inline_icons: bool) {
                 });
             gap(Dp(16.0));
             text()
-                .content(format!(
-                    "Figure content: {}",
-                    figure_name(false, selected.get())
+                .content(I18N.format(
+                    "ui-figure-content-value",
+                    [("v0", I18N.text(&figure_name(false, selected.get())).into())],
                 ))
                 .style(type_style(16.0, 24.0));
         });
@@ -2444,7 +2555,7 @@ fn secondary_measure_annotations(inline_icons: bool, geometry: State<Geometry>) 
     annotations::dimension("2".into(), Dp(container.x - 24.0), Dp(bottom - 12.0));
     dotted(&mut svg, container.x, bottom + 16.0, half, false, tint);
     annotations::dimension(
-        "Full-width indicator".into(),
+        "ui-full-width-indicator".into(),
         Dp(container.x),
         Dp(bottom + 24.0),
     );
@@ -2500,15 +2611,15 @@ fn scrolling_tabs() {
             flow_row().item_spacing(Dp(8.0)).children(move || {
                 button()
                     .text()
-                    .accessibility_label("Reset scrolling tabs")
+                    .accessibility_label(I18N.text("ui-reset-scrolling-tabs"))
                     .on_click(move || {
                         bar.with_mut(AppBarScrollState::reset);
                         content.with_mut(|content| {
                             content.set_scroll_position(tessera_ui::PxPosition::ZERO)
                         });
                     })
-                    .child(|| {
-                        text().content("Reset scroll");
+                    .child(move || {
+                        text().content(I18N.text("ui-reset-scroll"));
                     });
             });
             gap(Dp(16.0));
@@ -2535,13 +2646,13 @@ fn scrolling_tabs() {
                                         .modifier(Modifier::new().fill_max_width().semantics(
                                             SemanticsArgs {
                                                 role: Some(Role::Group),
-                                                label: Some("Scrolling tabs header".into()),
+                                                label: Some(I18N.text("ui-scrolling-tabs-header")),
                                                 ..Default::default()
                                             },
                                         ))
                                         .children(move || {
                                             tessera_components::app_bar::top_app_bar()
-                                                .title("Travel")
+                                                .title(I18N.text("ui-travel"))
                                                 .scroll_state(bar);
                                             boxed()
                                                 .alignment(Alignment::BottomCenter)
@@ -2556,9 +2667,12 @@ fn scrolling_tabs() {
                                                         .selected(selected)
                                                         .modifier(Modifier::new().fill_max_width())
                                                         .content(move |tab_row| {
-                                                            tab(tab_row).label("Flights");
-                                                            tab(tab_row).label("Trips");
-                                                            tab(tab_row).label("Explore");
+                                                            tab(tab_row)
+                                                                .label(I18N.text("ui-flights"));
+                                                            tab(tab_row)
+                                                                .label(I18N.text("ui-trips"));
+                                                            tab(tab_row)
+                                                                .label(I18N.text("ui-explore"));
                                                         });
                                                 });
                                         });
@@ -2571,16 +2685,25 @@ fn scrolling_tabs() {
                                                 .vertical_scroll(content)
                                                 .semantics(SemanticsArgs {
                                                     role: Some(Role::Group),
-                                                    label: Some("Scrolling tabs content".into()),
+                                                    label: Some(
+                                                        I18N.text("ui-scrolling-tabs-content"),
+                                                    ),
                                                     ..Default::default()
                                                 }),
                                         )
                                         .children(move || {
                                             let destination =
-                                                ["Flights", "Trips", "Explore"][selected.get()];
+                                                ["ui-flights", "ui-trips", "ui-explore"]
+                                                    [selected.get()];
                                             for index in 1..=24 {
                                                 text()
-                                                    .content(format!("{destination} item {index}"))
+                                                    .content(I18N.format(
+                                                        "ui-value-item-value",
+                                                        [
+                                                            ("v0", I18N.text(&destination).into()),
+                                                            ("v1", (index).into()),
+                                                        ],
+                                                    ))
                                                     .style(type_style(16.0, 24.0))
                                                     .modifier(Modifier::new().padding(
                                                         Padding::symmetric(Dp(24.0), Dp(12.0)),

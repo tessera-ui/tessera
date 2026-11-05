@@ -22,6 +22,8 @@ use tessera_components::{
 };
 use tessera_ui::{Color, Dp, Modifier, RenderSlot, State, remember, tessera, use_context};
 
+use crate::res::I18N;
+
 use super::{
     ACCENT, INK,
     annotations::{self, Geometry, dotted, relative, watch},
@@ -31,12 +33,12 @@ use super::{
 const DO_COLOR: Color = Color::from_rgb(0.121, 0.478, 0.196);
 const DONT_COLOR: Color = Color::from_rgb(0.741, 0.161, 0.161);
 const STATE_LABELS: [&str; 6] = [
-    "Enabled",
-    "Disabled",
-    "Hovered",
-    "Focused",
-    "Pressed",
-    "Active (main menu reveals submenu)",
+    "ui-enabled",
+    "ui-disabled",
+    "ui-hovered",
+    "ui-focused",
+    "ui-pressed",
+    "ui-active-main-menu-reveals-submenu",
 ];
 const BASELINE_NAMES: [[&str; 4]; 4] = [
     ["b-row-1", "b-lead-1", "b-label-1", "b-trail-1"],
@@ -45,23 +47,23 @@ const BASELINE_NAMES: [[&str; 4]; 4] = [
     ["b-row-4", "b-lead-4", "b-label-4", "b-trail-4"],
 ];
 const BASELINE_ROLES: [&str; 9] = [
-    "On surface variant",
-    "On surface",
-    "On surface - opacity: 0.08",
-    "Surface container",
-    "On surface variant",
-    "On surface variant",
-    "On surface variant",
-    "Surface container highest",
-    "Outline variant",
+    "ui-on-surface-variant",
+    "ui-on-surface",
+    "ui-on-surface-opacity-0-08",
+    "ui-surface-container",
+    "ui-on-surface-variant",
+    "ui-on-surface-variant",
+    "ui-on-surface-variant",
+    "ui-surface-container-highest",
+    "ui-outline-variant",
 ];
 const PLACEMENTS: [&str; 6] = [
-    "Below the element",
-    "Below, aligned to the end",
-    "Above the element",
-    "To the right",
-    "To the left",
-    "In front of the element",
+    "ui-below-the-element",
+    "ui-below-aligned-to-the-end",
+    "ui-above-the-element",
+    "ui-to-the-right",
+    "ui-to-the-left",
+    "ui-in-front-of-the-element",
 ];
 const LEADER: &str = "#49454f";
 const MEASURE: &str = "#ee7da4";
@@ -92,7 +94,7 @@ fn baseline_mark(geometry: Option<State<Geometry>>, slot: Option<usize>, part: u
 pub(super) fn caption(#[prop(into)] value: String) {
     let scheme = use_context::<MaterialTheme>().unwrap().get().color_scheme;
     text()
-        .content(value)
+        .content(I18N.text(value))
         .color(scheme.on_surface_variant)
         .style(type_style(14.0, 20.0));
 }
@@ -102,7 +104,7 @@ pub(super) fn bullets(items: Vec<String>) {
     column().children(move || {
         for item in items.clone() {
             text()
-                .content(format!("•  {item}"))
+                .content(format!("•  {}", I18N.text(item)))
                 .style(type_style(16.0, 24.0))
                 .color(INK);
             gap(Dp(8.0));
@@ -124,7 +126,7 @@ pub(super) fn badge(number: usize) {
         )
         .children(move || {
             text()
-                .content(number.to_string())
+                .content((number).to_string())
                 .style(type_style(12.0, 16.0))
                 .color(ink);
         });
@@ -143,7 +145,7 @@ pub(super) fn legend(items: Vec<String>) {
                         badge(index + 1);
                         spacer().modifier(Modifier::new().width(Dp(12.0)));
                         text()
-                            .content(label.clone())
+                            .content(I18N.text(&(label)))
                             .style(type_style(14.0, 20.0))
                             .color(INK);
                     });
@@ -168,13 +170,13 @@ fn verdict(good: bool, #[prop(into)] note: String) {
             )
             .children(move || {
                 text()
-                    .content(if good { "Do" } else { "Don't" })
+                    .content(I18N.text(if good { "ui-do" } else { "ui-dont" }))
                     .style(type_style(14.0, 20.0))
                     .color(Color::WHITE);
             });
         gap(Dp(8.0));
         text()
-            .content(note.clone())
+            .content(I18N.text(&(note)))
             .style(type_style(14.0, 20.0))
             .color(tone);
     });
@@ -207,7 +209,7 @@ fn state_item(
         return;
     }
     let item = menu_item()
-        .label(label)
+        .label(I18N.text(label))
         .container_color(container)
         .label_color(content)
         .enabled(enabled)
@@ -290,7 +292,7 @@ fn state_menu(state: usize, baseline: bool, selected: bool) {
             } else {
                 on_surface
             };
-            let label = format!("Item {}", index + 1);
+            let label = I18N.format("ui-item-value", [("v0", (index + 1).into())]);
             let arrow = index == 2 && !selected;
             let check = selected && is_marked;
             if state == 3 && is_marked {
@@ -342,7 +344,7 @@ fn active_menus() {
             .children(move || {
                 for index in 0..3 {
                     state_item(
-                        format!("Item {}", index + 1),
+                        I18N.format("ui-item-value", [("v0", (index + 1).into())]),
                         if index == 1 {
                             Color::TRANSPARENT.blend_over(on_surface, 0.10)
                         } else {
@@ -363,7 +365,7 @@ fn active_menus() {
                 .children(move || {
                     for index in 0..3 {
                         state_item(
-                            format!("Item {}", index + 1),
+                            I18N.format("ui-item-value", [("v0", (index + 1).into())]),
                             if index == 1 {
                                 Color::TRANSPARENT.blend_over(on_surface, 0.08)
                             } else {
@@ -504,12 +506,12 @@ fn baseline_row(
                 .modifier(baseline_mark(geometry, slot, 2).weight(1.0))
                 .children(move || {
                     text()
-                        .content(label.clone())
+                        .content(I18N.text(&(label)))
                         .style(type_style(14.0, 20.0))
                         .color(content);
                     if let Some(supporting) = supporting.clone() {
                         text()
-                            .content(supporting)
+                            .content(I18N.text(supporting))
                             .style(type_style(12.0, 16.0))
                             .color(muted);
                     }
@@ -517,7 +519,7 @@ fn baseline_row(
             if let Some(shortcut) = trailing_text.clone() {
                 spacer().modifier(Modifier::new().width(Dp(12.0)));
                 text()
-                    .content(shortcut)
+                    .content(I18N.text(shortcut))
                     .style(type_style(14.0, 20.0))
                     .color(muted)
                     .modifier(baseline_mark(geometry, slot, 3));
@@ -562,18 +564,18 @@ fn baseline_sample(geometry: Option<State<Geometry>>) {
                 .padding_symmetric(Dp::ZERO, Dp(8.0)),
         )
         .children(move || {
-            baseline_row("Item 1".into(), 1, 0, content, muted, hover)
+            baseline_row("ui-item-1".into(), 1, 0, content, muted, hover)
                 .geometry_optional(geometry)
                 .slot(0);
-            baseline_row("Item 2".into(), 2, 0, content, muted, Color::TRANSPARENT)
-                .trailing_text("⌘C")
+            baseline_row("ui-item-2".into(), 2, 0, content, muted, Color::TRANSPARENT)
+                .trailing_text(I18N.text("⌘C"))
                 .geometry_optional(geometry)
                 .slot(1);
-            baseline_row("Item 3".into(), 3, 5, content, muted, selected)
+            baseline_row("ui-item-3".into(), 3, 5, content, muted, selected)
                 .geometry_optional(geometry)
                 .slot(2);
             baseline_divider().geometry_optional(geometry);
-            baseline_row("Item 4".into(), 4, 6, content, muted, Color::TRANSPARENT)
+            baseline_row("ui-item-4".into(), 4, 6, content, muted, Color::TRANSPARENT)
                 .geometry_optional(geometry)
                 .slot(3);
         });
@@ -605,12 +607,12 @@ fn baseline_anatomy() {
     gap(Dp(16.0));
     legend(
         [
-            "List item",
-            "List item leading icon",
-            "List item trailing icon",
-            "Container",
-            "List item trailing text",
-            "Divider",
+            "ui-list-item",
+            "ui-list-item-leading-icon",
+            "ui-list-item-trailing-icon",
+            "ui-container",
+            "ui-list-item-trailing-text",
+            "ui-divider",
         ]
         .map(String::from)
         .to_vec(),
@@ -702,7 +704,7 @@ fn baseline_colors() {
             }
         });
     gap(Dp(16.0));
-    caption("Baseline menu color roles used for light and dark themes:");
+    caption("ui-baseline-menu-color-roles-used-for-light-and-dark-themes");
     gap(Dp(8.0));
     legend(BASELINE_ROLES.map(String::from).to_vec());
 }
@@ -837,12 +839,33 @@ pub(super) fn baseline_variant() {
                             .padding_symmetric(Dp::ZERO, Dp(8.0)),
                     )
                     .children(move || {
-                        baseline_row("Menu item".into(), 0, 6, content, muted, Color::TRANSPARENT);
-                        baseline_row("Menu item".into(), 5, 0, content, muted, selected)
-                            .supporting("Supporting text");
-                        baseline_row("Menu item".into(), 0, 0, content, muted, Color::TRANSPARENT);
+                        baseline_row(
+                            "ui-menu-item".into(),
+                            0,
+                            6,
+                            content,
+                            muted,
+                            Color::TRANSPARENT,
+                        );
+                        baseline_row("ui-menu-item".into(), 5, 0, content, muted, selected)
+                            .supporting(I18N.text("ui-supporting-text"));
+                        baseline_row(
+                            "ui-menu-item".into(),
+                            0,
+                            0,
+                            content,
+                            muted,
+                            Color::TRANSPARENT,
+                        );
                         baseline_divider();
-                        baseline_row("Menu item".into(), 7, 6, content, muted, Color::TRANSPARENT);
+                        baseline_row(
+                            "ui-menu-item".into(),
+                            7,
+                            6,
+                            content,
+                            muted,
+                            Color::TRANSPARENT,
+                        );
                     });
                 gap(Dp(16.0));
                 badge(1);
@@ -850,17 +873,21 @@ pub(super) fn baseline_variant() {
     }));
     gap(Dp(12.0));
     caption(
-        "A baseline menu has square corners, as compared to a vertical menu's round corners and expressive styling",
+        "ui-a-baseline-menu-has-square-corners-as-compared-to-a-vertical-menu-s-round-corners-and-expr",
     );
     gap(Dp(24.0));
     spec_table(
-        vec!["Variant".into(), "M3".into(), "M3 Expressive".into()],
+        vec!["ui-variant".into(), "M3".into(), "ui-m3-expressive".into()],
         vec![
-            vec!["Vertical menus".into(), "--".into(), "Available".into()],
             vec![
-                "Menu (baseline)".into(),
-                "Available".into(),
-                "Available".into(),
+                "ui-vertical-menus".into(),
+                "--".into(),
+                "ui-available".into(),
+            ],
+            vec![
+                "ui-menu-baseline".into(),
+                "ui-available".into(),
+                "ui-available".into(),
             ],
         ],
     );
@@ -901,7 +928,7 @@ fn trigger_tile(kind: usize) {
                                 )
                                 .children(move || {
                                     text()
-                                        .content("Activated")
+                                        .content(I18N.text("ui-activated"))
                                         .style(type_style(14.0, 20.0))
                                         .color(on_accent);
                                 });
@@ -924,11 +951,11 @@ fn trigger_tile(kind: usize) {
                                 )
                                 .children(move || {
                                     text()
-                                        .content("Label")
+                                        .content(I18N.text("ui-label"))
                                         .style(type_style(12.0, 16.0))
                                         .color(line);
                                     text()
-                                        .content("Item 2")
+                                        .content(I18N.text("ui-item-2"))
                                         .style(type_style(16.0, 24.0))
                                         .color(INK);
                                 });
@@ -941,7 +968,7 @@ fn trigger_tile(kind: usize) {
                         }
                         _ => {
                             text()
-                                .content("although a little too small")
+                                .content(I18N.text("ui-although-a-little-too-small"))
                                 .style(type_style(14.0, 20.0))
                                 .modifier(
                                     Modifier::new()
@@ -964,9 +991,9 @@ fn trigger_tile(kind: usize) {
                 )
                 .children(move || {
                     let labels: [&str; 2] = match kind {
-                        0 | 1 => ["Item 1", "Item 2"],
-                        2 => ["Refresh", "Settings"],
-                        _ => ["Undo", "Redo"],
+                        0 | 1 => ["ui-item-1", "ui-item-2"],
+                        2 => ["ui-refresh", "ui-settings"],
+                        _ => ["ui-undo", "ui-redo"],
                     };
                     for (index, label) in labels.into_iter().enumerate() {
                         let tint = if kind == 3 && index == 1 {
@@ -984,75 +1011,80 @@ fn trigger_tile(kind: usize) {
 #[tessera]
 pub(super) fn baseline_section() {
     super::prose(
-        "The baseline menu variant is available and continues to work in existing products. However, M3 expressive vertical menus are recommended for new designs.",
+        "ui-the-baseline-menu-variant-is-available-and-continues-to-work-in-existing-products-however",
     );
     gap(Dp(32.0));
-    subheading("Baseline tokens & specs".into());
+    subheading("ui-baseline-tokens-specs".into());
     gap(Dp(16.0));
     spec_table(
-        vec!["Token group".into(), "Value".into()],
+        vec!["ui-token-group".into(), "ui-value".into()],
         vec![
-            vec!["Container shape".into(), "Extra small, 4dp".into()],
-            vec!["Container color".into(), "Surface container".into()],
-            vec!["Container elevation".into(), "Level 2, 3dp".into()],
-            vec!["List item height".into(), "48dp".into()],
-            vec!["Label text".into(), "Label large".into()],
+            vec!["ui-container-shape".into(), "ui-extra-small-4dp".into()],
+            vec!["ui-container-color".into(), "ui-surface-container".into()],
+            vec!["ui-container-elevation".into(), "ui-level-2-3dp".into()],
+            vec!["ui-list-item-height".into(), "48dp".into()],
+            vec!["ui-label-text".into(), "ui-label-large".into()],
             vec![
-                "Leading / trailing icon".into(),
-                "24dp, On surface variant".into(),
+                "ui-leading-trailing-icon".into(),
+                "ui-24dp-on-surface-variant".into(),
             ],
             vec![
-                "Selected container".into(),
-                "Surface container highest".into(),
+                "ui-selected-container".into(),
+                "ui-surface-container-highest".into(),
             ],
             vec![
-                "Hover state layer".into(),
-                "On surface, opacity 0.08".into(),
+                "ui-hover-state-layer".into(),
+                "ui-on-surface-opacity-0-08-3932".into(),
             ],
             vec![
-                "Focus / pressed state layer".into(),
-                "On surface, opacity 0.10".into(),
+                "ui-focus-pressed-state-layer".into(),
+                "ui-on-surface-opacity-0-10".into(),
             ],
-            vec!["Focus indicator".into(), "Secondary, 3dp".into()],
+            vec!["ui-focus-indicator".into(), "ui-secondary-3dp".into()],
         ],
     );
     gap(Dp(32.0));
-    subheading("Anatomy".into());
+    subheading("ui-anatomy".into());
     gap(Dp(16.0));
     baseline_anatomy();
     gap(Dp(32.0));
-    subheading("Color".into());
+    subheading("ui-color".into());
     gap(Dp(16.0));
     baseline_colors();
     gap(Dp(32.0));
-    subheading("States".into());
+    subheading("ui-states".into());
     gap(Dp(16.0));
-    subheading("Default menu items".into()).level(4);
+    subheading("ui-default-menu-items".into()).level(4);
     gap(Dp(16.0));
     states_figure(true, false);
     gap(Dp(24.0));
-    subheading("Selected menu items".into()).level(4);
+    subheading("ui-selected-menu-items".into()).level(4);
     gap(Dp(16.0));
     states_figure(true, true);
     gap(Dp(12.0));
-    caption("State specs are in the token module above");
+    caption("ui-state-specs-are-in-the-token-module-above");
     gap(Dp(32.0));
-    subheading("Measurements".into());
+    subheading("ui-measurements".into());
     gap(Dp(16.0));
     baseline_measurements();
     gap(Dp(32.0));
-    subheading("Configurations".into());
+    subheading("ui-configurations".into());
     gap(Dp(16.0));
     super::prose(
-        "A baseline menu appears when a person interacts with a button, action, or other control.",
+        "ui-a-baseline-menu-appears-when-a-person-interacts-with-a-button-action-or-other-control",
     );
     gap(Dp(8.0));
-    super::prose("A few examples:");
+    super::prose("ui-a-few-examples");
     gap(Dp(8.0));
     legend(
-        ["Button", "Text field", "Icon button", "Selected text"]
-            .map(String::from)
-            .to_vec(),
+        [
+            "ui-button",
+            "ui-text-field",
+            "ui-icon-button",
+            "ui-selected-text",
+        ]
+        .map(String::from)
+        .to_vec(),
     );
     gap(Dp(16.0));
     panel(RenderSlot::new(|| {
@@ -1092,32 +1124,32 @@ fn baseline_measurements() {
                 });
         });
     gap(Dp(12.0));
-    caption("Baseline menu padding and size measurements");
+    caption("ui-baseline-menu-padding-and-size-measurements");
     gap(Dp(24.0));
     spec_table(
-        vec!["Attribute".into(), "Value".into()],
+        vec!["ui-attribute".into(), "ui-value".into()],
         vec![
-            vec!["Container width".into(), "112dp min, 280dp max".into()],
-            vec!["Corner radius".into(), "4dp".into()],
+            vec!["ui-container-width".into(), "ui-112dp-min-280dp-max".into()],
+            vec!["ui-corner-radius".into(), "4dp".into()],
             vec![
-                "Vertical label text alignment".into(),
-                "Center-aligned".into(),
+                "ui-vertical-label-text-alignment".into(),
+                "ui-center-aligned".into(),
             ],
             vec![
-                "Horizontal label text alignment".into(),
-                "Start-aligned".into(),
+                "ui-horizontal-label-text-alignment".into(),
+                "ui-start-aligned".into(),
             ],
-            vec!["Left/right padding".into(), "12dp".into()],
-            vec!["Left/right padding with-icon".into(), "12dp".into()],
-            vec!["List item height".into(), "48dp".into()],
+            vec!["ui-left-right-padding".into(), "12dp".into()],
+            vec!["ui-left-right-padding-with-icon-6959".into(), "12dp".into()],
+            vec!["ui-list-item-height".into(), "48dp".into()],
             vec![
-                "Padding between elements within a list item".into(),
+                "ui-padding-between-elements-within-a-list-item".into(),
                 "12dp".into(),
             ],
-            vec!["Divider top/bottom padding".into(), "8dp".into()],
-            vec!["Divider height".into(), "1dp".into()],
-            vec!["Divider width".into(), "Dynamic".into()],
-            vec!["Leading/trailing icon size".into(), "24dp".into()],
+            vec!["ui-divider-top-bottom-padding".into(), "8dp".into()],
+            vec!["ui-divider-height".into(), "1dp".into()],
+            vec!["ui-divider-width".into(), "ui-dynamic".into()],
+            vec!["ui-leading-trailing-icon-size".into(), "24dp".into()],
         ],
     );
 }
@@ -1138,9 +1170,9 @@ fn baseline_measure_menu(geometry: State<Geometry>) {
         )
         .children(move || {
             for (index, (label, code, shortcut)) in [
-                ("Item 1", 7, "⌘X"),
-                ("Item 2", 2, "⌘C"),
-                ("Item 3", 8, "⌘V"),
+                ("ui-item-1", 7, "⌘X"),
+                ("ui-item-2", 2, "⌘C"),
+                ("ui-item-3", 8, "⌘V"),
             ]
             .into_iter()
             .enumerate()
@@ -1157,12 +1189,12 @@ fn baseline_measure_menu(geometry: State<Geometry>) {
                         Color::TRANSPARENT
                     },
                 )
-                .trailing_text(shortcut)
+                .trailing_text(I18N.text(shortcut))
                 .geometry(geometry)
                 .slot(index);
             }
             baseline_divider().geometry(geometry);
-            baseline_row("Item 4".into(), 4, 6, content, muted, Color::TRANSPARENT)
+            baseline_row("ui-item-4".into(), 4, 6, content, muted, Color::TRANSPARENT)
                 .geometry(geometry)
                 .slot(3);
         });
@@ -1270,17 +1302,17 @@ pub(super) fn submenu_pair(#[prop(into)] parent: String, options: Vec<String>, s
             .modifier(Modifier::new().width(Dp(176.0)))
             .children(move || {
                 menu_item()
-                    .label("Bold")
+                    .label(I18N.text("ui-bold"))
                     .close_on_click(false)
                     .on_click(|| {});
                 menu_item()
-                    .label(parent.clone())
+                    .label(I18N.text(&(parent)))
                     .container_color(hover)
                     .trailing_icon(filled::ARROW_RIGHT_SVG)
                     .close_on_click(false)
                     .on_click(|| {});
                 menu_item()
-                    .label("Italic")
+                    .label(I18N.text("ui-italic"))
                     .close_on_click(false)
                     .on_click(|| {});
             });
@@ -1294,7 +1326,7 @@ pub(super) fn submenu_pair(#[prop(into)] parent: String, options: Vec<String>, s
                 .children(move || {
                     for (index, label) in options.clone().into_iter().enumerate() {
                         let item = menu_item()
-                            .label(label)
+                            .label(I18N.text(label))
                             .close_on_click(false)
                             .on_click(|| {});
                         if index == selected {
@@ -1311,7 +1343,7 @@ pub(super) fn submenu_pair(#[prop(into)] parent: String, options: Vec<String>, s
 }
 
 fn line_spacing() -> Vec<String> {
-    ["Single", "1.15", "Double", "Custom 1.2"]
+    ["ui-single", "1.15", "ui-double", "ui-custom-1-2"]
         .map(String::from)
         .to_vec()
 }
@@ -1319,7 +1351,7 @@ fn line_spacing() -> Vec<String> {
 #[tessera]
 pub(super) fn line_spacing_figure() {
     panel(RenderSlot::new(|| {
-        submenu_pair("Line spacing", line_spacing(), 3);
+        submenu_pair("ui-line-spacing", line_spacing(), 3);
     }));
 }
 
@@ -1331,11 +1363,11 @@ pub(super) fn opening_figure() {
         column().children(move || {
             row().children(move || {
                 text()
-                    .content("It showed a lady fitted out ")
+                    .content(I18N.text("ui-it-showed-a-lady-fitted-out"))
                     .style(type_style(16.0, 24.0))
                     .color(INK);
                 text()
-                    .content("with a fur hat and fur boa")
+                    .content(I18N.text("ui-with-a-fur-hat-and-fur-boa"))
                     .style(type_style(16.0, 24.0))
                     .color(INK)
                     .modifier(
@@ -1353,32 +1385,34 @@ pub(super) fn opening_figure() {
 fn edit_menu() {
     column()
         .modifier(Modifier::new().width(Dp(200.0)))
-        .children(|| {
-            menu_group().position(MenuPosition::First).children(|| {
+        .children(move || {
+            menu_group()
+                .position(MenuPosition::First)
+                .children(move || {
+                    menu_item()
+                        .label(I18N.text("ui-undo"))
+                        .leading_icon(filled::UNDO_SVG)
+                        .close_on_click(false)
+                        .on_click(|| {});
+                    menu_item()
+                        .label(I18N.text("ui-redo"))
+                        .enabled(false)
+                        .close_on_click(false)
+                        .on_click(|| {});
+                });
+            menu_group().position(MenuPosition::Last).children(move || {
                 menu_item()
-                    .label("Undo")
-                    .leading_icon(filled::UNDO_SVG)
-                    .close_on_click(false)
-                    .on_click(|| {});
-                menu_item()
-                    .label("Redo")
-                    .enabled(false)
-                    .close_on_click(false)
-                    .on_click(|| {});
-            });
-            menu_group().position(MenuPosition::Last).children(|| {
-                menu_item()
-                    .label("Cut")
+                    .label(I18N.text("ui-cut"))
                     .leading_icon(filled::CONTENT_CUT_SVG)
                     .close_on_click(false)
                     .on_click(|| {});
                 menu_item()
-                    .label("Copy")
+                    .label(I18N.text("ui-copy"))
                     .leading_icon(filled::CONTENT_COPY_SVG)
                     .close_on_click(false)
                     .on_click(|| {});
                 menu_item()
-                    .label("Paste")
+                    .label(I18N.text("ui-paste"))
                     .leading_icon(filled::CONTENT_PASTE_SVG)
                     .close_on_click(false)
                     .on_click(|| {});
@@ -1400,22 +1434,26 @@ pub(super) fn context_figure() {
     panel(RenderSlot::new(move || {
         column().children(move || {
             text()
-                .content("City council approves new riverside park")
+                .content(I18N.text("ui-city-council-approves-new-riverside-park"))
                 .style(type_style(16.0, 24.0))
                 .color(link);
             gap(Dp(8.0));
             menu_group()
                 .modifier(Modifier::new().width(Dp(220.0)))
-                .children(|| {
-                    for label in ["Open in new window", "Save link as", "Copy address"] {
+                .children(move || {
+                    for label in [
+                        "ui-open-in-new-window",
+                        "ui-save-link-as",
+                        "ui-copy-address",
+                    ] {
                         menu_item()
-                            .label(label)
+                            .label(I18N.text(label))
                             .close_on_click(false)
                             .on_click(|| {});
                     }
                     horizontal_divider();
                     menu_item()
-                        .label("Inspect")
+                        .label(I18N.text("ui-inspect"))
                         .close_on_click(false)
                         .on_click(|| {});
                 });
@@ -1425,12 +1463,12 @@ pub(super) fn context_figure() {
 
 #[tessera]
 pub(super) fn density_figure() {
-    panel(RenderSlot::new(|| {
+    panel(RenderSlot::new(move || {
         flow_row()
             .main_axis_alignment(MainAxisAlignment::Center)
             .item_spacing(Dp(32.0))
             .line_spacing(Dp(32.0))
-            .children(|| {
+            .children(move || {
                 for level in 0..4_u8 {
                     column()
                         .cross_axis_alignment(CrossAxisAlignment::Center)
@@ -1440,7 +1478,10 @@ pub(super) fn density_figure() {
                                 .children(move || {
                                     for index in 0..3 {
                                         menu_item()
-                                            .label(format!("Item {}", index + 1))
+                                            .label(I18N.format(
+                                                "ui-item-value",
+                                                [("v0", (index + 1).into())],
+                                            ))
                                             .height(Dp(44.0 - 4.0 * f64::from(level)))
                                             .close_on_click(false)
                                             .on_click(|| {});
@@ -1487,7 +1528,7 @@ pub(super) fn focus_examples() {
                                     .modifier(Modifier::new().width(Dp(176.0)))
                                     .children(move || {
                                         menu_item()
-                                            .label("Edit name")
+                                            .label(I18N.text("ui-edit-name"))
                                             .close_on_click(false)
                                             .on_click(|| {});
                                         if good {
@@ -1501,9 +1542,9 @@ pub(super) fn focus_examples() {
                                                             Shape::rounded_rectangle(Dp(12.0)),
                                                         ),
                                                 )
-                                                .children(|| {
+                                                .children(move || {
                                                     menu_item()
-                                                        .label("Share")
+                                                        .label(I18N.text("ui-share"))
                                                         .enabled(false)
                                                         .on_click(|| {});
                                                 });
@@ -1525,7 +1566,7 @@ pub(super) fn focus_examples() {
                                                 });
                                         }
                                         menu_item()
-                                            .label("Get link")
+                                            .label(I18N.text("ui-get-link"))
                                             .close_on_click(false)
                                             .on_click(|| {});
                                     });
@@ -1534,9 +1575,9 @@ pub(super) fn focus_examples() {
                         verdict(
                             good,
                             if good {
-                                "Disabled menu items can receive focus"
+                                "ui-disabled-menu-items-can-receive-focus"
                             } else {
-                                "A divider or gap can't receive focus"
+                                "ui-a-divider-or-gap-can-t-receive-focus"
                             },
                         );
                     });
@@ -1578,9 +1619,9 @@ pub(super) fn m2_comparison() {
                                         .container_color(gray_menu);
                                 }
                                 group.children(move || {
-                                    for label in ["Share", "Get link", "Edit name"] {
+                                    for label in ["ui-share", "ui-get-link", "ui-edit-name"] {
                                         let item = menu_item()
-                                            .label(label)
+                                            .label(I18N.text(label))
                                             .close_on_click(false)
                                             .on_click(|| {});
                                         if !m3 {
@@ -1591,9 +1632,9 @@ pub(super) fn m2_comparison() {
                             });
                         gap(Dp(12.0));
                         caption(if m3 {
-                            "M3: Menus feature new color mappings and dynamic color"
+                            "ui-m3-menus-feature-new-color-mappings-and-dynamic-color"
                         } else {
-                            "M2: Former menu colors don't contrast with the background"
+                            "ui-m2-former-menu-colors-don-t-contrast-with-the-background"
                         });
                     });
             }
@@ -1732,10 +1773,10 @@ pub(super) fn adaptive_figure(compact: bool) {
                             );
                             gap(Dp(12.0));
                             for (code, label) in [
-                                (9, "Share with a contact"),
-                                (10, "Copy link to photo"),
-                                (11, "Download original"),
-                                (12, "Move to album"),
+                                (9, "ui-share-with-a-contact"),
+                                (10, "ui-copy-link-to-photo"),
+                                (11, "ui-download-original"),
+                                (12, "ui-move-to-album"),
                             ] {
                                 row()
                                     .cross_axis_alignment(CrossAxisAlignment::Center)
@@ -1744,7 +1785,7 @@ pub(super) fn adaptive_figure(compact: bool) {
                                         baseline_icon(code, muted);
                                         spacer().modifier(Modifier::new().width(Dp(16.0)));
                                         text()
-                                            .content(label)
+                                            .content(I18N.text(label))
                                             .style(type_style(14.0, 20.0))
                                             .color(ink);
                                     });
@@ -1786,17 +1827,21 @@ pub(super) fn adaptive_figure(compact: bool) {
                                 .height(Dp(288.0))
                                 .background_with_shape(block, Shape::rounded_rectangle(Dp(16.0))),
                         )
-                        .children(|| {
+                        .children(move || {
                             menu_group()
                                 .color_style(MenuColorStyle::Vibrant)
                                 .modifier(
                                     Modifier::new().offset(Dp(56.0), Dp(48.0)).width(Dp(200.0)),
                                 )
-                                .children(|| {
-                                    for label in ["Share", "Copy link", "Download", "Move to album"]
-                                    {
+                                .children(move || {
+                                    for label in [
+                                        "ui-share",
+                                        "ui-copy-link",
+                                        "ui-download",
+                                        "ui-move-to-album",
+                                    ] {
                                         menu_item()
-                                            .label(label)
+                                            .label(I18N.text(label))
                                             .close_on_click(false)
                                             .on_click(|| {});
                                     }
@@ -1858,7 +1903,7 @@ pub(super) fn slots_figure() {
                                     )
                                     .children(move || {
                                         text()
-                                            .content("Slot")
+                                            .content(I18N.text("ui-slot"))
                                             .style(type_style(14.0, 20.0))
                                             .color(muted);
                                     });
@@ -1889,8 +1934,8 @@ pub(super) fn slots_figure() {
     gap(Dp(16.0));
     legend(
         [
-            "Menu item container with a swappable slot",
-            "Image, progress indicator and color swatch slots",
+            "ui-menu-item-container-with-a-swappable-slot",
+            "ui-image-progress-indicator-and-color-swatch-slots",
         ]
         .map(String::from)
         .to_vec(),
@@ -1920,7 +1965,7 @@ fn slot_image_row(image: Color, on_image: Color, ink: Color) {
                 });
             spacer().modifier(Modifier::new().width(Dp(12.0)));
             text()
-                .content("Album cover")
+                .content(I18N.text("ui-album-cover"))
                 .style(type_style(14.0, 20.0))
                 .color(ink);
         });
@@ -1943,7 +1988,7 @@ fn slot_progress_row(muted: Color, ink: Color, track: Color, bar: Color) {
                 .modifier(Modifier::new().weight(1.0))
                 .children(move || {
                     text()
-                        .content("Uploading 2 of 5")
+                        .content(I18N.text("ui-uploading-2-of-5"))
                         .style(type_style(14.0, 20.0))
                         .color(ink);
                     gap(Dp(6.0));
@@ -1978,7 +2023,7 @@ fn slot_swatch_row(ink: Color, swatches: Vec<Color>) {
         )
         .children(move || {
             text()
-                .content("Theme")
+                .content(I18N.text("ui-theme"))
                 .style(type_style(14.0, 20.0))
                 .color(ink);
             spacer().modifier(Modifier::new().weight(1.0));
@@ -1998,20 +2043,28 @@ fn slot_swatch_row(ink: Color, swatches: Vec<Color>) {
 #[tessera]
 pub(super) fn resources() {
     spec_table(
-        vec!["Type".into(), "Resource".into(), "Status".into()],
+        vec!["ui-type".into(), "ui-resource".into(), "ui-status".into()],
         [
-            ("Design", "Design Kit (Figma)", "Available"),
-            ("Implementation", "Flutter", "Available"),
-            ("Implementation", "Jetpack Compose", "Available"),
-            ("Implementation", "Jetpack Compose: Expressive", "Available"),
-            ("Implementation", "Android Views (MDC-Android)", "Available"),
+            ("ui-design", "ui-design-kit-figma", "ui-available"),
+            ("ui-implementation", "ui-flutter", "ui-available"),
+            ("ui-implementation", "ui-jetpack-compose", "ui-available"),
             (
-                "Implementation",
-                "Android Views (MDC-Android): Expressive",
-                "Unavailable",
+                "ui-implementation",
+                "ui-jetpack-compose-expressive",
+                "ui-available",
             ),
-            ("Implementation", "Web", "Available"),
-            ("Implementation", "Web: Expressive", "Unavailable"),
+            (
+                "ui-implementation",
+                "ui-android-views-mdc-android",
+                "ui-available",
+            ),
+            (
+                "ui-implementation",
+                "ui-android-views-mdc-android-expressive",
+                "ui-unavailable",
+            ),
+            ("ui-implementation", "ui-web", "ui-available"),
+            ("ui-implementation", "ui-web-expressive", "ui-unavailable"),
         ]
         .into_iter()
         .map(|(kind, resource, status)| vec![kind.into(), resource.into(), status.into()])

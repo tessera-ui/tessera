@@ -24,6 +24,8 @@ use tessera_ui::{
     Callback, Dp, FocusRequester, Modifier, RenderSlot, State, remember, tessera, use_context,
 };
 
+use crate::res::I18N;
+
 use super::{
     ACCENT, INK,
     article::SpecSection,
@@ -47,29 +49,29 @@ pub(super) fn checkbox_spec(route: Option<crate::pages::material_spec::article::
         Kind::Checkbox,
         vec![
             SpecSection {
-                title: "Tokens & specs",
+                title: "ui-tokens-specs",
                 content: RenderSlot::new(|| {
                     tokens(false);
                 }),
             },
             SpecSection {
-                title: "Checkbox",
+                title: "ui-checkbox",
                 content: RenderSlot::new(checkbox_anatomy),
             },
             SpecSection {
-                title: "Color",
+                title: "ui-color",
                 content: RenderSlot::new(|| {
                     colors(false);
                 }),
             },
             SpecSection {
-                title: "States",
+                title: "ui-states",
                 content: RenderSlot::new(|| {
                     states(false);
                 }),
             },
             SpecSection {
-                title: "Measurements",
+                title: "ui-measurements",
                 content: RenderSlot::new(|| {
                     measurements(false);
                 }),
@@ -89,31 +91,31 @@ pub(super) fn switch_spec(route: Option<crate::pages::material_spec::article::Ar
         Kind::Switch,
         vec![
             SpecSection {
-                title: "Tokens & specs",
+                title: "ui-tokens-specs",
                 content: RenderSlot::new(|| {
                     tokens(true);
                 }),
             },
             SpecSection {
-                title: "Color",
+                title: "ui-color",
                 content: RenderSlot::new(|| {
                     colors(true);
                 }),
             },
             SpecSection {
-                title: "States",
+                title: "ui-states",
                 content: RenderSlot::new(|| {
                     states(true);
                 }),
             },
             SpecSection {
-                title: "Measurements",
+                title: "ui-measurements",
                 content: RenderSlot::new(|| {
                     measurements(true);
                 }),
             },
             SpecSection {
-                title: "Configurations",
+                title: "ui-configurations",
                 content: RenderSlot::new(switch_figures::configurations),
             },
         ],
@@ -148,7 +150,7 @@ pub(super) fn selection_control(
             .focus_requester_optional(focus_requester)
             .checked(checked.get())
             .enabled(enabled)
-            .accessibility_label(label)
+            .accessibility_label(I18N.text(label))
             .on_toggle(move |value| checked.set(value))
             .child_optional(if show_icon {
                 Some(RenderSlot::new(move || {
@@ -167,7 +169,7 @@ pub(super) fn selection_control(
             .checked(checked.get())
             .indeterminate(mixed.get())
             .disabled(!enabled)
-            .accessibility_label(label)
+            .accessibility_label(I18N.text(label))
             .on_toggle(move |value| {
                 checked.set(value);
                 mixed.set(false);
@@ -215,21 +217,21 @@ fn settings(is_switch: bool) {
             .modifier(Modifier::new().width(Dp(400.0)))
             .children(move || {
                 text()
-                    .content(if is_switch {
-                        "Settings"
+                    .content(I18N.text(if is_switch {
+                        "ui-settings"
                     } else {
-                        "Allow access"
-                    })
+                        "ui-allow-access"
+                    }))
                     .style(type_style(24.0, 32.0))
                     .color(INK);
                 gap(Dp(24.0));
                 if is_switch {
                     setting_row(true, true, "Wi-Fi");
-                    setting_row(true, false, "Bluetooth");
+                    setting_row(true, false, "ui-bluetooth");
                 } else {
-                    setting_row(false, true, "Microphone access");
-                    setting_row(false, true, "Location access");
-                    setting_row(false, false, "Haptics");
+                    setting_row(false, true, "ui-microphone-access");
+                    setting_row(false, true, "ui-location-access");
+                    setting_row(false, false, "ui-haptics");
                 }
             });
     }));
@@ -261,27 +263,36 @@ pub(super) fn checkbox_group() {
         column()
             .modifier(Modifier::new().width(Dp(400.0)).semantics(SemanticsArgs {
                 role: Some(tessera_ui::accesskit::Role::Group),
-                label: Some("Related checkbox choices".into()),
+                label: Some(I18N.text("ui-related-checkbox-choices")),
                 merge_descendants: true,
                 ..Default::default()
             }))
             .children(move || {
-                checkbox_group_row(items, "All items".into());
+                checkbox_group_row(items, "ui-all-items".into());
                 column()
                     .modifier(Modifier::new().padding_symmetric(Dp(24.0), Dp::ZERO))
                     .children(move || {
-                        for (index, label) in
-                            ["Documents", "Photos", "Videos"].into_iter().enumerate()
+                        for (index, label) in ["ui-documents", "ui-photos", "ui-videos"]
+                            .into_iter()
+                            .enumerate()
                         {
                             checkbox_group_row(items, label.into()).index(index);
                         }
                     });
                 gap(Dp(16.0));
                 text()
-                    .content(format!(
-                        "Selected items: {}",
-                        items.with(|items| items.iter().filter(|selected| **selected).count())
-                    ))
+                    .content(
+                        I18N.format(
+                            "ui-selected-items-value",
+                            [(
+                                "v0",
+                                (items.with(|items| {
+                                    items.iter().filter(|selected| **selected).count()
+                                }))
+                                .into(),
+                            )],
+                        ),
+                    )
                     .style(type_style(16.0, 24.0));
             });
     }));
@@ -299,7 +310,7 @@ fn checkbox_group_row(items: State<[bool; 3]>, index: Option<usize>, label: Stri
             checkbox()
                 .checked(checked)
                 .indeterminate(mixed)
-                .accessibility_label(label.clone())
+                .accessibility_label(I18N.text(&(label)))
                 .focus_requester(focus)
                 .on_toggle(move |next| set_group_value(items, index, next));
             option_label(
@@ -320,116 +331,124 @@ fn tokens(is_switch: bool) {
         button()
             .text()
             .on_click(move || dimensions.set(false))
-            .child(|| {
-                text().content("Color tokens");
+            .child(move || {
+                text().content(I18N.text("ui-color-tokens"));
             });
         button()
             .text()
             .on_click(move || dimensions.set(true))
-            .child(|| {
-                text().content("Size tokens");
+            .child(move || {
+                text().content(I18N.text("ui-size-tokens"));
             });
     });
     gap(Dp(24.0));
     let rows = if dimensions.get() {
         if is_switch {
             vec![
-                ["Track height", "md.comp.switch.track.height", "32dp"],
-                ["Track width", "md.comp.switch.track.width", "52dp"],
-                ["Handle height", "md.comp.switch.handle.height", "16dp"],
+                ["ui-track-height", "md.comp.switch.track.height", "32dp"],
+                ["ui-track-width", "md.comp.switch.track.width", "52dp"],
+                ["ui-handle-height", "md.comp.switch.handle.height", "16dp"],
                 [
-                    "Selected handle height",
+                    "ui-selected-handle-height",
                     "md.comp.switch.selected.handle.height",
                     "24dp",
                 ],
                 [
-                    "Pressed handle height",
+                    "ui-pressed-handle-height",
                     "md.comp.switch.pressed.handle.height",
                     "28dp",
                 ],
-                ["Icon size", "md.comp.switch.icon.size", "16dp"],
+                ["ui-icon-size", "md.comp.switch.icon.size", "16dp"],
                 [
-                    "State layer size",
+                    "ui-state-layer-size",
                     "md.comp.switch.state-layer.size",
                     "40dp",
                 ],
             ]
         } else {
             vec![
-                ["Container size", "md.comp.checkbox.container.size", "18dp"],
                 [
-                    "Container shape",
-                    "md.comp.checkbox.container.shape",
-                    "2dp corner",
+                    "ui-container-size",
+                    "md.comp.checkbox.container.size",
+                    "18dp",
                 ],
-                ["Icon size", "md.comp.checkbox.icon.size", "18dp"],
                 [
-                    "State layer size",
+                    "ui-container-shape",
+                    "md.comp.checkbox.container.shape",
+                    "ui-2dp-corner",
+                ],
+                ["ui-icon-size", "md.comp.checkbox.icon.size", "18dp"],
+                [
+                    "ui-state-layer-size",
                     "md.comp.checkbox.state-layer.size",
                     "40dp",
                 ],
-                ["Target size", "md.comp.checkbox.touch-target.size", "48dp"],
+                [
+                    "ui-target-size",
+                    "md.comp.checkbox.touch-target.size",
+                    "48dp",
+                ],
             ]
         }
     } else if is_switch {
         vec![
             [
-                "Selected track",
+                "ui-selected-track",
                 "md.comp.switch.selected.track.color",
-                "Primary",
+                "ui-primary",
             ],
             [
-                "Unselected track",
+                "ui-unselected-track",
                 "md.comp.switch.unselected.track.color",
-                "Surface container highest",
+                "ui-surface-container-highest",
             ],
             [
-                "Selected handle",
+                "ui-selected-handle",
                 "md.comp.switch.selected.handle.color",
-                "On primary",
+                "ui-on-primary",
             ],
             [
-                "Unselected handle",
+                "ui-unselected-handle",
                 "md.comp.switch.unselected.handle.color",
-                "Outline",
+                "ui-outline",
             ],
             [
-                "Selected icon",
+                "ui-selected-icon",
                 "md.comp.switch.selected.icon.color",
-                "On primary container",
+                "ui-on-primary-container",
             ],
             [
-                "Unselected icon",
+                "ui-unselected-icon",
                 "md.comp.switch.unselected.icon.color",
-                "Surface container highest",
+                "ui-surface-container-highest",
             ],
         ]
     } else {
         vec![
             [
-                "Selected container",
+                "ui-selected-container",
                 "md.comp.checkbox.selected.container.color",
-                "Primary",
+                "ui-primary",
             ],
             [
-                "Selected icon",
+                "ui-selected-icon",
                 "md.comp.checkbox.selected.icon.color",
-                "On primary",
+                "ui-on-primary",
             ],
             [
-                "Unselected outline",
+                "ui-unselected-outline",
                 "md.comp.checkbox.unselected.outline.color",
-                "On surface variant",
+                "ui-on-surface-variant",
             ],
             [
-                "State layer",
+                "ui-state-layer",
                 "md.comp.checkbox.state-layer.color",
-                "On surface",
+                "ui-on-surface",
             ],
         ]
     };
     spec_table(
-        vec!["Element".into(), "Token".into(), "Value".into()],
+        vec!["ui-element".into(), "ui-token".into(), "ui-value".into()],
         rows.into_iter()
             .map(|row| row.map(str::to_owned).to_vec())
             .collect(),
@@ -438,19 +457,23 @@ fn tokens(is_switch: bool) {
 
 #[tessera]
 fn checkbox_anatomy() {
-    panel(RenderSlot::new(|| {
-        column().children(|| {
+    panel(RenderSlot::new(move || {
+        column().children(move || {
             flow_row()
                 .item_spacing(Dp(48.0))
                 .line_spacing(Dp(16.0))
                 .children(|| {
-                    selection_control(false, false, false, true, 0, "Unselected checkbox");
-                    selection_control(false, true, false, true, 0, "Selected checkbox");
-                    selection_control(false, false, true, true, 0, "Indeterminate checkbox");
+                    selection_control(false, false, false, true, 0, "ui-unselected-checkbox");
+                    selection_control(false, true, false, true, 0, "ui-selected-checkbox");
+                    selection_control(false, false, true, true, 0, "ui-indeterminate-checkbox");
                 });
             gap(Dp(24.0));
-            text().content("1  Container").style(type_style(16.0, 28.0));
-            text().content("2  Icon").style(type_style(16.0, 28.0));
+            text()
+                .content(I18N.text("ui-1-container"))
+                .style(type_style(16.0, 28.0));
+            text()
+                .content(I18N.text("ui-2-icon"))
+                .style(type_style(16.0, 28.0));
         });
     }));
 }
@@ -467,11 +490,15 @@ fn color_scheme(is_switch: bool, dark: bool) {
                         .modifier(Modifier::new().fill_max_width().padding_all(Dp(32.0)))
                         .children(move || {
                             text()
-                                .content(if dark { "Dark scheme" } else { "Light scheme" })
+                                .content(I18N.text(if dark {
+                                    "ui-dark-scheme"
+                                } else {
+                                    "ui-light-scheme"
+                                }))
                                 .style(type_style(24.0, 32.0));
                             gap(Dp(24.0));
-                            setting_row(is_switch, true, "Selected");
-                            setting_row(is_switch, false, "Unselected");
+                            setting_row(is_switch, true, "ui-selected");
+                            setting_row(is_switch, false, "ui-unselected");
                         });
                 });
         });
@@ -483,14 +510,14 @@ fn colors(is_switch: bool) {
     gap(Dp(24.0));
     color_scheme(is_switch, true);
     gap(Dp(32.0));
-    super::subheading("Adjacent text label color".into());
+    super::subheading("ui-adjacent-text-label-color".into());
     gap(Dp(16.0));
     text()
-        .content(if is_switch {
-            "Use On surface for the setting name and On surface variant for supporting text. Keep these roles when a setting changes."
+        .content(I18N.text(if is_switch {
+            "ui-use-on-surface-for-the-setting-name-and-on-surface-variant-for-supporting-text-keep-these"
         } else {
-            "Use On surface for adjacent option labels. Selection changes the checkbox, while the label keeps its text color."
-        })
+            "ui-use-on-surface-for-adjacent-option-labels-selection-changes-the-checkbox-while-the-label-k"
+        }))
         .style(type_style(16.0, 24.0))
         .color(INK);
     gap(Dp(24.0));
@@ -510,24 +537,24 @@ fn states(is_switch: bool) {
 fn measurement_table(is_switch: bool) {
     if is_switch {
         let rows = [
-            ("Track", "Height", "32dp", 4),
-            ("", "Width", "52dp", 1),
-            ("", "Outline width", "2dp", 1),
-            ("", "Shape", "md.sys.shape.corner.full", 1),
-            ("Handle", "Height (unselected)", "16dp", 9),
-            ("", "Height - with icon", "24dp", 1),
-            ("", "Height (selected)", "24dp", 1),
-            ("", "Height (pressed)", "28dp", 1),
-            ("", "Width (unselected)", "16dp", 1),
-            ("", "Width - with icon", "24dp", 1),
-            ("", "Width (selected)", "24dp", 1),
-            ("", "Width (pressed)", "28dp", 1),
-            ("", "Shape", "md.sys.shape.corner.full", 1),
-            ("State layer", "Size", "40dp", 2),
-            ("", "Shape", "md.sys.shape.corner.full", 1),
-            ("Target", "Size", "48dp", 1),
-            ("Icon", "Size (selected)", "16dp", 1),
-            ("Icon", "Size (unselected)", "16dp", 1),
+            ("ui-track", "ui-height", "32dp", 4),
+            ("", "ui-width", "52dp", 1),
+            ("", "ui-outline-width", "2dp", 1),
+            ("", "ui-shape", "md.sys.shape.corner.full", 1),
+            ("ui-handle", "ui-height-unselected", "16dp", 9),
+            ("", "ui-height-with-icon", "24dp", 1),
+            ("", "ui-height-selected", "24dp", 1),
+            ("", "ui-height-pressed", "28dp", 1),
+            ("", "ui-width-unselected", "16dp", 1),
+            ("", "ui-width-with-icon", "24dp", 1),
+            ("", "ui-width-selected", "24dp", 1),
+            ("", "ui-width-pressed", "28dp", 1),
+            ("", "ui-shape", "md.sys.shape.corner.full", 1),
+            ("ui-state-layer", "ui-size", "40dp", 2),
+            ("", "ui-shape", "md.sys.shape.corner.full", 1),
+            ("ui-target", "ui-size", "48dp", 1),
+            ("ui-icon", "ui-size-selected", "16dp", 1),
+            ("ui-icon", "ui-size-unselected", "16dp", 1),
         ];
         let cells = rows
             .into_iter()
@@ -549,20 +576,20 @@ fn measurement_table(is_switch: bool) {
             })
             .collect::<Vec<_>>();
         super::spec_table_cells(
-            ["Element", "Attribute", "Value"]
+            ["ui-element", "ui-attribute", "ui-value"]
                 .map(str::to_owned)
                 .to_vec(),
             cells,
         );
     } else {
         spec_table(
-            vec!["Attribute".into(), "Value".into()],
+            vec!["ui-attribute".into(), "ui-value".into()],
             vec![
-                vec!["Container".into(), "18 × 18dp".into()],
-                vec!["Corner radius".into(), "2dp".into()],
-                vec!["Icon".into(), "18dp · centered".into()],
-                vec!["State layer".into(), "40dp".into()],
-                vec!["Target".into(), "48 × 48dp".into()],
+                vec!["ui-container".into(), "18 × 18dp".into()],
+                vec!["ui-corner-radius".into(), "2dp".into()],
+                vec!["ui-icon".into(), "ui-18dp-centered".into()],
+                vec!["ui-state-layer".into(), "40dp".into()],
+                vec!["ui-target".into(), "48 × 48dp".into()],
             ],
         );
     }
@@ -581,15 +608,15 @@ fn measurements(is_switch: bool) {
                     Modifier::new().size(if is_switch { Dp(52.0) } else { Dp(48.0) }, Dp(48.0)),
                 )
                 .child(move || {
-                    selection_control(is_switch, true, false, true, 0, "Measured control");
+                    selection_control(is_switch, true, false, true, 0, "ui-measured-control");
                 });
             gap(Dp(24.0));
             text()
-                .content(if is_switch {
-                    "52 × 48dp interaction target"
+                .content(I18N.text(if is_switch {
+                    "ui-52-48dp-interaction-target"
                 } else {
-                    "48 × 48dp interaction target"
-                })
+                    "ui-48-48dp-interaction-target"
+                }))
                 .style(type_style(16.0, 24.0));
         });
     }));

@@ -7,6 +7,8 @@
 use tessera_components::dialog::dialog_provider;
 use tessera_ui::{Callback, Dp, RenderSlot, State, tessera};
 
+use crate::res::I18N;
+
 #[derive(Clone, PartialEq)]
 struct Request {
     open: State<bool>,
@@ -33,9 +35,11 @@ pub(crate) fn article_modal_host(active: ArticleModalController, content: Render
         .is_open(open)
         .full_screen(request.as_ref().is_some_and(|request| request.full_screen))
         .padding(Dp::ZERO)
-        .accessibility_label(request.as_ref().map_or("Article dialog", |request| {
-            request.accessibility_label.as_str()
-        }))
+        .accessibility_label(
+            I18N.text(request.as_ref().map_or("ui-article-dialog", |request| {
+                request.accessibility_label.as_str()
+            })),
+        )
         .on_close_request(move || {
             if let Some(request) = active.get().request
                 && request.open.is_alive()
@@ -66,7 +70,7 @@ pub(crate) fn hosted_dialog(
     modal_controller: Option<ArticleModalController>,
 ) {
     let full_screen = full_screen.unwrap_or(false);
-    let accessibility_label = accessibility_label.unwrap_or_else(|| "Article dialog".into());
+    let accessibility_label = accessibility_label.unwrap_or_else(|| "ui-article-dialog".into());
     let on_close_request = on_close_request.unwrap_or_default();
     let main_content = main_content.unwrap_or_default();
     let dialog_content = if let Some(content) = dialog_content {
@@ -99,7 +103,7 @@ pub(crate) fn hosted_dialog(
             .is_open(open.get())
             .full_screen(full_screen)
             .padding(Dp::ZERO)
-            .accessibility_label(accessibility_label)
+            .accessibility_label(I18N.text(accessibility_label))
             .on_close_request_shared(on_close_request)
             .main_content_shared(main_content)
             .dialog_content_shared(dialog_content);

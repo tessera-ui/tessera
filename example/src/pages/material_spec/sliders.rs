@@ -30,6 +30,8 @@ use tessera_ui::{
     remember, scaled_box, tessera, use_context,
 };
 
+use crate::res::I18N;
+
 use super::{
     ACCENT, INK,
     annotations::{self, PreciseGeometry, Rect, dotted, watch_precise},
@@ -47,45 +49,45 @@ const SIZES: [SliderSize; 5] = [
 
 #[tessera]
 pub(super) fn slider_spec(route: Option<crate::pages::material_spec::article::ArticleRoute>) {
-    article("Sliders","Sliders allow users to make selections from a range of values",vec![
-        section("Variants",RenderSlot::new(variants)),
-        section("Configurations",RenderSlot::new(configurations)),
-        section("Tokens & specs",RenderSlot::new(tokens)),
-        section("Anatomy",RenderSlot::new(anatomy)),
-        section("Color",RenderSlot::new(colors)),
-        section("States",RenderSlot::new(states)),
-        section("Measurements",RenderSlot::new(measurements)),
+    article("ui-sliders","ui-sliders-allow-users-to-make-selections-from-a-range-of-values",vec![
+        section("ui-variants",RenderSlot::new(variants)),
+        section("ui-configurations",RenderSlot::new(configurations)),
+        section("ui-tokens-specs",RenderSlot::new(tokens)),
+        section("ui-anatomy",RenderSlot::new(anatomy)),
+        section("ui-color",RenderSlot::new(colors)),
+        section("ui-states",RenderSlot::new(states)),
+        section("ui-measurements",RenderSlot::new(measurements)),
     ]).route_optional(route.clone()).hero(hero).pages(vec![
-        ArticlePage{title:"Overview",intro:Some(RenderSlot::new(||{
-            prose("Sliders select a value or range along a track. Use standard, centered, or range variants, show the full available range, and apply changes immediately.");gap(Dp(32.0));variants();
+        ArticlePage{title:"ui-overview",intro:Some(RenderSlot::new(||{
+            prose("ui-sliders-select-a-value-or-range-along-a-track-use-standard-centered-or-range-variants-show");gap(Dp(32.0));variants();
         })),sections:vec![
-            section("Availability & resources",RenderSlot::new(availability)),
-            section("M3 Expressive update",RenderSlot::new(||{prose("The May 2025 update adds horizontal and vertical orientations, five sizes from XS to XL, and an optional inset icon for standard sliders. Continuous sliders are now called standard sliders; discrete sliders use the stops configuration.");gap(Dp(24.0));configurations();})),
-            section("Previous updates",RenderSlot::new(||{subheading("Visual refresh to improve non-text contrast".into());prose("The December 2023 refresh adds centered and range configurations, refreshed color mappings, end stops, larger value labels, and a vertical handle that narrows when pressed.");gap(Dp(24.0));anatomy();})),
-            section("Differences from M2",RenderSlot::new(||{prose("Material 3 replaces the circular handle with a vertical handle and introduces dynamic color roles. End stops keep the extent of the inactive track distinguishable.");gap(Dp(24.0));colors();})),
+            section("ui-availability-resources",RenderSlot::new(availability)),
+            section("ui-m3-expressive-update",RenderSlot::new(||{prose("ui-the-may-2025-update-adds-horizontal-and-vertical-orientations-five-sizes-from-xs-to-xl-and");gap(Dp(24.0));configurations();})),
+            section("ui-previous-updates",RenderSlot::new(||{subheading("ui-visual-refresh-to-improve-non-text-contrast".into());prose("ui-the-december-2023-refresh-adds-centered-and-range-configurations-refreshed-color-mappings");gap(Dp(24.0));anatomy();})),
+            section("ui-differences-from-m2",RenderSlot::new(||{prose("ui-material-3-replaces-the-circular-handle-with-a-vertical-handle-and-introduces-dynamic-colo");gap(Dp(24.0));colors();})),
         ]},
-        ArticlePage{title:"Guidelines",intro:None,sections:vec![
-            section("Usage",RenderSlot::new(||{prose("Use sliders to adjust continuous settings such as volume, brightness, or filter intensity. Apply every value change immediately so the result stays connected to the handle movement.");gap(Dp(24.0));immediate_example();gap(Dp(24.0));prose("Standard sliders start at a minimum; centered sliders place zero in the middle; range sliders choose a minimum and maximum. Prefer horizontal range sliders to reduce cognitive effort.");gap(Dp(24.0));variants();})),
-            section("Anatomy",RenderSlot::new(||{anatomy();gap(Dp(24.0));subheading("Track".into());prose("The track represents the full available range. The active section runs from the minimum to the handle, or between the two handles of a range slider. Values increase toward the trailing edge in the reading direction.");gap(Dp(24.0));subheading("Handle".into());prose("Move the handle to select a value. A range slider has separate minimum and maximum handles. Each handle narrows during interaction.");})),
-            section("Configurations",RenderSlot::new(||{
-                subheading("Value".into());prose("Show a value label for the handle being adjusted. If a separate field shows the value, the built-in label is optional. Keep an editable field synchronized with the slider and next in the tab order.");gap(Dp(24.0));value_example();
-                gap(Dp(32.0));subheading("Stop indicators".into());prose("Stops represent equally spaced available values, and the handle snaps to the closest stop. Keep the track readable by avoiding excessive stops. End stops may be omitted only when another visual anchor gives at least 3:1 contrast.");gap(Dp(24.0));sample("Stops".into(),0,SliderSize::ExtraSmall,false,9);
-                gap(Dp(32.0));subheading("Orientation".into());prose("Use horizontal or vertical standard and centered sliders to fit the task. Vertical values increase from the bottom.");gap(Dp(24.0));orientation_examples();
-                gap(Dp(32.0));subheading("Inset icon".into());prose("Only standard sliders in M, L, or XL sizes support an inset icon. At low values it moves to the inactive track. Do not add inset icons to centered or range sliders.");gap(Dp(24.0));inset_examples();
-                gap(Dp(32.0));subheading("Size".into());prose("Track heights are XS 16dp, S 24dp, M 40dp, L 56dp, and XL 96dp. Active and inactive tracks use the same size. Reserve XL for a page where the slider is the primary task.");gap(Dp(24.0));measurements();
+        ArticlePage{title:"ui-guidelines",intro:None,sections:vec![
+            section("ui-usage",RenderSlot::new(||{prose("ui-use-sliders-to-adjust-continuous-settings-such-as-volume-brightness-or-filter-intensity-ap");gap(Dp(24.0));immediate_example();gap(Dp(24.0));prose("ui-standard-sliders-start-at-a-minimum-centered-sliders-place-zero-in-the-middle-range-slider");gap(Dp(24.0));variants();})),
+            section("ui-anatomy",RenderSlot::new(||{anatomy();gap(Dp(24.0));subheading("ui-track".into());prose("ui-the-track-represents-the-full-available-range-the-active-section-runs-from-the-minimum-to");gap(Dp(24.0));subheading("ui-handle".into());prose("ui-move-the-handle-to-select-a-value-a-range-slider-has-separate-minimum-and-maximum-handles");})),
+            section("ui-configurations",RenderSlot::new(||{
+                subheading("ui-value".into());prose("ui-show-a-value-label-for-the-handle-being-adjusted-if-a-separate-field-shows-the-value-the-b");gap(Dp(24.0));value_example();
+                gap(Dp(32.0));subheading("ui-stop-indicators".into());prose("ui-stops-represent-equally-spaced-available-values-and-the-handle-snaps-to-the-closest-stop-k");gap(Dp(24.0));sample("ui-stops".into(),0,SliderSize::ExtraSmall,false,9);
+                gap(Dp(32.0));subheading("ui-orientation".into());prose("ui-use-horizontal-or-vertical-standard-and-centered-sliders-to-fit-the-task-vertical-values-i");gap(Dp(24.0));orientation_examples();
+                gap(Dp(32.0));subheading("ui-inset-icon".into());prose("ui-only-standard-sliders-in-m-l-or-xl-sizes-support-an-inset-icon-at-low-values-it-moves-to-t");gap(Dp(24.0));inset_examples();
+                gap(Dp(32.0));subheading("ui-size".into());prose("ui-track-heights-are-xs-16dp-s-24dp-m-40dp-l-56dp-and-xl-96dp-active-and-inactive-tracks-use");gap(Dp(24.0));measurements();
             })),
-            section("Behaviors",RenderSlot::new(||{
-                subheading("Select & drag".into());prose("Drag the handle to update a continuous value or snap between stops.");gap(Dp(24.0));sample("Drag a continuous value".into(),0,SliderSize::Medium,false,0);
-                gap(Dp(32.0));subheading("Select jump".into());prose("Select the track to move the handle to that position, or the nearest stop.");gap(Dp(24.0));sample("Jump between stops".into(),0,SliderSize::Medium,false,9);
-                gap(Dp(32.0));subheading("Select & arrow".into());prose("Tab moves focus to the handle. Arrow keys change the value by one value or stop indicator. Hold Space while pressing an arrow key to change it by a larger interval. Home and End select the first and last values.");gap(Dp(24.0));value_example();
+            section("ui-behaviors",RenderSlot::new(||{
+                subheading("ui-select-drag".into());prose("ui-drag-the-handle-to-update-a-continuous-value-or-snap-between-stops");gap(Dp(24.0));sample("ui-drag-a-continuous-value".into(),0,SliderSize::Medium,false,0);
+                gap(Dp(32.0));subheading("ui-select-jump".into());prose("ui-select-the-track-to-move-the-handle-to-that-position-or-the-nearest-stop");gap(Dp(24.0));sample("ui-jump-between-stops".into(),0,SliderSize::Medium,false,9);
+                gap(Dp(32.0));subheading("ui-select-arrow".into());prose("ui-tab-moves-focus-to-the-handle-arrow-keys-change-the-value-by-one-value-or-stop-indicator-h");gap(Dp(24.0));value_example();
             })),
         ]},
-        ArticlePage{title:"Accessibility",intro:None,sections:vec![
-            section("Use cases",RenderSlot::new(||{prose("Assistive technology must identify each slider, adjust its handle along the range, and report the selected value. Range sliders expose both handles separately.");gap(Dp(24.0));sample("Price range".into(),2,SliderSize::Medium,false,0);})),
-            section("Interaction & style",RenderSlot::new(||{prose("The handle narrows and the value appears during touch, pointer, or keyboard interaction.");gap(Dp(24.0));states();gap(Dp(24.0));subheading("Focus and navigation".into());prose("Initial focus lands on the handle. Arrow keys adjust its value without requiring pointer precision.");gap(Dp(24.0));value_example();})),
-            section("Color contrast",RenderSlot::new(||{prose("The end of the inactive track needs a visual anchor with at least 3:1 contrast against the background. Use an end stop or a contrasting icon or label at the endpoint.");gap(Dp(24.0));colors();})),
-            section("Keyboard navigation",RenderSlot::new(||{spec_table(vec!["Keys".into(),"Actions".into()],vec![vec!["Tab".into(),"Moves focus to the slider handle".into()],vec!["Arrows".into(),"Increase and decrease the value by one value or one stop indicator".into()],vec!["Space & Arrows".into(),"Increase and decrease the value by one interval or one stop indicator".into()],vec!["Home or End".into(),"Set the slider to the first and last values on the slider".into()]]);gap(Dp(24.0));value_example();})),
-            section("Labeling elements",RenderSlot::new(||{prose("The accessibility label should match the adjacent visible label and use the slider role. Label external icon controls as buttons. Include units when they clarify the value.");gap(Dp(24.0));sample("Volume".into(),0,SliderSize::Medium,false,0).leading_icon(filled::VOLUME_UP_SVG);})),
+        ArticlePage{title:"ui-accessibility",intro:None,sections:vec![
+            section("ui-use-cases",RenderSlot::new(||{prose("ui-assistive-technology-must-identify-each-slider-adjust-its-handle-along-the-range-and-repor");gap(Dp(24.0));sample("ui-price-range".into(),2,SliderSize::Medium,false,0);})),
+            section("ui-interaction-style",RenderSlot::new(||{prose("ui-the-handle-narrows-and-the-value-appears-during-touch-pointer-or-keyboard-interaction");gap(Dp(24.0));states();gap(Dp(24.0));subheading("ui-focus-and-navigation".into());prose("ui-initial-focus-lands-on-the-handle-arrow-keys-adjust-its-value-without-requiring-pointer-pr");gap(Dp(24.0));value_example();})),
+            section("ui-color-contrast",RenderSlot::new(||{prose("ui-the-end-of-the-inactive-track-needs-a-visual-anchor-with-at-least-3-1-contrast-against-the");gap(Dp(24.0));colors();})),
+            section("ui-keyboard-navigation",RenderSlot::new(||{spec_table(vec!["ui-keys".into(),"ui-actions".into()],vec![vec!["ui-tab".into(),"ui-moves-focus-to-the-slider-handle".into()],vec!["ui-arrows".into(),"ui-increase-and-decrease-the-value-by-one-value-or-one-stop-indicator".into()],vec!["ui-space-arrows".into(),"ui-increase-and-decrease-the-value-by-one-interval-or-one-stop-indicator".into()],vec!["ui-home-or-end".into(),"ui-set-the-slider-to-the-first-and-last-values-on-the-slider".into()]]);gap(Dp(24.0));value_example();})),
+            section("ui-labeling-elements",RenderSlot::new(||{prose("ui-the-accessibility-label-should-match-the-adjacent-visible-label-and-use-the-slider-role-la");gap(Dp(24.0));sample("ui-volume".into(),0,SliderSize::Medium,false,0).leading_icon(filled::VOLUME_UP_SVG);})),
         ]},
     ]);
 }
@@ -97,39 +99,41 @@ fn section(title: &'static str, content: RenderSlot) -> SpecSection {
 #[tessera]
 fn availability() {
     spec_table(
-        vec!["Type".into(), "Resource".into(), "Status".into()],
+        vec!["ui-type".into(), "ui-resource".into(), "ui-status".into()],
         vec![
             vec![
-                "Design".into(),
-                "Design Kit (Figma)".into(),
-                "Available".into(),
+                "ui-design".into(),
+                "ui-design-kit-figma".into(),
+                "ui-available".into(),
             ],
             vec![
-                "Implementation".into(),
-                "Jetpack Compose: Expressive".into(),
-                "Available".into(),
+                "ui-implementation".into(),
+                "ui-jetpack-compose-expressive".into(),
+                "ui-available".into(),
             ],
             vec![
-                "Implementation".into(),
-                "Android Views (MDC-Android): Expressive".into(),
-                "Unavailable".into(),
+                "ui-implementation".into(),
+                "ui-android-views-mdc-android-expressive".into(),
+                "ui-unavailable".into(),
             ],
             vec![
-                "Implementation".into(),
-                "Web: Expressive".into(),
-                "Unavailable".into(),
+                "ui-implementation".into(),
+                "ui-web-expressive".into(),
+                "ui-unavailable".into(),
             ],
         ],
     );
     gap(Dp(24.0));
     prose(
-        "Tessera examples on this page use the native slider with standard, centered and range configurations, five sizes, both orientations and an optional inset icon.",
+        "ui-tessera-examples-on-this-page-use-the-native-slider-with-standard-centered-and-range-confi",
     );
 }
 
 #[tessera]
 fn prose(#[prop(into)] content: String) {
-    text().content(content).style(type_style(16.0, 24.0));
+    text()
+        .content(I18N.text(content))
+        .style(type_style(16.0, 24.0));
 }
 
 #[tessera]
@@ -138,7 +142,9 @@ fn immediate_example() {
     column()
         .modifier(Modifier::new().fill_max_width())
         .children(move || {
-            text().content("Volume").style(type_style(16.0, 24.0));
+            text()
+                .content(I18N.text("ui-volume"))
+                .style(type_style(16.0, 24.0));
             gap(Dp(16.0));
             slider()
                 .size(SliderSize::Medium)
@@ -150,10 +156,13 @@ fn immediate_example() {
                 } else {
                     filled::VOLUME_UP_SVG
                 })
-                .accessibility_label("Volume");
+                .accessibility_label(I18N.text("ui-volume"));
             gap(Dp(16.0));
             text()
-                .content(format!("Volume: {:.0}%", value.get() * 100.0))
+                .content(I18N.format(
+                    "ui-volume-value",
+                    [("v0", format!("{:.0}", value.get() * 100.0).into())],
+                ))
                 .style(type_style(16.0, 24.0));
         });
 }
@@ -171,7 +180,7 @@ fn value_example(editor: Option<State<TextInputController>>) {
         }),
     };
     text()
-        .content("Keyboard-adjustable value")
+        .content(I18N.text("ui-keyboard-adjustable-value"))
         .style(type_style(16.0, 24.0));
     gap(Dp(8.0));
     row()
@@ -188,14 +197,14 @@ fn value_example(editor: Option<State<TextInputController>>) {
                     editor.with_mut(|editor| editor.set_text(formatted));
                     invalid.set(false);
                 })
-                .accessibility_label("Keyboard-adjustable value");
+                .accessibility_label(I18N.text("ui-keyboard-adjustable-value"));
             tessera_components::spacer::spacer().modifier(Modifier::new().width(Dp(24.0)));
             text_field()
                 .outlined()
                 .controller(editor)
-                .label("Value")
-                .accessibility_label("Slider value")
-                .accessibility_description("Enter a value from 0 to 100")
+                .label(I18N.text("ui-value"))
+                .accessibility_label(I18N.text("ui-slider-value"))
+                .accessibility_description(I18N.text("ui-enter-a-value-from-0-to-100"))
                 .modifier(Modifier::new().width(Dp(88.0)))
                 .min_width(Dp::ZERO)
                 .is_error(invalid.get())
@@ -218,7 +227,7 @@ fn value_example(editor: Option<State<TextInputController>>) {
         gap(Dp(4.0));
         let scheme = use_context::<MaterialTheme>().unwrap().get().color_scheme;
         text()
-            .content("Enter a number from 0 to 100")
+            .content(I18N.text("ui-enter-a-number-from-0-to-100"))
             .style(type_style(12.0, 16.0))
             .color(scheme.error)
             .modifier(Modifier::new().semantics(SemanticsArgs {
@@ -242,14 +251,14 @@ fn orientation_examples() {
                 .modifier(Modifier::new().height(Dp(240.0)))
                 .value(standard.get())
                 .on_change(move |v| standard.set(v))
-                .accessibility_label("Vertical standard value");
+                .accessibility_label(I18N.text("ui-vertical-standard-value"));
             centered_slider()
                 .orientation(SliderOrientation::Vertical)
                 .reverse_direction(true)
                 .modifier(Modifier::new().height(Dp(240.0)))
                 .value(centered.get())
                 .on_change(move |v| centered.set(v))
-                .accessibility_label("Vertical centered value");
+                .accessibility_label(I18N.text("ui-vertical-centered-value"));
         });
 }
 
@@ -266,7 +275,7 @@ fn inset_examples() {
         } else {
             filled::VOLUME_UP_SVG
         })
-        .accessibility_label("Inset icon volume");
+        .accessibility_label(I18N.text("ui-inset-icon-volume"));
 }
 
 #[tessera]
@@ -296,7 +305,7 @@ fn sample(
                                 .modifier(Modifier::new().width(Dp(12.0)));
                         }
                         text()
-                            .content(label.clone())
+                            .content(I18N.text(&(label)))
                             .style(if leading_icon.is_some() {
                                 type_style(20.0, 24.0)
                             } else {
@@ -314,7 +323,7 @@ fn sample(
                         .on_change(move |v| value.set(v))
                         .disabled(disabled)
                         .steps(steps)
-                        .accessibility_label(label.clone());
+                        .accessibility_label(I18N.text(&(label)));
                 }
                 2 => {
                     range_slider()
@@ -324,7 +333,7 @@ fn sample(
                         .on_change(move |v| range.set(v))
                         .disabled(disabled)
                         .steps(steps)
-                        .accessibility_label(label.clone());
+                        .accessibility_label(I18N.text(&(label)));
                 }
                 _ => {
                     slider()
@@ -334,7 +343,7 @@ fn sample(
                         .on_change(move |v| value.set(v))
                         .disabled(disabled)
                         .steps(steps)
-                        .accessibility_label(label.clone());
+                        .accessibility_label(I18N.text(&(label)));
                 }
             }
         });
@@ -363,10 +372,10 @@ pub(super) fn hero() {
                                 )
                                 .children(|| {
                                     for (index, label) in [
-                                        "Call volume",
-                                        "Alarm volume",
-                                        "Ring volume",
-                                        "Media volume",
+                                        "ui-call-volume",
+                                        "ui-alarm-volume",
+                                        "ui-ring-volume",
+                                        "ui-media-volume",
                                     ]
                                     .into_iter()
                                     .enumerate()
@@ -399,11 +408,14 @@ pub(super) fn hero() {
 pub(super) fn variants() {
     variants_figure();
     gap(Dp(16.0));
-    for (index, label) in ["Standard", "Centered", "Range"].into_iter().enumerate() {
+    for (index, label) in ["ui-standard", "ui-centered", "ui-range"]
+        .into_iter()
+        .enumerate()
+    {
         row().children(move || {
             number(index + 1);
             text()
-                .content(label)
+                .content(I18N.text(label))
                 .modifier(Modifier::new().padding_symmetric(Dp(12.0), Dp(4.0)))
                 .style(type_style(16.0, 24.0));
         });
@@ -411,23 +423,27 @@ pub(super) fn variants() {
     }
     gap(Dp(80.0));
     spec_table(
-        vec!["Variant".into(), "M3".into(), "M3 Expressive".into()],
+        vec!["ui-variant".into(), "M3".into(), "ui-m3-expressive".into()],
         vec![
             vec![
-                "Standard".into(),
-                "Available as “continuous” slider".into(),
-                "Available".into(),
+                "ui-standard".into(),
+                "ui-available-as-continuous-slider".into(),
+                "ui-available".into(),
             ],
             vec![
-                "Centered".into(),
-                "Available (web only)".into(),
-                "Available".into(),
+                "ui-centered".into(),
+                "ui-available-web-only".into(),
+                "ui-available".into(),
             ],
-            vec!["Range".into(), "Available".into(), "Available".into()],
             vec![
-                "Discrete".into(),
-                "Available".into(),
-                "Available as “stops” configuration".into(),
+                "ui-range".into(),
+                "ui-available".into(),
+                "ui-available".into(),
+            ],
+            vec![
+                "ui-discrete".into(),
+                "ui-available".into(),
+                "ui-available-as-stops-configuration".into(),
             ],
         ],
     );
@@ -473,7 +489,10 @@ fn variants_figure() {
                                     .background_with_shape(scheme.inverse_surface, Shape::Ellipse)
                                     .semantics(SemanticsArgs {
                                         role: Some(tessera_ui::accesskit::Role::Note),
-                                        label: Some(format!("Slider variant marker {}", index + 1)),
+                                        label: Some(I18N.format(
+                                            "ui-slider-variant-marker-value",
+                                            [("v0", (index + 1).into())],
+                                        )),
                                         merge_descendants: true,
                                         ..Default::default()
                                     }),
@@ -503,7 +522,7 @@ fn variant_specimen(index: usize, x: Dp, y: Dp, width: Dp) {
                     .size(SliderSize::ExtraSmall)
                     .value(value.get())
                     .on_change(move |next| value.set(next))
-                    .accessibility_label("Centered slider variant");
+                    .accessibility_label(I18N.text("ui-centered-slider-variant"));
             }
             2 => {
                 range_slider()
@@ -511,7 +530,7 @@ fn variant_specimen(index: usize, x: Dp, y: Dp, width: Dp) {
                     .size(SliderSize::ExtraSmall)
                     .value(range.get())
                     .on_change(move |next| range.set(next))
-                    .accessibility_label("Range slider variant");
+                    .accessibility_label(I18N.text("ui-range-slider-variant"));
             }
             _ => {
                 slider()
@@ -519,7 +538,7 @@ fn variant_specimen(index: usize, x: Dp, y: Dp, width: Dp) {
                     .size(SliderSize::ExtraSmall)
                     .value(value.get())
                     .on_change(move |next| value.set(next))
-                    .accessibility_label("Standard slider variant");
+                    .accessibility_label(I18N.text("ui-standard-slider-variant"));
             }
         });
 }
@@ -536,7 +555,7 @@ fn number(value: usize) {
                 .modifier(Modifier::new().fill_max_size())
                 .children(move || {
                     text()
-                        .content(value.to_string())
+                        .content((value).to_string())
                         .color(Color::WHITE)
                         .style(type_style(12.0, 16.0));
                 });
@@ -547,14 +566,14 @@ fn number(value: usize) {
 pub(super) fn configurations() {
     configuration_figure(false);
     gap(Dp(16.0));
-    configuration_legend(1, "Orientation: Horizontal, vertical".into());
-    configuration_legend(2, "Size: XS, S, M, L, XL".into());
+    configuration_legend(1, "ui-orientation-horizontal-vertical".into());
+    configuration_legend(2, "ui-size-xs-s-m-l-xl".into());
     gap(Dp(32.0));
     configuration_figure(true);
     gap(Dp(16.0));
-    configuration_legend(1, "Inset icon".into());
-    configuration_legend(2, "Stops".into());
-    configuration_legend(3, "Value indicator".into());
+    configuration_legend(1, "ui-inset-icon".into());
+    configuration_legend(2, "ui-stops".into());
+    configuration_legend(3, "ui-value-indicator".into());
     gap(Dp(32.0));
     super::sliders_tokens::availability();
 }
@@ -566,7 +585,7 @@ fn configuration_legend(number: usize, label: String) {
         .children(move || {
             configuration_number(number);
             text()
-                .content(label.clone())
+                .content(I18N.text(&(label)))
                 .modifier(Modifier::new().padding_symmetric(Dp(12.0), Dp(4.0)))
                 .style(type_style(16.0, 24.0));
         });
@@ -585,7 +604,7 @@ fn configuration_number(number: usize) {
         )
         .children(move || {
             text()
-                .content(number.to_string())
+                .content((number).to_string())
                 .style(type_style(16.0, 24.0))
                 .color(scheme.inverse_on_surface);
         });
@@ -599,7 +618,10 @@ fn configuration_marker(number: usize, x: Dp, y: Dp) {
                 .offset(Dp(x.0 - 12.0), Dp(y.0 - 12.0))
                 .semantics(SemanticsArgs {
                     role: Some(tessera_ui::accesskit::Role::Note),
-                    label: Some(format!("Slider configuration marker {number}")),
+                    label: Some(I18N.format(
+                        "ui-slider-configuration-marker-value",
+                        [("v0", (number).into())],
+                    )),
                     merge_descendants: true,
                     ..Default::default()
                 }),
@@ -641,7 +663,7 @@ fn configuration_figure(optional: bool) {
                                     configuration_marker(2, Dp(505.0 * scale), Dp(159.0 * scale));
                                     configuration_marker(3, Dp(815.0 * scale), Dp(159.0 * scale));
                                     configuration_slider(
-                                        "Inset icon configuration".into(),
+                                        "ui-inset-icon-configuration".into(),
                                         SliderSize::Medium,
                                         Dp(78.0 * scale),
                                         Dp(273.0 * scale - 26.0),
@@ -655,7 +677,7 @@ fn configuration_figure(optional: bool) {
                                     )
                                     .value_indicator_host(value_indicator_host);
                                     configuration_slider(
-                                        "Stops configuration".into(),
+                                        "ui-stops-configuration".into(),
                                         SliderSize::ExtraSmall,
                                         Dp(388.0 * scale),
                                         Dp(273.0 * scale - 22.0),
@@ -669,7 +691,7 @@ fn configuration_figure(optional: bool) {
                                     )
                                     .value_indicator_host(value_indicator_host);
                                     configuration_slider(
-                                        "Value indicator configuration".into(),
+                                        "ui-value-indicator-configuration".into(),
                                         SliderSize::ExtraSmall,
                                         Dp(698.0 * scale),
                                         Dp(273.0 * scale - 22.0),
@@ -686,7 +708,7 @@ fn configuration_figure(optional: bool) {
                                     configuration_marker(1, Dp(241.0 * scale), Dp(99.0 * scale));
                                     configuration_marker(2, Dp(719.0 * scale), Dp(99.0 * scale));
                                     configuration_slider(
-                                        "Horizontal orientation configuration".into(),
+                                        "ui-horizontal-orientation-configuration".into(),
                                         SliderSize::Medium,
                                         Dp(121.0 * scale),
                                         Dp(223.0 * scale - 26.0),
@@ -700,7 +722,7 @@ fn configuration_figure(optional: bool) {
                                     )
                                     .value_indicator_host(value_indicator_host);
                                     configuration_slider(
-                                        "Vertical orientation configuration".into(),
+                                        "ui-vertical-orientation-configuration".into(),
                                         SliderSize::Medium,
                                         Dp(247.0 * scale - 26.0),
                                         Dp(317.0 * scale),
@@ -718,9 +740,15 @@ fn configuration_figure(optional: bool) {
                                     {
                                         let item_height = [44.0, 44.0, 52.0, 68.0, 108.0][index];
                                         configuration_slider(
-                                            format!(
-                                                "{} size configuration",
-                                                ["XS", "S", "M", "L", "XL"][index]
+                                            I18N.format(
+                                                "ui-value-size-configuration",
+                                                [(
+                                                    "v0",
+                                                    I18N.text(
+                                                        &(["ui-xs", "S", "M", "L", "ui-xl"][index]),
+                                                    )
+                                                    .into(),
+                                                )],
                                             ),
                                             SIZES[index],
                                             Dp(530.0 * scale),
@@ -782,7 +810,7 @@ fn configuration_slider(
                 } else {
                     SliderValueIndicatorVisibility::Hidden
                 })
-                .accessibility_label(label.clone());
+                .accessibility_label(I18N.text(&(label)));
             if inset {
                 control.inset_icon(filled::VOLUME_UP_SVG);
             }
@@ -799,14 +827,16 @@ pub(super) fn anatomy() {
     slider_figure(false);
     gap(Dp(16.0));
     for label in [
-        "1  Value indicator (optional)",
-        "2  Stop indicators (optional)",
-        "3  Active track",
-        "4  Handle",
-        "5  Inactive track",
-        "6  Inset icon (optional)",
+        "ui-1-value-indicator-optional",
+        "ui-2-stop-indicators-optional",
+        "ui-3-active-track",
+        "ui-4-handle",
+        "ui-5-inactive-track",
+        "ui-6-inset-icon-optional",
     ] {
-        text().content(label).style(type_style(16.0, 28.0));
+        text()
+            .content(I18N.text(label))
+            .style(type_style(16.0, 28.0));
     }
 }
 
@@ -814,18 +844,18 @@ pub(super) fn anatomy() {
 pub(super) fn colors() {
     color_figure();
     gap(Dp(24.0));
-    prose("Slider color roles used for light and dark schemes:");
+    prose("ui-slider-color-roles-used-for-light-and-dark-schemes");
     gap(Dp(16.0));
     for (index, label) in [
-        "Inverse surface",
-        "Inverse on surface",
-        "Primary",
-        "On primary",
-        "Primary",
-        "Secondary container",
-        "On secondary container",
-        "On secondary container",
-        "On primary",
+        "ui-inverse-surface",
+        "ui-inverse-on-surface",
+        "ui-primary",
+        "ui-on-primary",
+        "ui-primary",
+        "ui-secondary-container",
+        "ui-on-secondary-container",
+        "ui-on-secondary-container",
+        "ui-on-primary",
     ]
     .into_iter()
     .enumerate()
@@ -881,7 +911,7 @@ fn color_panel(width: Dp, height: Dp, dark: bool) {
     let controller = remember(SliderController::new);
     let scheme = use_context::<MaterialTheme>().unwrap().get().color_scheme;
     let scale = width.0 / 512.0;
-    let label = if dark { "Dark" } else { "Light" };
+    let label = if dark { "ui-dark" } else { "ui-light" };
     boxed()
         .modifier(
             watch_precise(geometry, "figure")
@@ -910,7 +940,10 @@ fn color_panel(width: Dp, height: Dp, dark: bool) {
                                     .controller(controller)
                                     .steps(9)
                                     .value_indicator(SliderValueIndicatorVisibility::Always)
-                                    .accessibility_label(format!("{label} slider color roles"));
+                                    .accessibility_label(I18N.format(
+                                        "ui-value-slider-color-roles",
+                                        [("v0", I18N.text(&label).into())],
+                                    ));
                             });
                         for (state, center, name) in
                             [(empty, 331.0, "inactive"), (inset, 391.0, "active")]
@@ -929,8 +962,12 @@ fn color_panel(width: Dp, height: Dp, dark: bool) {
                                         .value(state.get())
                                         .on_change(move |next| state.set(next))
                                         .inset_icon(filled::VOLUME_UP_SVG)
-                                        .accessibility_label(format!(
-                                            "{label} {name} inset color roles"
+                                        .accessibility_label(I18N.format(
+                                            "ui-value-value-inset-color-roles",
+                                            [
+                                                ("v0", I18N.text(&label).into()),
+                                                ("v1", I18N.text(&name).into()),
+                                            ],
                                         ));
                                 });
                         }
@@ -952,17 +989,26 @@ fn color_marker(number: usize, center_x: Dp, center_y: Dp, dark: bool) {
                 .background_with_shape(scheme.inverse_surface, Shape::CAPSULE)
                 .semantics(SemanticsArgs {
                     role: Some(tessera_ui::accesskit::Role::Note),
-                    label: Some(format!(
-                        "Slider color marker {number} {}",
-                        if dark { "Dark" } else { "Light" }
-                    )),
+                    label: Some(
+                        I18N.format(
+                            "ui-slider-color-marker-value-value",
+                            [
+                                ("v0", (number).into()),
+                                (
+                                    "v1",
+                                    I18N.text(&(if dark { "ui-dark" } else { "ui-light" }))
+                                        .into(),
+                                ),
+                            ],
+                        ),
+                    ),
                     merge_descendants: true,
                     ..Default::default()
                 }),
         )
         .children(move || {
             text()
-                .content(number.to_string())
+                .content((number).to_string())
                 .style(type_style(14.0, 20.0))
                 .color(scheme.inverse_on_surface);
         });
@@ -1034,9 +1080,15 @@ fn color_annotation_geometry(
 pub(super) fn states() {
     state_figure();
     gap(Dp(16.0));
-    for (index, label) in ["Enabled", "Disabled", "Hovered", "Focused", "Pressed"]
-        .into_iter()
-        .enumerate()
+    for (index, label) in [
+        "ui-enabled",
+        "ui-disabled",
+        "ui-hovered",
+        "ui-focused",
+        "ui-pressed",
+    ]
+    .into_iter()
+    .enumerate()
     {
         configuration_legend(index + 1, label.to_owned());
     }
@@ -1087,7 +1139,7 @@ fn state_panel(width: Dp, height: Dp, dark: bool) {
     boxed().modifier(Modifier::new().offset(if dark { width } else { Dp::ZERO }, Dp::ZERO).size(width, height).background(scheme.surface_container_low)).children(move || {
         slider_value_indicator_provider().child(move |value_indicator_host| {
             boxed().modifier(Modifier::new().fill_max_size()).children(move || {
-                for (index, label, state) in [(0, "Enabled", InteractionVisualState::Rest), (1, "Disabled", InteractionVisualState::Rest), (2, "Hovered", InteractionVisualState::Hover), (3, "Focused", InteractionVisualState::Focus), (4, "Pressed", InteractionVisualState::Pressed)] {
+                for (index, label, state) in [(0, "ui-enabled", InteractionVisualState::Rest), (1, "ui-disabled", InteractionVisualState::Rest), (2, "ui-hovered", InteractionVisualState::Hover), (3, "ui-focused", InteractionVisualState::Focus), (4, "ui-pressed", InteractionVisualState::Pressed)] {
                     state_specimen(index, label.to_owned(), state, width, dark).value_indicator_host(value_indicator_host);
                 }
             });
@@ -1133,10 +1185,19 @@ fn state_specimen(
                 .disabled(index == 1)
                 .presentation_state(state)
                 .value_indicator(SliderValueIndicatorVisibility::OnInteraction)
-                .accessibility_label(format!(
-                    "{} {label} slider state",
-                    if dark { "Dark" } else { "Light" }
-                ));
+                .accessibility_label(
+                    I18N.format(
+                        "ui-value-value-slider-state",
+                        [
+                            (
+                                "v0",
+                                I18N.text(&(if dark { "ui-dark" } else { "ui-light" }))
+                                    .into(),
+                            ),
+                            ("v1", I18N.text(&label).into()),
+                        ],
+                    ),
+                );
         });
     boxed()
         .alignment(Alignment::Center)
@@ -1147,11 +1208,19 @@ fn state_specimen(
                 .background_with_shape(scheme.inverse_surface, Shape::Ellipse)
                 .semantics(SemanticsArgs {
                     role: Some(tessera_ui::accesskit::Role::Note),
-                    label: Some(format!(
-                        "Slider state marker {} {}",
-                        index + 1,
-                        if dark { "Dark" } else { "Light" }
-                    )),
+                    label: Some(
+                        I18N.format(
+                            "ui-slider-state-marker-value-value",
+                            [
+                                ("v0", (index + 1).into()),
+                                (
+                                    "v1",
+                                    I18N.text(&(if dark { "ui-dark" } else { "ui-light" }))
+                                        .into(),
+                                ),
+                            ],
+                        ),
+                    ),
                     merge_descendants: true,
                     ..Default::default()
                 }),
@@ -1171,15 +1240,15 @@ pub(super) fn measurements() {
     slider_size_figure();
     gap(Dp(32.0));
     spec_table(
-        ["Attribute", "XS", "S", "M", "L", "XL"]
+        ["ui-attribute", "XS", "S", "M", "L", "XL"]
             .map(str::to_owned)
             .to_vec(),
         vec![
-            ["Track height", "16dp", "24dp", "40dp", "56dp", "96dp"]
+            ["ui-track-height", "16dp", "24dp", "40dp", "56dp", "96dp"]
                 .map(str::to_owned)
                 .to_vec(),
             [
-                "Label container height",
+                "ui-label-container-height",
                 "44dp",
                 "44dp",
                 "44dp",
@@ -1189,7 +1258,7 @@ pub(super) fn measurements() {
             .map(str::to_owned)
             .to_vec(),
             [
-                "Label container width",
+                "ui-label-container-width",
                 "48dp",
                 "48dp",
                 "48dp",
@@ -1198,27 +1267,27 @@ pub(super) fn measurements() {
             ]
             .map(str::to_owned)
             .to_vec(),
-            ["Handle height", "44dp", "44dp", "52dp", "68dp", "108dp"]
+            ["ui-handle-height", "44dp", "44dp", "52dp", "68dp", "108dp"]
                 .map(str::to_owned)
                 .to_vec(),
-            ["Handle width", "4dp", "4dp", "4dp", "4dp", "4dp"]
+            ["ui-handle-width", "4dp", "4dp", "4dp", "4dp", "4dp"]
                 .map(str::to_owned)
                 .to_vec(),
-            ["Track shape", "8dp", "8dp", "12dp", "16dp", "28dp"]
+            ["ui-track-shape", "8dp", "8dp", "12dp", "16dp", "28dp"]
                 .map(str::to_owned)
                 .to_vec(),
-            ["Inset icon size", "—", "—", "24dp", "24dp", "32dp"]
+            ["ui-inset-icon-size", "—", "—", "24dp", "24dp", "32dp"]
                 .map(str::to_owned)
                 .to_vec(),
         ],
     );
     gap(Dp(64.0));
     text()
-        .content("Material Design 3")
+        .content(I18N.text("ui-material-design-3"))
         .style(type_style(28.0, 36.0))
         .color(INK);
     text()
-        .content("Sliders · Interactive specifications")
+        .content(I18N.text("ui-sliders-interactive-specifications"))
         .style(type_style(16.0, 24.0))
         .color(INK);
 }
@@ -1277,7 +1346,7 @@ fn slider_figure(measurements: bool) {
                                             .on_change(move |v| value.set(v))
                                             .steps(9)
                                             .value_indicator(SliderValueIndicatorVisibility::Always)
-                                            .accessibility_label("Slider anatomy");
+                                            .accessibility_label(I18N.text("ui-slider-anatomy"));
                                     });
                                 boxed()
                                     .modifier(
@@ -1296,7 +1365,9 @@ fn slider_figure(measurements: bool) {
                                             .value(inset.get())
                                             .on_change(move |v| inset.set(v))
                                             .inset_icon(filled::VOLUME_UP_SVG)
-                                            .accessibility_label("Slider inset anatomy");
+                                            .accessibility_label(
+                                                I18N.text("ui-slider-inset-anatomy"),
+                                            );
                                     });
                             });
                     });
@@ -1470,8 +1541,9 @@ fn slider_measurement_figure() {
                                                 .value_indicator(
                                                     SliderValueIndicatorVisibility::Always,
                                                 )
-                                                .accessibility_label(format!(
-                                                    "{name} slider measurements"
+                                                .accessibility_label(I18N.format(
+                                                    "ui-value-slider-measurements",
+                                                    [("v0", I18N.text(&name).into())],
                                                 ));
                                         });
                                 }
@@ -1629,7 +1701,7 @@ fn slider_size_figure() {
     );
     gap(Dp(16.0));
     text()
-        .content("1  XS     2  S     3  M     4  L     5  XL")
+        .content(I18N.text("1  XS     2  S     3  M     4  L     5  XL"))
         .style(type_style(16.0, 24.0));
 }
 
@@ -1660,10 +1732,16 @@ fn size_specimen(
                         .value(value.get())
                         .controller(controller)
                         .on_change(move |next| value.set(next))
-                        .accessibility_label(format!(
-                            "{} size measurements",
-                            ["XS", "S", "M", "L", "XL"][index]
-                        ));
+                        .accessibility_label(
+                            I18N.format(
+                                "ui-value-size-measurements",
+                                [(
+                                    "v0",
+                                    I18N.text(&(["ui-xs", "S", "M", "L", "ui-xl"][index]))
+                                        .into(),
+                                )],
+                            ),
+                        );
                     if index >= 2 {
                         specimen.inset_icon(filled::VOLUME_UP_SVG);
                     }
@@ -1756,7 +1834,9 @@ fn size_annotation_geometry(
                 .background_with_shape(scheme.inverse_surface, Shape::Ellipse)
                 .semantics(SemanticsArgs {
                     role: Some(tessera_ui::accesskit::Role::Note),
-                    label: Some(format!("Slider size marker {}", index + 1)),
+                    label: Some(
+                        I18N.format("ui-slider-size-marker-value", [("v0", (index + 1).into())]),
+                    ),
                     ..Default::default()
                 }),
         )

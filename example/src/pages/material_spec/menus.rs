@@ -30,6 +30,8 @@ use tessera_ui::{
     tessera, use_context,
 };
 
+use crate::res::I18N;
+
 use super::{
     ACCENT, INK,
     annotations::{self, Geometry, dotted, relative, watch},
@@ -49,45 +51,45 @@ mod guides;
 #[tessera]
 pub(super) fn menus_spec(route: Option<crate::pages::material_spec::article::ArticleRoute>) {
     article(
-        "Menus",
-        "Menus display a list of choices on a temporary surface",
+        "ui-menus",
+        "ui-menus-display-a-list-of-choices-on-a-temporary-surface",
         vec![
             SpecSection {
-                title: "Variants",
+                title: "ui-variants",
                 content: RenderSlot::new(variants),
             },
             SpecSection {
-                title: "Configurations",
+                title: "ui-configurations",
                 content: RenderSlot::new(configurations),
             },
             SpecSection {
-                title: "Tokens & specs",
+                title: "ui-tokens-specs",
                 content: RenderSlot::new(tokens),
             },
             SpecSection {
-                title: "Anatomy",
+                title: "ui-anatomy",
                 content: RenderSlot::new(|| {
-                    subheading("Vertical menus".into());
+                    subheading("ui-vertical-menus".into());
                     gap(Dp(24.0));
                     menu_figure(true, false, MenuColorStyle::Standard);
                 }),
             },
             SpecSection {
-                title: "Color",
+                title: "ui-color",
                 content: RenderSlot::new(colors),
             },
             SpecSection {
-                title: "States",
+                title: "ui-states",
                 content: RenderSlot::new(states),
             },
             SpecSection {
-                title: "Measurements",
+                title: "ui-measurements",
                 content: RenderSlot::new(|| {
                     menu_figure(false, true, MenuColorStyle::Standard);
                 }),
             },
             SpecSection {
-                title: "Menu (baseline)",
+                title: "ui-menu-baseline",
                 content: RenderSlot::new(guides::baseline_section),
             },
         ],
@@ -95,95 +97,95 @@ pub(super) fn menus_spec(route: Option<crate::pages::material_spec::article::Art
     .route_optional(route.clone())
     .pages(vec![
         ArticlePage {
-            title: "Overview",
+            title: "ui-overview",
             intro: Some(RenderSlot::new(overview_intro)),
             sections: vec![
                 SpecSection {
-                    title: "Availability & resources",
+                    title: "ui-availability-resources",
                     content: RenderSlot::new(guides::resources),
                 },
                 SpecSection {
-                    title: "M3 Expressive update",
+                    title: "ui-m3-expressive-update",
                     content: RenderSlot::new(expressive),
                 },
                 SpecSection {
-                    title: "Differences from M2",
+                    title: "ui-differences-from-m2",
                     content: RenderSlot::new(differences),
                 },
             ],
         },
         ArticlePage {
-            title: "Guidelines",
+            title: "ui-guidelines",
             intro: None,
             sections: vec![
                 SpecSection {
-                    title: "Usage",
+                    title: "ui-usage",
                     content: RenderSlot::new(usage),
                 },
                 SpecSection {
-                    title: "Anatomy",
+                    title: "ui-anatomy",
                     content: RenderSlot::new(guideline_anatomy),
                 },
                 SpecSection {
-                    title: "Flexibility & slots",
+                    title: "ui-flexibility-slots",
                     content: RenderSlot::new(|| {
                         slots(true);
                     }),
                 },
                 SpecSection {
-                    title: "Placement",
+                    title: "ui-placement",
                     content: RenderSlot::new(placement),
                 },
                 SpecSection {
-                    title: "Adaptive design",
+                    title: "ui-adaptive-design",
                     content: RenderSlot::new(adaptive),
                 },
                 SpecSection {
-                    title: "Behavior",
+                    title: "ui-behavior",
                     content: RenderSlot::new(behavior),
                 },
                 SpecSection {
-                    title: "Focus",
+                    title: "ui-focus",
                     content: RenderSlot::new(guideline_focus),
                 },
                 SpecSection {
-                    title: "Density",
+                    title: "ui-density",
                     content: RenderSlot::new(density),
                 },
             ],
         },
         ArticlePage {
-            title: "Accessibility",
+            title: "ui-accessibility",
             intro: None,
             sections: vec![
                 SpecSection {
-                    title: "Use cases",
+                    title: "ui-use-cases",
                     content: RenderSlot::new(use_cases),
                 },
                 SpecSection {
-                    title: "Interaction & style",
+                    title: "ui-interaction-style",
                     content: RenderSlot::new(interaction),
                 },
                 SpecSection {
-                    title: "Flexibility & slots",
+                    title: "ui-flexibility-slots",
                     content: RenderSlot::new(|| {
                         slots(false);
                     }),
                 },
                 SpecSection {
-                    title: "Focus",
+                    title: "ui-focus",
                     content: RenderSlot::new(accessible_focus),
                 },
                 SpecSection {
-                    title: "Keyboard navigation",
+                    title: "ui-keyboard-navigation",
                     content: RenderSlot::new(keyboard),
                 },
                 SpecSection {
-                    title: "Interactability",
+                    title: "ui-interactability",
                     content: RenderSlot::new(interactability),
                 },
                 SpecSection {
-                    title: "Labeling elements",
+                    title: "ui-labeling-elements",
                     content: RenderSlot::new(labeling),
                 },
             ],
@@ -198,12 +200,12 @@ fn strings(items: &[&str]) -> Vec<String> {
 #[tessera]
 fn overview_intro() {
     prose(
-        "Use a menu to show a temporary set of actions. To show actions on screen at all times, use a toolbar instead.",
+        "ui-use-a-menu-to-show-a-temporary-set-of-actions-to-show-actions-on-screen-at-all-times-use-a",
     );
     gap(Dp(16.0));
     guides::bullets(strings(&[
-        "Menus can open from many components, including icon buttons, split buttons, and text fields",
-        "Context menus provide actions for a specific element, like an image or highlighted text, and usually open with a secondary click",
+        "ui-menus-can-open-from-many-components-including-icon-buttons-split-buttons-and-text-fields",
+        "ui-context-menus-provide-actions-for-a-specific-element-like-an-image-or-highlighted-text-and",
     ]));
     gap(Dp(24.0));
     panel(RenderSlot::new(|| {
@@ -214,52 +216,52 @@ fn overview_intro() {
             .children(|| {
                 configuration(true, MenuColorStyle::Vibrant);
                 guides::submenu_pair(
-                    "Line spacing",
-                    strings(&["Single", "1.15", "Double", "Custom 1.2"]),
+                    "ui-line-spacing",
+                    strings(&["ui-single", "1.15", "ui-double", "ui-custom-1-2"]),
                     3,
                 );
             });
     }));
     gap(Dp(12.0));
     guides::caption(
-        "Vertical menus can include vibrant colors, gaps, dividers, and submenus to organize a list of choices",
+        "ui-vertical-menus-can-include-vibrant-colors-gaps-dividers-and-submenus-to-organize-a-list-of",
     );
     gap(Dp(32.0));
     launch();
     gap(Dp(8.0));
-    guides::caption("Open the live menu, then hover or focus Share to reveal its submenu");
+    guides::caption("ui-open-the-live-menu-then-hover-or-focus-share-to-reveal-its-submenu");
 }
 
 #[tessera]
 fn expressive() {
-    guides::caption("November 2025");
+    guides::caption("ui-november-2025");
     gap(Dp(8.0));
     prose(
-        "Vertical menus were introduced with new shapes, color styles, selection states, and refined submenu motion. Gaps can be used for a more flexible layout on Android.",
+        "ui-vertical-menus-were-introduced-with-new-shapes-color-styles-selection-states-and-refined-s",
     );
     gap(Dp(16.0));
     prose("Variants:");
     gap(Dp(8.0));
     guides::bullets(strings(&[
-        "Added vertical menus, recommended for new designs",
-        "Baseline menu is still available",
+        "ui-added-vertical-menus-recommended-for-new-designs",
+        "ui-baseline-menu-is-still-available",
     ]));
-    prose("Color styles:");
+    prose("ui-color-styles-3705");
     gap(Dp(8.0));
-    guides::bullets(strings(&["Standard", "Vibrant"]));
+    guides::bullets(strings(&["ui-standard", "ui-vibrant"]));
     gap(Dp(16.0));
     panel(RenderSlot::new(|| {
         menu_sample(true, MenuColorStyle::Vibrant);
     }));
     gap(Dp(12.0));
-    guides::caption("Vibrant colors help selected menu items stand out");
+    guides::caption("ui-vibrant-colors-help-selected-menu-items-stand-out");
 }
 
 #[tessera]
 fn differences() {
     guides::bullets(strings(&[
-        "Color: New color mappings and compatibility with dynamic color",
-        "Variants: Dropdown menu and exposed dropdown menu are now both referred to as menu, since they differ only in the element which opens the menu surface",
+        "ui-color-new-color-mappings-and-compatibility-with-dynamic-color",
+        "ui-variants-dropdown-menu-and-exposed-dropdown-menu-are-now-both-referred-to-as-menu-since-th",
     ]));
     gap(Dp(24.0));
     guides::m2_comparison();
@@ -268,73 +270,73 @@ fn differences() {
 #[tessera]
 fn usage() {
     prose(
-        "Use a menu to show a temporary set of actions. To show actions on screen at all times, use a toolbar instead.",
+        "ui-use-a-menu-to-show-a-temporary-set-of-actions-to-show-actions-on-screen-at-all-times-use-a",
     );
     gap(Dp(8.0));
-    prose("A menu takes up less space than a set of radio buttons or chips.");
+    prose("ui-a-menu-takes-up-less-space-than-a-set-of-radio-buttons-or-chips");
     gap(Dp(24.0));
-    subheading("Color options".into()).level(4);
+    subheading("ui-color-options".into()).level(4);
     gap(Dp(8.0));
-    prose("Menus have two color mappings:");
+    prose("ui-menus-have-two-color-mappings");
     gap(Dp(8.0));
     guides::bullets(strings(&[
-        "Standard: Surface-based, lower visual emphasis",
-        "Vibrant: Tertiary-based, higher visual emphasis",
+        "ui-standard-surface-based-lower-visual-emphasis",
+        "ui-vibrant-tertiary-based-higher-visual-emphasis",
     ]));
-    prose("Vibrant menus are more prominent, and should be used sparingly.");
+    prose("ui-vibrant-menus-are-more-prominent-and-should-be-used-sparingly");
     gap(Dp(24.0));
     guides::line_spacing_figure();
     gap(Dp(12.0));
-    guides::caption("On web, menus can open submenus");
+    guides::caption("ui-on-web-menus-can-open-submenus");
     gap(Dp(32.0));
-    subheading("Opening menus".into());
+    subheading("ui-opening-menus".into());
     gap(Dp(8.0));
-    prose("Menus temporarily appear in front of all other permanent UI elements.");
+    prose("ui-menus-temporarily-appear-in-front-of-all-other-permanent-ui-elements");
     gap(Dp(8.0));
-    prose("A menu should open when a person:");
+    prose("ui-a-menu-should-open-when-a-person");
     gap(Dp(8.0));
     guides::bullets(strings(&[
-        "Selects an element, such as an icon, button, or text field",
-        "Performs a specific action to trigger the menu, like right-click or press-and-hold",
+        "ui-selects-an-element-such-as-an-icon-button-or-text-field",
+        "ui-performs-a-specific-action-to-trigger-the-menu-like-right-click-or-press-and-hold",
     ]));
-    prose("Use menus in situations that need extra actions, like:");
+    prose("ui-use-menus-in-situations-that-need-extra-actions-like");
     gap(Dp(8.0));
     guides::bullets(strings(&[
-        "Overflow menus",
-        "Text field dropdown menus",
-        "Select menus",
-        "Context menus",
+        "ui-overflow-menus",
+        "ui-text-field-dropdown-menus",
+        "ui-select-menus",
+        "ui-context-menus",
     ]));
     gap(Dp(16.0));
     guides::opening_figure();
     gap(Dp(12.0));
-    guides::caption("Menus appear in front of all other UI elements");
+    guides::caption("ui-menus-appear-in-front-of-all-other-ui-elements");
     gap(Dp(32.0));
-    subheading("Menu groups".into());
+    subheading("ui-menu-groups".into());
     gap(Dp(8.0));
     prose(
-        "Vertical menu items can be grouped by adding a divider or small gap. Use groups to bundle similar actions together.",
+        "ui-vertical-menu-items-can-be-grouped-by-adding-a-divider-or-small-gap-use-groups-to-bundle-s",
     );
     gap(Dp(24.0));
     configurations_figure();
     gap(Dp(16.0));
-    prose("Menu items can be grouped to be more scannable:");
+    prose("ui-menu-items-can-be-grouped-to-be-more-scannable");
     gap(Dp(8.0));
     guides::legend(strings(&[
-        "Standard vertical menu",
-        "Grouped vertical menu",
+        "ui-standard-vertical-menu",
+        "ui-grouped-vertical-menu",
     ]));
     gap(Dp(32.0));
-    subheading("Context menus".into());
+    subheading("ui-context-menus".into());
     gap(Dp(8.0));
     prose(
-        "Context menus provide a list of additional actions a person can take on an item. A secondary click, like a right-click on a mouse or a two-finger tap on a trackpad, opens a context menu.",
+        "ui-context-menus-provide-a-list-of-additional-actions-a-person-can-take-on-an-item-a-secondar",
     );
     gap(Dp(24.0));
     guides::context_figure();
     gap(Dp(12.0));
     guides::caption(
-        "A context menu appears when right clicking with a mouse or trackpad. It can reveal key actions related to the associated content.",
+        "ui-a-context-menu-appears-when-right-clicking-with-a-mouse-or-trackpad-it-can-reveal-key-acti",
     );
 }
 
@@ -342,269 +344,269 @@ fn usage() {
 fn guideline_anatomy() {
     menu_figure(true, false, MenuColorStyle::Standard);
     gap(Dp(32.0));
-    subheading("Menu items".into());
+    subheading("ui-menu-items".into());
     gap(Dp(8.0));
     prose(
-        "Menu items can include label text, leading icons, trailing icons, and keyboard commands.",
+        "ui-menu-items-can-include-label-text-leading-icons-trailing-icons-and-keyboard-commands",
     );
     gap(Dp(8.0));
     prose(
-        "When a menu item can only be used under specific conditions, it should appear disabled rather than be removed.",
+        "ui-when-a-menu-item-can-only-be-used-under-specific-conditions-it-should-appear-disabled-rath",
     );
     gap(Dp(24.0));
     guides::disabled_figure();
     gap(Dp(12.0));
-    guides::caption("The Redo action is disabled when that action isn't available");
+    guides::caption("ui-the-redo-action-is-disabled-when-that-action-isn-t-available");
     gap(Dp(32.0));
-    subheading("Gaps & dividers (optional)".into());
+    subheading("ui-gaps-dividers-optional".into());
     gap(Dp(8.0));
-    prose("Gaps and dividers can be used to separate and group menu items.");
+    prose("ui-gaps-and-dividers-can-be-used-to-separate-and-group-menu-items");
     gap(Dp(24.0));
-    subheading("Gaps".into()).level(4);
+    subheading("ui-gaps".into()).level(4);
     gap(Dp(8.0));
     prose(
-        "Use a gap to visually divide menu items into distinct groups. Gaps are more expressive than dividers and make the relationship between items clear.",
+        "ui-use-a-gap-to-visually-divide-menu-items-into-distinct-groups-gaps-are-more-expressive-than",
     );
     gap(Dp(8.0));
     guides::bullets(strings(&[
-        "Avoid changing the size of the gap",
-        "Limit the number of gaps in a menu to one or two",
-        "Don't use gaps in scrollable menus",
+        "ui-avoid-changing-the-size-of-the-gap",
+        "ui-limit-the-number-of-gaps-in-a-menu-to-one-or-two",
+        "ui-don-t-use-gaps-in-scrollable-menus",
     ]));
     gap(Dp(16.0));
     panel(RenderSlot::new(|| {
         menu_sample(true, MenuColorStyle::Standard);
     }));
     gap(Dp(12.0));
-    guides::caption("Gaps separate menu items using expressive shapes");
+    guides::caption("ui-gaps-separate-menu-items-using-expressive-shapes");
     gap(Dp(8.0));
-    guides::caption("Note: Gaps are not currently available in the Material web library");
+    guides::caption("ui-note-gaps-are-not-currently-available-in-the-material-web-library");
     gap(Dp(24.0));
-    subheading("Dividers".into()).level(4);
+    subheading("ui-dividers".into()).level(4);
     gap(Dp(8.0));
-    prose("Dividers create a more subtle separation between items. Use a divider for:");
+    prose("ui-dividers-create-a-more-subtle-separation-between-items-use-a-divider-for");
     gap(Dp(8.0));
     guides::bullets(strings(&[
-        "Scrollable menus",
-        "Text fields with a dropdown menu, where a grouped treatment isn't appropriate",
+        "ui-scrollable-menus",
+        "ui-text-fields-with-a-dropdown-menu-where-a-grouped-treatment-isn-t-appropriate",
     ]));
-    prose("On web, use a divider to separate menu items.");
+    prose("ui-on-web-use-a-divider-to-separate-menu-items");
     gap(Dp(16.0));
     panel(RenderSlot::new(|| {
         menu_sample(false, MenuColorStyle::Standard);
     }));
     gap(Dp(12.0));
-    guides::caption("Dividers separate menu items in baseline menus and on web");
+    guides::caption("ui-dividers-separate-menu-items-in-baseline-menus-and-on-web");
 }
 
 #[tessera]
 fn slots(guidelines: bool) {
     if guidelines {
-        prose("Menus have custom slots that support more flexible item layouts.");
+        prose("ui-menus-have-custom-slots-that-support-more-flexible-item-layouts");
         gap(Dp(8.0));
         prose(
-            "When creating a complicated menu, think of the menu item as a container with a swappable slot.",
+            "ui-when-creating-a-complicated-menu-think-of-the-menu-item-as-a-container-with-a-swappable-sl",
         );
         gap(Dp(8.0));
-        prose("Slots work best with simple content such as:");
+        prose("ui-slots-work-best-with-simple-content-such-as");
         gap(Dp(8.0));
         guides::bullets(strings(&[
-            "Images",
-            "Progress indicators",
-            "Color swatches",
+            "ui-images",
+            "ui-progress-indicators",
+            "ui-color-swatches",
         ]));
         gap(Dp(16.0));
         guides::slots_figure();
         gap(Dp(12.0));
-        guides::caption("Slots can appear anywhere in a menu");
+        guides::caption("ui-slots-can-appear-anywhere-in-a-menu");
         gap(Dp(8.0));
         guides::caption(
-            "Note: This page draws the slot structure statically. The native menu item exposes fixed icon, label, supporting text and trailing text slots, not arbitrary slot content.",
+            "ui-note-this-page-draws-the-slot-structure-statically-the-native-menu-item-exposes-fixed-icon",
         );
         gap(Dp(24.0));
-        subheading("Slot accessibility".into()).level(4);
+        subheading("ui-slot-accessibility".into()).level(4);
         gap(Dp(8.0));
     }
-    prose("Use caution when adding slots to menus:");
+    prose("ui-use-caution-when-adding-slots-to-menus");
     gap(Dp(8.0));
     guides::bullets(strings(&[
-        "Make sure the menu remains accessible",
-        "Elements must follow the rules and interaction patterns of the menu component",
-        "Keep the same menu item padding",
-        "Targets should be 48x48dp or larger",
+        "ui-make-sure-the-menu-remains-accessible",
+        "ui-elements-must-follow-the-rules-and-interaction-patterns-of-the-menu-component",
+        "ui-keep-the-same-menu-item-padding",
+        "ui-targets-should-be-48x48dp-or-larger",
     ]));
     prose(
-        "Don't add buttons, switches, or other direct actions into the menu item. Nested elements should only perform one action. Adding multiple actions can break keyboard navigation and screen reader functionality.",
+        "ui-don-t-add-buttons-switches-or-other-direct-actions-into-the-menu-item-nested-elements-shou",
     );
     gap(Dp(12.0));
     guides::caption(
-        "Caution: Reserve the use of slots for use cases that maintain the menu's accessibility and functionality",
+        "ui-caution-reserve-the-use-of-slots-for-use-cases-that-maintain-the-menu-s-accessibility-and",
     );
 }
 
 #[tessera]
 fn placement() {
     prose(
-        "A menu is positioned relative to the window edge. It typically appears below, next to, or in front of the element that generates it.",
+        "ui-a-menu-is-positioned-relative-to-the-window-edge-it-typically-appears-below-next-to-or-in",
     );
     gap(Dp(8.0));
     prose(
-        "If a menu is in a position to be cut off, it should automatically reposition to appear to the left, right, or above the element that generates it.",
+        "ui-if-a-menu-is-in-a-position-to-be-cut-off-it-should-automatically-reposition-to-appear-to-t",
     );
     gap(Dp(24.0));
     guides::placement_figure();
     gap(Dp(12.0));
-    guides::caption("Menus can appear around or in front of the element that opened them");
+    guides::caption("ui-menus-can-appear-around-or-in-front-of-the-element-that-opened-them");
     gap(Dp(24.0));
     launch();
     gap(Dp(8.0));
-    guides::caption("Open the live menu to see it positioned next to its trigger");
+    guides::caption("ui-open-the-live-menu-to-see-it-positioned-next-to-its-trigger");
     gap(Dp(32.0));
-    subheading("Submenus".into());
+    subheading("ui-submenus".into());
     gap(Dp(8.0));
-    prose("Submenus should open next to the parent menu item without overlapping it.");
+    prose("ui-submenus-should-open-next-to-the-parent-menu-item-without-overlapping-it");
     gap(Dp(8.0));
     prose(
-        "Submenus are best used on large screens where there's space. See adaptive guidance for alternatives on mobile.",
+        "ui-submenus-are-best-used-on-large-screens-where-there-s-space-see-adaptive-guidance-for-alte",
     );
     gap(Dp(24.0));
     guides::line_spacing_figure();
     gap(Dp(12.0));
-    guides::caption("Position submenus to the side of the parent item");
+    guides::caption("ui-position-submenus-to-the-side-of-the-parent-item");
     gap(Dp(8.0));
-    guides::caption("Note: Submenus are not currently available on Jetpack Compose");
+    guides::caption("ui-note-submenus-are-not-currently-available-on-jetpack-compose");
 }
 
 #[tessera]
 fn adaptive() {
-    subheading("Compact breakpoints".into());
+    subheading("ui-compact-breakpoints".into());
     gap(Dp(8.0));
     prose(
-        "Consider adapting menus into bottom sheets on small screens. They have more space to display additional items and longer labels.",
+        "ui-consider-adapting-menus-into-bottom-sheets-on-small-screens-they-have-more-space-to-displa",
     );
     gap(Dp(24.0));
     guides::adaptive_figure(true);
     gap(Dp(12.0));
-    guides::caption("A bottom sheet can replace a menu on smaller screens");
+    guides::caption("ui-a-bottom-sheet-can-replace-a-menu-on-smaller-screens");
     gap(Dp(32.0));
-    subheading("Other breakpoints".into());
+    subheading("ui-other-breakpoints".into());
     gap(Dp(8.0));
     prose(
-        "On medium and expanded windows, menus are most effective as they appear in context with the content. On larger screens, menus can also display more items, and can use submenus to organize complex sets of options.",
+        "ui-on-medium-and-expanded-windows-menus-are-most-effective-as-they-appear-in-context-with-the",
     );
     gap(Dp(24.0));
     guides::adaptive_figure(false);
     gap(Dp(12.0));
-    guides::caption("On large screens, a menu is often more appropriate than a bottom sheet");
+    guides::caption("ui-on-large-screens-a-menu-is-often-more-appropriate-than-a-bottom-sheet");
 }
 
 #[tessera]
 fn behavior() {
-    subheading("Appearing".into());
+    subheading("ui-appearing".into());
     gap(Dp(8.0));
     prose(
-        "A menu can appear when a person interacts with an element on the page, like a button, text field, filter chip, or highlighted text.",
+        "ui-a-menu-can-appear-when-a-person-interacts-with-an-element-on-the-page-like-a-button-text-f",
     );
     gap(Dp(8.0));
     prose(
-        "A menu's position on screen affects where and how it appears. If opened at the top of the screen, it expands downwards to avoid being cropped.",
+        "ui-a-menu-s-position-on-screen-affects-where-and-how-it-appears-if-opened-at-the-top-of-the-s",
     );
     gap(Dp(24.0));
     launch();
     gap(Dp(8.0));
     guides::caption(
-        "Menus at different positions on a screen open in different directions, adapting to the available space",
+        "ui-menus-at-different-positions-on-a-screen-open-in-different-directions-adapting-to-the-avai",
     );
     gap(Dp(32.0));
-    subheading("Motion".into());
+    subheading("ui-motion".into());
     gap(Dp(8.0));
     prose(
-        "Menus use an enter and exit transition. This animation creates a relationship between the menu and the element that generates it.",
+        "ui-menus-use-an-enter-and-exit-transition-this-animation-creates-a-relationship-between-the-m",
     );
     gap(Dp(8.0));
     prose(
-        "When a menu expands, the trigger element becomes pressed. When an item is selected, a ripple appears on touch.",
+        "ui-when-a-menu-expands-the-trigger-element-becomes-pressed-when-an-item-is-selected-a-ripple",
     );
     gap(Dp(8.0));
-    prose("In dense products, such as on desktop, menus can open instantly to reduce motion.");
+    prose("ui-in-dense-products-such-as-on-desktop-menus-can-open-instantly-to-reduce-motion");
     gap(Dp(32.0));
-    subheading("Filtering".into());
+    subheading("ui-filtering".into());
     gap(Dp(8.0));
     prose(
-        "A menu can include a text field to filter options. This pattern is also known as autocomplete.",
+        "ui-a-menu-can-include-a-text-field-to-filter-options-this-pattern-is-also-known-as-autocomple",
     );
     gap(Dp(8.0));
     prose(
-        "As someone types, the list of menu options filters to show relevant results. This helps people quickly find the right option from a long list.",
+        "ui-as-someone-types-the-list-of-menu-options-filters-to-show-relevant-results-this-helps-peop",
     );
     gap(Dp(32.0));
-    subheading("Scrolling".into());
+    subheading("ui-scrolling".into());
     gap(Dp(8.0));
     prose(
-        "Menus can scroll when all menu items can't display at once. In this state, menus show a persistent scrollbar.",
+        "ui-menus-can-scroll-when-all-menu-items-can-t-display-at-once-in-this-state-menus-show-a-pers",
     );
     gap(Dp(8.0));
-    prose("Don't use gaps if a menu scrolls; this is currently unsupported.");
+    prose("ui-don-t-use-gaps-if-a-menu-scrolls-this-is-currently-unsupported");
     gap(Dp(32.0));
-    subheading("Selecting".into());
+    subheading("ui-selecting".into());
     gap(Dp(8.0));
     prose(
-        "When a menu is opened, the corresponding button or icon button should remain the same visually, with the addition of a pressed state. This should happen even when opening from a keyboard shortcut.",
+        "ui-when-a-menu-is-opened-the-corresponding-button-or-icon-button-should-remain-the-same-visua",
     );
     gap(Dp(8.0));
-    prose("The overflow icon remains the same, even after the menu is opened.");
+    prose("ui-the-overflow-icon-remains-the-same-even-after-the-menu-is-opened");
     gap(Dp(24.0));
-    subheading("Single- and multi-select menus".into()).level(4);
+    subheading("ui-single-and-multi-select-menus".into()).level(4);
     gap(Dp(8.0));
-    prose("Menus can allow either single-select or multi-select actions:");
+    prose("ui-menus-can-allow-either-single-select-or-multi-select-actions");
     gap(Dp(8.0));
     guides::bullets(strings(&[
-        "Single-select menus can have one item selected at a time. When a new item is selected, the previously selected item is automatically unselected.",
-        "Multi-select menus can have many selected items. They stay open until the person dismisses the menu.",
+        "ui-single-select-menus-can-have-one-item-selected-at-a-time-when-a-new-item-is-selected-the-p",
+        "ui-multi-select-menus-can-have-many-selected-items-they-stay-open-until-the-person-dismisses",
     ]));
     gap(Dp(16.0));
     selection_figures::selection_figure();
     gap(Dp(12.0));
-    guides::caption("Menus can be single- or multi-select");
+    guides::caption("ui-menus-can-be-single-or-multi-select");
 }
 
 #[tessera]
 fn guideline_focus() {
     prose(
-        "When a menu has multiple submenus, focus follows the current hovered or focused submenu.",
+        "ui-when-a-menu-has-multiple-submenus-focus-follows-the-current-hovered-or-focused-submenu",
     );
     gap(Dp(24.0));
-    subheading("Shape morphing".into()).level(4);
+    subheading("ui-shape-morphing".into()).level(4);
     gap(Dp(8.0));
     prose(
-        "As a person moves from one submenu to the next, the corners of the focused submenu become more rounded, while the unfocused submenu becomes less rounded. This adds a dynamic quality to menu interactions.",
+        "ui-as-a-person-moves-from-one-submenu-to-the-next-the-corners-of-the-focused-submenu-become-m",
     );
     gap(Dp(24.0));
     launch();
     gap(Dp(8.0));
     guides::caption(
-        "Open the menu, then hover or focus Share to watch the corner shape follow the focused submenu",
+        "ui-open-the-menu-then-hover-or-focus-share-to-watch-the-corner-shape-follow-the-focused-subme",
     );
 }
 
 #[tessera]
 fn density() {
     prose(
-        "On web only, density levels control the spacing between elements. Increasing density decreases the top and bottom padding.",
+        "ui-on-web-only-density-levels-control-the-spacing-between-elements-increasing-density-decreas",
     );
     gap(Dp(24.0));
     guides::density_figure();
     gap(Dp(12.0));
-    guides::caption("Density of menus from 0 to -3");
+    guides::caption("ui-density-of-menus-from-0-to-3");
 }
 
 #[tessera]
 fn use_cases() {
-    prose("People should be able to do the following using assistive technology:");
+    prose("ui-people-should-be-able-to-do-the-following-using-assistive-technology");
     gap(Dp(8.0));
     guides::bullets(strings(&[
-        "Navigate to, open, and close a menu",
-        "Navigate between and select menu items",
+        "ui-navigate-to-open-and-close-a-menu",
+        "ui-navigate-between-and-select-menu-items",
     ]));
     gap(Dp(16.0));
     launch();
@@ -612,49 +614,49 @@ fn use_cases() {
 
 #[tessera]
 fn interaction() {
-    prose("Menu items need certain cues to clearly show when they're selected:");
+    prose("ui-menu-items-need-certain-cues-to-clearly-show-when-they-re-selected");
     gap(Dp(8.0));
     guides::bullets(strings(&[
-        "By default, menu items change shape and color when selected",
-        "The default color contrast is 3:1 between selected and unselected menu items",
-        "It's recommended to include another visual cue, like a checkmark",
+        "ui-by-default-menu-items-change-shape-and-color-when-selected",
+        "ui-the-default-color-contrast-is-3-1-between-selected-and-unselected-menu-items",
+        "ui-it-s-recommended-to-include-another-visual-cue-like-a-checkmark",
     ]));
     gap(Dp(16.0));
     accessibility_figures::state_selection();
     gap(Dp(12.0));
     guides::caption(
-        "Use multiple visual cues like color, shape, and icons to show that an item is selected",
+        "ui-use-multiple-visual-cues-like-color-shape-and-icons-to-show-that-an-item-is-selected",
     );
 }
 
 #[tessera]
 fn accessible_focus() {
-    subheading("Initial focus".into()).level(4);
+    subheading("ui-initial-focus".into()).level(4);
     gap(Dp(8.0));
     prose(
-        "When a menu opens, focus should be placed on the first menu item. This allows people using a keyboard or other assistive technologies to begin navigating the menu immediately.",
+        "ui-when-a-menu-opens-focus-should-be-placed-on-the-first-menu-item-this-allows-people-using-a",
     );
     gap(Dp(24.0));
-    subheading("Exiting a menu".into()).level(4);
+    subheading("ui-exiting-a-menu".into()).level(4);
     gap(Dp(8.0));
-    prose("People expect to exit a menu by:");
+    prose("ui-people-expect-to-exit-a-menu-by");
     gap(Dp(8.0));
     guides::bullets(strings(&[
-        "Selecting an option",
-        "Tapping Escape or outside of the menu",
-        "Using the system back button",
+        "ui-selecting-an-option",
+        "ui-tapping-escape-or-outside-of-the-menu",
+        "ui-using-the-system-back-button",
     ]));
     prose(
-        "Where focus is placed after closing the menu depends on the app. This example returns focus to its trigger.",
+        "ui-where-focus-is-placed-after-closing-the-menu-depends-on-the-app-this-example-returns-focus",
     );
     gap(Dp(24.0));
-    prose("Keyboard navigation on Android and web:");
+    prose("ui-keyboard-navigation-on-android-and-web");
     gap(Dp(8.0));
     guides::bullets(strings(&[
-        "Tab to select a menu item",
-        "Space or Enter to open a menu",
-        "Space or Enter to select a menu item",
-        "Escape to close a menu",
+        "ui-tab-to-select-a-menu-item",
+        "ui-space-or-enter-to-open-a-menu",
+        "ui-space-or-enter-to-select-a-menu-item",
+        "ui-escape-to-close-a-menu",
     ]));
     gap(Dp(16.0));
     launch();
@@ -662,48 +664,48 @@ fn accessible_focus() {
 
 #[tessera]
 fn interactability() {
-    prose("Disabled menu items can receive focus but aren't selectable.");
+    prose("ui-disabled-menu-items-can-receive-focus-but-aren-t-selectable");
     gap(Dp(8.0));
-    prose("Dividers and gaps can't receive focus.");
+    prose("ui-dividers-and-gaps-can-t-receive-focus");
     gap(Dp(24.0));
     guides::focus_examples();
 }
 
 #[tessera]
 fn labeling() {
-    prose("Accessibility labels are used with assistive technology devices like screen readers.");
+    prose("ui-accessibility-labels-are-used-with-assistive-technology-devices-like-screen-readers");
     gap(Dp(8.0));
-    prose("The accessibility label should be the same as the menu item text.");
+    prose("ui-the-accessibility-label-should-be-the-same-as-the-menu-item-text");
     gap(Dp(8.0));
-    prose("The role is dependent on platform.");
+    prose("ui-the-role-is-dependent-on-platform");
     gap(Dp(24.0));
     accessibility_figures::labeling();
     gap(Dp(12.0));
-    guides::caption("The menu item's accessibility label aligns with the UI text");
+    guides::caption("ui-the-menu-item-s-accessibility-label-aligns-with-the-ui-text");
     gap(Dp(24.0));
     prose(
-        "For menu items with text and an icon, the icon's accessibility label should be marked as decorative to avoid redundant verbalizations.",
+        "ui-for-menu-items-with-text-and-an-icon-the-icon-s-accessibility-label-should-be-marked-as-de",
     );
     gap(Dp(8.0));
     guides::caption(
-        "For menu items with text and an icon, the icon's accessibility label is decorative",
+        "ui-for-menu-items-with-text-and-an-icon-the-icon-s-accessibility-label-is-decorative",
     );
 }
 
 #[tessera]
 fn prose(#[prop(into)] value: String) {
     text()
-        .content(value)
+        .content(I18N.text(value))
         .style(type_style(16.0, 24.0))
         .color(INK);
 }
 
 #[tessera]
 fn variants() {
-    subheading("Vertical menus".into());
+    subheading("ui-vertical-menus".into());
     gap(Dp(16.0));
     prose(
-        "Use vertical menus for a more expressive look and feel, including rounded corners, standard and vibrant color styles, more selection states, and submenu motion.",
+        "ui-use-vertical-menus-for-a-more-expressive-look-and-feel-including-rounded-corners-standard",
     );
     gap(Dp(24.0));
     panel(RenderSlot::new(|| {
@@ -718,14 +720,14 @@ fn variants() {
     }));
     gap(Dp(16.0));
     guides::legend(strings(&[
-        "Vertical menu with gap",
-        "Vertical menu with divider",
+        "ui-vertical-menu-with-gap",
+        "ui-vertical-menu-with-divider",
     ]));
     gap(Dp(32.0));
-    subheading("Baseline variant".into());
+    subheading("ui-baseline-variant".into());
     gap(Dp(16.0));
     prose(
-        "In M3 Expressive, baseline menu is still available to use, but doesn't have the latest shapes, color styles, selection states, and motion.",
+        "ui-in-m3-expressive-baseline-menu-is-still-available-to-use-but-doesn-t-have-the-latest-shape",
     );
     gap(Dp(24.0));
     guides::baseline_variant();
@@ -733,19 +735,19 @@ fn variants() {
 
 #[tessera]
 fn configurations() {
-    subheading("Vertical menus layout".into());
+    subheading("ui-vertical-menus-layout".into());
     gap(Dp(24.0));
     configurations_figure();
     gap(Dp(16.0));
-    guides::legend(strings(&["Standard", "Grouped"]));
+    guides::legend(strings(&["ui-standard", "ui-grouped"]));
     gap(Dp(24.0));
     spec_table(
-        strings(&["Category", "Configuration", "M3", "M3 Expressive"]),
+        strings(&["ui-category", "ui-configuration", "M3", "ui-m3-expressive"]),
         vec![
-            strings(&["Color", "Standard", "Available", "Available"]),
-            strings(&["Color", "Vibrant", "--", "Available"]),
-            strings(&["Layout", "Standard", "Available", "Available"]),
-            strings(&["Layout", "Grouped", "--", "Available"]),
+            strings(&["ui-color", "ui-standard", "ui-available", "ui-available"]),
+            strings(&["ui-color", "ui-vibrant", "--", "ui-available"]),
+            strings(&["ui-layout", "ui-standard", "ui-available", "ui-available"]),
+            strings(&["ui-layout", "ui-grouped", "--", "ui-available"]),
         ],
     );
 }
@@ -803,7 +805,7 @@ fn configuration(grouped: bool, style: MenuColorStyle) {
                                                 .tint(scheme.on_secondary_container);
                                             boxed().modifier(Modifier::new().width(Dp(8.0)));
                                             text()
-                                                .content("Label")
+                                                .content(I18N.text("ui-label"))
                                                 .color(scheme.on_secondary_container);
                                         });
                                 });
@@ -852,20 +854,20 @@ fn configuration(grouped: bool, style: MenuColorStyle) {
                     .color_style(style)
                     .children(move || {
                         menu_item()
-                            .label("Item 1")
+                            .label(I18N.text("ui-item-1"))
                             .leading_icon(filled::VISIBILITY_SVG)
                             .selected(selected.get() == 0)
                             .selection_mode(MenuItemSelectionMode::Radio)
                             .on_click(move || selected.set(0));
                         menu_item()
-                            .label("Item 2")
+                            .label(I18N.text("ui-item-2"))
                             .leading_icon(filled::CONTENT_COPY_SVG)
-                            .trailing_text("⌘C")
+                            .trailing_text(I18N.text("⌘C"))
                             .selected(selected.get() == 1)
                             .selection_mode(MenuItemSelectionMode::Radio)
                             .on_click(move || selected.set(1));
                         menu_item()
-                            .label("Item 3")
+                            .label(I18N.text("ui-item-3"))
                             .leading_icon(filled::CHECK_SVG)
                             .selected(selected.get() == 2)
                             .selection_mode(MenuItemSelectionMode::Radio)
@@ -876,31 +878,31 @@ fn configuration(grouped: bool, style: MenuColorStyle) {
                     .color_style(style)
                     .children(move || {
                         menu_item()
-                            .label("Item 4")
+                            .label(I18N.text("ui-item-4"))
                             .leading_icon(filled::PERSON_SVG)
                             .trailing_icon(filled::ARROW_RIGHT_SVG)
                             .on_click(move || selected.set(3));
                         menu_item()
-                            .label("Item 5")
+                            .label(I18N.text("ui-item-5"))
                             .leading_icon(filled::SETTINGS_SVG)
                             .on_click(move || selected.set(4));
                     });
             } else {
                 menu_group().color_style(style).children(move || {
                     menu_item()
-                        .label("Refresh")
+                        .label(I18N.text("ui-refresh"))
                         .trailing_icon(filled::REFRESH_SVG)
                         .on_click(move || selected.set(0));
                     menu_item()
-                        .label("Settings")
+                        .label(I18N.text("ui-settings"))
                         .trailing_icon(filled::SETTINGS_SVG)
                         .on_click(move || selected.set(1));
                     menu_item()
-                        .label("Help")
+                        .label(I18N.text("ui-help"))
                         .trailing_icon(filled::HELP_OUTLINE_SVG)
                         .on_click(move || selected.set(2));
                     menu_item()
-                        .label("More")
+                        .label(I18N.text("ui-more"))
                         .trailing_icon(filled::MORE_VERT_SVG)
                         .on_click(move || selected.set(3));
                 });
@@ -933,9 +935,12 @@ fn menu_sample(grouped: bool, style: MenuColorStyle) {
                     MenuPosition::Standalone
                 })
                 .children(move || {
-                    for (index, label) in ["Item 1", "Item 2", "Item 3"].into_iter().enumerate() {
+                    for (index, label) in ["ui-item-1", "ui-item-2", "ui-item-3"]
+                        .into_iter()
+                        .enumerate()
+                    {
                         menu_item()
-                            .label(label)
+                            .label(I18N.text(label))
                             .selected(selected.get() == index)
                             .selection_mode(MenuItemSelectionMode::Radio)
                             .close_on_click(false)
@@ -946,13 +951,13 @@ fn menu_sample(grouped: bool, style: MenuColorStyle) {
                             } else {
                                 filled::EDIT_SVG
                             })
-                            .trailing_text(if index == 1 { "⌘C" } else { "" })
+                            .trailing_text(I18N.text(if index == 1 { "⌘C" } else { "" }))
                             .on_click(move || selected.set(index));
                     }
                     if !grouped {
                         horizontal_divider();
                         menu_item()
-                            .label("Item 4")
+                            .label(I18N.text("ui-item-4"))
                             .leading_icon(filled::CLOUD_SVG)
                             .trailing_icon(filled::ARROW_RIGHT_SVG)
                             .on_click(move || selected.set(3));
@@ -964,7 +969,7 @@ fn menu_sample(grouped: bool, style: MenuColorStyle) {
                     .color_style(style)
                     .children(move || {
                         menu_item()
-                            .label("Item 4")
+                            .label(I18N.text("ui-item-4"))
                             .leading_icon(filled::CLOUD_SVG)
                             .trailing_icon(filled::ARROW_RIGHT_SVG)
                             .on_click(move || selected.set(3));
@@ -977,7 +982,7 @@ fn menu_sample(grouped: bool, style: MenuColorStyle) {
 fn launch() {
     let menu = remember(MenuController::new);
     let anchor = remember(tessera_ui::LayoutCoordinates::default);
-    let notice = remember(|| "Choose an action".to_owned());
+    let notice = remember(|| "ui-choose-an-action".to_owned());
     boxed()
         .modifier(Modifier::new().fill_max_width().height(Dp(280.0)))
         .children(move || {
@@ -993,8 +998,8 @@ fn launch() {
                                 anchor.set_if_changed(coordinates);
                             }))
                             .on_click(move || menu.with_mut(MenuController::toggle))
-                            .child(|| {
-                                text().content("Open menu");
+                            .child(move || {
+                                text().content(I18N.text("ui-open-menu"));
                             });
                         gap(Dp(16.0));
                         prose(notice.get());
@@ -1007,24 +1012,24 @@ fn launch() {
                         .children(move || {
                             menu_item()
                                 .menu(menu)
-                                .label("Preview")
+                                .label(I18N.text("ui-preview"))
                                 .leading_icon(filled::VISIBILITY_SVG)
-                                .on_click(move || notice.set("Preview selected".into()));
+                                .on_click(move || notice.set("ui-preview-selected".into()));
                             menu_item()
                                 .menu(menu)
-                                .label("Share")
+                                .label(I18N.text("ui-share"))
                                 .leading_icon(filled::SHARE_SVG)
                                 .submenu_content(move |menu| {
                                     menu_item()
                                         .menu(menu)
-                                        .label("Copy link")
+                                        .label(I18N.text("ui-copy-link"))
                                         .leading_icon(filled::LINK_SVG)
-                                        .on_click(move || notice.set("Link copied".into()));
+                                        .on_click(move || notice.set("ui-link-copied".into()));
                                     menu_item()
                                         .menu(menu)
-                                        .label("Email")
+                                        .label(I18N.text("ui-email"))
                                         .leading_icon(filled::EMAIL_SVG)
-                                        .on_click(move || notice.set("Email selected".into()));
+                                        .on_click(move || notice.set("ui-email-selected".into()));
                                 });
                         });
                     menu_group()
@@ -1033,9 +1038,9 @@ fn launch() {
                         .children(move || {
                             menu_item()
                                 .menu(menu)
-                                .label("Delete")
+                                .label(I18N.text("ui-delete"))
                                 .leading_icon(filled::DELETE_SVG)
-                                .on_click(move || notice.set("Delete selected".into()));
+                                .on_click(move || notice.set("ui-delete-selected".into()));
                         });
                 });
         });
@@ -1069,7 +1074,7 @@ fn menu_figure(anatomy: bool, measurements: bool, style: MenuColorStyle) {
                                 .modifier(watch(geometry, "first").fill_max_width())
                                 .children(move || {
                                     menu_item()
-                                        .label("Item 1")
+                                        .label(I18N.text("ui-item-1"))
                                         .leading_icon(filled::VISIBILITY_SVG)
                                         .selected(selected.get() == 1)
                                         .selection_mode(MenuItemSelectionMode::Radio)
@@ -1079,7 +1084,7 @@ fn menu_figure(anatomy: bool, measurements: bool, style: MenuColorStyle) {
                                 .modifier(watch(geometry, "second").fill_max_width())
                                 .children(move || {
                                     menu_item()
-                                        .label("Item 2")
+                                        .label(I18N.text("ui-item-2"))
                                         .leading_icon(filled::CONTENT_COPY_SVG)
                                         .trailing_icon(filled::ARROW_RIGHT_SVG)
                                         .selected(selected.get() == 2)
@@ -1097,7 +1102,7 @@ fn menu_figure(anatomy: bool, measurements: bool, style: MenuColorStyle) {
                                 .modifier(watch(geometry, "third").fill_max_width())
                                 .children(move || {
                                     menu_item()
-                                        .label("Item 3")
+                                        .label(I18N.text("ui-item-3"))
                                         .leading_icon(filled::EDIT_SVG)
                                         .trailing_icon(filled::ARROW_RIGHT_SVG)
                                         .on_click(move || selected.set(3));
@@ -1115,17 +1120,19 @@ fn menu_figure(anatomy: bool, measurements: bool, style: MenuColorStyle) {
                                         .padding_symmetric(Dp(16.0), Dp::ZERO),
                                 )
                                 .alignment(Alignment::CenterStart)
-                                .children(|| {
-                                    text().content("Label text").style(type_style(14.0, 20.0));
+                                .children(move || {
+                                    text()
+                                        .content(I18N.text("ui-label-text"))
+                                        .style(type_style(14.0, 20.0));
                                 });
                             boxed()
                                 .modifier(watch(geometry, "fourth").fill_max_width())
                                 .children(move || {
                                     menu_item()
-                                        .label("Item 4")
-                                        .supporting_text("Supporting text")
+                                        .label(I18N.text("ui-item-4"))
+                                        .supporting_text(I18N.text("ui-supporting-text"))
                                         .leading_icon(filled::CLOUD_SVG)
-                                        .trailing_text("⌘C")
+                                        .trailing_text(I18N.text("⌘C"))
                                         .on_click(move || selected.set(4));
                                 });
                         });
@@ -1142,8 +1149,10 @@ fn menu_figure(anatomy: bool, measurements: bool, style: MenuColorStyle) {
                                 Dp(third.x + third.w - 80.0),
                                 Dp(third.y + third.h / 2.0 - 9.0),
                             ))
-                            .content(|| {
-                                text().content("New").style(type_style(12.0, 16.0));
+                            .content(move || {
+                                text()
+                                    .content(I18N.text("ui-new"))
+                                    .style(type_style(12.0, 16.0));
                             });
                     }
                 });
@@ -1151,22 +1160,22 @@ fn menu_figure(anatomy: bool, measurements: bool, style: MenuColorStyle) {
     if anatomy {
         gap(Dp(16.0));
         guides::legend(strings(&[
-            "Menu item",
-            "Leading icon (optional)",
-            "Menu item text",
-            "Trailing icon (optional)",
-            "Badge (optional)",
-            "Trailing text (optional)",
-            "Container",
-            "Supporting text (optional)",
-            "Label text (optional)",
-            "Gap (optional)",
-            "Divider (optional)",
+            "ui-menu-item",
+            "ui-leading-icon-optional",
+            "ui-menu-item-text",
+            "ui-trailing-icon-optional",
+            "ui-badge-optional",
+            "ui-trailing-text-optional",
+            "ui-container",
+            "ui-supporting-text-optional",
+            "ui-label-text-optional",
+            "ui-gap-optional",
+            "ui-divider-optional",
         ]));
     }
     if measurements {
         gap(Dp(12.0));
-        guides::caption("Vertical menu padding and size measurements");
+        guides::caption("ui-vertical-menu-padding-and-size-measurements");
     }
 }
 
@@ -1265,17 +1274,17 @@ fn menu_annotations(geometry: State<Geometry>, anatomy: bool, measurements: bool
 #[tessera]
 fn colors() {
     prose(
-        "Color values are implemented through design tokens. For designers, this means working with color values that correspond with tokens. In implementation, a color value will be a token that references a value.",
+        "ui-color-values-are-implemented-through-design-tokens-for-designers-this-means-working-with-c",
     );
     gap(Dp(16.0));
-    prose("Menus have two color mappings:");
+    prose("ui-menus-have-two-color-mappings");
     gap(Dp(8.0));
     guides::bullets(strings(&[
-        "Standard: Surface-based",
-        "Vibrant: Tertiary-based",
+        "ui-standard-surface-based",
+        "ui-vibrant-tertiary-based",
     ]));
     prose(
-        "These mappings provide options for lower or higher visual emphasis. Vibrant menus are more prominent so should be used sparingly.",
+        "ui-these-mappings-provide-options-for-lower-or-higher-visual-emphasis-vibrant-menus-are-more",
     );
     gap(Dp(24.0));
     panel(RenderSlot::new(|| {
@@ -1289,14 +1298,17 @@ fn colors() {
             });
     }));
     gap(Dp(16.0));
-    guides::legend(strings(&["Standard color scheme", "Vibrant color scheme"]));
+    guides::legend(strings(&[
+        "ui-standard-color-scheme",
+        "ui-vibrant-color-scheme",
+    ]));
     gap(Dp(32.0));
     for style in [MenuColorStyle::Standard, MenuColorStyle::Vibrant] {
         subheading(
             if style == MenuColorStyle::Standard {
-                "Standard colors"
+                "ui-standard-colors"
             } else {
-                "Vibrant colors"
+                "ui-vibrant-colors"
             }
             .into(),
         );
@@ -1317,7 +1329,7 @@ fn colors() {
                 }
             });
         gap(Dp(16.0));
-        guides::caption("Vertical menus color roles used for light and dark themes:");
+        guides::caption("ui-vertical-menus-color-roles-used-for-light-and-dark-themes");
         gap(Dp(8.0));
         guides::legend(
             menu_color_roles(style)
@@ -1340,31 +1352,31 @@ const COLOR_ROWS: [&str; 5] = [
 fn menu_color_roles(style: MenuColorStyle) -> [&'static str; 11] {
     if style == MenuColorStyle::Standard {
         [
-            "On surface variant",
-            "On surface",
-            "On surface (state layer)",
-            "Surface container low",
-            "On surface variant",
-            "On surface variant",
-            "Tertiary container (selected)",
-            "On tertiary container (selected)",
-            "On surface variant",
-            "On surface variant",
-            "On tertiary container (selected)",
+            "ui-on-surface-variant",
+            "ui-on-surface",
+            "ui-on-surface-state-layer",
+            "ui-surface-container-low",
+            "ui-on-surface-variant",
+            "ui-on-surface-variant",
+            "ui-tertiary-container-selected",
+            "ui-on-tertiary-container-selected",
+            "ui-on-surface-variant",
+            "ui-on-surface-variant",
+            "ui-on-tertiary-container-selected",
         ]
     } else {
         [
-            "On tertiary container",
-            "On tertiary container",
-            "On tertiary container (state layer)",
-            "Tertiary container",
-            "On tertiary container",
-            "On tertiary container",
-            "Tertiary (selected)",
-            "On tertiary (selected)",
-            "On tertiary container",
-            "On tertiary container",
-            "On tertiary (selected)",
+            "ui-on-tertiary-container",
+            "ui-on-tertiary-container",
+            "ui-on-tertiary-container-state-layer",
+            "ui-tertiary-container",
+            "ui-on-tertiary-container",
+            "ui-on-tertiary-container",
+            "ui-tertiary-selected",
+            "ui-on-tertiary-selected",
+            "ui-on-tertiary-container",
+            "ui-on-tertiary-container",
+            "ui-on-tertiary-selected",
         ]
     }
 }
@@ -1374,7 +1386,7 @@ fn menu_color_figure(style: MenuColorStyle, dark: bool) {
     let geometry = remember(Geometry::new);
     let selected = remember(|| 3_usize);
     let scheme = use_context::<MaterialTheme>().unwrap().get().color_scheme;
-    let mode = if dark { "Dark" } else { "Light" };
+    let mode = if dark { "ui-dark" } else { "ui-light" };
     let emphasis = if style == MenuColorStyle::Standard {
         "standard"
     } else {
@@ -1389,7 +1401,13 @@ fn menu_color_figure(style: MenuColorStyle, dark: bool) {
                 .background(scheme.surface)
                 .semantics(SemanticsArgs {
                     role: Some(Role::Group),
-                    label: Some(format!("{mode} {emphasis} menu color roles")),
+                    label: Some(I18N.format(
+                        "ui-value-value-menu-color-roles",
+                        [
+                            ("v0", I18N.text(&mode).into()),
+                            ("v1", I18N.text(&emphasis).into()),
+                        ],
+                    )),
                     merge_descendants: true,
                     ..Default::default()
                 }),
@@ -1407,7 +1425,10 @@ fn menu_color_figure(style: MenuColorStyle, dark: bool) {
                                     .modifier(watch(geometry, COLOR_ROWS[index]).fill_max_width())
                                     .children(move || {
                                         let item = menu_item()
-                                            .label(format!("Item {}", index + 1))
+                                            .label(I18N.format(
+                                                "ui-item-value",
+                                                [("v0", (index + 1).into())],
+                                            ))
                                             .selection_mode(MenuItemSelectionMode::Radio)
                                             .selected(selected.get() == index)
                                             .color_style(style)
@@ -1419,7 +1440,7 @@ fn menu_color_figure(style: MenuColorStyle, dark: bool) {
                                             }
                                             1 => {
                                                 item.leading_icon(filled::CONTENT_COPY_SVG)
-                                                    .trailing_text("⌘C");
+                                                    .trailing_text(I18N.text("⌘C"));
                                             }
                                             2 => {
                                                 item.leading_icon(filled::EDIT_SVG)
@@ -1444,7 +1465,7 @@ fn menu_color_figure(style: MenuColorStyle, dark: bool) {
                                 )
                                 .children(move || {
                                     text()
-                                        .content("Label text")
+                                        .content(I18N.text("ui-label-text"))
                                         .style(type_style(14.0, 20.0))
                                         .color(if style == MenuColorStyle::Standard {
                                             scheme.on_surface_variant
@@ -1456,8 +1477,8 @@ fn menu_color_figure(style: MenuColorStyle, dark: bool) {
                                 .modifier(watch(geometry, COLOR_ROWS[4]).fill_max_width())
                                 .children(move || {
                                     menu_item()
-                                        .label("Item 5")
-                                        .supporting_text("Supporting text")
+                                        .label(I18N.text("ui-item-5"))
+                                        .supporting_text(I18N.text("ui-supporting-text"))
                                         .trailing_icon(filled::ARROW_RIGHT_SVG)
                                         .selection_mode(MenuItemSelectionMode::Radio)
                                         .selected(selected.get() == 4)
@@ -1615,13 +1636,16 @@ fn menu_color_marker(number: usize, role: String, x: Dp, y: Dp) {
                 .background_with_shape(scheme.on_surface, Shape::rounded_rectangle(Dp(16.0)))
                 .semantics(SemanticsArgs {
                     role: Some(Role::Note),
-                    label: Some(format!("Menu color role {number}: {role}")),
+                    label: Some(I18N.format(
+                        "ui-menu-color-role-value-value",
+                        [("v0", (number).into()), ("v1", I18N.text(&role).into())],
+                    )),
                     ..Default::default()
                 }),
         )
         .children(move || {
             text()
-                .content(number.to_string())
+                .content((number).to_string())
                 .style(type_style(14.0, 20.0))
                 .color(scheme.surface);
         });
@@ -1630,11 +1654,11 @@ fn menu_color_marker(number: usize, role: String, x: Dp, y: Dp) {
 #[tessera]
 fn states() {
     prose(
-        "States are visual representations used to communicate the status of a component or an interactive element.",
+        "ui-states-are-visual-representations-used-to-communicate-the-status-of-a-component-or-an-inte",
     );
     gap(Dp(8.0));
     prose(
-        "Shape morphing in vertical menus creates an expressive active state. As focus moves between submenus, the corner shape changes to highlight the active menu.",
+        "ui-shape-morphing-in-vertical-menus-creates-an-expressive-active-state-as-focus-moves-between",
     );
     gap(Dp(24.0));
     guides::states_figure(false, false);
@@ -1642,22 +1666,22 @@ fn states() {
 
 #[tessera]
 fn tokens() {
-    prose("Browse the component elements, attributes, tokens, and their values.");
+    prose("ui-browse-the-component-elements-attributes-tokens-and-their-values");
     gap(Dp(16.0));
     spec_table(
-        strings(&["Token", "Value"]),
+        strings(&["ui-token", "ui-value"]),
         vec![
-            strings(&["Menu gap", "2dp"]),
-            strings(&["Menu group padding", "2dp"]),
-            strings(&["Menu container elevation", "Level 2, 3dp"]),
-            strings(&["Menu item height", "44dp"]),
-            strings(&["Menu item top space", "8dp"]),
-            strings(&["Menu item bottom space", "8dp"]),
-            strings(&["Menu item leading space", "16dp"]),
-            strings(&["Menu item trailing space", "16dp"]),
-            strings(&["Menu item between space", "12dp"]),
-            strings(&["Menu item leading icon size", "20dp"]),
-            strings(&["Menu item trailing icon size", "20dp"]),
+            strings(&["ui-menu-gap", "2dp"]),
+            strings(&["ui-menu-group-padding", "2dp"]),
+            strings(&["ui-menu-container-elevation", "ui-level-2-3dp"]),
+            strings(&["ui-menu-item-height", "44dp"]),
+            strings(&["ui-menu-item-top-space", "8dp"]),
+            strings(&["ui-menu-item-bottom-space", "8dp"]),
+            strings(&["ui-menu-item-leading-space", "16dp"]),
+            strings(&["ui-menu-item-trailing-space", "16dp"]),
+            strings(&["ui-menu-item-between-space", "12dp"]),
+            strings(&["ui-menu-item-leading-icon-size", "20dp"]),
+            strings(&["ui-menu-item-trailing-icon-size", "20dp"]),
         ],
     );
 }
@@ -1665,23 +1689,23 @@ fn tokens() {
 #[tessera]
 fn keyboard() {
     spec_table(
-        strings(&["Keys", "Actions"]),
+        strings(&["ui-keys", "ui-actions"]),
         vec![
-            strings(&["Tab", "Focus lands on menu"]),
+            strings(&["ui-tab", "ui-focus-lands-on-menu"]),
             strings(&[
-                "Space or Enter",
-                "For closed menus: Opens menu or submenu. For open menus: Selects a menu item",
+                "ui-space-or-enter",
+                "ui-for-closed-menus-opens-menu-or-submenu-for-open-menus-selects-a-menu-item",
             ]),
             strings(&[
-                "Up and Down arrows",
-                "For closed menus: Opens menu. For open menus: Moves focus to the next item",
+                "ui-up-and-down-arrows",
+                "ui-for-closed-menus-opens-menu-for-open-menus-moves-focus-to-the-next-item",
             ]),
-            strings(&["Left and Right arrows", "Opens or closes a submenu"]),
+            strings(&["ui-left-and-right-arrows", "ui-opens-or-closes-a-submenu"]),
             strings(&[
-                "Letters",
-                "Focus moves to the next menu item starting with letter",
+                "ui-letters",
+                "ui-focus-moves-to-the-next-menu-item-starting-with-letter",
             ]),
-            strings(&["Escape", "Closes menu"]),
+            strings(&["ui-escape", "ui-closes-menu"]),
         ],
     );
 }

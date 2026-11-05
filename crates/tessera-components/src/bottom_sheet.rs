@@ -40,6 +40,7 @@ use crate::{
     },
     overlay_semantics::{dialog_semantics, overlay_background},
     pos_misc::is_position_inside_bounds,
+    res::I18N,
     shape_def::{RoundedCorner, Shape},
     spacer::spacer,
     surface::{SurfaceStyle, surface},
@@ -510,7 +511,7 @@ fn bottom_sheet_drag_handle(
     let modifier = with_pointer_input(
         Modifier::new().clickable_with(ClickableArgs {
             enabled: controller.with(|controller| controller.can_resize),
-            label: Some("Drag handle".to_string()),
+            label: Some(I18N.text("md3-drag-handle")),
             block_input: false,
             tap_recognizer: Some(tap_recognizer),
             interaction_state: Some(interaction),

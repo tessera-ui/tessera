@@ -32,6 +32,8 @@ use tessera_ui::{
     accesskit::Role, modifier::FocusModifierExt as _, remember, tessera, use_context,
 };
 
+use crate::res::I18N;
+
 use self::figures::{guidance_card, legend, split};
 use super::{
     INK,
@@ -46,7 +48,13 @@ mod tests;
 struct FilterLabels;
 
 impl FilterLabels {
-    const ITEMS: [&'static str; 5] = ["Events", "Personal", "Projects", "Reminders", "Family"];
+    const ITEMS: [&'static str; 5] = [
+        "ui-events",
+        "ui-personal",
+        "ui-projects",
+        "ui-reminders",
+        "ui-family",
+    ];
 
     fn defaults() -> [bool; 5] {
         [false, false, true, true, false]
@@ -94,7 +102,7 @@ pub(crate) fn live_side_sheet_host(
     let session = LiveSideSheetSession {
         open: remember(|| false),
         filters: remember(FilterLabels::defaults),
-        notice: remember(|| String::from("No action selected")),
+        notice: remember(|| String::from("ui-no-action-selected")),
         directory,
         router,
         material,
@@ -125,7 +133,7 @@ fn live_modal(
     modal_side_sheet_provider()
         .position(SideSheetPosition::End)
         .content_padding(Dp::ZERO)
-        .accessibility_label("Filters")
+        .accessibility_label(I18N.text("ui-filters"))
         .is_open(open.get())
         .on_close_request(move || open.set(false))
         .main_content_shared(main_content)
@@ -142,7 +150,7 @@ pub(super) fn side_sheets_spec(
     let root = session;
     let local_open = remember(|| false);
     let local_filters = remember(FilterLabels::defaults);
-    let local_notice = remember(|| String::from("No action selected"));
+    let local_notice = remember(|| String::from("ui-no-action-selected"));
     let standard_open = remember(|| false);
     let (open, filters, notice) = if let Some(session) = root {
         (session.open, session.filters, session.notice)
@@ -171,21 +179,21 @@ fn sheet_article(
     session: Option<LiveSideSheetSession>,
 ) {
     article(
-        "Side sheets",
-        "Side sheets show secondary content anchored to the side of the screen",
+        "ui-side-sheets",
+        "ui-side-sheets-show-secondary-content-anchored-to-the-side-of-the-screen",
         vec![
             SpecSection {
-                title: "Tokens & specs",
+                title: "ui-tokens-specs",
                 content: RenderSlot::new(tokens),
             },
             SpecSection {
-                title: "Standard side sheet",
+                title: "ui-standard-side-sheet",
                 content: RenderSlot::new(move || {
                     variant_specs(false);
                 }),
             },
             SpecSection {
-                title: "Modal side sheet",
+                title: "ui-modal-side-sheet",
                 content: RenderSlot::new(move || {
                     variant_specs(true);
                 }),
@@ -195,23 +203,23 @@ fn sheet_article(
     .route_optional(route)
     .pages(vec![
         ArticlePage {
-            title: "Overview",
+            title: "ui-overview",
             intro: Some(RenderSlot::new(move || {
                 overview_intro(modal_open).session_optional(session);
             })),
             sections: vec![
                 SpecSection {
-                    title: "Availability & resources",
+                    title: "ui-availability-resources",
                     content: RenderSlot::new(availability),
                 },
                 SpecSection {
-                    title: "Differences from M2",
+                    title: "ui-differences-from-m2",
                     content: RenderSlot::new(differences),
                 },
             ],
         },
         ArticlePage {
-            title: "Guidelines",
+            title: "ui-guidelines",
             intro: Some(RenderSlot::new(move || {
                 figures::hero();
                 gap(Dp(24.0));
@@ -219,23 +227,23 @@ fn sheet_article(
             })),
             sections: vec![
                 SpecSection {
-                    title: "Usage",
+                    title: "ui-usage",
                     content: RenderSlot::new(move || {
                         usage(modal_open).session_optional(session);
                     }),
                 },
                 SpecSection {
-                    title: "Anatomy",
+                    title: "ui-anatomy",
                     content: RenderSlot::new(anatomy_guidance),
                 },
                 SpecSection {
-                    title: "Adaptive design",
+                    title: "ui-adaptive-design",
                     content: RenderSlot::new(move || {
                         adaptive_design(standard_open);
                     }),
                 },
                 SpecSection {
-                    title: "Behavior",
+                    title: "ui-behavior",
                     content: RenderSlot::new(move || {
                         behavior(modal_open, notice).session_optional(session);
                     }),
@@ -243,31 +251,31 @@ fn sheet_article(
             ],
         },
         ArticlePage {
-            title: "Accessibility",
+            title: "ui-accessibility",
             intro: None,
             sections: vec![
                 SpecSection {
-                    title: "Use cases",
+                    title: "ui-use-cases",
                     content: RenderSlot::new(move || {
                         use_cases(modal_open).session_optional(session);
                     }),
                 },
                 SpecSection {
-                    title: "Interaction & style",
+                    title: "ui-interaction-style",
                     content: RenderSlot::new(interaction_style),
                 },
                 SpecSection {
-                    title: "Initial focus",
+                    title: "ui-initial-focus",
                     content: RenderSlot::new(move || {
                         initial_focus(modal_open).session_optional(session);
                     }),
                 },
                 SpecSection {
-                    title: "Keyboard navigation",
+                    title: "ui-keyboard-navigation",
                     content: RenderSlot::new(keyboard_navigation),
                 },
                 SpecSection {
-                    title: "Labeling",
+                    title: "ui-labeling",
                     content: RenderSlot::new(labeling),
                 },
             ],
@@ -278,7 +286,7 @@ fn sheet_article(
 #[tessera]
 fn prose(#[prop(into)] value: String) {
     text()
-        .content(value)
+        .content(I18N.text(value))
         .style(type_style(16.0, 24.0))
         .color(INK);
 }
@@ -287,7 +295,7 @@ fn prose(#[prop(into)] value: String) {
 fn caption(#[prop(into)] value: String) {
     let scheme = use_context::<MaterialTheme>().unwrap().get().color_scheme;
     text()
-        .content(value)
+        .content(I18N.text(value))
         .color(scheme.on_surface_variant)
         .style(type_style(14.0, 20.0));
 }
@@ -297,7 +305,7 @@ fn bullets(items: Vec<String>) {
     column().children(move || {
         for item in items.clone() {
             text()
-                .content(format!("•  {item}"))
+                .content(format!("•  {}", I18N.text(item)))
                 .style(type_style(16.0, 24.0))
                 .color(INK);
             gap(Dp(8.0));
@@ -308,8 +316,8 @@ fn bullets(items: Vec<String>) {
 #[tessera]
 fn variants_legend() {
     legend(vec![
-        (1, "Standard side sheet".into()),
-        (2, "Modal side sheet".into()),
+        (1, "ui-standard-side-sheet".into()),
+        (2, "ui-modal-side-sheet".into()),
     ]);
 }
 
@@ -320,18 +328,18 @@ fn launch(open: State<bool>, session: Option<LiveSideSheetSession>) {
         .children(move || {
             button()
                 .outlined()
-                .accessibility_label("Open modal side sheet")
+                .accessibility_label(I18N.text("ui-open-modal-side-sheet"))
                 .on_click(move || {
                     if session.is_none_or(LiveSideSheetSession::can_open) {
                         open.set(true);
                     }
                 })
-                .child(|| {
-                    text().content("Open modal side sheet");
+                .child(move || {
+                    text().content(I18N.text("ui-open-modal-side-sheet"));
                 });
             gap(Dp(16.0));
             caption(
-                "Escape, the scrim and the close icon button all dismiss the modal side sheet.",
+                "ui-escape-the-scrim-and-the-close-icon-button-all-dismiss-the-modal-side-sheet",
             );
         });
 }
@@ -339,11 +347,11 @@ fn launch(open: State<bool>, session: Option<LiveSideSheetSession>) {
 #[tessera]
 fn overview_intro(open: State<bool>, session: Option<LiveSideSheetSession>) {
     bullets(vec![
-        "Use side sheets to provide optional content and actions without interrupting the main content"
+        "ui-use-side-sheets-to-provide-optional-content-and-actions-without-interrupting-the-main-cont"
             .into(),
-        "Two variants: standard and modal".into(),
-        "People can navigate to another region within the sheet".into(),
-        "Side sheets can contain a back icon for navigation".into(),
+        "ui-two-variants-standard-and-modal".into(),
+        "ui-people-can-navigate-to-another-region-within-the-sheet".into(),
+        "ui-side-sheets-can-contain-a-back-icon-for-navigation".into(),
     ]);
     gap(Dp(24.0));
     figures::hero();
@@ -356,29 +364,33 @@ fn overview_intro(open: State<bool>, session: Option<LiveSideSheetSession>) {
 #[tessera]
 fn availability() {
     spec_table(
-        vec!["Type".into(), "Resource".into(), "Status".into()],
+        vec!["ui-type".into(), "ui-resource".into(), "ui-status".into()],
         vec![
             vec![
-                "Design".into(),
-                "Design Kit (Figma)".into(),
-                "Available".into(),
+                "ui-design".into(),
+                "ui-design-kit-figma".into(),
+                "ui-available".into(),
             ],
             vec![
-                "Implementation".into(),
-                "Flutter".into(),
-                "Unavailable".into(),
+                "ui-implementation".into(),
+                "ui-flutter".into(),
+                "ui-unavailable".into(),
             ],
             vec![
-                "Implementation".into(),
-                "Jetpack Compose".into(),
-                "Unavailable".into(),
+                "ui-implementation".into(),
+                "ui-jetpack-compose".into(),
+                "ui-unavailable".into(),
             ],
             vec![
-                "Implementation".into(),
-                "Android Views (MDC-Android)".into(),
-                "Available".into(),
+                "ui-implementation".into(),
+                "ui-android-views-mdc-android".into(),
+                "ui-available".into(),
             ],
-            vec!["Implementation".into(), "Web".into(), "Unavailable".into()],
+            vec![
+                "ui-implementation".into(),
+                "ui-web".into(),
+                "ui-unavailable".into(),
+            ],
         ],
     );
 }
@@ -389,15 +401,15 @@ fn differences() {
         .start_weight(0.5)
         .start(|| {
             bullets(vec![
-                "Right-to-left (RTL) language support with left side sheet".into(),
-                "Color: new color mappings and compatibility with dynamic color".into(),
-                "Shape: modal side sheets have a 16dp corner radius".into(),
+                "ui-right-to-left-rtl-language-support-with-left-side-sheet".into(),
+                "ui-color-new-color-mappings-and-compatibility-with-dynamic-color-2123".into(),
+                "ui-shape-modal-side-sheets-have-a-16dp-corner-radius".into(),
             ]);
         })
         .end(|| {
             figures::differences_figure();
             gap(Dp(16.0));
-            caption("Side sheets have new color mappings to support dynamic color");
+            caption("ui-side-sheets-have-new-color-mappings-to-support-dynamic-color");
         });
 }
 
@@ -408,193 +420,198 @@ struct Token {
     value: &'static str,
 }
 
-const TOKEN_GROUPS: [&str; 4] = ["Enabled", "Hovered", "Focused", "Pressed (ripple)"];
+const TOKEN_GROUPS: [&str; 4] = [
+    "ui-enabled",
+    "ui-hovered",
+    "ui-focused",
+    "ui-pressed-ripple",
+];
 
 const TOKENS: [Token; 31] = [
     Token {
-        group: "Enabled",
-        section: "Container",
-        name: "Sheet side docked container color",
+        group: "ui-enabled",
+        section: "ui-container",
+        name: "ui-sheet-side-docked-container-color",
         value: "#FEF7FF",
     },
     Token {
-        group: "Enabled",
-        section: "Container",
-        name: "Sheet side docked modal container color",
+        group: "ui-enabled",
+        section: "ui-container",
+        name: "ui-sheet-side-docked-modal-container-color",
         value: "#F7F2FA",
     },
     Token {
-        group: "Enabled",
-        section: "Container",
-        name: "Sheet side docked standard container color",
+        group: "ui-enabled",
+        section: "ui-container",
+        name: "ui-sheet-side-docked-standard-container-color",
         value: "#FEF7FF",
     },
     Token {
-        group: "Enabled",
-        section: "Container",
-        name: "Sheet side docked container surface tint layer color",
+        group: "ui-enabled",
+        section: "ui-container",
+        name: "ui-sheet-side-docked-container-surface-tint-layer-color",
         value: "#6750A4",
     },
     Token {
-        group: "Enabled",
-        section: "Container",
-        name: "Sheet side docked modal container elevation",
-        value: "Level 1",
+        group: "ui-enabled",
+        section: "ui-container",
+        name: "ui-sheet-side-docked-modal-container-elevation",
+        value: "ui-level-1",
     },
     Token {
-        group: "Enabled",
-        section: "Container",
-        name: "Sheet side docked standard container elevation",
-        value: "Level 0",
+        group: "ui-enabled",
+        section: "ui-container",
+        name: "ui-sheet-side-docked-standard-container-elevation",
+        value: "ui-level-0",
     },
     Token {
-        group: "Enabled",
-        section: "Container",
-        name: "Sheet side docked container height",
+        group: "ui-enabled",
+        section: "ui-container",
+        name: "ui-sheet-side-docked-container-height",
         value: "100%",
     },
     Token {
-        group: "Enabled",
-        section: "Container",
-        name: "Sheet side docked container shape",
-        value: "Square corners",
+        group: "ui-enabled",
+        section: "ui-container",
+        name: "ui-sheet-side-docked-container-shape",
+        value: "ui-square-corners",
     },
     Token {
-        group: "Enabled",
-        section: "Container",
-        name: "Sheet side detached container shape",
-        value: "Rounded corners",
+        group: "ui-enabled",
+        section: "ui-container",
+        name: "ui-sheet-side-detached-container-shape",
+        value: "ui-rounded-corners",
     },
     Token {
-        group: "Enabled",
-        section: "Container",
-        name: "Sheet side docked container width",
+        group: "ui-enabled",
+        section: "ui-container",
+        name: "ui-sheet-side-docked-container-width",
         value: "256dp",
     },
     Token {
-        group: "Enabled",
-        section: "Container",
-        name: "Sheet side docked modal container shape",
-        value: "Rounded corners",
+        group: "ui-enabled",
+        section: "ui-container",
+        name: "ui-sheet-side-docked-modal-container-shape",
+        value: "ui-rounded-corners",
     },
     Token {
-        group: "Enabled",
-        section: "Headline",
-        name: "Sheet side docked headline color",
+        group: "ui-enabled",
+        section: "ui-headline",
+        name: "ui-sheet-side-docked-headline-color",
         value: "#49454F",
     },
     Token {
-        group: "Enabled",
-        section: "Headline",
-        name: "Sheet side docked headline font",
-        value: "Roboto",
+        group: "ui-enabled",
+        section: "ui-headline",
+        name: "ui-sheet-side-docked-headline-font",
+        value: "ui-roboto",
     },
     Token {
-        group: "Enabled",
-        section: "Headline",
-        name: "Sheet side docked headline line height",
+        group: "ui-enabled",
+        section: "ui-headline",
+        name: "ui-sheet-side-docked-headline-line-height",
         value: "28pt",
     },
     Token {
-        group: "Enabled",
-        section: "Headline",
-        name: "Sheet side docked headline size",
+        group: "ui-enabled",
+        section: "ui-headline",
+        name: "ui-sheet-side-docked-headline-size",
         value: "22pt",
     },
     Token {
-        group: "Enabled",
-        section: "Headline",
-        name: "Sheet side docked headline tracking",
+        group: "ui-enabled",
+        section: "ui-headline",
+        name: "ui-sheet-side-docked-headline-tracking",
         value: "0pt",
     },
     Token {
-        group: "Enabled",
-        section: "Headline",
-        name: "Sheet side docked headline weight",
+        group: "ui-enabled",
+        section: "ui-headline",
+        name: "ui-sheet-side-docked-headline-weight",
         value: "400",
     },
     Token {
-        group: "Enabled",
-        section: "Headline",
-        name: "Sheet side docked headline type style",
-        value: "Title large",
+        group: "ui-enabled",
+        section: "ui-headline",
+        name: "ui-sheet-side-docked-headline-type-style",
+        value: "ui-title-large",
     },
     Token {
-        group: "Enabled",
-        section: "Divider",
-        name: "Sheet side docked divider color",
+        group: "ui-enabled",
+        section: "ui-divider",
+        name: "ui-sheet-side-docked-divider-color",
         value: "#79747E",
     },
     Token {
-        group: "Hovered",
-        section: "Label text",
-        name: "Sheet side docked action hover label text color",
+        group: "ui-hovered",
+        section: "ui-label-text",
+        name: "ui-sheet-side-docked-action-hover-label-text-color",
         value: "#6750A4",
     },
     Token {
-        group: "Hovered",
-        section: "State layer",
-        name: "Sheet side docked action hover state layer color",
+        group: "ui-hovered",
+        section: "ui-state-layer",
+        name: "ui-sheet-side-docked-action-hover-state-layer-color",
         value: "#6750A4",
     },
     Token {
-        group: "Hovered",
-        section: "State layer",
-        name: "Sheet side docked action hover state layer opacity",
+        group: "ui-hovered",
+        section: "ui-state-layer",
+        name: "ui-sheet-side-docked-action-hover-state-layer-opacity",
         value: "0.08",
     },
     Token {
-        group: "Focused",
-        section: "Focus indicator",
-        name: "Sheet side docked focus indicator color",
+        group: "ui-focused",
+        section: "ui-focus-indicator",
+        name: "ui-sheet-side-docked-focus-indicator-color",
         value: "#625B71",
     },
     Token {
-        group: "Focused",
-        section: "Focus indicator",
-        name: "Sheet side docked focus indicator thickness",
+        group: "ui-focused",
+        section: "ui-focus-indicator",
+        name: "ui-sheet-side-docked-focus-indicator-thickness",
         value: "3dp",
     },
     Token {
-        group: "Focused",
-        section: "Focus indicator",
-        name: "Sheet side docked focus indicator offset",
+        group: "ui-focused",
+        section: "ui-focus-indicator",
+        name: "ui-sheet-side-docked-focus-indicator-offset",
         value: "2dp",
     },
     Token {
-        group: "Focused",
-        section: "Label text",
-        name: "Sheet side docked action focus label text color",
+        group: "ui-focused",
+        section: "ui-label-text",
+        name: "ui-sheet-side-docked-action-focus-label-text-color",
         value: "#6750A4",
     },
     Token {
-        group: "Focused",
-        section: "State layer",
-        name: "Sheet side docked action focus state layer color",
+        group: "ui-focused",
+        section: "ui-state-layer",
+        name: "ui-sheet-side-docked-action-focus-state-layer-color",
         value: "#6750A4",
     },
     Token {
-        group: "Focused",
-        section: "State layer",
-        name: "Sheet side docked action focus state layer opacity",
+        group: "ui-focused",
+        section: "ui-state-layer",
+        name: "ui-sheet-side-docked-action-focus-state-layer-opacity",
         value: "0.1",
     },
     Token {
-        group: "Pressed (ripple)",
-        section: "Label text",
-        name: "Sheet side docked action pressed label text color",
+        group: "ui-pressed-ripple",
+        section: "ui-label-text",
+        name: "ui-sheet-side-docked-action-pressed-label-text-color",
         value: "#6750A4",
     },
     Token {
-        group: "Pressed (ripple)",
-        section: "State layer",
-        name: "Sheet side docked action pressed state layer color",
+        group: "ui-pressed-ripple",
+        section: "ui-state-layer",
+        name: "ui-sheet-side-docked-action-pressed-state-layer-color",
         value: "#6750A4",
     },
     Token {
-        group: "Pressed (ripple)",
-        section: "State layer",
-        name: "Sheet side docked action pressed state layer opacity",
+        group: "ui-pressed-ripple",
+        section: "ui-state-layer",
+        name: "ui-sheet-side-docked-action-pressed-state-layer-opacity",
         value: "0.1",
     },
 ];
@@ -609,7 +626,7 @@ fn parse_hex(value: &str) -> Option<Color> {
 fn tokens() {
     let expanded = remember(|| [true, false, false, false]);
     let scheme = use_context::<MaterialTheme>().unwrap().get().color_scheme;
-    prose("Browse the component elements, attributes, tokens, and their values.");
+    prose("ui-browse-the-component-elements-attributes-tokens-and-their-values");
     gap(Dp(24.0));
     column()
         .modifier(
@@ -643,7 +660,7 @@ fn tokens() {
                         )
                         .children(move || {
                             text()
-                                .content("Sheets - Side")
+                                .content(I18N.text("ui-sheets-side"))
                                 .style(type_style(14.0, 20.0))
                                 .color(scheme.on_secondary_container);
                         });
@@ -651,11 +668,11 @@ fn tokens() {
                     let all_open = expanded.with(|state| state.iter().all(|open| *open));
                     button()
                         .text()
-                        .accessibility_label(if all_open {
-                            "Collapse all token groups"
+                        .accessibility_label(I18N.text(if all_open {
+                            "ui-collapse-all-token-groups"
                         } else {
-                            "Expand all token groups"
-                        })
+                            "ui-expand-all-token-groups"
+                        }))
                         .on_click(move || {
                             expanded.with_mut(|state| {
                                 let next = !state.iter().all(|open| *open);
@@ -663,11 +680,11 @@ fn tokens() {
                             });
                         })
                         .child(move || {
-                            text().content(if all_open {
-                                "Collapse all"
+                            text().content(I18N.text(if all_open {
+                                "ui-collapse-all"
                             } else {
-                                "Expand all"
-                            });
+                                "ui-expand-all"
+                            }));
                         });
                 });
             row()
@@ -680,12 +697,12 @@ fn tokens() {
                 )
                 .children(move || {
                     text()
-                        .content("Token")
+                        .content(I18N.text("ui-token"))
                         .style(type_style(14.0, 20.0))
                         .color(INK)
                         .modifier(Modifier::new().weight(1.0));
                     text()
-                        .content("Default, Light")
+                        .content(I18N.text("ui-default-light"))
                         .style(type_style(14.0, 20.0))
                         .color(scheme.on_surface_variant);
                 });
@@ -693,7 +710,9 @@ fn tokens() {
                 let open = expanded.with(|state| state[index]);
                 button()
                     .text()
-                    .accessibility_label(format!("{group} tokens"))
+                    .accessibility_label(
+                        I18N.format("ui-value-tokens", [("v0", I18N.text(&group).into())]),
+                    )
                     .modifier(Modifier::new().fill_max_width())
                     .on_click(move || expanded.with_mut(|state| state[index] = !state[index]))
                     .child(move || {
@@ -707,7 +726,7 @@ fn tokens() {
                                     .tint(scheme.on_surface_variant);
                                 spacer().modifier(Modifier::new().width(Dp(12.0)));
                                 text()
-                                    .content(group)
+                                    .content(I18N.text(group))
                                     .style(type_style(16.0, 24.0))
                                     .color(INK)
                                     .modifier(Modifier::new().weight(1.0));
@@ -736,7 +755,13 @@ fn token_group(#[prop(into)] group: String) {
         if token.section != section {
             section = token.section;
             text()
-                .content(format!("{group} / {section}"))
+                .content(I18N.format(
+                    "ui-value-value-format-31",
+                    [
+                        ("v0", I18N.text(&group).into()),
+                        ("v1", I18N.text(&section).into()),
+                    ],
+                ))
                 .style(type_style(14.0, 20.0))
                 .color(scheme.on_surface_variant)
                 .modifier(
@@ -756,7 +781,7 @@ fn token_group(#[prop(into)] group: String) {
             )
             .children(move || {
                 text()
-                    .content(name)
+                    .content(I18N.text(name))
                     .style(type_style(14.0, 20.0))
                     .color(INK)
                     .modifier(Modifier::new().weight(1.0));
@@ -779,15 +804,18 @@ fn token_group(#[prop(into)] group: String) {
                             .padding_symmetric(Dp(12.0), Dp(8.0)),
                     )
                     .children(move || {
-                        text().content(value).style(type_style(14.0, 20.0)).color(
-                            if swatch.is_some_and(|color| {
-                                0.2126 * color.r + 0.7152 * color.g + 0.0722 * color.b < 0.25
-                            }) {
-                                Color::WHITE
-                            } else {
-                                INK
-                            },
-                        );
+                        text()
+                            .content(I18N.text(value))
+                            .style(type_style(14.0, 20.0))
+                            .color(
+                                if swatch.is_some_and(|color| {
+                                    0.2126 * color.r + 0.7152 * color.g + 0.0722 * color.b < 0.25
+                                }) {
+                                    Color::WHITE
+                                } else {
+                                    INK
+                                },
+                            );
                     });
             });
     }
@@ -795,7 +823,7 @@ fn token_group(#[prop(into)] group: String) {
 
 #[tessera]
 fn variant_specs(modal: bool) {
-    let name = if modal { "Modal" } else { "Standard" };
+    let name = if modal { "ui-modal" } else { "ui-standard" };
     column()
         .modifier(Modifier::new().fill_max_width())
         .children(move || {
@@ -803,26 +831,26 @@ fn variant_specs(modal: bool) {
             gap(Dp(24.0));
             legend(figures::anatomy_legend(modal));
             gap(Dp(56.0));
-            subheading(format!("{name} side sheet color"));
+            subheading(I18N.format("ui-value-side-sheet-color", [("v0", I18N.text(&name).into())]));
             gap(Dp(16.0));
             prose(
-                "Color values are implemented through design tokens. For design, this means working with color values that correspond with tokens. For implementation, a color value will be a token that references a value.",
+                "ui-color-values-are-implemented-through-design-tokens-for-design-this-means-working-with-colo",
             );
             gap(Dp(24.0));
             figures::color_roles(modal);
             gap(Dp(8.0));
-            caption("Side sheet color roles used for light and dark themes:");
+            caption("ui-side-sheet-color-roles-used-for-light-and-dark-themes");
             gap(Dp(16.0));
             legend(figures::color_legend(modal));
             gap(Dp(56.0));
-            subheading(format!("{name} side sheet measurements"));
+            subheading(I18N.format("ui-value-side-sheet-measurements", [("v0", I18N.text(&name).into())]));
             gap(Dp(24.0));
             figures::measurement_figure(modal);
             gap(Dp(16.0));
             caption(if modal {
-                "Modal side sheet padding and size measurements"
+                "ui-modal-side-sheet-padding-and-size-measurements"
             } else {
-                "Side sheet padding and size measurements"
+                "ui-side-sheet-padding-and-size-measurements"
             });
             gap(Dp(32.0));
             measurements(modal);
@@ -831,23 +859,23 @@ fn variant_specs(modal: bool) {
 
 #[tessera]
 fn measurements(modal: bool) {
-    let mut rows: Vec<Vec<String>> = vec![vec!["Start/end padding".into(), "24dp".into()]];
+    let mut rows: Vec<Vec<String>> = vec![vec!["ui-start-end-padding".into(), "24dp".into()]];
     if modal {
-        rows.push(vec!["Start padding with icon".into(), "16dp".into()]);
+        rows.push(vec!["ui-start-padding-with-icon".into(), "16dp".into()]);
     }
     rows.extend([
-        vec!["Padding between top elements".into(), "12dp".into()],
-        vec!["Bottom actions height".into(), "72dp".into()],
-        vec!["Bottom actions top padding".into(), "16dp".into()],
-        vec!["Bottom actions bottom padding".into(), "24dp".into()],
+        vec!["ui-padding-between-top-elements".into(), "12dp".into()],
+        vec!["ui-bottom-actions-height".into(), "72dp".into()],
+        vec!["ui-bottom-actions-top-padding".into(), "16dp".into()],
+        vec!["ui-bottom-actions-bottom-padding".into(), "24dp".into()],
         vec![
-            "Bottom actions alignment (horizontal)".into(),
-            "Left".into(),
+            "ui-bottom-actions-alignment-horizontal".into(),
+            "ui-left".into(),
         ],
-        vec!["Max-width".into(), "400dp".into()],
-        vec!["Margins (when detached)".into(), "16dp".into()],
+        vec!["ui-max-width".into(), "400dp".into()],
+        vec!["ui-margins-when-detached".into(), "16dp".into()],
     ]);
-    spec_table(vec!["Attribute".into(), "Value".into()], rows);
+    spec_table(vec!["ui-attribute".into(), "ui-value".into()], rows);
 }
 
 #[tessera]
@@ -855,35 +883,35 @@ fn usage(modal_open: State<bool>, session: Option<LiveSideSheetSession>) {
     split()
         .start(|| {
             prose(
-                "Standard side sheets are supplementary surfaces used mostly in medium to expanded breakpoints, like tablet and desktop. They provide a consistent and predictable surface for contextual actions and information.",
+                "ui-standard-side-sheets-are-supplementary-surfaces-used-mostly-in-medium-to-expanded-breakpoi",
             );
             gap(Dp(16.0));
             prose(
-                "Standard side sheets display content that complements the screen's primary content. They remain visible while people interact with primary content.",
+                "ui-standard-side-sheets-display-content-that-complements-the-screen-s-primary-content-they-re",
             );
             gap(Dp(16.0));
-            prose("Common uses include:");
+            prose("ui-common-uses-include");
             gap(Dp(8.0));
             bullets(vec![
-                "Displaying a list of actions that affect the screen's primary content, such as filters"
+                "ui-displaying-a-list-of-actions-that-affect-the-screen-s-primary-content-such-as-filters"
                     .into(),
-                "Displaying supplemental content and features".into(),
+                "ui-displaying-supplemental-content-and-features".into(),
             ]);
         })
         .end(|| {
             figures::usage_figure(false);
             gap(Dp(12.0));
-            caption("Information about a photo in a standard side sheet");
+            caption("ui-information-about-a-photo-in-a-standard-side-sheet");
         });
     gap(Dp(40.0));
     split()
         .start(move || {
             prose(
-                "Modal side sheets are preferred in compact breakpoints, like mobile, due to limited screen size.",
+                "ui-modal-side-sheets-are-preferred-in-compact-breakpoints-like-mobile-due-to-limited-screen-s",
             );
             gap(Dp(16.0));
             prose(
-                "They can display the same kinds of content as standard side sheets, but must be dismissed in order to interact with the underlying content.",
+                "ui-they-can-display-the-same-kinds-of-content-as-standard-side-sheets-but-must-be-dismissed-i",
             );
             gap(Dp(24.0));
             launch(modal_open).session_optional(session);
@@ -891,18 +919,18 @@ fn usage(modal_open: State<bool>, session: Option<LiveSideSheetSession>) {
         .end(|| {
             figures::usage_figure(true);
             gap(Dp(12.0));
-            caption("Modal side sheet with filter controls");
+            caption("ui-modal-side-sheet-with-filter-controls");
         });
     gap(Dp(40.0));
-    prose("Side sheets have a fixed width and typically span the height of the screen.");
+    prose("ui-side-sheets-have-a-fixed-width-and-typically-span-the-height-of-the-screen");
     gap(Dp(12.0));
-    prose("Their dimensions depend on how the app's layout is subdivided into UI regions.");
+    prose("ui-their-dimensions-depend-on-how-the-app-s-layout-is-subdivided-into-ui-regions");
     gap(Dp(24.0));
     split()
         .start(|| {
             guidance_card(
                 true,
-                "Place side sheets along the edge of the screen, usually on the right side to avoid interference with any navigational components on the left edge. They can be slightly inset by 16dp.",
+                "ui-place-side-sheets-along-the-edge-of-the-screen-usually-on-the-right-side-to-avoid-interfer",
             )
             .figure(|| {
                 figures::inset_figure(16.0);
@@ -911,7 +939,7 @@ fn usage(modal_open: State<bool>, session: Option<LiveSideSheetSession>) {
         .end(|| {
             guidance_card(
                 false,
-                "Don't inset a side sheet from the screen edges far beyond the recommended margin. This makes the sheet's position and scroll behavior unclear, while obscuring primary content.",
+                "ui-don-t-inset-a-side-sheet-from-the-screen-edges-far-beyond-the-recommended-margin-this-make",
             )
             .figure(|| {
                 figures::inset_figure(56.0);
@@ -955,85 +983,85 @@ fn anatomy_guidance() {
     gap(Dp(24.0));
     legend(figures::anatomy_legend(true));
     element_section(
-        "Container",
-        "Side sheet containers hold all side sheet elements. Their size is determined by the space those elements occupy. The container is the only required element of a side sheet.",
+        "ui-container",
+        "ui-side-sheet-containers-hold-all-side-sheet-elements-their-size-is-determined-by-the-space-t",
         "container",
-        "Container",
+        "ui-container",
     );
     element_section(
-        "Back icon button (optional)",
-        "Icon buttons can provide ways to exit a side sheet or move to a different experience. Because the primary content behind or beside a side sheet is always visible, it's important to provide affordances for leaving a side sheet and returning to the primary content.",
+        "ui-back-icon-button-optional",
+        "ui-icon-buttons-can-provide-ways-to-exit-a-side-sheet-or-move-to-a-different-experience-becau",
         "back",
-        "Back icon button",
+        "ui-back-icon-button",
     );
     element_section(
-        "Close icon button (optional)",
-        "A close affordance provides a consistent method for dismissing a side sheet. A close icon button is highly recommended, increases accessibility, and makes focused side sheets easier to close.",
+        "ui-close-icon-button-optional",
+        "ui-a-close-affordance-provides-a-consistent-method-for-dismissing-a-side-sheet-a-close-icon-b",
         "close",
-        "Close icon button",
+        "ui-close-icon-button",
     );
     element_section(
-        "Action buttons (optional)",
-        "Buttons represent actions available from a side sheet. Examples: Save, Edit, Download. Use elevation, fill, and tone to call attention to specific actions.",
+        "ui-action-buttons-optional",
+        "ui-buttons-represent-actions-available-from-a-side-sheet-examples-save-edit-download-use-elev",
         "actions",
-        "Action buttons",
+        "ui-action-buttons",
     );
     element_section(
-        "Divider (optional)",
-        "Dividers can separate different kinds of content and create distinct regions in a side sheet. Use a divider to separate:",
+        "ui-divider-optional",
+        "ui-dividers-can-separate-different-kinds-of-content-and-create-distinct-regions-in-a-side-she",
         "divider",
-        "Divider",
+        "ui-divider",
     )
     .bullets_after(vec![
-        "Action buttons from content".into(),
-        "User-generated content from system-generated content".into(),
+        "ui-action-buttons-from-content".into(),
+        "ui-user-generated-content-from-system-generated-content".into(),
     ]);
     gap(Dp(48.0));
-    subheading("Content (optional)".into());
+    subheading("ui-content-optional".into());
     gap(Dp(12.0));
     prose(
-        "Side sheets can display a wide variety of content and layouts, ranging from a list of actions to supplemental content in a tabular layout.",
+        "ui-side-sheets-can-display-a-wide-variety-of-content-and-layouts-ranging-from-a-list-of-actio",
     );
     gap(Dp(24.0));
     figures::content_figure();
     gap(Dp(12.0));
-    caption("Form controls shown in a side sheet for app settings");
+    caption("ui-form-controls-shown-in-a-side-sheet-for-app-settings");
     gap(Dp(40.0));
     figures::transition_figure();
     gap(Dp(12.0));
     caption(
-        "Modal side sheets on smaller screens can transition to standard side sheets at larger screen sizes",
+        "ui-modal-side-sheets-on-smaller-screens-can-transition-to-standard-side-sheets-at-larger-scre",
     );
 }
 
 #[tessera]
 fn adaptive_design(standard_open: State<bool>) {
     prose(
-        "Side sheets have a default width, but can be resized depending on the needs of the layout.",
+        "ui-side-sheets-have-a-default-width-but-can-be-resized-depending-on-the-needs-of-the-layout",
     );
     gap(Dp(16.0));
     prose(
-        "When a standard side sheet opens, the body area shrinks to accommodate the sheet's width while maintaining a margin on the body's trailing edge.",
+        "ui-when-a-standard-side-sheet-opens-the-body-area-shrinks-to-accommodate-the-sheet-s-width-wh",
     );
     gap(Dp(24.0));
     standard_demo(standard_open);
     gap(Dp(12.0));
     caption(
-        "Entrance of standard side sheets will cause the body area to adjust and accommodate the new content",
+        "ui-entrance-of-standard-side-sheets-will-cause-the-body-area-to-adjust-and-accommodate-the-ne",
     );
     gap(Dp(48.0));
     split()
         .start(|| {
-            subheading("RTL language support".into());
+            subheading("ui-rtl-language-support".into());
             gap(Dp(12.0));
             prose(
-                "In right-to-left (RTL) languages, side sheets should appear on the left edge of the window with all elements reversed.",
+                "ui-in-right-to-left-rtl-languages-side-sheets-should-appear-on-the-left-edge-of-the-window-wi",
             );
         })
         .end(|| {
             figures::rtl_figure();
             gap(Dp(12.0));
-            caption("Side sheet elements are reversed in RTL languages");
+            caption("ui-side-sheet-elements-are-reversed-in-rtl-languages");
         });
 }
 
@@ -1049,7 +1077,7 @@ fn standard_demo(open: State<bool>) {
         .children(move || {
             standard_side_sheet_provider()
                 .position(SideSheetPosition::End)
-                .accessibility_label("Information")
+                .accessibility_label(I18N.text("ui-information"))
                 .is_open(open.get())
                 .on_close_request(move || open.set(false))
                 .main_content(move || {
@@ -1071,16 +1099,16 @@ fn standard_body(open: State<bool>) {
                 .modifier(Modifier::new().fill_max_width().padding_all(Dp(16.0)))
                 .children(move || {
                     text()
-                        .content("Primary content")
+                        .content(I18N.text("ui-primary-content"))
                         .style(type_style(18.0, 24.0))
                         .color(INK);
                     gap(Dp(12.0));
                     button()
                         .outlined()
-                        .accessibility_label("Open standard side sheet")
+                        .accessibility_label(I18N.text("ui-open-standard-side-sheet"))
                         .on_click(move || open.set(true))
-                        .child(|| {
-                            text().content("Open standard side sheet");
+                        .child(move || {
+                            text().content(I18N.text("ui-open-standard-side-sheet"));
                         });
                 });
         });
@@ -1147,7 +1175,7 @@ fn sheet_header(
                         Color::TRANSPARENT
                     };
                     text()
-                        .content(title.clone())
+                        .content(I18N.text(&(title)))
                         .style(type_style(22.0, 28.0))
                         .color(scheme.on_surface_variant)
                         .modifier(heading.clone().border_with_shape(
@@ -1159,7 +1187,7 @@ fn sheet_header(
             icon_button()
                 .standard()
                 .icon(filled::CLOSE_SVG)
-                .accessibility_label(close_label.clone())
+                .accessibility_label(I18N.text(&(close_label)))
                 .on_click(move || on_close.set(false));
         });
 }
@@ -1170,7 +1198,7 @@ fn standard_content(open: State<bool>) {
     column()
         .modifier(Modifier::new().fill_max_size().background(scheme.surface))
         .children(move || {
-            sheet_header("Info", "Close standard side sheet", open);
+            sheet_header("ui-info", "ui-close-standard-side-sheet", open);
             column()
                 .modifier(
                     Modifier::new()
@@ -1179,18 +1207,18 @@ fn standard_content(open: State<bool>) {
                 )
                 .children(move || {
                     text()
-                        .content("Festival concert")
+                        .content(I18N.text("ui-festival-concert"))
                         .style(type_style(16.0, 24.0))
                         .color(INK);
                     gap(Dp(8.0));
-                    caption("Albums");
+                    caption("ui-albums");
                     gap(Dp(8.0));
                     text()
-                        .content("Home space")
+                        .content(I18N.text("ui-home-space"))
                         .style(type_style(14.0, 20.0))
                         .color(INK);
                     text()
-                        .content("64 items")
+                        .content(I18N.text("ui-64-items"))
                         .style(type_style(12.0, 16.0))
                         .color(scheme.on_surface_variant);
                 });
@@ -1199,19 +1227,19 @@ fn standard_content(open: State<bool>) {
 
 #[tessera]
 fn behavior(modal_open: State<bool>, notice: State<String>, session: Option<LiveSideSheetSession>) {
-    prose("Side sheets can vertically scroll independent of the rest of the UI.");
+    prose("ui-side-sheets-can-vertically-scroll-independent-of-the-rest-of-the-ui");
     gap(Dp(12.0));
     prose(
-        "This allows their scroll position and content to persist while the page is scrolled, and vice versa.",
+        "ui-this-allows-their-scroll-position-and-content-to-persist-while-the-page-is-scrolled-and-vi",
     );
     gap(Dp(12.0));
-    prose("Side sheets cannot scroll horizontally.");
+    prose("ui-side-sheets-cannot-scroll-horizontally");
     gap(Dp(24.0));
     split()
         .start(|| {
             guidance_card(
                 true,
-                "Side sheets can vertically scroll internally when their content exceeds the screen height",
+                "ui-side-sheets-can-vertically-scroll-internally-when-their-content-exceeds-the-screen-height",
             )
             .figure(|| {
                 figures::scroll_figure(true);
@@ -1220,7 +1248,7 @@ fn behavior(modal_open: State<bool>, notice: State<String>, session: Option<Live
         .end(|| {
             guidance_card(
                 false,
-                "Don't allow horizontal scrolling or lay out the side sheet in a way that suggests horizontal scrolling. A side sheet's narrow width leaves limited space to fully view items.",
+                "ui-don-t-allow-horizontal-scrolling-or-lay-out-the-side-sheet-in-a-way-that-suggests-horizont",
             )
             .figure(|| {
                 figures::scroll_figure(false);
@@ -1231,31 +1259,31 @@ fn behavior(modal_open: State<bool>, notice: State<String>, session: Option<Live
     gap(Dp(16.0));
     caption(notice.get());
     gap(Dp(48.0));
-    subheading("Predictive back".into());
+    subheading("ui-predictive-back".into());
     gap(Dp(12.0));
     prose(
-        "On Android, a gesture called predictive back allows a person to swipe left or right on the side sheet.",
+        "ui-on-android-a-gesture-called-predictive-back-allows-a-person-to-swipe-left-or-right-on-the",
     );
     gap(Dp(12.0));
-    prose("When predictive back is used:");
+    prose("ui-when-predictive-back-is-used");
     gap(Dp(8.0));
     bullets(vec![
-        "The side sheet detaches from the top and bottom edges of the screen to signal it will close"
+        "ui-the-side-sheet-detaches-from-the-top-and-bottom-edges-of-the-screen-to-signal-it-will-clos"
             .into(),
-        "The previous screen is revealed in a preview".into(),
-        "The side sheet and its content always scales in the direction of the gesture".into(),
+        "ui-the-previous-screen-is-revealed-in-a-preview".into(),
+        "ui-the-side-sheet-and-its-content-always-scales-in-the-direction-of-the-gesture".into(),
     ]);
     gap(Dp(24.0));
     figures::predictive_back_figure();
     gap(Dp(12.0));
     caption(
-        "Preview of the result of the gestures: release to commit, fling to commit, and cancel",
+        "ui-preview-of-the-result-of-the-gestures-release-to-commit-fling-to-commit-and-cancel",
     );
 }
 
 #[tessera]
 fn use_cases(modal_open: State<bool>, session: Option<LiveSideSheetSession>) {
-    prose("People should be able to dismiss the side sheet using assistive technology.");
+    prose("ui-people-should-be-able-to-dismiss-the-side-sheet-using-assistive-technology");
     gap(Dp(24.0));
     launch(modal_open).session_optional(session);
 }
@@ -1263,12 +1291,12 @@ fn use_cases(modal_open: State<bool>, session: Option<LiveSideSheetSession>) {
 #[tessera]
 fn interaction_style() {
     prose(
-        "Material requires that a close affordance, such as a close icon button, is always present within a side sheet.",
+        "ui-material-requires-that-a-close-affordance-such-as-a-close-icon-button-is-always-present-wi",
     );
     gap(Dp(24.0));
     split()
         .start(|| {
-            guidance_card(true, "A close icon button makes the side sheet easy to dismiss").figure(
+            guidance_card(true, "ui-a-close-icon-button-makes-the-side-sheet-easy-to-dismiss").figure(
                 || {
                     figures::close_figure(true);
                 },
@@ -1277,7 +1305,7 @@ fn interaction_style() {
         .end(|| {
             guidance_card(
                 false,
-                "Without a close icon button, people can't predict the opening and closing flow of side sheets, or know if the sheet is transient or permanent",
+                "ui-without-a-close-icon-button-people-can-t-predict-the-opening-and-closing-flow-of-side-shee",
             )
             .figure(|| {
                 figures::close_figure(false);
@@ -1288,22 +1316,22 @@ fn interaction_style() {
 #[tessera]
 fn initial_focus(modal_open: State<bool>, session: Option<LiveSideSheetSession>) {
     prose(
-        "Actions within a side sheet can be focused by tab order using a keyboard or switch control.",
+        "ui-actions-within-a-side-sheet-can-be-focused-by-tab-order-using-a-keyboard-or-switch-control",
     );
     gap(Dp(16.0));
     prose(
-        "In the live example, opening the sheet moves focus to its Filters headline so the sheet is announced. Tab then reaches Close, the label checkboxes, Save and Cancel in reading order; the headline is not a separate Tab stop.",
+        "ui-in-the-live-example-opening-the-sheet-moves-focus-to-its-filters-headline-so-the-sheet-is",
     );
     gap(Dp(24.0));
     figures::focus_figure();
     gap(Dp(12.0));
-    caption("Visible focus shown on the available actions within a side sheet:");
+    caption("ui-visible-focus-shown-on-the-available-actions-within-a-side-sheet");
     gap(Dp(16.0));
     legend(vec![
-        (1, "Headline".into()),
-        (2, "Close".into()),
-        (3, "Save".into()),
-        (4, "Cancel".into()),
+        (1, "ui-headline".into()),
+        (2, "ui-close".into()),
+        (3, "ui-save".into()),
+        (4, "ui-cancel".into()),
     ]);
     gap(Dp(24.0));
     launch(modal_open).session_optional(session);
@@ -1312,15 +1340,15 @@ fn initial_focus(modal_open: State<bool>, session: Option<LiveSideSheetSession>)
 #[tessera]
 fn keyboard_navigation() {
     spec_table(
-        vec!["Keys".into(), "Actions".into()],
+        vec!["ui-keys".into(), "ui-actions".into()],
         vec![
             vec![
-                "Tab".into(),
-                "Focus lands on (non-disabled) icon button".into(),
+                "ui-tab".into(),
+                "ui-focus-lands-on-non-disabled-icon-button".into(),
             ],
             vec![
-                "Space or Enter".into(),
-                "Activates the (non-disabled) icon button".into(),
+                "ui-space-or-enter".into(),
+                "ui-activates-the-non-disabled-icon-button".into(),
             ],
         ],
     );
@@ -1328,11 +1356,11 @@ fn keyboard_navigation() {
 
 #[tessera]
 fn labeling() {
-    prose("The accessibility role for a side sheet is Dialog.");
+    prose("ui-the-accessibility-role-for-a-side-sheet-is-dialog");
     gap(Dp(24.0));
     figures::role_figure();
     gap(Dp(12.0));
-    caption("The role for side sheets is Dialog");
+    caption("ui-the-role-for-side-sheets-is-dialog");
 }
 
 #[tessera]
@@ -1350,7 +1378,7 @@ fn sheet_content(modal_open: State<bool>, filters: State<[bool; 5]>, notice: Sta
                 }),
         )
         .children(move || {
-            sheet_header("Filters", "Close side sheet", modal_open).announce_open(true);
+            sheet_header("ui-filters", "ui-close-side-sheet", modal_open).announce_open(true);
             column()
                 .modifier(
                     Modifier::new()
@@ -1360,7 +1388,7 @@ fn sheet_content(modal_open: State<bool>, filters: State<[bool; 5]>, notice: Sta
                 )
                 .children(move || {
                     text()
-                        .content("Labels")
+                        .content(I18N.text("ui-labels"))
                         .style(type_style(14.0, 20.0))
                         .color(scheme.on_surface_variant);
                     gap(Dp(8.0));
@@ -1374,9 +1402,11 @@ fn sheet_content(modal_open: State<bool>, filters: State<[bool; 5]>, notice: Sta
                                     .on_toggle(move |next| {
                                         filters.with_mut(|values| values[index] = next);
                                     })
-                                    .accessibility_label(label);
+                                    .accessibility_label(I18N.text(label));
                                 spacer().modifier(Modifier::new().width(Dp(16.0)));
-                                text().content(label).style(type_style(16.0, 24.0));
+                                text()
+                                    .content(I18N.text(label))
+                                    .style(type_style(16.0, 24.0));
                             });
                     }
                 });
@@ -1398,22 +1428,22 @@ fn sheet_content(modal_open: State<bool>, filters: State<[bool; 5]>, notice: Sta
                     button()
                         .filled()
                         .size(ButtonSize::ExtraSmall)
-                        .accessibility_label("Save filters")
+                        .accessibility_label(I18N.text("ui-save-filters"))
                         .on_click(move || {
-                            notice.set(String::from("Filters applied"));
+                            notice.set(String::from("ui-filters-applied"));
                             modal_open.set(false);
                         })
-                        .child(|| {
-                            text().content("Save");
+                        .child(move || {
+                            text().content(I18N.text("ui-save"));
                         });
                     spacer().modifier(Modifier::new().width(Dp(8.0)));
                     button()
                         .outlined()
                         .size(ButtonSize::ExtraSmall)
-                        .accessibility_label("Cancel filters")
+                        .accessibility_label(I18N.text("ui-cancel-filters"))
                         .on_click(move || modal_open.set(false))
-                        .child(|| {
-                            text().content("Cancel");
+                        .child(move || {
+                            text().content(I18N.text("ui-cancel"));
                         });
                 });
         });

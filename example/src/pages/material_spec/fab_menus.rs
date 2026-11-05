@@ -25,6 +25,8 @@ use tessera_ui::{
     Callback, Color, Dp, Modifier, RenderSlot, accesskit::Role, remember, tessera, use_context,
 };
 
+use crate::res::I18N;
+
 use super::{
     ACCENT, INK,
     article::{ArticlePage, SpecSection, article},
@@ -35,43 +37,43 @@ const DO_COLOR: Color = Color::from_rgb(0.121, 0.478, 0.196);
 const DONT_COLOR: Color = Color::from_rgb(0.741, 0.161, 0.161);
 
 const ITEMS: [(&str, &str); 3] = [
-    ("New document", "Document"),
-    ("New folder", "Folder"),
-    ("Upload file", "File"),
+    ("ui-new-document", "ui-document"),
+    ("ui-new-folder", "ui-folder"),
+    ("ui-upload-file", "ui-file"),
 ];
 
 #[tessera]
 pub(super) fn fab_menu_spec(route: Option<crate::pages::material_spec::article::ArticleRoute>) {
     article(
-        "FAB menu",
-        "The FAB menu expands from a floating action button to show related actions",
+        "ui-fab-menu",
+        "ui-the-fab-menu-expands-from-a-floating-action-button-to-show-related-actions",
         vec![
             SpecSection {
-                title: "Variants",
+                title: "ui-variants",
                 content: RenderSlot::new(variants),
             },
             SpecSection {
-                title: "Configurations",
+                title: "ui-configurations",
                 content: RenderSlot::new(configurations),
             },
             SpecSection {
-                title: "Tokens & specs",
+                title: "ui-tokens-specs",
                 content: RenderSlot::new(tokens),
             },
             SpecSection {
-                title: "Anatomy",
+                title: "ui-anatomy",
                 content: RenderSlot::new(anatomy),
             },
             SpecSection {
-                title: "Color",
+                title: "ui-color",
                 content: RenderSlot::new(colors),
             },
             SpecSection {
-                title: "States",
+                title: "ui-states",
                 content: RenderSlot::new(states),
             },
             SpecSection {
-                title: "Measurements",
+                title: "ui-measurements",
                 content: RenderSlot::new(measurements),
             },
         ],
@@ -79,71 +81,71 @@ pub(super) fn fab_menu_spec(route: Option<crate::pages::material_spec::article::
     .route_optional(route.clone())
     .pages(vec![
         ArticlePage {
-            title: "Overview",
+            title: "ui-overview",
             intro: Some(RenderSlot::new(overview_intro)),
             sections: vec![
                 SpecSection {
-                    title: "Availability & resources",
+                    title: "ui-availability-resources",
                     content: RenderSlot::new(availability),
                 },
                 SpecSection {
-                    title: "M3 Expressive update",
+                    title: "ui-m3-expressive-update",
                     content: RenderSlot::new(expressive_update),
                 },
                 SpecSection {
-                    title: "Differences from M2",
+                    title: "ui-differences-from-m2",
                     content: RenderSlot::new(differences),
                 },
             ],
         },
         ArticlePage {
-            title: "Guidelines",
+            title: "ui-guidelines",
             intro: None,
             sections: vec![
                 SpecSection {
-                    title: "Usage",
+                    title: "ui-usage",
                     content: RenderSlot::new(usage),
                 },
                 SpecSection {
-                    title: "Anatomy",
+                    title: "ui-anatomy",
                     content: RenderSlot::new(guide_anatomy),
                 },
                 SpecSection {
-                    title: "Color",
+                    title: "ui-color",
                     content: RenderSlot::new(guide_color),
                 },
                 SpecSection {
-                    title: "Adaptive layout",
+                    title: "ui-adaptive-layout",
                     content: RenderSlot::new(adaptive_layout),
                 },
                 SpecSection {
-                    title: "Behavior",
+                    title: "ui-behavior",
                     content: RenderSlot::new(behavior),
                 },
             ],
         },
         ArticlePage {
-            title: "Accessibility",
+            title: "ui-accessibility",
             intro: None,
             sections: vec![
                 SpecSection {
-                    title: "Use cases",
+                    title: "ui-use-cases",
                     content: RenderSlot::new(use_cases),
                 },
                 SpecSection {
-                    title: "Interaction & style",
+                    title: "ui-interaction-style",
                     content: RenderSlot::new(interaction_style),
                 },
                 SpecSection {
-                    title: "Initial focus",
+                    title: "ui-initial-focus",
                     content: RenderSlot::new(initial_focus),
                 },
                 SpecSection {
-                    title: "Keyboard navigation",
+                    title: "ui-keyboard-navigation",
                     content: RenderSlot::new(keyboard),
                 },
                 SpecSection {
-                    title: "Labeling elements",
+                    title: "ui-labeling-elements",
                     content: RenderSlot::new(labeling),
                 },
             ],
@@ -153,14 +155,16 @@ pub(super) fn fab_menu_spec(route: Option<crate::pages::material_spec::article::
 
 #[tessera]
 fn prose(#[prop(into)] value: String) {
-    text().content(value).style(type_style(16.0, 24.0));
+    text()
+        .content(I18N.text(value))
+        .style(type_style(16.0, 24.0));
 }
 
 #[tessera]
 fn caption(#[prop(into)] value: String) {
     let scheme = use_context::<MaterialTheme>().unwrap().get().color_scheme;
     text()
-        .content(value)
+        .content(I18N.text(value))
         .color(scheme.on_surface_variant)
         .style(type_style(14.0, 20.0));
 }
@@ -170,7 +174,7 @@ fn bullets(items: Vec<String>) {
     column().children(move || {
         for item in items.clone() {
             text()
-                .content(format!("•  {item}"))
+                .content(format!("•  {}", I18N.text(item)))
                 .style(type_style(16.0, 24.0));
             gap(Dp(8.0));
         }
@@ -188,7 +192,7 @@ fn badge(number: usize) {
         )
         .children(move || {
             text()
-                .content(number.to_string())
+                .content((number).to_string())
                 .style(type_style(12.0, 16.0))
                 .color(Color::WHITE);
         });
@@ -202,7 +206,9 @@ fn legend(number: usize, #[prop(into)] label: String) {
         .children(move || {
             badge(number);
             spacer().modifier(Modifier::new().width(Dp(12.0)));
-            text().content(label.clone()).style(type_style(16.0, 24.0));
+            text()
+                .content(I18N.text(&(label)))
+                .style(type_style(16.0, 24.0));
         });
 }
 
@@ -223,13 +229,13 @@ fn guidance_line(#[prop(into)] mark: String, #[prop(into)] note: String, color: 
                 )
                 .children(move || {
                     text()
-                        .content(mark.clone())
+                        .content(I18N.text(&(mark)))
                         .style(type_style(14.0, 20.0))
                         .color(Color::WHITE);
                 });
             spacer().modifier(Modifier::new().width(Dp(12.0)));
             text()
-                .content(note.clone())
+                .content(I18N.text(&(note)))
                 .color(scheme.on_surface_variant)
                 .style(type_style(14.0, 20.0));
         });
@@ -258,13 +264,16 @@ fn menu_demo(
         }
         state
     });
-    let status = remember(|| "No action selected".to_owned());
+    let status = remember(|| "ui-no-action-selected".to_owned());
     let theme = use_context::<MaterialTheme>().expect("MaterialTheme").get();
     let caption_text = label.clone();
     column()
         .modifier(Modifier::new().fill_max_width().semantics(SemanticsArgs {
             role: Some(Role::Group),
-            label: Some(format!("{label} FAB menu example")),
+            label: Some(I18N.format(
+                "ui-value-fab-menu-example",
+                [("v0", I18N.text(&label).into())],
+            )),
             merge_descendants: true,
             ..Default::default()
         }))
@@ -277,8 +286,8 @@ fn menu_demo(
                 } else {
                     FloatingActionButtonMenuAlignment::End
                 })
-                .open_label(format!("Open {label} menu"))
-                .close_label(format!("Close {label} menu"))
+                .open_label(I18N.format("ui-open-value-menu", [("v0", I18N.text(&label).into())]))
+                .close_label(I18N.format("ui-close-value-menu", [("v0", I18N.text(&label).into())]))
                 .modifier(Modifier::new().fill_max_width().height(Dp(300.0)))
                 .items(vec![
                     FloatingActionButtonMenuItem::new(
@@ -310,96 +319,106 @@ fn menu_demo(
                                     Dp(24.0),
                                 )))
                                 .children(move || {
-                                    text().content("Create").style(theme.typography.title_large);
+                                    text()
+                                        .content(I18N.text("ui-create"))
+                                        .style(theme.typography.title_large);
                                     gap(Dp(8.0));
-                                    text().content(status.get()).style(type_style(16.0, 24.0));
+                                    text()
+                                        .content(I18N.text(status.get()))
+                                        .style(type_style(16.0, 24.0));
                                 });
                         });
                 });
             gap(Dp(12.0));
-            caption(format!("{caption_text} · last action: {}", status.get()));
+            caption(I18N.format(
+                "ui-last-action-caption",
+                [
+                    ("caption", I18N.text(&caption_text).into()),
+                    ("action", I18N.text(status.get()).into()),
+                ],
+            ));
         });
 }
 
 #[tessera]
 fn overview_intro() {
     bullets(vec![
-        "Opens from a FAB to show 2–6 related actions floating on screen".into(),
-        "One FAB menu size for all sizes of FABs".into(),
-        "Not used with extended FABs".into(),
-        "Available in primary, secondary, and tertiary color sets".into(),
+        "ui-opens-from-a-fab-to-show-2-6-related-actions-floating-on-screen".into(),
+        "ui-one-fab-menu-size-for-all-sizes-of-fabs".into(),
+        "ui-not-used-with-extended-fabs".into(),
+        "ui-available-in-primary-secondary-and-tertiary-color-sets".into(),
     ]);
     gap(Dp(32.0));
     panel(RenderSlot::new(|| {
         menu_demo(
-            "Overview",
+            "ui-overview",
             FloatingActionButtonMenuColor::Primary,
             false,
             true,
         );
     }));
     gap(Dp(16.0));
-    caption("The FAB menu comes in three color sets: primary, secondary, tertiary");
+    caption("ui-the-fab-menu-comes-in-three-color-sets-primary-secondary-tertiary");
 }
 
 #[tessera]
 fn availability() {
     spec_table(
-        vec!["Type".into(), "Resource".into(), "Status".into()],
+        vec!["ui-type".into(), "ui-resource".into(), "ui-status".into()],
         vec![
             vec![
-                "Design".into(),
-                "Design Kit (Figma)".into(),
-                "Available".into(),
+                "ui-design".into(),
+                "ui-design-kit-figma".into(),
+                "ui-available".into(),
             ],
             vec![
-                "Implementation".into(),
-                "Jetpack Compose: Expressive".into(),
-                "Available".into(),
+                "ui-implementation".into(),
+                "ui-jetpack-compose-expressive".into(),
+                "ui-available".into(),
             ],
             vec![
-                "Implementation".into(),
-                "Android Views (MDC-Android): Expressive".into(),
-                "Unavailable".into(),
+                "ui-implementation".into(),
+                "ui-android-views-mdc-android-expressive".into(),
+                "ui-unavailable".into(),
             ],
             vec![
-                "Implementation".into(),
-                "Web: Expressive".into(),
-                "Unavailable".into(),
+                "ui-implementation".into(),
+                "ui-web-expressive".into(),
+                "ui-unavailable".into(),
             ],
         ],
     );
     gap(Dp(24.0));
     prose(
-        "Tessera examples on this page use the native floating action button menu with its close button, labelled items and three color sets.",
+        "ui-tessera-examples-on-this-page-use-the-native-floating-action-button-menu-with-its-close-bu",
     );
 }
 
 #[tessera]
 fn expressive_update() {
-    subheading("May 2025".into());
+    subheading("ui-may-2025".into());
     prose(
-        "The FAB menu adds more options to the FAB. It should replace the speed dial and any usage of stacked small FABs.",
+        "ui-the-fab-menu-adds-more-options-to-the-fab-it-should-replace-the-speed-dial-and-any-usage-o",
     );
     gap(Dp(24.0));
-    prose("New component added to catalog:");
+    prose("ui-new-component-added-to-catalog-3010");
     gap(Dp(8.0));
     bullets(vec![
-        "One menu size that pairs with any FAB".into(),
-        "Replaces any usage of stacked small FABs".into(),
+        "ui-one-menu-size-that-pairs-with-any-fab".into(),
+        "ui-replaces-any-usage-of-stacked-small-fabs".into(),
     ]);
     gap(Dp(24.0));
     prose("Color:");
     gap(Dp(8.0));
     bullets(vec![
-        "Contrasting close button and item colors".into(),
-        "Supports dynamic color".into(),
-        "Compatible with any FAB color style".into(),
+        "ui-contrasting-close-button-and-item-colors".into(),
+        "ui-supports-dynamic-color".into(),
+        "ui-compatible-with-any-fab-color-style".into(),
     ]);
     gap(Dp(24.0));
     panel(RenderSlot::new(|| {
         menu_demo(
-            "Expressive",
+            "ui-expressive",
             FloatingActionButtonMenuColor::Tertiary,
             false,
             true,
@@ -407,57 +426,61 @@ fn expressive_update() {
     }));
     gap(Dp(16.0));
     caption(
-        "The FAB menu uses contrasting color and large items to focus attention. It can open from any size FAB",
+        "ui-the-fab-menu-uses-contrasting-color-and-large-items-to-focus-attention-it-can-open-from-an",
     );
 }
 
 #[tessera]
 fn differences() {
     prose(
-        "M2 speed dials stacked several small FABs and hid their labels. The M3 FAB menu uses one size for every FAB and labels each action.",
+        "ui-m2-speed-dials-stacked-several-small-fabs-and-hid-their-labels-the-m3-fab-menu-uses-one-si",
     );
     gap(Dp(24.0));
     bullets(vec![
-        "M2: speed dial with stacked small icon-only FABs".into(),
-        "M3: a single FAB menu whose labelled items expand from one FAB".into(),
+        "ui-m2-speed-dial-with-stacked-small-icon-only-fabs".into(),
+        "ui-m3-a-single-fab-menu-whose-labelled-items-expand-from-one-fab".into(),
     ]);
     gap(Dp(24.0));
     panel(RenderSlot::new(|| {
         menu_demo(
-            "Differences",
+            "ui-differences",
             FloatingActionButtonMenuColor::Primary,
             false,
             true,
         );
     }));
     gap(Dp(16.0));
-    caption("The M3 FAB menu replaces stacked small FABs with labelled, expressive items");
+    caption("ui-the-m3-fab-menu-replaces-stacked-small-fabs-with-labelled-expressive-items");
 }
 
 #[tessera]
 fn variants() {
     panel(RenderSlot::new(|| {
         menu_demo(
-            "Variant",
+            "ui-variant",
             FloatingActionButtonMenuColor::Primary,
             false,
             true,
         );
     }));
     gap(Dp(16.0));
-    caption("There’s one variant of FAB menu");
+    caption("ui-there-s-one-variant-of-fab-menu");
     gap(Dp(32.0));
     spec_table(
-        vec!["Variant".into(), "M3".into(), "M3 Expressive".into()],
-        vec![vec!["FAB menu".into(), "--".into(), "Available".into()]],
+        vec!["ui-variant".into(), "M3".into(), "ui-m3-expressive".into()],
+        vec![vec![
+            "ui-fab-menu".into(),
+            "--".into(),
+            "ui-available".into(),
+        ]],
     );
 }
 
 #[tessera]
 fn configurations() {
-    subheading("Color set".into());
+    subheading("ui-color-set".into());
     prose(
-        "FAB menus come in three color sets. Each set colors the close button and the items together.",
+        "ui-fab-menus-come-in-three-color-sets-each-set-colors-the-close-button-and-the-items-together",
     );
     gap(Dp(24.0));
     for (number, color) in [
@@ -468,7 +491,10 @@ fn configurations() {
     .into_iter()
     .enumerate()
     {
-        legend(number + 1, format!("{:?} set", color));
+        legend(
+            number + 1,
+            I18N.format("ui-value-set", [("v0", format!("{:?}", color).into())]),
+        );
         gap(Dp(16.0));
         panel(RenderSlot::new(move || {
             menu_demo(format!("{:?}", color), color, false, true);
@@ -477,27 +503,27 @@ fn configurations() {
     }
     spec_table(
         vec![
-            "Category".into(),
-            "Configuration".into(),
+            "ui-category".into(),
+            "ui-configuration".into(),
             "M3".into(),
-            "M3 Expressive".into(),
+            "ui-m3-expressive".into(),
         ],
         vec![vec![
-            "Color".into(),
-            "Primary set, secondary set, tertiary set".into(),
+            "ui-color".into(),
+            "ui-primary-set-secondary-set-tertiary-set".into(),
             "--".into(),
-            "Available".into(),
+            "ui-available".into(),
         ]],
     );
     gap(Dp(32.0));
-    subheading("Alignment".into());
+    subheading("ui-alignment".into());
     prose(
-        "The FAB menu is aligned to the trailing edge of the window. In right-to-left languages it is aligned to the left edge and the layout of elements is mirrored.",
+        "ui-the-fab-menu-is-aligned-to-the-trailing-edge-of-the-window-in-right-to-left-languages-it-i",
     );
     gap(Dp(24.0));
     panel(RenderSlot::new(|| {
         menu_demo(
-            "Trailing",
+            "ui-trailing",
             FloatingActionButtonMenuColor::Primary,
             false,
             true,
@@ -506,67 +532,67 @@ fn configurations() {
     gap(Dp(16.0));
     panel(RenderSlot::new(|| {
         menu_demo(
-            "Leading",
+            "ui-leading",
             FloatingActionButtonMenuColor::Primary,
             true,
             true,
         );
     }));
     gap(Dp(16.0));
-    caption("Trailing alignment by default; leading alignment mirrors the layout for RTL");
+    caption("ui-trailing-alignment-by-default-leading-alignment-mirrors-the-layout-for-rtl");
 }
 
 #[tessera]
 fn tokens() {
     prose(
-        "The FAB menu has a common token set and six color sets, three for each element (close button and menu item). Values below come from the native implementation.",
+        "ui-the-fab-menu-has-a-common-token-set-and-six-color-sets-three-for-each-element-close-button",
     );
     gap(Dp(24.0));
     spec_table(
-        vec!["Element".into(), "Token".into(), "Value".into()],
+        vec!["ui-element".into(), "ui-token".into(), "ui-value".into()],
         vec![
             vec![
-                "Close button container".into(),
+                "ui-close-button-container".into(),
                 "md.comp.fab-menu.close-button.container.size".into(),
-                "56 × 56dp · full round".into(),
+                "ui-56-56dp-full-round".into(),
             ],
             vec![
-                "Close button color".into(),
+                "ui-close-button-color".into(),
                 "md.comp.fab-menu.close-button.container.color".into(),
-                "Primary · secondary · tertiary".into(),
+                "ui-primary-secondary-tertiary".into(),
             ],
             vec![
-                "Close button icon".into(),
+                "ui-close-button-icon".into(),
                 "md.comp.fab-menu.close-button.icon.color".into(),
-                "On primary · on secondary · on tertiary".into(),
+                "ui-on-primary-on-secondary-on-tertiary".into(),
             ],
             vec![
-                "Item container".into(),
+                "ui-item-container".into(),
                 "md.comp.fab-menu.menu-item.container.color".into(),
-                "Primary container · secondary container · tertiary container".into(),
+                "ui-primary-container-secondary-container-tertiary-container".into(),
             ],
             vec![
-                "Item label".into(),
+                "ui-item-label".into(),
                 "md.comp.fab-menu.menu-item.label.text.color".into(),
-                "On primary container · on secondary container · on tertiary container".into(),
+                "ui-on-primary-container-on-secondary-container-on-tertiary-container".into(),
             ],
             vec![
-                "Item shape".into(),
+                "ui-item-shape".into(),
                 "md.comp.fab-menu.menu-item.container.shape".into(),
-                "Full capsule".into(),
+                "ui-full-capsule".into(),
             ],
             vec![
-                "Item height".into(),
+                "ui-item-height".into(),
                 "md.comp.fab-menu.menu-item.container.height".into(),
                 "56dp".into(),
             ],
             vec![
-                "Item spacing".into(),
+                "ui-item-spacing".into(),
                 "md.comp.fab-menu.menu-item.container.spacing".into(),
                 "4dp".into(),
             ],
             vec![
-                "Menu margins".into(),
+                "ui-menu-margins".into(),
                 "md.comp.fab-menu.menu.margin".into(),
                 "16dp".into(),
             ],
@@ -578,7 +604,7 @@ fn tokens() {
 fn anatomy() {
     panel(RenderSlot::new(|| {
         menu_demo(
-            "Anatomy",
+            "ui-anatomy",
             FloatingActionButtonMenuColor::Primary,
             false,
             true,
@@ -586,15 +612,15 @@ fn anatomy() {
     }));
     gap(Dp(24.0));
     column().children(|| {
-        legend(1, "Close button");
-        legend(2, "Menu item");
+        legend(1, "ui-close-button");
+        legend(2, "ui-menu-item");
     });
     gap(Dp(16.0));
-    caption("The close button replaces the FAB; each menu item pairs an icon with a label");
+    caption("ui-the-close-button-replaces-the-fab-each-menu-item-pairs-an-icon-with-a-label");
     gap(Dp(32.0));
     panel(RenderSlot::new(six_items));
     gap(Dp(16.0));
-    caption("The FAB menu can have up to six items");
+    caption("ui-the-fab-menu-can-have-up-to-six-items");
 }
 
 #[tessera]
@@ -605,46 +631,46 @@ fn six_items() {
         state
     });
     let theme = use_context::<MaterialTheme>().expect("MaterialTheme").get();
-    let status = remember(|| "Six actions".to_owned());
+    let status = remember(|| "ui-six-actions".to_owned());
     column()
         .modifier(Modifier::new().fill_max_width())
         .children(move || {
             floating_action_button_menu()
                 .state(state)
                 .color(FloatingActionButtonMenuColor::Primary)
-                .open_label("Open six action menu")
-                .close_label("Close six action menu")
+                .open_label(I18N.text("ui-open-six-action-menu"))
+                .close_label(I18N.text("ui-close-six-action-menu"))
                 .modifier(Modifier::new().fill_max_width().height(Dp(480.0)))
                 .items(vec![
                     FloatingActionButtonMenuItem::new(
-                        "First",
+                        "ui-first",
                         Some(filled::EDIT_SVG.into()),
-                        Callback::new(move || status.set("First".into())),
+                        Callback::new(move || status.set("ui-first".into())),
                     ),
                     FloatingActionButtonMenuItem::new(
-                        "Second",
+                        "ui-second",
                         Some(filled::FOLDER_SVG.into()),
-                        Callback::new(move || status.set("Second".into())),
+                        Callback::new(move || status.set("ui-second".into())),
                     ),
                     FloatingActionButtonMenuItem::new(
-                        "Third",
+                        "ui-third",
                         Some(filled::UPLOAD_SVG.into()),
-                        Callback::new(move || status.set("Third".into())),
+                        Callback::new(move || status.set("ui-third".into())),
                     ),
                     FloatingActionButtonMenuItem::new(
-                        "Fourth",
+                        "ui-fourth",
                         Some(filled::IMAGE_SVG.into()),
-                        Callback::new(move || status.set("Fourth".into())),
+                        Callback::new(move || status.set("ui-fourth".into())),
                     ),
                     FloatingActionButtonMenuItem::new(
-                        "Fifth",
+                        "ui-fifth",
                         Some(filled::EVENT_SVG.into()),
-                        Callback::new(move || status.set("Fifth".into())),
+                        Callback::new(move || status.set("ui-fifth".into())),
                     ),
                     FloatingActionButtonMenuItem::new(
-                        "Sixth",
+                        "ui-sixth",
                         Some(filled::CHECK_SVG.into()),
-                        Callback::new(move || status.set("Sixth".into())),
+                        Callback::new(move || status.set("ui-sixth".into())),
                     ),
                 ])
                 .main_content(move || {
@@ -656,10 +682,10 @@ fn six_items() {
                                 .modifier(Modifier::new().padding_all(Dp(24.0)))
                                 .children(move || {
                                     text()
-                                        .content("Up to six actions")
+                                        .content(I18N.text("ui-up-to-six-actions"))
                                         .style(theme.typography.title_large);
                                     gap(Dp(8.0));
-                                    text().content(status.get());
+                                    text().content(I18N.text(status.get()));
                                 });
                         });
                 });
@@ -669,12 +695,12 @@ fn six_items() {
 #[tessera]
 fn colors() {
     prose(
-        "FAB menu colors come from the active color set: primary, secondary, or tertiary. The close button uses the set's fill color while items use its container color.",
+        "ui-fab-menu-colors-come-from-the-active-color-set-primary-secondary-or-tertiary-the-close-but",
     );
     gap(Dp(24.0));
     panel(RenderSlot::new(|| {
         menu_demo(
-            "Primary",
+            "ui-primary",
             FloatingActionButtonMenuColor::Primary,
             false,
             true,
@@ -685,57 +711,78 @@ fn colors() {
         .theme(|| MaterialTheme::from_seed(ACCENT, true))
         .child(|| {
             panel(RenderSlot::new(|| {
-                menu_demo("Dark", FloatingActionButtonMenuColor::Primary, false, true);
+                menu_demo(
+                    "ui-dark",
+                    FloatingActionButtonMenuColor::Primary,
+                    false,
+                    true,
+                );
             }));
         });
     gap(Dp(24.0));
     spec_table(
-        vec!["Set".into(), "Element".into(), "Color role".into()],
+        vec!["ui-set".into(), "ui-element".into(), "ui-color-role".into()],
         vec![
             vec![
-                "Primary".into(),
-                "Item container".into(),
-                "Primary container".into(),
+                "ui-primary".into(),
+                "ui-item-container".into(),
+                "ui-primary-container".into(),
             ],
             vec![
-                "Primary".into(),
-                "Item label and icon".into(),
-                "On primary container".into(),
-            ],
-            vec!["Primary".into(), "Close button".into(), "Primary".into()],
-            vec!["Primary".into(), "Close icon".into(), "On primary".into()],
-            vec![
-                "Secondary".into(),
-                "Item container".into(),
-                "Secondary container".into(),
+                "ui-primary".into(),
+                "ui-item-label-and-icon".into(),
+                "ui-on-primary-container".into(),
             ],
             vec![
-                "Secondary".into(),
-                "Item label and icon".into(),
-                "On secondary container".into(),
+                "ui-primary".into(),
+                "ui-close-button".into(),
+                "ui-primary".into(),
             ],
             vec![
-                "Secondary".into(),
-                "Close button".into(),
-                "Secondary".into(),
+                "ui-primary".into(),
+                "ui-close-icon".into(),
+                "ui-on-primary".into(),
             ],
             vec![
-                "Secondary".into(),
-                "Close icon".into(),
-                "On secondary".into(),
+                "ui-secondary".into(),
+                "ui-item-container".into(),
+                "ui-secondary-container".into(),
             ],
             vec![
-                "Tertiary".into(),
-                "Item container".into(),
-                "Tertiary container".into(),
+                "ui-secondary".into(),
+                "ui-item-label-and-icon".into(),
+                "ui-on-secondary-container".into(),
             ],
             vec![
-                "Tertiary".into(),
-                "Item label and icon".into(),
-                "On tertiary container".into(),
+                "ui-secondary".into(),
+                "ui-close-button".into(),
+                "ui-secondary".into(),
             ],
-            vec!["Tertiary".into(), "Close button".into(), "Tertiary".into()],
-            vec!["Tertiary".into(), "Close icon".into(), "On tertiary".into()],
+            vec![
+                "ui-secondary".into(),
+                "ui-close-icon".into(),
+                "ui-on-secondary".into(),
+            ],
+            vec![
+                "ui-tertiary".into(),
+                "ui-item-container".into(),
+                "ui-tertiary-container".into(),
+            ],
+            vec![
+                "ui-tertiary".into(),
+                "ui-item-label-and-icon".into(),
+                "ui-on-tertiary-container".into(),
+            ],
+            vec![
+                "ui-tertiary".into(),
+                "ui-close-button".into(),
+                "ui-tertiary".into(),
+            ],
+            vec![
+                "ui-tertiary".into(),
+                "ui-close-icon".into(),
+                "ui-on-tertiary".into(),
+            ],
         ],
     );
 }
@@ -743,73 +790,85 @@ fn colors() {
 #[tessera]
 fn states() {
     prose(
-        "States are visual representations used to communicate the status of a component or interactive element.",
+        "ui-states-are-visual-representations-used-to-communicate-the-status-of-a-component-or-interac",
     );
     gap(Dp(32.0));
-    subheading("Close button".into());
+    subheading("ui-close-button".into());
     prose(
-        "Enabled, hovered, focused and pressed states share the same close button colors. Hover, focus with Tab, or press and hold in the live sample below.",
+        "ui-enabled-hovered-focused-and-pressed-states-share-the-same-close-button-colors-hover-focus",
     );
     gap(Dp(24.0));
     panel(RenderSlot::new(|| {
         menu_demo(
-            "Close states",
+            "ui-close-states",
             FloatingActionButtonMenuColor::Primary,
             false,
             true,
         );
     }));
     gap(Dp(16.0));
-    caption("Close button states: enabled, hovered, focused, pressed");
+    caption("ui-close-button-states-enabled-hovered-focused-pressed");
     gap(Dp(32.0));
-    subheading("Menu item".into());
+    subheading("ui-menu-item".into());
     prose(
-        "Menu items keep their own hover, focus and pressed state layers while the menu stays open.",
+        "ui-menu-items-keep-their-own-hover-focus-and-pressed-state-layers-while-the-menu-stays-open",
     );
     gap(Dp(24.0));
     panel(RenderSlot::new(|| {
         menu_demo(
-            "Item states",
+            "ui-item-states",
             FloatingActionButtonMenuColor::Secondary,
             false,
             true,
         );
     }));
     gap(Dp(16.0));
-    caption("Menu item states: enabled, hovered, focused, pressed");
+    caption("ui-menu-item-states-enabled-hovered-focused-pressed");
 }
 
 #[tessera]
 fn measurements() {
     prose(
-        "FAB menu items share the same measurements as the medium button specs. The close button should always be 56dp.",
+        "ui-fab-menu-items-share-the-same-measurements-as-the-medium-button-specs-the-close-button-sho",
     );
     gap(Dp(24.0));
     spec_table(
-        vec!["Element".into(), "Attribute".into(), "Value".into()],
         vec![
-            vec!["Menu item".into(), "Container height".into(), "56dp".into()],
+            "ui-element".into(),
+            "ui-attribute".into(),
+            "ui-value".into(),
+        ],
+        vec![
             vec![
-                "Menu item".into(),
-                "Horizontal padding".into(),
+                "ui-menu-item".into(),
+                "ui-container-height".into(),
+                "56dp".into(),
+            ],
+            vec![
+                "ui-menu-item".into(),
+                "ui-horizontal-padding".into(),
                 "24dp".into(),
             ],
-            vec!["Menu item".into(), "Icon size".into(), "24dp".into()],
-            vec!["Menu item".into(), "Icon to label gap".into(), "8dp".into()],
+            vec!["ui-menu-item".into(), "ui-icon-size".into(), "24dp".into()],
             vec![
-                "Menu items".into(),
-                "Spacing between items".into(),
+                "ui-menu-item".into(),
+                "ui-icon-to-label-gap".into(),
+                "8dp".into(),
+            ],
+            vec![
+                "ui-menu-items".into(),
+                "ui-spacing-between-items".into(),
                 "4dp".into(),
             ],
             vec![
-                "Close button".into(),
-                "Container size".into(),
+                "ui-close-button".into(),
+                "ui-container-size".into(),
                 "56 × 56dp".into(),
             ],
-            vec!["Menu".into(), "Window margin".into(), "16dp".into()],
+            vec!["ui-menu".into(), "ui-window-margin".into(), "16dp".into()],
             vec![
-                "Menu items".into(),
-                "Minimum target size".into(),
+                "ui-menu-items".into(),
+                "ui-minimum-target-size".into(),
                 "48dp".into(),
             ],
         ],
@@ -817,45 +876,45 @@ fn measurements() {
     gap(Dp(24.0));
     panel(RenderSlot::new(|| {
         menu_demo(
-            "Measurements",
+            "ui-measurements",
             FloatingActionButtonMenuColor::Primary,
             false,
             true,
         );
     }));
     gap(Dp(16.0));
-    caption("FAB menu size measurements");
+    caption("ui-fab-menu-size-measurements");
     gap(Dp(24.0));
     bullets(vec![
-        "The FAB menu animates from the top trailing edge of the FAB to ensure a smooth animation"
+        "ui-the-fab-menu-animates-from-the-top-trailing-edge-of-the-fab-to-ensure-a-smooth-animation"
             .into(),
-        "The FAB should always have a 16dp margin from the window edge".into(),
-        "The close button and FAB share the same trailing edge".into(),
+        "ui-the-fab-should-always-have-a-16dp-margin-from-the-window-edge".into(),
+        "ui-the-close-button-and-fab-share-the-same-trailing-edge".into(),
     ]);
 }
 
 #[tessera]
 fn usage() {
     prose(
-        "A FAB menu opens from a FAB to show multiple related actions. It should always appear in the same place as the FAB that opened it.",
+        "ui-a-fab-menu-opens-from-a-fab-to-show-multiple-related-actions-it-should-always-appear-in-th",
     );
     gap(Dp(16.0));
     prose(
-        "This makes actions immediately accessible, and keeps the UI clean by concealing actions when they’re not needed.",
+        "ui-this-makes-actions-immediately-accessible-and-keeps-the-ui-clean-by-concealing-actions-whe",
     );
     gap(Dp(24.0));
     do_dont(
-        "Open the FAB menu from a FAB",
-        "Don’t open a FAB menu from an extended FAB or any other extended component",
+        "ui-open-the-fab-menu-from-a-fab",
+        "ui-don-t-open-a-fab-menu-from-an-extended-fab-or-any-other-extended-component",
     );
     gap(Dp(32.0));
     prose(
-        "The FAB menu should be aligned to the trailing edge of the window. In right-to-left (RTL) languages, this means the FAB and FAB menu should be aligned to the left edge, and the layout of elements should be mirrored.",
+        "ui-the-fab-menu-should-be-aligned-to-the-trailing-edge-of-the-window-in-right-to-left-rtl-lan",
     );
     gap(Dp(24.0));
     panel(RenderSlot::new(|| {
         menu_demo(
-            "Mirrored",
+            "ui-mirrored",
             FloatingActionButtonMenuColor::Primary,
             true,
             true,
@@ -863,37 +922,37 @@ fn usage() {
     }));
     gap(Dp(16.0));
     caption(
-        "In RTL languages, the FAB menu is left-aligned and the icon and text placement is mirrored",
+        "ui-in-rtl-languages-the-fab-menu-is-left-aligned-and-the-icon-and-text-placement-is-mirrored",
     );
     gap(Dp(32.0));
     prose(
-        "FAB menus can contain 2–6 items. These should be closely related under a single action, like Share.",
+        "ui-fab-menus-can-contain-2-6-items-these-should-be-closely-related-under-a-single-action-like",
     );
     gap(Dp(16.0));
-    prose("Avoid grouping unrelated actions in the same FAB menu.");
+    prose("ui-avoid-grouping-unrelated-actions-in-the-same-fab-menu");
     gap(Dp(24.0));
     do_dont(
-        "FAB menus can have 2–6 items",
-        "Don’t use a FAB menu with one item",
+        "ui-fab-menus-can-have-2-6-items",
+        "ui-don-t-use-a-fab-menu-with-one-item",
     );
     gap(Dp(32.0));
     prose(
-        "When a FAB is paired with other components, like the floating toolbar or navigation rail, don’t use the FAB menu. This prevents cognitive overload and interface clutter.",
+        "ui-when-a-fab-is-paired-with-other-components-like-the-floating-toolbar-or-navigation-rail-do",
     );
     gap(Dp(24.0));
     do_dont(
-        "FABs can be placed next to toolbars and other components",
-        "Don’t use a FAB menu with a toolbar or navigation rail",
+        "ui-fabs-can-be-placed-next-to-toolbars-and-other-components",
+        "ui-don-t-use-a-fab-menu-with-a-toolbar-or-navigation-rail",
     );
 }
 
 #[tessera]
 fn guide_anatomy() {
-    prose("The FAB menu has two elements: the close button and the menu items.");
+    prose("ui-the-fab-menu-has-two-elements-the-close-button-and-the-menu-items");
     gap(Dp(24.0));
     panel(RenderSlot::new(|| {
         menu_demo(
-            "Anatomy",
+            "ui-anatomy",
             FloatingActionButtonMenuColor::Primary,
             false,
             true,
@@ -901,55 +960,57 @@ fn guide_anatomy() {
     }));
     gap(Dp(24.0));
     column().children(|| {
-        legend(1, "Close button");
-        legend(2, "Menu item");
+        legend(1, "ui-close-button");
+        legend(2, "ui-menu-item");
     });
     gap(Dp(16.0));
-    caption("The close button takes the place of the FAB and each item pairs an icon with a label");
+    caption(
+        "ui-the-close-button-takes-the-place-of-the-fab-and-each-item-pairs-an-icon-with-a-label",
+    );
 }
 
 #[tessera]
 fn guide_color() {
     prose(
-        "FAB menus have three color sets: primary, secondary, and tertiary. Use the color set that best matches the FAB color style.",
+        "ui-fab-menus-have-three-color-sets-primary-secondary-and-tertiary-use-the-color-set-that-best",
     );
     gap(Dp(16.0));
     prose(
-        "Use the primary FAB menu color set with the primary or primary container FAB color styles.",
+        "ui-use-the-primary-fab-menu-color-set-with-the-primary-or-primary-container-fab-color-styles",
     );
     gap(Dp(24.0));
     panel(RenderSlot::new(|| {
         menu_demo(
-            "Primary pair",
+            "ui-primary-pair",
             FloatingActionButtonMenuColor::Primary,
             false,
             true,
         );
     }));
     gap(Dp(16.0));
-    caption("A primary FAB is paired with a primary FAB menu");
+    caption("ui-a-primary-fab-is-paired-with-a-primary-fab-menu");
     gap(Dp(24.0));
     panel(RenderSlot::new(|| {
         menu_demo(
-            "Tertiary pair",
+            "ui-tertiary-pair",
             FloatingActionButtonMenuColor::Tertiary,
             false,
             true,
         );
     }));
     gap(Dp(16.0));
-    caption("A tertiary FAB is paired with a tertiary FAB menu");
+    caption("ui-a-tertiary-fab-is-paired-with-a-tertiary-fab-menu");
 }
 
 #[tessera]
 fn adaptive_layout() {
     prose(
-        "The FAB menu can scroll when there are more actions than fit on screen. Make sure the items scroll behind the close button and keep the close button easy to access and unobstructed.",
+        "ui-the-fab-menu-can-scroll-when-there-are-more-actions-than-fit-on-screen-make-sure-the-items",
     );
     gap(Dp(24.0));
     panel(RenderSlot::new(|| {
         menu_demo(
-            "Adaptive",
+            "ui-adaptive",
             FloatingActionButtonMenuColor::Primary,
             false,
             true,
@@ -957,28 +1018,28 @@ fn adaptive_layout() {
     }));
     gap(Dp(24.0));
     do_dont(
-        "Allow the menu items to scroll behind the close button",
-        "Don’t obstruct the close button in short screens like horizontal orientation",
+        "ui-allow-the-menu-items-to-scroll-behind-the-close-button",
+        "ui-don-t-obstruct-the-close-button-in-short-screens-like-horizontal-orientation",
     );
     gap(Dp(32.0));
     prose(
-        "Each item keeps a minimum 48dp target, so density changes must preserve the target size of both the close button and the items.",
+        "ui-each-item-keeps-a-minimum-48dp-target-so-density-changes-must-preserve-the-target-size-of",
     );
 }
 
 #[tessera]
 fn behavior() {
     prose(
-        "The FAB menu animates from the top trailing edge of the FAB. Items expand upward in order, and the close button replaces the FAB in place.",
+        "ui-the-fab-menu-animates-from-the-top-trailing-edge-of-the-fab-items-expand-upward-in-order-a",
     );
     gap(Dp(16.0));
     prose(
-        "Selecting an item closes the menu and runs that action. Pressing Escape, or activating the close button, dismisses the menu and returns focus to the FAB; tapping outside the menu also closes it.",
+        "ui-selecting-an-item-closes-the-menu-and-runs-that-action-pressing-escape-or-activating-the-c",
     );
     gap(Dp(24.0));
     panel(RenderSlot::new(|| {
         menu_demo(
-            "Behavior",
+            "ui-behavior",
             FloatingActionButtonMenuColor::Primary,
             false,
             false,
@@ -986,22 +1047,22 @@ fn behavior() {
     }));
     gap(Dp(16.0));
     caption(
-        "Open the menu with the FAB, choose an action, then reopen it to confirm the reported action",
+        "ui-open-the-menu-with-the-fab-choose-an-action-then-reopen-it-to-confirm-the-reported-action",
     );
 }
 
 #[tessera]
 fn use_cases() {
-    prose("People should be able to do the following using assistive technology:");
+    prose("ui-people-should-be-able-to-do-the-following-using-assistive-technology");
     gap(Dp(16.0));
     bullets(vec![
-        "Navigate and interact with the FAB menu".into(),
-        "Ensure focus is correct when navigating through the menu".into(),
+        "ui-navigate-and-interact-with-the-fab-menu".into(),
+        "ui-ensure-focus-is-correct-when-navigating-through-the-menu".into(),
     ]);
     gap(Dp(24.0));
     panel(RenderSlot::new(|| {
         menu_demo(
-            "Use cases",
+            "ui-use-cases",
             FloatingActionButtonMenuColor::Primary,
             false,
             false,
@@ -1011,67 +1072,67 @@ fn use_cases() {
 
 #[tessera]
 fn interaction_style() {
-    prose("FAB menu elements meet the minimum target size of 48dp.");
+    prose("ui-fab-menu-elements-meet-the-minimum-target-size-of-48dp");
     gap(Dp(16.0));
-    caption("FAB menus have 48x48dp minimum width and sufficient spacing by default");
+    caption("ui-fab-menus-have-48x48dp-minimum-width-and-sufficient-spacing-by-default");
     gap(Dp(24.0));
     prose(
-        "When the FAB menu can scroll, make sure the items scroll behind the close button. The close button should always be easy to access and unobstructed.",
+        "ui-when-the-fab-menu-can-scroll-make-sure-the-items-scroll-behind-the-close-button-the-close",
     );
     gap(Dp(24.0));
     do_dont(
-        "Allow the menu items to scroll behind the close button",
-        "Don’t obstruct the close button in short screens like horizontal orientation",
+        "ui-allow-the-menu-items-to-scroll-behind-the-close-button",
+        "ui-don-t-obstruct-the-close-button-in-short-screens-like-horizontal-orientation",
     );
 }
 
 #[tessera]
 fn initial_focus() {
     prose(
-        "When the FAB is selected, the FAB menu opens, and initial focus remains on the close button, which takes the place of the original FAB.",
+        "ui-when-the-fab-is-selected-the-fab-menu-opens-and-initial-focus-remains-on-the-close-button",
     );
     gap(Dp(16.0));
-    prose("Then the focus moves from the top menu item to the bottom.");
+    prose("ui-then-the-focus-moves-from-the-top-menu-item-to-the-bottom");
     gap(Dp(24.0));
     panel(RenderSlot::new(|| {
         menu_demo(
-            "Initial focus",
+            "ui-initial-focus",
             FloatingActionButtonMenuColor::Primary,
             false,
             true,
         );
     }));
     gap(Dp(16.0));
-    caption("Focus lands on the close button. People can then navigate through all the items");
+    caption("ui-focus-lands-on-the-close-button-people-can-then-navigate-through-all-the-items");
 }
 
 #[tessera]
 fn keyboard() {
     spec_table(
-        vec!["Keys".into(), "Actions".into()],
+        vec!["ui-keys".into(), "ui-actions".into()],
         vec![
             vec![
-                "Tab".into(),
-                "Navigate to the next interactive element".into(),
+                "ui-tab".into(),
+                "ui-navigate-to-the-next-interactive-element".into(),
             ],
             vec![
-                "Space or Enter".into(),
-                "Activate the focused button or item".into(),
+                "ui-space-or-enter".into(),
+                "ui-activate-the-focused-button-or-item".into(),
             ],
             vec![
-                "Escape".into(),
-                "Close the menu and return focus to the FAB".into(),
+                "ui-escape".into(),
+                "ui-close-the-menu-and-return-focus-to-the-fab".into(),
             ],
         ],
     );
     gap(Dp(24.0));
     prose(
-        "The native sample follows this table: Tab reaches the close button and each item, Space or Enter activates the focused element, and Escape dismisses the menu.",
+        "ui-the-native-sample-follows-this-table-tab-reaches-the-close-button-and-each-item-space-or-e",
     );
     gap(Dp(24.0));
     panel(RenderSlot::new(|| {
         menu_demo(
-            "Keyboard",
+            "ui-keyboard",
             FloatingActionButtonMenuColor::Primary,
             false,
             true,
@@ -1082,43 +1143,43 @@ fn keyboard() {
 #[tessera]
 fn labeling() {
     prose(
-        "On Android, a FAB menu’s close button should include a state to tell screen readers what action will occur when it’s toggled. The close button should be labeled:",
+        "ui-on-android-a-fab-menu-s-close-button-should-include-a-state-to-tell-screen-readers-what-ac",
     );
     gap(Dp(16.0));
     spec_table(
         vec![
-            "Element".into(),
-            "Label".into(),
-            "Role".into(),
-            "State".into(),
+            "ui-element".into(),
+            "ui-label".into(),
+            "ui-role".into(),
+            "ui-state".into(),
         ],
         vec![
             vec![
-                "Close button".into(),
-                "Toggle menu".into(),
-                "Button".into(),
-                "Expanded or collapsed".into(),
+                "ui-close-button".into(),
+                "ui-toggle-menu".into(),
+                "ui-button".into(),
+                "ui-expanded-or-collapsed".into(),
             ],
             vec![
-                "Menu item".into(),
-                "Match the item’s UI text".into(),
-                "Menu item".into(),
+                "ui-menu-item".into(),
+                "ui-match-the-item-s-ui-text".into(),
+                "ui-menu-item".into(),
                 "—".into(),
             ],
         ],
     );
     gap(Dp(24.0));
     caption(
-        "On Android, the close button accessibility labels should include a toggle menu label, button role, and an expanded or collapsed state",
+        "ui-on-android-the-close-button-accessibility-labels-should-include-a-toggle-menu-label-button",
     );
     gap(Dp(24.0));
     prose(
-        "FAB menu items should be labeled with the same text people see on screen, so the announced action matches the visible label.",
+        "ui-fab-menu-items-should-be-labeled-with-the-same-text-people-see-on-screen-so-the-announced",
     );
     gap(Dp(24.0));
     panel(RenderSlot::new(|| {
         menu_demo(
-            "Labeling",
+            "ui-labeling",
             FloatingActionButtonMenuColor::Primary,
             false,
             true,

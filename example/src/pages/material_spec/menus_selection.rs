@@ -23,15 +23,23 @@ use tessera_ui::{
     remember, scaled_box, tessera, use_context,
 };
 
+use crate::res::I18N;
+
 use super::super::annotations;
 
-const CHOICES: [&str; 5] = ["Gluten-free", "Kosher", "Nut-free", "Vegan", "Vegetarian"];
+const CHOICES: [&str; 5] = [
+    "ui-gluten-free",
+    "ui-kosher",
+    "ui-nut-free",
+    "ui-vegan",
+    "ui-vegetarian",
+];
 
 fn selected_text(selected: &[bool; 5]) -> String {
     CHOICES
         .iter()
         .enumerate()
-        .filter_map(|(index, label)| selected[index].then_some(*label))
+        .filter_map(|(index, label)| selected[index].then(|| I18N.text(label)))
         .collect::<Vec<_>>()
         .join(", ")
 }
@@ -50,7 +58,7 @@ pub(super) fn selection_figure() {
             },
         ))
         .children(move || {
-            scaled_box(scale).child(|| {
+            scaled_box(scale).child(move || {
                 let scheme = use_context::<MaterialTheme>().unwrap().get().color_scheme;
                 boxed()
                     .alignment(Alignment::TopStart)
@@ -60,7 +68,7 @@ pub(super) fn selection_figure() {
                             .background(scheme.surface)
                             .semantics(SemanticsArgs {
                                 role: Some(Role::Group),
-                                label: Some("Diet selection comparison".into()),
+                                label: Some(I18N.text("ui-diet-selection-comparison")),
                                 merge_descendants: true,
                                 ..Default::default()
                             }),
@@ -99,13 +107,13 @@ fn background() {
 fn selection_column(multiple: bool) {
     let theme = use_context::<MaterialTheme>().unwrap();
     let selected = remember(move || [false, false, true, multiple, false]);
-    let initial_text = selected.with(selected_text);
+    let initial_text = selected.with(|selected| selected_text(selected));
     let controller = remember(|| {
         let mut controller = TextInputController::new(Dp(16.0), Some(Dp(24.0)));
         controller.set_text(&initial_text);
         controller
     });
-    let mode = if multiple { "Multiple" } else { "Single" };
+    let mode = if multiple { "ui-multiple" } else { "ui-single" };
     column()
         .modifier(
             Modifier::new()
@@ -116,7 +124,10 @@ fn selection_column(multiple: bool) {
             boxed()
                 .modifier(Modifier::new().fill_max_width().semantics(SemanticsArgs {
                     role: Some(Role::Group),
-                    label: Some(format!("{mode} selection Diet field")),
+                    label: Some(I18N.format(
+                        "ui-value-selection-diet-field",
+                        [("v0", I18N.text(&mode).into())],
+                    )),
                     merge_descendants: true,
                     ..Default::default()
                 }))
@@ -124,8 +135,13 @@ fn selection_column(multiple: bool) {
                     text_field()
                         .outlined()
                         .controller(controller)
-                        .label("Diet")
-                        .accessibility_label(format!("{mode} selection Diet"))
+                        .label(I18N.text("ui-diet"))
+                        .accessibility_label(
+                            I18N.format(
+                                "ui-value-selection-diet",
+                                [("v0", I18N.text(&mode).into())],
+                            ),
+                        )
                         .read_only(true)
                         .min_width(Dp::ZERO)
                         .modifier(Modifier::new().size(Dp(200.0), Dp(56.0)))
@@ -141,7 +157,9 @@ fn selection_column(multiple: bool) {
             boxed()
                 .modifier(Modifier::new().fill_max_width().semantics(SemanticsArgs {
                     role: Some(Role::Menu),
-                    label: Some(format!("{mode} selection menu")),
+                    label: Some(
+                        I18N.format("ui-value-selection-menu", [("v0", I18N.text(&mode).into())]),
+                    ),
                     merge_descendants: true,
                     ..Default::default()
                 }))
@@ -160,7 +178,7 @@ fn selection_column(multiple: bool) {
                             menu_group().children(move || {
                                 for (index, choice) in CHOICES.iter().enumerate() {
                                     menu_item()
-                                        .label(*choice)
+                                        .label(I18N.text(*choice))
                                         .selected(selected.get()[index])
                                         .selection_mode(if multiple {
                                             MenuItemSelectionMode::Checkbox
@@ -177,7 +195,8 @@ fn selection_column(multiple: bool) {
                                                     selected[index] = true;
                                                 }
                                             });
-                                            let text = selected.with(selected_text);
+                                            let text =
+                                                selected.with(|selected| selected_text(selected));
                                             controller
                                                 .with_mut(|controller| controller.set_text(&text));
                                         });

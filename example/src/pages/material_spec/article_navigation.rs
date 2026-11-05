@@ -19,8 +19,14 @@ use tessera_ui::{
     },
 };
 
-pub(super) const ARTICLE_TAB_TITLES: [&str; 4] =
-    ["Overview", "Specs", "Guidelines", "Accessibility"];
+use crate::res::I18N;
+
+pub(super) const ARTICLE_TAB_TITLES: [&str; 4] = [
+    "ui-overview",
+    "ui-specs",
+    "ui-guidelines",
+    "ui-accessibility",
+];
 
 pub(super) struct ArticleNavigationState {
     requesters: [FocusRequester; 4],
@@ -126,7 +132,7 @@ pub(super) fn article_tab_modifier(
         })
         .clickable_with(ClickableArgs {
             role: Some(Role::Tab),
-            label: Some(ARTICLE_TAB_TITLES[index].into()),
+            label: Some(I18N.text(ARTICLE_TAB_TITLES[index])),
             enabled: available,
             interaction_state: interaction,
             focus_requester: Some(requester),
@@ -224,7 +230,7 @@ mod tests {
 
     #[tessera]
     fn scrolling_tab_fixture(output: tessera_ui::testing::TestProbe<Option<Observed>>) {
-        let selected = remember(|| "Overview");
+        let selected = remember(|| "ui-overview");
         let navigation = remember(ArticleNavigationState::default);
         let vertical = remember(ScrollableController::new);
         let horizontal = remember(ScrollableController::new);
@@ -258,7 +264,7 @@ mod tests {
                                     None,
                                 ))
                                 .children(move || {
-                                    text().content(title);
+                                    text().content(I18N.text(title));
                                 });
                         }
                     });
@@ -342,7 +348,7 @@ mod tests {
             renderer.step_frame();
             let scroll = output.get().unwrap().2.unwrap();
             assert_eq!(focused(&renderer), "Specs");
-            assert_eq!(output.get().unwrap().1.get(), "Specs");
+            assert_eq!(output.get().unwrap().1.get(), "ui-specs");
             assert_eq!(
                 scroll.with(|scroll| scroll.child_position().y),
                 -240.0,
@@ -412,7 +418,13 @@ mod tests {
 
     #[tessera]
     fn fixture(available: [bool; 4], output: tessera_ui::testing::TestProbe<Option<Observed>>) {
-        let selected = remember(|| if available[1] { "Specs" } else { "Overview" });
+        let selected = remember(|| {
+            if available[1] {
+                "ui-specs"
+            } else {
+                "ui-overview"
+            }
+        });
         let navigation = remember(ArticleNavigationState::default);
         output.set(Some((navigation, selected, None)));
         sync_article_navigation(navigation, available, selected.get());
@@ -456,7 +468,7 @@ mod tests {
                                         None,
                                     ))
                                     .children(move || {
-                                        text().content(title);
+                                        text().content(I18N.text(title));
                                     });
                             }
                         });
@@ -556,7 +568,8 @@ mod tests {
                 .nodes
                 .iter()
                 .find(|(_, node)| {
-                    node.role() == Role::Tab && node.label() == Some(ARTICLE_TAB_TITLES[initial])
+                    node.role() == Role::Tab
+                        && node.label() == Some(I18N.text(ARTICLE_TAB_TITLES[initial]).as_str())
                 })
                 .unwrap()
                 .1
@@ -572,7 +585,7 @@ mod tests {
             renderer.render_frames(4);
             assert_eq!(
                 focused(&renderer),
-                ARTICLE_TAB_TITLES[initial],
+                I18N.text(ARTICLE_TAB_TITLES[initial]),
                 "pointer activation must focus the tab before keyboard navigation"
             );
             assert_eq!(output.get().unwrap().1.get(), ARTICLE_TAB_TITLES[initial]);
@@ -583,14 +596,18 @@ mod tests {
                 ARTICLE_TAB_TITLES[initial],
                 "accessibility focus alone must not activate a tab"
             );
-            action(&mut renderer, ARTICLE_TAB_TITLES[initial], Action::Focus);
+            action(
+                &mut renderer,
+                &I18N.text(ARTICLE_TAB_TITLES[initial]),
+                Action::Focus,
+            );
             key(
                 &mut renderer,
                 output.get().unwrap().0,
                 initial,
                 NamedKey::ArrowRight,
             );
-            assert_eq!(focused(&renderer), ARTICLE_TAB_TITLES[next]);
+            assert_eq!(focused(&renderer), I18N.text(ARTICLE_TAB_TITLES[next]));
             assert_eq!(
                 output.get().unwrap().1.get(),
                 ARTICLE_TAB_TITLES[initial],
@@ -616,7 +633,7 @@ mod tests {
             assert_eq!(focused(&renderer), "Overview");
             key(&mut renderer, output.get().unwrap().0, 0, NamedKey::End);
             action(&mut renderer, "Accessibility", Action::Click);
-            assert_eq!(output.get().unwrap().1.get(), "Accessibility");
+            assert_eq!(output.get().unwrap().1.get(), "ui-accessibility");
             let tree = renderer.accessibility_snapshot().unwrap();
             let tabs: Vec<_> = tree
                 .nodes
@@ -633,7 +650,7 @@ mod tests {
                     Some(tab.label() == Some("Accessibility"))
                 );
             }
-            output.get().unwrap().1.set("Overview");
+            output.get().unwrap().1.set("ui-overview");
             renderer.render_frames(4);
             assert_eq!(
                 focused(&renderer),

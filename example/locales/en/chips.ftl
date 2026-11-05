@@ -1,0 +1,439 @@
+ui-assist = Assist
+
+ui-filter = Filter
+
+ui-input = Input
+
+ui-suggestion = Suggestion
+
+ui-assist-chip = Assist chip
+
+ui-filter-chip = Filter chip
+
+ui-input-chip = Input chip
+
+ui-suggestion-chip = Suggestion chip
+
+ui-assist-chips = Assist chips
+
+ui-filter-chips = Filter chips
+
+ui-input-chips = Input chips
+
+ui-suggestion-chips = Suggestion chips
+
+ui-use-chips-to-show-options-for-a-specific-context = Use chips to show options for a specific context
+
+ui-four-variants-assist-filter-input-and-suggestion = Four variants: assist, filter, input, and suggestion
+
+ui-chip-elevation-defaults-to-0-but-can-be-elevated-if-they-need-more-visual-separation = Chip elevation defaults to 0 but can be elevated if they need more visual separation
+
+ui-there-are-four-chip-variants-assist-filter-input-and-suggestion = There are four chip variants: assist, filter, input, and suggestion
+
+ui-tessera-examples-on-this-page-use-the-native-chip-component-with-the-flat-and-elevated-sty = Tessera examples on this page use the native chip component with the flat and elevated styles, standard shape corners, and an independent remove action for input chips.
+
+ui-aug-2024 = Aug 2024
+
+ui-updated-stroke-color-from-outline-to-outline-variant = Updated stroke color from outline to outline variant.
+
+ui-the-stroke-color-was-softened-to-improve-visual-hierarchy-between-chips-and-buttons = The stroke color was softened to improve visual hierarchy between chips and buttons
+
+ui-shape-rounded-rectangle = Shape: Rounded rectangle
+
+ui-variants-action-chips-have-been-separated-into-assist-chips-and-suggestion-chips-choice-ch = Variants: Action chips have been separated into assist chips and suggestion chips. Choice chips are now a subset of filter chips
+
+ui-choice = Choice
+
+ui-m2-variants-of-chips-are-input-choice-filter-and-action = M2: Variants of chips are input, choice, filter, and action
+
+ui-m3-variants-of-chips-updated-to-assist-filter-input-and-suggestion = M3: Variants of chips updated to assist, filter, input, and suggestion
+
+ui-there-are-four-variants-of-chips-assist-filter-input-and-suggestion = There are four variants of chips: assist, filter, input, and suggestion
+
+ui-chips-help-people-enter-information-make-selections-filter-content-or-trigger-actions-they = Chips help people enter information, make selections, filter content, or trigger actions. They're best used to help people accomplish their current task faster and easier.
+
+ui-chips-aren-t-buttons = Chips aren’t buttons
+
+ui-chips-and-buttons-are-similar-they-both-provide-visual-cues-to-prompt-people-to-take-actio = Chips and buttons are similar. They both provide visual cues to prompt people to take actions and make selections. While buttons appear consistently and with familiar calls of action, chips are dynamic to the situation, and appear as a group of interactive elements.
+
+ui-use-chips-to-enhance-a-person-s-current-journey-and-encourage-action-use-buttons-to-progre = Use chips to enhance a person’s current journey and encourage action. Use buttons to progress them through the product and for significant actions.
+
+ui-use-chips-to-present-contextual-supplemental-options = Use chips to present contextual, supplemental options
+
+ui-avoid-replacing-major-actions-with-chips-actions-that-progress-people-to-the-next-or-previ = Avoid replacing major actions with chips. Actions that progress people to the next or previous step should always be displayed as buttons.
+
+ui-chips-should-dynamically-offer-various-actions-depending-on-the-current-task-whereas-a-but = Chips should dynamically offer various actions depending on the current task, whereas a button should be a persistent fixture of a layout.
+
+ui-chips-represent-forking-paths-for-a-current-task-while-buttons-represent-linear-steps = Chips represent forking paths for a current task, while buttons represent linear steps.
+
+ui-use-buttons-for-the-final-step-in-a-task = Use buttons for the final step in a task
+
+ui-avoid-using-chips-to-finish-or-progress-a-task = Avoid using chips to finish or progress a task
+
+ui-multiple-chips-should-appear-together-in-a-set-whereas-there-should-be-no-more-than-3-butt = Multiple chips should appear together in a set, whereas there should be no more than 3 buttons in a single arrangement.
+
+ui-chip-sets-can-be-scrolled-horizontally = Chip sets can be scrolled horizontally.
+
+ui-chips-can-be-scrolled-horizontally = Chips can be scrolled horizontally
+
+ui-don-t-display-a-single-chip-by-itself-chips-should-appear-in-a-set = Don’t display a single chip by itself. Chips should appear in a set.
+
+ui-choose-the-chip-variant-based-on-its-purpose-and-author = Choose the chip variant based on its purpose and author.
+
+ui-does-the-chip-represent-an-action-assist-chip-or-filter-results-filter-chip = Does the chip represent an action (assist chip) or filter results (filter chip)?
+
+ui-is-its-content-generated-by-the-product-suggestion-chip-or-by-the-person-using-the-product = Is its content generated by the product (suggestion chip), or by the person using the product (input chip)?
+
+ui-purpose = Purpose
+
+ui-chip-variant = Chip variant
+
+ui-rationale = Rationale
+
+ui-example = Example
+
+ui-assist-chips-represent-smart-or-automated-actions-that-can-span-multiple-apps = Assist chips represent smart or automated actions that can span multiple apps
+
+ui-add-to-calendar-action = Add to calendar action
+
+ui-filter-chips-represent-filters-for-a-collection = Filter chips represent filters for a collection
+
+ui-information-user-authored = Information, user-authored
+
+ui-input-chips-represent-discrete-pieces-of-information-entered-by-a-person = Input chips represent discrete pieces of information entered by a person
+
+ui-gmail-contact-in-the-to-field = Gmail contact in the To field
+
+ui-information-product-authored = Information, product-authored
+
+ui-suggestion-chips-help-narrow-a-person-s-intent-by-presenting-dynamically-generated-suggest = Suggestion chips help narrow a person’s intent by presenting dynamically-generated suggestions
+
+ui-suggested-chat-response = Suggested chat response
+
+ui-a-chip-contains-a-container-a-label-and-optional-leading-and-trailing-elements = A chip contains a container, a label, and optional leading and trailing elements
+
+ui-all-chips-are-slightly-rounded-with-an-8dp-corner = All chips are slightly rounded with an 8dp corner.
+
+ui-chips-have-rounded-corners = Chips have rounded corners
+
+ui-shadows-elevation = Shadows & elevation
+
+ui-chip-containers-can-be-elevated-if-placed-on-top-of-an-image-or-dynamic-background = Chip containers can be elevated if placed on top of an image or dynamic background.
+
+ui-when-on-complicated-backgrounds-chip-containers-can-be-elevated = When on complicated backgrounds, chip containers can be elevated
+
+ui-use-an-outline-to-define-the-edge-of-the-chip-s-container-on-regular-backgrounds = Use an outline to define the edge of the chip's container on regular backgrounds
+
+ui-chips-shouldn-t-be-elevated-when-placed-directly-on-the-page = Chips shouldn't be elevated when placed directly on the page
+
+ui-chips-may-use-elevation-when-placed-on-an-image = Chips may use elevation when placed on an image
+
+ui-avoid-using-elevation-to-indicate-a-chip-s-pressed-state-instead-use-the-visual-ripple-eff = Avoid using elevation to indicate a chip's pressed state. Instead, use the visual ripple effect.
+
+ui-chip-label-text-should-be-20-characters-or-fewer-and-have-the-same-typography-style-as-but = Chip label text should be 20 characters or fewer, and have the same typography style as buttons.
+
+ui-chip-labels-should-remain-brief-for-the-limited-space-available-skip-conventional-grammar = Chip labels should remain brief for the limited space available. Skip conventional grammar rules, such as articles (take “a” walk), to save space.
+
+ui-keep-chip-labels-short = Keep chip labels short
+
+ui-avoid-chip-labels-longer-than-20-characters = Avoid chip labels longer than 20 characters
+
+ui-leading-icon-or-image-optional = Leading icon or image (optional)
+
+ui-chips-can-contain-a-leading-icon-logo-or-circular-image-use-a-system-icon-to-help-identify = Chips can contain a leading icon, logo, or circular image. Use a system icon to help identify a chip’s category.
+
+ui-chips-can-contain-a-logo-icon-or-circular-image = Chips can contain a logo, icon, or circular image
+
+ui-the-leading-icon-color-for-unselected-chips-can-be-customized-through-theming-while-the-de = The leading icon color for unselected chips can be customized through theming. While the default color role is primary, the on surface variant color role is a good alternative when the icon style requires less emphasis.
+
+ui-leading-circular-images-are-sized-larger-than-leading-icons-to-provide-more-space-for-deta = Leading circular images are sized larger than leading icons to provide more space for detail. Icons are designed to be legible at small sizes. See the Specs tab for precise measurement values.
+
+ui-leading-images-such-as-avatars-are-sized-larger-than-leading-icons-or-logos = Leading images, such as avatars, are sized larger than leading icons or logos
+
+ui-trailing-icon-optional-input-and-filter-chips-only = Trailing icon (optional, input and filter chips only)
+
+ui-the-trailing-icon-is-present-for-input-and-filter-chips = The trailing icon is present for input and filter chips.
+
+ui-on-input-chips-it-s-required-and-must-be-used-to-remove-the-chip-on-filter-chips-it-s-opti = On input chips, it’s required and must be used to remove the chip. On filter chips, it’s optional, and can be used to open a menu or remove the chip.
+
+ui-secondary-actions-such-as-a-trailing-icon-button-for-remove-must-have-a-48x48dp-interactio = Secondary actions (such as a trailing icon button for Remove) must have a 48x48dp interaction target that doesn’t interfere with the chip’s primary action (such as Edit or Drag). To achieve this, apply a minimum width of 88dp to the chip, or 42dp to the label text.
+
+ui-interaction-targets-for-actions-like-edit-or-close-have-a-size-of-48x48-this-can-be-achiev = Interaction targets for actions like Edit or Close have a size of 48x48. This can be achieved by setting the minimum container width to 88dp
+
+ui-flat-chips-suit-regular-surfaces-elevated-chips-separate-containers-from-imagery-or-dynami = Flat chips suit regular surfaces; elevated chips separate containers from imagery or dynamic color
+
+ui-take-walk = Take walk
+
+ui-take-a-long-walk-around-the-park = Take a long walk around the park
+
+ui-ping-qiang = Ping Qiang
+
+ui-type-images = Type: Images
+
+ui-restore-input-chip = Restore input chip
+
+ui-88dp-min = 88dp min
+
+ui-team-catch-up = Team catch-up
+
+ui-wednesday-10-00-10-30 = Wednesday · 10:00–10:30
+
+ui-added = Added
+
+ui-add-to-calendar = Add to calendar
+
+ui-get-directions = Get directions
+
+ui-assist-chips-represent-smart-or-automated-actions-that-can-span-multiple-apps-such-as-open = Assist chips represent smart or automated actions that can span multiple apps, such as opening a calendar event from the home screen. Assist chips function as though the person asked an assistant to complete the action. They should appear dynamically and contextually in a UI.
+
+ui-an-alternative-to-assist-chips-are-buttons-which-should-appear-persistently-and-consistent = An alternative to assist chips are buttons, which should appear persistently and consistently.
+
+ui-the-text-in-most-assist-chips-begins-with-a-short-verb-like-get-or-add = The text in most assist chips begins with a short verb, like Get or Add
+
+ui-assist-chips-can-trigger-an-action-or-show-progress-and-confirmation-write-assist-chips-li = Assist chips can trigger an action or show progress and confirmation. Write assist chips like buttons: start with a verb. Adjust text dynamically if the state changes, like Save to Saved.
+
+ui-tapping-an-assist-chip-triggers-a-contextual-action-and-the-chip-can-show-progress-and-con = Tapping an assist chip triggers a contextual action, and the chip can show progress and confirmation feedback
+
+ui-assist-chips-are-displayed-after-primary-content-such-as-below-a-card-or-persistently-at-t = Assist chips are displayed after primary content, such as below a card or persistently at the bottom of a screen.
+
+ui-filter-results = Filter results
+
+ui-unread = Unread
+
+ui-attachments = Attachments
+
+ui-filter-chips-use-tags-or-descriptive-words-to-filter-content-they-can-be-a-good-alternativ = Filter chips use tags or descriptive words to filter content. They can be a good alternative to segmented buttons or checkboxes when viewing a list or search results.
+
+ui-tapping-on-a-filter-chip-activates-it-and-appends-a-leading-checkmark-icon-to-the-starting = Tapping on a filter chip activates it and appends a leading checkmark icon to the starting edge of the chip label.
+
+ui-write-filter-chips-with-nouns-that-describe-the-category-to-include-in-the-results-avoid-n = Write filter chips with nouns that describe the category to include in the results. Avoid negative phrases like Exclude images.
+
+ui-filter-chips-rely-on-tags-or-descriptive-words-to-filter-content = Filter chips rely on tags or descriptive words to filter content
+
+ui-tap-a-chip-to-select-it-multiple-chips-can-be-selected-or-unselected = Tap a chip to select it. Multiple chips can be selected or unselected.
+
+ui-filter-chips-in-a-shopping-app-and-in-a-real-estate-app = Filter chips in a shopping app and in a real estate app
+
+ui-use-nouns-that-describe-the-category-to-include-in-results = Use nouns that describe the category to include in results
+
+ui-avoid-negative-phrases-like-exclude-images = Avoid negative phrases like Exclude images
+
+ui-restore-recipients = Restore recipients
+
+ui-alex = Alex
+
+ui-sam = Sam
+
+ui-taylor = Taylor
+
+ui-input-chips-represent-information-entered-by-a-person-their-body-can-select-or-edit-the-it = Input chips represent information entered by a person. Their body can select or edit the item; the independent trailing control removes it.
+
+ui-use-input-chips-for-discrete-pieces-of-information-such-as-recipients-filters-or-tags-a-le = Use input chips for discrete pieces of information, such as recipients, filters, or tags. A leading icon, logo or circular avatar can identify the item, and the removal action must stay independent.
+
+ui-place-input-chips-inline-in-a-wrapping-set-or-in-a-horizontally-scrolling-field-keep-all-v = Place input chips inline, in a wrapping set, or in a horizontally scrolling field. Keep all values visible when the task benefits from reviewing the whole set.
+
+ui-use-a-leading-avatar-or-icon-and-a-separate-trailing-remove-action = Use a leading avatar or icon and a separate trailing remove action
+
+ui-avoid-making-the-whole-chip-the-remove-action-the-chip-body-and-its-removal-stay-separate = Avoid making the whole chip the remove action; the chip body and its removal stay separate
+
+ui-would-you-like-to-meet-tomorrow = Would you like to meet tomorrow?
+
+ui-sounds-good = Sounds good
+
+ui-maybe-later = Maybe later
+
+ui-what-time = What time?
+
+ui-suggestion-chips-help-narrow-a-person-s-intent-by-presenting-dynamically-generated-suggest-1772 = Suggestion chips help narrow a person’s intent by presenting dynamically-generated suggestions. They are product-authored, so their labels come from the app rather than the person.
+
+ui-suggestion-chips-offer-short-product-generated-replies-or-search-suggestions = Suggestion chips offer short, product-generated replies or search suggestions
+
+ui-keep-suggestions-in-an-inline-set-that-wraps-as-needed-preserve-at-least-8dp-between-visua = Keep suggestions in an inline set that wraps as needed. Preserve at least 8dp between visual chips and 48dp interaction targets.
+
+ui-offer-a-short-set-of-suggestions-next-to-the-content-they-answer = Offer a short set of suggestions next to the content they answer
+
+ui-avoid-presenting-a-single-suggestion-chip-on-its-own = Avoid presenting a single suggestion chip on its own
+
+ui-container-elevation = Container elevation
+
+ui-0dp-elevated-1dp = 0dp · elevated 1dp
+
+ui-label-color = Label color
+
+ui-outline-variant = Outline variant
+
+ui-8dp-corner = 8dp corner
+
+ui-leading-icon-color = Leading icon color
+
+ui-trailing-icon-color = Trailing icon color
+
+ui-selected-container = Selected container
+
+ui-selected-label = Selected label
+
+ui-selected-icon = Selected icon
+
+ui-8dp-corner-radius = 8dp corner radius
+
+ui-center-aligned-start-aligned = Center-aligned · start-aligned
+
+ui-vertical-label-text-alignment = Vertical label text alignment
+
+ui-horizontal-label-text-alignment = Horizontal label text alignment
+
+ui-avatar-shape = Avatar shape
+
+ui-avatar-size = Avatar size
+
+ui-left-padding-for-avatar = Left padding for avatar
+
+ui-right-padding-for-avatar = Right padding for avatar
+
+ui-target-size-for-close-icon = Target size for close icon
+
+ui-min-48dp = Min 48dp
+
+ui-trailing-icon = Trailing icon
+
+ui-enabled-disabled-hovered-focused-pressed-and-dragged-states-use-the-same-container-label-a = Enabled, disabled, hovered, focused, pressed and dragged states use the same container, label and icon color roles. Hover, focus with Tab, or press and hold to inspect actual input feedback.
+
+ui-use-a-chip-to-perform-an-action = Use a chip to perform an action
+
+ui-navigate-to-a-chip = Navigate to a chip
+
+ui-activate-a-chip = Activate a chip
+
+ui-the-chip-label-needs-at-least-3-1-contrast-with-the-background = The chip label needs at least 3:1 contrast with the background.
+
+ui-a-chip-that-performs-an-action-should-present-the-same-semantics-as-a-button-to-a-platform = A chip that performs an action should present the same semantics as a button to a platform’s accessibility API.
+
+ui-this-native-sample-exposes-assist-chips-as-buttons-filter-and-input-chips-as-toggleable-co = This native sample exposes assist chips as buttons, filter and input chips as toggleable controls, and the input chip removal as a separate action.
+
+ui-high-contrast-helps-differentiate-chips-clustered-together = High contrast helps differentiate chips clustered together
+
+ui-horizontal-overflow = Horizontal overflow
+
+ui-when-there-are-too-many-chips-to-fit-on-one-row-provide-a-way-to-display-them-all-at-once = When there are too many chips to fit on one row, provide a way to display them all at once and avoid scrolling.
+
+ui-reflow-method-use-a-filter-chip-as-a-leading-element-to-reflow-the-horizontal-list-this-sh = Reflow method: Use a filter chip as a leading element to reflow the horizontal list. This should shift down the content below and make room for all chips to show.
+
+ui-the-show-all-filter-chip-is-used-to-reflow-the-list-displaying-all-chips-at-once-and-pushi = The Show all filter chip is used to reflow the list, displaying all chips at once and pushing down the content below
+
+ui-menu-method-create-a-leading-button-to-display-all-chip-options-in-a-menu-use-this-option = Menu method: Create a leading button to display all chip options in a menu. Use this option to avoid shifting the position of the content below.
+
+ui-don-t-use-the-menu-method-on-chips-with-a-second-action-like-a-remove-icon = Don’t use the menu method on chips with a second action, like a remove icon.
+
+ui-don-t-apply-density-to-chips-by-default-this-lowers-their-targets-below-our-best-practice = Don’t apply density to chips by default — this lowers their targets below our best practice of 48x48 CSS pixels. Instead, give people a way to choose a higher density, like selecting a denser layout or changing the theme.
+
+ui-to-ensure-that-this-density-setting-can-be-easily-reverted-when-it-s-active-keep-all-the-t = To ensure that this density setting can be easily reverted when it’s active, keep all the targets to change it at minimum 48x48 CSS pixels each.
+
+ui-music = Music
+
+ui-movies = Movies
+
+ui-books = Books
+
+ui-travel = Travel
+
+ui-food = Food
+
+ui-sports = Sports
+
+ui-moves-focus-to-enabled-chip-or-chip-group = Moves focus to enabled chip or chip group
+
+ui-activates-selects-or-deselects-the-focused-chip = Activates, selects, or deselects the focused chip
+
+ui-backspace-or-delete = Backspace or Delete
+
+ui-removes-currently-focused-input-chip = Removes currently focused input chip
+
+ui-arrows = Arrows
+
+ui-moves-focus-between-chips = Moves focus between chips
+
+ui-this-native-sample-follows-the-table-tab-reaches-each-chip-space-or-enter-activates-the-fo = This native sample follows the table: Tab reaches each chip, Space or Enter activates the focused chip, and the remove action of an input chip is a separate focus stop.
+
+ui-use-the-visible-chip-label-as-its-accessible-name-decorative-icons-are-not-repeated-additi = Use the visible chip label as its accessible name. Decorative icons are not repeated. Additional actions have their own labels.
+
+ui-a11y-label = A11y label
+
+ui-role-web = Role (Web)
+
+ui-role-android-views = Role (Android Views)
+
+ui-role-jetpack-compose = Role (Jetpack Compose)
+
+ui-hide-image = Hide image
+
+ui-basic-chip-one-action = Basic chip (one action)
+
+ui-selectable-chip = Selectable chip
+
+ui-radio-button-1835 = radio button
+
+ui-remove-icon-no-other-action = Remove icon (no other action)
+
+ui-two-actions-e-g-select-remove = Two actions (e.g., select + remove)
+
+ui-button-or-checkbox = button or checkbox
+
+ui-space-or-enter-toggles-a-focused-selectable-chip-without-changing-other-choices = Space or Enter toggles a focused selectable chip without changing other choices.
+
+ui-drop-down-list = Drop-down list
+
+ui-menu-item-labels-match-their-visible-text-decorative-icons-do-not-add-redundant-announceme = Menu item labels match their visible text; decorative icons do not add redundant announcements.
+
+ui-input-chip-remove-action = Input chip remove action
+
+ui-a-chip-with-selection-and-removal-exposes-two-independent-focusable-actions-name-the-secon = A chip with selection and removal exposes two independent focusable actions. Name the second action Remove followed by the chip label.
+
+ui-showing-chip-interactivity = Showing chip interactivity
+
+ui-introduce-the-chip-group-with-a-meaningful-instruction-such-as-filter-results-or-use-an-ac = Introduce the chip group with a meaningful instruction, such as Filter results, or use an action-oriented label and leading icon.
+
+ui-value-example = { $v0 } example
+
+ui-value-chip = { $v0 } chip
+
+ui-value-filters-selected = { $v0 } filters selected
+
+ui-reply-value = Reply: { $v0 }
+
+ui-value-chip-tokens = { $v0 } chip tokens
+
+ui-actions-value = Actions: { $v0 }
+
+ui-value-chip-color = { $v0 } chip color
+
+ui-value-chip-color-roles-used-for-light-and-dark-themes-value = { $v0 } chip color roles used for light and dark themes: { $v1 }.
+
+ui-value-chip-states = { $v0 } chip states
+
+ui-value-chip-measurements = { $v0 } chip measurements
+
+ui-platform-selector-on-material-io-components = Platform selector on material.io/components
+
+ui-left-right-padding = Left/right padding
+
+ui-left-right-padding-without-icon = Left/right padding without icon
+
+ui-left-right-padding-with-icon = Left/right padding with icon
+
+ui-surface-container-low-optional-on-surface-outline-primary = Surface container low (optional), on surface, outline, primary
+
+ui-on-surface-variant-on-secondary-container-secondary-container-outline-variant-surface-cont = On surface variant, on secondary container, secondary container, outline variant, surface container low (optional)
+
+ui-on-surface-variant-surface-container-low-optional-outline-variant-primary-secondary-contai = On surface variant, surface container low (optional), outline variant, primary, secondary container, on secondary container
+
+ui-outline-surface-container-low-optional-on-surface-variant = Outline, surface container low (optional), on surface variant
+
+ui-image-icon-within-chip = Image / Icon within chip
+
+ui-to = To
+
+ui-chip-content = { "{" }chip content{ "}" }
+
+ui-remove-chip-content = Remove { "{" }chip content{ "}" }
+
+ui-chip-content-then-remove-chip-content = { "{" }chip content{ "}" }. Then “Remove { "{" }chip content{ "}" }”

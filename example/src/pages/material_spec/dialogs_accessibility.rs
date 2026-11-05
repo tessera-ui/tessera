@@ -23,6 +23,8 @@ use tessera_ui::{
     modifier::FocusModifierExt as _, remember, tessera, use_context,
 };
 
+use crate::res::I18N;
+
 use super::{
     annotations, dialog_marker, dialog_phone_status, dialog_scene_action, dialog_scene_input,
     dialog_type_style, gap,
@@ -140,15 +142,15 @@ fn keyboard_content(reverse: bool, scale: f64) {
                     .children(move || {
                         icon().vector(filled::DELETE_OUTLINE_SVG).size(Dp(24.0 * scale)).tint(scheme.secondary);
                     });
-                placed_text("Permanently delete?".into(), 24.0, 32.0, 46.0, 64.0, 264.0, scale);
-                text().content("Deleting the selected messages will also remove them from all synced devices. You won’t be able to recover them later.")
+                placed_text("ui-permanently-delete".into(), 24.0, 32.0, 46.0, 64.0, 264.0, scale);
+                text().content(I18N.text("ui-deleting-the-selected-messages-will-also-remove-them-from-all-synced-devices-you-won-t-be"))
                     .style(dialog_type_style(14.0, 20.0, scale)).color(scheme.on_surface_variant)
                     .modifier(Modifier::new().offset(Dp(24.0 * scale), Dp(112.0 * scale)).width(Dp(264.0 * scale)));
                 for (index, label, x, width, focus) in [
-                    (0, "Cancel", 127.0, 78.0, cancel),
-                    (1, "Delete", 213.0, 75.0, delete),
+                    (0, "ui-cancel", 127.0, 78.0, cancel),
+                    (1, "ui-delete", 213.0, 75.0, delete),
                 ] {
-                    button().text().accessibility_label(format!("{} example {label}", if reverse { "Reverse" } else { "Forward" }))
+                    button().text().accessibility_label(I18N.format("ui-value-example-value", [("v0", I18N.text(&(if reverse { "ui-reverse" } else { "ui-forward" })).into()), ("v1", I18N.text(&label).into())]))
                         .presentation_state(if selected.get() == index { InteractionVisualState::Focus } else { InteractionVisualState::Rest })
                         .shape(Shape::rounded_rectangle(Dp(12.0 * scale)))
                         .content_padding(Padding::all(Dp::ZERO))
@@ -156,14 +158,14 @@ fn keyboard_content(reverse: bool, scale: f64) {
                             .size(Dp(width * scale), Dp(40.0 * scale)).focus_requester(focus))
                         .on_click(move || shown.set(false))
                         .child(move || {
-                            text().content(label).style(dialog_type_style(14.0, 20.0, scale));
+                            text().content(I18N.text(label)).style(dialog_type_style(14.0, 20.0, scale));
                         });
                 }
             });
     } else {
         dialog_scene_action(
-            "Reset example".into(),
-            "Reset keyboard dialog example".into(),
+            "ui-reset-example".into(),
+            "ui-reset-keyboard-dialog-example".into(),
             246.0,
             210.0,
             160.0,
@@ -182,11 +184,11 @@ fn keyboard_content(reverse: bool, scale: f64) {
         .color(scheme.tertiary)
         .content_color(scheme.on_tertiary)
         .content_padding(Padding::all(Dp::ZERO))
-        .accessibility_label(if reverse {
-            "Move to the previous dialog action"
+        .accessibility_label(I18N.text(if reverse {
+            "ui-move-to-the-previous-dialog-action"
         } else {
-            "Move to the next dialog action"
-        })
+            "ui-move-to-the-next-dialog-action"
+        }))
         .modifier(
             Modifier::new()
                 .offset(Dp(x * scale), Dp(371.0 * scale))
@@ -203,7 +205,7 @@ fn keyboard_content(reverse: bool, scale: f64) {
         })
         .child(move || {
             text()
-                .content(if reverse { "Shift + Tab" } else { "Tab" })
+                .content(I18N.text(if reverse { "ui-shift-tab" } else { "ui-tab" }))
                 .style(dialog_type_style(28.0, 36.0, scale));
         });
     numbered(if reverse { 2 } else { 1 }, 326.0, 505.0, scale);
@@ -226,21 +228,21 @@ fn traffic_labels(scale: f64) {
             .size(Dp(312.0 * scale), Dp(240.0 * scale))
             .background_with_shape(scheme.surface_container_high, Shape::rounded_rectangle(Dp(28.0 * scale)))
             .border_with_shape(Dp(4.0 * scale), scheme.tertiary, Shape::rounded_rectangle(Dp(28.0 * scale)))
-            .semantics(SemanticsArgs { role: Some(Role::AlertDialog), label: Some("Set up traffic updates?".into()), ..Default::default() }))
+            .semantics(SemanticsArgs { role: Some(Role::AlertDialog), label: Some(I18N.text("ui-set-up-traffic-updates")), ..Default::default() }))
             .children(move || {
-                placed_text("Set up traffic updates?".into(), 24.0, 32.0, 24.0, 24.0, 264.0, scale);
-                text().content("Get notified when traffic is impacted along your usual routes. Add your preferred routes and travel times to get started with traffic updates.")
+                placed_text("ui-set-up-traffic-updates".into(), 24.0, 32.0, 24.0, 24.0, 264.0, scale);
+                text().content(I18N.text("ui-get-notified-when-traffic-is-impacted-along-your-usual-routes-add-your-preferred-routes-an"))
                     .style(dialog_type_style(14.0, 20.0, scale)).color(scheme.on_surface_variant)
                     .modifier(Modifier::new().offset(Dp(24.0 * scale), Dp(72.0 * scale)).width(Dp(264.0 * scale)));
-                dialog_scene_action("No thanks".into(), "Decline traffic updates".into(), 128.0, 180.0, 96.0, scale,
+                dialog_scene_action("ui-no-thanks".into(), "ui-decline-traffic-updates".into(), 128.0, 180.0, 96.0, scale,
                     Callback::new(move || shown.set(false)));
-                dialog_scene_action("OK".into(), "Enable traffic updates".into(), 240.0, 180.0, 48.0, scale,
+                dialog_scene_action("ui-ok".into(), "ui-enable-traffic-updates".into(), 240.0, 180.0, 48.0, scale,
                     Callback::new(move || shown.set(false)));
             });
     } else {
         dialog_scene_action(
-            "Show traffic dialog".into(),
-            "Show traffic label example".into(),
+            "ui-show-traffic-dialog".into(),
+            "ui-show-traffic-label-example".into(),
             110.0,
             160.0,
             200.0,
@@ -253,8 +255,8 @@ fn traffic_labels(scale: f64) {
         108.0,
         224.0,
         148.0,
-        "Set up traffic updates?".into(),
-        "Alert dialog".into(),
+        "ui-set-up-traffic-updates".into(),
+        "ui-alert-dialog".into(),
         scale,
     );
     connector(362.0, 180.0, 440.0, scale);
@@ -275,7 +277,7 @@ fn event_labels(scale: f64) {
             if shown.get() {
                 dialog_phone_status(scale);
                 event_header(
-                    "New event".into(),
+                    "ui-new-event".into(),
                     scale,
                     Callback::new(move || shown.set(false)),
                     Callback::new(move || {
@@ -287,9 +289,9 @@ fn event_labels(scale: f64) {
                     24.0,
                     118.0,
                     364.0,
-                    "Label".into(),
-                    "Input".into(),
-                    "Event category".into(),
+                    "ui-label".into(),
+                    "ui-input".into(),
+                    "ui-event-category".into(),
                     true,
                     scale,
                 );
@@ -298,8 +300,8 @@ fn event_labels(scale: f64) {
                     190.0,
                     364.0,
                     "".into(),
-                    "Carmen’s Birthday Surprise Party".into(),
-                    "Enter event name".into(),
+                    "ui-carmen-s-birthday-surprise-party".into(),
+                    "ui-enter-event-name".into(),
                     false,
                     scale,
                 );
@@ -308,20 +310,20 @@ fn event_labels(scale: f64) {
                     262.0,
                     364.0,
                     "".into(),
-                    "123 El Camino, Cleveland, OH 44113".into(),
-                    "Event location".into(),
+                    "ui-123-el-camino-cleveland-oh-44113".into(),
+                    "ui-event-location".into(),
                     false,
                     scale,
                 );
-                placed_text("From".into(), 12.0, 16.0, 24.0, 350.0, 364.0, scale);
+                placed_text("ui-from".into(), 12.0, 16.0, 24.0, 350.0, 364.0, scale);
                 outline(332.0, 68.0, 64.0, 40.0, scale);
                 outline(23.0, 190.0, 365.0, 56.0, scale);
             } else {
                 placed_text(
                     if saved.get() {
-                        "Event saved"
+                        "ui-event-saved"
                     } else {
-                        "Event closed"
+                        "ui-event-closed"
                     }
                     .into(),
                     16.0,
@@ -332,8 +334,8 @@ fn event_labels(scale: f64) {
                     scale,
                 );
                 dialog_scene_action(
-                    "Show event".into(),
-                    "Reset event label example".into(),
+                    "ui-show-event".into(),
+                    "ui-reset-event-label-example".into(),
                     24.0,
                     170.0,
                     140.0,
@@ -350,8 +352,8 @@ fn event_labels(scale: f64) {
         13.0,
         170.0,
         144.0,
-        "UI text (“Save”)".into(),
-        "Button".into(),
+        "ui-ui-text-save".into(),
+        "ui-button".into(),
         scale,
     );
     annotation_card(
@@ -359,8 +361,8 @@ fn event_labels(scale: f64) {
         176.0,
         182.0,
         144.0,
-        "Enter event name".into(),
-        "Text field".into(),
+        "ui-enter-event-name".into(),
+        "ui-text-field".into(),
         scale,
     );
     connector(396.0, 88.0, 440.0, scale);
@@ -372,7 +374,7 @@ fn event_header(title: String, scale: f64, close: Callback, save: Callback) {
     let scheme = use_context::<MaterialTheme>().unwrap().get().color_scheme;
     button()
         .text()
-        .accessibility_label(format!("Close {title}"))
+        .accessibility_label(I18N.format("ui-close-value", [("v0", I18N.text(&title).into())]))
         .on_click_shared(close)
         .content_padding(Padding::all(Dp::ZERO))
         .modifier(
@@ -387,7 +389,15 @@ fn event_header(title: String, scale: f64, close: Callback, save: Callback) {
                 .tint(scheme.on_surface);
         });
     placed_text(title, 22.0, 28.0, 56.0, 74.0, 268.0, scale);
-    dialog_scene_action("Save".into(), "Save".into(), 332.0, 68.0, 64.0, scale, save);
+    dialog_scene_action(
+        "ui-save".into(),
+        "ui-save".into(),
+        332.0,
+        68.0,
+        64.0,
+        scale,
+        save,
+    );
 }
 
 #[tessera]
@@ -420,9 +430,9 @@ fn annotation_card(
                 }),
         )
         .children(move || {
-            placed_text("Label".into(), 16.0, 20.0, 0.0, 0.0, width - 44.0, scale);
+            placed_text("ui-label".into(), 16.0, 20.0, 0.0, 0.0, width - 44.0, scale);
             text()
-                .content(label.clone())
+                .content(I18N.text(&(label)))
                 .style(dialog_type_style(16.0, 20.0, scale))
                 .color(scheme.tertiary)
                 .modifier(
@@ -430,9 +440,9 @@ fn annotation_card(
                         .offset(Dp::ZERO, Dp(22.0 * scale))
                         .width(Dp((width - 44.0) * scale)),
                 );
-            placed_text("Role".into(), 16.0, 20.0, 0.0, 56.0, width - 44.0, scale);
+            placed_text("ui-role".into(), 16.0, 20.0, 0.0, 56.0, width - 44.0, scale);
             text()
-                .content(role.clone())
+                .content(I18N.text(&(role)))
                 .style(dialog_type_style(16.0, 20.0, scale))
                 .color(scheme.tertiary)
                 .modifier(
@@ -488,7 +498,7 @@ fn photo_region(x: f64, y: f64, width: f64, height: f64, radius: f64, scale: f64
                 .clip_shape(Shape::rounded_rectangle(Dp(radius * scale)))
                 .semantics(SemanticsArgs {
                     role: Some(Role::Image),
-                    label: Some("Family photograph".into()),
+                    label: Some(I18N.text("ui-family-photograph")),
                     ..Default::default()
                 }),
         )
@@ -543,11 +553,11 @@ fn photo_content(modal: bool, scale: f64) {
         )
         .children(move || {
             text()
-                .content("Jun\n8")
+                .content(I18N.text("Jun\n8"))
                 .style(dialog_type_style(12.0, 16.0, scale))
                 .color(scheme.on_primary_container);
         });
-    placed_text("Today".into(), 48.0, 56.0, 188.0, 6.0, 300.0, scale);
+    placed_text("ui-today".into(), 48.0, 56.0, 188.0, 6.0, 300.0, scale);
     if modal && shown.get() {
         boxed()
             .modifier(
@@ -568,9 +578,17 @@ fn photo_content(modal: bool, scale: f64) {
                     ),
             )
             .children(move || {
-                placed_text("Sync complete".into(), 24.0, 32.0, 24.0, 24.0, 266.0, scale);
+                placed_text(
+                    "ui-sync-complete".into(),
+                    24.0,
+                    32.0,
+                    24.0,
+                    24.0,
+                    266.0,
+                    scale,
+                );
                 text()
-                    .content("Three new photos were synced to your device")
+                    .content(I18N.text("ui-three-new-photos-were-synced-to-your-device"))
                     .style(dialog_type_style(14.0, 20.0, scale))
                     .color(scheme.on_surface_variant)
                     .modifier(
@@ -579,8 +597,8 @@ fn photo_content(modal: bool, scale: f64) {
                             .width(Dp(266.0 * scale)),
                     );
                 dialog_scene_action(
-                    "OK".into(),
-                    "Acknowledge sync complete".into(),
+                    "ui-ok".into(),
+                    "ui-acknowledge-sync-complete".into(),
                     238.0,
                     136.0,
                     52.0,
@@ -602,14 +620,14 @@ fn photo_content(modal: bool, scale: f64) {
             )
             .children(move || {
                 text()
-                    .content("Three new photos were synced to your device")
+                    .content(I18N.text("ui-three-new-photos-were-synced-to-your-device"))
                     .style(dialog_type_style(14.0, 20.0, scale))
                     .color(scheme.inverse_on_surface);
             });
         if modal {
             dialog_scene_action(
-                "Show sync dialog".into(),
-                "Reset blocking message example".into(),
+                "ui-show-sync-dialog".into(),
+                "ui-reset-blocking-message-example".into(),
                 220.0,
                 554.0,
                 216.0,
@@ -646,7 +664,7 @@ fn enlarged_text(scale: f64) {
             )
             .children(move || {
                 placed_text(
-                    "Clear your location history?".into(),
+                    "ui-clear-your-location-history".into(),
                     48.0,
                     64.0,
                     24.0,
@@ -655,7 +673,9 @@ fn enlarged_text(scale: f64) {
                     scale,
                 );
                 text()
-                    .content("You won’t be able to restore your history once it’s cleared.")
+                    .content(
+                        I18N.text("ui-you-won-t-be-able-to-restore-your-history-once-it-s-cleared"),
+                    )
                     .style(dialog_type_style(28.0, 36.0, scale))
                     .color(scheme.on_surface_variant)
                     .modifier(
@@ -665,7 +685,7 @@ fn enlarged_text(scale: f64) {
                     );
                 button()
                     .text()
-                    .accessibility_label("Don't clear location history")
+                    .accessibility_label(I18N.text("ui-don-t-clear-location-history"))
                     .content_padding(Padding::all(Dp::ZERO))
                     .modifier(
                         Modifier::new()
@@ -675,14 +695,14 @@ fn enlarged_text(scale: f64) {
                     .on_click(move || shown.set(false))
                     .child(move || {
                         text()
-                            .content("Don’t clear")
+                            .content(I18N.text("ui-don-t-clear"))
                             .style(dialog_type_style(28.0, 36.0, scale));
                     });
             });
     } else {
         dialog_scene_action(
-            "Show enlarged dialog".into(),
-            "Reset enlarged text example".into(),
+            "ui-show-enlarged-dialog".into(),
+            "ui-reset-enlarged-text-example".into(),
             210.0,
             200.0,
             220.0,
@@ -721,7 +741,7 @@ fn contained_elements(scale: f64) {
                     dialog_phone_status(scale);
                     if shown.get() {
                         event_header(
-                            "New contact".into(),
+                            "ui-new-contact".into(),
                             scale,
                             Callback::new(move || shown.set(false)),
                             Callback::new(move || shown.set(false)),
@@ -734,14 +754,14 @@ fn contained_elements(scale: f64) {
                                     .size(Dp(24.0 * scale))
                                     .tint(scheme.primary);
                             });
-                        placed_text("Name".into(), 14.0, 20.0, 56.0, 136.0, 320.0, scale);
+                        placed_text("ui-name".into(), 14.0, 20.0, 56.0, 136.0, 320.0, scale);
                         dialog_scene_input(
                             56.0,
                             182.0,
                             332.0,
-                            "First Name".into(),
-                            "Carmen".into(),
-                            "First Name".into(),
+                            "ui-first-name".into(),
+                            "ui-carmen".into(),
+                            "ui-first-name".into(),
                             false,
                             scale,
                         );
@@ -749,16 +769,16 @@ fn contained_elements(scale: f64) {
                             56.0,
                             254.0,
                             332.0,
-                            "Last Name".into(),
+                            "ui-last-name".into(),
                             "".into(),
-                            "Last Name".into(),
+                            "ui-last-name".into(),
                             false,
                             scale,
                         );
                     } else {
                         dialog_scene_action(
-                            "Show contact".into(),
-                            "Reset contact elements example".into(),
+                            "ui-show-contact".into(),
+                            "ui-reset-contact-elements-example".into(),
                             56.0,
                             182.0,
                             180.0,
@@ -800,7 +820,7 @@ fn map_background(scale: f64) {
     boxed().modifier(Modifier::new().width(Dp(420.0 * scale)).height(Dp(459.0 * scale)).background(scheme.surface_container))
         .children(move || {
             annotations::lines(Dp(420.0 * scale), Dp(459.0 * scale), format!("<g fill='none' stroke='#dad4c5' stroke-width='{}'><path d='M0 {}L{} 0M0 {}L{} 0M0 {}L{} {}M{} 0L{} {}M{} 0L{} {}'/></g><path d='M0 {}C{} {},{} {},{} 0' fill='none' stroke='#c2d9e9' stroke-width='{}'/>", 6.0*scale,200.0*scale,180.0*scale,330.0*scale,360.0*scale,50.0*scale,400.0*scale,240.0*scale,120.0*scale,40.0*scale,420.0*scale,459.0*scale,200.0*scale,390.0*scale,230.0*scale,90.0*scale,180.0*scale,120.0*scale,90.0*scale,140.0*scale,20.0*scale));
-            for (label, x, y) in [("2nd St",45.0,45.0),("Firestone Ave",115.0,24.0),("Springdale St",320.0,88.0),("Mud Island Amphitheater",16.0,300.0),("Music venue",16.0,328.0)] {
+            for (label, x, y) in [("2nd St",45.0,45.0),("ui-firestone-ave",115.0,24.0),("ui-springdale-st",320.0,88.0),("ui-mud-island-amphitheater",16.0,300.0),("ui-music-venue",16.0,328.0)] {
                 placed_text(label.into(), if y>290.0 {16.0} else {8.0}, if y>290.0 {24.0} else {12.0}, x,y,300.0,scale);
             }
         });
@@ -810,7 +830,7 @@ fn map_background(scale: f64) {
 fn placed_text(value: String, size: f64, line: f64, x: f64, y: f64, width: f64, scale: f64) {
     let scheme = use_context::<MaterialTheme>().unwrap().get().color_scheme;
     text()
-        .content(value)
+        .content(I18N.text(value))
         .style(dialog_type_style(size, line, scale))
         .color(scheme.on_surface)
         .modifier(
@@ -833,7 +853,7 @@ fn numbered(value: usize, x: f64, y: f64, scale: f64) {
         )
         .children(move || {
             text()
-                .content(value.to_string())
+                .content((value).to_string())
                 .style(dialog_type_style(28.0, 36.0, scale))
                 .color(scheme.inverse_on_surface);
         });

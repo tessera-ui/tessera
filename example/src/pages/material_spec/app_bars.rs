@@ -34,6 +34,8 @@ use tessera_ui::{
     modifier::FocusModifierExt as _, remember, remember_with_key, tessera, use_context,
 };
 
+use crate::res::I18N;
+
 use super::{
     ACCENT,
     annotations::{self, Geometry, Rect, dotted, relative, watch},
@@ -47,49 +49,55 @@ const DONT_COLOR: Color = Color::from_rgb(0.741, 0.161, 0.161);
 #[tessera]
 pub(super) fn app_bars_spec(route: Option<crate::pages::material_spec::article::ArticleRoute>) {
     article(
-        "App bars",
-        "Navigate between screens and expose relevant actions.",
+        "ui-app-bars",
+        "ui-navigate-between-screens-and-expose-relevant-actions",
         vec![
-            section("Variants", RenderSlot::new(variants)),
-            section("Configurations", RenderSlot::new(configurations)),
-            section("Tokens & specs", RenderSlot::new(tokens)),
-            section("Anatomy", RenderSlot::new(anatomy)),
-            section("Color", RenderSlot::new(colors)),
-            section("Measurements", RenderSlot::new(measurements)),
-            section("Baseline app bars", RenderSlot::new(baseline_app_bars)),
+            section("ui-variants", RenderSlot::new(variants)),
+            section("ui-configurations", RenderSlot::new(configurations)),
+            section("ui-tokens-specs", RenderSlot::new(tokens)),
+            section("ui-anatomy", RenderSlot::new(anatomy)),
+            section("ui-color", RenderSlot::new(colors)),
+            section("ui-measurements", RenderSlot::new(measurements)),
+            section("ui-baseline-app-bars", RenderSlot::new(baseline_app_bars)),
         ],
     )
     .route_optional(route.clone())
     .pages(vec![
         ArticlePage {
-            title: "Overview",
+            title: "ui-overview",
             intro: Some(RenderSlot::new(overview_intro)),
             sections: vec![
-                section("Availability & resources", RenderSlot::new(availability)),
-                section("M3 Expressive update", RenderSlot::new(expressive_update)),
-                section("Differences from M2", RenderSlot::new(m2_differences)),
+                section("ui-availability-resources", RenderSlot::new(availability)),
+                section(
+                    "ui-m3-expressive-update",
+                    RenderSlot::new(expressive_update),
+                ),
+                section("ui-differences-from-m2", RenderSlot::new(m2_differences)),
             ],
         },
         ArticlePage {
-            title: "Guidelines",
+            title: "ui-guidelines",
             intro: Some(RenderSlot::new(guidelines_intro)),
             sections: vec![
-                section("Usage", RenderSlot::new(usage)),
-                section("Search app bar", RenderSlot::new(search_guidelines)),
-                section("Anatomy", RenderSlot::new(anatomy_guidelines)),
-                section("Adaptive design", RenderSlot::new(adaptive_design)),
-                section("Behavior", RenderSlot::new(behavior)),
+                section("ui-usage", RenderSlot::new(usage)),
+                section("ui-search-app-bar", RenderSlot::new(search_guidelines)),
+                section("ui-anatomy", RenderSlot::new(anatomy_guidelines)),
+                section("ui-adaptive-design", RenderSlot::new(adaptive_design)),
+                section("ui-behavior", RenderSlot::new(behavior)),
             ],
         },
         ArticlePage {
-            title: "Accessibility",
+            title: "ui-accessibility",
             intro: None,
             sections: vec![
-                section("Use cases", RenderSlot::new(use_cases)),
-                section("Interaction & style", RenderSlot::new(interaction_style)),
-                section("Color", RenderSlot::new(accessible_color)),
-                section("Keyboard navigation", RenderSlot::new(keyboard_navigation)),
-                section("Labeling elements", RenderSlot::new(labeling_elements)),
+                section("ui-use-cases", RenderSlot::new(use_cases)),
+                section("ui-interaction-style", RenderSlot::new(interaction_style)),
+                section("ui-color", RenderSlot::new(accessible_color)),
+                section(
+                    "ui-keyboard-navigation",
+                    RenderSlot::new(keyboard_navigation),
+                ),
+                section("ui-labeling-elements", RenderSlot::new(labeling_elements)),
             ],
         },
     ]);
@@ -99,7 +107,7 @@ pub(super) fn app_bars_spec(route: Option<crate::pages::material_spec::article::
 fn caption(#[prop(into)] value: String) {
     let scheme = use_context::<MaterialTheme>().unwrap().get().color_scheme;
     text()
-        .content(value)
+        .content(I18N.text(value))
         .color(scheme.on_surface_variant)
         .style(type_style(14.0, 20.0));
 }
@@ -114,7 +122,7 @@ fn bullets(items: Vec<String>, nested: Option<bool>) {
     column().children(move || {
         for item in items.clone() {
             text()
-                .content(format!("{marker}{item}"))
+                .content(format!("{marker}{}", I18N.text(item)))
                 .style(type_style(16.0, 24.0));
             gap(Dp(8.0));
         }
@@ -126,7 +134,10 @@ fn numbered(items: Vec<String>) {
     column().children(move || {
         for (index, item) in items.clone().into_iter().enumerate() {
             text()
-                .content(format!("{}  {item}", index + 1))
+                .content(I18N.format(
+                    "ui-value-value",
+                    [("v0", (index + 1).into()), ("v1", I18N.text(&item).into())],
+                ))
                 .style(type_style(16.0, 24.0));
             gap(Dp(8.0));
         }
@@ -159,7 +170,7 @@ fn verdict_band(good: bool) {
                         .size(Dp(20.0));
                     spacer().modifier(Modifier::new().width(Dp(8.0)));
                     text()
-                        .content(if good { "Do" } else { "Don't" })
+                        .content(I18N.text(if good { "ui-do" } else { "ui-dont" }))
                         .color(color)
                         .style(type_style(16.0, 24.0));
                 });
@@ -281,18 +292,18 @@ impl Glyph {
 
     fn label(self) -> &'static str {
         match self {
-            Self::Bookmark => "Bookmark",
-            Self::Share => "Share",
-            Self::Send => "Send",
-            Self::Done => "Mark as watched",
-            Self::More => "More options",
-            Self::Search => "Search",
-            Self::Map => "View on map",
-            Self::Event => "Add event",
-            Self::PersonAdd => "Add person",
-            Self::Archive => "Archive",
-            Self::Star => "Star",
-            Self::Favorite => "Favorite",
+            Self::Bookmark => "ui-bookmark",
+            Self::Share => "ui-share",
+            Self::Send => "ui-send",
+            Self::Done => "ui-mark-as-watched",
+            Self::More => "ui-more-options",
+            Self::Search => "ui-search",
+            Self::Map => "ui-view-on-map",
+            Self::Event => "ui-add-event",
+            Self::PersonAdd => "ui-add-person",
+            Self::Archive => "ui-archive",
+            Self::Star => "ui-star",
+            Self::Favorite => "ui-favorite",
         }
     }
 }
@@ -360,100 +371,100 @@ const FILLED_SINGLE: usize = 21;
 fn preset_for(kind: usize) -> Preset {
     match kind {
         HIKING => Preset {
-            figure: "Hiking trails app bar",
+            figure: "ui-hiking-trails-app-bar",
             variant: TopAppBarVariant::MediumFlexible,
-            title: "Top 10 hiking trails",
-            subtitle: Some("Discover popular trails"),
+            title: "ui-top-10-hiking-trails",
+            subtitle: Some("ui-discover-popular-trails"),
             actions: &[Glyph::Bookmark],
             filled: 1,
             tonal: true,
             ..BASE
         },
         SUSHI => Preset {
-            figure: "Contextual app bar",
+            figure: "ui-contextual-app-bar",
             variant: TopAppBarVariant::MediumFlexible,
-            title: "The best sushi spots in Los Angeles and Orange County",
+            title: "ui-the-best-sushi-spots-in-los-angeles-and-orange-county",
             actions: &[Glyph::Share],
             filled: 1,
             tonal: true,
             ..BASE
         },
         SEND => Preset {
-            figure: "Primary action app bar",
+            figure: "ui-primary-action-app-bar",
             variant: TopAppBarVariant::MediumFlexible,
-            title: "Image",
-            subtitle: Some("7.2 MB • PNG"),
+            title: "ui-image",
+            subtitle: Some("ui-7-2-mb-png"),
             actions: &[Glyph::Send],
             filled: 1,
             ..BASE
         },
         FILMS_DO => Preset {
-            figure: "Single filled action app bar",
-            title: "Must watch films",
+            figure: "ui-single-filled-action-app-bar",
+            title: "ui-must-watch-films",
             actions: &[Glyph::Done],
             filled: 1,
             ..BASE
         },
         FILMS_DONT => Preset {
-            figure: "Multiple filled actions app bar",
-            title: "Must watch films",
+            figure: "ui-multiple-filled-actions-app-bar",
+            title: "ui-must-watch-films",
             actions: &[Glyph::More, Glyph::Done],
             filled: 2,
             ..BASE
         },
         LOGO => Preset {
-            figure: "Logo app bar",
+            figure: "ui-logo-app-bar",
             title: "",
             actions: &[Glyph::Bookmark],
             logo: true,
             ..BASE
         },
         CURVED => Preset {
-            figure: "Curved container app bar",
-            title: "Hike trails",
+            figure: "ui-curved-container-app-bar",
+            title: "ui-hike-trails",
             actions: &[Glyph::Search, Glyph::Bookmark],
             curved: true,
             content: true,
             ..BASE
         },
         STRAIGHT => Preset {
-            figure: "Straight container app bar",
-            title: "Hike trails",
+            figure: "ui-straight-container-app-bar",
+            title: "ui-hike-trails",
             actions: &[Glyph::Search, Glyph::Bookmark],
             content: true,
             ..BASE
         },
         DEFAULT_HEIGHT => Preset {
-            figure: "Default height app bar",
-            title: "Astral Meadow",
+            figure: "ui-default-height-app-bar",
+            title: "ui-astral-meadow",
             actions: &[Glyph::Search, Glyph::Bookmark],
             content: true,
             ..BASE
         },
         SHORT => Preset {
-            figure: "Shortened app bar",
-            title: "Astral Meadow",
+            figure: "ui-shortened-app-bar",
+            title: "ui-astral-meadow",
             actions: &[Glyph::Search, Glyph::Bookmark],
             short: true,
             content: true,
             ..BASE
         },
         WRAP => Preset {
-            figure: "Wrapped headline app bar",
+            figure: "ui-wrapped-headline-app-bar",
             variant: TopAppBarVariant::MediumFlexible,
-            title: "Hiking trips with Elie in Santa Monica and Joshua Tree!",
+            title: "ui-hiking-trips-with-elie-in-santa-monica-and-joshua-tree",
             actions: &[Glyph::Map, Glyph::Bookmark],
             ..BASE
         },
         ORDERED => Preset {
-            figure: "Ordered actions app bar",
-            title: "Saved podcasts",
+            figure: "ui-ordered-actions-app-bar",
+            title: "ui-saved-podcasts",
             actions: &[Glyph::Search, Glyph::Event, Glyph::More],
             ..BASE
         },
         WIDE => Preset {
-            figure: "Expanded window app bar",
-            title: "Aki Aro",
+            figure: "ui-expanded-window-app-bar",
+            title: "ui-aki-aro",
             actions: &[
                 Glyph::Search,
                 Glyph::Event,
@@ -463,28 +474,28 @@ fn preset_for(kind: usize) -> Preset {
             ..BASE
         },
         NARROW => Preset {
-            figure: "Compact window app bar",
-            title: "Aki Aro",
+            figure: "ui-compact-window-app-bar",
+            title: "ui-aki-aro",
             actions: &[Glyph::Search, Glyph::More],
             ..BASE
         },
         FLAT => Preset {
-            figure: "Flat app bar",
-            title: "Top Stories",
+            figure: "ui-flat-app-bar",
+            title: "ui-top-stories",
             actions: &[Glyph::More],
             content: true,
             ..BASE
         },
         SCROLLED => Preset {
-            figure: "Scrolled app bar",
-            title: "Top Stories",
+            figure: "ui-scrolled-app-bar",
+            title: "ui-top-stories",
             actions: &[Glyph::More],
             scrolled: true,
             content: true,
             ..BASE
         },
         FLOATING => Preset {
-            figure: "Transparent app bar",
+            figure: "ui-transparent-app-bar",
             title: "",
             actions: &[Glyph::Star],
             floating: true,
@@ -492,39 +503,39 @@ fn preset_for(kind: usize) -> Preset {
             ..BASE
         },
         M2 => Preset {
-            figure: "M2 top app bar",
-            title: "Material 2",
+            figure: "ui-m2-top-app-bar",
+            title: "ui-material-2",
             actions: &[Glyph::Favorite, Glyph::Search, Glyph::More],
             elevated: true,
             content: true,
             ..BASE
         },
         M3 => Preset {
-            figure: "M3 app bar",
-            title: "Material 3",
+            figure: "ui-m3-app-bar",
+            title: "ui-material-3",
             actions: &[Glyph::Share],
             scrolled: true,
             content: true,
             ..BASE
         },
         LABELED => Preset {
-            figure: "Labeled app bar",
-            title: "Saved podcasts",
-            subtitle: Some("80 episodes"),
+            figure: "ui-labeled-app-bar",
+            title: "ui-saved-podcasts",
+            subtitle: Some("ui-80-episodes"),
             actions: &[Glyph::Map],
             heading: true,
             ..BASE
         },
         SUBTITLED => Preset {
-            figure: "Subtitle app bar",
-            title: "Saved podcasts",
-            subtitle: Some("80 episodes"),
+            figure: "ui-subtitle-app-bar",
+            title: "ui-saved-podcasts",
+            subtitle: Some("ui-80-episodes"),
             actions: &[Glyph::Share],
             ..BASE
         },
         _ => Preset {
-            figure: "Filled icon button app bar",
-            title: "Saved podcasts",
+            figure: "ui-filled-icon-button-app-bar",
+            title: "ui-saved-podcasts",
             actions: &[Glyph::Share],
             filled: 1,
             ..BASE
@@ -540,7 +551,7 @@ fn specimen(kind: usize) {
     column()
         .modifier(Modifier::new().fill_max_width().semantics(SemanticsArgs {
             role: Some(Role::Group),
-            label: Some(figure.to_owned()),
+            label: Some(I18N.text(&(figure))),
             merge_descendants: true,
             ..Default::default()
         }))
@@ -590,7 +601,13 @@ fn specimen(kind: usize) {
             if !status.get().is_empty() {
                 gap(Dp(8.0));
                 text()
-                    .content(format!("{}: {}", preset.figure, status.get()))
+                    .content(I18N.format(
+                        "ui-value-value-format-1",
+                        [
+                            ("v0", I18N.text(&preset.figure).into()),
+                            ("v1", I18N.text(&status.get()).into()),
+                        ],
+                    ))
                     .style(type_style(14.0, 20.0));
             }
         });
@@ -613,7 +630,7 @@ fn specimen_content(floating: bool) {
                         )
                         .semantics(SemanticsArgs {
                             role: Some(Role::Image),
-                            label: Some("Vacation rental photo".to_owned()),
+                            label: Some(I18N.text("ui-vacation-rental-photo")),
                             ..Default::default()
                         }),
                 );
@@ -632,14 +649,14 @@ fn specimen_lines(floating: bool) {
         .children(move || {
             let lines: &[&str] = if floating {
                 &[
-                    "The kitchen is well-equipped, perfect for whipping up some delicious meals together.",
-                    "Let's not forget the amazing outdoor area: sounds like the perfect place to soak up the sun.",
+                    "ui-the-kitchen-is-well-equipped-perfect-for-whipping-up-some-delicious-meals-together",
+                    "ui-let-s-not-forget-the-amazing-outdoor-area-sounds-like-the-perfect-place-to-soak-up-the-sun",
                 ]
             } else {
-                &["Saved item 1", "Saved item 2"]
+                &["ui-saved-item-1", "ui-saved-item-2"]
             };
             for line in lines {
-                text().content(*line).style(type_style(14.0, 20.0));
+                text().content(I18N.text(*line)).style(type_style(14.0, 20.0));
                 gap(Dp(8.0));
             }
         });
@@ -661,14 +678,16 @@ fn specimen_bar(kind: usize, status: State<String>) {
         None
     };
     let on_container = preset.elevated.then_some(scheme.on_primary);
-    let heading = format!(
-        "{}{}",
-        preset.title,
-        preset
-            .subtitle
-            .map(|value| format!(", {value}"))
-            .unwrap_or_default()
-    );
+    let heading = match preset.subtitle {
+        Some(subtitle) => I18N.format(
+            "ui-title-subtitle",
+            [
+                ("title", I18N.text(preset.title).into()),
+                ("subtitle", I18N.text(subtitle).into()),
+            ],
+        ),
+        None => I18N.text(preset.title),
+    };
     let title_modifier = if preset.heading {
         Modifier::new().semantics(SemanticsArgs {
             role: Some(Role::Heading),
@@ -687,7 +706,7 @@ fn specimen_bar(kind: usize, status: State<String>) {
             Modifier::new()
         })
         .variant(preset.variant)
-        .title(preset.title)
+        .title(I18N.text(preset.title))
         .subtitle_optional(preset.subtitle.map(str::to_owned))
         .title_area_modifier(title_modifier)
         .title_content_optional(preset.logo.then_some(logo))
@@ -702,40 +721,43 @@ fn specimen_bar(kind: usize, status: State<String>) {
                 icon_button()
                     .filled_tonal()
                     .icon(filled::ARROW_BACK_SVG)
-                    .accessibility_label("Back")
-                    .on_click(move || status.set("Back selected".to_owned()));
+                    .accessibility_label(I18N.text("ui-back"))
+                    .on_click(move || status.set("ui-back-selected".to_owned()));
             } else {
                 icon_button()
                     .standard()
                     .color_style(IconButtonColorStyle::Inherited)
                     .icon(filled::ARROW_BACK_SVG)
-                    .accessibility_label("Back")
-                    .on_click(move || status.set("Back selected".to_owned()));
+                    .accessibility_label(I18N.text("ui-back"))
+                    .on_click(move || status.set("ui-back-selected".to_owned()));
             }
         })
         .action(move || {
             let preset = preset_for(kind);
             let count = preset.actions.len();
             for (index, glyph) in preset.actions.iter().copied().enumerate() {
-                let selected = format!("{} selected", glyph.label());
+                let selected = I18N.format(
+                    "ui-value-selected",
+                    [("v0", I18N.text(&glyph.label()).into())],
+                );
                 if preset.floating || preset.tonal && index + preset.filled >= count {
                     icon_button()
                         .filled_tonal()
                         .icon(glyph.asset())
-                        .accessibility_label(glyph.label())
+                        .accessibility_label(I18N.text(glyph.label()))
                         .on_click(move || status.set(selected.clone()));
                 } else if index + preset.filled >= count {
                     icon_button()
                         .filled()
                         .icon(glyph.asset())
-                        .accessibility_label(glyph.label())
+                        .accessibility_label(I18N.text(glyph.label()))
                         .on_click(move || status.set(selected.clone()));
                 } else {
                     icon_button()
                         .standard()
                         .color_style(IconButtonColorStyle::Inherited)
                         .icon(glyph.asset())
-                        .accessibility_label(glyph.label())
+                        .accessibility_label(I18N.text(glyph.label()))
                         .on_click(move || status.set(selected.clone()));
                 }
             }
@@ -745,110 +767,117 @@ fn specimen_bar(kind: usize, status: State<String>) {
 #[tessera]
 fn overview_intro() {
     bullets(vec![
-        "Focus on describing the current page and provide 1–2 essential actions".into(),
-        "Displays labels and page navigation controls at the top of the page. Use a toolbar to display page actions".into(),
-        "Four variants: Search app bar, small, medium flexible, large flexible".into(),
-        "On scroll, apply a fill color to separate from body content".into(),
-        "Can animate on and off screen with another bar of controls, like a row of chips".into(),
+        "ui-focus-on-describing-the-current-page-and-provide-1-2-essential-actions".into(),
+        "ui-displays-labels-and-page-navigation-controls-at-the-top-of-the-page-use-a-toolbar-to-displ".into(),
+        "ui-four-variants-search-app-bar-small-medium-flexible-large-flexible".into(),
+        "ui-on-scroll-apply-a-fill-color-to-separate-from-body-content".into(),
+        "ui-can-animate-on-and-off-screen-with-another-bar-of-controls-like-a-row-of-chips".into(),
     ]);
     gap(Dp(32.0));
-    variants_figure("Variant");
+    variants_figure("ui-variant");
     gap(Dp(16.0));
     numbered(vec![
-        "Search app bar".into(),
-        "Small".into(),
-        "Medium flexible".into(),
-        "Large flexible".into(),
+        "ui-search-app-bar".into(),
+        "ui-small".into(),
+        "ui-medium-flexible".into(),
+        "ui-large-flexible".into(),
     ]);
 }
 
 #[tessera]
 fn availability() {
     spec_table(
-        vec!["Type".into(), "Resource".into(), "Status".into()],
+        vec!["ui-type".into(), "ui-resource".into(), "ui-status".into()],
         vec![
             vec![
-                "Design".into(),
-                "Design Kit (Figma)".into(),
-                "Available".into(),
+                "ui-design".into(),
+                "ui-design-kit-figma".into(),
+                "ui-available".into(),
             ],
             vec![
-                "Implementation".into(),
-                "Flutter".into(),
-                "Available".into(),
+                "ui-implementation".into(),
+                "ui-flutter".into(),
+                "ui-available".into(),
             ],
             vec![
-                "Implementation".into(),
-                "Jetpack Compose".into(),
-                "Available".into(),
+                "ui-implementation".into(),
+                "ui-jetpack-compose".into(),
+                "ui-available".into(),
             ],
             vec![
-                "Implementation".into(),
-                "Jetpack Compose: Expressive".into(),
-                "Available".into(),
+                "ui-implementation".into(),
+                "ui-jetpack-compose-expressive".into(),
+                "ui-available".into(),
             ],
             vec![
-                "Implementation".into(),
-                "Android Views (MDC-Android)".into(),
-                "Available".into(),
+                "ui-implementation".into(),
+                "ui-android-views-mdc-android".into(),
+                "ui-available".into(),
             ],
             vec![
-                "Implementation".into(),
-                "Android Views (MDC-Android): Expressive".into(),
-                "Available".into(),
+                "ui-implementation".into(),
+                "ui-android-views-mdc-android-expressive".into(),
+                "ui-available".into(),
             ],
-            vec!["Implementation".into(), "Web".into(), "Unavailable".into()],
             vec![
-                "Implementation".into(),
-                "Web: Expressive".into(),
-                "Unavailable".into(),
+                "ui-implementation".into(),
+                "ui-web".into(),
+                "ui-unavailable".into(),
+            ],
+            vec![
+                "ui-implementation".into(),
+                "ui-web-expressive".into(),
+                "ui-unavailable".into(),
             ],
         ],
     );
     gap(Dp(24.0));
-    paragraph("Tessera examples use the native top_app_bar component for the small, medium flexible and large flexible variants, and the native search bar inside an app bar for the search variant.".into());
+    paragraph(
+        "ui-tessera-examples-use-the-native-top-app-bar-component-for-the-small-medium-flexible-a"
+            .into(),
+    );
 }
 
 #[tessera]
 fn expressive_update() {
-    caption("May 2025");
+    caption("ui-may-2025");
     gap(Dp(16.0));
-    paragraph("The new search app bar supports icons inside and outside the search bar, and centered text. It opens the search view component when selected.".into());
+    paragraph("ui-the-new-search-app-bar-supports-icons-inside-and-outside-the-search-bar-and-centered-text".into());
     gap(Dp(16.0));
-    paragraph("The new medium flexible and large flexible app bars come with significant improvements, and should replace medium and large app bars, which are no longer recommended. The small app bar is updated with the same flexible improvements.".into());
+    paragraph("ui-the-new-medium-flexible-and-large-flexible-app-bars-come-with-significant-improvements-and".into());
     gap(Dp(32.0));
-    subheading("Variants and naming".into());
+    subheading("ui-variants-and-naming".into());
     gap(Dp(16.0));
     bullets(vec![
-        "Renamed component from top app bar to app bar".into(),
-        "Added search app bar".into(),
-        "Medium and large app bars are no longer recommended".into(),
-        "Added medium flexible and large flexible app bars with:".into(),
+        "ui-renamed-component-from-top-app-bar-to-app-bar".into(),
+        "ui-added-search-app-bar".into(),
+        "ui-medium-and-large-app-bars-are-no-longer-recommended".into(),
+        "ui-added-medium-flexible-and-large-flexible-app-bars-with".into(),
     ]);
     bullets(vec![
-        "Reduced overall height".into(),
-        "Larger title text".into(),
-        "Subtitle".into(),
-        "Left- and center-aligned text options".into(),
-        "Text wrapping".into(),
-        "More flexible elements for imagery and filled buttons".into(),
+        "ui-reduced-overall-height".into(),
+        "ui-larger-title-text".into(),
+        "ui-subtitle".into(),
+        "ui-left-and-center-aligned-text-options".into(),
+        "ui-text-wrapping".into(),
+        "ui-more-flexible-elements-for-imagery-and-filled-buttons".into(),
     ])
     .nested(true);
-    bullets(vec!["Added features to small app bar:".into()]);
+    bullets(vec!["ui-added-features-to-small-app-bar".into()]);
     bullets(vec![
-        "Subtitle".into(),
-        "Center-aligned text option".into(),
-        "More flexible elements for imagery and filled buttons".into(),
+        "ui-subtitle".into(),
+        "ui-center-aligned-text-option".into(),
+        "ui-more-flexible-elements-for-imagery-and-filled-buttons".into(),
     ])
     .nested(true);
     gap(Dp(24.0));
-    variants_figure("Expressive variant");
+    variants_figure("ui-expressive-variant");
     gap(Dp(16.0));
     caption(
-        "4 total app bar configurations: search app bar, small, medium flexible, large flexible.",
+        "ui-4-total-app-bar-configurations-search-app-bar-small-medium-flexible-large-flexible",
     );
     gap(Dp(32.0));
-    sample("Expressive overview", TopAppBarVariant::MediumFlexible)
+    sample("ui-expressive-overview", TopAppBarVariant::MediumFlexible)
         .subtitle(true)
         .controls(true);
 }
@@ -856,15 +885,15 @@ fn expressive_update() {
 #[tessera]
 fn m2_differences() {
     bullets(vec![
-        "Color: New color mappings and compatibility with dynamic color".into(),
-        "On scroll: No drop shadow, instead a color fill creates separation from content".into(),
-        "Typography: Larger default text".into(),
-        "Layout: Smaller default height".into(),
+        "ui-color-new-color-mappings-and-compatibility-with-dynamic-color".into(),
+        "ui-on-scroll-no-drop-shadow-instead-a-color-fill-creates-separation-from-content".into(),
+        "ui-typography-larger-default-text".into(),
+        "ui-layout-smaller-default-height".into(),
     ]);
     gap(Dp(24.0));
     guidance_pair(
-        "M2: Elevation and a drop shadow raise the top app bar when content is present underneath",
-        "M3: On scroll, a color fill overlay separates the app bar from the content beneath",
+        "ui-m2-elevation-and-a-drop-shadow-raise-the-top-app-bar-when-content-is-present-underneath",
+        "ui-m3-on-scroll-a-color-fill-overlay-separates-the-app-bar-from-the-content-beneath",
     )
     .first(|| {
         specimen(M2);
@@ -880,35 +909,35 @@ fn guidelines_intro() {
         specimen(HIKING);
     }));
     gap(Dp(16.0));
-    paragraph("App bars show information about the page, key actions, and navigation actions like Back or Menu.".into());
+    paragraph("ui-app-bars-show-information-about-the-page-key-actions-and-navigation-actions-like-back-or-m".into());
 }
 
 #[tessera]
 fn usage() {
-    paragraph("Use an app bar to provide content and actions related to the current page, such as page navigation actions, headlines, images, and 1–2 essential actions.".into());
+    paragraph("ui-use-an-app-bar-to-provide-content-and-actions-related-to-the-current-page-such-as-page-nav".into());
     gap(Dp(16.0));
-    paragraph("The information and actions in the app bar should be contextual and specific to a page, but can also include global product controls, such as search or notifications.".into());
+    paragraph("ui-the-information-and-actions-in-the-app-bar-should-be-contextual-and-specific-to-a-page-but".into());
     gap(Dp(24.0));
-    guidance_item("App bars provide content and actions related to the current page").content(
+    guidance_item("ui-app-bars-provide-content-and-actions-related-to-the-current-page").content(
         || {
             specimen(SUSHI);
         },
     );
     gap(Dp(48.0));
-    paragraph("App bars should only have one action, two if necessary. The primary action should alter or exit the entire page, like Send, Save, or Edit.".into());
+    paragraph("ui-app-bars-should-only-have-one-action-two-if-necessary-the-primary-action-should-alter-or-e".into());
     gap(Dp(16.0));
-    paragraph("If a product needs many page actions, place those in a toolbar. Avoid placing an overflow menu in the app bar when possible.".into());
+    paragraph("ui-if-a-product-needs-many-page-actions-place-those-in-a-toolbar-avoid-placing-an-overflow-me".into());
     gap(Dp(24.0));
-    guidance_item("App bars can display one high visibility action to boost its prominence")
+    guidance_item("ui-app-bars-can-display-one-high-visibility-action-to-boost-its-prominence")
         .content(|| {
             specimen(SEND);
         });
     gap(Dp(48.0));
-    paragraph("To boost visibility of a primary action, change the style of the icon button to filled or tonal, and consider using a wide icon button. Avoid using multiple filled or tonal buttons.".into());
+    paragraph("ui-to-boost-visibility-of-a-primary-action-change-the-style-of-the-icon-button-to-filled-or-t".into());
     gap(Dp(24.0));
     guidance_pair(
-        "Use a filled or tonal button for important actions",
-        "Don't put multiple filled or tonal buttons in the app bar",
+        "ui-use-a-filled-or-tonal-button-for-important-actions",
+        "ui-don-t-put-multiple-filled-or-tonal-buttons-in-the-app-bar",
     )
     .first(|| {
         specimen(FILMS_DO);
@@ -919,110 +948,121 @@ fn usage() {
     .first_verdict(true)
     .second_verdict(false);
     gap(Dp(48.0));
-    subheading("Variants".into());
+    subheading("ui-variants".into());
     gap(Dp(16.0));
-    paragraph("The four variants of app bars are:".into());
+    paragraph("ui-the-four-variants-of-app-bars-are".into());
     gap(Dp(8.0));
     numbered(vec![
-        "Search app bar: Use on home pages when search is key to the product.".into(),
-        "Small: Use in dense layouts or when a page is scrolled.".into(),
-        "Medium flexible: Use to display a larger headline. It can collapse into a small app bar on scroll.".into(),
-        "Large flexible: Use to emphasize the headline of the page.".into(),
+        "ui-search-app-bar-use-on-home-pages-when-search-is-key-to-the-product".into(),
+        "ui-small-use-in-dense-layouts-or-when-a-page-is-scrolled".into(),
+        "ui-medium-flexible-use-to-display-a-larger-headline-it-can-collapse-into-a-small-app-bar-on-s".into(),
+        "ui-large-flexible-use-to-emphasize-the-headline-of-the-page".into(),
     ]);
     gap(Dp(24.0));
-    variants_figure("Guideline variant");
+    variants_figure("ui-guideline-variant");
     gap(Dp(48.0));
-    subheading("Baseline app bars".into());
+    subheading("ui-baseline-app-bars".into());
     gap(Dp(16.0));
-    paragraph("There are two baseline app bars that are no longer recommended:".into());
+    paragraph("ui-there-are-two-baseline-app-bars-that-are-no-longer-recommended".into());
     gap(Dp(8.0));
     numbered(vec![
-        "Medium: Replace with medium flexible.".into(),
-        "Large: Replace with large flexible.".into(),
+        "ui-medium-replace-with-medium-flexible".into(),
+        "ui-large-replace-with-large-flexible".into(),
     ]);
     gap(Dp(24.0));
-    baseline_figure("Guideline baseline");
+    baseline_figure("ui-guideline-baseline");
 }
 
 #[tessera]
 fn search_guidelines() {
     paragraph(
-        "Use a search app bar to provide an emphasized entry-point to open the search view.".into(),
+        "ui-use-a-search-app-bar-to-provide-an-emphasized-entry-point-to-open-the-search-view"
+            .into(),
     );
     gap(Dp(24.0));
-    guidance_item("Search app bars have a search field instead of heading text").content(|| {
-        search_sample().placeholder("Search product");
-    });
-    gap(Dp(48.0));
-    paragraph("Search bars should always include the word Search. They can use various capitalization styles depending on the product.".into());
-    gap(Dp(8.0));
-    numbered(vec![
-        "Search".into(),
-        "Searching a specific area. Example: Search inbox".into(),
-        "Search [Product]. Example: Search Photos".into(),
-    ]);
-    gap(Dp(24.0));
-    guidance_item("Use proper capitalization depending on what's being searched").content(|| {
-        for hint in ["Search", "Search inbox", "Search Photos"] {
-            search_sample().placeholder(hint);
-            gap(Dp(16.0));
-        }
-    });
-    gap(Dp(48.0));
-    subheading("Buttons in search app bar".into());
-    gap(Dp(16.0));
-    paragraph("In addition to a trailing avatar, search app bars can have up to two trailing icons on mobile. Trailing icons can be placed inside or outside the search bar.".into());
-    gap(Dp(24.0));
-    guidance_item("Put the most used actions on the left and least used on the right").content(
-        || {
-            search_sample().specimen(1).placeholder("Search music");
+    guidance_item("ui-search-app-bars-have-a-search-field-instead-of-heading-text").content(
+        move || {
+            search_sample().placeholder(I18N.text("ui-search-product"));
         },
     );
     gap(Dp(48.0));
-    paragraph("The leading element of a search app bar can be used for a product's logo to brand the app's overall experience. This logo can be purely cosmetic, or can trigger an action like returning to the home screen or refreshing it. Avoid using a logo to open an expanded navigation rail.".into());
+    paragraph("ui-search-bars-should-always-include-the-word-search-they-can-use-various-capitalization-styl".into());
+    gap(Dp(8.0));
+    numbered(vec![
+        "ui-search".into(),
+        "ui-searching-a-specific-area-example-search-inbox".into(),
+        "ui-search-product-example-search-photos".into(),
+    ]);
     gap(Dp(24.0));
-    guidance_item("The leading element can be a product logo").content(|| {
+    guidance_item("ui-use-proper-capitalization-depending-on-what-s-being-searched").content(
+        move || {
+            for hint in ["ui-search", "ui-search-inbox", "ui-search-photos"] {
+                search_sample().placeholder(I18N.text(hint));
+                gap(Dp(16.0));
+            }
+        },
+    );
+    gap(Dp(48.0));
+    subheading("ui-buttons-in-search-app-bar".into());
+    gap(Dp(16.0));
+    paragraph("ui-in-addition-to-a-trailing-avatar-search-app-bars-can-have-up-to-two-trailing-icons-on-mobi".into());
+    gap(Dp(24.0));
+    guidance_item("ui-put-the-most-used-actions-on-the-left-and-least-used-on-the-right").content(
+        move || {
+            search_sample()
+                .specimen(1)
+                .placeholder(I18N.text("ui-search-music"));
+        },
+    );
+    gap(Dp(48.0));
+    paragraph("ui-the-leading-element-of-a-search-app-bar-can-be-used-for-a-product-s-logo-to-brand-the-app".into());
+    gap(Dp(24.0));
+    guidance_item("ui-the-leading-element-can-be-a-product-logo").content(move || {
         search_sample()
             .specimen(2)
             .logo(true)
-            .placeholder("Search Tessera");
+            .placeholder(I18N.text("ui-search-tessera"));
     });
     gap(Dp(48.0));
-    paragraph("Don't use more than two trailing icon buttons with an avatar. If more actions are needed, consider using a toolbar.".into());
+    paragraph("ui-don-t-use-more-than-two-trailing-icon-buttons-with-an-avatar-if-more-actions-are-needed-co".into());
     gap(Dp(24.0));
     guidance_pair(
-        "Use up to two trailing icons with an avatar",
-        "Don't use three icons and an avatar in a search app bar",
+        "ui-use-up-to-two-trailing-icons-with-an-avatar",
+        "ui-don-t-use-three-icons-and-an-avatar-in-a-search-app-bar",
     )
-    .first(|| {
-        search_sample().specimen(1).placeholder("Search news");
+    .first(move || {
+        search_sample()
+            .specimen(1)
+            .placeholder(I18N.text("ui-search-news"));
     })
-    .second(|| {
-        search_sample().specimen(5).placeholder("Search news");
+    .second(move || {
+        search_sample()
+            .specimen(5)
+            .placeholder(I18N.text("ui-search-news"));
     })
     .first_verdict(true)
     .second_verdict(false);
     gap(Dp(48.0));
-    subheading("Large screens".into());
+    subheading("ui-large-screens".into());
     gap(Dp(16.0));
-    paragraph("The search app bar dynamically adapts to available width. There should be up to four trailing icons on larger screens.".into());
+    paragraph("ui-the-search-app-bar-dynamically-adapts-to-available-width-there-should-be-up-to-four-traili".into());
     gap(Dp(24.0));
     guidance_item(
-        "On a larger window, the search field stays centered between leading and trailing elements",
+        "ui-on-a-larger-window-the-search-field-stays-centered-between-leading-and-trailing-elements",
     )
-    .content(|| {
-        search_sample().specimen(6).placeholder("Search news");
+    .content(move || {
+        search_sample().specimen(6).placeholder(I18N.text("ui-search-news"));
     });
     gap(Dp(48.0));
-    subheading("Alternate color options".into());
+    subheading("ui-alternate-color-options".into());
     gap(Dp(16.0));
-    paragraph("By default, search containers in app bars use the surface container color to distinguish it from the app background. If the background is darker, use a lighter container color on the search bar, like surface bright.".into());
+    paragraph("ui-by-default-search-containers-in-app-bars-use-the-surface-container-color-to-distinguish-it".into());
     gap(Dp(16.0));
-    paragraph("When choosing alternate colors, make sure the search text and container have at least 3:1 contrast for readability.".into());
+    paragraph("ui-when-choosing-alternate-colors-make-sure-the-search-text-and-container-have-at-least-3-1-c".into());
     gap(Dp(24.0));
-    guidance_item("Search app bars can use different colors, like surface bright, for improved contrast with surrounding elements")
-        .content(|| {
-search_sample().bright(true).placeholder("Search mail");
+    guidance_item("ui-search-app-bars-can-use-different-colors-like-surface-bright-for-improved-contrast-with-su")
+        .content(move || {
+search_sample().bright(true).placeholder(I18N.text("ui-search-mail"));
 });
 }
 
@@ -1030,13 +1070,13 @@ search_sample().bright(true).placeholder("Search mail");
 fn anatomy_guidelines() {
     app_figure(TopAppBarVariant::Small, false);
     gap(Dp(48.0));
-    subheading("Container".into());
+    subheading("ui-container".into());
     gap(Dp(16.0));
-    paragraph("The app bar container holds all information and actions at the top of a screen, including navigation icons, headlines, and buttons. Avoid changing the position or shape of the container.".into());
+    paragraph("ui-the-app-bar-container-holds-all-information-and-actions-at-the-top-of-a-screen-including-n".into());
     gap(Dp(24.0));
     guidance_pair(
-        "Use straight corners for app bars",
-        "Don't use curved shapes. This implies that the container can expand upon interaction.",
+        "ui-use-straight-corners-for-app-bars",
+        "ui-don-t-use-curved-shapes-this-implies-that-the-container-can-expand-upon-interaction",
     )
     .first(|| {
         specimen(STRAIGHT);
@@ -1047,11 +1087,11 @@ fn anatomy_guidelines() {
     .first_verdict(true)
     .second_verdict(false);
     gap(Dp(32.0));
-    paragraph("Always use the default height of the app bar, and make it span the full width of the window.".into());
+    paragraph("ui-always-use-the-default-height-of-the-app-bar-and-make-it-span-the-full-width-of-the-window".into());
     gap(Dp(24.0));
     guidance_pair(
-        "Default heights were chosen to ensure readability of on-screen elements",
-        "Don't make an app bar shorter than its default height",
+        "ui-default-heights-were-chosen-to-ensure-readability-of-on-screen-elements",
+        "ui-don-t-make-an-app-bar-shorter-than-its-default-height",
     )
     .first(|| {
         specimen(DEFAULT_HEIGHT);
@@ -1062,67 +1102,67 @@ fn anatomy_guidelines() {
     .first_verdict(true)
     .second_verdict(false);
     gap(Dp(48.0));
-    subheading("Adding logos".into());
+    subheading("ui-adding-logos".into());
     gap(Dp(16.0));
-    paragraph("Image logos can be used in app bars to bolster brand identity or visual appeal. The image should be high quality and relevant to the product. It can replace all text in a small app bar, and appears above the text in other variants without disrupting navigation or actions.".into());
+    paragraph("ui-image-logos-can-be-used-in-app-bars-to-bolster-brand-identity-or-visual-appeal-the-image-s".into());
     gap(Dp(24.0));
-    guidance_item("A logo can replace the headline in a small app bar").content(|| {
+    guidance_item("ui-a-logo-can-replace-the-headline-in-a-small-app-bar").content(|| {
         specimen(LOGO);
     });
     gap(Dp(48.0));
-    subheading("Leading button".into());
+    subheading("ui-leading-button".into());
     gap(Dp(16.0));
-    paragraph("Use Back to return to the previous screen, or Menu to open product navigation. Keep the leading button aligned to the leading edge.".into());
+    paragraph("ui-use-back-to-return-to-the-previous-screen-or-menu-to-open-product-navigation-keep-the-lead".into());
     gap(Dp(48.0));
-    subheading("Headline".into());
+    subheading("ui-headline".into());
     gap(Dp(16.0));
-    paragraph("The headline can describe the current page, the current section, or the product. Headline text should be brief enough to easily fit in the app bar.".into());
+    paragraph("ui-the-headline-can-describe-the-current-page-the-current-section-or-the-product-headline-tex".into());
     gap(Dp(16.0));
-    paragraph("In medium flexible and large flexible app bars, the headline can wrap to a second line. Don't truncate the headline text, and don't wrap text in a small app bar.".into());
+    paragraph("ui-in-medium-flexible-and-large-flexible-app-bars-the-headline-can-wrap-to-a-second-line-don".into());
     gap(Dp(24.0));
-    guidance_item("If headline text is long, use a medium flexible or large flexible app bar and wrap the headline to two lines maximum")
+    guidance_item("ui-if-headline-text-is-long-use-a-medium-flexible-or-large-flexible-app-bar-and-wrap-the-head")
         .verdict(true)
         .content(|| {
 specimen(WRAP);
 });
     gap(Dp(32.0));
-    paragraph("Headlines can be aligned to the leading edge or centered. The headline's typography style depends on the app bar size.".into());
+    paragraph("ui-headlines-can-be-aligned-to-the-leading-edge-or-centered-the-headline-s-typography-style-d".into());
     gap(Dp(24.0));
-    guidance_item("Headline typography: small uses title large, medium flexible uses headline medium, and large flexible uses display small").content(|| {
+    guidance_item("ui-headline-typography-small-uses-title-large-medium-flexible-uses-headline-medium-and-large").content(move || {
         for (variant, centered, name) in [
-            (TopAppBarVariant::Small, false, "Small"),
-            (TopAppBarVariant::MediumFlexible, false, "Medium flexible"),
-            (TopAppBarVariant::LargeFlexible, true, "Large flexible"),
+            (TopAppBarVariant::Small, false, "ui-small"),
+            (TopAppBarVariant::MediumFlexible, false, "ui-medium-flexible"),
+            (TopAppBarVariant::LargeFlexible, true, "ui-large-flexible"),
         ] {
-            sample(format!("Headline {name}"), variant).centered(centered);
+            sample(I18N.format("ui-headline-value", [("v0", I18N.text(&name).into())]), variant).centered(centered);
             gap(Dp(16.0));
         }
     });
     gap(Dp(48.0));
-    subheading("Subtitle".into());
+    subheading("ui-subtitle".into());
     gap(Dp(16.0));
-    paragraph("Subtitles are aligned with their headline. Their typography style depends on the app bar size.".into());
+    paragraph("ui-subtitles-are-aligned-with-their-headline-their-typography-style-depends-on-the-app-bar-si".into());
     gap(Dp(24.0));
-    guidance_item("Subtitle typography: small uses label medium, medium flexible uses label large, and large flexible uses title medium").content(|| {
+    guidance_item("ui-subtitle-typography-small-uses-label-medium-medium-flexible-uses-label-large-and-large-fle").content(move || {
         for (variant, name) in [
-            (TopAppBarVariant::Small, "Small"),
-            (TopAppBarVariant::MediumFlexible, "Medium flexible"),
-            (TopAppBarVariant::LargeFlexible, "Large flexible"),
+            (TopAppBarVariant::Small, "ui-small"),
+            (TopAppBarVariant::MediumFlexible, "ui-medium-flexible"),
+            (TopAppBarVariant::LargeFlexible, "ui-large-flexible"),
         ] {
-            sample(format!("Subtitle style {name}"), variant).subtitle(true);
+            sample(I18N.format("ui-subtitle-style-value", [("v0", I18N.text(&name).into())]), variant).subtitle(true);
             gap(Dp(16.0));
         }
     });
     gap(Dp(48.0));
-    subheading("Trailing icon buttons".into());
+    subheading("ui-trailing-icon-buttons".into());
     gap(Dp(16.0));
-    paragraph("Trailing icon buttons are aligned to the trailing edge of the app bar. Place most-used actions closest to the leading edge.".into());
+    paragraph("ui-trailing-icon-buttons-are-aligned-to-the-trailing-edge-of-the-app-bar-place-most-used-acti".into());
     gap(Dp(16.0));
-    paragraph("Avoid using these buttons to open a menu with more actions. If more actions are needed, place them in a toolbar instead. If changing the icon button color style to filled or tonal, only use one icon button.".into());
+    paragraph("ui-avoid-using-these-buttons-to-open-a-menu-with-more-actions-if-more-actions-are-needed-plac".into());
     gap(Dp(16.0));
-    paragraph("Use filled icons when possible for the best visibility. Outlined icons can also be used, particularly for unselected toggle buttons.".into());
+    paragraph("ui-use-filled-icons-when-possible-for-the-best-visibility-outlined-icons-can-also-be-used-par".into());
     gap(Dp(24.0));
-    guidance_item("Put the most used actions on the left and least used on the right").content(
+    guidance_item("ui-put-the-most-used-actions-on-the-left-and-least-used-on-the-right").content(
         || {
             specimen(ORDERED);
         },
@@ -1131,23 +1171,23 @@ specimen(WRAP);
 
 #[tessera]
 fn adaptive_design() {
-    paragraph("Adaptive design allows an interface to respond or change based on context, such as the user, device, and usage.".into());
+    paragraph("ui-adaptive-design-allows-an-interface-to-respond-or-change-based-on-context-such-as-the-user".into());
     gap(Dp(32.0));
-    subheading("Resizing".into());
+    subheading("ui-resizing".into());
     gap(Dp(16.0));
-    paragraph("The width of the app bar container responds to the view or device width. It should always span 100% of the window width.".into());
+    paragraph("ui-the-width-of-the-app-bar-container-responds-to-the-view-or-device-width-it-should-always-s".into());
     gap(Dp(24.0));
-    guidance_item("The app bar's container responds to always fill the window width").content(
+    guidance_item("ui-the-app-bar-s-container-responds-to-always-fill-the-window-width").content(
         || {
-            sample("Resizing app bar", TopAppBarVariant::Small);
+            sample("ui-resizing-app-bar", TopAppBarVariant::Small);
         },
     );
     gap(Dp(32.0));
-    paragraph("Resizing may cause actions at the trailing edge of the app bar to collapse into an overflow menu at smaller breakpoints. These actions become visible again at larger sizes.".into());
+    paragraph("ui-resizing-may-cause-actions-at-the-trailing-edge-of-the-app-bar-to-collapse-into-an-overflo".into());
     gap(Dp(24.0));
     guidance_pair(
-        "In an expanded window, every trailing action stays visible",
-        "Actions at the trailing edge collapse into an overflow menu",
+        "ui-in-an-expanded-window-every-trailing-action-stays-visible",
+        "ui-actions-at-the-trailing-edge-collapse-into-an-overflow-menu",
     )
     .first(|| {
         specimen(WIDE);
@@ -1156,24 +1196,24 @@ fn adaptive_design() {
         specimen(NARROW);
     });
     gap(Dp(32.0));
-    paragraph("The search container of the search app bar should fill 100% of the space between leading and trailing app bar elements until it reaches 312dp. Then, it should only grow further to fill 50% of that space.".into());
+    paragraph("ui-the-search-container-of-the-search-app-bar-should-fill-100-of-the-space-between-leading-an".into());
     gap(Dp(24.0));
-    guidance_item("The search field grows with the window until it reaches 312dp, then grows at half the rate")
+    guidance_item("ui-the-search-field-grows-with-the-window-until-it-reaches-312dp-then-grows-at-half-the-rate")
         .content(|| {
 search_sample();
 });
     gap(Dp(48.0));
-    subheading("Presentation".into());
+    subheading("ui-presentation".into());
     gap(Dp(16.0));
-    paragraph("The app bar automatically supports right-to-left (RTL) languages by aligning the layout of elements to the leading and trailing edges of the container. This means that in RTL languages, the layout of the app bar is mirrored.".into());
+    paragraph("ui-the-app-bar-automatically-supports-right-to-left-rtl-languages-by-aligning-the-layout-of-e".into());
     gap(Dp(16.0));
     caption(
-        "Tessera does not provide a layout direction yet. The right-to-left bar below is arranged by hand to show the mirrored result; the native app bar always lays out left to right.",
+        "ui-tessera-does-not-provide-a-layout-direction-yet-the-right-to-left-bar-below-is-arranged-by",
     );
     gap(Dp(24.0));
     guidance_pair(
-        "Left-to-right: navigation at the leading edge, actions at the trailing edge",
-        "Right-to-left: the layout is mirrored, with navigation on the right and actions on the left",
+        "ui-left-to-right-navigation-at-the-leading-edge-actions-at-the-trailing-edge",
+        "ui-right-to-left-the-layout-is-mirrored-with-navigation-on-the-right-and-actions-on-the-left",
     )
     .first(|| {
         mirrored_bar(false);
@@ -1187,9 +1227,9 @@ search_sample();
 fn mirrored_bar(rtl: bool) {
     let scheme = use_context::<MaterialTheme>().unwrap().get().color_scheme;
     let direction = if rtl {
-        "Right-to-left"
+        "ui-right-to-left"
     } else {
-        "Left-to-right"
+        "ui-left-to-right"
     };
     row()
         .cross_axis_alignment(CrossAxisAlignment::Center)
@@ -1201,7 +1241,9 @@ fn mirrored_bar(rtl: bool) {
                 .padding_symmetric(Dp(4.0), Dp(0.0))
                 .semantics(SemanticsArgs {
                     role: Some(Role::Toolbar),
-                    label: Some(format!("{direction} app bar")),
+                    label: Some(
+                        I18N.format("ui-value-app-bar", [("v0", I18N.text(&direction).into())]),
+                    ),
                     ..Default::default()
                 }),
         )
@@ -1214,12 +1256,16 @@ fn mirrored_bar(rtl: bool) {
                 icon_button()
                     .standard()
                     .icon(filled::ARROW_FORWARD_SVG)
-                    .accessibility_label(format!("{direction} back"));
+                    .accessibility_label(
+                        I18N.format("ui-value-back", [("v0", I18N.text(&direction).into())]),
+                    );
             } else {
                 icon_button()
                     .standard()
                     .icon(filled::ARROW_BACK_SVG)
-                    .accessibility_label(format!("{direction} back"));
+                    .accessibility_label(
+                        I18N.format("ui-value-back", [("v0", I18N.text(&direction).into())]),
+                    );
                 boxed().modifier(Modifier::new().weight(1.0)).children(|| {
                     mirrored_title(false);
                 });
@@ -1244,7 +1290,7 @@ fn mirrored_title(rtl: bool) {
         )
         .children(move || {
             text()
-                .content("Headline")
+                .content(I18N.text("ui-headline"))
                 .color(scheme.on_surface)
                 .style(type_style(22.0, 28.0));
         });
@@ -1259,19 +1305,25 @@ fn mirrored_actions(#[prop(into)] direction: String) {
         icon_button()
             .standard()
             .icon(glyph)
-            .accessibility_label(format!("{direction} {name}"));
+            .accessibility_label(I18N.format(
+                "ui-value-value-format-2",
+                [
+                    ("v0", I18N.text(&direction).into()),
+                    ("v1", I18N.text(&name).into()),
+                ],
+            ));
     }
 }
 
 #[tessera]
 fn behavior() {
-    subheading("Scrolling".into());
+    subheading("ui-scrolling".into());
     gap(Dp(16.0));
-    paragraph("App bars should initially be the same color as the background, then fill with a contrasting color on scroll to provide visual separation from the background. The app bar can remain on a page at all times, or can hide and reappear when scrolling.".into());
+    paragraph("ui-app-bars-should-initially-be-the-same-color-as-the-background-then-fill-with-a-contrasting".into());
     gap(Dp(24.0));
     guidance_pair(
-        "A flat app bar matches the background",
-        "Upon scrolling, an app bar container fills with contrasting color to create a visual separation",
+        "ui-a-flat-app-bar-matches-the-background",
+        "ui-upon-scrolling-an-app-bar-container-fills-with-contrasting-color-to-create-a-visual-separa",
     )
     .first(|| {
 specimen(FLAT);
@@ -1280,26 +1332,26 @@ specimen(FLAT);
 specimen(SCROLLED);
 });
     gap(Dp(32.0));
-    paragraph("To focus more on body content, consider setting the app bar container to be transparent on scroll. This allows the buttons to float above the content. Make sure icon buttons have a container fill.".into());
+    paragraph("ui-to-focus-more-on-body-content-consider-setting-the-app-bar-container-to-be-transparent-on".into());
     gap(Dp(24.0));
-    guidance_item("A transparent app bar lets filled icon buttons float above the content")
+    guidance_item("ui-a-transparent-app-bar-lets-filled-icon-buttons-float-above-the-content")
         .content(|| {
             specimen(FLOATING);
         });
     gap(Dp(32.0));
-    paragraph("When scrolled, medium flexible and large flexible app bars can transform into small app bars. They should remain small until the page is scrolled back to the top. Don't transform app bars into a search app bar.".into());
+    paragraph("ui-when-scrolled-medium-flexible-and-large-flexible-app-bars-can-transform-into-small-app-bar".into());
     gap(Dp(24.0));
     guidance_pair(
-        "The app bar can hide when scrolling up and reveal when scrolling down",
-        "Medium and large flexible app bars can use the compress effect to transform into small app bars when scrolled",
+        "ui-the-app-bar-can-hide-when-scrolling-up-and-reveal-when-scrolling-down",
+        "ui-medium-and-large-flexible-app-bars-can-use-the-compress-effect-to-transform-into-small-app",
     )
     .first(|| {
-        sample("Hiding app bar", TopAppBarVariant::Small)
+        sample("ui-hiding-app-bar", TopAppBarVariant::Small)
             .behavior(AppBarScrollBehavior::EnterAlways)
             .controls(true);
     })
-    .second(|| {
-        sample("Scrolling app bar", TopAppBarVariant::MediumFlexible)
+    .second(move || {
+        sample("ui-scrolling-app-bar", TopAppBarVariant::MediumFlexible)
             .subtitle(true)
             .controls(true);
     });
@@ -1307,59 +1359,59 @@ specimen(SCROLLED);
 
 #[tessera]
 fn use_cases() {
-    paragraph("People should be able to do the following using assistive technology:".into());
+    paragraph("ui-people-should-be-able-to-do-the-following-using-assistive-technology".into());
     gap(Dp(8.0));
     bullets(vec![
-        "Understand what page they're currently visiting".into(),
-        "Take actions or navigate to a new page destination".into(),
-        "Maintain access to app bar actions when the content is scrolled".into(),
+        "ui-understand-what-page-they-re-currently-visiting".into(),
+        "ui-take-actions-or-navigate-to-a-new-page-destination".into(),
+        "ui-maintain-access-to-app-bar-actions-when-the-content-is-scrolled".into(),
     ]);
 }
 
 #[tessera]
 fn interaction_style() {
-    subheading("Touch".into());
+    subheading("ui-touch".into());
     gap(Dp(16.0));
     paragraph(
-        "When tapping on an icon button, a touch ripple appears, indicating interaction feedback."
+        "ui-when-tapping-on-an-icon-button-a-touch-ripple-appears-indicating-interaction-feedback"
             .into(),
     );
     gap(Dp(32.0));
-    subheading("Cursor".into());
+    subheading("ui-cursor".into());
     gap(Dp(16.0));
-    paragraph("When hovered, the hover state provides a visual cue to the user that the element is interactive. When clicked (in both active and inactive states), a ripple appears to indicate feedback.".into());
+    paragraph("ui-when-hovered-the-hover-state-provides-a-visual-cue-to-the-user-that-the-element-is-interac".into());
     gap(Dp(32.0));
-    subheading("Keyboard or switch".into());
+    subheading("ui-keyboard-or-switch".into());
     gap(Dp(16.0));
-    paragraph("When navigating to an interactive element, a focus indicator appears to show that action can be taken. When the element is selected, an action is then performed.".into());
+    paragraph("ui-when-navigating-to-an-interactive-element-a-focus-indicator-appears-to-show-that-action-ca".into());
     gap(Dp(32.0));
-    subheading("Initial focus".into());
+    subheading("ui-initial-focus".into());
     gap(Dp(16.0));
-    paragraph("Focus should initially land on the leading button, since it's the first interactive element of the app bar. The Tab key navigates from the first button to the second button in the app bar, and Space or Enter activates the focused action.".into());
+    paragraph("ui-focus-should-initially-land-on-the-leading-button-since-it-s-the-first-interactive-element".into());
     gap(Dp(24.0));
-    guidance_item("Tab moves through the app bar from the leading button; Space or Enter activates the focused action")
+    guidance_item("ui-tab-moves-through-the-app-bar-from-the-leading-button-space-or-enter-activates-the-focused")
         .content(|| {
-sample("Accessible app bar", TopAppBarVariant::Small).controls(true);
+sample("ui-accessible-app-bar", TopAppBarVariant::Small).controls(true);
 });
 }
 
 #[tessera]
 fn accessible_color() {
-    paragraph("On search app bars, use the default color roles when possible:".into());
+    paragraph("ui-on-search-app-bars-use-the-default-color-roles-when-possible".into());
     gap(Dp(8.0));
     bullets(vec![
-        "Search container: surface container".into(),
-        "Search label: on surface variant".into(),
+        "ui-search-container-surface-container".into(),
+        "ui-search-label-on-surface-variant".into(),
     ]);
     gap(Dp(8.0));
-    paragraph("On darker backgrounds, search bar containers can use the surface bright role to maintain strong visual contrast. If mapping to other color roles, make sure the text and container have 3:1 contrast to ensure readability.".into());
+    paragraph("ui-on-darker-backgrounds-search-bar-containers-can-use-the-surface-bright-role-to-maintain-st".into());
     gap(Dp(24.0));
     guidance_pair(
-        "Make sure search bars and their labels have at least 3:1 contrast. Use the default colors when possible.",
-        "Avoid using custom color roles for the search bar container and search label text. If custom roles are necessary, make sure they have contrast of at least 3:1.",
+        "ui-make-sure-search-bars-and-their-labels-have-at-least-3-1-contrast-use-the-default-colors-w",
+        "ui-avoid-using-custom-color-roles-for-the-search-bar-container-and-search-label-text-if-custo",
     )
-    .first(|| {
-search_sample().placeholder("Search messages");
+    .first(move || {
+search_sample().placeholder(I18N.text("ui-search-messages"));
 })
     .second(low_contrast_search)
     .first_verdict(true)
@@ -1375,39 +1427,39 @@ fn low_contrast_search() {
             theme.color_scheme.on_surface_variant = theme.color_scheme.outline_variant;
             theme
         })
-        .child(|| {
-            search_sample().placeholder("Search messages");
+        .child(move || {
+            search_sample().placeholder(I18N.text("ui-search-messages"));
         });
 }
 
 #[tessera]
 fn keyboard_navigation() {
     spec_table(
-        vec!["Keys".into(), "Actions".into()],
+        vec!["ui-keys".into(), "ui-actions".into()],
         vec![
             vec![
-                "Tab".into(),
-                "Move focus to the next interactive element".into(),
+                "ui-tab".into(),
+                "ui-move-focus-to-the-next-interactive-element".into(),
             ],
             vec![
-                "Space or Enter".into(),
-                "Activate the focused element".into(),
+                "ui-space-or-enter".into(),
+                "ui-activate-the-focused-element".into(),
             ],
         ],
     );
     gap(Dp(24.0));
-    sample("Keyboard app bar", TopAppBarVariant::Small).controls(true);
+    sample("ui-keyboard-app-bar", TopAppBarVariant::Small).controls(true);
 }
 
 #[tessera]
 fn labeling_elements() {
-    paragraph("The accessibility label for a title should be the same as the content within the title. If needed, add additional context to the accessibility label to ensure users understand what page they're on or what content is being shown.".into());
+    paragraph("ui-the-accessibility-label-for-a-title-should-be-the-same-as-the-content-within-the-title-if".into());
     gap(Dp(16.0));
-    paragraph("Screen readers will read the UI text followed by the component's role. The headline has the accessibility role Title; AccessKit has no Title role, so this example exposes the headline as a Heading whose label combines the headline and subtitle.".into());
+    paragraph("ui-screen-readers-will-read-the-ui-text-followed-by-the-component-s-role-the-headline-has-the".into());
     gap(Dp(16.0));
-    paragraph("Label icon buttons according to their accessibility guidelines. The app bar icon button has the accessibility role Button, and should be clearly labeled with the action it takes, like View on map.".into());
+    paragraph("ui-label-icon-buttons-according-to-their-accessibility-guidelines-the-app-bar-icon-button-has".into());
     gap(Dp(24.0));
-    guidance_item("An app bar's accessibility label can incorporate its UI text as well as additional context, and an icon button is labeled with the action it takes")
+    guidance_item("ui-an-app-bar-s-accessibility-label-can-incorporate-its-ui-text-as-well-as-additional-context")
         .content(|| {
 specimen(LABELED);
 });
@@ -1419,7 +1471,9 @@ fn section(title: &'static str, content: RenderSlot) -> SpecSection {
 
 #[tessera]
 fn paragraph(content: String) {
-    text().content(content).style(type_style(16.0, 24.0));
+    text()
+        .content(I18N.text(content))
+        .style(type_style(16.0, 24.0));
 }
 
 #[tessera]
@@ -1438,7 +1492,7 @@ fn sample(
     let centered = remember(|| centered.unwrap_or(false));
     let filled_action = remember(|| false);
     let logo = remember(|| logo.unwrap_or(false));
-    let status = remember(|| "No action".to_owned());
+    let status = remember(|| "ui-no-action".to_owned());
     let scroll = remember(AppBarScrollState::default);
     let content = remember(ScrollableController::new);
     column()
@@ -1450,65 +1504,88 @@ fn sample(
                     .line_spacing(Dp(8.0))
                     .children(move || {
                         for (value, title) in [
-                            (TopAppBarVariant::Small, "Small"),
-                            (TopAppBarVariant::MediumFlexible, "Medium flexible"),
-                            (TopAppBarVariant::LargeFlexible, "Large flexible"),
+                            (TopAppBarVariant::Small, "ui-small"),
+                            (TopAppBarVariant::MediumFlexible, "ui-medium-flexible"),
+                            (TopAppBarVariant::LargeFlexible, "ui-large-flexible"),
                         ] {
                             button()
                                 .tonal()
                                 .selected(variant.get() == value)
-                                .accessibility_label(format!("{} {title}", label.get()))
+                                .accessibility_label(I18N.format(
+                                    "ui-value-value-format-2",
+                                    [
+                                        ("v0", I18N.text(&label.get()).into()),
+                                        ("v1", I18N.text(&title).into()),
+                                    ],
+                                ))
                                 .on_click(move || {
                                     variant.set(value);
                                     scroll.with_mut(AppBarScrollState::reset);
                                 })
                                 .child(move || {
-                                    text().content(title);
+                                    text().content(I18N.text(title));
                                 });
                         }
                         button()
                             .tonal()
                             .selected(subtitle.get())
-                            .accessibility_label(format!("{} subtitle", label.get()))
+                            .accessibility_label(I18N.format(
+                                "ui-value-subtitle",
+                                [("v0", I18N.text(&label.get()).into())],
+                            ))
                             .on_click(move || subtitle.set(!subtitle.get()))
-                            .child(|| {
-                                text().content("Subtitle");
+                            .child(move || {
+                                text().content(I18N.text("ui-subtitle"));
                             });
                         button()
                             .tonal()
                             .selected(centered.get())
-                            .accessibility_label(format!("{} centered", label.get()))
+                            .accessibility_label(I18N.format(
+                                "ui-value-centered",
+                                [("v0", I18N.text(&label.get()).into())],
+                            ))
                             .on_click(move || centered.set(!centered.get()))
-                            .child(|| {
-                                text().content("Centered");
+                            .child(move || {
+                                text().content(I18N.text("ui-centered"));
                             });
                         button()
                             .tonal()
                             .selected(filled_action.get())
-                            .accessibility_label(format!("{} filled action", label.get()))
+                            .accessibility_label(I18N.format(
+                                "ui-value-filled-action",
+                                [("v0", I18N.text(&label.get()).into())],
+                            ))
                             .on_click(move || filled_action.set(!filled_action.get()))
-                            .child(|| {
-                                text().content("Filled action");
+                            .child(move || {
+                                text().content(I18N.text("ui-filled-action"));
                             });
                         button()
                             .tonal()
                             .selected(logo.get())
-                            .accessibility_label(format!("{} logo", label.get()))
+                            .accessibility_label(
+                                I18N.format(
+                                    "ui-value-logo",
+                                    [("v0", I18N.text(&label.get()).into())],
+                                ),
+                            )
                             .on_click(move || logo.set(!logo.get()))
-                            .child(|| {
-                                text().content("Logo");
+                            .child(move || {
+                                text().content(I18N.text("ui-logo"));
                             });
                         button()
                             .text()
-                            .accessibility_label(format!("Reset {} scroll", label.get()))
+                            .accessibility_label(I18N.format(
+                                "ui-reset-value-scroll",
+                                [("v0", I18N.text(&label.get()).into())],
+                            ))
                             .on_click(move || {
                                 scroll.with_mut(AppBarScrollState::reset);
                                 content.with_mut(|content| {
                                     content.set_scroll_position(tessera_ui::PxPosition::ZERO)
                                 });
                             })
-                            .child(|| {
-                                text().content("Reset scroll");
+                            .child(move || {
+                                text().content(I18N.text("ui-reset-scroll"));
                             });
                     });
                 gap(Dp(24.0));
@@ -1522,7 +1599,10 @@ fn sample(
                         boxed()
                             .modifier(Modifier::new().fill_max_width().semantics(SemanticsArgs {
                                 role: Some(Role::Group),
-                                label: Some(format!("{} bar", label.get())),
+                                label: Some(I18N.format(
+                                    "ui-value-bar",
+                                    [("v0", I18N.text(&label.get()).into())],
+                                )),
                                 merge_descendants: true,
                                 ..Default::default()
                             }))
@@ -1531,9 +1611,9 @@ fn sample(
                                 top_app_bar()
                                     .scroll_state(scroll)
                                     .variant(variant.get())
-                                    .title("Library")
+                                    .title(I18N.text("ui-library"))
                                     .subtitle_optional(
-                                        subtitle.get().then(|| "Recently saved".to_owned()),
+                                        subtitle.get().then(|| "ui-recently-saved".to_owned()),
                                     )
                                     .title_alignment(if centered.get() {
                                         AppBarTitleAlignment::Center
@@ -1542,7 +1622,10 @@ fn sample(
                                     })
                                     .title_area_modifier(Modifier::new().semantics(SemanticsArgs {
                                         role: Some(Role::Group),
-                                        label: Some(format!("{} title", label.get())),
+                                        label: Some(I18N.format(
+                                            "ui-value-title",
+                                            [("v0", I18N.text(&label.get()).into())],
+                                        )),
                                         merge_descendants: true,
                                         ..Default::default()
                                     }))
@@ -1552,9 +1635,12 @@ fn sample(
                                             .standard()
                                             .color_style(IconButtonColorStyle::Inherited)
                                             .icon(filled::ARROW_BACK_SVG)
-                                            .accessibility_label(format!("{} back", label.get()))
+                                            .accessibility_label(I18N.format(
+                                                "ui-value-back",
+                                                [("v0", I18N.text(&label.get()).into())],
+                                            ))
                                             .on_click(move || {
-                                                status.set("Back selected".to_owned())
+                                                status.set("ui-back-selected".to_owned())
                                             });
                                     })
                                     .action(move || {
@@ -1562,24 +1648,24 @@ fn sample(
                                             icon_button()
                                                 .filled()
                                                 .icon(filled::SEARCH_SVG)
-                                                .accessibility_label(format!(
-                                                    "{} search",
-                                                    label.get()
+                                                .accessibility_label(I18N.format(
+                                                    "ui-value-search",
+                                                    [("v0", I18N.text(&label.get()).into())],
                                                 ))
                                                 .on_click(move || {
-                                                    status.set("Search selected".to_owned())
+                                                    status.set("ui-search-selected".to_owned())
                                                 });
                                         } else {
                                             icon_button()
                                                 .standard()
                                                 .color_style(IconButtonColorStyle::Inherited)
                                                 .icon(filled::SEARCH_SVG)
-                                                .accessibility_label(format!(
-                                                    "{} search",
-                                                    label.get()
+                                                .accessibility_label(I18N.format(
+                                                    "ui-value-search",
+                                                    [("v0", I18N.text(&label.get()).into())],
                                                 ))
                                                 .on_click(move || {
-                                                    status.set("Search selected".to_owned())
+                                                    status.set("ui-search-selected".to_owned())
                                                 });
                                         }
                                     });
@@ -1597,18 +1683,21 @@ fn sample(
                                             .vertical_scroll(content)
                                             .semantics(SemanticsArgs {
                                                 role: Some(Role::Group),
-                                                label: Some(format!(
-                                                    "{} scroll content",
-                                                    label.get()
+                                                label: Some(I18N.format(
+                                                    "ui-value-scroll-content",
+                                                    [("v0", I18N.text(&label.get()).into())],
                                                 )),
                                                 merge_descendants: true,
                                                 ..Default::default()
                                             }),
                                     )
-                                    .children(|| {
+                                    .children(move || {
                                         for index in 0..20 {
                                             text()
-                                                .content(format!("Saved item {}", index + 1))
+                                                .content(I18N.format(
+                                                    "ui-saved-item-value",
+                                                    [("v0", (index + 1).into())],
+                                                ))
                                                 .style(type_style(16.0, 24.0))
                                                 .modifier(
                                                     Modifier::new()
@@ -1625,7 +1714,13 @@ fn sample(
             if controls.unwrap_or(false) {
                 gap(Dp(16.0));
                 text()
-                    .content(format!("{} action: {}", label.get(), status.get()))
+                    .content(I18N.format(
+                        "ui-value-action-value",
+                        [
+                            ("v0", I18N.text(&label.get()).into()),
+                            ("v1", I18N.text(&status.get()).into()),
+                        ],
+                    ))
                     .style(type_style(14.0, 20.0));
             }
         });
@@ -1647,7 +1742,7 @@ fn brand() {
     boxed()
         .modifier(Modifier::new().semantics(SemanticsArgs {
             role: Some(Role::Image),
-            label: Some("Tessera brand".to_owned()),
+            label: Some(I18N.text("ui-tessera-brand")),
             ..Default::default()
         }))
         .children(move || {
@@ -1668,8 +1763,8 @@ fn search_avatar(status: State<String>, geometry: Option<State<Geometry>>) {
                 .unwrap_or_default()
                 .size(Dp(48.0), Dp(48.0)),
         )
-        .accessibility_label("Search app bar account")
-        .on_click(move || status.set("Account selected".into()))
+        .accessibility_label(I18N.text("ui-search-app-bar-account"))
+        .on_click(move || status.set("ui-account-selected".into()))
         .child(move || {
             boxed()
                 .alignment(Alignment::Center)
@@ -1680,7 +1775,7 @@ fn search_avatar(status: State<String>, geometry: Option<State<Geometry>>) {
                 )
                 .children(move || {
                     text()
-                        .content("A")
+                        .content(I18N.text("A"))
                         .color(scheme.on_primary)
                         .style(type_style(24.0, 32.0));
                 });
@@ -1730,11 +1825,11 @@ fn search_sample(
     let hint = match (specimen, placeholder) {
         (Some(0), _) => String::new(),
         (_, Some(value)) => value,
-        (Some(_), None) => "Body Large".to_owned(),
-        (None, None) => "Search library".to_owned(),
+        (Some(_), None) => "ui-body-large".to_owned(),
+        (None, None) => "ui-search-library".to_owned(),
     };
     dialog_provider()
-        .accessibility_label("Search library view")
+        .accessibility_label(I18N.text("ui-search-library-view"))
         .full_screen(true)
         .is_open(opened.get())
         .on_close_request(move || opened.set(false))
@@ -1759,7 +1854,7 @@ fn search_sample(
                         .unwrap_or_default()
                         .semantics(SemanticsArgs {
                             role: Some(Role::Toolbar),
-                            label: Some("Search app bar".into()),
+                            label: Some(I18N.text("ui-search-app-bar")),
                             merge_descendants: true,
                             ..Default::default()
                         })
@@ -1802,8 +1897,8 @@ fn search_sample(
                                     } else {
                                         filled::MENU_SVG
                                     })
-                                    .accessibility_label("Search app bar menu")
-                                    .on_click(move || status.set("Menu selected".into()));
+                                    .accessibility_label(I18N.text("ui-search-app-bar-menu"))
+                                    .on_click(move || status.set("ui-menu-selected".into()));
                             }
                             spacer().modifier(Modifier::new().width(Dp(8.0)));
                             boxed()
@@ -1837,7 +1932,7 @@ fn search_sample(
                                             container_color: field_color,
                                             divider_color: divider,
                                         })
-                                        .placeholder(hint.clone())
+                                        .placeholder(I18N.text(&(hint)))
                                         .on_active_change(move |active| {
                                             if active {
                                                 opened.set(true);
@@ -1853,9 +1948,9 @@ fn search_sample(
                                             .modifier(
                                                 Modifier::new().size(Dp(field_width), Dp(56.0)),
                                             )
-                                            .children(|| {
+                                            .children(move || {
                                                 text()
-                                                    .content("Body Large")
+                                                    .content(I18N.text("ui-body-large"))
                                                     .style(type_style(16.0, 24.0));
                                             });
                                     }
@@ -1864,23 +1959,23 @@ fn search_sample(
                             for (glyph, label, selected) in [
                                 (
                                     filled::AUTO_AWESOME_SVG,
-                                    "Search app bar suggestions",
-                                    "Suggestions selected",
+                                    "ui-search-app-bar-suggestions",
+                                    "ui-suggestions-selected",
                                 ),
                                 (
                                     filled::NOTIFICATIONS_SVG,
-                                    "Search app bar notifications",
-                                    "Notifications selected",
+                                    "ui-search-app-bar-notifications",
+                                    "ui-notifications-selected",
                                 ),
                                 (
                                     filled::SETTINGS_SVG,
-                                    "Search app bar settings",
-                                    "Settings selected",
+                                    "ui-search-app-bar-settings",
+                                    "ui-settings-selected",
                                 ),
                                 (
                                     filled::HELP_OUTLINE_SVG,
-                                    "Search app bar help",
-                                    "Help selected",
+                                    "ui-search-app-bar-help",
+                                    "ui-help-selected",
                                 ),
                             ]
                             .into_iter()
@@ -1890,7 +1985,7 @@ fn search_sample(
                                     .standard()
                                     .color_style(IconButtonColorStyle::Inherited)
                                     .icon(glyph)
-                                    .accessibility_label(label)
+                                    .accessibility_label(I18N.text(label))
                                     .on_click(move || status.set(selected.to_owned()));
                                 spacer().modifier(Modifier::new().width(Dp(4.0)));
                             }
@@ -1906,8 +2001,8 @@ fn search_sample(
                                     .standard()
                                     .color_style(IconButtonColorStyle::Inherited)
                                     .icon(filled::ACCOUNT_CIRCLE_SVG)
-                                    .accessibility_label("Search app bar account")
-                                    .on_click(move || status.set("Account selected".into()));
+                                    .accessibility_label(I18N.text("ui-search-app-bar-account"))
+                                    .on_click(move || status.set("ui-account-selected".into()));
                             }
                         });
                 });
@@ -1926,12 +2021,12 @@ fn search_sample(
                         .controller(view)
                         .is_active(true)
                         .on_active_change(move |active| opened.set(active))
-                        .placeholder("Search library")
+                        .placeholder(I18N.text("ui-search-library"))
                         .leading_icon(move || {
                             icon_button()
                                 .standard()
                                 .icon(filled::ARROW_BACK_SVG)
-                                .accessibility_label("Close app bar search")
+                                .accessibility_label(I18N.text("ui-close-app-bar-search"))
                                 .on_click(move || opened.set(false));
                         })
                         .on_query_change(move |value: String| {
@@ -1943,16 +2038,21 @@ fn search_sample(
                                 .modifier(Modifier::new().padding_all(Dp(16.0)))
                                 .children(move || {
                                     text().content(if query.get().is_empty() {
-                                        "Search saved items".to_owned()
+                                        I18N.text("ui-search-saved-items")
                                     } else {
-                                        format!("Results for {}", query.get())
+                                        I18N.format(
+                                            "ui-results-for-value",
+                                            [("v0", query.get().into())],
+                                        )
                                     });
                                 });
                         });
                 });
         });
     if !status.get().is_empty() {
-        text().content(status.get()).style(type_style(14.0, 20.0));
+        text()
+            .content(I18N.text(status.get()))
+            .style(type_style(14.0, 20.0));
     }
 }
 
@@ -1962,11 +2062,20 @@ fn variants_figure(#[prop(into)] prefix: String) {
         search_sample();
         gap(Dp(32.0));
         for (variant, label) in [
-            (TopAppBarVariant::Small, "Small"),
-            (TopAppBarVariant::MediumFlexible, "Medium flexible"),
-            (TopAppBarVariant::LargeFlexible, "Large flexible"),
+            (TopAppBarVariant::Small, "ui-small"),
+            (TopAppBarVariant::MediumFlexible, "ui-medium-flexible"),
+            (TopAppBarVariant::LargeFlexible, "ui-large-flexible"),
         ] {
-            sample(format!("{prefix} {label}"), variant);
+            sample(
+                I18N.format(
+                    "ui-value-value-format-2",
+                    [
+                        ("v0", I18N.text(&prefix).into()),
+                        ("v1", I18N.text(&label).into()),
+                    ],
+                ),
+                variant,
+            );
             gap(Dp(32.0));
         }
     }));
@@ -1975,20 +2084,22 @@ fn variants_figure(#[prop(into)] prefix: String) {
 #[tessera]
 fn baseline_figure(#[prop(into)] prefix: String) {
     panel(RenderSlot::new(move || {
-        baseline_bar(false).label(format!("{prefix} medium"));
+        baseline_bar(false)
+            .label(I18N.format("ui-value-medium", [("v0", I18N.text(&prefix).into())]));
         gap(Dp(32.0));
-        baseline_bar(true).label(format!("{prefix} large"));
+        baseline_bar(true)
+            .label(I18N.format("ui-value-large", [("v0", I18N.text(&prefix).into())]));
     }));
     gap(Dp(16.0));
     caption(
-        "Baseline reference drawings: a 64dp top row with the headline in a fixed-height area below it. The native Tessera app bar provides only the medium flexible and large flexible replacements.",
+        "ui-baseline-reference-drawings-a-64dp-top-row-with-the-headline-in-a-fixed-height-area-below",
     );
 }
 
 #[tessera]
 fn baseline_bar(large: bool, #[prop(into)] label: Option<String>) {
     let scheme = use_context::<MaterialTheme>().unwrap().get().color_scheme;
-    let label = label.unwrap_or_else(|| "Baseline app bar".to_owned());
+    let label = label.unwrap_or_else(|| "ui-baseline-app-bar".to_owned());
     boxed()
         .alignment(Alignment::TopStart)
         .modifier(
@@ -1998,7 +2109,7 @@ fn baseline_bar(large: bool, #[prop(into)] label: Option<String>) {
                 .background_with_shape(scheme.surface, Shape::rounded_rectangle(Dp(0.0)))
                 .semantics(SemanticsArgs {
                     role: Some(Role::Toolbar),
-                    label: Some(label.clone()),
+                    label: Some(I18N.text(&(label))),
                     ..Default::default()
                 }),
         )
@@ -2016,7 +2127,9 @@ fn baseline_bar(large: bool, #[prop(into)] label: Option<String>) {
                     icon_button()
                         .standard()
                         .icon(filled::ARROW_BACK_SVG)
-                        .accessibility_label(format!("{label} back"));
+                        .accessibility_label(
+                            I18N.format("ui-value-back", [("v0", I18N.text(&label).into())]),
+                        );
                     spacer().modifier(Modifier::new().weight(1.0));
                     for (glyph, name) in [
                         (filled::SEARCH_SVG, "search"),
@@ -2026,15 +2139,21 @@ fn baseline_bar(large: bool, #[prop(into)] label: Option<String>) {
                         icon_button()
                             .standard()
                             .icon(glyph)
-                            .accessibility_label(format!("{label} {name}"));
+                            .accessibility_label(I18N.format(
+                                "ui-value-value-format-2",
+                                [
+                                    ("v0", I18N.text(&label).into()),
+                                    ("v1", I18N.text(&name).into()),
+                                ],
+                            ));
                     }
                 });
             text()
-                .content(if large {
-                    "Headline Medium"
+                .content(I18N.text(if large {
+                    "ui-headline-medium"
                 } else {
-                    "Headline Small"
-                })
+                    "ui-headline-small"
+                }))
                 .color(scheme.on_surface)
                 .style(if large {
                     type_style(28.0, 36.0)
@@ -2059,45 +2178,45 @@ fn variants() {
     column()
         .modifier(Modifier::new().fill_max_width())
         .children(|| {
-            variants_figure("Variant");
+            variants_figure("ui-variant");
             gap(Dp(16.0));
             numbered(vec![
-                "Search app bar".into(),
-                "Small".into(),
-                "Medium flexible".into(),
-                "Large flexible".into(),
+                "ui-search-app-bar".into(),
+                "ui-small".into(),
+                "ui-medium-flexible".into(),
+                "ui-large-flexible".into(),
             ]);
             gap(Dp(48.0));
-            subheading("Baseline variants".to_owned());
+            subheading("ui-baseline-variants".to_owned());
             gap(Dp(16.0));
-            paragraph("The baseline M3 medium and large app bars are no longer recommended in M3 Expressive, and should be replaced with medium flexible and large flexible app bars, which are similar visually, but have multi-line support, a shorter height, and can contain a wide variety of elements, like images.".into());
+            paragraph("ui-the-baseline-m3-medium-and-large-app-bars-are-no-longer-recommended-in-m3-expressive-and-s".into());
             gap(Dp(24.0));
-            baseline_figure("Baseline");
+            baseline_figure("ui-baseline");
             gap(Dp(16.0));
-            numbered(vec!["Medium".into(), "Large".into()]);
+            numbered(vec!["ui-medium".into(), "ui-large".into()]);
             gap(Dp(32.0));
             spec_table(
-                vec!["Variant".into(), "M3".into(), "M3 Expressive".into()],
+                vec!["ui-variant".into(), "M3".into(), "ui-m3-expressive".into()],
                 vec![
-                    vec!["Search app bar".into(), "--".into(), "Available".into()],
-                    vec!["Small".into(), "Available".into(), "Available".into()],
+                    vec!["ui-search-app-bar".into(), "--".into(), "ui-available".into()],
+                    vec!["ui-small".into(), "ui-available".into(), "ui-available".into()],
                     vec![
-                        "Center-aligned".into(),
-                        "Available".into(),
-                        "Merged into small. Use centered-text configuration.".into(),
+                        "ui-center-aligned".into(),
+                        "ui-available".into(),
+                        "ui-merged-into-small-use-centered-text-configuration".into(),
                     ],
                     vec![
-                        "Medium (baseline)".into(),
-                        "Available".into(),
-                        "Not recommended. Use medium flexible".into(),
+                        "ui-medium-baseline".into(),
+                        "ui-available".into(),
+                        "ui-not-recommended-use-medium-flexible".into(),
                     ],
-                    vec!["Medium flexible".into(), "--".into(), "Available".into()],
+                    vec!["ui-medium-flexible".into(), "--".into(), "ui-available".into()],
                     vec![
-                        "Large (baseline)".into(),
-                        "Available".into(),
-                        "Not recommended. Use large flexible".into(),
+                        "ui-large-baseline".into(),
+                        "ui-available".into(),
+                        "ui-not-recommended-use-large-flexible".into(),
                     ],
-                    vec!["Large flexible".into(), "--".into(), "Available".into()],
+                    vec!["ui-large-flexible".into(), "--".into(), "ui-available".into()],
                 ],
             );
         });
@@ -2107,16 +2226,13 @@ fn variants() {
 fn configurations() {
     column()
         .modifier(Modifier::new().fill_max_width())
-        .children(|| {
-            subheading("Text alignment".to_owned());
+        .children(move || {
+            subheading("ui-text-alignment".to_owned());
             gap(Dp(24.0));
-            panel(RenderSlot::new(|| {
+            panel(RenderSlot::new(move || {
                 for centered in [false, true] {
                     sample(
-                        format!(
-                            "{} alignment",
-                            if centered { "Centered" } else { "Leading" }
-                        ),
+                        I18N.format("ui-value-alignment", [("v0", I18N.text(&(if centered { "ui-centered" } else { "ui-leading" })).into())]),
                         TopAppBarVariant::MediumFlexible,
                     )
                     .centered(centered)
@@ -2125,35 +2241,35 @@ fn configurations() {
                 }
             }));
             gap(Dp(16.0));
-            caption("Text labels, including supporting text, can be aligned to the leading edge or centered");
+            caption("ui-text-labels-including-supporting-text-can-be-aligned-to-the-leading-edge-or-centered");
             gap(Dp(32.0));
             spec_table(
                 vec![
-                    "Category".into(),
-                    "Configuration".into(),
+                    "ui-category".into(),
+                    "ui-configuration".into(),
                     "M3".into(),
-                    "M3 Expressive".into(),
+                    "ui-m3-expressive".into(),
                 ],
                 vec![
                     vec![
-                        "Text alignment".into(),
-                        "Leading edge (default)".into(),
-                        "Available".into(),
-                        "Available".into(),
+                        "ui-text-alignment".into(),
+                        "ui-leading-edge-default".into(),
+                        "ui-available".into(),
+                        "ui-available".into(),
                     ],
                     vec![
-                        "Text alignment".into(),
-                        "Centered".into(),
+                        "ui-text-alignment".into(),
+                        "ui-centered".into(),
                         "--".into(),
-                        "Available".into(),
+                        "ui-available".into(),
                     ],
                 ],
             );
             gap(Dp(112.0));
-            subheading("Interactive configuration".to_owned());
+            subheading("ui-interactive-configuration".to_owned());
             gap(Dp(24.0));
-            panel(RenderSlot::new(|| {
-                sample("Configured app bar", TopAppBarVariant::MediumFlexible)
+            panel(RenderSlot::new(move || {
+                sample("ui-configured-app-bar", TopAppBarVariant::MediumFlexible)
                     .subtitle(true)
                     .controls(true);
             }));
@@ -2161,113 +2277,119 @@ fn configurations() {
 }
 
 const COMMON_TOKENS: &[(&str, &str)] = &[
-    ("App bar container color", "#FEF7FF (Surface)"),
-    ("Search container color", "#F3EDF7 (Surface container)"),
-    ("Search label color", "#49454F (On surface variant)"),
+    ("ui-app-bar-container-color", "ui-fef7ff-surface"),
+    ("ui-search-container-color", "ui-f3edf7-surface-container"),
+    ("ui-search-label-color", "ui-49454f-on-surface-variant"),
     (
-        "App bar container color on scroll",
-        "#F3EDF7 (Surface container)",
+        "ui-app-bar-container-color-on-scroll",
+        "ui-f3edf7-surface-container",
     ),
     (
-        "Search container color on scroll",
-        "#E6E0E9 (Surface container highest)",
+        "ui-search-container-color-on-scroll",
+        "ui-e6e0e9-surface-container-highest",
     ),
-    ("App bar container elevation", "0dp"),
-    ("App bar container elevation on scroll", "3dp"),
-    ("App bar title text", "#1D1B20 (On surface)"),
-    ("App bar subtitle text", "#49454F (On surface variant)"),
-    ("App bar leading icon", "#1D1B20 (On surface)"),
-    ("App bar trailing icon", "#49454F (On surface variant)"),
-    ("App bar left padding", "4dp"),
-    ("App bar right padding", "4dp"),
-    ("App bar icon spacing", "0dp"),
-    ("Search left padding", "8dp"),
-    ("Search right padding", "8dp"),
-    ("App bar container shape", "Rounded corners, 0dp"),
-    ("App bar avatar size", "32dp"),
-    ("App bar icon size", "24dp"),
+    ("ui-app-bar-container-elevation", "0dp"),
+    ("ui-app-bar-container-elevation-on-scroll", "3dp"),
+    ("ui-app-bar-title-text", "ui-1d1b20-on-surface"),
+    ("ui-app-bar-subtitle-text", "ui-49454f-on-surface-variant"),
+    ("ui-app-bar-leading-icon", "ui-1d1b20-on-surface"),
+    ("ui-app-bar-trailing-icon", "ui-49454f-on-surface-variant"),
+    ("ui-app-bar-left-padding", "4dp"),
+    ("ui-app-bar-right-padding", "4dp"),
+    ("ui-app-bar-icon-spacing", "0dp"),
+    ("ui-search-left-padding", "8dp"),
+    ("ui-search-right-padding", "8dp"),
+    ("ui-app-bar-container-shape", "ui-rounded-corners-0dp"),
+    ("ui-app-bar-avatar-size", "32dp"),
+    ("ui-app-bar-icon-size", "24dp"),
 ];
 
 const SMALL_TOKENS: &[(&str, &str)] = &[
-    ("App bar small container height", "64dp"),
+    ("ui-app-bar-small-container-height", "64dp"),
     (
-        "App bar small title font",
-        "Roboto 22pt, line height 28pt, weight 400, tracking 0pt",
+        "ui-app-bar-small-title-font",
+        "ui-roboto-22pt-line-height-28pt-weight-400-tracking-0pt",
     ),
     (
-        "App bar small subtitle font",
-        "Roboto 12pt, line height 16pt, weight 500, tracking 0.5pt",
+        "ui-app-bar-small-subtitle-font",
+        "ui-roboto-12pt-line-height-16pt-weight-500-tracking-0-5pt",
     ),
-    ("App bar small icon button size", "24dp"),
-    ("Search container height", "56dp"),
-    ("Search container shape", "Circular"),
+    ("ui-app-bar-small-icon-button-size", "24dp"),
+    ("ui-search-container-height", "56dp"),
+    ("ui-search-container-shape", "ui-circular"),
     (
-        "Search title font",
-        "Roboto 16pt, line height 24pt, weight 400, tracking 0.5pt",
+        "ui-search-title-font",
+        "ui-roboto-16pt-line-height-24pt-weight-400-tracking-0-5pt",
     ),
 ];
 
 const MEDIUM_FLEXIBLE_TOKENS: &[(&str, &str)] = &[
-    ("App bar medium flexible container height", "112dp"),
+    ("ui-app-bar-medium-flexible-container-height", "112dp"),
     (
-        "App bar medium flexible container height with subtitle",
+        "ui-app-bar-medium-flexible-container-height-with-subtitle",
         "136dp",
     ),
     (
-        "App bar medium Title font",
-        "Roboto 28pt, line height 36pt, weight 400, tracking 0pt",
+        "ui-app-bar-medium-title-font",
+        "ui-roboto-28pt-line-height-36pt-weight-400-tracking-0pt",
     ),
     (
-        "App bar medium Subtitle font",
-        "Roboto 14pt, line height 20pt, weight 500, tracking 0.1pt",
+        "ui-app-bar-medium-subtitle-font",
+        "ui-roboto-14pt-line-height-20pt-weight-500-tracking-0-1pt",
     ),
 ];
 
 const LARGE_FLEXIBLE_TOKENS: &[(&str, &str)] = &[
-    ("App bar large flexible container height", "120dp"),
+    ("ui-app-bar-large-flexible-container-height", "120dp"),
     (
-        "App bar large flexible container height with subtitle",
+        "ui-app-bar-large-flexible-container-height-with-subtitle",
         "152dp",
     ),
     (
-        "App bar large Title font",
-        "Roboto 36pt, line height 44pt, weight 400, tracking 0pt",
+        "ui-app-bar-large-title-font",
+        "ui-roboto-36pt-line-height-44pt-weight-400-tracking-0pt",
     ),
     (
-        "App bar large Subtitle font",
-        "Roboto 16pt, line height 24pt, weight 500, tracking 0.15pt",
+        "ui-app-bar-large-subtitle-font",
+        "ui-roboto-16pt-line-height-24pt-weight-500-tracking-0-15pt",
     ),
 ];
 
 const SEARCH_BAR_TOKENS: &[(&str, &str)] = &[
     (
-        "Search bar container color",
-        "#ECE6F0 (Surface container high)",
+        "ui-search-bar-container-color",
+        "ui-ece6f0-surface-container-high",
     ),
-    ("Search bar container elevation", "6dp"),
-    ("Search bar leading icon color", "#1D1B20 (On surface)"),
+    ("ui-search-bar-container-elevation", "6dp"),
+    ("ui-search-bar-leading-icon-color", "ui-1d1b20-on-surface"),
     (
-        "Search bar trailing icon color",
-        "#49454F (On surface variant)",
+        "ui-search-bar-trailing-icon-color",
+        "ui-49454f-on-surface-variant",
     ),
     (
-        "Search bar supporting text color",
-        "#49454F (On surface variant)",
+        "ui-search-bar-supporting-text-color",
+        "ui-49454f-on-surface-variant",
     ),
-    ("Search bar input text color", "#1D1B20 (On surface)"),
-    ("Search bar hover state layer color", "#1D1B20 (On surface)"),
-    ("Search bar hover state layer opacity", "0.08"),
+    ("ui-search-bar-input-text-color", "ui-1d1b20-on-surface"),
     (
-        "Search bar pressed state layer color",
-        "#1D1B20 (On surface)",
+        "ui-search-bar-hover-state-layer-color",
+        "ui-1d1b20-on-surface",
     ),
-    ("Search bar contained pane leading margin", "24dp"),
-    ("Search bar contained pane trailing margin", "24dp"),
-    ("Search bar contained motion", "Damping 0.9, stiffness 1400"),
-    ("Search bar contained leading space", "4dp"),
-    ("Search bar contained trailing space", "4dp"),
-    ("Search bar contained no actions leading space", "16dp"),
-    ("Search bar contained no actions trailing space", "16dp"),
+    ("ui-search-bar-hover-state-layer-opacity", "0.08"),
+    (
+        "ui-search-bar-pressed-state-layer-color",
+        "ui-1d1b20-on-surface",
+    ),
+    ("ui-search-bar-contained-pane-leading-margin", "24dp"),
+    ("ui-search-bar-contained-pane-trailing-margin", "24dp"),
+    (
+        "ui-search-bar-contained-motion",
+        "ui-damping-0-9-stiffness-1400",
+    ),
+    ("ui-search-bar-contained-leading-space", "4dp"),
+    ("ui-search-bar-contained-trailing-space", "4dp"),
+    ("ui-search-bar-contained-no-actions-leading-space", "16dp"),
+    ("ui-search-bar-contained-no-actions-trailing-space", "16dp"),
 ];
 
 fn token_rows(rows: &[(&str, &str)]) -> Vec<Vec<String>> {
@@ -2278,29 +2400,31 @@ fn token_rows(rows: &[(&str, &str)]) -> Vec<Vec<String>> {
 
 #[tessera]
 fn tokens() {
-    paragraph("Select a token set to view in the table's menu. App bar token sets are organized into a common token set, and size-specific tokens. Values are shown for the default light scheme.".into());
+    paragraph("ui-select-a-token-set-to-view-in-the-table-s-menu-app-bar-token-sets-are-organized-into-a-com".into());
     for (title, rows) in [
-        ("App bar - Common", COMMON_TOKENS),
-        ("App bar - Size - Small", SMALL_TOKENS),
-        ("App bar - Size - Medium Flexible", MEDIUM_FLEXIBLE_TOKENS),
-        ("App bar - Size - Large Flexible", LARGE_FLEXIBLE_TOKENS),
+        ("ui-app-bar-common", COMMON_TOKENS),
+        ("ui-app-bar-size-small", SMALL_TOKENS),
+        ("ui-app-bar-size-medium-flexible", MEDIUM_FLEXIBLE_TOKENS),
+        ("ui-app-bar-size-large-flexible", LARGE_FLEXIBLE_TOKENS),
     ] {
         gap(Dp(32.0));
-        text().content(title).style(type_style(16.0, 24.0));
+        text()
+            .content(I18N.text(title))
+            .style(type_style(16.0, 24.0));
         gap(Dp(16.0));
-        spec_table(vec!["Token".into(), "Value".into()], token_rows(rows));
+        spec_table(vec!["ui-token".into(), "ui-value".into()], token_rows(rows));
     }
     gap(Dp(48.0));
-    subheading("Search component tokens & specs".to_owned());
+    subheading("ui-search-component-tokens-specs".to_owned());
     gap(Dp(16.0));
-    paragraph("The default search component tokens are used in the search app bar. Inside an app bar, the search container uses surface container rather than the standalone search bar default.".into());
+    paragraph("ui-the-default-search-component-tokens-are-used-in-the-search-app-bar-inside-an-app-bar-the-s".into());
     gap(Dp(24.0));
     text()
-        .content("Search - Bar, enabled and contained (expressive)")
+        .content(I18N.text("ui-search-bar-enabled-and-contained-expressive"))
         .style(type_style(16.0, 24.0));
     gap(Dp(16.0));
     spec_table(
-        vec!["Token".into(), "Value".into()],
+        vec!["ui-token".into(), "ui-value".into()],
         token_rows(SEARCH_BAR_TOKENS),
     );
 }
@@ -2309,18 +2433,18 @@ fn tokens() {
 fn anatomy() {
     column()
         .modifier(Modifier::new().fill_max_width())
-        .children(|| {
+        .children(move || {
             combined_app_anatomy();
             gap(Dp(32.0));
-            paragraph("App bars can be customized to include:".into());
+            paragraph("ui-app-bars-can-be-customized-to-include".into());
             gap(Dp(8.0));
             bullets(vec![
-                "An image or logo".into(),
-                "A subtitle".into(),
-                "A filled icon button".into(),
+                "ui-an-image-or-logo".into(),
+                "ui-a-subtitle".into(),
+                "ui-a-filled-icon-button".into(),
             ]);
             gap(Dp(8.0));
-            paragraph("Avoid customizing the size of the heading and subtitle, or adding too many actions.".into());
+            paragraph("ui-avoid-customizing-the-size-of-the-heading-and-subtitle-or-adding-too-many-actions".into());
             gap(Dp(24.0));
             panel(RenderSlot::new(|| {
                 for kind in [LOGO, SUBTITLED, FILLED_SINGLE] {
@@ -2329,11 +2453,11 @@ fn anatomy() {
                 }
             }));
             gap(Dp(16.0));
-            caption("The app bar can have different layouts depending on which elements are shown");
+            caption("ui-the-app-bar-can-have-different-layouts-depending-on-which-elements-are-shown");
             gap(Dp(112.0));
-            subheading("Search".to_owned());
+            subheading("ui-search".to_owned());
             gap(Dp(16.0));
-            paragraph("The search app bar can include trailing actions inside and outside the search bar. When the search bar is selected, it should open the search view.".into());
+            paragraph("ui-the-search-app-bar-can-include-trailing-actions-inside-and-outside-the-search-bar-when-the".into());
             gap(Dp(24.0));
             search_figure(false);
             gap(Dp(32.0));
@@ -2345,53 +2469,53 @@ fn anatomy() {
             }));
             gap(Dp(16.0));
             numbered(vec![
-                "A leading element and a trailing element outside search".into(),
-                "A leading element, a trailing element inside search, and a trailing element outside search".into(),
-                "A leading element and two trailing elements outside search".into(),
+                "ui-a-leading-element-and-a-trailing-element-outside-search".into(),
+                "ui-a-leading-element-a-trailing-element-inside-search-and-a-trailing-element-outside-search".into(),
+                "ui-a-leading-element-and-two-trailing-elements-outside-search".into(),
             ]);
             gap(Dp(112.0));
-            subheading("Image".to_owned());
+            subheading("ui-image".to_owned());
             gap(Dp(16.0));
-            paragraph("An image can be placed in the app bar. In small app bars, this can replace the label text.".into());
+            paragraph("ui-an-image-can-be-placed-in-the-app-bar-in-small-app-bars-this-can-replace-the-label-text".into());
             gap(Dp(24.0));
             panel(RenderSlot::new(|| {
-                sample("Image", TopAppBarVariant::Small).logo(true);
+                sample("ui-image", TopAppBarVariant::Small).logo(true);
             }));
             gap(Dp(16.0));
-            caption("Images can be added to app bars and can replace label text on small app bars");
+            caption("ui-images-can-be-added-to-app-bars-and-can-replace-label-text-on-small-app-bars");
             gap(Dp(112.0));
-            subheading("Filled trailing icon button".to_owned());
+            subheading("ui-filled-trailing-icon-button".to_owned());
             gap(Dp(16.0));
-            paragraph("The app bar's trailing icon buttons can be replaced with a single, primary, or tonal filled icon button in default or wide sizes.".into());
+            paragraph("ui-the-app-bar-s-trailing-icon-buttons-can-be-replaced-with-a-single-primary-or-tonal-filled".into());
             gap(Dp(24.0));
             app_figure(TopAppBarVariant::Small, false).filled_action(true);
             gap(Dp(16.0));
-            caption("The trailing icons can be configured to be a single filled icon button");
+            caption("ui-the-trailing-icons-can-be-configured-to-be-a-single-filled-icon-button");
             gap(Dp(112.0));
-            subheading("Subtitle".to_owned());
+            subheading("ui-subtitle".to_owned());
             gap(Dp(24.0));
-            panel(RenderSlot::new(|| {
+            panel(RenderSlot::new(move || {
                 for (variant, name) in [
-                    (TopAppBarVariant::Small, "Small"),
-                    (TopAppBarVariant::MediumFlexible, "Medium flexible"),
-                    (TopAppBarVariant::LargeFlexible, "Large flexible"),
+                    (TopAppBarVariant::Small, "ui-small"),
+                    (TopAppBarVariant::MediumFlexible, "ui-medium-flexible"),
+                    (TopAppBarVariant::LargeFlexible, "ui-large-flexible"),
                 ] {
-                    sample(format!("Without subtitle {name}"), variant);
+                    sample(I18N.format("ui-without-subtitle-value", [("v0", I18N.text(&name).into())]), variant);
                     gap(Dp(24.0));
-                    sample(format!("Subtitle {name}"), variant).subtitle(true);
+                    sample(I18N.format("ui-subtitle-value", [("v0", I18N.text(&name).into())]), variant).subtitle(true);
                     gap(Dp(32.0));
                 }
             }));
             gap(Dp(16.0));
-            caption("The medium flexible and large flexible app bars hug the text contents, so they are taller when a subtitle is visible");
+            caption("ui-the-medium-flexible-and-large-flexible-app-bars-hug-the-text-contents-so-they-are-taller-w");
             gap(Dp(8.0));
             numbered(vec![
-                "Small".into(),
-                "Small with subtitle".into(),
-                "Medium flexible".into(),
-                "Medium flexible with subtitle".into(),
-                "Large flexible".into(),
-                "Large flexible with subtitle".into(),
+                "ui-small".into(),
+                "ui-small-with-subtitle".into(),
+                "ui-medium-flexible".into(),
+                "ui-medium-flexible-with-subtitle".into(),
+                "ui-large-flexible".into(),
+                "ui-large-flexible-with-subtitle".into(),
             ]);
         });
 }
@@ -2401,9 +2525,9 @@ fn colors() {
     column()
         .modifier(Modifier::new().fill_max_width())
         .children(|| {
-            paragraph("Color values are implemented through design tokens. For design, this means working with color values that correspond with tokens. For implementation, a color value will be a token that references a value.".into());
+            paragraph("ui-color-values-are-implemented-through-design-tokens-for-design-this-means-working-with-colo".into());
             gap(Dp(16.0));
-            paragraph("All app bars share the same color roles. On scroll, the container changes color to surface container.".into());
+            paragraph("ui-all-app-bars-share-the-same-color-roles-on-scroll-the-container-changes-color-to-surface-c".into());
             gap(Dp(24.0));
             for dark in [false, true] {
                 material_theme()
@@ -2413,15 +2537,15 @@ fn colors() {
                     });
                 gap(Dp(24.0));
             }
-            caption("App bar color roles used for light and dark themes:");
+            caption("ui-app-bar-color-roles-used-for-light-and-dark-themes");
             gap(Dp(8.0));
             numbered(vec![
-                "Container: surface".into(),
-                "Leading icon: on surface".into(),
-                "Trailing icons: on surface variant".into(),
-                "Headline: on surface".into(),
-                "Subtitle: on surface variant".into(),
-                "Container on scroll: surface container".into(),
+                "ui-container-surface".into(),
+                "ui-leading-icon-on-surface".into(),
+                "ui-trailing-icons-on-surface-variant".into(),
+                "ui-headline-on-surface".into(),
+                "ui-subtitle-on-surface-variant".into(),
+                "ui-container-on-scroll-surface-container".into(),
             ]);
             gap(Dp(48.0));
             for dark in [false, true] {
@@ -2432,21 +2556,21 @@ fn colors() {
                     });
                 gap(Dp(24.0));
             }
-            caption("Search app bar color roles used for light and dark themes:");
+            caption("ui-search-app-bar-color-roles-used-for-light-and-dark-themes");
             gap(Dp(8.0));
             numbered(vec![
-                "Container: surface".into(),
-                "Leading icon: on surface variant".into(),
-                "Trailing icon: on surface variant".into(),
-                "Hinted search text: on surface variant".into(),
-                "Search container: surface container".into(),
-                "Container on scroll: surface container".into(),
-                "Search container on scroll: surface container highest".into(),
+                "ui-container-surface".into(),
+                "ui-leading-icon-on-surface-variant".into(),
+                "ui-trailing-icon-on-surface-variant".into(),
+                "ui-hinted-search-text-on-surface-variant".into(),
+                "ui-search-container-surface-container".into(),
+                "ui-container-on-scroll-surface-container".into(),
+                "ui-search-container-on-scroll-surface-container-highest".into(),
             ]);
             gap(Dp(88.0));
-            subheading("Scroll states".to_owned());
+            subheading("ui-scroll-states".to_owned());
             gap(Dp(24.0));
-            guidance_pair("Flat", "On scroll")
+            guidance_pair("ui-flat", "ui-on-scroll")
                 .first(|| {
                     scroll_state_column(false);
                 })
@@ -2454,7 +2578,7 @@ fn colors() {
                     scroll_state_column(true);
                 });
             gap(Dp(16.0));
-            caption("The app bar changes color when flat or on scroll. The search bar can also change color on scroll.");
+            caption("ui-the-app-bar-changes-color-when-flat-or-on-scroll-the-search-bar-can-also-change-color-on-s");
         });
 }
 
@@ -2475,11 +2599,35 @@ fn color_figure(search: bool, dark: bool) {
                 )
                 .semantics(SemanticsArgs {
                     role: Some(Role::Group),
-                    label: Some(format!(
-                        "{} color roles, {} scheme",
-                        if search { "Search app bar" } else { "App bar" },
-                        if dark { "dark" } else { "light" }
-                    )),
+                    label: Some(
+                        I18N.format(
+                            "ui-value-color-roles-value-scheme",
+                            [
+                                (
+                                    "v0",
+                                    I18N.text(
+                                        &(if search {
+                                            "ui-search-app-bar"
+                                        } else {
+                                            "ui-app-bar"
+                                        }),
+                                    )
+                                    .into(),
+                                ),
+                                (
+                                    "v1",
+                                    I18N.text(
+                                        &(if dark {
+                                            "ui-dark-7069"
+                                        } else {
+                                            "ui-light-7070"
+                                        }),
+                                    )
+                                    .into(),
+                                ),
+                            ],
+                        ),
+                    ),
                     ..Default::default()
                 }),
         )
@@ -2496,11 +2644,11 @@ fn color_figure(search: bool, dark: bool) {
                         search_sample()
                             .geometry(geometry)
                             .specimen(3)
-                            .placeholder("Search product");
+                            .placeholder(I18N.text("ui-search-product"));
                         gap(Dp(COLOR_FIGURE_GAP));
                         search_sample()
                             .specimen(3)
-                            .placeholder("Search product")
+                            .placeholder(I18N.text("ui-search-product"))
                             .scrolled(true);
                     } else {
                         theme_sample_bar(false).geometry(geometry);
@@ -2628,8 +2776,8 @@ fn theme_sample_bar(scrolled: bool, geometry: Option<State<Geometry>>) {
     top_app_bar()
         .modifier(tracked("container"))
         .variant(TopAppBarVariant::Small)
-        .title("Headline")
-        .subtitle("Subtitle")
+        .title(I18N.text("ui-headline"))
+        .subtitle(I18N.text("ui-subtitle"))
         .title_area_modifier(tracked("title"))
         .container_color(if scrolled {
             scheme.surface_container
@@ -2642,7 +2790,7 @@ fn theme_sample_bar(scrolled: bool, geometry: Option<State<Geometry>>) {
                 .standard()
                 .color_style(IconButtonColorStyle::Inherited)
                 .icon(filled::ARROW_BACK_SVG)
-                .accessibility_label("Color figure back");
+                .accessibility_label(I18N.text("ui-color-figure-back"));
         })
         .action(move || {
             icon_button()
@@ -2650,14 +2798,14 @@ fn theme_sample_bar(scrolled: bool, geometry: Option<State<Geometry>>) {
                 .standard()
                 .color_style(IconButtonColorStyle::Inherited)
                 .icon(filled::SEARCH_SVG)
-                .accessibility_label("Color figure search");
+                .accessibility_label(I18N.text("ui-color-figure-search"));
         })
-        .action(|| {
+        .action(move || {
             icon_button()
                 .standard()
                 .color_style(IconButtonColorStyle::Inherited)
                 .icon(filled::EVENT_SVG)
-                .accessibility_label("Color figure calendar");
+                .accessibility_label(I18N.text("ui-color-figure-calendar"));
         });
 }
 
@@ -2673,51 +2821,51 @@ fn scroll_state_column(scrolled: bool) {
         .modifier(Modifier::new().fill_max_width())
         .children(move || {
             top_app_bar()
-                .title("Product")
+                .title(I18N.text("ui-product"))
                 .title_alignment(AppBarTitleAlignment::Center)
                 .container_color(container)
-                .navigation_icon(|| {
+                .navigation_icon(move || {
                     icon_button()
                         .standard()
                         .color_style(IconButtonColorStyle::Inherited)
                         .icon(filled::MENU_SVG)
-                        .accessibility_label("Scroll state menu");
+                        .accessibility_label(I18N.text("ui-scroll-state-menu"));
                 })
-                .action(|| {
+                .action(move || {
                     icon_button()
                         .standard()
                         .color_style(IconButtonColorStyle::Inherited)
                         .icon(filled::ACCOUNT_CIRCLE_SVG)
-                        .accessibility_label("Scroll state account");
+                        .accessibility_label(I18N.text("ui-scroll-state-account"));
                 });
             gap(Dp(16.0));
             search_sample()
                 .specimen(3)
-                .placeholder("Search product")
+                .placeholder(I18N.text("ui-search-product"))
                 .scrolled(scrolled);
             gap(Dp(16.0));
             for (variant, title) in [
-                (TopAppBarVariant::Small, "Title large"),
-                (TopAppBarVariant::MediumFlexible, "Headline medium"),
-                (TopAppBarVariant::LargeFlexible, "Display small"),
+                (TopAppBarVariant::Small, "ui-title-large"),
+                (TopAppBarVariant::MediumFlexible, "ui-headline-medium-579"),
+                (TopAppBarVariant::LargeFlexible, "ui-display-small"),
             ] {
                 top_app_bar()
                     .variant(variant)
-                    .title(title)
+                    .title(I18N.text(title))
                     .container_color(container)
-                    .navigation_icon(|| {
+                    .navigation_icon(move || {
                         icon_button()
                             .standard()
                             .color_style(IconButtonColorStyle::Inherited)
                             .icon(filled::ARROW_BACK_SVG)
-                            .accessibility_label("Scroll state back");
+                            .accessibility_label(I18N.text("ui-scroll-state-back"));
                     })
-                    .action(|| {
+                    .action(move || {
                         icon_button()
                             .standard()
                             .color_style(IconButtonColorStyle::Inherited)
                             .icon(filled::SEARCH_SVG)
-                            .accessibility_label("Scroll state search");
+                            .accessibility_label(I18N.text("ui-scroll-state-search"));
                     });
                 gap(Dp(16.0));
             }
@@ -2726,14 +2874,17 @@ fn scroll_state_column(scrolled: bool) {
 
 #[tessera]
 fn measurements() {
-    subheading("Search app bar".to_owned());
+    subheading("ui-search-app-bar".to_owned());
     gap(Dp(24.0));
     search_figure(true);
     gap(Dp(48.0));
     for (variant, name) in [
-        (TopAppBarVariant::Small, "Small app bar"),
-        (TopAppBarVariant::MediumFlexible, "Medium flexible app bar"),
-        (TopAppBarVariant::LargeFlexible, "Large flexible app bar"),
+        (TopAppBarVariant::Small, "ui-small-app-bar"),
+        (
+            TopAppBarVariant::MediumFlexible,
+            "ui-medium-flexible-app-bar",
+        ),
+        (TopAppBarVariant::LargeFlexible, "ui-large-flexible-app-bar"),
     ] {
         subheading(name.to_owned());
         gap(Dp(24.0));
@@ -2741,96 +2892,101 @@ fn measurements() {
         gap(Dp(48.0));
     }
     spec_table(
-        vec!["Attribute".into(), "Value".into()],
+        vec!["ui-attribute".into(), "ui-value".into()],
         vec![
-            vec!["Small height".into(), "64dp".into()],
-            vec!["Medium flexible height".into(), "112dp".into()],
-            vec!["Medium flexible with subtitle".into(), "136dp".into()],
-            vec!["Large flexible height".into(), "120dp".into()],
-            vec!["Large flexible with subtitle".into(), "152dp".into()],
-            vec!["Navigation and action target".into(), "48dp".into()],
-            vec!["Icon size".into(), "24dp".into()],
-            vec!["Title inset without navigation".into(), "16dp".into()],
-            vec!["Search field height".into(), "56dp".into()],
-            vec!["Search field growth threshold".into(), "312dp".into()],
+            vec!["ui-small-height".into(), "64dp".into()],
+            vec!["ui-medium-flexible-height".into(), "112dp".into()],
+            vec!["ui-medium-flexible-with-subtitle".into(), "136dp".into()],
+            vec!["ui-large-flexible-height".into(), "120dp".into()],
+            vec!["ui-large-flexible-with-subtitle".into(), "152dp".into()],
+            vec!["ui-navigation-and-action-target".into(), "48dp".into()],
+            vec!["ui-icon-size".into(), "24dp".into()],
+            vec!["ui-title-inset-without-navigation".into(), "16dp".into()],
+            vec!["ui-search-field-height".into(), "56dp".into()],
+            vec!["ui-search-field-growth-threshold".into(), "312dp".into()],
         ],
     );
     gap(Dp(24.0));
-    paragraph("Flexible app bars hug their text contents, so a subtitle or a wrapping headline can make the bar taller. The small app bar stays 64dp tall with or without a subtitle. Navigation and action targets stay at 48dp.".into());
+    paragraph("ui-flexible-app-bars-hug-their-text-contents-so-a-subtitle-or-a-wrapping-headline-can-make-th".into());
 }
 
 #[tessera]
 fn baseline_app_bars() {
-    paragraph("The medium and large app bars are no longer recommended in M3 Expressive. Use the medium flexible and large flexible app bars in their place.".into());
+    paragraph("ui-the-medium-and-large-app-bars-are-no-longer-recommended-in-m3-expressive-use-the-medium-fl".into());
     gap(Dp(24.0));
-    baseline_figure("Baseline section");
+    baseline_figure("ui-baseline-section");
     gap(Dp(24.0));
-    paragraph("Medium and large app bars have the same elements:".into());
+    paragraph("ui-medium-and-large-app-bars-have-the-same-elements".into());
     gap(Dp(8.0));
     numbered(vec![
-        "Container".into(),
-        "Leading button".into(),
-        "Trailing icons".into(),
-        "Headline".into(),
+        "ui-container".into(),
+        "ui-leading-button".into(),
+        "ui-trailing-icons".into(),
+        "ui-headline".into(),
     ]);
     gap(Dp(48.0));
-    subheading("Tokens & specs".to_owned());
+    subheading("ui-tokens-specs".to_owned());
     gap(Dp(16.0));
-    paragraph("Baseline app bar token sets are organized into medium, large, and older baseline token sets.".into());
+    paragraph("ui-baseline-app-bar-token-sets-are-organized-into-medium-large-and-older-baseline-token-sets".into());
     gap(Dp(24.0));
     for (title, rows) in [
         (
-            "App bar - Size - Medium (baseline)",
+            "ui-app-bar-size-medium-baseline",
             [
-                ("App bar medium container height", "112dp"),
+                ("ui-app-bar-medium-container-height", "112dp"),
                 (
-                    "App bar medium title font",
-                    "Roboto 24pt, line height 32pt, weight 400, tracking 0pt",
+                    "ui-app-bar-medium-title-font-603",
+                    "ui-roboto-24pt-line-height-32pt-weight-400-tracking-0pt",
                 ),
-                ("App bar medium icon button size", "24dp"),
+                ("ui-app-bar-medium-icon-button-size", "24dp"),
                 (
-                    "App bar medium subtitle font",
-                    "Roboto 14pt, line height 20pt, weight 500, tracking 0.1pt",
+                    "ui-app-bar-medium-subtitle-font-606",
+                    "ui-roboto-14pt-line-height-20pt-weight-500-tracking-0-1pt",
                 ),
             ],
         ),
         (
-            "App bar - Size - Large (baseline)",
+            "ui-app-bar-size-large-baseline",
             [
-                ("App bar large container height", "152dp"),
+                ("ui-app-bar-large-container-height", "152dp"),
                 (
-                    "App bar large title font",
-                    "Roboto 28pt, line height 36pt, weight 400, tracking 0pt",
+                    "ui-app-bar-large-title-font-609",
+                    "ui-roboto-28pt-line-height-36pt-weight-400-tracking-0pt",
                 ),
-                ("App bar large icon button size", "24dp"),
+                ("ui-app-bar-large-icon-button-size", "24dp"),
                 (
-                    "App bar large subtitle font",
-                    "Roboto 16pt, line height 24pt, weight 500, tracking 0.15pt",
+                    "ui-app-bar-large-subtitle-font-611",
+                    "ui-roboto-16pt-line-height-24pt-weight-500-tracking-0-15pt",
                 ),
             ],
         ),
     ] {
-        text().content(title).style(type_style(16.0, 24.0));
+        text()
+            .content(I18N.text(title))
+            .style(type_style(16.0, 24.0));
         gap(Dp(16.0));
-        spec_table(vec!["Token".into(), "Value".into()], token_rows(&rows));
+        spec_table(
+            vec!["ui-token".into(), "ui-value".into()],
+            token_rows(&rows),
+        );
         gap(Dp(32.0));
     }
     gap(Dp(16.0));
-    subheading("Color".to_owned());
+    subheading("ui-color".to_owned());
     gap(Dp(16.0));
-    paragraph("Medium top app bar color roles used for light and dark schemes:".into());
+    paragraph("ui-medium-top-app-bar-color-roles-used-for-light-and-dark-schemes".into());
     gap(Dp(8.0));
     numbered(vec![
-        "Surface".into(),
-        "On surface".into(),
-        "On surface".into(),
-        "On surface variant".into(),
+        "ui-surface".into(),
+        "ui-on-surface".into(),
+        "ui-on-surface".into(),
+        "ui-on-surface-variant".into(),
     ]);
     gap(Dp(48.0));
-    subheading("Measurements".to_owned());
+    subheading("ui-measurements".to_owned());
     gap(Dp(16.0));
-    paragraph("Medium and large app bars share the same layout: a 64dp top row for the leading button and trailing icons, and a fixed-height headline area below it.".into());
-    for (title, large) in [("Medium app bar", false), ("Large app bar", true)] {
+    paragraph("ui-medium-and-large-app-bars-share-the-same-layout-a-64dp-top-row-for-the-leading-button-and".into());
+    for (title, large) in [("ui-medium-app-bar", false), ("ui-large-app-bar", true)] {
         gap(Dp(24.0));
         subheading(title.to_owned());
         gap(Dp(24.0));
@@ -2838,33 +2994,38 @@ fn baseline_app_bars() {
             boxed()
                 .modifier(Modifier::new().width(Dp(360.0)))
                 .children(move || {
-                    baseline_bar(large).label(format!("{title} measurement"));
+                    baseline_bar(large).label(
+                        I18N.format("ui-value-measurement", [("v0", I18N.text(&title).into())]),
+                    );
                 });
         }));
         gap(Dp(16.0));
-        caption(format!("{title} padding and size measurements"));
+        caption(I18N.format(
+            "ui-value-padding-and-size-measurements",
+            [("v0", I18N.text(&title).into())],
+        ));
     }
     gap(Dp(32.0));
     spec_table(
-        vec!["Attribute".into(), "Medium".into(), "Large".into()],
+        vec!["ui-attribute".into(), "ui-medium".into(), "ui-large".into()],
         vec![
-            vec!["Container height".into(), "112dp".into(), "152dp".into()],
-            vec!["Top padding".into(), "20dp".into(), "20dp".into()],
+            vec!["ui-container-height".into(), "112dp".into(), "152dp".into()],
+            vec!["ui-top-padding".into(), "20dp".into(), "20dp".into()],
             vec![
-                "Leading and trailing padding".into(),
+                "ui-leading-and-trailing-padding".into(),
                 "16dp".into(),
                 "16dp".into(),
             ],
-            vec!["Trailing icon size".into(), "24dp".into(), "24dp".into()],
+            vec!["ui-trailing-icon-size".into(), "24dp".into(), "24dp".into()],
             vec![
-                "Headline bottom padding".into(),
+                "ui-headline-bottom-padding".into(),
                 "24dp".into(),
                 "28dp".into(),
             ],
             vec![
-                "Headline type style".into(),
-                "Headline small".into(),
-                "Headline medium".into(),
+                "ui-headline-type-style".into(),
+                "ui-headline-small-625".into(),
+                "ui-headline-medium-579".into(),
             ],
         ],
     );
@@ -2902,9 +3063,7 @@ fn combined_app_anatomy() {
             }
         });
     gap(Dp(16.0));
-    paragraph(
-        "1  Container\n2  Leading button\n3  Trailing elements\n4  Headline\n5  Subtitle".into(),
-    );
+    paragraph("ui-1-container-2-leading-button-3-trailing-elements-4-headline-5-subtitle".into());
 }
 
 #[tessera]
@@ -2962,14 +3121,22 @@ fn search_figure(measurements: bool) {
                 )
                 .semantics(SemanticsArgs {
                     role: Some(Role::Group),
-                    label: Some(format!(
-                        "Search app bar {} figure",
-                        if measurements {
-                            "measurement"
-                        } else {
-                            "anatomy"
-                        }
-                    )),
+                    label: Some(
+                        I18N.format(
+                            "ui-search-app-bar-value-figure",
+                            [(
+                                "v0",
+                                I18N.text(
+                                    &(if measurements {
+                                        "ui-measurement-7071"
+                                    } else {
+                                        "ui-anatomy-7072"
+                                    }),
+                                )
+                                .into(),
+                            )],
+                        ),
+                    ),
                     merge_descendants: true,
                     ..Default::default()
                 }),
@@ -2985,9 +3152,9 @@ fn search_figure(measurements: bool) {
         });
     gap(Dp(16.0));
     paragraph(if measurements {
-        "Search app bar padding and size measurements".into()
+        "ui-search-app-bar-padding-and-size-measurements".into()
     } else {
-        "1  Container\n2  Leading icon button\n3  Hinted search text\n4  Trailing icon or avatar\n5  Search container".into()
+        "ui-1-container-2-leading-icon-button-3-hinted-search-text-4-trailing-icon-or-avatar-5-search".into()
     });
 }
 
@@ -3056,7 +3223,7 @@ fn search_pair_item(variant: usize, measurements: bool) {
                             .geometry(geometry)
                             .centered(true)
                             .specimen(variant)
-                            .placeholder("Search product");
+                            .placeholder(I18N.text("ui-search-product"));
                     } else {
                         search_sample()
                             .geometry(geometry)
@@ -3216,14 +3383,22 @@ fn app_figure(
                 )
                 .semantics(SemanticsArgs {
                     role: Some(Role::Group),
-                    label: Some(format!(
-                        "App bar {} figure",
-                        if measurements {
-                            "measurement"
-                        } else {
-                            "anatomy"
-                        }
-                    )),
+                    label: Some(
+                        I18N.format(
+                            "ui-app-bar-value-figure",
+                            [(
+                                "v0",
+                                I18N.text(
+                                    &(if measurements {
+                                        "ui-measurement-7071"
+                                    } else {
+                                        "ui-anatomy-7072"
+                                    }),
+                                )
+                                .into(),
+                            )],
+                        ),
+                    ),
                     merge_descendants: true,
                     ..Default::default()
                 }),
@@ -3244,16 +3419,22 @@ fn app_figure(
         });
     gap(Dp(16.0));
     paragraph(if measurements {
-        format!(
-            "{} padding and size measurements",
-            name.as_deref().unwrap_or("App bar")
+        I18N.format(
+            "ui-value-padding-and-size-measurements",
+            [(
+                "v0",
+                I18N.text(&name.as_deref().unwrap_or("ui-app-bar")).into(),
+            )],
         )
     } else {
-        "1  Container\n2  Leading button\n3  Trailing elements\n4  Headline\n5  Subtitle".into()
+        "ui-1-container-2-leading-button-3-trailing-elements-4-headline-5-subtitle".into()
     });
     if actions.get() > 0 {
         text()
-            .content(format!("App bar figure actions: {}", actions.get()))
+            .content(I18N.format(
+                "ui-app-bar-figure-actions-value",
+                [("v0", (actions.get()).into())],
+            ))
             .style(type_style(14.0, 20.0));
     }
 }
@@ -3269,15 +3450,15 @@ fn figure_bar(
     top_app_bar()
         .modifier(watch(geometry, "container"))
         .variant(variant)
-        .title(if measurements {
+        .title(I18N.text(if measurements {
             match variant {
-                TopAppBarVariant::Small => "Title Large",
-                TopAppBarVariant::MediumFlexible => "Headline Medium",
-                TopAppBarVariant::LargeFlexible => "Display Small",
+                TopAppBarVariant::Small => "ui-title-large-629",
+                TopAppBarVariant::MediumFlexible => "ui-headline-medium",
+                TopAppBarVariant::LargeFlexible => "ui-display-small-630",
             }
         } else {
-            "Headline"
-        })
+            "ui-headline"
+        }))
         .title_area_modifier(watch(geometry, "title"))
         .navigation_icon(move || {
             icon_button()
@@ -3285,7 +3466,7 @@ fn figure_bar(
                 .standard()
                 .color_style(IconButtonColorStyle::Inherited)
                 .icon(filled::ARROW_BACK_SVG)
-                .accessibility_label("Figure back")
+                .accessibility_label(I18N.text("ui-figure-back"))
                 .on_click(move || actions.set(actions.get() + 1));
         })
         .action(move || {
@@ -3294,7 +3475,7 @@ fn figure_bar(
                     .modifier(watch(geometry, "trailing"))
                     .filled()
                     .icon(filled::SEARCH_SVG)
-                    .accessibility_label("Figure search")
+                    .accessibility_label(I18N.text("ui-figure-search"))
                     .on_click(move || actions.set(actions.get() + 1));
             } else {
                 icon_button()
@@ -3302,7 +3483,7 @@ fn figure_bar(
                     .standard()
                     .color_style(IconButtonColorStyle::Inherited)
                     .icon(filled::SEARCH_SVG)
-                    .accessibility_label("Figure search")
+                    .accessibility_label(I18N.text("ui-figure-search"))
                     .on_click(move || actions.set(actions.get() + 1));
             }
             icon_button()
@@ -3310,10 +3491,10 @@ fn figure_bar(
                 .standard()
                 .color_style(IconButtonColorStyle::Inherited)
                 .icon(filled::CALENDAR_TODAY_SVG)
-                .accessibility_label("Figure calendar")
+                .accessibility_label(I18N.text("ui-figure-calendar"))
                 .on_click(move || actions.set(actions.get() + 1));
         })
-        .subtitle_optional((!measurements).then(|| "Subtitle".to_owned()));
+        .subtitle_optional((!measurements).then(|| "ui-subtitle".to_owned()));
 }
 
 #[tessera]

@@ -23,6 +23,8 @@ use tessera_ui::{
     Color, Dp, Modifier, RenderSlot, accesskit::Role, remember, tessera, use_context,
 };
 
+use crate::res::I18N;
+
 use super::{
     ACCENT, INK,
     article::{ArticlePage, SpecSection, article},
@@ -39,35 +41,35 @@ pub(super) fn navigation_bar_spec(
     route: Option<crate::pages::material_spec::article::ArticleRoute>,
 ) {
     article(
-        "Navigation bar",
-        "Navigation bars let people switch between primary destinations",
+        "ui-navigation-bar",
+        "ui-navigation-bars-let-people-switch-between-primary-destinations",
         vec![
             SpecSection {
-                title: "Variants",
+                title: "ui-variants",
                 content: RenderSlot::new(variants),
             },
             SpecSection {
-                title: "Configurations",
+                title: "ui-configurations",
                 content: RenderSlot::new(configurations),
             },
             SpecSection {
-                title: "Tokens & specs",
+                title: "ui-tokens-specs",
                 content: RenderSlot::new(tokens),
             },
             SpecSection {
-                title: "Anatomy",
+                title: "ui-anatomy",
                 content: RenderSlot::new(anatomy),
             },
             SpecSection {
-                title: "Color",
+                title: "ui-color",
                 content: RenderSlot::new(colors),
             },
             SpecSection {
-                title: "States",
+                title: "ui-states",
                 content: RenderSlot::new(states),
             },
             SpecSection {
-                title: "Measurements",
+                title: "ui-measurements",
                 content: RenderSlot::new(measurements),
             },
         ],
@@ -75,71 +77,71 @@ pub(super) fn navigation_bar_spec(
     .route_optional(route.clone())
     .pages(vec![
         ArticlePage {
-            title: "Overview",
+            title: "ui-overview",
             intro: Some(RenderSlot::new(overview)),
             sections: vec![
                 SpecSection {
-                    title: "Availability & resources",
+                    title: "ui-availability-resources",
                     content: RenderSlot::new(availability),
                 },
                 SpecSection {
-                    title: "M3 Expressive update",
+                    title: "ui-m3-expressive-update",
                     content: RenderSlot::new(expressive_update),
                 },
                 SpecSection {
-                    title: "Differences from M2",
+                    title: "ui-differences-from-m2",
                     content: RenderSlot::new(differences),
                 },
             ],
         },
         ArticlePage {
-            title: "Guidelines",
+            title: "ui-guidelines",
             intro: None,
             sections: vec![
                 SpecSection {
-                    title: "Usage",
+                    title: "ui-usage",
                     content: RenderSlot::new(usage),
                 },
                 SpecSection {
-                    title: "Anatomy",
+                    title: "ui-anatomy",
                     content: RenderSlot::new(guide_anatomy),
                 },
                 SpecSection {
-                    title: "Color",
+                    title: "ui-color",
                     content: RenderSlot::new(guide_color),
                 },
                 SpecSection {
-                    title: "Adaptive design",
+                    title: "ui-adaptive-design",
                     content: RenderSlot::new(adaptive_design),
                 },
                 SpecSection {
-                    title: "Behavior",
+                    title: "ui-behavior",
                     content: RenderSlot::new(behavior),
                 },
             ],
         },
         ArticlePage {
-            title: "Accessibility",
+            title: "ui-accessibility",
             intro: None,
             sections: vec![
                 SpecSection {
-                    title: "Use cases",
+                    title: "ui-use-cases",
                     content: RenderSlot::new(use_cases),
                 },
                 SpecSection {
-                    title: "Interaction & style",
+                    title: "ui-interaction-style",
                     content: RenderSlot::new(interaction_style),
                 },
                 SpecSection {
-                    title: "Initial focus",
+                    title: "ui-initial-focus",
                     content: RenderSlot::new(initial_focus),
                 },
                 SpecSection {
-                    title: "Keyboard navigation",
+                    title: "ui-keyboard-navigation",
                     content: RenderSlot::new(keyboard),
                 },
                 SpecSection {
-                    title: "Labeling elements",
+                    title: "ui-labeling-elements",
                     content: RenderSlot::new(labeling),
                 },
             ],
@@ -149,14 +151,16 @@ pub(super) fn navigation_bar_spec(
 
 #[tessera]
 fn prose(#[prop(into)] value: String) {
-    text().content(value).style(type_style(16.0, 24.0));
+    text()
+        .content(I18N.text(value))
+        .style(type_style(16.0, 24.0));
 }
 
 #[tessera]
 fn caption(#[prop(into)] value: String) {
     let scheme = use_context::<MaterialTheme>().unwrap().get().color_scheme;
     text()
-        .content(value)
+        .content(I18N.text(value))
         .color(scheme.on_surface_variant)
         .style(type_style(14.0, 20.0));
 }
@@ -166,7 +170,7 @@ fn bullets(items: Vec<String>) {
     column().children(move || {
         for item in items.clone() {
             text()
-                .content(format!("•  {item}"))
+                .content(format!("•  {}", I18N.text(item)))
                 .style(type_style(16.0, 24.0));
             gap(Dp(8.0));
         }
@@ -184,7 +188,7 @@ fn badge(number: usize) {
         )
         .children(move || {
             text()
-                .content(number.to_string())
+                .content((number).to_string())
                 .style(type_style(12.0, 16.0))
                 .color(Color::WHITE);
         });
@@ -198,7 +202,9 @@ fn legend(number: usize, #[prop(into)] label: String) {
         .children(move || {
             badge(number);
             spacer().modifier(Modifier::new().width(Dp(12.0)));
-            text().content(label.clone()).style(type_style(16.0, 24.0));
+            text()
+                .content(I18N.text(&(label)))
+                .style(type_style(16.0, 24.0));
         });
 }
 
@@ -219,13 +225,13 @@ fn guidance_line(#[prop(into)] mark: String, #[prop(into)] note: String, color: 
                 )
                 .children(move || {
                     text()
-                        .content(mark.clone())
+                        .content(I18N.text(&(mark)))
                         .style(type_style(14.0, 20.0))
                         .color(Color::WHITE);
                 });
             spacer().modifier(Modifier::new().width(Dp(12.0)));
             text()
-                .content(note.clone())
+                .content(I18N.text(&(note)))
                 .color(scheme.on_surface_variant)
                 .style(type_style(14.0, 20.0));
         });
@@ -252,7 +258,10 @@ fn bar_demo(
     column()
         .modifier(Modifier::new().fill_max_width().semantics(SemanticsArgs {
             role: Some(Role::Group),
-            label: Some(format!("{label} navigation bar example")),
+            label: Some(I18N.format(
+                "ui-value-navigation-bar-example",
+                [("v0", I18N.text(&label).into())],
+            )),
             merge_descendants: true,
             ..Default::default()
         }))
@@ -261,7 +270,7 @@ fn bar_demo(
                 for (index, name) in NAMES.into_iter().take(count).enumerate() {
                     navigation_bar_item()
                         .icon_position(icon_position)
-                        .label(name)
+                        .label(I18N.text(name))
                         .label_behavior(label_behavior)
                         .selected(selected.get() == index)
                         .on_click(move || selected.set(index))
@@ -282,7 +291,7 @@ fn bar_demo(
                                             )
                                             .modifier(Modifier::new())
                                             .content(move || {
-                                                text().content(badge_text.clone());
+                                                text().content(I18N.text(&(badge_text)));
                                             });
                                     })
                                     .content(move || {
@@ -296,9 +305,12 @@ fn bar_demo(
             });
             gap(Dp(16.0));
             text()
-                .content(format!(
-                    "{caption_text} destination: {}",
-                    NAMES[selected.get()]
+                .content(I18N.format(
+                    "ui-selected-destination",
+                    [
+                        ("caption", I18N.text(&caption_text).into()),
+                        ("destination", I18N.text(NAMES[selected.get()]).into()),
+                    ],
                 ))
                 .style(type_style(14.0, 20.0));
         });
@@ -307,103 +319,119 @@ fn bar_demo(
 #[tessera]
 fn overview() {
     prose(
-        "Navigation bars let people switch between primary destinations in an app. They appear at the bottom of the screen and stay visible across the top-level views.",
+        "ui-navigation-bars-let-people-switch-between-primary-destinations-in-an-app-they-appear-at-th",
     );
     gap(Dp(16.0));
     bullets(vec![
-        "Use for three to five primary destinations".into(),
-        "Keep the bar visible across top-level views".into(),
-        "Show the active destination with an indicator and a selected icon".into(),
+        "ui-use-for-three-to-five-primary-destinations".into(),
+        "ui-keep-the-bar-visible-across-top-level-views".into(),
+        "ui-show-the-active-destination-with-an-indicator-and-a-selected-icon".into(),
     ]);
     gap(Dp(32.0));
     panel(RenderSlot::new(|| {
-        bar_demo("Overview", 4, NavigationBarLabelBehavior::AlwaysShow, 0);
+        bar_demo("ui-overview", 4, NavigationBarLabelBehavior::AlwaysShow, 0);
     }));
     gap(Dp(16.0));
-    caption("A navigation bar shows the app's primary destinations and highlights the active one");
+    caption(
+        "ui-a-navigation-bar-shows-the-app-s-primary-destinations-and-highlights-the-active-one",
+    );
 }
 
 #[tessera]
 fn availability() {
     spec_table(
-        vec!["Type".into(), "Resource".into(), "Status".into()],
+        vec!["ui-type".into(), "ui-resource".into(), "ui-status".into()],
         vec![
             vec![
-                "Design".into(),
-                "Design Kit (Figma)".into(),
-                "Available".into(),
+                "ui-design".into(),
+                "ui-design-kit-figma".into(),
+                "ui-available".into(),
             ],
             vec![
-                "Implementation".into(),
-                "Jetpack Compose".into(),
-                "Available".into(),
+                "ui-implementation".into(),
+                "ui-jetpack-compose".into(),
+                "ui-available".into(),
             ],
             vec![
-                "Implementation".into(),
-                "Android Views (MDC-Android)".into(),
-                "Available".into(),
+                "ui-implementation".into(),
+                "ui-android-views-mdc-android".into(),
+                "ui-available".into(),
             ],
-            vec!["Implementation".into(), "Web".into(), "Available".into()],
+            vec![
+                "ui-implementation".into(),
+                "ui-web".into(),
+                "ui-available".into(),
+            ],
         ],
     );
     gap(Dp(24.0));
     prose(
-        "Tessera examples on this page use the native navigation_bar and navigation_bar_item components with three to five destinations, label behavior and badges.",
+        "ui-tessera-examples-on-this-page-use-the-native-navigation-bar-and-navigation-bar-item-c",
     );
 }
 
 #[tessera]
 fn expressive_update() {
     prose(
-        "The M3 navigation bar keeps the same structure as the baseline: a container with an active indicator behind the selected destination's icon, paired with a label.",
+        "ui-the-m3-navigation-bar-keeps-the-same-structure-as-the-baseline-a-container-with-an-active",
     );
     gap(Dp(16.0));
     bullets(vec![
-        "Active indicator 56 × 32dp in the native component (M3 reference: 64 × 32dp, 16dp radius)"
+        "ui-active-indicator-56-32dp-in-the-native-component-m3-reference-64-32dp-16dp-radius"
             .into(),
-        "Selected icon switches from outlined to filled".into(),
-        "Labels can always show, or appear only for the selected destination".into(),
-        "Badges can mark a destination with unread activity".into(),
+        "ui-selected-icon-switches-from-outlined-to-filled".into(),
+        "ui-labels-can-always-show-or-appear-only-for-the-selected-destination".into(),
+        "ui-badges-can-mark-a-destination-with-unread-activity".into(),
     ]);
     gap(Dp(24.0));
     panel(RenderSlot::new(|| {
-        bar_demo("Expressive", 5, NavigationBarLabelBehavior::SelectedOnly, 3);
+        bar_demo(
+            "ui-expressive",
+            5,
+            NavigationBarLabelBehavior::SelectedOnly,
+            3,
+        );
     }));
     gap(Dp(16.0));
-    caption("Five destinations with selected-only labels and a badge on Inbox");
+    caption("ui-five-destinations-with-selected-only-labels-and-a-badge-on-inbox");
 }
 
 #[tessera]
 fn differences() {
     bullets(vec![
-        "M2: bottom navigation with shifting or fixed items and text-only states".into(),
-        "M3: a persistent container, a pill-shaped active indicator behind the icon, and filled selected icons".into(),
-        "M3 labels can stay visible or appear only on the selected destination".into(),
+        "ui-m2-bottom-navigation-with-shifting-or-fixed-items-and-text-only-states".into(),
+        "ui-m3-a-persistent-container-a-pill-shaped-active-indicator-behind-the-icon-and-filled-select".into(),
+        "ui-m3-labels-can-stay-visible-or-appear-only-on-the-selected-destination".into(),
     ]);
     gap(Dp(24.0));
     panel(RenderSlot::new(|| {
-        bar_demo("Differences", 3, NavigationBarLabelBehavior::AlwaysShow, 0);
+        bar_demo(
+            "ui-differences",
+            3,
+            NavigationBarLabelBehavior::AlwaysShow,
+            0,
+        );
     }));
     gap(Dp(16.0));
     caption(
-        "M3 navigation bars highlight the active destination with an indicator and a filled icon",
+        "ui-m3-navigation-bars-highlight-the-active-destination-with-an-indicator-and-a-filled-icon",
     );
 }
 
 #[tessera]
 fn variants() {
     panel(RenderSlot::new(|| {
-        bar_demo("Variant", 4, NavigationBarLabelBehavior::AlwaysShow, 0);
+        bar_demo("ui-variant", 4, NavigationBarLabelBehavior::AlwaysShow, 0);
     }));
     gap(Dp(16.0));
-    caption("There is one navigation bar variant, holding three to five destinations");
+    caption("ui-there-is-one-navigation-bar-variant-holding-three-to-five-destinations");
     gap(Dp(32.0));
     spec_table(
-        vec!["Variant".into(), "M3".into(), "M3 Expressive".into()],
+        vec!["ui-variant".into(), "M3".into(), "ui-m3-expressive".into()],
         vec![vec![
-            "Navigation bar".into(),
-            "Available".into(),
-            "Available".into(),
+            "ui-navigation-bar".into(),
+            "ui-available".into(),
+            "ui-available".into(),
         ]],
     );
 }
@@ -420,42 +448,44 @@ fn configurations() {
             .children(move || {
                 button()
                     .tonal()
-                    .accessibility_label("Cycle destination count")
+                    .accessibility_label(I18N.text("ui-cycle-destination-count"))
                     .on_click(move || {
                         count.set(if count.get() == 5 { 3 } else { count.get() + 1 });
                     })
                     .child(move || {
-                        text().content(format!("Destinations: {}", count.get()));
+                        text().content(
+                            I18N.format("ui-destinations-value", [("v0", (count.get()).into())]),
+                        );
                     });
                 button()
                     .tonal()
                     .selected(selected_only.get())
-                    .accessibility_label("Toggle selected-only labels")
+                    .accessibility_label(I18N.text("ui-toggle-selected-only-labels"))
                     .on_click(move || selected_only.set(!selected_only.get()))
                     .child(move || {
-                        text().content(if selected_only.get() {
-                            "Labels: selected only"
+                        text().content(I18N.text(if selected_only.get() {
+                            "ui-labels-selected-only"
                         } else {
-                            "Labels: always"
-                        });
+                            "ui-labels-always"
+                        }));
                     });
                 button()
                     .tonal()
                     .selected(badges.get())
-                    .accessibility_label("Toggle Inbox badge")
+                    .accessibility_label(I18N.text("ui-toggle-inbox-badge"))
                     .on_click(move || badges.set(!badges.get()))
                     .child(move || {
-                        text().content(if badges.get() {
-                            "Badge: 3"
+                        text().content(I18N.text(if badges.get() {
+                            "ui-badge-3"
                         } else {
-                            "Badge: off"
-                        });
+                            "ui-badge-off"
+                        }));
                     });
             });
         gap(Dp(24.0));
         panel(RenderSlot::new(move || {
             bar_demo(
-                "Configured",
+                "ui-configured",
                 count.get(),
                 if selected_only.get() {
                     NavigationBarLabelBehavior::SelectedOnly
@@ -471,57 +501,57 @@ fn configurations() {
 #[tessera]
 fn tokens() {
     spec_table(
-        vec!["Element".into(), "Token".into(), "Value".into()],
+        vec!["ui-element".into(), "ui-token".into(), "ui-value".into()],
         vec![
             vec![
-                "Container".into(),
+                "ui-container".into(),
                 "md.comp.navigation-bar.container.color".into(),
-                "Surface container".into(),
+                "ui-surface-container".into(),
             ],
             vec![
-                "Container".into(),
+                "ui-container".into(),
                 "md.comp.navigation-bar.container.height".into(),
-                "64dp native · 80dp M3 reference".into(),
+                "ui-64dp-native-80dp-m3-reference".into(),
             ],
             vec![
-                "Active indicator".into(),
+                "ui-active-indicator".into(),
                 "md.comp.navigation-bar.active-indicator.color".into(),
-                "Secondary container".into(),
+                "ui-secondary-container".into(),
             ],
             vec![
-                "Active indicator".into(),
+                "ui-active-indicator".into(),
                 "md.comp.navigation-bar.active-indicator.shape".into(),
-                "56 × 32dp · full round".into(),
+                "ui-56-32dp-full-round".into(),
             ],
             vec![
-                "Active icon".into(),
+                "ui-active-icon".into(),
                 "md.comp.navigation-bar.active-icon.color".into(),
-                "On secondary container".into(),
+                "ui-on-secondary-container".into(),
             ],
             vec![
-                "Active label".into(),
+                "ui-active-label".into(),
                 "md.comp.navigation-bar.active-label-text.color".into(),
-                "Secondary".into(),
+                "ui-secondary".into(),
             ],
             vec![
-                "Inactive icon and label".into(),
+                "ui-inactive-icon-and-label".into(),
                 "md.comp.navigation-bar.inactive-icon.color".into(),
-                "On surface variant".into(),
+                "ui-on-surface-variant".into(),
             ],
             vec![
-                "Icon size".into(),
+                "ui-icon-size".into(),
                 "md.comp.navigation-bar.icon.size".into(),
                 "24dp".into(),
             ],
             vec![
-                "Label".into(),
+                "ui-label".into(),
                 "md.comp.navigation-bar.label-text".into(),
-                "Label medium".into(),
+                "ui-label-medium".into(),
             ],
             vec![
-                "State layer".into(),
+                "ui-state-layer".into(),
                 "md.comp.navigation-bar.state-layer".into(),
-                "Hover 8% · Focus 10% · Press 10%".into(),
+                "ui-hover-8-focus-10-press-10".into(),
             ],
         ],
     );
@@ -530,49 +560,54 @@ fn tokens() {
 #[tessera]
 fn anatomy() {
     panel(RenderSlot::new(|| {
-        bar_demo("Anatomy", 4, NavigationBarLabelBehavior::AlwaysShow, 0);
+        bar_demo("ui-anatomy", 4, NavigationBarLabelBehavior::AlwaysShow, 0);
     }));
     gap(Dp(24.0));
     column().children(|| {
-        legend(1, "Container");
-        legend(2, "Active indicator");
-        legend(3, "Icon");
-        legend(4, "Active label");
-        legend(5, "Inactive icon");
-        legend(6, "Inactive label");
+        legend(1, "ui-container");
+        legend(2, "ui-active-indicator");
+        legend(3, "ui-icon");
+        legend(4, "ui-active-label");
+        legend(5, "ui-inactive-icon");
+        legend(6, "ui-inactive-label");
     });
     gap(Dp(16.0));
-    caption("The active indicator sits behind the selected icon; labels describe each destination");
+    caption(
+        "ui-the-active-indicator-sits-behind-the-selected-icon-labels-describe-each-destination",
+    );
 }
 
 #[tessera]
 fn colors() {
     prose(
-        "Navigation bar colors come from the surface container role, the secondary container indicator and the on surface variant inactive content.",
+        "ui-navigation-bar-colors-come-from-the-surface-container-role-the-secondary-container-indicat",
     );
     gap(Dp(24.0));
     panel(RenderSlot::new(|| {
-        bar_demo("Light", 4, NavigationBarLabelBehavior::AlwaysShow, 0);
+        bar_demo("ui-light", 4, NavigationBarLabelBehavior::AlwaysShow, 0);
     }));
     gap(Dp(24.0));
     material_theme()
         .theme(|| MaterialTheme::from_seed(ACCENT, true))
         .child(|| {
             panel(RenderSlot::new(|| {
-                bar_demo("Dark", 4, NavigationBarLabelBehavior::AlwaysShow, 0);
+                bar_demo("ui-dark", 4, NavigationBarLabelBehavior::AlwaysShow, 0);
             }));
         });
     gap(Dp(24.0));
     spec_table(
-        vec!["Element".into(), "Color role".into()],
+        vec!["ui-element".into(), "ui-color-role".into()],
         vec![
-            vec!["Container".into(), "Surface container".into()],
-            vec!["Active indicator".into(), "Secondary container".into()],
-            vec!["Active icon".into(), "On secondary container".into()],
-            vec!["Active label".into(), "Secondary".into()],
+            vec!["ui-container".into(), "ui-surface-container".into()],
             vec![
-                "Inactive icon and label".into(),
-                "On surface variant".into(),
+                "ui-active-indicator".into(),
+                "ui-secondary-container".into(),
+            ],
+            vec!["ui-active-icon".into(), "ui-on-secondary-container".into()],
+            vec!["ui-active-label".into(), "ui-secondary".into()],
+            vec![
+                "ui-inactive-icon-and-label".into(),
+                "ui-on-surface-variant".into(),
             ],
         ],
     );
@@ -581,248 +616,265 @@ fn colors() {
 #[tessera]
 fn states() {
     prose(
-        "Destinations show an active or inactive state; the selected destination gains the indicator, a filled icon and its active colors. Hover, focus and press add the standard state layers.",
+        "ui-destinations-show-an-active-or-inactive-state-the-selected-destination-gains-the-indicator",
     );
     gap(Dp(24.0));
     panel(RenderSlot::new(|| {
-        bar_demo("States", 4, NavigationBarLabelBehavior::AlwaysShow, 0);
+        bar_demo("ui-states", 4, NavigationBarLabelBehavior::AlwaysShow, 0);
     }));
     gap(Dp(16.0));
-    caption("Active and inactive destinations; hover, focus and press add state layers");
+    caption("ui-active-and-inactive-destinations-hover-focus-and-press-add-state-layers");
     gap(Dp(24.0));
     prose(
-        "The native component does not expose a per-destination disabled state; hide a destination or use a disabled host when a destination must be unavailable.",
+        "ui-the-native-component-does-not-expose-a-per-destination-disabled-state-hide-a-destination-o",
     );
 }
 
 #[tessera]
 fn measurements() {
     spec_table(
-        vec!["Element".into(), "Attribute".into(), "Value".into()],
+        vec![
+            "ui-element".into(),
+            "ui-attribute".into(),
+            "ui-value".into(),
+        ],
         vec![
             vec![
-                "Bar container".into(),
-                "Height".into(),
-                "64dp native · 80dp M3 reference".into(),
+                "ui-bar-container".into(),
+                "ui-height".into(),
+                "ui-64dp-native-80dp-m3-reference".into(),
             ],
             vec![
-                "Active indicator".into(),
-                "Size".into(),
-                "56 × 32dp native · 64 × 32dp reference".into(),
+                "ui-active-indicator".into(),
+                "ui-size".into(),
+                "ui-56-32dp-native-64-32dp-reference".into(),
             ],
             vec![
-                "Active indicator".into(),
-                "Corner radius".into(),
-                "16dp (full round)".into(),
+                "ui-active-indicator".into(),
+                "ui-corner-radius".into(),
+                "ui-16dp-full-round".into(),
             ],
-            vec!["Icon".into(), "Size".into(), "24dp".into()],
-            vec!["Label".into(), "Typography".into(), "Label medium".into()],
+            vec!["ui-icon".into(), "ui-size".into(), "24dp".into()],
             vec![
-                "Destination".into(),
-                "Minimum target".into(),
+                "ui-label".into(),
+                "ui-typography".into(),
+                "ui-label-medium".into(),
+            ],
+            vec![
+                "ui-destination".into(),
+                "ui-minimum-target".into(),
                 "48 × 48dp".into(),
             ],
-            vec!["Indicator to label".into(), "Gap".into(), "4dp".into()],
             vec![
-                "Destinations".into(),
-                "Recommended count".into(),
+                "ui-indicator-to-label".into(),
+                "ui-gap".into(),
+                "4dp".into(),
+            ],
+            vec![
+                "ui-destinations".into(),
+                "ui-recommended-count".into(),
                 "3–5".into(),
             ],
         ],
     );
     gap(Dp(24.0));
     panel(RenderSlot::new(|| {
-        bar_demo("Measurements", 4, NavigationBarLabelBehavior::AlwaysShow, 0);
+        bar_demo(
+            "ui-measurements",
+            4,
+            NavigationBarLabelBehavior::AlwaysShow,
+            0,
+        );
     }));
     gap(Dp(16.0));
     caption(
-        "Native values are shown first; the M3 reference values are noted where the component differs",
+        "ui-native-values-are-shown-first-the-m3-reference-values-are-noted-where-the-component-differ",
     );
 }
 
 #[tessera]
 fn usage() {
     prose(
-        "Use a navigation bar for three to five primary destinations that are equal in importance. People can switch between top-level views without losing their place.",
+        "ui-use-a-navigation-bar-for-three-to-five-primary-destinations-that-are-equal-in-importance-p",
     );
     gap(Dp(24.0));
     do_dont(
-        "Use three to five primary destinations",
-        "Don’t use a navigation bar for secondary navigation or for actions",
+        "ui-use-three-to-five-primary-destinations",
+        "ui-don-t-use-a-navigation-bar-for-secondary-navigation-or-for-actions",
     );
     gap(Dp(24.0));
     prose(
-        "Keep the bar visible across the app's top-level views, and keep each destination's label stable so the bar stays predictable.",
+        "ui-keep-the-bar-visible-across-the-app-s-top-level-views-and-keep-each-destination-s-label-st",
     );
     gap(Dp(16.0));
     do_dont(
-        "Keep destinations equal and stable",
-        "Don’t hide or reorder destinations between screens",
+        "ui-keep-destinations-equal-and-stable",
+        "ui-don-t-hide-or-reorder-destinations-between-screens",
     );
 }
 
 #[tessera]
 fn guide_anatomy() {
-    prose("A navigation bar contains an active indicator, icons and labels for each destination.");
+    prose("ui-a-navigation-bar-contains-an-active-indicator-icons-and-labels-for-each-destination");
     gap(Dp(24.0));
     panel(RenderSlot::new(|| {
-        bar_demo("Anatomy", 4, NavigationBarLabelBehavior::AlwaysShow, 0);
+        bar_demo("ui-anatomy", 4, NavigationBarLabelBehavior::AlwaysShow, 0);
     }));
     gap(Dp(24.0));
     column().children(|| {
-        legend(1, "Container");
-        legend(2, "Active indicator");
-        legend(3, "Icon");
-        legend(4, "Active label");
-        legend(5, "Inactive icon");
-        legend(6, "Inactive label");
+        legend(1, "ui-container");
+        legend(2, "ui-active-indicator");
+        legend(3, "ui-icon");
+        legend(4, "ui-active-label");
+        legend(5, "ui-inactive-icon");
+        legend(6, "ui-inactive-label");
     });
     gap(Dp(16.0));
     caption(
-        "The indicator highlights the active destination while other destinations stay inactive",
+        "ui-the-indicator-highlights-the-active-destination-while-other-destinations-stay-inactive",
     );
 }
 
 #[tessera]
 fn guide_color() {
     prose(
-        "Use the surface container color for the bar so it separates from the page, and rely on the secondary container indicator plus the filled icon to communicate selection.",
+        "ui-use-the-surface-container-color-for-the-bar-so-it-separates-from-the-page-and-rely-on-the",
     );
     gap(Dp(24.0));
     panel(RenderSlot::new(|| {
-        bar_demo("Primary", 4, NavigationBarLabelBehavior::AlwaysShow, 0);
+        bar_demo("ui-primary", 4, NavigationBarLabelBehavior::AlwaysShow, 0);
     }));
     gap(Dp(16.0));
     caption(
-        "The active destination uses the secondary container indicator and on secondary container icon",
+        "ui-the-active-destination-uses-the-secondary-container-indicator-and-on-secondary-container-i",
     );
 }
 
 #[tessera]
 fn adaptive_design() {
     prose(
-        "On wider windows the icon can move beside the label. The native component switches automatically at 600dp, and the icon position can also be set explicitly.",
+        "ui-on-wider-windows-the-icon-can-move-beside-the-label-the-native-component-switches-automati",
     );
     gap(Dp(24.0));
     panel(RenderSlot::new(|| {
-        bar_demo("Adaptive", 4, NavigationBarLabelBehavior::AlwaysShow, 0);
+        bar_demo("ui-adaptive", 4, NavigationBarLabelBehavior::AlwaysShow, 0);
     }));
     gap(Dp(16.0));
-    caption("Above 600dp the icon moves before the label and destinations center in the bar");
+    caption("ui-above-600dp-the-icon-moves-before-the-label-and-destinations-center-in-the-bar");
     gap(Dp(24.0));
     prose(
-        "For compact widths keep the icon above the label and let the bar span the window. Avoid increasing the destination count when the bar becomes wider.",
+        "ui-for-compact-widths-keep-the-icon-above-the-label-and-let-the-bar-span-the-window-avoid-inc",
     );
 }
 
 #[tessera]
 fn behavior() {
     prose(
-        "Selecting a destination animates the active indicator to that destination, swaps its icon for the filled variant and updates the label color. The new view replaces the current top-level view.",
+        "ui-selecting-a-destination-animates-the-active-indicator-to-that-destination-swaps-its-icon-f",
     );
     gap(Dp(16.0));
     prose(
-        "Keep the bar's selected destination in sync with the visible view. When a destination opens its own stack, restore the previous selection when people return.",
+        "ui-keep-the-bar-s-selected-destination-in-sync-with-the-visible-view-when-a-destination-opens",
     );
     gap(Dp(24.0));
     panel(RenderSlot::new(|| {
-        bar_demo("Behavior", 4, NavigationBarLabelBehavior::AlwaysShow, 0);
+        bar_demo("ui-behavior", 4, NavigationBarLabelBehavior::AlwaysShow, 0);
     }));
     gap(Dp(16.0));
-    caption("Tap a destination to move the indicator and swap the icon to its filled variant");
+    caption("ui-tap-a-destination-to-move-the-indicator-and-swap-the-icon-to-its-filled-variant");
 }
 
 #[tessera]
 fn use_cases() {
-    prose("People should be able to do the following using assistive technology:");
+    prose("ui-people-should-be-able-to-do-the-following-using-assistive-technology");
     gap(Dp(16.0));
     bullets(vec![
-        "Navigate to and activate a destination".into(),
-        "Identify the currently selected destination".into(),
-        "Understand how many destinations the bar contains".into(),
+        "ui-navigate-to-and-activate-a-destination".into(),
+        "ui-identify-the-currently-selected-destination".into(),
+        "ui-understand-how-many-destinations-the-bar-contains".into(),
     ]);
 }
 
 #[tessera]
 fn interaction_style() {
     prose(
-        "Each destination keeps a minimum 48 × 48dp target across the full height of the bar. The active indicator is decorative and does not change the target size.",
+        "ui-each-destination-keeps-a-minimum-48-48dp-target-across-the-full-height-of-the-bar-the-acti",
     );
     gap(Dp(16.0));
-    caption("Every destination keeps a 48dp target even when the label is hidden");
+    caption("ui-every-destination-keeps-a-48dp-target-even-when-the-label-is-hidden");
     gap(Dp(24.0));
     panel(RenderSlot::new(|| {
-        bar_demo("Targets", 4, NavigationBarLabelBehavior::SelectedOnly, 0);
+        bar_demo("ui-targets", 4, NavigationBarLabelBehavior::SelectedOnly, 0);
     }));
 }
 
 #[tessera]
 fn initial_focus() {
     prose(
-        "When the bar receives focus, focus lands on the selected destination, or on the first destination when none is selected.",
+        "ui-when-the-bar-receives-focus-focus-lands-on-the-selected-destination-or-on-the-first-destin",
     );
     gap(Dp(16.0));
     prose(
-        "Moving focus between destinations does not change the selected view until a destination is activated.",
+        "ui-moving-focus-between-destinations-does-not-change-the-selected-view-until-a-destination-is",
     );
 }
 
 #[tessera]
 fn keyboard() {
     spec_table(
-        vec!["Keys".into(), "Actions".into()],
+        vec!["ui-keys".into(), "ui-actions".into()],
         vec![
-            vec!["Tab".into(), "Move focus between destinations".into()],
+            vec!["ui-tab".into(), "ui-move-focus-between-destinations".into()],
             vec![
-                "Shift + Tab".into(),
-                "Move focus to the previous destination".into(),
+                "ui-shift-tab".into(),
+                "ui-move-focus-to-the-previous-destination".into(),
             ],
             vec![
-                "Space or Enter".into(),
-                "Activate the focused destination".into(),
+                "ui-space-or-enter".into(),
+                "ui-activate-the-focused-destination".into(),
             ],
         ],
     );
     gap(Dp(24.0));
     prose(
-        "Traversal wraps inside the bar and stays horizontal, so Tab leaves the bar from either end rather than skipping destinations.",
+        "ui-traversal-wraps-inside-the-bar-and-stays-horizontal-so-tab-leaves-the-bar-from-either-end",
     );
 }
 
 #[tessera]
 fn labeling() {
     prose(
-        "Give every destination a short, visible label. The accessible name matches the label, and the selected destination is exposed as selected together with its position in the set.",
+        "ui-give-every-destination-a-short-visible-label-the-accessible-name-matches-the-label-and-the",
     );
     gap(Dp(24.0));
     spec_table(
         vec![
-            "Element".into(),
-            "Label".into(),
-            "Role".into(),
-            "State".into(),
+            "ui-element".into(),
+            "ui-label".into(),
+            "ui-role".into(),
+            "ui-state".into(),
         ],
         vec![
             vec![
-                "Destination".into(),
-                "Match the visible label".into(),
-                "Tab".into(),
-                "Selected or not selected".into(),
+                "ui-destination".into(),
+                "ui-match-the-visible-label".into(),
+                "ui-tab".into(),
+                "ui-selected-or-not-selected".into(),
             ],
             vec![
-                "Position".into(),
+                "ui-position".into(),
                 "\u{201c}Home, tab, 1 of 4\u{201d}".into(),
-                "Tab".into(),
-                "Selected".into(),
+                "ui-tab".into(),
+                "ui-selected".into(),
             ],
             vec![
-                "Badge".into(),
-                "Append the unread count".into(),
-                "Tab".into(),
-                "3 unread".into(),
+                "ui-badge".into(),
+                "ui-append-the-unread-count".into(),
+                "ui-tab".into(),
+                "ui-3-unread".into(),
             ],
         ],
     );
     gap(Dp(24.0));
-    caption("Announce each destination with its label, role and position in the bar");
+    caption("ui-announce-each-destination-with-its-label-role-and-position-in-the-bar");
 }

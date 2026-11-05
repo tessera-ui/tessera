@@ -324,6 +324,7 @@ fn plugin_instance_registry() -> Arc<RwLock<HashMap<TypeId, Arc<dyn Any + Send +
 
 /// Reads a plugin when it is available in the active session.
 pub fn try_with_plugin<T: Plugin, R>(read: impl FnOnce(&T) -> R) -> Option<R> {
+    let _session = crate::RuntimeSession::current()?;
     let registry = plugin_instance_registry();
     let plugin = registry.read().get(&TypeId::of::<T>()).cloned()?;
     let plugin = Arc::downcast::<RwLock<T>>(plugin).ok()?;
@@ -332,6 +333,7 @@ pub fn try_with_plugin<T: Plugin, R>(read: impl FnOnce(&T) -> R) -> Option<R> {
 
 /// Updates a plugin when it is available in the active session.
 pub fn try_with_plugin_mut<T: Plugin, R>(update: impl FnOnce(&mut T) -> R) -> Option<R> {
+    let _session = crate::RuntimeSession::current()?;
     let registry = plugin_instance_registry();
     let plugin = registry.read().get(&TypeId::of::<T>()).cloned()?;
     let plugin = Arc::downcast::<RwLock<T>>(plugin).ok()?;

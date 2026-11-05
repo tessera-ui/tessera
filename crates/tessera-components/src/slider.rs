@@ -19,6 +19,7 @@ use crate::{
     image_vector::TintMode,
     modifier::{InteractionState, InteractionVisualState},
     painter::Painter,
+    res::I18N,
     theme::{MaterialAlpha, MaterialColorScheme, MaterialTheme},
 };
 
@@ -82,7 +83,7 @@ struct RangeThumbAccessibility {
     key: &'static str,
     label: Option<String>,
     description: Option<String>,
-    fallback_description: &'static str,
+    fallback_description: String,
     steps: usize,
     disabled: bool,
     value: f32,
@@ -112,10 +113,13 @@ fn range_thumb_label(args: &RangeSliderConfig, start: bool) -> String {
     if let Some(label) = override_label {
         return label.clone();
     }
-    let edge = if start { "start" } else { "end" };
+    let edge = I18N.text(if start { "md3-start" } else { "md3-end" });
     match &args.accessibility_label {
-        Some(label) => format!("{label} {edge}"),
-        None => format!("Range {edge}"),
+        Some(label) => I18N.format(
+            "md3-range-labeled-thumb",
+            [("label", label.as_str().into()), ("edge", edge.into())],
+        ),
+        None => I18N.format("md3-range-thumb", [("edge", edge.into())]),
     }
 }
 
@@ -2495,7 +2499,7 @@ fn range_slider_content(
                     axis: args.axis,
                     label: Some(range_thumb_label(&args, true)),
                     description: args.accessibility_description.clone(),
-                    fallback_description: "range start",
+                    fallback_description: I18N.text("md3-range-start"),
                     steps: args.steps,
                     disabled: args.disabled,
                     value: start,
@@ -2534,7 +2538,7 @@ fn range_slider_content(
                     axis: args.axis,
                     label: Some(range_thumb_label(&args, false)),
                     description: args.accessibility_description.clone(),
-                    fallback_description: "range end",
+                    fallback_description: I18N.text("md3-range-end"),
                     steps: args.steps,
                     disabled: args.disabled,
                     value: end,

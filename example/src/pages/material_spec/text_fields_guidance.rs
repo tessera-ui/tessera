@@ -19,6 +19,8 @@ use tessera_components::{
 };
 use tessera_ui::{Color, Dp, Modifier, RenderSlot, tessera, use_context};
 
+use crate::res::I18N;
+
 use super::{gap, panel, type_style};
 
 const DO_COLOR: Color = Color::from_rgb(0.121, 0.478, 0.196);
@@ -31,7 +33,7 @@ fn verdict(tone: u8, #[prop(into)] note: String) {
     let (mark, color) = match tone {
         0 => ("Do", DO_COLOR),
         1 => ("Don't", DONT_COLOR),
-        _ => ("Caution", CAUTION_COLOR),
+        _ => ("ui-caution", CAUTION_COLOR),
     };
     column()
         .modifier(Modifier::new().fill_max_width())
@@ -47,13 +49,13 @@ fn verdict(tone: u8, #[prop(into)] note: String) {
                 .cross_axis_alignment(CrossAxisAlignment::Center)
                 .children(move || {
                     text()
-                        .content(mark)
+                        .content(I18N.text(mark))
                         .style(type_style(14.0, 20.0))
                         .color(color);
                 });
             gap(Dp(4.0));
             text()
-                .content(note.clone())
+                .content(I18N.text(&(note)))
                 .color(scheme.on_surface_variant)
                 .style(type_style(14.0, 20.0));
         });
@@ -105,8 +107,8 @@ fn field(
     } else {
         text_field().filled()
     };
-    base.label(label.clone())
-        .accessibility_label(label.clone())
+    base.label(I18N.text(&(label)))
+        .accessibility_label(I18N.text(&(label)))
         .min_width(Dp::ZERO)
         .is_error(error.unwrap_or(false))
         .modifier(Modifier::new().fill_max_width());
@@ -125,7 +127,7 @@ fn field(
 fn support(#[prop(into)] value: String, error: bool) {
     let scheme = use_context::<MaterialTheme>().unwrap().get().color_scheme;
     text()
-        .content(value)
+        .content(I18N.text(value))
         .color(if error {
             scheme.error
         } else {
@@ -140,11 +142,14 @@ fn form(outlined: bool, mixed: bool) {
     column()
         .modifier(Modifier::new().fill_max_width())
         .children(move || {
-            field("First name", outlined).value("Odette".to_owned());
+            field("ui-first-name-5955", outlined).value("ui-odette".to_owned());
             gap(Dp(16.0));
-            field("Last name", if mixed { !outlined } else { outlined });
+            field(
+                "ui-last-name-5957",
+                if mixed { !outlined } else { outlined },
+            );
             gap(Dp(16.0));
-            field("Email", outlined);
+            field("ui-email", outlined);
         });
 }
 
@@ -155,18 +160,18 @@ pub(super) fn variant_regions() {
         RenderSlot::new(|| {
             example(
                 0,
-                "When using both variants of text fields in a UI, separate them by region",
+                "ui-when-using-both-variants-of-text-fields-in-a-ui-separate-them-by-region",
                 RenderSlot::new(|| {
                     form(false, false);
                     gap(Dp(24.0));
-                    field("Promo code", true).value("SPRING".to_owned());
+                    field("ui-promo-code", true).value("SPRING".to_owned());
                 }),
             );
         }),
         RenderSlot::new(|| {
             example(
                 1,
-                "When using both variants of text fields, don't use both next to each other or within the same form",
+                "ui-when-using-both-variants-of-text-fields-don-t-use-both-next-to-each-other-or-within-the-sa",
                 RenderSlot::new(|| {
                     form(false, true);
                 }),
@@ -183,26 +188,26 @@ pub(super) fn label_misuse() {
         RenderSlot::new(|| {
             example(
                 1,
-                "Don't truncate label text. Keep it short, clear, and fully visible.",
+                "ui-don-t-truncate-label-text-keep-it-short-clear-and-fully-visible",
                 RenderSlot::new(|| {
                     boxed()
                         .modifier(Modifier::new().width(Dp(200.0)))
                         .children(|| {
-                            field("Enter the name printed on your card…", true);
+                            field("ui-enter-the-name-printed-on-your-card", true);
                         });
                 }),
             );
         }),
-        RenderSlot::new(|| {
+        RenderSlot::new(move || {
             example(
                 1,
-                "Label text shouldn't take up multiple lines",
-                RenderSlot::new(|| {
+                "ui-label-text-shouldn-t-take-up-multiple-lines",
+                RenderSlot::new(move || {
                     column()
                         .modifier(Modifier::new().width(Dp(200.0)))
-                        .children(|| {
+                        .children(move || {
                             text()
-                                .content("Enter the name printed\non your card")
+                                .content(I18N.text("ui-enter-the-name-printed-on-your-card-5964"))
                                 .style(type_style(12.0, 16.0))
                                 .modifier(
                                     Modifier::new().padding(Padding::symmetric(Dp(16.0), Dp(4.0))),
@@ -222,27 +227,27 @@ pub(super) fn error_swap() {
         RenderSlot::new(|| {
             example(
                 0,
-                "Swap supporting text with error text",
+                "ui-swap-supporting-text-with-error-text",
                 RenderSlot::new(|| {
-                    field("Password", true)
+                    field("ui-password", true)
                         .value("pass".to_owned())
                         .error(true)
                         .focused(true);
-                    support("Must be at least 8 characters", true);
+                    support("ui-must-be-at-least-8-characters", true);
                 }),
             );
         }),
         RenderSlot::new(|| {
             example(
                 1,
-                "Don't add error text in addition to supporting text, as their appearance will shift content",
+                "ui-don-t-add-error-text-in-addition-to-supporting-text-as-their-appearance-will-shift-content",
                 RenderSlot::new(|| {
-                    field("Password", true)
+                    field("ui-password", true)
                         .value("pass".to_owned())
                         .error(true)
                         .focused(true);
-                    support("Use 8 or more characters", false);
-                    support("Must be at least 8 characters", true);
+                    support("ui-use-8-or-more-characters", false);
+                    support("ui-must-be-at-least-8-characters", true);
                 }),
             );
         }),
@@ -250,19 +255,21 @@ pub(super) fn error_swap() {
     gap(Dp(24.0));
     example(
         2,
-        "Long errors can wrap to multiple lines if there isn't enough space to clearly describe the error. In this case, ensure padding between text fields is sufficient to prevent multi-lined errors from bumping layout content.",
+        "ui-long-errors-can-wrap-to-multiple-lines-if-there-isn-t-enough-space-to-clearly-describe-the",
         RenderSlot::new(|| {
             boxed()
                 .modifier(Modifier::new().width(Dp(280.0)))
                 .children(|| {
                     column().children(|| {
-                        field("Email", true).value("odette@".to_owned()).error(true);
+                        field("ui-email", true)
+                            .value("odette@".to_owned())
+                            .error(true);
                         support(
-                            "Enter an email address in the format name@example.com",
+                            "ui-enter-an-email-address-in-the-format-name-example-com",
                             true,
                         );
                         gap(Dp(24.0));
-                        field("Password", true);
+                        field("ui-password", true);
                     });
                 });
         }),
@@ -276,18 +283,18 @@ pub(super) fn outline_contrast() {
         RenderSlot::new(|| {
             example(
                 0,
-                "Make sure the container outline has a minimum contrast of 3:1 to the background",
+                "ui-make-sure-the-container-outline-has-a-minimum-contrast-of-3-1-to-the-background",
                 RenderSlot::new(|| {
-                    field("Email", true);
+                    field("ui-email", true);
                 }),
             );
         }),
         RenderSlot::new(|| {
             example(
                 1,
-                "Don't choose colors that won't pass Material's minimum contrast of 3:1",
+                "ui-don-t-choose-colors-that-won-t-pass-material-s-minimum-contrast-of-3-1",
                 RenderSlot::new(|| {
-                    field("Email", true).outline(Color::from_rgb(0.86, 0.85, 0.88));
+                    field("ui-email", true).outline(Color::from_rgb(0.86, 0.85, 0.88));
                 }),
             );
         }),
@@ -308,19 +315,19 @@ pub(super) fn input_modes() {
 fn input_mode(mode: u8) {
     let (label, note, value) = match mode {
         0 => (
-            "Single-line field",
-            "In single-line fields, as the cursor reaches the right field edge, text longer than the input line automatically scrolls left.",
-            "A response that is longer than the input line keeps scrolling horizontally as you type",
+            "ui-single-line-field",
+            "ui-in-single-line-fields-as-the-cursor-reaches-the-right-field-edge-text-longer-than-the-inpu",
+            "ui-a-response-that-is-longer-than-the-input-line-keeps-scrolling-horizontally-as-you-type",
         ),
         1 => (
-            "Multi-line field",
-            "In multi-line fields, overflow text wraps onto a new line and the field expands, shifting elements below it downward.",
-            "This field starts as a single line. Keep typing and it grows to fit each new line.",
+            "ui-multi-line-field",
+            "ui-in-multi-line-fields-overflow-text-wraps-onto-a-new-line-and-the-field-expands-shifting-el",
+            "ui-this-field-starts-as-a-single-line-keep-typing-and-it-grows-to-fit-each-new-line",
         ),
         _ => (
-            "Text area",
-            "Text areas are a fixed height. Overflow text wraps onto a new line and scrolls vertically when the cursor reaches the bottom of the field.",
-            "Text areas suit longer responses.\nThis example keeps a fixed height.\nAdd more lines to scroll inside it.\nLine four.\nLine five.\nLine six.",
+            "ui-text-area",
+            "ui-text-areas-are-a-fixed-height-overflow-text-wraps-onto-a-new-line-and-scrolls-vertically-w",
+            "ui-text-areas-suit-longer-responses-this-example-keeps-a-fixed-height-add-more-lines-to-scrol",
         ),
     };
     let scheme = use_context::<MaterialTheme>().unwrap().get().color_scheme;
@@ -330,8 +337,8 @@ fn input_mode(mode: u8) {
             panel(RenderSlot::new(move || {
                 let base = text_field()
                     .outlined()
-                    .label(label)
-                    .accessibility_label(label)
+                    .label(I18N.text(label))
+                    .accessibility_label(I18N.text(label))
                     .initial_text(value)
                     .min_width(Dp::ZERO)
                     .line_limit(if mode == 0 {
@@ -348,7 +355,7 @@ fn input_mode(mode: u8) {
             }));
             gap(Dp(12.0));
             text()
-                .content(note)
+                .content(I18N.text(note))
                 .color(scheme.on_surface_variant)
                 .style(type_style(14.0, 20.0));
         });

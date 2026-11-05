@@ -15,6 +15,8 @@ use tessera_components::{
 };
 use tessera_ui::{Callback, Color, Dp, Modifier, RenderSlot, tessera, use_context};
 
+use crate::res::I18N;
+
 use super::{
     INK,
     article::{ArticlePage, SpecSection, article},
@@ -79,7 +81,7 @@ pub(super) fn option_label(
         .modifier(modifier.default_min_size(Dp(48.0), Dp(48.0)))
         .children(move || {
             text()
-                .content(label.clone())
+                .content(I18N.text(&(label)))
                 .style(style.unwrap_or(type_style(16.0, 24.0)))
                 .color(color.unwrap_or(scheme.on_surface));
         });
@@ -89,45 +91,45 @@ fn guidelines(kind: Kind) -> Vec<Chapter> {
     match kind {
         Kind::Checkbox => vec![
             Chapter {
-                title: "Usage",
-                text: "Use checkboxes for related choices that can be selected independently. A parent control makes selecting many children easier.",
+                title: "ui-usage",
+                text: "ui-use-checkboxes-for-related-choices-that-can-be-selected-independently-a-parent-control-mak",
                 figure: Figure::Children,
             },
             Chapter {
-                title: "Anatomy",
-                text: "A checkbox contains a container and a selection icon.",
+                title: "ui-anatomy",
+                text: "ui-a-checkbox-contains-a-container-and-a-selection-icon",
                 figure: Figure::Anatomy,
             },
             Chapter {
-                title: "Responsive layout",
-                text: "At wider breakpoints, a contained region can group related choices and actions.",
+                title: "ui-responsive-layout",
+                text: "ui-at-wider-breakpoints-a-contained-region-can-group-related-choices-and-actions",
                 figure: Figure::Example,
             },
             Chapter {
-                title: "Behavior",
-                text: "Select children independently. The parent is mixed when only some children are selected. Selecting a mixed parent selects every child; clearing it clears them all.",
+                title: "ui-behavior",
+                text: "ui-select-children-independently-the-parent-is-mixed-when-only-some-children-are-selected-sel",
                 figure: Figure::Children,
             },
         ],
         Kind::Switch => vec![
             Chapter {
-                title: "Usage",
-                text: "Use a switch for an independent binary setting that takes effect immediately. Use radio buttons for one choice from a set, checkboxes for related multiple choices, and buttons for commands.",
+                title: "ui-usage",
+                text: "ui-use-a-switch-for-an-independent-binary-setting-that-takes-effect-immediately-use-radio-but",
                 figure: Figure::Example,
             },
             Chapter {
-                title: "Anatomy",
-                text: "The track contains a handle and an optional icon. Icons should communicate on or off clearly, such as a checkmark and a cross.",
+                title: "ui-anatomy",
+                text: "ui-the-track-contains-a-handle-and-an-optional-icon-icons-should-communicate-on-or-off-clearl",
                 figure: Figure::Anatomy,
             },
             Chapter {
-                title: "Placement",
-                text: "Settings commonly use vertically stacked rows with an inline label for each switch.",
+                title: "ui-placement",
+                text: "ui-settings-commonly-use-vertically-stacked-rows-with-an-inline-label-for-each-switch",
                 figure: Figure::Example,
             },
             Chapter {
-                title: "Behavior",
-                text: "The handle moves to the opposite side and changes size as the value changes. The setting takes effect without a separate Save action.",
+                title: "ui-behavior",
+                text: "ui-the-handle-moves-to-the-opposite-side-and-changes-size-as-the-value-changes-the-setting-ta",
                 figure: Figure::Example,
             },
         ],
@@ -137,18 +139,18 @@ fn guidelines(kind: Kind) -> Vec<Chapter> {
 fn accessibility(kind: Kind) -> Vec<Chapter> {
     let mut chapters = vec![
         Chapter {
-            title: "Use cases",
-            text: "People using assistive technology need to find the control, change its selection and receive feedback about the result.",
+            title: "ui-use-cases",
+            text: "ui-people-using-assistive-technology-need-to-find-the-control-change-its-selection-and-receiv",
             figure: Figure::Example,
         },
         Chapter {
-            title: "Interaction & style",
+            title: "ui-interaction-style",
             text: match kind {
                 Kind::Checkbox => {
-                    "Both the label and checkbox select the option. Child selections remain independent; a partially selected parent reports a mixed state."
+                    "ui-both-the-label-and-checkbox-select-the-option-child-selections-remain-independent-a-partia"
                 }
                 Kind::Switch => {
-                    "Touch and pointer feedback communicate that the handle is interactive. Keep the current on or off value easy to distinguish."
+                    "ui-touch-and-pointer-feedback-communicate-that-the-handle-is-interactive-keep-the-current-on"
                 }
             },
             figure: if kind == Kind::Checkbox {
@@ -159,20 +161,20 @@ fn accessibility(kind: Kind) -> Vec<Chapter> {
         },
     ];
     if kind == Kind::Checkbox {
-        chapters.push(Chapter {title:"Avoid applying density by default",text:"Keep default targets at least 48 by 48dp. A denser presentation should be an explicit preference that remains easy to reverse.",figure:Figure::None});
+        chapters.push(Chapter {title:"ui-avoid-applying-density-by-default",text:"ui-keep-default-targets-at-least-48-by-48dp-a-denser-presentation-should-be-an-explicit-prefe",figure:Figure::None});
     } else {
         chapters.push(Chapter {
-            title: "Initial focus",
-            text: "Focus lands on the switch handle. Space or Enter changes its value.",
+            title: "ui-initial-focus",
+            text: "ui-focus-lands-on-the-switch-handle-space-or-enter-changes-its-value",
             figure: Figure::None,
         });
     }
     chapters.push(Chapter {
-        title: "Keyboard navigation",
-        text: "Use the controls below to try keyboard navigation.",
+        title: "ui-keyboard-navigation",
+        text: "ui-use-the-controls-below-to-try-keyboard-navigation",
         figure: Figure::Keyboard,
     });
-    chapters.push(Chapter {title:"Labeling elements",text:"Use a concise label that describes the setting. An accessible name should clarify ambiguous visible wording.",figure:Figure::Example});
+    chapters.push(Chapter {title:"ui-labeling-elements",text:"ui-use-a-concise-label-that-describes-the-setting-an-accessible-name-should-clarify-ambiguous",figure:Figure::Example});
     chapters
 }
 
@@ -186,8 +188,8 @@ pub(super) fn selection_article(
     route: Option<crate::pages::material_spec::article::ArticleRoute>,
 ) {
     let title = match kind {
-        Kind::Checkbox => "Checkbox",
-        Kind::Switch => "Switch",
+        Kind::Checkbox => "ui-checkbox",
+        Kind::Switch => "ui-switch",
     };
     let description = super::media::page_media(title)
         .expect("selection article media")
@@ -217,23 +219,23 @@ pub(super) fn selection_article(
         page = page.intro_shared(anatomy);
     }
     page.pages(vec![
-        ArticlePage {title:"Overview",intro:Some(RenderSlot::new(move || {
+        ArticlePage {title:"ui-overview",intro:Some(RenderSlot::new(move || {
             paragraph(match kind {
-                Kind::Checkbox=>"Choose multiple related options. Use concise labels and make selected, unselected and mixed states easy to scan.",
-                Kind::Switch=>"Turn an independent setting on or off. Its effect is immediate, and the handle makes the current value clear.",
+                Kind::Checkbox=>"ui-choose-multiple-related-options-use-concise-labels-and-make-selected-unselected-and-mixed",
+                Kind::Switch=>"ui-turn-an-independent-setting-on-or-off-its-effect-is-immediate-and-the-handle-makes-the-cur",
             });
             gap(Dp(32.0)); anatomy.render();
             gap(Dp(32.0)); example.render();
         })),sections:vec![]},
-        ArticlePage {title:"Guidelines",intro:None,sections:guide},
-        ArticlePage {title:"Accessibility",intro:None,sections:access},
+        ArticlePage {title:"ui-guidelines",intro:None,sections:guide},
+        ArticlePage {title:"ui-accessibility",intro:None,sections:access},
     ]);
 }
 
 #[tessera]
 fn paragraph(#[prop(into)] value: String) {
     text()
-        .content(value)
+        .content(I18N.text(value))
         .style(type_style(16.0, 24.0))
         .color(INK);
 }
@@ -242,13 +244,13 @@ fn paragraph(#[prop(into)] value: String) {
 fn chapter_content(kind: Kind, chapter: Chapter, example: RenderSlot, anatomy: RenderSlot) {
     column().modifier(Modifier::new().fill_max_width()).children(move || {
         paragraph(chapter.text);
-        if chapter.title=="Usage" {
-            gap(Dp(24.0)); subheading("Alternate selection controls".into());
-            paragraph("Checkboxes allow several related choices, radio buttons select one option, and switches control independent settings.");
+        if chapter.title=="ui-usage" {
+            gap(Dp(24.0)); subheading("ui-alternate-selection-controls".into());
+            paragraph("ui-checkboxes-allow-several-related-choices-radio-buttons-select-one-option-and-switches-cont");
         }
-        if chapter.title=="Interaction & style" && kind!=Kind::Checkbox {
-            gap(Dp(24.0)); subheading("Avoid applying density by default".into());
-            paragraph("Retain the default minimum 48dp targets. Let people explicitly opt into a denser presentation.");
+        if chapter.title=="ui-interaction-style" && kind!=Kind::Checkbox {
+            gap(Dp(24.0)); subheading("ui-avoid-applying-density-by-default".into());
+            paragraph("ui-retain-the-default-minimum-48dp-targets-let-people-explicitly-opt-into-a-denser-presentati");
         }
         gap(Dp(32.0));
         match chapter.figure {
@@ -257,7 +259,7 @@ fn chapter_content(kind: Kind, chapter: Chapter, example: RenderSlot, anatomy: R
             Figure::Anatomy=>anatomy.render(),
             Figure::Children=>{ super::selection_controls::checkbox_group(); },
             Figure::Keyboard=>{
-                spec_table(vec!["Keys".into(),"Action".into()],vec![vec!["Tab / Shift + Tab".into(),"Move focus between enabled controls".into()],vec!["Space / Enter".into(),"Toggle the focused control".into()]]);
+                spec_table(vec!["ui-keys".into(),"ui-action".into()],vec![vec!["ui-tab-shift-tab".into(),"ui-move-focus-between-enabled-controls".into()],vec!["ui-space-enter".into(),"ui-toggle-the-focused-control".into()]]);
                 gap(Dp(32.0)); example.render();
             },
         }

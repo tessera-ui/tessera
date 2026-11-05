@@ -34,6 +34,8 @@ use tessera_ui::{
     modifier::FocusModifierExt as _, remember, tessera, use_context,
 };
 
+use crate::res::I18N;
+
 use super::{
     ACCENT,
     annotations::{self, Geometry, Rect, dotted, relative, watch},
@@ -44,7 +46,7 @@ use super::{
 #[path = "navigation_figures_tests.rs"]
 mod tests;
 
-pub(super) const NAMES: [&str; 5] = ["Home", "Inbox", "Saved", "Media", "Settings"];
+pub(super) const NAMES: [&str; 5] = ["ui-home", "ui-inbox", "ui-saved", "ui-media", "ui-settings"];
 
 #[tessera]
 fn sample(
@@ -73,7 +75,10 @@ fn sample(
             })
             .semantics(SemanticsArgs {
                 role: Some(Role::Group),
-                label: Some(format!("{label} navigation preview")),
+                label: Some(I18N.format(
+                    "ui-value-navigation-preview",
+                    [("v0", I18N.text(&label).into())],
+                )),
                 merge_descendants: true,
                 ..Default::default()
             }),
@@ -88,23 +93,23 @@ fn sample(
                             button()
                                 .tonal()
                                 .selected(expanded.get())
-                                .accessibility_label("Expand navigation rail")
+                                .accessibility_label(I18N.text("ui-expand-navigation-rail"))
                                 .on_click(move || expanded.set(!expanded.get()))
-                                .child(|| {
-                                    text().content("Expanded");
+                                .child(move || {
+                                    text().content(I18N.text("ui-expanded"));
                                 });
                             button()
                                 .tonal()
                                 .selected(hidden.get())
-                                .accessibility_label("Hide collapsed rail")
+                                .accessibility_label(I18N.text("ui-hide-collapsed-rail"))
                                 .on_click(move || hidden.set(!hidden.get()))
-                                .child(|| {
-                                    text().content("Hide when collapsed");
+                                .child(move || {
+                                    text().content(I18N.text("ui-hide-when-collapsed"));
                                 });
                         } else {
                             button()
                                 .tonal()
-                                .accessibility_label("Cycle navigation item layout")
+                                .accessibility_label(I18N.text("ui-cycle-navigation-item-layout"))
                                 .on_click(move || {
                                     position.set(match position.get() {
                                         NavigationBarIconPosition::Auto => {
@@ -119,11 +124,16 @@ fn sample(
                                     })
                                 })
                                 .child(move || {
-                                    text().content(format!("Layout: {:?}", position.get()));
+                                    text().content(I18N.format(
+                                        "ui-layout-value",
+                                        [("v0", format!("{:?}", position.get()).into())],
+                                    ));
                                 });
                             button()
                                 .text()
-                                .accessibility_label("Cycle navigation destination count")
+                                .accessibility_label(
+                                    I18N.text("ui-cycle-navigation-destination-count"),
+                                )
                                 .on_click(move || {
                                     let next = if count.get() == 5 { 3 } else { count.get() + 1 };
                                     count.set(next);
@@ -132,7 +142,10 @@ fn sample(
                                     }
                                 })
                                 .child(move || {
-                                    text().content(format!("Destinations: {}", count.get()));
+                                    text().content(I18N.format(
+                                        "ui-destinations-value",
+                                        [("v0", (count.get()).into())],
+                                    ));
                                 });
                         }
                     });
@@ -161,7 +174,7 @@ fn sample(
                                 .content(move |rail_scope| {
                                     for (index, name) in NAMES.into_iter().take(3).enumerate() {
                                         navigation_rail_item(rail_scope)
-                                            .label(name)
+                                            .label(I18N.text(name))
                                             .selected(selected.get() == index)
                                             .on_click(move || selected.set(index))
                                             .icon(move || {
@@ -178,7 +191,7 @@ fn sample(
                         for (index, name) in NAMES.into_iter().take(count.get()).enumerate() {
                             navigation_bar_item()
                                 .icon_position(icon_position)
-                                .label(name)
+                                .label(I18N.text(name))
                                 .selected(selected.get() == index)
                                 .on_click(move || selected.set(index))
                                 .icon(move || {
@@ -189,11 +202,23 @@ fn sample(
             }
             gap(Dp(16.0));
             text()
-                .content(format!("{caption} destination: {}", NAMES[selected.get()]))
+                .content(I18N.format(
+                    "ui-value-destination-value",
+                    [
+                        ("v0", I18N.text(&caption).into()),
+                        ("v1", I18N.text(&(NAMES[selected.get()])).into()),
+                    ],
+                ))
                 .style(type_style(14.0, 20.0));
             if fab.unwrap_or(false) {
                 text()
-                    .content(format!("{caption} compositions: {}", actions.get()))
+                    .content(I18N.format(
+                        "ui-value-compositions-value",
+                        [
+                            ("v0", I18N.text(&caption).into()),
+                            ("v1", (actions.get()).into()),
+                        ],
+                    ))
                     .style(type_style(14.0, 20.0));
             }
         });
@@ -216,11 +241,13 @@ fn rail_header(
                 } else {
                     filled::MENU_SVG
                 })
-                .accessibility_label(format!("{label} rail menu"))
+                .accessibility_label(
+                    I18N.format("ui-value-rail-menu", [("v0", I18N.text(&label).into())]),
+                )
                 .on_click(move || expanded.set(!expanded.get()));
         }
         if fab {
-            extended_floating_action_button("Compose")
+            extended_floating_action_button("ui-compose")
                 .icon(filled::EDIT_SVG)
                 .expanded(expanded.get())
                 .elevation(FloatingActionButtonElevation::new(
@@ -229,7 +256,9 @@ fn rail_header(
                     Dp::ZERO,
                     Dp::ZERO,
                 ))
-                .accessibility_label(format!("{label} compose"))
+                .accessibility_label(
+                    I18N.format("ui-value-compose", [("v0", I18N.text(&label).into())]),
+                )
                 .on_click(move || actions.set(actions.get() + 1));
         }
     });
@@ -266,11 +295,11 @@ fn variants(rail: bool) {
                 .item_spacing(Dp(32.0))
                 .line_spacing(Dp(32.0))
                 .children(|| {
-                    sample("Collapsed", true, false).compact(true);
-                    sample("Expanded", true, true).compact(true);
+                    sample("ui-collapsed", true, false).compact(true);
+                    sample("ui-expanded", true, true).compact(true);
                 });
         } else {
-            sample("Flexible", false, false);
+            sample("ui-flexible", false, false);
         }
     }));
 }
@@ -278,7 +307,7 @@ fn variants(rail: bool) {
 #[tessera]
 fn configurations(rail: bool) {
     panel(RenderSlot::new(move || {
-        sample("Configured", rail, false)
+        sample("ui-configured", rail, false)
             .controls(true)
             .menu(rail)
             .fab(rail);
@@ -288,28 +317,34 @@ fn configurations(rail: bool) {
 #[tessera]
 fn tokens(rail: bool) {
     spec_table(
-        vec!["Element".into(), "Token value".into()],
+        vec!["ui-element".into(), "ui-token-value".into()],
         vec![
             vec![
-                "Container".into(),
+                "ui-container".into(),
                 if rail {
-                    "Surface (uncontained)".into()
+                    "ui-surface-uncontained".into()
                 } else {
-                    "Surface container".into()
+                    "ui-surface-container".into()
                 },
             ],
-            vec!["Selected indicator".into(), "Secondary container".into()],
-            vec!["Selected icon".into(), "On secondary container".into()],
             vec![
-                "Selected label · vertical / horizontal".into(),
-                "Secondary / on secondary container".into(),
+                "ui-selected-indicator".into(),
+                "ui-secondary-container".into(),
             ],
             vec![
-                "Inactive icon and label".into(),
-                "On surface variant".into(),
+                "ui-selected-icon".into(),
+                "ui-on-secondary-container".into(),
             ],
             vec![
-                "Hover / focus / press state layer".into(),
+                "ui-selected-label-vertical-horizontal".into(),
+                "ui-secondary-on-secondary-container".into(),
+            ],
+            vec![
+                "ui-inactive-icon-and-label".into(),
+                "ui-on-surface-variant".into(),
+            ],
+            vec![
+                "ui-hover-focus-press-state-layer".into(),
                 "8% / 10% / 10%".into(),
             ],
         ],
@@ -320,7 +355,13 @@ fn tokens(rail: bool) {
 fn anatomy(rail: bool) {
     native_figure(rail, false, 1, false);
     gap(Dp(24.0));
-    text().content(if rail {"1  Container    2  Optional menu    3  Optional FAB    4  Icon    5  Active indicator    6  Label"}else{"1  Container    2  Icon    3  Label    4  Active indicator"}).style(type_style(16.0,24.0));
+    text()
+        .content(I18N.text(if rail {
+            "ui-1-container-2-optional-menu-3-optional-fab-4-icon-5-active-indicator-6-label"
+        } else {
+            "ui-1-container-2-icon-3-label-4-active-indicator"
+        }))
+        .style(type_style(16.0, 24.0));
 }
 
 #[tessera]
@@ -368,14 +409,14 @@ fn color_specimen(rail: bool, initially_expanded: bool, dark: bool, backdrop: Co
     let actions = remember(|| 0_usize);
     let context = if rail {
         if expanded.get() {
-            "expanded rail"
+            "ui-expanded-rail"
         } else {
-            "collapsed rail"
+            "ui-collapsed-rail"
         }
     } else {
         "bar"
     };
-    let mode = if dark { "Dark" } else { "Light" };
+    let mode = if dark { "ui-dark" } else { "ui-light" };
     column()
         .modifier(Modifier::new().fill_max_width())
         .children(move || {
@@ -389,7 +430,13 @@ fn color_specimen(rail: bool, initially_expanded: bool, dark: bool, backdrop: Co
                         .semantics(SemanticsArgs {
                             role: Some(Role::Group),
                             merge_descendants: true,
-                            label: Some(format!("{mode} {context} color roles")),
+                            label: Some(I18N.format(
+                                "ui-value-value-color-roles",
+                                [
+                                    ("v0", I18N.text(&mode).into()),
+                                    ("v1", I18N.text(&context).into()),
+                                ],
+                            )),
                             ..Default::default()
                         }),
                 )
@@ -416,12 +463,16 @@ fn color_specimen(rail: bool, initially_expanded: bool, dark: bool, backdrop: Co
                                                 } else {
                                                     filled::MENU_SVG
                                                 })
-                                                .accessibility_label(format!(
-                                                    "{mode} {context} menu"
+                                                .accessibility_label(I18N.format(
+                                                    "ui-value-value-menu",
+                                                    [
+                                                        ("v0", I18N.text(&mode).into()),
+                                                        ("v1", I18N.text(&context).into()),
+                                                    ],
                                                 ))
                                                 .on_click(move || expanded.set(!expanded.get()));
                                             gap(Dp(8.0));
-                                            extended_floating_action_button("Label")
+                                            extended_floating_action_button("ui-label")
                                                 .expanded(expanded.get())
                                                 .icon(filled::EDIT_SVG)
                                                 .elevation(FloatingActionButtonElevation::new(
@@ -430,8 +481,12 @@ fn color_specimen(rail: bool, initially_expanded: bool, dark: bool, backdrop: Co
                                                     Dp::ZERO,
                                                     Dp::ZERO,
                                                 ))
-                                                .accessibility_label(format!(
-                                                    "{mode} {context} compose"
+                                                .accessibility_label(I18N.format(
+                                                    "ui-value-value-compose",
+                                                    [
+                                                        ("v0", I18N.text(&mode).into()),
+                                                        ("v1", I18N.text(&context).into()),
+                                                    ],
                                                 ))
                                                 .on_click(move || actions.set(actions.get() + 1));
                                         });
@@ -439,11 +494,15 @@ fn color_specimen(rail: bool, initially_expanded: bool, dark: bool, backdrop: Co
                                     .content(move |rail_scope| {
                                         for index in 0..4 {
                                             let item = navigation_rail_item(rail_scope)
-                                                .label("Label")
+                                                .label(I18N.text("ui-label"))
                                                 .selected(selected.get() == index)
-                                                .accessibility_description(format!(
-                                                    "{mode} {context} destination {}",
-                                                    index + 1
+                                                .accessibility_description(I18N.format(
+                                                    "ui-value-value-destination-value",
+                                                    [
+                                                        ("v0", I18N.text(&mode).into()),
+                                                        ("v1", I18N.text(&context).into()),
+                                                        ("v2", (index + 1).into()),
+                                                    ],
                                                 ))
                                                 .on_click(move || selected.set(index))
                                                 .icon(move || {
@@ -470,11 +529,14 @@ fn color_specimen(rail: bool, initially_expanded: bool, dark: bool, backdrop: Co
                                         for index in 0..3 {
                                             navigation_bar_item()
                                                 .icon_position(icon_position)
-                                                .label("Label")
+                                                .label(I18N.text("ui-label"))
                                                 .selected(selected.get() == index)
-                                                .accessibility_description(format!(
-                                                    "{mode} bar destination {}",
-                                                    index + 1
+                                                .accessibility_description(I18N.format(
+                                                    "ui-value-bar-destination-value",
+                                                    [
+                                                        ("v0", I18N.text(&mode).into()),
+                                                        ("v1", (index + 1).into()),
+                                                    ],
                                                 ))
                                                 .on_click(move || selected.set(index))
                                                 .icon(move || {
@@ -504,7 +566,14 @@ fn color_specimen(rail: bool, initially_expanded: bool, dark: bool, backdrop: Co
                 });
             if actions.get() > 0 {
                 text()
-                    .content(format!("{mode} {context} compositions: {}", actions.get()))
+                    .content(I18N.format(
+                        "ui-value-value-compositions-value",
+                        [
+                            ("v0", I18N.text(&mode).into()),
+                            ("v1", I18N.text(&context).into()),
+                            ("v2", (actions.get()).into()),
+                        ],
+                    ))
                     .style(type_style(14.0, 20.0));
             }
         });
@@ -539,39 +608,43 @@ fn navigation_grid_content(values: Geometry, dark: bool) {
 pub(super) fn navigation_color_roles(rail: bool, baseline: bool) -> Vec<&'static str> {
     if rail && baseline {
         vec![
-            "On secondary container",
-            "Secondary container",
-            "On surface",
-            "On surface variant",
-            "On surface variant",
-            "Error",
-            "On error",
-            "Error",
+            "ui-on-secondary-container",
+            "ui-secondary-container",
+            "ui-on-surface",
+            "ui-on-surface-variant",
+            "ui-on-surface-variant",
+            "ui-error",
+            "ui-on-error",
+            "ui-error",
         ]
     } else if rail {
         vec![
-            "Surface container (optional)",
-            "On secondary container",
-            "Secondary container",
-            "Secondary (vertical) / On secondary container (horizontal)",
-            "On surface variant",
-            "On surface variant",
-            "Error",
-            "On error",
-            "Error",
+            "ui-surface-container-optional",
+            "ui-on-secondary-container",
+            "ui-secondary-container",
+            "ui-secondary-vertical-on-secondary-container-horizontal",
+            "ui-on-surface-variant",
+            "ui-on-surface-variant",
+            "ui-error",
+            "ui-on-error",
+            "ui-error",
         ]
     } else {
         vec![
             if baseline {
-                "Surface"
+                "ui-surface"
             } else {
-                "Surface container"
+                "ui-surface-container"
             },
-            "On secondary container",
-            if baseline { "On surface" } else { "Secondary" },
-            "Secondary container",
-            "On surface variant",
-            "On surface variant",
+            "ui-on-secondary-container",
+            if baseline {
+                "ui-on-surface"
+            } else {
+                "ui-secondary"
+            },
+            "ui-secondary-container",
+            "ui-on-surface-variant",
+            "ui-on-surface-variant",
         ]
     }
 }
@@ -579,7 +652,7 @@ pub(super) fn navigation_color_roles(rail: bool, baseline: bool) -> Vec<&'static
 #[tessera]
 fn color_legend(rail: bool, baseline: bool) {
     spec_table(
-        vec!["Element".into(), "Color role".into()],
+        vec!["ui-element".into(), "ui-color-role".into()],
         navigation_color_roles(rail, baseline)
             .into_iter()
             .enumerate()
@@ -746,14 +819,17 @@ fn navigation_color_marker(number: usize, role: String, x: Dp, y: Dp) {
                 .background_with_shape(scheme.on_surface, Shape::rounded_rectangle(Dp(16.0)))
                 .semantics(SemanticsArgs {
                     role: Some(Role::Note),
-                    label: Some(format!("Navigation color role {number}: {role}")),
+                    label: Some(I18N.format(
+                        "ui-navigation-color-role-value-value",
+                        [("v0", (number).into()), ("v1", I18N.text(&role).into())],
+                    )),
                     merge_descendants: true,
                     ..Default::default()
                 }),
         )
         .children(move || {
             text()
-                .content(number.to_string())
+                .content((number).to_string())
                 .style(type_style(14.0, 20.0))
                 .color(scheme.surface);
         });
@@ -761,14 +837,14 @@ fn navigation_color_marker(number: usize, role: String, x: Dp, y: Dp) {
 
 #[tessera]
 fn baseline(rail: bool) {
-    text().content(if rail { "The baseline rail is retained for comparison. Use a collapsed or expanded navigation rail for new designs." } else { "The baseline bar is retained for comparison. Use the flexible navigation bar for new designs." }).style(type_style(16.0, 24.0));
+    text().content(I18N.text(if rail { "ui-the-baseline-rail-is-retained-for-comparison-use-a-collapsed-or-expanded-navigation-rail-f" } else { "ui-the-baseline-bar-is-retained-for-comparison-use-the-flexible-navigation-bar-for-new-design" })).style(type_style(16.0, 24.0));
     gap(Dp(24.0));
     baseline_figure(rail, false);
     gap(Dp(32.0));
-    subheading("Tokens & specs".into());
+    subheading("ui-tokens-specs".into());
     baseline_measurements(rail);
     gap(Dp(32.0));
-    subheading("Color".into());
+    subheading("ui-color".into());
     for dark in [false, true] {
         material_theme()
             .theme(move || MaterialTheme::from_seed(ACCENT, dark))
@@ -781,23 +857,23 @@ fn baseline(rail: bool) {
     gap(Dp(24.0));
     color_legend(rail, true);
     gap(Dp(32.0));
-    subheading("States".into());
-    text().content("Select a destination or move keyboard focus to inspect the live selection and input feedback. Focus does not activate a destination.").style(type_style(16.0, 24.0));
+    subheading("ui-states".into());
+    text().content(I18N.text("ui-select-a-destination-or-move-keyboard-focus-to-inspect-the-live-selection-and-input-feedba")).style(type_style(16.0, 24.0));
     gap(Dp(24.0));
     baseline_figure(rail, false);
     gap(Dp(32.0));
-    subheading("Measurements".into());
+    subheading("ui-measurements".into());
     baseline_figure(rail, true);
     baseline_measurements(rail);
     gap(Dp(32.0));
-    subheading("Configurations".into());
+    subheading("ui-configurations".into());
     if rail {
-        text().content("Keep destinations in a vertical group. A menu or primary action may precede the destinations.").style(type_style(16.0, 24.0));
+        text().content(I18N.text("ui-keep-destinations-in-a-vertical-group-a-menu-or-primary-action-may-precede-the-destination")).style(type_style(16.0, 24.0));
         gap(Dp(24.0));
         baseline_figure(true, false);
     } else {
         for count in [3, 4, 5] {
-            subheading(format!("{count} destinations"));
+            subheading(I18N.format("ui-value-destinations", [("v0", (count).into())]));
             gap(Dp(16.0));
             baseline_figure(false, false).destination_count(count);
             gap(Dp(24.0));
@@ -808,32 +884,32 @@ fn baseline(rail: bool) {
 #[tessera]
 fn baseline_measurements(rail: bool) {
     spec_table(
-        vec!["Attribute".into(), "Value".into()],
+        vec!["ui-attribute".into(), "ui-value".into()],
         vec![
             vec![
                 if rail {
-                    "Container width"
+                    "ui-container-width"
                 } else {
-                    "Container height"
+                    "ui-container-height"
                 }
                 .into(),
                 "80dp".into(),
             ],
             vec![
-                "Item height".into(),
+                "ui-item-height".into(),
                 if rail { "56dp" } else { "80dp" }.into(),
             ],
             vec![
-                "Active indicator".into(),
+                "ui-active-indicator".into(),
                 if rail { "56 × 32dp" } else { "64 × 32dp" }.into(),
             ],
-            vec!["Icon".into(), "24dp".into()],
-            vec!["Icon-to-label gap".into(), "4dp".into()],
+            vec!["ui-icon".into(), "24dp".into()],
+            vec!["ui-icon-to-label-gap-3995".into(), "4dp".into()],
             vec![
                 if rail {
-                    "Item gap"
+                    "ui-item-gap"
                 } else {
-                    "Top / bottom padding"
+                    "ui-top-bottom-padding-6966"
                 }
                 .into(),
                 if rail { "4dp" } else { "12 / 16dp" }.into(),
@@ -877,14 +953,11 @@ fn baseline_figure(
                         .semantics(SemanticsArgs {
                             role: Some(Role::TabList),
                             merge_descendants: true,
-                            label: Some(
-                                if rail {
-                                    "Baseline navigation rail"
-                                } else {
-                                    "Baseline navigation bar"
-                                }
-                                .into(),
-                            ),
+                            label: Some(I18N.text(if rail {
+                                "ui-baseline-navigation-rail"
+                            } else {
+                                "ui-baseline-navigation-bar"
+                            })),
                             ..Default::default()
                         })
                         .focus_group()
@@ -980,12 +1053,20 @@ fn baseline_destination(
                     selected: active,
                     on_click: Callback::new(move || selected.set(index)),
                     role: Some(Role::Tab),
-                    label: Some("Label".into()),
-                    description: Some(format!(
-                        "Baseline navigation {} destination {}",
-                        if rail { "rail" } else { "bar" },
-                        index + 1
-                    )),
+                    label: Some(I18N.text("ui-label")),
+                    description: Some(
+                        I18N.format(
+                            "ui-baseline-navigation-value-destination-value",
+                            [
+                                (
+                                    "v0",
+                                    I18N.text(&(if rail { "ui-rail-7098" } else { "ui-bar" }))
+                                        .into(),
+                                ),
+                                ("v1", (index + 1).into()),
+                            ],
+                        ),
+                    ),
                     interaction_state: Some(interaction),
                     ..Default::default()
                 }),
@@ -1053,49 +1134,55 @@ fn baseline_destination(
                                 });
                         });
                     gap(Dp(4.0));
-                    text().content("Label").style(label_style).color(if active {
-                        scheme.on_surface
-                    } else {
-                        scheme.on_surface_variant
-                    });
+                    text()
+                        .content(I18N.text("ui-label"))
+                        .style(label_style)
+                        .color(if active {
+                            scheme.on_surface
+                        } else {
+                            scheme.on_surface_variant
+                        });
                 });
         });
 }
 
 #[tessera]
 fn states(rail: bool) {
-    text().content("Select a destination, move focus with Tab and arrow keys, and activate it with Enter or Space. Hover, focus and press feedback preserve the current destination until activation.").style(type_style(16.0,24.0));
+    text().content(I18N.text("ui-select-a-destination-move-focus-with-tab-and-arrow-keys-and-activate-it-with-enter-or-spac")).style(type_style(16.0,24.0));
     gap(Dp(24.0));
     panel(RenderSlot::new(move || {
-        sample("State", rail, false);
+        sample("ui-state", rail, false);
     }));
 }
 
 #[tessera]
 fn measurements(rail: bool) {
     spec_table(
-        vec!["Attribute".into(), "Value".into()],
+        vec!["ui-attribute".into(), "ui-value".into()],
         if rail {
             vec![
                 vec![
-                    "Collapsed / minimum expanded width".into(),
+                    "ui-collapsed-minimum-expanded-width".into(),
                     "96 / 220dp".into(),
                 ],
-                vec!["Collapsed item minimum height".into(), "64dp".into()],
-                vec!["Expanded item height".into(), "56dp".into()],
-                vec!["Collapsed active indicator".into(), "56 × 32dp".into()],
-                vec!["Icon".into(), "24dp".into()],
+                vec!["ui-collapsed-item-minimum-height".into(), "64dp".into()],
+                vec!["ui-expanded-item-height".into(), "56dp".into()],
+                vec!["ui-collapsed-active-indicator".into(), "56 × 32dp".into()],
+                vec!["ui-icon".into(), "24dp".into()],
             ]
         } else {
             vec![
-                vec!["Container height".into(), "64dp".into()],
-                vec!["Vertical item active indicator".into(), "56 × 32dp".into()],
+                vec!["ui-container-height".into(), "64dp".into()],
                 vec![
-                    "Horizontal item active indicator height".into(),
+                    "ui-vertical-item-active-indicator".into(),
+                    "56 × 32dp".into(),
+                ],
+                vec![
+                    "ui-horizontal-item-active-indicator-height".into(),
                     "40dp".into(),
                 ],
-                vec!["Vertical icon-to-label gap".into(), "4dp".into()],
-                vec!["Icon".into(), "24dp".into()],
+                vec!["ui-vertical-icon-to-label-gap".into(), "4dp".into()],
+                vec!["ui-icon".into(), "24dp".into()],
             ]
         },
     );
@@ -1104,10 +1191,10 @@ fn measurements(rail: bool) {
 #[tessera]
 fn layouts() {
     for (label, menu, fab) in [
-        ("Destinations", false, false),
-        ("Menu", true, false),
-        ("Compose", false, true),
-        ("Menu and compose", true, true),
+        ("ui-destinations", false, false),
+        ("ui-menu", true, false),
+        ("ui-compose", false, true),
+        ("ui-menu-and-compose", true, true),
     ] {
         subheading(label.into());
         gap(Dp(24.0));
@@ -1172,7 +1259,9 @@ fn native_figure(rail: bool, expanded: bool, annotation: usize, badges: bool) {
                                                                     filled::MENU_SVG
                                                                 })
                                                                 .accessibility_label(
-                                                                    "Figure rail menu",
+                                                                    I18N.text(
+                                                                        "ui-figure-rail-menu",
+                                                                    ),
                                                                 )
                                                                 .on_click(move || {
                                                                     expanded.set(!expanded.get())
@@ -1183,7 +1272,7 @@ fn native_figure(rail: bool, expanded: bool, annotation: usize, badges: bool) {
                                                         .modifier(watch(geometry, "fab"))
                                                         .children(move || {
                                                             extended_floating_action_button(
-                                                                "Label",
+                                                                "ui-label",
                                                             )
                                                             .expanded(expanded.get())
                                                             .icon(filled::EDIT_SVG)
@@ -1196,7 +1285,7 @@ fn native_figure(rail: bool, expanded: bool, annotation: usize, badges: bool) {
                                                                 ),
                                                             )
                                                             .accessibility_label(
-                                                                "Figure rail compose",
+                                                                I18N.text("ui-figure-rail-compose"),
                                                             )
                                                             .on_click(move || {
                                                                 actions.set(actions.get() + 1)
@@ -1207,7 +1296,7 @@ fn native_figure(rail: bool, expanded: bool, annotation: usize, badges: bool) {
                                             .content(move |rail_scope| {
                                                 for index in 0..3 {
                                                     let item = navigation_rail_item(rail_scope)
-                                                        .label("Label")
+                                                        .label(I18N.text("ui-label"))
                                                         .selected(selected.get() == index)
                                                         .on_click(move || selected.set(index))
                                                         .icon(move || {
@@ -1223,13 +1312,13 @@ fn native_figure(rail: bool, expanded: bool, annotation: usize, badges: bool) {
                                                                 });
                                                         });
                                                     if badges && index > 0 {
-                                                        item.accessibility_description(
+                                                        item.accessibility_description(I18N.text(
                                                             if index == 1 {
-                                                                "3 unread messages"
+                                                                "ui-3-unread-messages"
                                                             } else {
-                                                                "New items"
+                                                                "ui-new-items"
                                                             },
-                                                        )
+                                                        ))
                                                         .badge(move || {
                                                             navigation_badge(index, geometry);
                                                         });
@@ -1247,15 +1336,15 @@ fn native_figure(rail: bool, expanded: bool, annotation: usize, badges: bool) {
                                                 for index in 0..4 {
                                                     navigation_bar_item()
                                                         .icon_position(icon_position)
-                                                        .label("Label")
+                                                        .label(I18N.text("ui-label"))
                                                         .selected(selected.get() == index)
                                                         .accessibility_description_optional(
                                                             if badges && index > 1 {
                                                                 Some(
                                                                     if index == 3 {
-                                                                        "3 unread messages"
+                                                                        "ui-3-unread-messages"
                                                                     } else {
-                                                                        "New items"
+                                                                        "ui-new-items"
                                                                     }
                                                                     .into(),
                                                                 )
@@ -1311,11 +1400,17 @@ fn native_figure(rail: bool, expanded: bool, annotation: usize, badges: bool) {
                 });
             gap(Dp(16.0));
             text()
-                .content(format!("Figure destination: {}", selected.get() + 1))
+                .content(I18N.format(
+                    "ui-figure-destination-value",
+                    [("v0", (selected.get() + 1).into())],
+                ))
                 .style(type_style(14.0, 20.0));
             if actions.get() > 0 {
                 text()
-                    .content(format!("Figure compositions: {}", actions.get()))
+                    .content(I18N.format(
+                        "ui-figure-compositions-value",
+                        [("v0", (actions.get()).into())],
+                    ))
                     .style(type_style(14.0, 20.0));
             }
         });
@@ -1346,7 +1441,9 @@ fn navigation_badge(index: usize, geometry: State<Geometry>) {
         .children(move || {
             if index == 1 {
                 badge_with_content().content(move || {
-                    text().content("3").modifier(watch(geometry, "badge-label"));
+                    text()
+                        .content(I18N.text("3"))
+                        .modifier(watch(geometry, "badge-label"));
                 });
             } else {
                 badge();
@@ -1554,7 +1651,7 @@ fn placement(rail: bool) {
                         navigation_rail().content(move |rail_scope| {
                             for (index, name) in NAMES.into_iter().take(3).enumerate() {
                                 navigation_rail_item(rail_scope)
-                                    .label(name)
+                                    .label(I18N.text(name))
                                     .selected(selected.get() == index)
                                     .on_click(move || selected.set(index))
                                     .icon(move || {
@@ -1566,10 +1663,12 @@ fn placement(rail: bool) {
                             .modifier(Modifier::new().weight(1.0).padding_all(Dp(24.0)))
                             .children(move || {
                                 text()
-                                    .content(NAMES[selected.get()])
+                                    .content(I18N.text(NAMES[selected.get()]))
                                     .style(type_style(24.0, 32.0));
                                 gap(Dp(16.0));
-                                text().content("Page content").style(type_style(16.0, 24.0));
+                                text()
+                                    .content(I18N.text("ui-page-content"))
+                                    .style(type_style(16.0, 24.0));
                             });
                     });
             } else {
@@ -1585,14 +1684,14 @@ fn placement(rail: bool) {
                             )
                             .children(move || {
                                 text()
-                                    .content(NAMES[selected.get()])
+                                    .content(I18N.text(NAMES[selected.get()]))
                                     .style(type_style(24.0, 32.0));
                                 spacer().modifier(Modifier::new().weight(1.0));
                                 boxed()
                                     .alignment(Alignment::CenterEnd)
                                     .modifier(Modifier::new().fill_max_width())
                                     .children(move || {
-                                        extended_floating_action_button("Compose")
+                                        extended_floating_action_button("ui-compose")
                                             .icon(filled::EDIT_SVG)
                                             .on_click(move || count.set(count.get() + 1));
                                     });
@@ -1601,7 +1700,7 @@ fn placement(rail: bool) {
                             for (index, name) in NAMES.into_iter().take(3).enumerate() {
                                 navigation_bar_item()
                                     .icon_position(icon_position)
-                                    .label(name)
+                                    .label(I18N.text(name))
                                     .selected(selected.get() == index)
                                     .on_click(move || selected.set(index))
                                     .icon(move || {
@@ -1622,7 +1721,7 @@ fn modal_rail() {
     modal_side_sheet_provider()
         .position(SideSheetPosition::Start)
         .is_open(open.get())
-        .accessibility_label("Expanded navigation rail")
+        .accessibility_label(I18N.text("ui-expanded-navigation-rail"))
         .on_close_request(move || open.set(false))
         .main_content(move || {
             column()
@@ -1637,14 +1736,16 @@ fn modal_rail() {
                     icon_button()
                         .standard()
                         .icon(filled::MENU_SVG)
-                        .accessibility_label("Open modal expanded rail")
+                        .accessibility_label(I18N.text("ui-open-modal-expanded-rail"))
                         .on_click(move || open.set(true));
                     gap(Dp(24.0));
                     text()
-                        .content(NAMES[selected.get()])
+                        .content(I18N.text(NAMES[selected.get()]))
                         .style(type_style(24.0, 32.0));
                     text()
-                        .content("Select the menu to reveal navigation over this page.")
+                        .content(
+                            I18N.text("ui-select-the-menu-to-reveal-navigation-over-this-page"),
+                        )
                         .style(type_style(16.0, 24.0));
                 });
         })
@@ -1655,13 +1756,13 @@ fn modal_rail() {
                     icon_button()
                         .standard()
                         .icon(filled::MENU_OPEN_SVG)
-                        .accessibility_label("Close modal expanded rail")
+                        .accessibility_label(I18N.text("ui-close-modal-expanded-rail"))
                         .on_click(move || open.set(false));
                 })
                 .content(move |rail_scope| {
                     for (index, name) in NAMES.into_iter().enumerate() {
                         navigation_rail_item(rail_scope)
-                            .label(name)
+                            .label(I18N.text(name))
                             .selected(selected.get() == index)
                             .on_click(move || {
                                 selected.set(index);

@@ -27,6 +27,8 @@ use tessera_ui::{
     tessera, use_context,
 };
 
+use crate::res::I18N;
+
 use super::{
     Geometry, annotations, bullets, drawer_content, drawer_figure, drawer_marker, drawer_scene,
     drawer_stage, gap, launch, leader, legend_entries, mail_messages, prose, responsive_figure,
@@ -69,274 +71,274 @@ fn spec(kind: u8) -> GuideSpec {
             1024.0,
             572.0,
             NONE,
-            "Navigation drawer with 4 primary destinations",
+            "ui-navigation-drawer-with-4-primary-destinations",
             "",
         ),
         1 => spec_of(
             680.0,
             576.0,
             DO,
-            "Navigation drawer with multiple destinations in a mail app",
-            "Use a navigation drawer for 5 or more primary destinations, or more than 1 level of navigation hierarchy",
+            "ui-navigation-drawer-with-multiple-destinations-in-a-mail-app",
+            "ui-use-a-navigation-drawer-for-5-or-more-primary-destinations-or-more-than-1-level-of-navigat",
         ),
         2 => spec_of(
             680.0,
             576.0,
             CAUTION,
-            "Standard navigation drawer and navigation bar used together",
-            "Avoid using two navigation components on the same screen",
+            "ui-standard-navigation-drawer-and-navigation-bar-used-together",
+            "ui-avoid-using-two-navigation-components-on-the-same-screen",
         ),
         3 => spec_of(
             460.0,
             600.0,
             NONE,
-            "Standard navigation drawer with destinations in mail app",
-            "Standard navigation drawer",
+            "ui-standard-navigation-drawer-with-destinations-in-mail-app",
+            "ui-standard-navigation-drawer",
         ),
         4 => spec_of(
             460.0,
             600.0,
             NONE,
-            "Modal navigation drawer with destinations and scrim",
-            "Modal navigation drawer",
+            "ui-modal-navigation-drawer-with-destinations-and-scrim",
+            "ui-modal-navigation-drawer",
         ),
         5 => spec_of(
             1024.0,
             600.0,
             NONE,
-            "Standard navigation drawer next to app content",
-            "Standard navigation drawer providing access to drawer destinations next to app content",
+            "ui-standard-navigation-drawer-next-to-app-content",
+            "ui-standard-navigation-drawer-providing-access-to-drawer-destinations-next-to-app-content",
         ),
         6 => spec_of(
             680.0,
             576.0,
             NONE,
-            "Modal navigation drawer with 1 active destination and scrim",
-            "Modal navigation drawer using a scrim to block interaction with the rest of an app’s content",
+            "ui-modal-navigation-drawer-with-1-active-destination-and-scrim",
+            "ui-modal-navigation-drawer-using-a-scrim-to-block-interaction-with-the-rest-of-an-app-s-conte",
         ),
         7 => spec_of(
             680.0,
             443.0,
             NONE,
-            "Navigation menu icon in a navigation rail",
-            "A modal drawer opened by an action such as clicking a navigation menu icon (1)",
+            "ui-navigation-menu-icon-in-a-navigation-rail",
+            "ui-a-modal-drawer-opened-by-an-action-such-as-clicking-a-navigation-menu-icon-1",
         ),
         8 => spec_of(
             1024.0,
             868.0,
             NONE,
-            "Dismissing a modal drawer by tapping the scrim or swiping",
-            "1. Dismiss by tapping the scrim\n2. Dismiss by swiping the drawer",
+            "ui-dismissing-a-modal-drawer-by-tapping-the-scrim-or-swiping",
+            "ui-1-dismiss-by-tapping-the-scrim-2-dismiss-by-swiping-the-drawer",
         ),
         10 => spec_of(
             680.0,
             576.0,
             DO,
-            "Modal navigation drawer opening from the left side of the screen",
-            "A navigation drawer opens from the left side of the screen for left-to-right languages",
+            "ui-modal-navigation-drawer-opening-from-the-left-side-of-the-screen",
+            "ui-a-navigation-drawer-opens-from-the-left-side-of-the-screen-for-left-to-right-languages",
         ),
         11 => spec_of(
             400.0,
             698.0,
             DO,
-            "Full-width divider separating a group of destinations",
-            "Use full-width dividers (1) to separate groups of destinations",
+            "ui-full-width-divider-separating-a-group-of-destinations",
+            "ui-use-full-width-dividers-1-to-separate-groups-of-destinations",
         ),
         12 => spec_of(
             400.0,
             698.0,
             DONT,
-            "Dividers separating individual destinations",
-            "Don’t use dividers to separate individual destinations",
+            "ui-dividers-separating-individual-destinations",
+            "ui-don-t-use-dividers-to-separate-individual-destinations",
         ),
         13 => spec_of(
             720.0,
             360.0,
             NONE,
-            "Active indicator in a navigation drawer",
-            "The active indicator (1) is a background shape communicating which destination of the navigation drawer is currently being displayed",
+            "ui-active-indicator-in-a-navigation-drawer",
+            "ui-the-active-indicator-1-is-a-background-shape-communicating-which-destination-of-the-naviga",
         ),
         14 => spec_of(
             720.0,
             346.0,
             NONE,
-            "Icon and label text of a navigation drawer destination",
-            "Actionable list items in a navigation drawer describe each destination using (1) an optional icon and (2) required label text",
+            "ui-icon-and-label-text-of-a-navigation-drawer-destination",
+            "ui-actionable-list-items-in-a-navigation-drawer-describe-each-destination-using-1-an-optional",
         ),
         15 => spec_of(
             720.0,
             374.0,
             NONE,
-            "Navigation drawer using only label text",
-            "Navigation drawers can use text labels without icons",
+            "ui-navigation-drawer-using-only-label-text",
+            "ui-navigation-drawers-can-use-text-labels-without-icons",
         ),
         16 => spec_of(
             400.0,
             396.0,
             DO,
-            "Navigation drawer with a truncated text label",
-            "Keep text labels concise, but truncate them if they extend beyond the container width",
+            "ui-navigation-drawer-with-a-truncated-text-label",
+            "ui-keep-text-labels-concise-but-truncate-them-if-they-extend-beyond-the-container-width",
         ),
         17 => spec_of(
             400.0,
             396.0,
             DONT,
-            "Navigation drawer with wrapped label text",
-            "Don’t wrap label text",
+            "ui-navigation-drawer-with-wrapped-label-text",
+            "ui-don-t-wrap-label-text",
         ),
         18 => spec_of(
             400.0,
             396.0,
             DONT,
-            "Navigation drawer with a smaller text label",
-            "Don’t shrink text size in order to fit a text label on a single line",
+            "ui-navigation-drawer-with-a-smaller-text-label",
+            "ui-don-t-shrink-text-size-in-order-to-fit-a-text-label-on-a-single-line",
         ),
         19 => spec_of(
             400.0,
             396.0,
             DO,
-            "Navigation drawer with recognizable icons",
-            "Use recognizable icons when conventions exist",
+            "ui-navigation-drawer-with-recognizable-icons",
+            "ui-use-recognizable-icons-when-conventions-exist",
         ),
         20 => spec_of(
             400.0,
             396.0,
             DONT,
-            "Navigation drawer with icons on only some destinations",
-            "Don’t apply icons to some destinations and not others. Icons should be used for all destinations, or none.",
+            "ui-navigation-drawer-with-icons-on-only-some-destinations",
+            "ui-don-t-apply-icons-to-some-destinations-and-not-others-icons-should-be-used-for-all-destina",
         ),
         21 => spec_of(
             720.0,
             288.0,
             NONE,
-            "Navigation drawer subhead section labels",
-            "Related destinations can be grouped using short subhead section labels in the navigation drawer",
+            "ui-navigation-drawer-subhead-section-labels",
+            "ui-related-destinations-can-be-grouped-using-short-subhead-section-labels-in-the-navigation-d",
         ),
         22 => spec_of(
             680.0,
             576.0,
             NONE,
-            "Modal navigation drawer with scrim placed behind",
-            "Scrim applied behind a modal navigation drawer",
+            "ui-modal-navigation-drawer-with-scrim-placed-behind",
+            "ui-scrim-applied-behind-a-modal-navigation-drawer",
         ),
         23 => spec_of(
             0.0,
             0.0,
             NONE,
             "",
-            "Standard navigation drawers change size to suit the device’s screen",
+            "ui-standard-navigation-drawers-change-size-to-suit-the-device-s-screen",
         ),
         24 => spec_of(
             680.0,
             576.0,
             NONE,
-            "Modal navigation drawer on a mobile screen",
-            "Use a modal navigation drawer on mobile screens",
+            "ui-modal-navigation-drawer-on-a-mobile-screen",
+            "ui-use-a-modal-navigation-drawer-on-mobile-screens",
         ),
         25 => spec_of(
             0.0,
             0.0,
             NONE,
             "",
-            "Use a navigation rail on tablet screens, or also allow a drawer to open and close via a menu icon",
+            "ui-use-a-navigation-rail-on-tablet-screens-or-also-allow-a-drawer-to-open-and-close-via-a-men",
         ),
         26 => spec_of(
             0.0,
             0.0,
             NONE,
             "",
-            "Use a standard navigation drawer on large and desktop screens",
+            "ui-use-a-standard-navigation-drawer-on-large-and-desktop-screens",
         ),
         27 => spec_of(
             680.0,
             576.0,
             NONE,
-            "Navigation drawer scrolling independently of mail content",
-            "When a navigation drawer is scrolled, the body content should remain stationary",
+            "ui-navigation-drawer-scrolling-independently-of-mail-content",
+            "ui-when-a-navigation-drawer-is-scrolled-the-body-content-should-remain-stationary",
         ),
         28 => spec_of(
             0.0,
             0.0,
             NONE,
             "",
-            "A standard dismissible navigation drawer is opened and closed by tapping the navigation menu icon in the app bar (1), and remains open until the menu icon is tapped again (2)",
+            "ui-a-standard-dismissible-navigation-drawer-is-opened-and-closed-by-tapping-the-navigation-me",
         ),
         29 => spec_of(
             1024.0,
             600.0,
             NONE,
-            "Permanently visible standard navigation drawer on desktop",
-            "A permanently-visible standard navigation drawer on desktop",
+            "ui-permanently-visible-standard-navigation-drawer-on-desktop",
+            "ui-a-permanently-visible-standard-navigation-drawer-on-desktop",
         ),
         31 => spec_of(
             692.0,
             305.0,
             NONE,
-            "Tapping a navigation drawer destination",
-            "Touch: Tap",
+            "ui-tapping-a-navigation-drawer-destination",
+            "ui-touch-tap",
         ),
         32 => spec_of(
             692.0,
             305.0,
             NONE,
-            "Hovering and clicking a navigation drawer destination",
-            "Cursor: Hover, Click",
+            "ui-hovering-and-clicking-a-navigation-drawer-destination",
+            "ui-cursor-hover-click",
         ),
         33 => spec_of(
             692.0,
             305.0,
             NONE,
-            "Keyboard focus moving between navigation drawer destinations",
-            "Focus lands on first navigation item",
+            "ui-keyboard-focus-moving-between-navigation-drawer-destinations",
+            "ui-focus-lands-on-first-navigation-item",
         ),
         34 => spec_of(
             692.0,
             305.0,
             NONE,
-            "Selecting a focused navigation drawer destination with Space or Enter",
-            "The navigation item is selected via Space/Enter",
+            "ui-selecting-a-focused-navigation-drawer-destination-with-space-or-enter",
+            "ui-the-navigation-item-is-selected-via-space-enter",
         ),
         40 => spec_of(
             692.0,
             305.0,
             NONE,
-            "Selecting the scrim to close the navigation drawer",
-            "Select the scrim to close the navigation drawer",
+            "ui-selecting-the-scrim-to-close-the-navigation-drawer",
+            "ui-select-the-scrim-to-close-the-navigation-drawer",
         ),
         41 => spec_of(
             330.0,
             304.0,
             DO,
-            "Navigation drawer with a filled selected icon",
-            "Use a filled icon for the selected navigation destination to differentiate from the other destinations",
+            "ui-navigation-drawer-with-a-filled-selected-icon",
+            "ui-use-a-filled-icon-for-the-selected-navigation-destination-to-differentiate-from-the-other",
         ),
         42 => spec_of(
             330.0,
             304.0,
             DONT,
-            "Navigation drawer with an outlined selected icon",
-            "Avoid keeping the icon style for the selected navigation destination the same as unselected destination's icons. This removes an important visual indicator of which destination is active.",
+            "ui-navigation-drawer-with-an-outlined-selected-icon",
+            "ui-avoid-keeping-the-icon-style-for-the-selected-navigation-destination-the-same-as-unselecte",
         ),
         43 => spec_of(
             432.0,
             191.0,
             NONE,
-            "Selected and unselected navigation drawer icons",
-            "When selected, the icon fills, darkens in light theme (or lightens in dark theme), and is backed by an active indicator shape",
+            "ui-selected-and-unselected-navigation-drawer-icons",
+            "ui-when-selected-the-icon-fills-darkens-in-light-theme-or-lightens-in-dark-theme-and-is-backe",
         ),
         44 => spec_of(
             704.0,
             328.0,
             NONE,
-            "Navigation drawer accessibility label matching its label text",
-            "A navigation drawer’s accessibility label can incorporate its adjacent UI text",
+            "ui-navigation-drawer-accessibility-label-matching-its-label-text",
+            "ui-a-navigation-drawer-s-accessibility-label-can-incorporate-its-adjacent-ui-text",
         ),
         _ => spec_of(
             704.0,
             328.0,
             NONE,
-            "Navigation drawer accessibility label clarifying its label text",
-            "While the visible label text reads Recents, the accessibility label for this destination clarifies its function: Recent images",
+            "ui-navigation-drawer-accessibility-label-clarifying-its-label-text",
+            "ui-while-the-visible-label-text-reads-recents-the-accessibility-label-for-this-destination-cl",
         ),
     }
 }
@@ -354,7 +356,7 @@ pub(super) fn medium_style(size: f64, line: f64) -> TextStyle {
 #[tessera]
 fn minor_heading(#[prop(into)] label: String) {
     text()
-        .content(label)
+        .content(I18N.text(label))
         .style(medium_style(16.0, 24.0))
         .modifier(Modifier::new().semantics(SemanticsArgs {
             role: Some(Role::Heading),
@@ -367,7 +369,7 @@ fn minor_heading(#[prop(into)] label: String) {
 pub(super) fn caption(#[prop(into)] value: String) {
     let scheme = use_context::<MaterialTheme>().unwrap().get().color_scheme;
     text()
-        .content(value)
+        .content(I18N.text(value))
         .style(type_style(14.0, 20.0))
         .color(scheme.on_surface_variant);
 }
@@ -391,7 +393,7 @@ fn advice(tone: u8) {
             srgb(255, 207, 36),
             srgb(36, 26, 0),
             filled::PRIORITY_HIGH_SVG,
-            "Caution",
+            "ui-caution",
         ),
         _ => (
             srgb(214, 46, 40),
@@ -413,7 +415,7 @@ fn advice(tone: u8) {
             icon().vector(asset).size(Dp(18.0)).tint(ink);
             spacer().modifier(Modifier::new().width(Dp(8.0)));
             text()
-                .content(label)
+                .content(I18N.text(label))
                 .style(type_style(14.0, 20.0))
                 .color(ink);
         });
@@ -575,16 +577,16 @@ fn guide_scene(kind: u8, selected: State<usize>) {
                 .children(move || {
                     navigation_bar().content(move |icon_position| {
                         for (index, (label, asset)) in [
-                            ("Inbox", outlined::INBOX_SVG),
-                            ("Favorites", outlined::FAVORITE_BORDER_SVG),
-                            ("Trash", outlined::DELETE_SVG),
+                            ("ui-inbox", outlined::INBOX_SVG),
+                            ("ui-favorites", outlined::FAVORITE_BORDER_SVG),
+                            ("ui-trash", outlined::DELETE_SVG),
                         ]
                         .into_iter()
                         .enumerate()
                         {
                             navigation_bar_item()
                                 .icon_position(icon_position)
-                                .label(label)
+                                .label(I18N.text(label))
                                 .selected(index == 0)
                                 .icon(move || {
                                     icon().vector(asset).size(Dp(24.0));
@@ -711,7 +713,7 @@ fn guide_scene(kind: u8, selected: State<usize>) {
             annotations::lines(Dp(692.0), Dp(305.0), svg.into());
         }
         33 | 34 => {
-            key_chip("Tab", 186.0, 23.0, 74.0);
+            key_chip("ui-tab", 186.0, 23.0, 74.0);
             if kind == 33 {
                 key_chip("Arrow \u{2193}", 553.0, 23.0, 100.0);
             } else {
@@ -778,7 +780,7 @@ fn subhead_row(#[prop(into)] label: String) {
                 .padding_symmetric(Dp(16.0), Dp::ZERO),
         )
         .children(move || {
-            text().content(label.clone()).style(style);
+            text().content(I18N.text(&(label))).style(style);
         });
 }
 
@@ -789,7 +791,7 @@ fn custom_drawer(variant: u8, selected: State<usize>) {
         .modifier(Modifier::new().height(Dp(720.0)))
         .content(move || {
             if variant != 21 {
-                subhead_row("Mail");
+                subhead_row("ui-mail");
             }
             for index in 0..4usize {
                 if variant == 17 && index == 2 {
@@ -806,9 +808,9 @@ fn custom_drawer(variant: u8, selected: State<usize>) {
             if variant == 21 {
                 gap(Dp(16.0));
                 divider_row();
-                subhead_row("Personal Folders");
-                for label in ["Friends", "Volunteering", "Work"] {
-                    navigation_drawer_item().label(label).icon(|| {
+                subhead_row("ui-personal-folders-2672");
+                for label in ["ui-friends", "ui-volunteering", "ui-work"] {
+                    navigation_drawer_item().label(I18N.text(label)).icon(|| {
                         icon().vector(outlined::FOLDER_SVG).size(Dp(24.0));
                     });
                 }
@@ -833,13 +835,13 @@ fn divider_row() {
 fn drawer_item(variant: u8, index: usize, selected: State<usize>) {
     let home = matches!(variant, 41 | 42);
     let label = match (home, index, variant) {
-        (true, 0, _) => "Home",
-        (_, 0, _) => "Inbox",
-        (false, 1, _) => "Outbox",
-        (true, 1, _) => "Inbox",
-        (_, 2, 16) => "Notifications from fami…",
-        (_, 2, _) => "Favorites",
-        _ => "Trash",
+        (true, 0, _) => "ui-home",
+        (_, 0, _) => "ui-inbox",
+        (false, 1, _) => "ui-outbox",
+        (true, 1, _) => "ui-inbox",
+        (_, 2, 16) => "ui-notifications-from-fami",
+        (_, 2, _) => "ui-favorites",
+        _ => "ui-trash",
     };
     let active = selected.get() == index;
     let asset = match (home, index, active && variant != 42) {
@@ -860,15 +862,15 @@ fn drawer_item(variant: u8, index: usize, selected: State<usize>) {
     };
     let with_icon = variant != 15 && !(variant == 20 && index >= 2);
     let badge = if index == 0 && !home {
-        Some(RenderSlot::new(|| {
-            text().content("24");
+        Some(RenderSlot::new(move || {
+            text().content(I18N.text("24"));
         }))
     } else {
         None
     };
     if with_icon {
         navigation_drawer_item()
-            .label(label)
+            .label(I18N.text(label))
             .selected(active)
             .badge_optional(badge)
             .on_click(move || selected.set(index))
@@ -877,7 +879,7 @@ fn drawer_item(variant: u8, index: usize, selected: State<usize>) {
             });
     } else {
         navigation_drawer_item()
-            .label(label)
+            .label(I18N.text(label))
             .selected(active)
             .badge_optional(badge)
             .on_click(move || selected.set(index));
@@ -915,13 +917,16 @@ fn plain_item(two_lines: bool) {
             column().children(move || {
                 if two_lines {
                     text()
-                        .content("Notifications from family")
+                        .content(I18N.text("ui-notifications-from-family"))
                         .style(style)
                         .color(color);
-                    text().content("and friends").style(style).color(color);
+                    text()
+                        .content(I18N.text("ui-and-friends"))
+                        .style(style)
+                        .color(color);
                 } else {
                     text()
-                        .content("Notifications from family and friends")
+                        .content(I18N.text("ui-notifications-from-family-and-friends"))
                         .style(style)
                         .color(color);
                 }
@@ -936,9 +941,9 @@ fn a11y_purple() -> tessera_ui::Color {
 #[tessera]
 fn a11y_item(photos: bool, index: usize, selected: usize, outlined_selected: bool) {
     let labels = if photos {
-        ["Photos", "Albums", "Recents", "Trash"]
+        ["ui-photos", "ui-albums", "ui-recents", "ui-trash"]
     } else {
-        ["Inbox", "Outbox", "Favorites", "Trash"]
+        ["ui-inbox", "ui-outbox", "ui-favorites", "ui-trash"]
     };
     let filled_icon = selected == index && !outlined_selected;
     let asset = match (index, filled_icon) {
@@ -952,14 +957,14 @@ fn a11y_item(photos: bool, index: usize, selected: usize, outlined_selected: boo
         (_, false) => outlined::DELETE_SVG,
     };
     let badge = if index == 1 && !photos {
-        Some(RenderSlot::new(|| {
-            text().content("100+");
+        Some(RenderSlot::new(move || {
+            text().content(I18N.text("100+"));
         }))
     } else {
         None
     };
     navigation_drawer_item()
-        .label(labels[index])
+        .label(I18N.text(labels[index]))
         .selected(selected == index)
         .badge_optional(badge)
         .icon(move || {
@@ -996,7 +1001,7 @@ fn a11y_card(
                 .style(NavigationDrawerStyle::Modal)
                 .modifier(Modifier::new().height(Dp(height)))
                 .content(move || {
-                    subhead_row("Mail");
+                    subhead_row("ui-mail");
                     for index in 0..4usize {
                         a11y_item(photos, index, selected, outlined_selected);
                     }
@@ -1029,7 +1034,7 @@ fn key_chip(#[prop(into)] label: String, x: f64, y: f64, width: f64) {
         )
         .children(move || {
             text()
-                .content(label.clone())
+                .content(I18N.text(&(label)))
                 .style(medium_style(14.0, 20.0))
                 .color(tessera_ui::Color::WHITE);
         });
@@ -1057,9 +1062,9 @@ fn icon_states() {
 fn labeling_figure(photos: bool) {
     let scheme = use_context::<MaterialTheme>().unwrap().get().color_scheme;
     let (row, accessible) = if photos {
-        (0.0, "Photos")
+        (0.0, "ui-photos")
     } else {
-        (2.0, "Recent Images")
+        (2.0, "ui-recent-images")
     };
     let row_y = 102.0 + 56.0 * row;
     a11y_card(32.0, 34.0, 360.0, 320.0, true, 0);
@@ -1082,7 +1087,7 @@ fn labeling_figure(photos: bool) {
                 .padding_symmetric(Dp(22.0), Dp(18.0)),
         )
         .children(move || {
-            for (index, (name, value)) in [("Label", accessible), ("Role", "Tab")]
+            for (index, (name, value)) in [("ui-label", accessible), ("ui-role", "ui-tab")]
                 .into_iter()
                 .enumerate()
             {
@@ -1090,11 +1095,11 @@ fn labeling_figure(photos: bool) {
                     gap(Dp(8.0));
                 }
                 text()
-                    .content(name)
+                    .content(I18N.text(name))
                     .style(type_style(16.0, 24.0))
                     .color(scheme.on_surface);
                 text()
-                    .content(value)
+                    .content(I18N.text(value))
                     .style(medium_style(16.0, 24.0))
                     .color(a11y_purple());
             }
@@ -1105,15 +1110,15 @@ fn labeling_figure(photos: bool) {
 pub(super) fn usage(open: State<bool>, selected: State<usize>) {
     guide_split()
         .start(|| {
-            prose("Navigation drawers provide access to destinations and app functionality, such as switching accounts. They can either be permanently on-screen or opened and closed by a navigation menu icon. One navigation destination is always active.");
+            prose("ui-navigation-drawers-provide-access-to-destinations-and-app-functionality-such-as-switching");
             gap(Dp(16.0));
-            prose("Navigation drawers are recommended for:");
+            prose("ui-navigation-drawers-are-recommended-for");
             gap(Dp(12.0));
             bullets(vec![
-                "Apps with 5 or more top-level destinations".into(),
-                "Apps with 2 or more levels of navigation hierarchy".into(),
-                "Quick navigation between unrelated destinations".into(),
-                "Replacing the navigation rail or navigation bar on large screens".into(),
+                "ui-apps-with-5-or-more-top-level-destinations".into(),
+                "ui-apps-with-2-or-more-levels-of-navigation-hierarchy".into(),
+                "ui-quick-navigation-between-unrelated-destinations".into(),
+                "ui-replacing-the-navigation-rail-or-navigation-bar-on-large-screens".into(),
             ]);
         })
         .end(|| {
@@ -1122,14 +1127,14 @@ pub(super) fn usage(open: State<bool>, selected: State<usize>) {
     gap(Dp(48.0));
     guide_split()
         .start(|| {
-            prose("Avoid using a navigation drawer with other primary navigation components, such as a navigation bar.");
+            prose("ui-avoid-using-a-navigation-drawer-with-other-primary-navigation-components-such-as-a-navigat");
             gap(Dp(16.0));
-            prose("Instead, choose a single navigation component based on product requirements and breakpoints:");
+            prose("ui-instead-choose-a-single-navigation-component-based-on-product-requirements-and-breakpoints");
             gap(Dp(12.0));
             bullets(vec![
-                "Navigation bars for compact breakpoints".into(),
-                "Navigation rails for medium and expanded breakpoints".into(),
-                "Standard navigation drawers for expanded, large and extra-large breakpoints".into(),
+                "ui-navigation-bars-for-compact-breakpoints".into(),
+                "ui-navigation-rails-for-medium-and-expanded-breakpoints".into(),
+                "ui-standard-navigation-drawers-for-expanded-large-and-extra-large-breakpoints".into(),
             ]);
         })
         .end(|| {
@@ -1138,40 +1143,40 @@ pub(super) fn usage(open: State<bool>, selected: State<usize>) {
     gap(Dp(48.0));
     guide_split()
         .start(|| {
-            prose("There are two variants of navigation drawers:");
+            prose("ui-there-are-two-variants-of-navigation-drawers");
             gap(Dp(16.0));
             legend_entries(vec![
-                (1, "Standard navigation drawer".into()),
-                (2, "Modal navigation drawer".into()),
+                (1, "ui-standard-navigation-drawer".into()),
+                (2, "ui-modal-navigation-drawer".into()),
             ]);
         })
         .end(|| {
             guide_row(vec![3, 4]);
         });
     gap(Dp(48.0));
-    subheading("Standard navigation drawer".into());
+    subheading("ui-standard-navigation-drawer".into());
     gap(Dp(24.0));
     guide_split()
         .start(|| {
-            prose("Standard navigation drawers provide access to drawer destinations and app content for layouts in expanded, large, and extra-large breakpoints.");
+            prose("ui-standard-navigation-drawers-provide-access-to-drawer-destinations-and-app-content-for-layo");
             gap(Dp(16.0));
-            prose("Standard drawers can be permanently visible (best for frequently switching destinations) or opened and closed by tapping a menu icon (best for focusing more on screen content).");
+            prose("ui-standard-drawers-can-be-permanently-visible-best-for-frequently-switching-destinations-or");
             gap(Dp(16.0));
-            prose("In medium and compact breakpoints, use modal drawers instead.");
+            prose("ui-in-medium-and-compact-breakpoints-use-modal-drawers-instead");
         })
         .end(|| {
             guide(5);
         });
     gap(Dp(48.0));
-    subheading("Modal navigation drawer".into());
+    subheading("ui-modal-navigation-drawer".into());
     gap(Dp(24.0));
     guide_split()
         .start(|| {
-            prose("Modal navigation drawers use a scrim to block interaction with the rest of an app’s content, and don’t affect the screen’s layout grid.");
+            prose("ui-modal-navigation-drawers-use-a-scrim-to-block-interaction-with-the-rest-of-an-app-s-conten");
             gap(Dp(16.0));
-            prose("Modal navigation drawers can be used in any breakpoint, but are primarily used in compact and medium sizes where space is limited or prioritized for app content.");
+            prose("ui-modal-navigation-drawers-can-be-used-in-any-breakpoint-but-are-primarily-used-in-compact-a");
             gap(Dp(16.0));
-            prose("They can be swapped with standard drawers on expanded, large, and extra-large breakpoints.");
+            prose("ui-they-can-be-swapped-with-standard-drawers-on-expanded-large-and-extra-large-breakpoints");
         })
         .end(|| {
             guide(6);
@@ -1179,14 +1184,14 @@ pub(super) fn usage(open: State<bool>, selected: State<usize>) {
     gap(Dp(48.0));
     guide_split()
         .start(|| {
-            prose("Modal navigation drawers are always opened by an action outside of the drawer, such as clicking a navigation menu icon in a navigation rail.");
+            prose("ui-modal-navigation-drawers-are-always-opened-by-an-action-outside-of-the-drawer-such-as-clic");
             gap(Dp(16.0));
-            prose("Modal drawers can be dismissed by:");
+            prose("ui-modal-drawers-can-be-dismissed-by");
             gap(Dp(12.0));
             bullets(vec![
-                "Selecting a drawer item".into(),
-                "Tapping the scrim".into(),
-                "Swiping toward the drawer’s anchoring edge (for example, swiping right-to-left for a left-aligned navigation drawer)".into(),
+                "ui-selecting-a-drawer-item".into(),
+                "ui-tapping-the-scrim".into(),
+                "ui-swiping-toward-the-drawer-s-anchoring-edge-for-example-swiping-right-to-left-for-a-left-al".into(),
             ]);
         })
         .end(|| {
@@ -1195,7 +1200,7 @@ pub(super) fn usage(open: State<bool>, selected: State<usize>) {
     gap(Dp(48.0));
     guide_split()
         .start(|| {
-            prose("Modal drawers can be dismissed by tapping the scrim or swiping the drawer toward its anchoring screen edge.");
+            prose("ui-modal-drawers-can-be-dismissed-by-tapping-the-scrim-or-swiping-the-drawer-toward-its-ancho");
         })
         .end(|| {
             guide(8);
@@ -1207,33 +1212,33 @@ pub(super) fn usage(open: State<bool>, selected: State<usize>) {
 #[tessera]
 pub(super) fn anatomy() {
     prose(
-        "Navigation drawers are essentially a list contained within a side sheet. They can also include headers, subheads, and dividers to organize longer lists.",
+        "ui-navigation-drawers-are-essentially-a-list-contained-within-a-side-sheet-they-can-also-incl",
     );
     gap(Dp(32.0));
     drawer_figure(true, 4);
     gap(Dp(12.0));
     caption(
-        "Navigation drawers can include headers, subheads, and dividers to organize longer lists",
+        "ui-navigation-drawers-can-include-headers-subheads-and-dividers-to-organize-longer-lists",
     );
     gap(Dp(16.0));
     legend_entries(vec![
-        (1, "Active Indicator".into()),
-        (2, "Icon".into()),
-        (3, "Label".into()),
-        (4, "Badge label".into()),
-        (5, "Sheet".into()),
-        (6, "Divider".into()),
-        (7, "Section label (optional)".into()),
-        (8, "Scrim".into()),
+        (1, "ui-active-indicator-2814".into()),
+        (2, "ui-icon".into()),
+        (3, "ui-label".into()),
+        (4, "ui-badge-label".into()),
+        (5, "ui-sheet".into()),
+        (6, "ui-divider".into()),
+        (7, "ui-section-label-optional".into()),
+        (8, "ui-scrim".into()),
     ]);
     gap(Dp(48.0));
     guide_split()
         .start(|| {
-            minor_heading("Sheet");
+            minor_heading("ui-sheet");
             gap(Dp(8.0));
-            prose("A sheet holds all navigation drawer elements. Side sheets are used as the container for standard and modal navigation drawers.");
+            prose("ui-a-sheet-holds-all-navigation-drawer-elements-side-sheets-are-used-as-the-container-for-sta");
             gap(Dp(16.0));
-            prose("Navigation drawers that open from the side are always placed on the start edge of the screen, on the left for left-to-right (LTR) languages, and on the right for right-to-left (RTL) languages.");
+            prose("ui-navigation-drawers-that-open-from-the-side-are-always-placed-on-the-start-edge-of-the-scre");
         })
         .end(|| {
             guide(10);
@@ -1241,9 +1246,9 @@ pub(super) fn anatomy() {
     gap(Dp(48.0));
     guide_split()
         .start(|| {
-            minor_heading("Divider (optional)");
+            minor_heading("ui-divider-optional");
             gap(Dp(8.0));
-            prose("Dividers can be used to separate groups of destinations within the navigation drawer.");
+            prose("ui-dividers-can-be-used-to-separate-groups-of-destinations-within-the-navigation-drawer");
         })
         .end(|| {
             guide_row(vec![11, 12]);
@@ -1251,9 +1256,9 @@ pub(super) fn anatomy() {
     gap(Dp(48.0));
     guide_split()
         .start(|| {
-            minor_heading("Active indicator");
+            minor_heading("ui-active-indicator");
             gap(Dp(8.0));
-            prose("The active indicator is a background shape communicating which destination of the navigation drawer is currently being displayed.");
+            prose("ui-the-active-indicator-is-a-background-shape-communicating-which-destination-of-the-navigati");
         })
         .end(|| {
             guide(13);
@@ -1261,9 +1266,9 @@ pub(super) fn anatomy() {
     gap(Dp(48.0));
     guide_split()
         .start(|| {
-            minor_heading("Label text and icons");
+            minor_heading("ui-label-text-and-icons");
             gap(Dp(8.0));
-            prose("Destinations in a navigation drawer take the form of actionable list items. Each item describes its destination using label text and an optional icon.");
+            prose("ui-destinations-in-a-navigation-drawer-take-the-form-of-actionable-list-items-each-item-descr");
         })
         .end(|| {
             guide(14);
@@ -1272,7 +1277,7 @@ pub(super) fn anatomy() {
     guide_split()
         .start(|| {
             prose(
-                "Label text should be clear and short enough that it isn’t cut off by the sheet.",
+                "ui-label-text-should-be-clear-and-short-enough-that-it-isn-t-cut-off-by-the-sheet",
             );
         })
         .end(|| {
@@ -1283,7 +1288,7 @@ pub(super) fn anatomy() {
     gap(Dp(48.0));
     guide_split()
         .start(|| {
-            prose("Icons can supplement labels as indicators of a destination. When used, they should always be placed before text. Other app components and content should reference these icons.");
+            prose("ui-icons-can-supplement-labels-as-indicators-of-a-destination-when-used-they-should-always-be");
         })
         .end(|| {
             guide_row(vec![19, 20]);
@@ -1291,9 +1296,9 @@ pub(super) fn anatomy() {
     gap(Dp(48.0));
     guide_split()
         .start(|| {
-            minor_heading("Section label (optional)");
+            minor_heading("ui-section-label-optional");
             gap(Dp(8.0));
-            prose("Short subhead section labels can help group related destinations in the navigation drawer.");
+            prose("ui-short-subhead-section-labels-can-help-group-related-destinations-in-the-navigation-drawer");
         })
         .end(|| {
             guide(21);
@@ -1301,9 +1306,9 @@ pub(super) fn anatomy() {
     gap(Dp(48.0));
     guide_split()
         .start(|| {
-            minor_heading("Scrim (modal only)");
+            minor_heading("ui-scrim-modal-only");
             gap(Dp(8.0));
-            prose("Modal navigation drawers use a scrim to block interaction with the rest of the app. The scrim is placed directly behind the drawer’s sheet and can be tapped or clicked to dismiss the drawer.");
+            prose("ui-modal-navigation-drawers-use-a-scrim-to-block-interaction-with-the-rest-of-the-app-the-scr");
         })
         .end(|| {
             guide(22);
@@ -1314,13 +1319,13 @@ pub(super) fn anatomy() {
 pub(super) fn responsive_layout() {
     guide_split()
         .start(|| {
-            prose("A product’s navigation component should change to suit the breakpoint and form factor of the screen.");
+            prose("ui-a-product-s-navigation-component-should-change-to-suit-the-breakpoint-and-form-factor-of-t");
             gap(Dp(16.0));
-            prose("Modal navigation drawers can be used at any breakpoint but are most common in compact and medium breakpoints.");
+            prose("ui-modal-navigation-drawers-can-be-used-at-any-breakpoint-but-are-most-common-in-compact-and");
             gap(Dp(16.0));
-            prose("Standard navigation drawers are best for expanded, large, and extra-large breakpoints.");
+            prose("ui-standard-navigation-drawers-are-best-for-expanded-large-and-extra-large-breakpoints");
             gap(Dp(16.0));
-            prose("Use a transition when swapping components. For example, when switching from a portrait to landscape layout, the navigation rail should transform into a navigation drawer.");
+            prose("ui-use-a-transition-when-swapping-components-for-example-when-switching-from-a-portrait-to-la");
         })
         .end(|| {
             guide(23);
@@ -1328,11 +1333,11 @@ pub(super) fn responsive_layout() {
     gap(Dp(48.0));
     guide_split()
         .start(|| {
-            minor_heading("Compact breakpoint");
+            minor_heading("ui-compact-breakpoint");
             gap(Dp(8.0));
-            prose("Use modal navigation drawers in compact breakpoints. Or swap the drawer for a navigation bar.");
+            prose("ui-use-modal-navigation-drawers-in-compact-breakpoints-or-swap-the-drawer-for-a-navigation-ba");
             gap(Dp(16.0));
-            prose("On web, when the screen size is smaller than 320 CSS pixels, swap the navigation drawer for a navigation bar to ensure accessibility.");
+            prose("ui-on-web-when-the-screen-size-is-smaller-than-320-css-pixels-swap-the-navigation-drawer-for");
         })
         .end(|| {
             guide(24);
@@ -1340,13 +1345,13 @@ pub(super) fn responsive_layout() {
     gap(Dp(48.0));
     guide_split()
         .start(|| {
-            minor_heading("Medium & expanded breakpoints");
+            minor_heading("ui-medium-expanded-breakpoints");
             gap(Dp(8.0));
-            prose("Use a modal navigation drawer alone or with a navigation rail on medium and expanded breakpoints.");
+            prose("ui-use-a-modal-navigation-drawer-alone-or-with-a-navigation-rail-on-medium-and-expanded-break");
             gap(Dp(16.0));
-            prose("When a navigation rail and modal navigation drawer are used together, the drawer can repeat destinations in the navigation rail as long as the drawer offers enough visual separation between levels of the navigation hierarchy.");
+            prose("ui-when-a-navigation-rail-and-modal-navigation-drawer-are-used-together-the-drawer-can-repeat");
             gap(Dp(16.0));
-            prose("A standard navigation drawer can be used in single pane layouts in expanded breakpoints.");
+            prose("ui-a-standard-navigation-drawer-can-be-used-in-single-pane-layouts-in-expanded-breakpoints");
         })
         .end(|| {
             guide(25);
@@ -1354,9 +1359,9 @@ pub(super) fn responsive_layout() {
     gap(Dp(48.0));
     guide_split()
         .start(|| {
-            minor_heading("Large and extra-large breakpoints");
+            minor_heading("ui-large-and-extra-large-breakpoints");
             gap(Dp(8.0));
-            prose("For web experiences on laptop and desktop devices, use either a standard navigation drawer, or a navigation rail that transitions into a modal navigation drawer.");
+            prose("ui-for-web-experiences-on-laptop-and-desktop-devices-use-either-a-standard-navigation-drawer");
         })
         .end(|| {
             guide(26);
@@ -1367,9 +1372,9 @@ pub(super) fn responsive_layout() {
 pub(super) fn behavior(open: State<bool>, selected: State<usize>) {
     guide_split()
         .start(|| {
-            minor_heading("Scrolling");
+            minor_heading("ui-scrolling");
             gap(Dp(8.0));
-            prose("Navigation drawers can be vertically scrolled, independent of the rest of the screen’s content and UI. If the list of navigation destinations is longer than the height of the drawer, the drawer’s contents can be scrolled within the drawer.");
+            prose("ui-navigation-drawers-can-be-vertically-scrolled-independent-of-the-rest-of-the-screen-s-cont");
         })
         .end(|| {
             guide(27);
@@ -1377,9 +1382,9 @@ pub(super) fn behavior(open: State<bool>, selected: State<usize>) {
     gap(Dp(48.0));
     guide_split()
         .start(|| {
-            minor_heading("Visibility");
+            minor_heading("ui-visibility");
             gap(Dp(8.0));
-            prose("Dismissible standard drawers can be used for layouts that prioritize content (such as a photo gallery) or for apps where users are unlikely to switch destinations often. They should use a visible navigation menu icon to open and close the drawer.");
+            prose("ui-dismissible-standard-drawers-can-be-used-for-layouts-that-prioritize-content-such-as-a-pho");
         })
         .end(|| {
             guide(28);
@@ -1387,7 +1392,7 @@ pub(super) fn behavior(open: State<bool>, selected: State<usize>) {
     gap(Dp(48.0));
     guide_split()
         .start(|| {
-            prose("Permanently visible standard drawers allow quick navigation between unrelated destinations. They can’t be closed or dismissed by the user.");
+            prose("ui-permanently-visible-standard-drawers-allow-quick-navigation-between-unrelated-destinations");
         })
         .end(|| {
             guide(29);
@@ -1395,25 +1400,25 @@ pub(super) fn behavior(open: State<bool>, selected: State<usize>) {
     gap(Dp(48.0));
     guide_split()
         .start(|| {
-            minor_heading("Appearing");
+            minor_heading("ui-appearing");
             gap(Dp(8.0));
-            prose("When a navigation drawer animates on screen, it uses an enter and exit transition pattern.");
+            prose("ui-when-a-navigation-drawer-animates-on-screen-it-uses-an-enter-and-exit-transition-pattern");
         })
         .end(move || {
             launch(open, selected);
             gap(Dp(12.0));
-            caption("A navigation drawer animating on screen");
+            caption("ui-a-navigation-drawer-animating-on-screen");
         });
 }
 
 #[tessera]
 pub(super) fn use_cases(open: State<bool>, selected: State<usize>) {
-    prose("Users should be able to:");
+    prose("ui-users-should-be-able-to");
     gap(Dp(12.0));
     bullets(vec![
-        "Move between navigation destinations with assistive technology".into(),
-        "Select a particular navigation destination from a set".into(),
-        "Get appropriate feedback based on input type".into(),
+        "ui-move-between-navigation-destinations-with-assistive-technology".into(),
+        "ui-select-a-particular-navigation-destination-from-a-set".into(),
+        "ui-get-appropriate-feedback-based-on-input-type".into(),
     ]);
     gap(Dp(16.0));
     launch(open, selected);
@@ -1423,13 +1428,13 @@ pub(super) fn use_cases(open: State<bool>, selected: State<usize>) {
 pub(super) fn interaction() {
     guide_split()
         .start(|| {
-            minor_heading("Touch");
+            minor_heading("ui-touch");
             gap(Dp(8.0));
             bullets(vec![
-                "When a navigation item is tapped, the active indicator appears in place, providing feedback to the user that it is selected".into(),
-                "A touch ripple passes through the indicator".into(),
-                "The icon switches from outlined to filled".into(),
-                "The icon changes color, becoming darker".into(),
+                "ui-when-a-navigation-item-is-tapped-the-active-indicator-appears-in-place-providing-feedback".into(),
+                "ui-a-touch-ripple-passes-through-the-indicator".into(),
+                "ui-the-icon-switches-from-outlined-to-filled".into(),
+                "ui-the-icon-changes-color-becoming-darker".into(),
             ]);
         })
         .end(|| {
@@ -1438,13 +1443,13 @@ pub(super) fn interaction() {
     gap(Dp(48.0));
     guide_split()
         .start(|| {
-            minor_heading("Cursor");
+            minor_heading("ui-cursor");
             gap(Dp(8.0));
             bullets(vec![
-                "When hovered, the hover indicator appears providing a visual cue that the destination is interactive".into(),
-                "When clicked, a ripple passes through the indicator".into(),
-                "The icon switches from outlined to filled".into(),
-                "The icon changes color, becoming darker in light theme and lighter in dark theme, to increase the contrast".into(),
+                "ui-when-hovered-the-hover-indicator-appears-providing-a-visual-cue-that-the-destination-is-in".into(),
+                "ui-when-clicked-a-ripple-passes-through-the-indicator".into(),
+                "ui-the-icon-switches-from-outlined-to-filled".into(),
+                "ui-the-icon-changes-color-becoming-darker-in-light-theme-and-lighter-in-dark-theme-to-increas".into(),
             ]);
         })
         .end(|| {
@@ -1456,7 +1461,7 @@ pub(super) fn interaction() {
 pub(super) fn initial_focus(open: State<bool>, selected: State<usize>) {
     guide_split()
         .start(|| {
-            prose("Initial focus lands directly on the first navigation item, since that is the first interactive element of the component.");
+            prose("ui-initial-focus-lands-directly-on-the-first-navigation-item-since-that-is-the-first-interact");
         })
         .end(|| {
             guide(33);
@@ -1469,7 +1474,7 @@ pub(super) fn initial_focus(open: State<bool>, selected: State<usize>) {
 pub(super) fn closing(open: State<bool>, selected: State<usize>) {
     guide_split()
         .start(|| {
-            prose("The modal navigation drawer can be dismissed by selecting the scrim that covers the rest of the screen.");
+            prose("ui-the-modal-navigation-drawer-can-be-dismissed-by-selecting-the-scrim-that-covers-the-rest-o");
         })
         .end(|| {
             guide(40);
@@ -1482,7 +1487,7 @@ pub(super) fn closing(open: State<bool>, selected: State<usize>) {
 pub(super) fn visual_indicators() {
     guide_split()
         .start(|| {
-            prose("Icons are the primary focus of the navigation and such give the dominant cue of its state. Use a filled icon for the selected destination to differentiate from the outlined icons of non-selected destinations.");
+            prose("ui-icons-are-the-primary-focus-of-the-navigation-and-such-give-the-dominant-cue-of-its-state");
         })
         .end(|| {
             guide(34);
@@ -1498,19 +1503,19 @@ pub(super) fn visual_indicators() {
 #[tessera]
 pub(super) fn keyboard() {
     spec_table(
-        vec!["Keys".into(), "Actions".into()],
+        vec!["ui-keys".into(), "ui-actions".into()],
         vec![
             vec![
-                "Tab".into(),
-                "Focus lands on the first navigation destination".into(),
+                "ui-tab".into(),
+                "ui-focus-lands-on-the-first-navigation-destination".into(),
             ],
             vec![
-                "Space or Enter".into(),
-                "Selects the focused navigation destination, and focus moves to the newly opened section (if applicable)".into(),
+                "ui-space-or-enter".into(),
+                "ui-selects-the-focused-navigation-destination-and-focus-moves-to-the-newly-opened-section-if".into(),
             ],
             vec![
-                "Arrow".into(),
-                "Navigate between destinations within the navigation drawer".into(),
+                "ui-arrow".into(),
+                "ui-navigate-between-destinations-within-the-navigation-drawer".into(),
             ],
         ],
     );
@@ -1520,11 +1525,11 @@ pub(super) fn keyboard() {
 pub(super) fn labeling() {
     guide_split()
         .start(|| {
-            prose("The accessibility label for a navigation item is typically the same as the destination name.");
+            prose("ui-the-accessibility-label-for-a-navigation-item-is-typically-the-same-as-the-destination-nam");
             gap(Dp(16.0));
-            prose("If the UI text is correctly linked, assistive tech (such as a screenreader) will read the UI text followed by the component’s role.");
+            prose("ui-if-the-ui-text-is-correctly-linked-assistive-tech-such-as-a-screenreader-will-read-the-ui");
             gap(Dp(16.0));
-            prose("For Android Views (MDC-Android), a more descriptive accessibility label is not available to be set and the role is not announced.");
+            prose("ui-for-android-views-mdc-android-a-more-descriptive-accessibility-label-is-not-available-to-b");
         })
         .end(|| {
             guide(44);
@@ -1532,7 +1537,7 @@ pub(super) fn labeling() {
     gap(Dp(48.0));
     guide_split()
         .start(|| {
-            prose("When the visible UI text is ambiguous, accessibility labels need to be more descriptive. For example, a navigation destination visibly labeled Recents would benefit from additional information in its accessibility label to clarify the destination’s intent.");
+            prose("ui-when-the-visible-ui-text-is-ambiguous-accessibility-labels-need-to-be-more-descriptive-for");
         })
         .end(|| {
             guide(45);

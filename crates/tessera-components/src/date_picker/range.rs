@@ -20,6 +20,7 @@ use crate::{
     lazy_list::{LazyListController, lazy_column},
     material_icons::filled,
     modifier::{ModifierExt as _, Padding, SemanticsArgs},
+    res::I18N,
     row::row,
     scrollable::ScrollBarBehavior,
     spacer::spacer,
@@ -324,35 +325,62 @@ pub fn date_range_picker(
         .expect("MaterialTheme must be provided")
         .get();
     let input = state.with(|state| state.display_mode() == DatePickerDisplayMode::Input);
-    let title =
-        title.unwrap_or_else(|| if input { "Select date" } else { "Select dates" }.to_owned());
+    let title = title.unwrap_or_else(|| {
+        I18N.text(if input {
+            "md3-select-date"
+        } else {
+            "md3-select-dates"
+        })
+    });
     let headline = headline.unwrap_or_else(|| {
         if input {
-            return "Enter dates".to_owned();
+            return I18N.text("md3-enter-dates");
         }
         state.with(|state| {
             let cross_year = state
                 .selected_start_date()
                 .zip(state.selected_end_date())
                 .is_some_and(|(start, end)| start.year() != end.year());
-            let format = |date: CalendarDate| {
-                let value = format!("{} {}", format_month_short_name(date.month()), date.day());
+            let format = move |date: CalendarDate| {
+                let value = I18N.format(
+                    "md3-month-day",
+                    [
+                        ("month", format_month_short_name(date.month()).into()),
+                        ("day", date.day().into()),
+                    ],
+                );
                 if cross_year {
-                    format!("{value}, {}", date.year())
+                    I18N.format(
+                        "md3-date-with-year",
+                        [
+                            ("date", value.into()),
+                            ("year", (date.year()).to_string().into()),
+                        ],
+                    )
                 } else {
                     value
                 }
             };
-            format!(
-                "{} – {}",
-                state
-                    .selected_start_date()
-                    .map(format)
-                    .unwrap_or_else(|| "Start date".to_owned()),
-                state
-                    .selected_end_date()
-                    .map(format)
-                    .unwrap_or_else(|| "End date".to_owned())
+            I18N.format(
+                "md3-date-range",
+                [
+                    (
+                        "start",
+                        state
+                            .selected_start_date()
+                            .map(format)
+                            .unwrap_or_else(|| I18N.text("md3-start-date"))
+                            .into(),
+                    ),
+                    (
+                        "end",
+                        state
+                            .selected_end_date()
+                            .map(format)
+                            .unwrap_or_else(|| I18N.text("md3-end-date"))
+                            .into(),
+                    ),
+                ],
             )
         })
     });
@@ -389,7 +417,9 @@ pub fn date_range_picker(
                                     icon_button()
                                         .standard()
                                         .icon(filled::CALENDAR_TODAY_SVG)
-                                        .accessibility_label("Switch to range calendar")
+                                        .accessibility_label(
+                                            I18N.text("md3-switch-to-range-calendar"),
+                                        )
                                         .on_click(move || {
                                             state
                                                 .with_mut(DateRangePickerState::toggle_display_mode)
@@ -431,9 +461,9 @@ pub fn date_range_picker(
                                     filled::EDIT_SVG
                                 })
                                 .accessibility_label(if input {
-                                    "Switch to range calendar"
+                                    I18N.text("md3-switch-to-range-calendar")
                                 } else {
-                                    "Switch to date range input"
+                                    I18N.text("md3-switch-to-date-range-input")
                                 })
                                 .on_click(move || {
                                     state.with_mut(DateRangePickerState::toggle_display_mode)
@@ -540,7 +570,7 @@ fn range_calendar(
                         .focus_properties(FocusProperties::new().skip_traversal(true))
                         .semantics(SemanticsArgs {
                             role: Some(tessera_ui::accesskit::Role::Group),
-                            label: Some("Date range calendar".into()),
+                            label: Some(I18N.text("md3-date-range-calendar").into()),
                             merge_descendants: true,
                             ..Default::default()
                         }),
@@ -632,13 +662,13 @@ fn range_month(
                             }))
                             .description_optional(date.map(|_| {
                                 if date == start {
-                                    "Start date"
+                                    I18N.text("md3-start-date")
                                 } else if date == end {
-                                    "End date"
+                                    I18N.text("md3-end-date")
                                 } else if in_range {
-                                    "In selected range"
+                                    I18N.text("md3-in-selected-range")
                                 } else {
-                                    "Not selected"
+                                    I18N.text("md3-not-selected")
                                 }
                                 .to_owned()
                             }));
@@ -736,7 +766,11 @@ fn range_input_field(
         .controller(controller)
         .background_color(theme.color_scheme.surface_container_high)
         .focus_background_color(theme.color_scheme.surface_container_high)
-        .label(if start { "Start date" } else { "End date" })
+        .label(if start {
+            I18N.text("md3-start-date")
+        } else {
+            I18N.text("md3-end-date")
+        })
         .placeholder("MM/DD/YYYY")
         .is_error(error.is_some())
         .on_change(move |value| {
@@ -762,25 +796,25 @@ fn range_input_field(
     }
 }
 
-fn input_error(value: &str, start: bool, state: &DateRangePickerState) -> Option<&'static str> {
+fn input_error(value: &str, start: bool, state: &DateRangePickerState) -> Option<String> {
     if value.is_empty() {
         return None;
     }
     let Some(date) = parse_date_input(value) else {
-        return Some("Enter a date as MM/DD/YYYY");
+        return Some(I18N.text("md3-enter-a-date-as-mm-dd-yyyy"));
     };
     if !state.is_date_selectable(date) {
-        return Some("Date is not allowed");
+        return Some(I18N.text("md3-date-is-not-allowed"));
     }
     if !start && state.selected_start_date().is_none() {
-        return Some("Enter a start date first");
+        return Some(I18N.text("md3-enter-a-start-date-first"));
     }
     if !start
         && state
             .selected_start_date()
             .is_some_and(|start| date_key(date) < date_key(start))
     {
-        return Some("End date must be on or after start date");
+        return Some(I18N.text("md3-end-date-must-be-on-or-after-start-date"));
     }
     None
 }

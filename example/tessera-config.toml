@@ -6,3 +6,6 @@ dir = "assets"
 
 [assets.tree_shaking]
 exclude = []
+
+[i18n]
+fallback = "en"

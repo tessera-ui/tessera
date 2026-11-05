@@ -19,6 +19,8 @@ use tessera_components::{
 };
 use tessera_ui::{Dp, Modifier, RenderSlot, remember, tessera, use_context};
 
+use crate::res::I18N;
+
 use super::{
     ACCENT, INK,
     article::{ArticlePage, SpecSection, article},
@@ -30,35 +32,35 @@ pub(super) fn loading_indicator_spec(
     route: Option<crate::pages::material_spec::article::ArticleRoute>,
 ) {
     article(
-        "Loading indicator",
-        "Loading indicators show the progress of a process for a short wait time",
+        "ui-loading-indicator",
+        "ui-loading-indicators-show-the-progress-of-a-process-for-a-short-wait-time",
         vec![
             SpecSection {
-                title: "Variants",
+                title: "ui-variants",
                 content: RenderSlot::new(variants),
             },
             SpecSection {
-                title: "Configurations",
+                title: "ui-configurations",
                 content: RenderSlot::new(configurations),
             },
             SpecSection {
-                title: "Tokens & specs",
+                title: "ui-tokens-specs",
                 content: RenderSlot::new(tokens),
             },
             SpecSection {
-                title: "Anatomy",
+                title: "ui-anatomy",
                 content: RenderSlot::new(anatomy),
             },
             SpecSection {
-                title: "Color",
+                title: "ui-color",
                 content: RenderSlot::new(colors),
             },
             SpecSection {
-                title: "States",
+                title: "ui-states",
                 content: RenderSlot::new(states),
             },
             SpecSection {
-                title: "Measurements",
+                title: "ui-measurements",
                 content: RenderSlot::new(measurements),
             },
         ],
@@ -66,63 +68,63 @@ pub(super) fn loading_indicator_spec(
     .route_optional(route.clone())
     .pages(vec![
         ArticlePage {
-            title: "Overview",
+            title: "ui-overview",
             intro: Some(RenderSlot::new(overview)),
             sections: vec![
                 SpecSection {
-                    title: "Availability & resources",
+                    title: "ui-availability-resources",
                     content: RenderSlot::new(resources),
                 },
                 SpecSection {
-                    title: "M3 Expressive update",
+                    title: "ui-m3-expressive-update",
                     content: RenderSlot::new(expressive),
                 },
                 SpecSection {
-                    title: "Differences from M2",
+                    title: "ui-differences-from-m2",
                     content: RenderSlot::new(differences),
                 },
             ],
         },
         ArticlePage {
-            title: "Guidelines",
+            title: "ui-guidelines",
             intro: None,
             sections: vec![
                 SpecSection {
-                    title: "Usage",
+                    title: "ui-usage",
                     content: RenderSlot::new(usage),
                 },
                 SpecSection {
-                    title: "Anatomy",
+                    title: "ui-anatomy",
                     content: RenderSlot::new(guidelines_anatomy),
                 },
                 SpecSection {
-                    title: "Placement",
+                    title: "ui-placement",
                     content: RenderSlot::new(placement),
                 },
                 SpecSection {
-                    title: "Responsive layout",
+                    title: "ui-responsive-layout",
                     content: RenderSlot::new(responsive_layout),
                 },
                 SpecSection {
-                    title: "Behavior",
+                    title: "ui-behavior",
                     content: RenderSlot::new(behavior),
                 },
             ],
         },
         ArticlePage {
-            title: "Accessibility",
+            title: "ui-accessibility",
             intro: None,
             sections: vec![
                 SpecSection {
-                    title: "Use cases",
+                    title: "ui-use-cases",
                     content: RenderSlot::new(use_cases),
                 },
                 SpecSection {
-                    title: "Interaction & style",
+                    title: "ui-interaction-style",
                     content: RenderSlot::new(interaction_style),
                 },
                 SpecSection {
-                    title: "Labeling elements",
+                    title: "ui-labeling-elements",
                     content: RenderSlot::new(labeling),
                 },
             ],
@@ -132,7 +134,9 @@ pub(super) fn loading_indicator_spec(
 
 #[tessera]
 fn prose(#[prop(into)] value: String) {
-    text().content(value).style(type_style(16.0, 24.0));
+    text()
+        .content(I18N.text(value))
+        .style(type_style(16.0, 24.0));
 }
 
 #[tessera]
@@ -140,7 +144,7 @@ fn caption(#[prop(into)] value: String) {
     let scheme = use_context::<MaterialTheme>().unwrap().get().color_scheme;
     gap(Dp(16.0));
     text()
-        .content(value)
+        .content(I18N.text(value))
         .color(scheme.on_surface_variant)
         .style(type_style(14.0, 20.0));
 }
@@ -165,7 +169,9 @@ fn bullets(items: Vec<String>) {
                                 .background_with_shape(scheme.on_surface_variant, Shape::Ellipse),
                         );
                         spacer().modifier(Modifier::new().width(Dp(16.0)));
-                        text().content(item.clone()).style(type_style(16.0, 24.0));
+                        text()
+                            .content(I18N.text(&(item)))
+                            .style(type_style(16.0, 24.0));
                     });
             }
         });
@@ -183,118 +189,126 @@ fn spinner(
         .progress_optional(progress)
         .contained(contained.unwrap_or(false))
         .paused(paused.unwrap_or(false))
-        .accessibility_label(label);
+        .accessibility_label(I18N.text(label));
 }
 
 #[tessera]
 fn overview() {
     prose(
-        "Loading indicators show the progress of a process for a short wait time. Use the indeterminate morph for brief, unknown waits, and a determinate value when completion is measurable.",
+        "ui-loading-indicators-show-the-progress-of-a-process-for-a-short-wait-time-use-the-indetermin",
     );
     gap(Dp(16.0));
     bullets(vec![
-        "Best for short, indeterminate wait times".into(),
-        "Include loading indicators in a layout rather than blocking the whole screen".into(),
-        "Show determinate progress when the wait can be measured".into(),
+        "ui-best-for-short-indeterminate-wait-times".into(),
+        "ui-include-loading-indicators-in-a-layout-rather-than-blocking-the-whole-screen".into(),
+        "ui-show-determinate-progress-when-the-wait-can-be-measured".into(),
     ]);
     gap(Dp(32.0));
     panel(RenderSlot::new(|| {
-        spinner("Loading content");
+        spinner("ui-loading-content");
     }));
     gap(Dp(16.0));
-    prose("1  Loading indicator");
+    prose("ui-1-loading-indicator");
 }
 
 #[tessera]
 fn resources() {
     spec_table(
-        vec!["Type".into(), "Resource".into(), "Status".into()],
+        vec!["ui-type".into(), "ui-resource".into(), "ui-status".into()],
         vec![
             vec![
-                "Design".into(),
-                "Design Kit (Figma)".into(),
-                "Available".into(),
+                "ui-design".into(),
+                "ui-design-kit-figma".into(),
+                "ui-available".into(),
             ],
             vec![
-                "Implementation".into(),
-                "Jetpack Compose: Expressive".into(),
-                "Available".into(),
+                "ui-implementation".into(),
+                "ui-jetpack-compose-expressive".into(),
+                "ui-available".into(),
             ],
             vec![
-                "Implementation".into(),
-                "Flutter".into(),
-                "Unavailable".into(),
+                "ui-implementation".into(),
+                "ui-flutter".into(),
+                "ui-unavailable".into(),
             ],
-            vec!["Implementation".into(), "Web".into(), "Unavailable".into()],
+            vec![
+                "ui-implementation".into(),
+                "ui-web".into(),
+                "ui-unavailable".into(),
+            ],
         ],
     );
     gap(Dp(24.0));
     prose(
-        "Tessera examples on this page use the native loading_indicator component. The indeterminate morph, determinate progress, the contained style, a paused state, and an accessibility label are implemented.",
+        "ui-tessera-examples-on-this-page-use-the-native-loading-indicator-component-the-indeterm",
     );
 }
 
 #[tessera]
 fn expressive() {
     prose(
-        "May 2025: the loading indicator replaces the circular progress indicator for short, indeterminate waits. It animates a single morphing shape instead of a rotating arc, and adds a contained style with its own container color.",
+        "ui-may-2025-the-loading-indicator-replaces-the-circular-progress-indicator-for-short-indeterm",
     );
     gap(Dp(24.0));
     spec_table(
-        vec!["Change".into(), "Details".into()],
+        vec!["ui-change".into(), "ui-details".into()],
         vec![
             vec![
-                "Shape".into(),
-                "A morphing shape instead of a rotating arc".into(),
+                "ui-shape".into(),
+                "ui-a-morphing-shape-instead-of-a-rotating-arc".into(),
             ],
             vec![
-                "Containment".into(),
-                "A contained style with primary container color".into(),
+                "ui-containment".into(),
+                "ui-a-contained-style-with-primary-container-color".into(),
             ],
             vec![
-                "Determinate".into(),
-                "The same shape can express a measured completion".into(),
+                "ui-determinate".into(),
+                "ui-the-same-shape-can-express-a-measured-completion".into(),
             ],
         ],
     );
     gap(Dp(32.0));
     panel(RenderSlot::new(|| {
         flow_row().item_spacing(Dp(48.0)).children(|| {
-            spinner("Default loading indicator");
-            spinner("Contained loading indicator").contained(true);
+            spinner("ui-default-loading-indicator");
+            spinner("ui-contained-loading-indicator").contained(true);
         });
     }));
-    caption("Default and contained styles share the same morph.");
+    caption("ui-default-and-contained-styles-share-the-same-morph");
 }
 
 #[tessera]
 fn differences() {
     prose(
-        "M2: a circular progress indicator rotated a stroke arc and had no contained style. M3 keeps the circular shape but pairs it with the expressive loading indicator, which morphs a solid shape and can sit in a container.",
+        "ui-m2-a-circular-progress-indicator-rotated-a-stroke-arc-and-had-no-contained-style-m3-keeps",
     );
     gap(Dp(24.0));
     spec_table(
-        vec!["Attribute".into(), "M2".into(), "M3 Expressive".into()],
+        vec![
+            "ui-attribute".into(),
+            "M2".into(),
+            "ui-m3-expressive".into(),
+        ],
         vec![
             vec![
-                "Shape".into(),
-                "Rotating arc".into(),
-                "Morphing shape".into(),
+                "ui-shape".into(),
+                "ui-rotating-arc".into(),
+                "ui-morphing-shape".into(),
             ],
             vec![
-                "Size".into(),
+                "ui-size".into(),
                 "40dp".into(),
-                "48dp target, 38dp shape".into(),
+                "ui-48dp-target-38dp-shape".into(),
             ],
             vec![
-                "Containment".into(),
-                "None".into(),
-                "Default or contained".into(),
+                "ui-containment".into(),
+                "ui-none".into(),
+                "ui-default-or-contained".into(),
             ],
             vec![
-                "Determinate".into(),
-                "Separate component".into(),
-                "Same component with a progress value".into(),
+                "ui-determinate".into(),
+                "ui-separate-component".into(),
+                "ui-same-component-with-a-progress-value".into(),
             ],
         ],
     );
@@ -303,21 +317,21 @@ fn differences() {
 #[tessera]
 fn variants() {
     prose(
-        "Loading indicators have a single variant. Choose containment and a determinate value as configurations, not as separate components.",
+        "ui-loading-indicators-have-a-single-variant-choose-containment-and-a-determinate-value-as-con",
     );
     gap(Dp(24.0));
     panel(RenderSlot::new(|| {
-        spinner("Loading indicator");
+        spinner("ui-loading-indicator");
     }));
     gap(Dp(16.0));
-    caption("1 Loading indicator");
+    caption("ui-1-loading-indicator-3589");
     gap(Dp(32.0));
     spec_table(
-        vec!["Variant".into(), "M3".into(), "M3 Expressive".into()],
+        vec!["ui-variant".into(), "M3".into(), "ui-m3-expressive".into()],
         vec![vec![
-            "Loading indicator".into(),
+            "ui-loading-indicator".into(),
             "--".into(),
-            "Available".into(),
+            "ui-available".into(),
         ]],
     );
 }
@@ -327,27 +341,27 @@ fn configurations() {
     let contained = remember(|| false);
     let paused = remember(|| false);
     prose(
-        "Configure containment, a determinate progress value, and a paused state. Pausing is useful for reduced-motion settings and keeps the shape visible without animating.",
+        "ui-configure-containment-a-determinate-progress-value-and-a-paused-state-pausing-is-useful-fo",
     );
     gap(Dp(24.0));
-    spinner("Configured loading")
+    spinner("ui-configured-loading")
         .contained(contained.get())
         .paused(paused.get());
     gap(Dp(16.0));
     flow_row().item_spacing(Dp(16.0)).children(move || {
         text()
-            .content("Contained loading")
+            .content(I18N.text("ui-contained-loading"))
             .style(type_style(14.0, 20.0));
         switch()
             .checked(contained.get())
-            .accessibility_label("Contained loading")
+            .accessibility_label(I18N.text("ui-contained-loading"))
             .on_toggle(move |value| contained.set(value));
         text()
-            .content("Pause animation")
+            .content(I18N.text("ui-pause-animation"))
             .style(type_style(14.0, 20.0));
         switch()
             .checked(paused.get())
-            .accessibility_label("Pause loading animation")
+            .accessibility_label(I18N.text("ui-pause-loading-animation"))
             .on_toggle(move |value| paused.set(value));
     });
     gap(Dp(24.0));
@@ -355,32 +369,32 @@ fn configurations() {
         column()
             .modifier(Modifier::new().fill_max_width())
             .children(|| {
-                subheading("1  Containment".into());
+                subheading("ui-1-containment".into());
                 gap(Dp(24.0));
                 flow_row()
                     .item_spacing(Dp(48.0))
                     .line_spacing(Dp(24.0))
                     .children(|| {
-                        spinner("Default loading indicator");
-                        spinner("Contained loading indicator").contained(true);
+                        spinner("ui-default-loading-indicator");
+                        spinner("ui-contained-loading-indicator").contained(true);
                     });
                 gap(Dp(40.0));
-                subheading("2  Progress".into());
+                subheading("ui-2-progress".into());
                 gap(Dp(24.0));
                 flow_row()
                     .item_spacing(Dp(48.0))
                     .line_spacing(Dp(24.0))
                     .children(|| {
-                        spinner("Indeterminate progress");
-                        spinner("Loading 30%").progress(0.3);
-                        spinner("Loading 70%").progress(0.7);
+                        spinner("ui-indeterminate-progress");
+                        spinner("ui-loading-30").progress(0.3);
+                        spinner("ui-loading-70").progress(0.7);
                     });
                 gap(Dp(40.0));
-                subheading("3  Paused".into());
+                subheading("ui-3-paused".into());
                 gap(Dp(24.0));
                 flow_row().item_spacing(Dp(48.0)).children(|| {
-                    spinner("Paused loading indicator").paused(true);
-                    spinner("Paused contained indicator")
+                    spinner("ui-paused-loading-indicator").paused(true);
+                    spinner("ui-paused-contained-indicator")
                         .paused(true)
                         .contained(true);
                 });
@@ -389,25 +403,25 @@ fn configurations() {
     gap(Dp(32.0));
     spec_table(
         vec![
-            "Configuration".into(),
-            "Options".into(),
-            "M3 Expressive".into(),
+            "ui-configuration".into(),
+            "ui-options".into(),
+            "ui-m3-expressive".into(),
         ],
         vec![
             vec![
-                "Containment".into(),
-                "Default, contained".into(),
-                "Available".into(),
+                "ui-containment".into(),
+                "ui-default-contained".into(),
+                "ui-available".into(),
             ],
             vec![
-                "Progress".into(),
-                "Indeterminate, determinate 0–100%".into(),
-                "Available".into(),
+                "ui-progress".into(),
+                "ui-indeterminate-determinate-0-100".into(),
+                "ui-available".into(),
             ],
             vec![
-                "Paused".into(),
-                "Animating, paused".into(),
-                "Available".into(),
+                "ui-paused".into(),
+                "ui-animating-paused".into(),
+                "ui-available".into(),
             ],
         ],
     );
@@ -415,26 +429,26 @@ fn configurations() {
 
 #[tessera]
 fn tokens() {
-    prose("Loading indicators have a single token set, grouped by color, size, and shape.");
+    prose("ui-loading-indicators-have-a-single-token-set-grouped-by-color-size-and-shape");
     gap(Dp(24.0));
     spec_table(
-        vec!["Token".into(), "Value".into()],
+        vec!["ui-token".into(), "ui-value".into()],
         vec![
             vec![
                 "md.comp.loading-indicator.indicator.color".into(),
-                "Primary".into(),
+                "ui-primary".into(),
             ],
             vec![
                 "md.comp.loading-indicator.contained.indicator.color".into(),
-                "On primary container".into(),
+                "ui-on-primary-container".into(),
             ],
             vec![
                 "md.comp.loading-indicator.contained.container.color".into(),
-                "Primary container".into(),
+                "ui-primary-container".into(),
             ],
             vec![
                 "md.comp.loading-indicator.size".into(),
-                "48dp target".into(),
+                "ui-48dp-target".into(),
             ],
             vec!["md.comp.loading-indicator.shape.size".into(), "38dp".into()],
             vec![
@@ -443,59 +457,59 @@ fn tokens() {
             ],
             vec![
                 "md.comp.loading-indicator.morph.interval".into(),
-                "650ms between shapes".into(),
+                "ui-650ms-between-shapes".into(),
             ],
             vec![
                 "md.comp.loading-indicator.rotation.duration".into(),
-                "4666ms per revolution".into(),
+                "ui-4666ms-per-revolution".into(),
             ],
         ],
     );
     gap(Dp(24.0));
     prose(
-        "The morph interval is longer than the morph duration so each shape settles before the next one starts, and the slow rotation keeps the indicator readable without drawing attention.",
+        "ui-the-morph-interval-is-longer-than-the-morph-duration-so-each-shape-settles-before-the-next",
     );
 }
 
 #[tessera]
 fn anatomy() {
     prose(
-        "A loading indicator is a single shape inside a 48dp target. The contained style adds a circular container behind the shape.",
+        "ui-a-loading-indicator-is-a-single-shape-inside-a-48dp-target-the-contained-style-adds-a-circ",
     );
     gap(Dp(24.0));
-    panel(RenderSlot::new(|| {
-        column().children(|| {
+    panel(RenderSlot::new(move || {
+        column().children(move || {
             row()
                 .modifier(Modifier::new().fill_max_width())
                 .children(|| {
-                    spinner("Default loading indicator");
+                    spinner("ui-default-loading-indicator");
                     spacer().modifier(Modifier::new().width(Dp(48.0)));
-                    spinner("Contained loading indicator").contained(true);
+                    spinner("ui-contained-loading-indicator").contained(true);
                 });
             gap(Dp(32.0));
-            for line in ["1  Shape", "2  Container (contained only)"] {
+            for line in ["ui-1-shape", "ui-2-container-contained-only"] {
                 text()
-                    .content(line)
+                    .content(I18N.text(line))
                     .color(INK)
                     .style(type_style(16.0, 28.0));
             }
         });
     }));
     gap(Dp(16.0));
-    caption("The shape carries the animation; the container is optional.");
+    caption("ui-the-shape-carries-the-animation-the-container-is-optional");
 }
 
 #[tessera]
 fn colors() {
     prose(
-        "The default style uses the primary color on the surface behind it. The contained style pairs the primary container with its on-color, so the indicator keeps at least 3:1 contrast in both light and dark schemes.",
+        "ui-the-default-style-uses-the-primary-color-on-the-surface-behind-it-the-contained-style-pair",
     );
     gap(Dp(24.0));
     for dark in [false, true] {
         subheading(if dark {
-            "Dark scheme".into()
+            "ui-dark-scheme".into()
         } else {
-            "Light scheme".into()
+            "ui-light-scheme".into()
         });
         gap(Dp(24.0));
         material_theme()
@@ -512,20 +526,20 @@ fn colors() {
                                     .line_spacing(Dp(24.0))
                                     .children(move || {
                                         spinner(if dark {
-                                            "Dark default loading indicator"
+                                            "ui-dark-default-loading-indicator"
                                         } else {
-                                            "Light default loading indicator"
+                                            "ui-light-default-loading-indicator"
                                         });
                                         spinner(if dark {
-                                            "Dark contained loading indicator"
+                                            "ui-dark-contained-loading-indicator"
                                         } else {
-                                            "Light contained loading indicator"
+                                            "ui-light-contained-loading-indicator"
                                         })
                                         .contained(true);
                                     });
                                 gap(Dp(16.0));
                                 text()
-                                    .content("1  Primary    2  Primary container with on primary container")
+                                    .content(I18N.text("ui-1-primary-2-primary-container-with-on-primary-container"))
                                     .style(type_style(14.0, 20.0));
                             });
                     });
@@ -537,43 +551,46 @@ fn colors() {
 #[tessera]
 fn states() {
     prose(
-        "A loading indicator has three meaningful states rather than interaction states: it runs an indeterminate morph, shows a determinate value, or pauses. It never takes focus or responds to input.",
+        "ui-a-loading-indicator-has-three-meaningful-states-rather-than-interaction-states-it-runs-an",
     );
     gap(Dp(24.0));
-    panel(RenderSlot::new(|| {
+    panel(RenderSlot::new(move || {
         column()
             .modifier(Modifier::new().fill_max_width())
-            .children(|| {
+            .children(move || {
                 flow_row()
                     .item_spacing(Dp(48.0))
                     .line_spacing(Dp(24.0))
                     .children(|| {
-                        spinner("Running indeterminate indicator");
-                        spinner("Determinate indicator at 60%").progress(0.6);
-                        spinner("Paused indicator").paused(true);
+                        spinner("ui-running-indeterminate-indicator");
+                        spinner("ui-determinate-indicator-at-60").progress(0.6);
+                        spinner("ui-paused-indicator").paused(true);
                     });
                 gap(Dp(24.0));
                 text()
-                    .content("1  Running    2  Determinate    3  Paused")
+                    .content(I18N.text("ui-1-running-2-determinate-3-paused"))
                     .style(type_style(14.0, 20.0));
             });
     }));
     gap(Dp(24.0));
     spec_table(
-        vec!["State".into(), "Behavior".into()],
+        vec!["ui-state".into(), "ui-behavior".into()],
         vec![
-            vec!["Running".into(), "Morphs and rotates until removed".into()],
             vec![
-                "Determinate".into(),
-                "Holds the shape for the given progress value".into(),
+                "ui-running".into(),
+                "ui-morphs-and-rotates-until-removed".into(),
             ],
             vec![
-                "Paused".into(),
-                "Keeps the current shape without animating".into(),
+                "ui-determinate".into(),
+                "ui-holds-the-shape-for-the-given-progress-value".into(),
             ],
             vec![
-                "Contained".into(),
-                "Adds the container without changing the state".into(),
+                "ui-paused".into(),
+                "ui-keeps-the-current-shape-without-animating".into(),
+            ],
+            vec![
+                "ui-contained".into(),
+                "ui-adds-the-container-without-changing-the-state".into(),
             ],
         ],
     );
@@ -582,34 +599,34 @@ fn states() {
 #[tessera]
 fn measurements() {
     prose(
-        "To ensure sufficient margins, the size is 48dp while the shape container is 38dp. Keep the 48dp target even when the visible shape is smaller, and reserve it in the layout so surrounding content does not shift.",
+        "ui-to-ensure-sufficient-margins-the-size-is-48dp-while-the-shape-container-is-38dp-keep-the-4",
     );
     gap(Dp(24.0));
     panel(RenderSlot::new(|| {
         row()
             .modifier(Modifier::new().fill_max_width())
             .children(|| {
-                spinner("Default loading indicator");
+                spinner("ui-default-loading-indicator");
                 spacer().modifier(Modifier::new().width(Dp(48.0)));
-                spinner("Contained loading indicator").contained(true);
+                spinner("ui-contained-loading-indicator").contained(true);
             });
     }));
     gap(Dp(16.0));
-    caption("Default and contained styles share the same 48dp target.");
+    caption("ui-default-and-contained-styles-share-the-same-48dp-target");
     gap(Dp(24.0));
     spec_table(
-        vec!["Attribute".into(), "Value".into()],
+        vec!["ui-attribute".into(), "ui-value".into()],
         vec![
-            vec!["Target size".into(), "48dp".into()],
-            vec!["Shape size".into(), "38dp".into()],
-            vec!["Contained container size".into(), "38dp".into()],
+            vec!["ui-target-size".into(), "48dp".into()],
+            vec!["ui-shape-size".into(), "38dp".into()],
+            vec!["ui-contained-container-size".into(), "38dp".into()],
             vec![
-                "Minimum margins".into(),
-                "Sufficient to keep the 48dp target clear".into(),
+                "ui-minimum-margins".into(),
+                "ui-sufficient-to-keep-the-48dp-target-clear".into(),
             ],
             vec![
-                "Minimum interactive target".into(),
-                "Not interactive".into(),
+                "ui-minimum-interactive-target".into(),
+                "ui-not-interactive".into(),
             ],
         ],
     );
@@ -618,40 +635,42 @@ fn measurements() {
 #[tessera]
 fn usage() {
     prose(
-        "Use a loading indicator for a short, indeterminate wait while content arrives. Keep it inside the area that is loading instead of covering the whole screen, and choose a determinate value when the wait can be measured.",
+        "ui-use-a-loading-indicator-for-a-short-indeterminate-wait-while-content-arrives-keep-it-insid",
     );
     gap(Dp(24.0));
-    panel(RenderSlot::new(|| {
+    panel(RenderSlot::new(move || {
         column()
             .modifier(Modifier::new().fill_max_width())
-            .children(|| {
-                spinner("Loading article");
+            .children(move || {
+                spinner("ui-loading-article");
                 gap(Dp(16.0));
                 text()
-                    .content("Do: place the indicator in the region that is loading.")
+                    .content(I18N.text("ui-do-place-the-indicator-in-the-region-that-is-loading"))
                     .style(type_style(14.0, 20.0));
                 gap(Dp(32.0));
-                spinner("Loading image gallery").contained(true);
+                spinner("ui-loading-image-gallery").contained(true);
                 gap(Dp(16.0));
                 text()
-                    .content("Don't: use a contained indicator as a full-screen blocker.")
+                    .content(
+                        I18N.text("ui-don-t-use-a-contained-indicator-as-a-full-screen-blocker"),
+                    )
                     .style(type_style(14.0, 20.0));
             });
     }));
     gap(Dp(16.0));
-    caption("Loading indicators are best for indicating a short, indeterminate wait time.");
+    caption("ui-loading-indicators-are-best-for-indicating-a-short-indeterminate-wait-time");
     gap(Dp(32.0));
     bullets(vec![
-        "Prefer a determinate value for waits longer than a few seconds".into(),
-        "Avoid stacking several indicators in the same view".into(),
-        "Do not use the indicator to signal an error or completion".into(),
+        "ui-prefer-a-determinate-value-for-waits-longer-than-a-few-seconds".into(),
+        "ui-avoid-stacking-several-indicators-in-the-same-view".into(),
+        "ui-do-not-use-the-indicator-to-signal-an-error-or-completion".into(),
     ]);
 }
 
 #[tessera]
 fn guidelines_anatomy() {
     prose(
-        "The shape is the only required part. Add the container when the indicator sits on media or a busy background, and keep the 48dp target clear around it.",
+        "ui-the-shape-is-the-only-required-part-add-the-container-when-the-indicator-sits-on-media-or",
     );
     gap(Dp(24.0));
     anatomy();
@@ -660,7 +679,7 @@ fn guidelines_anatomy() {
 #[tessera]
 fn placement() {
     prose(
-        "Place the indicator where the content will appear: inside a card, a list row, or the media area. For a page-level wait, center it in the content region and keep navigation visible.",
+        "ui-place-the-indicator-where-the-content-will-appear-inside-a-card-a-list-row-or-the-media-ar",
     );
     gap(Dp(24.0));
     let scheme = use_context::<MaterialTheme>().unwrap().get().color_scheme;
@@ -673,7 +692,7 @@ fn placement() {
                 .modifier(Modifier::new().fill_max_size().padding_all(Dp(24.0)))
                 .children(move || {
                     text()
-                        .content("Content region")
+                        .content(I18N.text("ui-content-region"))
                         .color(scheme.on_surface_variant)
                         .style(type_style(14.0, 20.0));
                     spacer().modifier(Modifier::new().weight(1.0));
@@ -681,87 +700,87 @@ fn placement() {
                         .modifier(Modifier::new().fill_max_width())
                         .children(move || {
                             spacer().modifier(Modifier::new().weight(1.0));
-                            spinner("Loading content region");
+                            spinner("ui-loading-content-region");
                             spacer().modifier(Modifier::new().weight(1.0));
                         });
                     spacer().modifier(Modifier::new().weight(1.0));
                 });
         });
     gap(Dp(16.0));
-    caption("Center the indicator in the region that is waiting for content.");
+    caption("ui-center-the-indicator-in-the-region-that-is-waiting-for-content");
 }
 
 #[tessera]
 fn responsive_layout() {
     prose(
-        "The indicator keeps its 48dp target at every window size. In compact layouts keep the surrounding padding smaller rather than shrinking the indicator, and in expanded layouts place it beside the content that is loading.",
+        "ui-the-indicator-keeps-its-48dp-target-at-every-window-size-in-compact-layouts-keep-the-surro",
     );
     gap(Dp(24.0));
     panel(RenderSlot::new(|| {
         flow_row().item_spacing(Dp(48.0)).children(|| {
-            spinner("Compact loading indicator");
-            spinner("Expanded loading indicator").contained(true);
+            spinner("ui-compact-loading-indicator");
+            spinner("ui-expanded-loading-indicator").contained(true);
         });
     }));
     gap(Dp(16.0));
-    caption("The size does not change across window classes.");
+    caption("ui-the-size-does-not-change-across-window-classes");
 }
 
 #[tessera]
 fn behavior() {
     prose(
-        "An indeterminate indicator morphs every 650ms, each morph lasting 297ms, while completing a slow rotation every 4666ms. Stop animating when the wait ends, when the component leaves the layout, or when reduced motion is requested.",
+        "ui-an-indeterminate-indicator-morphs-every-650ms-each-morph-lasting-297ms-while-completing-a",
     );
     gap(Dp(24.0));
-    panel(RenderSlot::new(|| {
+    panel(RenderSlot::new(move || {
         column()
             .modifier(Modifier::new().fill_max_width())
-            .children(|| {
+            .children(move || {
                 flow_row().item_spacing(Dp(48.0)).children(|| {
-                    spinner("Animating loading indicator");
-                    spinner("Paused for reduced motion").paused(true);
+                    spinner("ui-animating-loading-indicator");
+                    spinner("ui-paused-for-reduced-motion").paused(true);
                 });
                 gap(Dp(16.0));
                 text()
-                    .content(
-                        "The paused example holds its current shape and stops requesting frames.",
-                    )
+                    .content(I18N.text(
+                        "ui-the-paused-example-holds-its-current-shape-and-stops-requesting-frames",
+                    ))
                     .style(type_style(14.0, 20.0));
             });
     }));
     gap(Dp(24.0));
     spec_table(
-        vec!["Phase".into(), "Duration".into()],
+        vec!["ui-phase".into(), "ui-duration".into()],
         vec![
-            vec!["Morph between shapes".into(), "297ms".into()],
-            vec!["Hold before the next morph".into(), "650ms".into()],
-            vec!["Full rotation".into(), "4666ms".into()],
+            vec!["ui-morph-between-shapes".into(), "297ms".into()],
+            vec!["ui-hold-before-the-next-morph".into(), "650ms".into()],
+            vec!["ui-full-rotation".into(), "4666ms".into()],
         ],
     );
     gap(Dp(24.0));
     prose(
-        "Frames are only requested while the indicator is indeterminate and not paused; a determinate or paused indicator stops requesting frames, so a page that stops loading does not keep animating in the background.",
+        "ui-frames-are-only-requested-while-the-indicator-is-indeterminate-and-not-paused-a-determinat",
     );
 }
 
 #[tessera]
 fn use_cases() {
-    prose("People should be able to do the following with assistive technology:");
+    prose("ui-people-should-be-able-to-do-the-following-with-assistive-technology");
     gap(Dp(16.0));
     bullets(vec![
-        "Navigate to the loading indicator".into(),
-        "Understand what progress the indicator is communicating".into(),
-        "Initiate a content refresh without relying on a gesture".into(),
+        "ui-navigate-to-the-loading-indicator".into(),
+        "ui-understand-what-progress-the-indicator-is-communicating".into(),
+        "ui-initiate-a-content-refresh-without-relying-on-a-gesture".into(),
     ]);
     gap(Dp(24.0));
-    panel(RenderSlot::new(|| {
+    panel(RenderSlot::new(move || {
         column()
             .modifier(Modifier::new().fill_max_width())
-            .children(|| {
-                spinner("Loading content");
+            .children(move || {
+                spinner("ui-loading-content");
                 gap(Dp(16.0));
                 text()
-                    .content("The indicator exposes the label “Loading content” to assistive technology.")
+                    .content(I18N.text("ui-the-indicator-exposes-the-label-loading-content-to-assistive-technology"))
                     .style(type_style(14.0, 20.0));
             });
     }));
@@ -770,7 +789,7 @@ fn use_cases() {
 #[tessera]
 fn interaction_style() {
     prose(
-        "The indicator is not interactive: it takes no focus and has no hover or pressed state. Keep at least 3:1 contrast between the active indicator and the surface behind it, including the contained style.",
+        "ui-the-indicator-is-not-interactive-it-takes-no-focus-and-has-no-hover-or-pressed-state-keep",
     );
     gap(Dp(24.0));
     let scheme = use_context::<MaterialTheme>().unwrap().get().color_scheme;
@@ -781,50 +800,54 @@ fn interaction_style() {
                 row()
                     .modifier(Modifier::new().fill_max_width())
                     .children(move || {
-                        spinner("Above three to one loading indicator");
+                        spinner("ui-above-three-to-one-loading-indicator");
                         spacer().modifier(Modifier::new().width(Dp(48.0)));
                         loading_indicator()
                             .paused(true)
                             .indicator_color(scheme.surface_container)
-                            .accessibility_label("Below three to one loading indicator");
+                            .accessibility_label(
+                                I18N.text("ui-below-three-to-one-loading-indicator"),
+                            );
                     });
                 gap(Dp(16.0));
                 text()
-                    .content("Above 3:1 in the primary role versus a low-contrast pairing.")
+                    .content(
+                        I18N.text("ui-above-3-1-in-the-primary-role-versus-a-low-contrast-pairing"),
+                    )
                     .style(type_style(14.0, 20.0));
             });
     }));
     gap(Dp(24.0));
     prose(
-        "Do not place the indicator over content that people are reading, and never use it as a full-screen blocker without a way to cancel the wait.",
+        "ui-do-not-place-the-indicator-over-content-that-people-are-reading-and-never-use-it-as-a-full",
     );
 }
 
 #[tessera]
 fn labeling() {
     prose(
-        "Name the wait, not the animation. Screen readers should announce what is loading, such as “Loading content”, instead of describing the morph. Keep the label stable while the indicator is visible.",
+        "ui-name-the-wait-not-the-animation-screen-readers-should-announce-what-is-loading-such-as-loa",
     );
     gap(Dp(24.0));
-    panel(RenderSlot::new(|| {
+    panel(RenderSlot::new(move || {
         column()
             .modifier(Modifier::new().fill_max_width())
-            .children(|| {
-                spinner("Loading content");
+            .children(move || {
+                spinner("ui-loading-content");
                 gap(Dp(16.0));
                 text()
-                    .content("Do: “Loading content” — names the pending work.")
+                    .content(I18N.text("ui-do-loading-content-names-the-pending-work"))
                     .style(type_style(14.0, 20.0));
                 gap(Dp(32.0));
-                spinner("Loading").contained(true);
+                spinner("ui-loading").contained(true);
                 gap(Dp(16.0));
                 text()
-                    .content("Don't: rely on the animation alone; a bare “Loading” without context is ambiguous.")
+                    .content(I18N.text("ui-don-t-rely-on-the-animation-alone-a-bare-loading-without-context-is-ambiguous"))
                     .style(type_style(14.0, 20.0));
             });
     }));
     gap(Dp(32.0));
     prose(
-        "Update the label when the wait changes stage, and remove the indicator once the content arrives so assistive technology stops announcing a pending state.",
+        "ui-update-the-label-when-the-wait-changes-stage-and-remove-the-indicator-once-the-content-arr",
     );
 }

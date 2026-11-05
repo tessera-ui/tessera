@@ -12,6 +12,7 @@ members = [
     "crates/cargo-tessera",
     "crates/tessera-mobile",
     "crates/tessera-glyphon",
+    "crates/tessera-i18n",
 ]
 exclude = ["crates/tessera-android-activity", "crates/tessera-accesskit", "crates/tessera-cosmic-text", "crates/tessera-winit"]
 

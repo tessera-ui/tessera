@@ -21,15 +21,25 @@ use tessera_ui::{
     remember, tessera, use_context,
 };
 
-use crate::pages::material_spec::{media, type_style};
+use crate::{
+    pages::material_spec::{media, type_style},
+    res::I18N,
+};
 
 const MIN_WIDTH: Dp = Dp(616.0);
 const ROW_HEIGHT: Dp = Dp(56.0);
 const CELLS: [[&str; 6]; 4] = [
     ["", "XS", "S", "M", "L", "XL"],
-    ["A. Round button", "Full", "Full", "Full", "Full", "Full"],
-    ["B. Square button", "12dp", "12dp", "16dp", "28dp", "28dp"],
-    ["C. Pressed state", "8dp", "8dp", "12dp", "16dp", "16dp"],
+    [
+        "ui-a-round-button",
+        "ui-full",
+        "ui-full",
+        "ui-full",
+        "ui-full",
+        "ui-full",
+    ],
+    ["ui-b-square-button", "12dp", "12dp", "16dp", "28dp", "28dp"],
+    ["ui-c-pressed-state", "8dp", "8dp", "12dp", "16dp", "16dp"],
 ];
 
 #[tessera]
@@ -64,7 +74,7 @@ pub(super) fn figure() {
                     column()
                         .modifier(Modifier::new().fill_max_size().semantics(SemanticsArgs {
                             role: Some(Role::Table),
-                            label: Some("Icon button corner radius values".into()),
+                            label: Some(I18N.text("ui-icon-button-corner-radius-values")),
                             collection_info: Some((4, 6, false)),
                             merge_descendants: true,
                             ..Default::default()
@@ -148,7 +158,7 @@ fn cell(row: usize, column: usize, value: String, ink: Color, rule: Color) {
                 .fill_max_height()
                 .semantics(SemanticsArgs {
                     role: Some(role),
-                    label: Some(value.clone()),
+                    label: Some(I18N.text(&(value))),
                     collection_item_info: Some((
                         row,
                         1,
@@ -161,7 +171,7 @@ fn cell(row: usize, column: usize, value: String, ink: Color, rule: Color) {
         )
         .children(move || {
             text()
-                .content(value.clone())
+                .content(I18N.text(&(value)))
                 .style(type_style(16.0, 24.0))
                 .color(ink)
                 .modifier(Modifier::new().padding_symmetric(Dp(24.0), Dp(16.0)));

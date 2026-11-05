@@ -24,6 +24,7 @@ use crate::{
     icon_button::icon_button,
     material_icons::filled,
     modifier::{ModifierExt as _, Padding, SemanticsArgs},
+    res::I18N,
     row::row,
     scrollable::{ScrollBarBehavior, ScrollableController, scrollable},
     shape_def::Shape,
@@ -583,11 +584,11 @@ fn date_picker_content(args: DatePickerConfig) {
     let scheme = theme.color_scheme;
     let title = args
         .title
-        .unwrap_or_else(|| default_title(snapshot.display_mode).to_owned());
+        .unwrap_or_else(|| default_title(snapshot.display_mode));
     let headline = args.headline.unwrap_or_else(|| {
         if snapshot.display_mode == DatePickerDisplayMode::Input && snapshot.selected_date.is_none()
         {
-            "Input date".to_owned()
+            I18N.text("md3-input-date")
         } else {
             default_headline(snapshot.selected_date)
         }
@@ -749,7 +750,11 @@ pub fn date_picker_dialog(
     let title = picker_title.or(title);
     crate::dialog::register_dialog_accessibility()
         .dialog_optional(dialog)
-        .label(title.clone().unwrap_or_else(|| "Select date".to_owned()));
+        .label(
+            title
+                .clone()
+                .unwrap_or_else(|| I18N.text("md3-select-date")),
+        );
     let theme = use_context::<MaterialTheme>().unwrap().get();
     column()
         .modifier(Modifier::new().width(DATE_PICKER_MAX_WIDTH))
@@ -847,7 +852,7 @@ fn calendar_view(
                                 }
                             })
                         })
-                        .accessibility_label("Choose year")
+                        .accessibility_label(I18N.text("md3-choose-year"))
                         .child(move || {
                             row()
                                 .cross_axis_alignment(CrossAxisAlignment::Center)
@@ -876,7 +881,7 @@ fn calendar_view(
                                         .standard()
                                         .icon(filled::CHEVRON_LEFT_SVG)
                                         .enabled(can_prev)
-                                        .accessibility_label("Previous month")
+                                        .accessibility_label(I18N.text("md3-previous-month"))
                                         .on_click(move || {
                                             state.with_mut(DatePickerState::previous_month)
                                         });
@@ -889,7 +894,7 @@ fn calendar_view(
                                         .standard()
                                         .icon(filled::CHEVRON_RIGHT_SVG)
                                         .enabled(can_next)
-                                        .accessibility_label("Next month")
+                                        .accessibility_label(I18N.text("md3-next-month"))
                                         .on_click(move || {
                                             state.with_mut(DatePickerState::next_month)
                                         });
@@ -1089,7 +1094,7 @@ fn date_year_grid(state: State<DatePickerState>, view: State<DatePickerView>, to
                 .size(Dp(336.0), Dp(288.0))
                 .semantics(SemanticsArgs {
                     role: Some(tessera_ui::accesskit::Role::Group),
-                    label: Some("Choose year".to_owned()),
+                    label: Some(I18N.text("md3-choose-year")),
                     merge_descendants: true,
                     test_tag: cfg!(test).then(|| "date-years".to_owned()),
                     ..Default::default()
@@ -1174,7 +1179,7 @@ fn date_input_view(state: State<DatePickerState>) {
         None
     } else {
         match parse_date_input(&value) {
-            None => Some("Enter a date as MM/DD/YYYY"),
+            None => Some(I18N.text("md3-enter-a-date-as-mm-dd-yyyy")),
             Some(date)
                 if !is_date_selectable(
                     date,
@@ -1183,7 +1188,7 @@ fn date_input_view(state: State<DatePickerState>) {
                     snapshot.is_selectable_year.as_ref(),
                 ) =>
             {
-                Some("Date is not allowed")
+                Some(I18N.text("md3-date-is-not-allowed"))
             }
             Some(_) => None,
         }
@@ -1197,7 +1202,7 @@ fn date_input_view(state: State<DatePickerState>) {
                 .background_color(theme.color_scheme.surface_container_high)
                 .focus_background_color(theme.color_scheme.surface_container_high)
                 .controller(controller)
-                .label("Date")
+                .label(I18N.text("md3-date"))
                 .placeholder("MM/DD/YYYY")
                 .is_error(error.is_some())
                 .on_change(move |value| {
@@ -1214,9 +1219,9 @@ fn date_input_view(state: State<DatePickerState>) {
                     previous.set(value.clone());
                     value
                 });
-            if let Some(error) = error {
+            if let Some(error) = &error {
                 text()
-                    .content(error)
+                    .content(error.clone())
                     .style(theme.typography.body_small)
                     .color(theme.color_scheme.error);
             }
@@ -1234,9 +1239,9 @@ fn date_mode_toggle(state: State<DatePickerState>) {
             filled::EDIT_SVG
         })
         .accessibility_label(if input {
-            "Switch to calendar"
+            I18N.text("md3-switch-to-calendar")
         } else {
-            "Switch to date input"
+            I18N.text("md3-switch-to-date-input")
         })
         .on_click(move || state.with_mut(DatePickerState::toggle_display_mode));
 }
@@ -1260,74 +1265,87 @@ fn parse_date_input(value: &str) -> Option<CalendarDate> {
     )
 }
 
-fn default_title(mode: DatePickerDisplayMode) -> &'static str {
-    match mode {
-        DatePickerDisplayMode::Picker => "Select date",
-        DatePickerDisplayMode::Input => "Enter date",
-    }
+fn default_title(mode: DatePickerDisplayMode) -> String {
+    I18N.text(match mode {
+        DatePickerDisplayMode::Picker => "md3-select-date",
+        DatePickerDisplayMode::Input => "md3-enter-date",
+    })
 }
 
 fn default_headline(selected: Option<CalendarDate>) -> String {
     selected
         .map(format_selected_date)
-        .unwrap_or_else(|| "Select date".to_string())
+        .unwrap_or_else(|| I18N.text("md3-select-date"))
 }
 
 fn format_selected_date(date: CalendarDate) -> String {
-    format!(
-        "{}, {} {}",
-        weekday_short_label(weekday_for_date(date)),
-        format_month_short_name(date.month()),
-        date.day()
+    I18N.format(
+        "md3-date-headline",
+        [
+            (
+                "weekday",
+                weekday_short_label(weekday_for_date(date)).into(),
+            ),
+            ("month", format_month_short_name(date.month()).into()),
+            ("day", date.day().into()),
+        ],
     )
 }
 
-fn weekday_narrow_label(day: Weekday) -> &'static str {
-    match day {
-        Weekday::Monday => "M",
-        Weekday::Tuesday | Weekday::Thursday => "T",
-        Weekday::Wednesday => "W",
-        Weekday::Friday => "F",
-        Weekday::Saturday | Weekday::Sunday => "S",
-    }
+fn weekday_narrow_label(day: Weekday) -> String {
+    I18N.text(match day {
+        Weekday::Monday => "md3-weekday-mon-narrow",
+        Weekday::Tuesday => "md3-weekday-tue-narrow",
+        Weekday::Wednesday => "md3-weekday-wed-narrow",
+        Weekday::Thursday => "md3-weekday-thu-narrow",
+        Weekday::Friday => "md3-weekday-fri-narrow",
+        Weekday::Saturday => "md3-weekday-sat-narrow",
+        Weekday::Sunday => "md3-weekday-sun-narrow",
+    })
 }
 
 fn format_month_year(month: YearMonth) -> String {
-    format!("{} {}", format_month_name(month.month()), month.year())
+    I18N.format(
+        "md3-month-year",
+        [
+            ("month", format_month_name(month.month()).into()),
+            ("year", (month.year()).to_string().into()),
+        ],
+    )
 }
 
-fn format_month_name(month: u8) -> &'static str {
-    match month {
-        1 => "January",
-        2 => "February",
-        3 => "March",
-        4 => "April",
-        5 => "May",
-        6 => "June",
-        7 => "July",
-        8 => "August",
-        9 => "September",
-        10 => "October",
-        11 => "November",
-        _ => "December",
-    }
+fn format_month_name(month: u8) -> String {
+    I18N.text(match month {
+        1 => "md3-january",
+        2 => "md3-february",
+        3 => "md3-march",
+        4 => "md3-april",
+        5 => "md3-may",
+        6 => "md3-june",
+        7 => "md3-july",
+        8 => "md3-august",
+        9 => "md3-september",
+        10 => "md3-october",
+        11 => "md3-november",
+        _ => "md3-december",
+    })
 }
 
-fn format_month_short_name(month: u8) -> &'static str {
-    match month {
-        1 => "Jan",
-        2 => "Feb",
-        3 => "Mar",
-        4 => "Apr",
-        5 => "May",
-        6 => "Jun",
-        7 => "Jul",
-        8 => "Aug",
-        9 => "Sep",
-        10 => "Oct",
-        11 => "Nov",
-        _ => "Dec",
-    }
+fn format_month_short_name(month: u8) -> String {
+    I18N.text(match month {
+        1 => "md3-jan",
+        2 => "md3-feb",
+        3 => "md3-mar",
+        4 => "md3-apr",
+        5 => "md3-may",
+        6 => "md3-jun",
+        7 => "md3-jul",
+        8 => "md3-aug",
+        9 => "md3-sep",
+        10 => "md3-oct",
+        11 => "md3-nov",
+        _ => "md3-dec",
+    })
 }
 
 fn weekday_sequence(first_day_of_week: Weekday) -> [Weekday; DATE_COLUMNS] {
@@ -1339,16 +1357,16 @@ fn weekday_sequence(first_day_of_week: Weekday) -> [Weekday; DATE_COLUMNS] {
     days
 }
 
-fn weekday_short_label(day: Weekday) -> &'static str {
-    match day {
-        Weekday::Monday => "Mon",
-        Weekday::Tuesday => "Tue",
-        Weekday::Wednesday => "Wed",
-        Weekday::Thursday => "Thu",
-        Weekday::Friday => "Fri",
-        Weekday::Saturday => "Sat",
-        Weekday::Sunday => "Sun",
-    }
+fn weekday_short_label(day: Weekday) -> String {
+    I18N.text(match day {
+        Weekday::Monday => "md3-mon",
+        Weekday::Tuesday => "md3-tue",
+        Weekday::Wednesday => "md3-wed",
+        Weekday::Thursday => "md3-thu",
+        Weekday::Friday => "md3-fri",
+        Weekday::Saturday => "md3-sat",
+        Weekday::Sunday => "md3-sun",
+    })
 }
 
 fn build_month_grid(month: YearMonth, first_day_of_week: Weekday) -> Vec<Option<CalendarDate>> {
@@ -2142,7 +2160,14 @@ mod tests {
         ));
         let day = session
             .inspect_components()
-            .labeled("July 16, 2026")
+            .labeled(&super::I18N.format(
+                "md3-full-date",
+                [
+                    ("month", "July".into()),
+                    ("day", 16.into()),
+                    ("year", "2026".into()),
+                ],
+            ))
             .bounds()
             .unwrap();
         let point = cursor.unwrap();
@@ -2249,7 +2274,14 @@ mod tests {
         ));
         let day = session
             .inspect_components()
-            .labeled("July 16, 2026")
+            .labeled(&super::I18N.format(
+                "md3-full-date",
+                [
+                    ("month", "July".into()),
+                    ("day", 16.into()),
+                    ("year", "2026".into()),
+                ],
+            ))
             .bounds()
             .unwrap();
         let point = cursor.unwrap();

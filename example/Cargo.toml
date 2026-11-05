@@ -24,6 +24,7 @@ tessera-shard = { path = "../crates/tessera-shard" }
 tessera-ui = { path = "../tessera-ui", features = ["headless"] }
 tessera-components = { path = "../crates/tessera-components" }
 tessera-platform = { path = "../crates/tessera-platform" }
+tessera-i18n = { path = "../crates/tessera-i18n" }
 
 [target.'cfg(target_family = "wasm")'.dependencies]
 wasm-bindgen = "0.2.105"

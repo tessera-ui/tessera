@@ -31,6 +31,8 @@ use tessera_ui::{
     remember, scaled_box, tessera, use_context,
 };
 
+use crate::res::I18N;
+
 use super::{
     INK,
     annotations::{self, Rect, SpaceGeometry as Geometry, space_geometry, watch_in_space as watch},
@@ -38,7 +40,13 @@ use super::{
     gap, spec_table, srgb, subheading, type_style,
 };
 
-const DESTINATIONS: [&str; 5] = ["Inbox", "Outbox", "Favorites", "Trash", "Personal"];
+const DESTINATIONS: [&str; 5] = [
+    "ui-inbox",
+    "ui-outbox",
+    "ui-favorites",
+    "ui-trash",
+    "ui-personal",
+];
 
 #[path = "drawers_guides.rs"]
 mod guides;
@@ -235,7 +243,7 @@ pub(crate) fn live_drawer_host(
             .content_padding(Dp::ZERO)
             .position(SideSheetPosition::Start)
             .is_open(open.get())
-            .accessibility_label("Mail navigation")
+            .accessibility_label(I18N.text("ui-mail-navigation"))
             .on_close_request(move || open.set(false))
             .main_content(move || {
                 main_content.render(session);
@@ -265,31 +273,31 @@ pub(super) fn drawers_spec(
     };
     let content = RenderSlot::new(move || {
         article(
-            "Navigation drawer",
-            "Navigation drawers let people switch between UI views on larger devices",
+            "ui-navigation-drawer",
+            "ui-navigation-drawers-let-people-switch-between-ui-views-on-larger-devices",
             vec![
                 SpecSection {
-                    title: "Tokens & specs",
+                    title: "ui-tokens-specs",
                     content: RenderSlot::new(tokens),
                 },
                 SpecSection {
-                    title: "Color",
+                    title: "ui-color",
                     content: RenderSlot::new(colors),
                 },
                 SpecSection {
-                    title: "States",
+                    title: "ui-states",
                     content: RenderSlot::new(states),
                 },
                 SpecSection {
-                    title: "Measurements",
+                    title: "ui-measurements",
                     content: RenderSlot::new(move || {
-                        subheading("Standard navigation drawer".into());
+                        subheading("ui-standard-navigation-drawer".into());
                         gap(Dp(24.0));
                         measurement_pair(false);
                         gap(Dp(32.0));
                         measurements(false);
                         gap(Dp(48.0));
-                        subheading("Modal navigation drawer".into());
+                        subheading("ui-modal-navigation-drawer".into());
                         gap(Dp(24.0));
                         measurement_pair(true);
                         gap(Dp(32.0));
@@ -305,15 +313,15 @@ pub(super) fn drawers_spec(
         })
         .pages(vec![
             ArticlePage {
-                title: "Overview",
+                title: "ui-overview",
                 intro: Some(RenderSlot::new(move || {
                     recommendation().on_recommended_optional(on_recommended);
                     bullets(vec![
-                        "Use standard navigation drawers in expanded, large, and extra-large breakpoints".into(),
-                        "Use modal navigation drawers in compact and medium breakpoints".into(),
-                        "Can be open or closed by default".into(),
-                        "Two variants: standard and modal".into(),
-                        "Put the most frequent destinations at the top and group related destinations together".into(),
+                        "ui-use-standard-navigation-drawers-in-expanded-large-and-extra-large-breakpoints".into(),
+                        "ui-use-modal-navigation-drawers-in-compact-and-medium-breakpoints".into(),
+                        "ui-can-be-open-or-closed-by-default".into(),
+                        "ui-two-variants-standard-and-modal".into(),
+                        "ui-put-the-most-frequent-destinations-at-the-top-and-group-related-destinations-together".into(),
                     ]);
                     gap(Dp(32.0));
                     overview_figure();
@@ -322,46 +330,46 @@ pub(super) fn drawers_spec(
                 })),
                 sections: vec![
                     SpecSection {
-                        title: "Availability & resources",
+                        title: "ui-availability-resources",
                         content: RenderSlot::new(availability),
                     },
                     SpecSection {
-                        title: "M3 Expressive update",
+                        title: "ui-m3-expressive-update",
                         content: RenderSlot::new(expressive_update),
                     },
                     SpecSection {
-                        title: "Differences from M2",
+                        title: "ui-differences-from-m2",
                         content: RenderSlot::new(differences),
                     },
                 ],
             },
             ArticlePage {
-                title: "Guidelines",
+                title: "ui-guidelines",
                 intro: Some(RenderSlot::new(move || {
                     recommendation().on_recommended_optional(on_recommended);
                     guides::guide(0);
                 })),
                 sections: vec![
                     SpecSection {
-                        title: "Usage",
+                        title: "ui-usage",
                         content: RenderSlot::new(move || {
                             guides::usage(open, selected);
                         }),
                     },
                     SpecSection {
-                        title: "Anatomy",
+                        title: "ui-anatomy",
                         content: RenderSlot::new(move || {
                             guides::anatomy();
                         }),
                     },
                     SpecSection {
-                        title: "Responsive layout",
+                        title: "ui-responsive-layout",
                         content: RenderSlot::new(move || {
                             guides::responsive_layout();
                         }),
                     },
                     SpecSection {
-                        title: "Behavior",
+                        title: "ui-behavior",
                         content: RenderSlot::new(move || {
                             guides::behavior(open, selected);
                         }),
@@ -369,49 +377,49 @@ pub(super) fn drawers_spec(
                 ],
             },
             ArticlePage {
-                title: "Accessibility",
+                title: "ui-accessibility",
                 intro: Some(RenderSlot::new(move || {
                     recommendation().on_recommended_optional(on_recommended).window_size_classes(true);
                 })),
                 sections: vec![
                     SpecSection {
-                        title: "Use cases",
+                        title: "ui-use-cases",
                         content: RenderSlot::new(move || {
                             guides::use_cases(open, selected);
                         }),
                     },
                     SpecSection {
-                        title: "Interaction & style",
+                        title: "ui-interaction-style",
                         content: RenderSlot::new(move || {
                             guides::interaction();
                         }),
                     },
                     SpecSection {
-                        title: "Initial focus",
+                        title: "ui-initial-focus",
                         content: RenderSlot::new(move || {
                             guides::initial_focus(open, selected);
                         }),
                     },
                     SpecSection {
-                        title: "Closing",
+                        title: "ui-closing",
                         content: RenderSlot::new(move || {
                             guides::closing(open, selected);
                         }),
                     },
                     SpecSection {
-                        title: "Visual indicators",
+                        title: "ui-visual-indicators",
                         content: RenderSlot::new(move || {
                             guides::visual_indicators();
                         }),
                     },
                     SpecSection {
-                        title: "Keyboard navigation",
+                        title: "ui-keyboard-navigation",
                         content: RenderSlot::new(move || {
                             guides::keyboard();
                         }),
                     },
                     SpecSection {
-                        title: "Labeling elements",
+                        title: "ui-labeling-elements",
                         content: RenderSlot::new(move || {
                             guides::labeling();
                         }),
@@ -428,7 +436,7 @@ pub(super) fn drawers_spec(
             .content_padding(Dp::ZERO)
             .position(SideSheetPosition::Start)
             .is_open(open.get())
-            .accessibility_label("Mail navigation")
+            .accessibility_label(I18N.text("ui-mail-navigation"))
             .on_close_request(move || open.set(false))
             .main_content_shared(content)
             .side_sheet_content(move || {
@@ -440,7 +448,7 @@ pub(super) fn drawers_spec(
 #[tessera]
 fn prose(#[prop(into)] value: String) {
     text()
-        .content(value)
+        .content(I18N.text(value))
         .style(type_style(16.0, 24.0))
         .color(INK);
 }
@@ -448,29 +456,33 @@ fn prose(#[prop(into)] value: String) {
 #[tessera]
 fn availability() {
     spec_table(
-        vec!["Type".into(), "Resource".into(), "Status".into()],
+        vec!["ui-type".into(), "ui-resource".into(), "ui-status".into()],
         vec![
             vec![
-                "Design".into(),
-                "Design Kit (Figma)".into(),
-                "Available".into(),
+                "ui-design".into(),
+                "ui-design-kit-figma".into(),
+                "ui-available".into(),
             ],
             vec![
-                "Implementation".into(),
-                "Flutter".into(),
-                "Available".into(),
+                "ui-implementation".into(),
+                "ui-flutter".into(),
+                "ui-available".into(),
             ],
             vec![
-                "Implementation".into(),
-                "Jetpack Compose".into(),
-                "Available".into(),
+                "ui-implementation".into(),
+                "ui-jetpack-compose".into(),
+                "ui-available".into(),
             ],
             vec![
-                "Implementation".into(),
-                "Android Views (MDC-Android)".into(),
-                "Available".into(),
+                "ui-implementation".into(),
+                "ui-android-views-mdc-android".into(),
+                "ui-available".into(),
             ],
-            vec!["Implementation".into(), "Web".into(), "Unavailable".into()],
+            vec![
+                "ui-implementation".into(),
+                "ui-web".into(),
+                "ui-unavailable".into(),
+            ],
         ],
     );
 }
@@ -478,23 +490,23 @@ fn availability() {
 #[tessera]
 fn expressive_update() {
     text()
-        .content("May 2025")
+        .content(I18N.text("ui-may-2025"))
         .style(guides::medium_style(16.0, 24.0))
         .color(INK);
     gap(Dp(16.0));
     prose(
-        "The navigation drawer is no longer recommended. Use the expanded navigation rail instead. More on M3 Expressive",
+        "ui-the-navigation-drawer-is-no-longer-recommended-use-the-expanded-navigation-rail-instead-mo",
     );
 }
 
 #[tessera]
 fn differences() {
     bullets(vec![
-        "Color: New color mappings and compatibility with dynamic color".into(),
-        "Variants: Distinguishes two separate variants of navigation drawer: Standard and modal"
+        "ui-color-new-color-mappings-and-compatibility-with-dynamic-color".into(),
+        "ui-variants-distinguishes-two-separate-variants-of-navigation-drawer-standard-and-modal"
             .into(),
-        "Shape: Rounded corners at the ending edge of the drawer".into(),
-        "States: Updated color and shape for indicating selected state".into(),
+        "ui-shape-rounded-corners-at-the-ending-edge-of-the-drawer".into(),
+        "ui-states-updated-color-and-shape-for-indicating-selected-state".into(),
     ]);
     gap(Dp(32.0));
     differences_figure();
@@ -505,11 +517,11 @@ fn bullets(items: Vec<String>) {
     for item in items {
         row().children(move || {
             text()
-                .content("•")
+                .content(I18N.text("•"))
                 .style(type_style(16.0, 24.0))
                 .modifier(Modifier::new().width(Dp(24.0)));
             text()
-                .content(item.clone())
+                .content(I18N.text(&(item)))
                 .style(type_style(16.0, 24.0))
                 .modifier(Modifier::new().weight(1.0));
         });
@@ -523,24 +535,24 @@ fn mail_messages(selected: State<usize>, width: f64) {
     column().modifier(Modifier::new().width(Dp(width)).padding_all(Dp(16.0))).children(move || {
         surface().shape(Shape::CAPSULE).style(scheme.surface_container_high.into())
             .modifier(Modifier::new().fill_max_width().height(Dp(48.0)))
-            .child(|| { text().content("Search replies").style(type_style(14.0,20.0)); });
+            .child(move || { text().content(I18N.text("ui-search-replies")).style(type_style(14.0,20.0)); });
         gap(Dp(16.0));
-        text().content(DESTINATIONS[selected.get().min(4)]).style(type_style(22.0,28.0));
+        text().content(I18N.text(DESTINATIONS[selected.get().min(4)])).style(type_style(22.0,28.0));
         for (sender, subject, body) in [
-            ("Ellie Pietersen", "Adoption volunteering", "I just learned about this volunteering opportunity. The organization is looking for help with the upcoming event."),
-            ("In Yeong-hui", "Museum field trip", "About 26 students have signed up. We are looking for parent volunteers to share the day."),
-            ("B. Bhatia", "Weekend plans", "Here are the details for our next community meeting."),
+            ("ui-ellie-pietersen", "ui-adoption-volunteering", "ui-i-just-learned-about-this-volunteering-opportunity-the-organization-is-looking-for-help-wi"),
+            ("ui-in-yeong-hui", "ui-museum-field-trip", "ui-about-26-students-have-signed-up-we-are-looking-for-parent-volunteers-to-share-the-day"),
+            ("ui-b-bhatia", "ui-weekend-plans", "ui-here-are-the-details-for-our-next-community-meeting"),
         ] {
             gap(Dp(12.0));
             surface().shape(Shape::rounded_rectangle(Dp(16.0))).style(scheme.surface_container.into())
                 .modifier(Modifier::new().fill_max_width())
                 .child(move || {
                     column().modifier(Modifier::new().padding_all(Dp(16.0))).children(move || {
-                        text().content(sender).style(type_style(12.0,16.0));
+                        text().content(I18N.text(sender)).style(type_style(12.0,16.0));
                         gap(Dp(8.0));
-                        text().content(subject).style(type_style(18.0,24.0));
+                        text().content(I18N.text(subject)).style(type_style(18.0,24.0));
                         gap(Dp(8.0));
-                        text().content(body).style(type_style(14.0,20.0));
+                        text().content(I18N.text(body)).style(type_style(14.0,20.0));
                     });
                 });
         }
@@ -550,9 +562,12 @@ fn mail_messages(selected: State<usize>, width: f64) {
 #[tessera]
 fn small_rail() {
     tessera_components::navigation_rail::navigation_rail().content(move |rail_scope| {
-        for (index, label) in ["Inbox", "Outbox", "Favorites"].into_iter().enumerate() {
+        for (index, label) in ["ui-inbox", "ui-outbox", "ui-favorites"]
+            .into_iter()
+            .enumerate()
+        {
             tessera_components::navigation_rail::navigation_rail_item(rail_scope)
-                .label(label)
+                .label(I18N.text(label))
                 .selected(index == 0)
                 .icon(move || {
                     icon()
@@ -574,7 +589,10 @@ fn responsive_figure(kind: u8) {
     drawer_stage(
         1024.0,
         440.0,
-        format!("Drawer responsive layout example {kind}"),
+        I18N.format(
+            "ui-drawer-responsive-layout-example-value",
+            [("v0", (kind).into())],
+        ),
         geometry,
     )
     .child(move || {
@@ -593,7 +611,7 @@ fn responsive_figure(kind: u8) {
                 });
             drawer_scene(false, selected, 512.0, 64.0, 464.0, 440.0);
             text()
-                .content("Navigation rail to navigation drawer")
+                .content(I18N.text("ui-navigation-rail-to-navigation-drawer"))
                 .style(type_style(16.0, 24.0))
                 .modifier(Modifier::new().offset(Dp(48.0), Dp(16.0)));
         } else if kind == 1 {
@@ -644,28 +662,34 @@ fn visibility_panel(number: usize, initial: bool) {
         .children(move || {
             button()
                 .text()
-                .accessibility_label(format!("Toggle standard drawer example {number}"))
+                .accessibility_label(I18N.format(
+                    "ui-toggle-standard-drawer-example-value",
+                    [("v0", (number).into())],
+                ))
                 .on_click(move || visible.set(!visible.get()))
                 .child(move || {
-                    text().content(if visible.get() {
-                        "Hide navigation"
+                    text().content(I18N.text(if visible.get() {
+                        "ui-hide-navigation"
                     } else {
-                        "Show navigation"
-                    });
+                        "ui-show-navigation"
+                    }));
                 });
             drawer_stage(
                 1024.0,
                 712.0,
-                format!("Standard drawer visibility example {number}"),
+                I18N.format(
+                    "ui-standard-drawer-visibility-example-value",
+                    [("v0", (number).into())],
+                ),
                 geometry,
             )
             .child(move || {
                 text()
-                    .content(if visible.get() {
-                        "Drawer visible: content shares the window"
+                    .content(I18N.text(if visible.get() {
+                        "ui-drawer-visible-content-shares-the-window"
                     } else {
-                        "Drawer hidden: content uses the full window"
-                    })
+                        "ui-drawer-hidden-content-uses-the-full-window"
+                    }))
                     .style(type_style(16.0, 24.0))
                     .modifier(Modifier::new().offset(Dp(48.0), Dp(20.0)));
                 row()
@@ -678,7 +702,10 @@ fn visibility_panel(number: usize, initial: bool) {
                             .semantics(SemanticsArgs {
                                 role: Some(Role::Group),
                                 merge_descendants: true,
-                                label: Some(format!("Standard drawer viewport {number}")),
+                                label: Some(I18N.format(
+                                    "ui-standard-drawer-viewport-value",
+                                    [("v0", (number).into())],
+                                )),
                                 ..Default::default()
                             }),
                     )
@@ -691,8 +718,9 @@ fn visibility_panel(number: usize, initial: bool) {
                                         .semantics(SemanticsArgs {
                                             role: Some(Role::Group),
                                             merge_descendants: true,
-                                            label: Some(format!(
-                                                "Standard drawer surface {number}"
+                                            label: Some(I18N.format(
+                                                "ui-standard-drawer-surface-value",
+                                                [("v0", (number).into())],
                                             )),
                                             ..Default::default()
                                         }),
@@ -713,7 +741,10 @@ fn visibility_panel(number: usize, initial: bool) {
                                     .semantics(SemanticsArgs {
                                         role: Some(Role::Group),
                                         merge_descendants: true,
-                                        label: Some(format!("Standard drawer content {number}")),
+                                        label: Some(I18N.format(
+                                            "ui-standard-drawer-content-value",
+                                            [("v0", (number).into())],
+                                        )),
                                         ..Default::default()
                                     }),
                             )
@@ -739,7 +770,7 @@ fn visibility_examples() {
 #[tessera]
 fn recommendation(window_size_classes: Option<bool>, on_recommended: Option<Callback>) {
     let ending = if window_size_classes.unwrap_or(false) {
-        "window size classes"
+        "ui-window-size-classes"
     } else {
         "breakpoints"
     };
@@ -753,7 +784,7 @@ fn recommendation(window_size_classes: Option<bool>, on_recommended: Option<Call
                 .padding_symmetric(Dp(24.0), Dp(20.0))
                 .semantics(SemanticsArgs {
                     role: Some(Role::Note),
-                    label: Some("M3 Expressive navigation recommendation".into()),
+                    label: Some(I18N.text("ui-m3-expressive-navigation-recommendation")),
                     merge_descendants: true,
                     ..Default::default()
                 }),
@@ -765,17 +796,17 @@ fn recommendation(window_size_classes: Option<bool>, on_recommended: Option<Call
                 .modifier(Modifier::new().weight(1.0))
                 .children(move || {
                     text()
-                        .content(format!("Note: The navigation drawer is no longer recommended in the Material 3 Expressive update. For those who have updated, use an expanded navigation rail, which has mostly the same functionality of the navigation drawer and adapts better across {ending}."))
+                        .content(I18N.format("ui-note-the-navigation-drawer-is-no-longer-recommended-in-the-material-3-expressive-update-fo", [("v0", I18N.text(&ending).into())]))
                         .style(type_style(14.0, 24.0))
                         .color(ink);
                     if let Some(on_recommended) = on_recommended {
                         gap(Dp(8.0));
                         button()
                             .text()
-                            .accessibility_label("Open recommended navigation rail")
+                            .accessibility_label(I18N.text("ui-open-recommended-navigation-rail"))
                             .on_click_shared(on_recommended)
                             .child(move || {
-                                text().content("Expanded navigation rail").color(ink);
+                                text().content(I18N.text("ui-expanded-navigation-rail")).color(ink);
                             });
                     }
                 });
@@ -788,19 +819,19 @@ fn launch(open: State<bool>, selected: State<usize>, session: Option<LiveDrawerS
     column().children(move || {
         button()
             .outlined()
-            .accessibility_label("Open modal navigation drawer")
+            .accessibility_label(I18N.text("ui-open-modal-navigation-drawer"))
             .on_click(move || {
                 if session.is_none_or(LiveDrawerSession::can_open) {
                     open.set(true);
                 }
             })
-            .child(|| {
-                text().content("Open navigation drawer");
+            .child(move || {
+                text().content(I18N.text("ui-open-navigation-drawer"));
             });
         gap(Dp(16.0));
-        prose(format!(
-            "Current destination: {}",
-            DESTINATIONS[selected.get()]
+        prose(I18N.format(
+            "ui-current-destination-value",
+            [("v0", I18N.text(&(DESTINATIONS[selected.get()])).into())],
         ));
     });
 }
@@ -828,7 +859,7 @@ fn drawer_content(
                 .height(height.unwrap_or(Dp(440.0)))
                 .then(container_watch),
         )
-        .accessibility_label("Mail destinations")
+        .accessibility_label(I18N.text("ui-mail-destinations"))
         .content(move || {
             drawer_destinations(selected)
                 .geometry_optional(geometry)
@@ -846,7 +877,7 @@ fn live_drawer(selected: State<usize>, open: State<bool>, scroll: State<Scrollab
                 .focus_group()
                 .semantics(SemanticsArgs {
                     role: Some(Role::Navigation),
-                    label: Some("Mail destinations".into()),
+                    label: Some(I18N.text("ui-mail-destinations")),
                     test_tag: Some("live-drawer".into()),
                     merge_descendants: true,
                     ..Default::default()
@@ -883,7 +914,7 @@ fn drawer_destinations(
                 .map(|geometry| watch(geometry, "headline"))
                 .unwrap_or_default();
             text()
-                .content("Mail")
+                .content(I18N.text("ui-mail"))
                 .style(theme.typography.title_small)
                 .modifier(modifier);
         });
@@ -903,7 +934,7 @@ fn drawer_destinations(
         let badge_style = theme.typography.label_large;
         let badge_slot = if index == 0 {
             Some(RenderSlot::new(move || {
-                text().content("24").style(badge_style).modifier(
+                text().content(I18N.text("24")).style(badge_style).modifier(
                     geometry
                         .map(|geometry| watch(geometry, "badge"))
                         .unwrap_or_default(),
@@ -913,7 +944,7 @@ fn drawer_destinations(
             None
         };
         navigation_drawer_item()
-            .label(label)
+            .label(I18N.text(label))
             .selected(active)
             .on_click(move || {
                 if let Some(open) = open {
@@ -979,13 +1010,13 @@ fn drawer_destinations(
         )
         .children(move || {
             text()
-                .content(if open.is_some() {
-                    "Personal folders"
+                .content(I18N.text(if open.is_some() {
+                    "ui-personal-folders"
                 } else if folders {
-                    "Personal Folders"
+                    "ui-personal-folders-2672"
                 } else {
-                    "Labels"
-                })
+                    "ui-labels"
+                }))
                 .style(theme.typography.title_small)
                 .modifier(observe(geometry, "subhead"));
         });
@@ -995,13 +1026,13 @@ fn drawer_destinations(
             merge_descendants: true,
             ..Default::default()
         }))
-        .label(if open.is_some() {
-            "Personal"
+        .label(I18N.text(if open.is_some() {
+            "ui-personal"
         } else if folders {
-            "Friends"
+            "ui-friends"
         } else {
-            "Label"
-        })
+            "ui-label"
+        }))
         .selected(selected.get() == 4)
         .icon(move || {
             let asset = if selected.get() == 4 {
@@ -1030,18 +1061,18 @@ fn drawer_destinations(
     if open.is_none() {
         let rows = if folders {
             [
-                ("Volunteering", outlined::FOLDER_SVG),
-                ("Work", outlined::FOLDER_SVG),
+                ("ui-volunteering", outlined::FOLDER_SVG),
+                ("ui-work", outlined::FOLDER_SVG),
             ]
         } else {
             [
-                ("Label", outlined::CHANGE_HISTORY_SVG),
-                ("Label", outlined::CROP_SQUARE_SVG),
+                ("ui-label", outlined::CHANGE_HISTORY_SVG),
+                ("ui-label", outlined::CROP_SQUARE_SVG),
             ]
         };
         for (label, asset) in rows {
             navigation_drawer_item()
-                .label(label)
+                .label(I18N.text(label))
                 .selected(false)
                 .icon(move || {
                     icon().vector(asset).size(Dp(24.0));
@@ -1131,7 +1162,7 @@ fn drawer_stage_canvas(
                             .clip_shape(stage_shape(square_bottom))
                             .semantics(SemanticsArgs {
                                 role: Some(Role::Group),
-                                label: Some(label.clone()),
+                                label: Some(I18N.text(&(label))),
                                 merge_descendants: true,
                                 ..Default::default()
                             }),
@@ -1211,9 +1242,9 @@ fn drawer_label_probes(geometry: State<Geometry>) {
         .typography
         .label_large;
     for (name, row_name, icon_name, label) in [
-        ("label", "indicator", "icon", "Inbox"),
-        ("inactive_label", "outbox", "inactive_icon", "Outbox"),
-        ("folder_label", "label_row", "label_icon", "Label"),
+        ("label", "indicator", "icon", "ui-inbox"),
+        ("inactive_label", "outbox", "inactive_icon", "ui-outbox"),
+        ("folder_label", "label_row", "label_icon", "ui-label"),
     ] {
         let (Some(row), Some(icon)) = (values.get(row_name), values.get(icon_name)) else {
             continue;
@@ -1235,10 +1266,13 @@ fn drawer_label_probes(geometry: State<Geometry>) {
             )
             .children(move || {
                 text()
-                    .content(label)
+                    .content(I18N.text(label))
                     .style(style)
                     .color(tessera_ui::Color::TRANSPARENT)
-                    .accessibility_label(format!("Drawer {name} measurement probe"))
+                    .accessibility_label(I18N.format(
+                        "ui-drawer-value-measurement-probe",
+                        [("v0", I18N.text(&name).into())],
+                    ))
                     .modifier(watch(geometry, name).semantics(SemanticsArgs {
                         hidden: true,
                         ..Default::default()
@@ -1258,14 +1292,14 @@ fn drawer_marker(number: usize, x: f64, y: f64) {
                 .background_with_shape(srgb(48, 48, 52), Shape::CAPSULE)
                 .semantics(SemanticsArgs {
                     role: Some(Role::Note),
-                    label: Some(format!("Drawer marker {number}")),
+                    label: Some(I18N.format("ui-drawer-marker-value", [("v0", (number).into())])),
                     merge_descendants: true,
                     ..Default::default()
                 }),
         )
         .children(move || {
             text()
-                .content(number.to_string())
+                .content((number).to_string())
                 .style(type_style(14.0, 20.0))
                 .color(tessera_ui::Color::WHITE);
         });
@@ -1317,18 +1351,25 @@ fn drawer_figure(modal: bool, mode: u8, geometry: Option<State<Geometry>>) {
         (1024.0, 488.0)
     };
     let label = match mode {
-        1 => "element sizes",
-        2 => "padding and margins",
-        3 => "color roles",
-        4 => "guidelines anatomy",
+        1 => "ui-element-sizes",
+        2 => "ui-padding-and-margins",
+        3 => "ui-color-roles",
+        4 => "ui-guidelines-anatomy",
         _ => "anatomy",
     };
     drawer_stage(
         width,
         height,
-        format!(
-            "{} navigation drawer {label}",
-            if modal { "Modal" } else { "Standard" }
+        I18N.format(
+            "ui-value-navigation-drawer-value",
+            [
+                (
+                    "v0",
+                    I18N.text(&(if modal { "ui-modal" } else { "ui-standard" }))
+                        .into(),
+                ),
+                ("v1", I18N.text(&label).into()),
+            ],
         ),
         geometry,
     )
@@ -1587,7 +1628,9 @@ fn legend_entries(entries: Vec<(usize, String)>) {
                         drawer_marker(number, 0.0, 0.0);
                     });
                 spacer().modifier(Modifier::new().width(Dp(16.0)));
-                text().content(label.clone()).style(type_style(16.0, 24.0));
+                text()
+                    .content(I18N.text(&(label)))
+                    .style(type_style(16.0, 24.0));
             });
         gap(Dp(12.0));
     }
@@ -1597,13 +1640,13 @@ fn legend_entries(entries: Vec<(usize, String)>) {
 fn legend() {
     gap(Dp(16.0));
     legend_entries(vec![
-        (1, "Container".into()),
-        (2, "Headline".into()),
-        (3, "Label text".into()),
-        (4, "Active indicator".into()),
-        (5, "Badge label text".into()),
-        (6, "Scrim".into()),
-        (7, "Icon".into()),
+        (1, "ui-container".into()),
+        (2, "ui-headline".into()),
+        (3, "ui-label-text".into()),
+        (4, "ui-active-indicator".into()),
+        (5, "ui-badge-label-text".into()),
+        (6, "ui-scrim".into()),
+        (7, "ui-icon".into()),
     ]);
 }
 
@@ -1614,7 +1657,7 @@ fn overview_figure() {
     drawer_stage(
         1024.0,
         572.0,
-        "Standard and modal navigation drawers".into(),
+        "ui-standard-and-modal-navigation-drawers".into(),
         geometry,
     )
     .child(move || {
@@ -1625,26 +1668,26 @@ fn overview_figure() {
     });
     gap(Dp(16.0));
     legend_entries(vec![
-        (1, "Standard navigation drawer".into()),
-        (2, "Modal navigation drawer".into()),
+        (1, "ui-standard-navigation-drawer".into()),
+        (2, "ui-modal-navigation-drawer".into()),
     ]);
 }
 
 #[tessera]
 fn differences_figure() {
-    row().children(|| {
+    row().children(move || {
         for legacy in [true, false] {
             column().modifier(Modifier::new().weight(1.0)).children(move || {
                 let geometry = remember(Geometry::new);
                 let selected = remember(|| 0usize);
-                drawer_stage(512.0, 356.0, if legacy { "M2 rectangular active indicator".into() } else { "M3 pill-shaped active indicator".into() }, geometry).background_optional(if legacy { Some(srgb(230, 230, 230)) } else { None }).child(move || {
+                drawer_stage(512.0, 356.0, if legacy { "ui-m2-rectangular-active-indicator".into() } else { "ui-m3-pill-shaped-active-indicator".into() }, geometry).background_optional(if legacy { Some(srgb(230, 230, 230)) } else { None }).child(move || {
                     if legacy {
                         let theme = use_context::<MaterialTheme>().unwrap().get();
                         surface().shape(Shape::rounded_rectangle(Dp::ZERO)).style(tessera_ui::Color::WHITE.into())
                             .modifier(Modifier::new().offset(Dp(48.0), Dp(40.0)).required_size(Dp(360.0), Dp(440.0)))
                             .child(move || {
                                 column().modifier(Modifier::new().padding_all(Dp(12.0))).children(move || {
-                                    for (index, label) in ["Inbox", "Outbox", "Favorites", "Archive"].into_iter().enumerate() {
+                                    for (index, label) in ["ui-inbox", "ui-outbox", "ui-favorites", "ui-archive"].into_iter().enumerate() {
                                         surface().shape(Shape::rounded_rectangle(Dp::ZERO))
                                             .style(if index == 0 { srgb(238, 228, 253) } else { tessera_ui::Color::WHITE }.into())
                                             .modifier(Modifier::new().fill_max_width().height(Dp(56.0)))
@@ -1654,7 +1697,7 @@ fn differences_figure() {
                                                     .children(move || {
                                                         icon().vector(match index { 0=>filled::MAIL_SVG,1=>filled::SEND_SVG,2=>filled::FAVORITE_SVG,_=>filled::ARCHIVE_SVG }).size(Dp(24.0)).tint(if index == 0 { srgb(98, 0, 238) } else { srgb(97, 97, 97) });
                                                         spacer().modifier(Modifier::new().width(Dp(24.0)));
-                                                        text().content(label).style(theme.typography.label_large).color(if index == 0 { srgb(98, 0, 238) } else { srgb(33, 33, 33) });
+                                                        text().content(I18N.text(label)).style(theme.typography.label_large).color(if index == 0 { srgb(98, 0, 238) } else { srgb(33, 33, 33) });
                                                     });
                                             });
                                     }
@@ -1665,7 +1708,7 @@ fn differences_figure() {
                     }
                 });
                 gap(Dp(16.0));
-                guides::caption(if legacy { "M2: Navigation drawer had square corners and a rectangular shape indicating the active destination" } else { "M3: Navigation drawer has rounded corners, new color mappings, and an updated style for indicating the active destination" });
+                guides::caption(if legacy { "ui-m2-navigation-drawer-had-square-corners-and-a-rectangular-shape-indicating-the-active-dest" } else { "ui-m3-navigation-drawer-has-rounded-corners-new-color-mappings-and-an-updated-style-for-indic" });
             });
             if legacy { spacer().modifier(Modifier::new().width(Dp(24.0))); }
         }
@@ -1682,9 +1725,9 @@ fn measurement_pair(modal: bool) {
                     drawer_figure(modal, mode);
                     gap(Dp(16.0));
                     prose(if mode == 1 {
-                        "Element size measurements"
+                        "ui-element-size-measurements"
                     } else {
-                        "Padding and margins"
+                        "ui-padding-and-margins-2689"
                     });
                 });
             if mode == 1 {
@@ -1698,17 +1741,17 @@ fn measurement_pair(modal: bool) {
 fn state_panel(number: usize, label: String, state: InteractionVisualState, x: f64, y: f64) {
     let theme = use_context::<MaterialTheme>().unwrap().get();
     boxed().modifier(Modifier::new().offset(Dp(x),Dp(y)).required_size(Dp(512.0),Dp(392.0)).clip_to_bounds()
-        .semantics(SemanticsArgs { role:Some(Role::Group),label:Some(format!("Drawer {label} state presentation")),merge_descendants:true,..Default::default() }))
+        .semantics(SemanticsArgs { role:Some(Role::Group),label:Some(I18N.format("ui-drawer-value-state-presentation", [("v0", I18N.text(&label).into())])),merge_descendants:true,..Default::default() }))
         .children(move || {
             drawer_marker(number, 20.0, 20.0);
-            text().content(label.clone()).style(type_style(14.0,20.0)).modifier(Modifier::new().offset(Dp(60.0),Dp(26.0)));
+            text().content(I18N.text(&(label))).style(type_style(14.0,20.0)).modifier(Modifier::new().offset(Dp(60.0),Dp(26.0)));
             boxed().modifier(Modifier::new().offset(Dp(128.0),Dp(88.0)).required_size(Dp(400.0),Dp(320.0))
                 .background_with_shape(theme.color_scheme.surface, Shape::rounded_rectangle(Dp(24.0)))
                 .border_with_shape(Dp(8.0), theme.color_scheme.outline_variant, Shape::rounded_rectangle(Dp(24.0))));
             boxed().modifier(Modifier::new().offset(Dp(136.0),Dp(96.0)))
                 .children(move || {
                     navigation_drawer().modifier(Modifier::new().height(Dp(400.0))).content(move || {
-                        text().content("Mail").style(theme.typography.title_small).modifier(Modifier::new().padding_all(Dp(16.0)));
+                        text().content(I18N.text("ui-mail")).style(theme.typography.title_small).modifier(Modifier::new().padding_all(Dp(16.0)));
                         for (index, destination) in DESTINATIONS.into_iter().take(4).enumerate() {
                             if index == 2 {
                                 surface().shape(Shape::CAPSULE).style(tessera_ui::Color::TRANSPARENT.into())
@@ -1723,13 +1766,13 @@ fn state_panel(number: usize, label: String, state: InteractionVisualState, x: f
                                             .children(move || {
                                                 icon().vector(outlined::FAVORITE_BORDER_SVG).size(Dp(24.0));
                                                 spacer().modifier(Modifier::new().width(Dp(12.0)));
-                                                text().content("Favorites").style(theme.typography.label_large);
+                                                text().content(I18N.text("ui-favorites")).style(theme.typography.label_large);
                                             });
                                     });
                             } else {
-                                navigation_drawer_item().label(destination).selected(index == 0)
+                                navigation_drawer_item().label(I18N.text(destination)).selected(index == 0)
                                     .icon(move || { icon().vector(match index {0=>filled::INBOX_SVG,1=>outlined::SEND_SVG,_=>outlined::DELETE_SVG}).size(Dp(24.0)); })
-                                    .badge(move || { if index == 0 { text().content("24").style(theme.typography.label_large); } });
+                                    .badge(move || { if index == 0 { text().content(I18N.text("24")).style(theme.typography.label_large); } });
                             }
                         }
                     });
@@ -1739,21 +1782,24 @@ fn state_panel(number: usize, label: String, state: InteractionVisualState, x: f
 
 #[tessera]
 fn tokens() {
-    prose("The navigation drawer has one token set. Learn about design tokens");
+    prose("ui-the-navigation-drawer-has-one-token-set-learn-about-design-tokens");
     gap(Dp(24.0));
     spec_table(
-        vec!["Element".into(), "Token / value".into()],
+        vec!["ui-element".into(), "ui-token-value-6938".into()],
         vec![
-            vec!["Modal container".into(), "surfaceContainerLow".into()],
-            vec!["Active indicator".into(), "secondaryContainer".into()],
+            vec!["ui-modal-container".into(), "surfaceContainerLow".into()],
+            vec!["ui-active-indicator".into(), "secondaryContainer".into()],
             vec![
-                "Active label and icon".into(),
+                "ui-active-label-and-icon".into(),
                 "onSecondaryContainer".into(),
             ],
-            vec!["Inactive label and icon".into(), "onSurfaceVariant".into()],
-            vec!["Destination height".into(), "56dp".into()],
-            vec!["Active indicator radius".into(), "28dp".into()],
-            vec!["Icon size".into(), "24dp".into()],
+            vec![
+                "ui-inactive-label-and-icon".into(),
+                "onSurfaceVariant".into(),
+            ],
+            vec!["ui-destination-height".into(), "56dp".into()],
+            vec!["ui-active-indicator-radius".into(), "28dp".into()],
+            vec!["ui-icon-size".into(), "24dp".into()],
         ],
     );
 }
@@ -1761,75 +1807,81 @@ fn tokens() {
 #[tessera]
 fn measurements(modal: bool) {
     let mut rows = vec![
-        vec!["Container height".into(), "100%".into()],
-        vec!["Container width".into(), "360dp".into()],
+        vec!["ui-container-height".into(), "100%".into()],
+        vec!["ui-container-width".into(), "360dp".into()],
     ];
     if !modal {
         rows.push(vec![
-            "Container shape".into(),
-            "0,16,16,0dp corner radii".into(),
+            "ui-container-shape".into(),
+            "ui-0-16-16-0dp-corner-radii".into(),
         ]);
     }
     for (attribute, value) in [
-        ("Icon size", "24dp"),
-        ("Active indicator height", "56dp"),
-        ("Active indicator shape", "28dp"),
-        ("Active indicator width", "336dp"),
-        ("Horizontal label alignment", "Start-aligned"),
-        ("Left padding", "28dp"),
-        ("Right padding", "28dp"),
-        ("Active indicator padding", "12dp"),
-        ("Padding between elements", "0dp"),
+        ("ui-icon-size", "24dp"),
+        ("ui-active-indicator-height", "56dp"),
+        ("ui-active-indicator-shape", "28dp"),
+        ("ui-active-indicator-width", "336dp"),
+        ("ui-horizontal-label-alignment", "ui-start-aligned"),
+        ("ui-left-padding", "28dp"),
+        ("ui-right-padding", "28dp"),
+        ("ui-active-indicator-padding", "12dp"),
+        ("ui-padding-between-elements", "0dp"),
     ] {
         rows.push(vec![attribute.into(), value.into()]);
     }
-    spec_table(vec!["Attribute".into(), "Value".into()], rows);
+    spec_table(vec!["ui-attribute".into(), "ui-value".into()], rows);
 }
 
 #[tessera]
 fn colors() {
     prose(
-        "Color values are implemented through design tokens. For design, this means working with color values that correspond with tokens. For implementation, a color value will be a token that references a value. Learn more about design tokens",
+        "ui-color-values-are-implemented-through-design-tokens-for-design-this-means-working-with-colo-2703",
     );
     gap(Dp(32.0));
     drawer_figure(true, 3);
     gap(Dp(24.0));
-    prose("Navigation drawer color roles used for light and dark schemes:");
+    prose("ui-navigation-drawer-color-roles-used-for-light-and-dark-schemes");
     gap(Dp(16.0));
     legend_entries(vec![
-        (1, "Surface container low".into()),
-        (2, "On surface variant".into()),
-        (3, "On secondary container".into()),
-        (4, "On secondary container".into()),
-        (5, "Secondary container".into()),
-        (6, "On secondary container".into()),
-        (7, "On surface variant".into()),
-        (8, "On surface variant".into()),
-        (9, "Scrim".into()),
+        (1, "ui-surface-container-low".into()),
+        (2, "ui-on-surface-variant".into()),
+        (3, "ui-on-secondary-container".into()),
+        (4, "ui-on-secondary-container".into()),
+        (5, "ui-secondary-container".into()),
+        (6, "ui-on-secondary-container".into()),
+        (7, "ui-on-surface-variant".into()),
+        (8, "ui-on-surface-variant".into()),
+        (9, "ui-scrim".into()),
     ]);
     gap(Dp(24.0));
-    prose("For divider color roles, go to divider specs.");
+    prose("ui-for-divider-color-roles-go-to-divider-specs");
 }
 
 #[tessera]
 fn states() {
     prose(
-        "States are visual representations used to communicate the status of a component or interactive element. Learn more about interaction states",
+        "ui-states-are-visual-representations-used-to-communicate-the-status-of-a-component-or-interac-2706",
     );
     gap(Dp(32.0));
     let geometry = remember(Geometry::new);
     drawer_stage(
         1024.0,
         784.0,
-        "Drawer enabled hovered focused pressed states".into(),
+        "ui-drawer-enabled-hovered-focused-pressed-states".into(),
         geometry,
     )
     .child(|| {
         for (number, label, state, x, y) in [
-            (1, "Enabled", InteractionVisualState::Rest, 0.0, 0.0),
-            (2, "Hovered", InteractionVisualState::Hover, 512.0, 0.0),
-            (3, "Focused", InteractionVisualState::Focus, 0.0, 392.0),
-            (4, "Pressed", InteractionVisualState::Pressed, 512.0, 392.0),
+            (1, "ui-enabled", InteractionVisualState::Rest, 0.0, 0.0),
+            (2, "ui-hovered", InteractionVisualState::Hover, 512.0, 0.0),
+            (3, "ui-focused", InteractionVisualState::Focus, 0.0, 392.0),
+            (
+                4,
+                "ui-pressed",
+                InteractionVisualState::Pressed,
+                512.0,
+                392.0,
+            ),
         ] {
             state_panel(number, label.into(), state, x, y);
         }
@@ -1852,16 +1904,16 @@ fn states() {
         );
     });
     gap(Dp(24.0));
-    prose("Navigation drawer states:");
+    prose("ui-navigation-drawer-states");
     gap(Dp(16.0));
     legend_entries(vec![
-        (1, "Enabled".into()),
-        (2, "Hovered".into()),
-        (3, "Focused".into()),
-        (4, "Pressed".into()),
+        (1, "ui-enabled".into()),
+        (2, "ui-hovered".into()),
+        (3, "ui-focused".into()),
+        (4, "ui-pressed".into()),
     ]);
     gap(Dp(24.0));
-    prose("State specs are in the tokens module above");
+    prose("ui-state-specs-are-in-the-tokens-module-above");
 }
 
 #[cfg(all(test, not(target_family = "wasm")))]

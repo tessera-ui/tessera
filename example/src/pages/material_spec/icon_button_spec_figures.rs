@@ -24,8 +24,9 @@ use tessera_ui::{
     modifier::FocusModifierExt as _, remember, scaled_box, tessera, use_context,
 };
 
-use crate::pages::material_spec::{
-    gap, icon_buttons::context, media, srgb, subheading, type_style,
+use crate::{
+    pages::material_spec::{gap, icon_buttons::context, media, srgb, subheading, type_style},
+    res::I18N,
 };
 
 #[tessera]
@@ -37,13 +38,13 @@ pub(super) fn configs() {
         .primary;
     material_theme()
         .theme(move || MaterialTheme::from_seed(seed, true))
-        .child(|| {
+        .child(move || {
             stage(
                 1024.0,
                 448.0,
-                "Icon button configurations".into(),
+                "ui-icon-button-configurations".into(),
                 srgb(31, 31, 33),
-                RenderSlot::new(|| {
+                RenderSlot::new(move || {
                     for (size, x) in [
                         (IconButtonSize::ExtraSmall, 62.0),
                         (IconButtonSize::Small, 119.0),
@@ -63,7 +64,7 @@ pub(super) fn configs() {
                             0,
                             x,
                             220.0,
-                            format!("Play {size:?}"),
+                            I18N.format("ui-play-value", [("v0", format!("{:?}", size).into())]),
                         );
                     }
                     for (shape, y) in [
@@ -82,7 +83,7 @@ pub(super) fn configs() {
                             1,
                             570.0,
                             y,
-                            format!("Share {shape:?}"),
+                            I18N.format("ui-share-value", [("v0", format!("{:?}", shape).into())]),
                         );
                     }
                     for (variant, y) in [
@@ -103,7 +104,10 @@ pub(super) fn configs() {
                             2,
                             730.0,
                             y,
-                            format!("Video {variant:?}"),
+                            I18N.format(
+                                "ui-video-value",
+                                [("v0", format!("{:?}", variant).into())],
+                            ),
                         );
                     }
                     for (width, y) in [
@@ -123,7 +127,10 @@ pub(super) fn configs() {
                             3,
                             908.0,
                             y,
-                            format!("More options {width:?}"),
+                            I18N.format(
+                                "ui-more-options-value",
+                                [("v0", format!("{:?}", width).into())],
+                            ),
                         );
                     }
                     for (index, x) in [260.0, 570.0, 730.0, 908.0].into_iter().enumerate() {
@@ -134,10 +141,10 @@ pub(super) fn configs() {
         });
     gap(Dp(24.0));
     legend(vec![
-        "Five sizes".into(),
-        "Two shapes".into(),
-        "Four color styles".into(),
-        "Three widths".into(),
+        "ui-five-sizes".into(),
+        "ui-two-shapes".into(),
+        "ui-four-color-styles".into(),
+        "ui-three-widths".into(),
     ]);
 }
 
@@ -145,9 +152,9 @@ pub(super) fn configs() {
 pub(super) fn shape_morph() {
     context::context_row(
         RenderSlot::new(|| {
-            subheading("Pressed state".into());
+            subheading("ui-pressed-state".into());
             gap(Dp(24.0));
-            paragraph("When pressed, round and square icon buttons morph toward a square shape. Both shapes use the same pressed corner radius for a given size. The corner radius changes with button size.".into());
+            paragraph("ui-when-pressed-round-and-square-icon-buttons-morph-toward-a-square-shape-both-shapes-use-the".into());
         }),
         RenderSlot::new(|| {
             morph_grid(false);
@@ -156,9 +163,9 @@ pub(super) fn shape_morph() {
     gap(Dp(56.0));
     context::context_row(
         RenderSlot::new(|| {
-            subheading("When selected".into());
+            subheading("ui-when-selected".into());
             gap(Dp(24.0));
-            paragraph("When selected, a round icon button changes to a square shape, and a square icon button changes to a round shape. The change in shape reinforces the selected state.".into());
+            paragraph("ui-when-selected-a-round-icon-button-changes-to-a-square-shape-and-a-square-icon-button-chang".into());
         }),
         RenderSlot::new(|| {
             morph_grid(true);
@@ -173,9 +180,9 @@ fn morph_grid(selection: bool) {
         676.0,
         296.0,
         if selection {
-            "Selected icon button shapes".into()
+            "ui-selected-icon-button-shapes".into()
         } else {
-            "Pressed icon button shapes".into()
+            "ui-pressed-icon-button-shapes".into()
         },
         scheme.surface_container_low,
         RenderSlot::new(move || {
@@ -208,14 +215,34 @@ fn morph_grid(selection: bool) {
                         4,
                         first + column as f64 * step,
                         y,
-                        format!(
-                            "{} {shape:?} {}",
-                            if selection {
-                                "Selected shapes"
-                            } else {
-                                "Pressed shapes"
-                            },
-                            ["Enabled", "Hovered", "Pressed", "Selected"][column]
+                        I18N.format(
+                            "ui-value-value-value-format-35",
+                            [
+                                (
+                                    "v0",
+                                    I18N.text(
+                                        &(if selection {
+                                            "ui-selected-shapes"
+                                        } else {
+                                            "ui-pressed-shapes"
+                                        }),
+                                    )
+                                    .into(),
+                                ),
+                                ("v1", format!("{:?}", shape).into()),
+                                (
+                                    "v2",
+                                    I18N.text(
+                                        &([
+                                            "ui-enabled",
+                                            "ui-hovered",
+                                            "ui-pressed",
+                                            "ui-selected",
+                                        ][column]),
+                                    )
+                                    .into(),
+                                ),
+                            ],
                         ),
                     );
                 }
@@ -227,13 +254,17 @@ fn morph_grid(selection: bool) {
         .item_spacing(Dp(24.0))
         .line_spacing(Dp(8.0))
         .children(|| {
-            paragraph("A. Round button".into());
-            paragraph("B. Square button".into());
+            paragraph("ui-a-round-button".into());
+            paragraph("ui-b-square-button".into());
         });
     gap(Dp(16.0));
-    let mut items = vec!["Enabled".into(), "Hovered".into(), "Pressed".into()];
+    let mut items = vec![
+        "ui-enabled".into(),
+        "ui-hovered".into(),
+        "ui-pressed".into(),
+    ];
     if selection {
-        items.push("Selected".into());
+        items.push("ui-selected".into());
     }
     legend(items);
 }
@@ -262,7 +293,7 @@ fn stage(width: f64, height: f64, label: String, background: Color, child: Rende
                             .clip_shape(Shape::rounded_rectangle(Dp(32.0)))
                             .semantics(SemanticsArgs {
                                 role: Some(Role::Group),
-                                label: Some(label.clone()),
+                                label: Some(I18N.text(&(label))),
                                 merge_descendants: true,
                                 ..Default::default()
                             }),
@@ -333,8 +364,10 @@ fn control(
                         }
                     }
                 })
-                .accessibility_label(label.clone())
-                .accessibility_description(format!("Activations: {}", actions.get()))
+                .accessibility_label(I18N.text(&(label)))
+                .accessibility_description(
+                    I18N.format("ui-activations-value", [("v0", (actions.get()).into())]),
+                )
                 .on_click(move || {
                     actions.set(actions.get() + 1);
                     if toggle {
@@ -362,7 +395,7 @@ fn marker(value: String, x: f64, y: f64) {
         )
         .children(move || {
             text()
-                .content(value.clone())
+                .content(I18N.text(&(value)))
                 .color(scheme.inverse_on_surface)
                 .style(type_style(16.0, 24.0));
         });
@@ -370,7 +403,9 @@ fn marker(value: String, x: f64, y: f64) {
 
 #[tessera]
 fn paragraph(value: String) {
-    text().content(value).style(type_style(16.0, 24.0));
+    text()
+        .content(I18N.text(value))
+        .style(type_style(16.0, 24.0));
 }
 
 #[tessera]
@@ -405,7 +440,9 @@ fn legend(items: Vec<String>) {
                         .style(type_style(16.0, 24.0));
                 });
             spacer().modifier(Modifier::new().width(Dp(12.0)));
-            text().content(value.clone()).style(type_style(16.0, 24.0));
+            text()
+                .content(I18N.text(&(value)))
+                .style(type_style(16.0, 24.0));
         });
         gap(Dp(8.0));
     }

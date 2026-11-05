@@ -5,7 +5,7 @@ use tessera_components::{
 use tessera_shard::shard;
 use tessera_ui::{Dp, Modifier, remember_with_key, use_context};
 
-use crate::res;
+use crate::res::{self, I18N};
 
 #[shard]
 pub fn home_page() {
@@ -26,7 +26,7 @@ pub fn home_page() {
         .cross_axis_alignment(CrossAxisAlignment::Start)
         .item(move || {
                 text()
-                    .content("Hello From Tessera!")
+                    .content(I18N.text("ui-hello-from-tessera"))
                     .style(theme.with(|t| t.typography.headline_large));
                 })
         .item(|| {
@@ -38,11 +38,7 @@ pub fn home_page() {
         .item(|| {
                 spacer().modifier(Modifier::new().height(Dp(5.0)));
                 })
-        .item(|| {
-                text().content(r#"This is a sample application for the Tessera UI framework!
-
-Tessera is a modern UI framework based on Rust, aiming to provide high performance, ease of use, and cross-platform support.
-
-The purpose of this sample application is to showcase Tessera's capabilities and some of its components."#);
+        .item(move || {
+                text().content(I18N.text("ui-this-is-a-sample-application-for-the-tessera-ui-framework-tessera-is-a-modern-ui-framework"));
             });
 }

@@ -34,6 +34,8 @@ use tessera_ui::{
     modifier::FocusModifierExt as _, remember, scaled_box, tessera, use_context,
 };
 
+use crate::res::I18N;
+
 use super::{
     ACCENT,
     annotations::{self, Rect, SpaceGeometry, dotted, watch_observed},
@@ -80,7 +82,7 @@ fn range(mode: DatePickerDisplayMode) -> DateRangePickerState {
 fn formatted(value: Option<CalendarDate>) -> String {
     value
         .map(|date| format!("{:04}-{:02}-{:02}", date.year(), date.month(), date.day()))
-        .unwrap_or_else(|| "None".into())
+        .unwrap_or_else(|| "ui-none".into())
 }
 
 #[tessera]
@@ -93,21 +95,21 @@ pub(super) fn date_pickers_spec(route: Option<crate::pages::material_spec::artic
         range: remember(|| range(DatePickerDisplayMode::Picker)),
         range_mode: remember(|| false),
         dark: remember(|| false),
-        status: remember(|| "Ready".to_owned()),
+        status: remember(|| "ui-ready".to_owned()),
     };
     let input = Sample {
         single: remember(|| single(DatePickerDisplayMode::Input)),
         range: remember(|| range(DatePickerDisplayMode::Input)),
         range_mode: remember(|| false),
         dark: remember(|| false),
-        status: remember(|| "Ready".to_owned()),
+        status: remember(|| "ui-ready".to_owned()),
     };
     let draft = Sample {
         single: remember(|| single(DatePickerDisplayMode::Picker)),
         range: remember(|| range(DatePickerDisplayMode::Picker)),
         range_mode: remember(|| false),
         dark: remember(|| false),
-        status: remember(|| "Ready".to_owned()),
+        status: remember(|| "ui-ready".to_owned()),
     };
     let modal = remember(|| false);
     let modal_input = remember(|| false);
@@ -124,7 +126,7 @@ pub(super) fn date_pickers_spec(route: Option<crate::pages::material_spec::artic
         }
         pages.push(ArticlePage {
             title,
-            intro: if title == "Overview" {
+            intro: if title == "ui-overview" {
                 Some(RenderSlot::new(date_overview))
             } else {
                 None
@@ -135,71 +137,71 @@ pub(super) fn date_pickers_spec(route: Option<crate::pages::material_spec::artic
     dialog_provider()
         .is_open(modal.get())
         .padding(Dp::ZERO)
-        .accessibility_label("Date picker dialog")
+        .accessibility_label(I18N.text("ui-date-picker-dialog"))
         .on_close_request(move || modal.set(false))
         .main_content(move || {
             article(
-                "Date pickers",
-                "Date pickers let people select a date, or a range of dates",
+                "ui-date-pickers",
+                "ui-date-pickers-let-people-select-a-date-or-a-range-of-dates",
                 vec![
                     SpecSection {
-                        title: "Tokens & specs",
+                        title: "ui-tokens-specs",
                         content: RenderSlot::new(tokens),
                     },
                     SpecSection {
-                        title: "Docked date picker",
+                        title: "ui-docked-date-picker",
                         content: RenderSlot::new(docked_section),
                     },
                     SpecSection {
-                        title: "Modal date picker",
+                        title: "ui-modal-date-picker",
                         content: RenderSlot::new(move || {
                             date_figure(Figure::Day, true, false);
                             gap(Dp(32.0));
-                            example(calendar, "Calendar", modal, modal_input, false, draft);
+                            example(calendar, "ui-calendar", modal, modal_input, false, draft);
                             gap(Dp(24.0));
                             anatomy_legend(Figure::Day, DockedDatePickerView::Calendar);
                             gap(Dp(32.0));
-                            subheading("Modal date picker color".into());
+                            subheading("ui-modal-date-picker-color".into());
                             gap(Dp(24.0));
                             date_colors(Figure::Day);
                             gap(Dp(32.0));
-                            subheading("Modal date picker measurements".into());
+                            subheading("ui-modal-date-picker-measurements".into());
                             gap(Dp(24.0));
                             date_figure(Figure::Day, false, true);
                             gap(Dp(24.0));
                             measurements(false);
                             gap(Dp(32.0));
-                            subheading("Modal date picker configurations".into());
+                            subheading("ui-modal-date-picker-configurations".into());
                             gap(Dp(24.0));
                             modal_configurations();
                         }),
                     },
                     SpecSection {
-                        title: "Modal date input",
+                        title: "ui-modal-date-input",
                         content: RenderSlot::new(move || {
                             date_figure(Figure::Input, true, false);
                             gap(Dp(32.0));
-                            example(input, "Input", modal, modal_input, true, draft);
+                            example(input, "ui-input", modal, modal_input, true, draft);
                             gap(Dp(24.0));
                             anatomy_legend(Figure::Input, DockedDatePickerView::Calendar);
                             gap(Dp(32.0));
-                            subheading("Modal date input color".into());
+                            subheading("ui-modal-date-input-color".into());
                             gap(Dp(24.0));
                             date_colors(Figure::Input);
                             gap(Dp(32.0));
-                            subheading("Modal date input measurements".into());
+                            subheading("ui-modal-date-input-measurements".into());
                             gap(Dp(24.0));
                             date_figure(Figure::Input, false, true);
                             gap(Dp(24.0));
                             measurements(true);
                             gap(Dp(32.0));
-                            subheading("Modal date input configurations".into());
+                            subheading("ui-modal-date-input-configurations".into());
                             gap(Dp(24.0));
                             input_configurations();
                         }),
                     },
                     SpecSection {
-                        title: "Element states",
+                        title: "ui-element-states",
                         content: RenderSlot::new(move || {
                             states();
                         }),
@@ -212,7 +214,7 @@ pub(super) fn date_pickers_spec(route: Option<crate::pages::material_spec::artic
             .pages(pages.clone());
         })
         .dialog_content(move |dialog_scope| {
-            themed_picker(draft, "Modal")
+            themed_picker(draft, "ui-modal")
                 .dialog(dialog_scope)
                 .modal(modal)
                 .commit_target(if modal_input.get() { input } else { calendar });
@@ -283,29 +285,34 @@ fn example(
             button()
                 .tonal()
                 .selected(sample.range_mode.get())
-                .accessibility_label(format!("{label} range selection"))
+                .accessibility_label(I18N.format(
+                    "ui-value-range-selection",
+                    [("v0", I18N.text(&label).into())],
+                ))
                 .on_click(move || {
                     sample.range_mode.set(!sample.range_mode.get());
                     FocusManager::current().defer_keyboard_until_layout();
                 })
                 .child(move || {
-                    text().content(if sample.range_mode.get() {
-                        "Date range"
+                    text().content(I18N.text(if sample.range_mode.get() {
+                        "ui-date-range"
                     } else {
-                        "Single date"
-                    });
+                        "ui-single-date"
+                    }));
                 });
             button()
                 .tonal()
                 .selected(sample.dark.get())
-                .accessibility_label(format!("{label} dark theme"))
+                .accessibility_label(
+                    I18N.format("ui-value-dark-theme", [("v0", I18N.text(&label).into())]),
+                )
                 .on_click(move || sample.dark.set(!sample.dark.get()))
                 .child(move || {
-                    text().content(if sample.dark.get() {
-                        "Dark theme"
+                    text().content(I18N.text(if sample.dark.get() {
+                        "ui-dark-theme"
                     } else {
-                        "Light theme"
-                    });
+                        "ui-light-theme"
+                    }));
                 });
         });
     gap(Dp(24.0));
@@ -318,36 +325,57 @@ fn example(
         });
     gap(Dp(16.0));
     text()
-        .content(if sample.range_mode.get() {
-            sample.range.with(|state| {
-                format!(
-                    "{caption} range: {} – {}",
-                    formatted(state.selected_start_date()),
-                    formatted(state.selected_end_date())
-                )
+        .content(
+            (if sample.range_mode.get() {
+                sample.range.with(|state| {
+                    I18N.format(
+                        "ui-value-range-value-value",
+                        [
+                            ("v0", I18N.text(&caption).into()),
+                            (
+                                "v1",
+                                I18N.text(&formatted(state.selected_start_date())).into(),
+                            ),
+                            (
+                                "v2",
+                                I18N.text(&formatted(state.selected_end_date())).into(),
+                            ),
+                        ],
+                    )
+                })
+            } else {
+                sample.single.with(|state| {
+                    I18N.format(
+                        "ui-value-date-value",
+                        [
+                            ("v0", I18N.text(&caption).into()),
+                            ("v1", I18N.text(&formatted(state.selected_date())).into()),
+                        ],
+                    )
+                })
             })
-        } else {
-            sample
-                .single
-                .with(|state| format!("{caption} date: {}", formatted(state.selected_date())))
-        })
+            .to_string(),
+        )
         .style(type_style(16.0, 24.0));
     text()
-        .content(sample.status.get())
+        .content(I18N.text(sample.status.get()))
         .style(type_style(14.0, 20.0));
     gap(Dp(16.0));
     button()
         .outlined()
-        .accessibility_label(format!("Open {caption} date dialog"))
+        .accessibility_label(I18N.format(
+            "ui-open-value-date-dialog",
+            [("v0", I18N.text(&caption).into())],
+        ))
         .on_click(move || {
             open_date_dialog(sample, draft, modal, modal_input, input);
         })
-        .child(|| {
-            text().content("Open dialog");
+        .child(move || {
+            text().content(I18N.text("ui-open-dialog"));
         });
     gap(Dp(12.0));
     text()
-        .content("Dialog changes are a draft. OK applies them to this example; Cancel, Escape or dismissal outside leaves its date unchanged.")
+        .content(I18N.text("ui-dialog-changes-are-a-draft-ok-applies-them-to-this-example-cancel-escape-or-dismissal-outs"))
         .style(type_style(14.0, 20.0));
 }
 
@@ -383,14 +411,14 @@ fn picker_surface(
         .expect("MaterialTheme must be provided")
         .get()
         .color_scheme;
-    let confirm_label = format!("{label} confirm date");
-    let cancel_label = format!("{label} cancel date");
+    let confirm_label = I18N.format("ui-value-confirm-date", [("v0", I18N.text(&label).into())]);
+    let cancel_label = I18N.format("ui-value-cancel-date", [("v0", I18N.text(&label).into())]);
     surface()
         .style(scheme.surface_container_high.into())
         .shape(Shape::rounded_rectangle(Dp(28.0)))
         .modifier(Modifier::new().semantics(SemanticsArgs {
             role: Some(Role::Group),
-            label: Some(format!("{label} date preview")),
+            label: Some(I18N.format("ui-value-date-preview", [("v0", I18N.text(&label).into())])),
             merge_descendants: true,
             ..Default::default()
         }))
@@ -465,20 +493,31 @@ fn confirm(
         } else {
             sample.single.with(|state| state.selected_date().is_some())
         })
-        .accessibility_label(label)
+        .accessibility_label(I18N.text(label))
         .on_click(move || {
             sample.status.set(if sample.range_mode.get() {
                 sample.range.with(|state| {
-                    format!(
-                        "Confirmed range: {} – {}",
-                        formatted(state.selected_start_date()),
-                        formatted(state.selected_end_date())
+                    I18N.format(
+                        "ui-confirmed-range-value-value",
+                        [
+                            (
+                                "v0",
+                                I18N.text(&formatted(state.selected_start_date())).into(),
+                            ),
+                            (
+                                "v1",
+                                I18N.text(&formatted(state.selected_end_date())).into(),
+                            ),
+                        ],
                     )
                 })
             } else {
-                sample
-                    .single
-                    .with(|state| format!("Confirmed date: {}", formatted(state.selected_date())))
+                sample.single.with(|state| {
+                    I18N.format(
+                        "ui-confirmed-date-value",
+                        [("v0", I18N.text(&formatted(state.selected_date())).into())],
+                    )
+                })
             });
             if let Some(target) = commit_target {
                 copy_date_sample(sample, target);
@@ -487,8 +526,8 @@ fn confirm(
                 modal.set(false);
             }
         })
-        .child(|| {
-            text().content("OK");
+        .child(move || {
+            text().content(I18N.text("ui-ok"));
         });
 }
 
@@ -496,36 +535,39 @@ fn confirm(
 fn cancel(sample: Sample, #[prop(into)] label: String, modal: Option<State<bool>>) {
     button()
         .text()
-        .accessibility_label(label)
+        .accessibility_label(I18N.text(label))
         .on_click(move || {
-            sample.status.set("Cancelled".into());
+            sample.status.set("ui-cancelled".into());
             if let Some(modal) = modal {
                 modal.set(false);
             }
         })
-        .child(|| {
-            text().content("Cancel");
+        .child(move || {
+            text().content(I18N.text("ui-cancel"));
         });
 }
 
 #[tessera]
 fn tokens() {
     spec_table(
-        vec!["Element".into(), "Token value".into()],
+        vec!["ui-element".into(), "ui-token-value".into()],
         vec![
-            vec!["Modal container".into(), "Surface container high".into()],
-            vec!["Selected date".into(), "Primary / on primary".into()],
             vec![
-                "Range highlight".into(),
-                "Secondary container / on secondary container".into(),
+                "ui-modal-container".into(),
+                "ui-surface-container-high".into(),
             ],
-            vec!["Today outline".into(), "Primary".into()],
-            vec!["Headline / unselected date".into(), "On surface".into()],
+            vec!["ui-selected-date".into(), "ui-primary-on-primary".into()],
             vec![
-                "Supporting text / weekdays / icons".into(),
-                "On surface variant".into(),
+                "ui-range-highlight".into(),
+                "ui-secondary-container-on-secondary-container".into(),
             ],
-            vec!["Divider".into(), "Outline variant".into()],
+            vec!["ui-today-outline".into(), "ui-primary".into()],
+            vec!["ui-headline-unselected-date".into(), "ui-on-surface".into()],
+            vec![
+                "ui-supporting-text-weekdays-icons".into(),
+                "ui-on-surface-variant".into(),
+            ],
+            vec!["ui-divider".into(), "ui-outline-variant".into()],
         ],
     );
 }
@@ -534,19 +576,19 @@ fn tokens() {
 fn measurements(input: bool) {
     let mut rows = vec![
         vec![
-            "Single-date container".into(),
-            "360dp maximum width · 28dp corners".into(),
+            "ui-single-date-container".into(),
+            "ui-360dp-maximum-width-28dp-corners".into(),
         ],
-        vec!["Header left / right padding".into(), "24 / 12dp".into()],
-        vec!["Date input".into(), "MM/DD/YYYY".into()],
-        vec!["Date input height".into(), "56dp".into()],
+        vec!["ui-header-left-right-padding".into(), "24 / 12dp".into()],
+        vec!["ui-date-input".into(), "MM/DD/YYYY".into()],
+        vec!["ui-date-input-height".into(), "56dp".into()],
     ];
     if !input {
-        rows.push(vec!["Calendar date target".into(), "48 × 48dp".into()]);
-        rows.push(vec!["Selected date indicator".into(), "40dp".into()]);
-        rows.push(vec!["Calendar columns".into(), "7".into()]);
+        rows.push(vec!["ui-calendar-date-target".into(), "48 × 48dp".into()]);
+        rows.push(vec!["ui-selected-date-indicator".into(), "40dp".into()]);
+        rows.push(vec!["ui-calendar-columns".into(), "7".into()]);
     }
-    spec_table(vec!["Attribute".into(), "Value".into()], rows);
+    spec_table(vec!["ui-attribute".into(), "ui-value".into()], rows);
 }
 
 #[path = "date_instructional.rs"]
@@ -592,137 +634,137 @@ fn chapter(title: &'static str, text: &'static str, figure: Figure) -> DateChapt
 fn date_chapters() -> Vec<(&'static str, Vec<DateChapter>)> {
     vec![
         (
-            "Overview",
+            "ui-overview",
             vec![
                 chapter(
-                    "Availability & resources",
-                    "Material provides design and implementation resources for date selection. Availability below describes the Material libraries; these live examples use Tessera.",
+                    "ui-availability-resources",
+                    "ui-material-provides-design-and-implementation-resources-for-date-selection-availability-belo",
                     Figure::None,
                 ),
                 chapter(
-                    "Differences from M2",
-                    "M3 uses larger titles and labels with more spacing for 48dp touch targets, new dynamic-color mappings and no modal shadow. The former desktop picker is now the docked date picker; the former mobile picker and input are now modal date picker and modal date input. These names describe behavior, not a device type.",
+                    "ui-differences-from-m2",
+                    "ui-m3-uses-larger-titles-and-labels-with-more-spacing-for-48dp-touch-targets-new-dynamic-colo",
                     Figure::Day,
                 ),
             ],
         ),
         (
-            "Guidelines",
+            "ui-guidelines",
             vec![
                 chapter(
-                    "Usage",
-                    "Choose a calendar for nearby dates and text entry for dates in the distant past or future, such as a date of birth. Offer a single date for an event or an inclusive range for a reservation. Show past, present and future dates as the task allows, and distinguish today from the selected date.",
+                    "ui-usage",
+                    "ui-choose-a-calendar-for-nearby-dates-and-text-entry-for-dates-in-the-distant-past-or-future",
                     Figure::Docked,
                 ),
                 DateChapter {
-                    title: "Anatomy",
-                    text: "Each variant exposes its selection, navigation and confirmation controls.",
+                    title: "ui-anatomy",
+                    text: "ui-each-variant-exposes-its-selection-navigation-and-confirmation-controls",
                     figure: Figure::None,
                     children: vec![
                         chapter(
-                            "Docked date picker",
-                            "An input field anchors a calendar with separate month and year menus, date cells and optional actions.",
+                            "ui-docked-date-picker",
+                            "ui-an-input-field-anchors-a-calendar-with-separate-month-and-year-menus-date-cells-and-option",
                             Figure::Docked,
                         ),
                         chapter(
-                            "Modal date picker",
-                            "Supporting text and a headline describe the selection. The edit action switches entry method; month navigation, date cells and actions complete the dialog.",
+                            "ui-modal-date-picker",
+                            "ui-supporting-text-and-a-headline-describe-the-selection-the-edit-action-switches-entry-metho",
                             Figure::Day,
                         ),
                         chapter(
-                            "Modal date input",
-                            "The calendar action returns to visual selection. A labeled input accepts the date before confirmation.",
+                            "ui-modal-date-input",
+                            "ui-the-calendar-action-returns-to-visual-selection-a-labeled-input-accepts-the-date-before-co",
                             Figure::Input,
                         ),
                         chapter(
-                            "Full-screen date picker",
-                            "A close affordance and Save action frame the range calendar on compact windows.",
+                            "ui-full-screen-date-picker",
+                            "ui-a-close-affordance-and-save-action-frame-the-range-calendar-on-compact-windows",
                             Figure::FullScreen,
                         ),
                     ],
                 },
                 DateChapter {
-                    title: "Docked date picker",
-                    text: "Use an anchored calendar alongside direct date entry.",
+                    title: "ui-docked-date-picker",
+                    text: "ui-use-an-anchored-calendar-alongside-direct-date-entry",
                     figure: Figure::None,
                     children: vec![
                         chapter(
-                            "Usage",
-                            "Keep the editable field visible when its calendar is open. Docked pickers work well in forms with enough space beside the field. Both direct text entry and calendar selection must complete the same task; clearly describe the expected date format.",
+                            "ui-usage",
+                            "ui-keep-the-editable-field-visible-when-its-calendar-is-open-docked-pickers-work-well-in-form",
                             Figure::Docked,
                         ),
                         chapter(
-                            "Behavior",
-                            "Activate the calendar icon to reveal the picker immediately below the field. Its position stays anchored while month or year menus open. OK commits the draft; Cancel dismisses it without replacing the field's saved value.",
+                            "ui-behavior",
+                            "ui-activate-the-calendar-icon-to-reveal-the-picker-immediately-below-the-field-its-position-s",
                             Figure::Docked,
                         ),
                         chapter(
-                            "Month selection",
-                            "Use previous and next controls or open the month menu to jump within the year.",
+                            "ui-month-selection",
+                            "ui-use-previous-and-next-controls-or-open-the-month-menu-to-jump-within-the-year",
                             Figure::Docked,
                         ),
                         chapter(
-                            "Year selection",
-                            "Use the year controls or open the year menu to navigate distant dates.",
+                            "ui-year-selection",
+                            "ui-use-the-year-controls-or-open-the-year-menu-to-navigate-distant-dates",
                             Figure::Docked,
                         ),
                     ],
                 },
                 DateChapter {
-                    title: "Modal date picker",
-                    text: "A dialog keeps attention on a pending date selection.",
+                    title: "ui-modal-date-picker",
+                    text: "ui-a-dialog-keeps-attention-on-a-pending-date-selection",
                     figure: Figure::None,
                     children: vec![
                         chapter(
-                            "Behavior",
-                            "Use previous and next month controls for nearby dates. The month and year selector opens year navigation.",
+                            "ui-behavior",
+                            "ui-use-previous-and-next-month-controls-for-nearby-dates-the-month-and-year-selector-opens-ye",
                             Figure::Day,
                         ),
                         chapter(
-                            "Date range selection",
-                            "Choose a start and end date for bookings and reservations. Intermediate dates share a connected highlight; vertical scrolling reveals other months. Keep the selected endpoints visible in the headline, and enable Save only after both endpoints form a valid range.",
+                            "ui-date-range-selection",
+                            "ui-choose-a-start-and-end-date-for-bookings-and-reservations-intermediate-dates-share-a-conne",
                             Figure::Range,
                         ),
                     ],
                 },
                 DateChapter {
-                    title: "Modal date input",
-                    text: "Direct entry is useful when the intended date is already known.",
+                    title: "ui-modal-date-input",
+                    text: "ui-direct-entry-is-useful-when-the-intended-date-is-already-known",
                     figure: Figure::None,
                     children: vec![
                         chapter(
-                            "Usage",
-                            "Offer numeric entry for a date or date range, especially dates far from the current month.",
+                            "ui-usage",
+                            "ui-offer-numeric-entry-for-a-date-or-date-range-especially-dates-far-from-the-current-month",
                             Figure::Input,
                         ),
                         chapter(
-                            "Behavior",
-                            "The edit and calendar controls switch entry methods without losing the current selection. Keep format guidance with each field. Reject malformed or impossible dates and ranges ending before they start, and make the reason clear before confirmation.",
+                            "ui-behavior",
+                            "ui-the-edit-and-calendar-controls-switch-entry-methods-without-losing-the-current-selection-k",
                             Figure::RangeInput,
                         ),
                         chapter(
-                            "Compact breakpoint",
-                            "A full-screen picker keeps range selection readable on compact windows, with Close and Save at the top. Preserve touch-target sizes and scroll the months rather than compressing the calendar cells.",
+                            "ui-compact-breakpoint",
+                            "ui-a-full-screen-picker-keeps-range-selection-readable-on-compact-windows-with-close-and-save",
                             Figure::FullScreen,
                         ),
                         chapter(
-                            "Medium and expanded breakpoints",
-                            "Use a modal dialog or docked picker where the layout has sufficient space. A docked calendar stays below its field, which remains available for direct entry. Keep calendars at their intended size rather than stretching cells across an expanded window.",
+                            "ui-medium-and-expanded-breakpoints",
+                            "ui-use-a-modal-dialog-or-docked-picker-where-the-layout-has-sufficient-space-a-docked-calenda",
                             Figure::Docked,
                         ),
                         chapter(
-                            "Selection",
-                            "A selected endpoint uses a filled indicator. The dates between the endpoints have a connected tonal highlight.",
+                            "ui-selection",
+                            "ui-a-selected-endpoint-uses-a-filled-indicator-the-dates-between-the-endpoints-have-a-connect",
                             Figure::Range,
                         ),
                         chapter(
-                            "Appearing and disappearing",
-                            "Confirm or cancel to dismiss modal selection. A docked calendar appears below the input field.",
+                            "ui-appearing-and-disappearing",
+                            "ui-confirm-or-cancel-to-dismiss-modal-selection-a-docked-calendar-appears-below-the-input-fie",
                             Figure::Docked,
                         ),
                         chapter(
-                            "Responsive layout",
-                            "Keep the calendar at its intended component size; use surrounding space rather than stretching its date cells.",
+                            "ui-responsive-layout",
+                            "ui-keep-the-calendar-at-its-intended-component-size-use-surrounding-space-rather-than-stretch",
                             Figure::Day,
                         ),
                     ],
@@ -730,61 +772,61 @@ fn date_chapters() -> Vec<(&'static str, Vec<DateChapter>)> {
             ],
         ),
         (
-            "Accessibility",
+            "ui-accessibility",
             vec![
                 chapter(
-                    "Use cases",
-                    "Support visual date selection and manual text entry so the calendar is optional for keyboard and assistive technology users.",
+                    "ui-use-cases",
+                    "ui-support-visual-date-selection-and-manual-text-entry-so-the-calendar-is-optional-for-keyboa",
                     Figure::Docked,
                 ),
                 chapter(
-                    "Interaction & style",
-                    "Preserve 48dp touch targets and provide a clearly labeled edit control for switching to date input.",
+                    "ui-interaction-style",
+                    "ui-preserve-48dp-touch-targets-and-provide-a-clearly-labeled-edit-control-for-switching-to-da",
                     Figure::Day,
                 ),
                 chapter(
-                    "Date entry methods",
-                    "Keep the text field and calendar button as separate keyboard stops. The calendar button opens the optional visual picker.",
+                    "ui-date-entry-methods",
+                    "ui-keep-the-text-field-and-calendar-button-as-separate-keyboard-stops-the-calendar-button-ope",
                     Figure::Docked,
                 ),
                 chapter(
-                    "Accessible date input",
-                    "Keep typed text unchanged while editing. Validate and format on submission rather than inserting separators as each character is typed. Explain the format before entry, preserve invalid input for correction, and associate validation messages with the field.",
+                    "ui-accessible-date-input",
+                    "ui-keep-typed-text-unchanged-while-editing-validate-and-format-on-submission-rather-than-inse",
                     Figure::Docked,
                 ),
                 chapter(
-                    "Optional Clear button",
-                    "Omit a Clear action when the task does not need one, keeping keyboard traversal concise.",
+                    "ui-optional-clear-button",
+                    "ui-omit-a-clear-action-when-the-task-does-not-need-one-keeping-keyboard-traversal-concise",
                     Figure::Input,
                 ),
                 chapter(
-                    "Affordance for keyboard shortcuts",
-                    "Communicate available navigation shortcuts in contextual hints and accessible descriptions.",
+                    "ui-affordance-for-keyboard-shortcuts",
+                    "ui-communicate-available-navigation-shortcuts-in-contextual-hints-and-accessible-descriptions",
                     Figure::Docked,
                 ),
                 chapter(
-                    "Truncated labels & tooltips",
-                    "Keep full accessible names for shortened visible labels. Noninteractive weekday headings do not add keyboard stops.",
+                    "ui-truncated-labels-tooltips",
+                    "ui-keep-full-accessible-names-for-shortened-visible-labels-noninteractive-weekday-headings-do",
                     Figure::Day,
                 ),
                 chapter(
-                    "Color contrast between dates",
-                    "Keep date text legible against the calendar surface and selected or range indicators. Use at least 4.5:1 contrast for normal-size text. Use an outline for today and a filled indicator for selection so these meanings do not rely on color alone.",
+                    "ui-color-contrast-between-dates",
+                    "ui-keep-date-text-legible-against-the-calendar-surface-and-selected-or-range-indicators-use-a",
                     Figure::Range,
                 ),
                 chapter(
-                    "Keyboard navigation",
-                    "Use the calendar with keyboard navigation; confirmation and dismissal remain explicit actions.",
+                    "ui-keyboard-navigation",
+                    "ui-use-the-calendar-with-keyboard-navigation-confirmation-and-dismissal-remain-explicit-actio",
                     Figure::None,
                 ),
                 chapter(
-                    "Labeling elements",
-                    "Give the field a task-specific label and a description of its date format. Name month and year navigation controls.",
+                    "ui-labeling-elements",
+                    "ui-give-the-field-a-task-specific-label-and-a-description-of-its-date-format-name-month-and-y",
                     Figure::Docked,
                 ),
                 chapter(
-                    "Screen reader verbalizations",
-                    "Announce the complete weekday, month, date and year, plus today or selected state where applicable. For example, Sunday, August 17, 2025 remains understandable outside the calendar. Name range endpoints Start date and End date; visual weekday abbreviations are not sufficient accessible names.",
+                    "ui-screen-reader-verbalizations",
+                    "ui-announce-the-complete-weekday-month-date-and-year-plus-today-or-selected-state-where-appli",
                     Figure::Day,
                 ),
             ],
@@ -799,50 +841,52 @@ fn date_chapter(
         crate::pages::material_spec::article::modal_host::ArticleModalController,
     >,
 ) {
-    text().content(chapter.text).style(type_style(16.0, 24.0));
+    text()
+        .content(I18N.text(chapter.text))
+        .style(type_style(16.0, 24.0));
     if chapter.figure != Figure::None {
         gap(Dp(24.0));
         chapter_figure(
             chapter.figure,
             chapter.title.to_owned(),
-            chapter.title == "Anatomy",
+            chapter.title == "ui-anatomy",
         )
         .modal_controller_optional(modal_controller);
     }
-    if chapter.title == "Availability & resources" {
+    if chapter.title == "ui-availability-resources" {
         gap(Dp(24.0));
         date_resources();
     }
-    if chapter.title == "Keyboard navigation" {
+    if chapter.title == "ui-keyboard-navigation" {
         gap(Dp(24.0));
         spec_table(
-            vec!["Keys".into(), "Actions".into()],
+            vec!["ui-keys".into(), "ui-actions".into()],
             vec![
                 vec![
-                    "Tab / Shift+Tab".into(),
-                    "Move between the field, calendar, navigation controls and actions".into(),
+                    "ui-tab-shift-tab-6921".into(),
+                    "ui-move-between-the-field-calendar-navigation-controls-and-actions".into(),
                 ],
                 vec![
-                    "Left / Right arrow".into(),
-                    "Move the focused date by one day".into(),
+                    "ui-left-right-arrow".into(),
+                    "ui-move-the-focused-date-by-one-day".into(),
                 ],
                 vec![
-                    "Up / Down arrow".into(),
-                    "Move the focused date by one week".into(),
+                    "ui-up-down-arrow".into(),
+                    "ui-move-the-focused-date-by-one-week".into(),
                 ],
-                vec!["Page Up / Page Down".into(), "Move by one month".into()],
+                vec!["ui-page-up-page-down".into(), "ui-move-by-one-month".into()],
                 vec![
-                    "Shift + Page Up / Page Down".into(),
-                    "Move by one year".into(),
+                    "ui-shift-page-up-page-down".into(),
+                    "ui-move-by-one-year".into(),
                 ],
                 vec![
-                    "Home / End".into(),
-                    "Move to the first / last date in the week".into(),
+                    "ui-home-end".into(),
+                    "ui-move-to-the-first-last-date-in-the-week".into(),
                 ],
-                vec!["Enter / Space".into(), "Choose the focused date".into()],
+                vec!["ui-enter-space".into(), "ui-choose-the-focused-date".into()],
                 vec![
-                    "Escape".into(),
-                    "Dismiss the modal without saving its draft".into(),
+                    "ui-escape".into(),
+                    "ui-dismiss-the-modal-without-saving-its-draft".into(),
                 ],
             ],
         );
@@ -851,13 +895,15 @@ fn date_chapter(
         gap(Dp(32.0));
         subheading(child.title.into());
         gap(Dp(24.0));
-        text().content(child.text).style(type_style(16.0, 24.0));
+        text()
+            .content(I18N.text(child.text))
+            .style(type_style(16.0, 24.0));
         if child.figure != Figure::None {
             gap(Dp(24.0));
             chapter_figure(
                 child.figure,
                 child.title.to_owned(),
-                chapter.title == "Anatomy",
+                chapter.title == "ui-anatomy",
             )
             .modal_controller_optional(modal_controller);
         }
@@ -874,18 +920,18 @@ fn chapter_figure(
     >,
 ) {
     let instructional = match title.as_str() {
-        "Date entry methods" => Some(instructional_figures::Illustration::EntryMethods),
-        "Accessible date input" => Some(instructional_figures::Illustration::Formatting),
-        "Optional Clear button" => Some(instructional_figures::Illustration::Clear),
-        "Labeling elements" => Some(instructional_figures::Illustration::Labels),
+        "ui-date-entry-methods" => Some(instructional_figures::Illustration::EntryMethods),
+        "ui-accessible-date-input" => Some(instructional_figures::Illustration::Formatting),
+        "ui-optional-clear-button" => Some(instructional_figures::Illustration::Clear),
+        "ui-labeling-elements" => Some(instructional_figures::Illustration::Labels),
         _ => None,
     };
     if let Some(kind) = instructional {
         instructional_figures::illustration(kind).modal_controller_optional(modal_controller);
     } else {
         let view = remember(|| match title.as_str() {
-            "Month selection" => DockedDatePickerView::Month,
-            "Year selection" => DockedDatePickerView::Year,
+            "ui-month-selection" => DockedDatePickerView::Month,
+            "ui-year-selection" => DockedDatePickerView::Year,
             _ => DockedDatePickerView::Calendar,
         });
         date_figure(figure, anatomy, false).view(view);
@@ -917,32 +963,32 @@ fn date_canvas(width: f64, height: f64, content: RenderSlot) {
 #[tessera]
 fn date_resources() {
     spec_table(
-        vec!["Type".into(), "Resource".into(), "Status".into()],
+        vec!["ui-type".into(), "ui-resource".into(), "ui-status".into()],
         vec![
             vec![
-                "Design".into(),
-                "Material 3 Design Kit (Figma)".into(),
-                "Available".into(),
+                "ui-design".into(),
+                "ui-material-3-design-kit-figma".into(),
+                "ui-available".into(),
             ],
             vec![
-                "Implementation".into(),
-                "Flutter".into(),
-                "Available".into(),
+                "ui-implementation".into(),
+                "ui-flutter".into(),
+                "ui-available".into(),
             ],
             vec![
-                "Implementation".into(),
-                "Jetpack Compose".into(),
-                "Available".into(),
+                "ui-implementation".into(),
+                "ui-jetpack-compose".into(),
+                "ui-available".into(),
             ],
             vec![
-                "Implementation".into(),
-                "Android Views (MDC-Android)".into(),
-                "Available".into(),
+                "ui-implementation".into(),
+                "ui-android-views-mdc-android".into(),
+                "ui-available".into(),
             ],
             vec![
-                "Implementation".into(),
-                "Material Web".into(),
-                "Unavailable".into(),
+                "ui-implementation".into(),
+                "ui-material-web".into(),
+                "ui-unavailable".into(),
             ],
         ],
     );
@@ -951,13 +997,13 @@ fn date_resources() {
 #[tessera]
 fn date_overview() {
     for item in [
-        "Date pickers can display past, present and future dates.",
-        "Three variants: docked date picker, modal date picker and modal date input.",
-        "Clearly distinguish important dates, including today and the selected day.",
-        "Use familiar calendar patterns and offer direct date entry.",
+        "ui-date-pickers-can-display-past-present-and-future-dates",
+        "ui-three-variants-docked-date-picker-modal-date-picker-and-modal-date-input",
+        "ui-clearly-distinguish-important-dates-including-today-and-the-selected-day",
+        "ui-use-familiar-calendar-patterns-and-offer-direct-date-entry",
     ] {
         text()
-            .content(format!("• {item}"))
+            .content(format!("• {}", I18N.text(item)))
             .style(type_style(16.0, 24.0));
         gap(Dp(12.0));
     }
@@ -981,7 +1027,7 @@ fn date_overview() {
                         .clip_shape(Shape::rounded_rectangle(Dp(24.0)))
                         .semantics(SemanticsArgs {
                             role: Some(Role::Group),
-                            label: Some("Date picker variants".into()),
+                            label: Some(I18N.text("ui-date-picker-variants")),
                             merge_descendants: true,
                             ..Default::default()
                         }),
@@ -1027,15 +1073,25 @@ fn date_overview_variant(index: usize, scale: f64) {
                         )
                         .semantics(SemanticsArgs {
                             role: Some(Role::Note),
-                            label: Some(format!(
-                                "{} {}",
-                                index + 1,
-                                [
-                                    "Docked date picker",
-                                    "Modal date picker",
-                                    "Modal date input"
-                                ][index]
-                            )),
+                            label: Some(
+                                I18N.format(
+                                    "ui-value-value-format-2",
+                                    [
+                                        ("v0", (index + 1).into()),
+                                        (
+                                            "v1",
+                                            I18N.text(
+                                                &([
+                                                    "ui-docked-date-picker",
+                                                    "ui-modal-date-picker",
+                                                    "ui-modal-date-input",
+                                                ][index]),
+                                            )
+                                            .into(),
+                                        ),
+                                    ],
+                                ),
+                            ),
                             ..Default::default()
                         }),
                 )
@@ -1080,9 +1136,9 @@ fn overview_docked_picker() {
     text_field()
         .outlined()
         .controller(controller)
-        .label("Date")
-        .accessibility_label("Overview docked date")
-        .accessibility_description("MM/DD/YYYY")
+        .label(I18N.text("ui-date"))
+        .accessibility_label(I18N.text("ui-overview-docked-date"))
+        .accessibility_description(I18N.text("MM/DD/YYYY"))
         .modifier(Modifier::new().width(Dp(312.0)).height(Dp(56.0)))
         .on_change(move |value: String| {
             if let Some(date) = parse_form_date(&value) {
@@ -1091,7 +1147,7 @@ fn overview_docked_picker() {
             value
         });
     text()
-        .content("MM/DD/YYYY")
+        .content(I18N.text("MM/DD/YYYY"))
         .style(type_style(12.0, 16.0))
         .color(scheme.on_surface_variant)
         .modifier(Modifier::new().offset(Dp(16.0), Dp(60.0)));
@@ -1122,7 +1178,7 @@ fn overview_modal_picker() {
             date_picker_dialog()
                 .picker_today(illustration_today())
                 .state(state)
-                .picker_title("Select date")
+                .picker_title(I18N.text("ui-select-date"))
                 .picker_first_day_of_week(Weekday::Sunday);
         });
 }
@@ -1155,17 +1211,17 @@ fn overview_modal_input() {
                     date_range_picker()
                         .today(illustration_today())
                         .state(range)
-                        .title("Select date");
+                        .title(I18N.text("ui-select-date"));
                     figure_actions(status, open, range, committed);
                 });
             });
     } else {
         button()
             .text()
-            .accessibility_label("Reopen overview modal date input")
+            .accessibility_label(I18N.text("ui-reopen-overview-modal-date-input"))
             .on_click(move || open.set(true))
-            .child(|| {
-                text().content("Open date input");
+            .child(move || {
+                text().content(I18N.text("ui-open-date-input"));
             });
     }
 }
@@ -1181,11 +1237,11 @@ fn docked_section() {
     gap(Dp(24.0));
     anatomy_legend(Figure::Docked, month_view.get());
     gap(Dp(32.0));
-    subheading("Docked date picker color".into());
+    subheading("ui-docked-date-picker-color".into());
     gap(Dp(24.0));
     date_colors(Figure::Docked);
     gap(Dp(32.0));
-    subheading("Docked date picker measurements".into());
+    subheading("ui-docked-date-picker-measurements".into());
     gap(Dp(24.0));
     date_figure(Figure::Docked, false, true);
     gap(Dp(24.0));
@@ -1193,17 +1249,17 @@ fn docked_section() {
     date_figure(Figure::Docked, false, true).view(measurement_view);
     gap(Dp(24.0));
     spec_table(
-        vec!["Attribute".into(), "Value".into()],
+        vec!["ui-attribute".into(), "ui-value".into()],
         vec![
-            vec!["Calendar width".into(), "360dp".into()],
-            vec!["Calendar height".into(), "460dp with actions".into()],
-            vec!["Date cell / indicator".into(), "48 / 40dp".into()],
-            vec!["Content inset".into(), "12dp".into()],
-            vec!["Field to calendar gap".into(), "8dp".into()],
+            vec!["ui-calendar-width".into(), "360dp".into()],
+            vec!["ui-calendar-height".into(), "ui-460dp-with-actions".into()],
+            vec!["ui-date-cell-indicator".into(), "48 / 40dp".into()],
+            vec!["ui-content-inset".into(), "12dp".into()],
+            vec!["ui-field-to-calendar-gap".into(), "8dp".into()],
         ],
     );
     gap(Dp(32.0));
-    subheading("Docked date picker configurations".into());
+    subheading("ui-docked-date-picker-configurations".into());
     gap(Dp(24.0));
     docked_configurations();
 }
@@ -1224,88 +1280,88 @@ fn date_colors(figure: Figure) {
 
 fn date_color_title(figure: Figure, menu: bool, year: bool) -> &'static str {
     match figure {
-        Figure::Docked if menu => "Docked date picker menu color roles",
-        Figure::Docked => "Docked date picker color roles",
-        Figure::Input => "Modal date input color roles",
-        Figure::FullScreen => "Modal date range picker color roles",
-        _ if year => "Modal date picker year color roles",
-        _ => "Modal date picker color roles",
+        Figure::Docked if menu => "ui-docked-date-picker-menu-color-roles",
+        Figure::Docked => "ui-docked-date-picker-color-roles",
+        Figure::Input => "ui-modal-date-input-color-roles",
+        Figure::FullScreen => "ui-modal-date-range-picker-color-roles",
+        _ if year => "ui-modal-date-picker-year-color-roles",
+        _ => "ui-modal-date-picker-color-roles",
     }
 }
 
 fn date_color_labels(figure: Figure, menu: bool, year: bool) -> Vec<&'static str> {
     match figure {
         Figure::Docked if menu => vec![
-            "Primary",
-            "On surface variant",
-            "On surface",
-            "Outline variant",
-            "Surface container high",
-            "Surface variant",
-            "On surface",
+            "ui-primary",
+            "ui-on-surface-variant",
+            "ui-on-surface",
+            "ui-outline-variant",
+            "ui-surface-container-high",
+            "ui-surface-variant",
+            "ui-on-surface",
         ],
         Figure::Docked => vec![
-            "Primary",
-            "On surface variant",
-            "On surface variant",
-            "On surface",
-            "On surface",
-            "Primary",
-            "On surface variant",
-            "Primary",
-            "Surface container high",
-            "Primary",
-            "On primary",
+            "ui-primary",
+            "ui-on-surface-variant",
+            "ui-on-surface-variant",
+            "ui-on-surface",
+            "ui-on-surface",
+            "ui-primary",
+            "ui-on-surface-variant",
+            "ui-primary",
+            "ui-surface-container-high",
+            "ui-primary",
+            "ui-on-primary",
         ],
         Figure::Input => vec![
-            "On surface",
-            "On surface variant",
-            "Surface container high",
-            "On surface variant",
-            "Primary",
-            "Primary",
-            "Outline variant",
+            "ui-on-surface",
+            "ui-on-surface-variant",
+            "ui-surface-container-high",
+            "ui-on-surface-variant",
+            "ui-primary",
+            "ui-primary",
+            "ui-outline-variant",
         ],
         Figure::FullScreen => vec![
-            "On surface",
-            "On surface variant",
-            "On surface variant",
-            "Surface container high",
-            "Primary",
-            "On surface variant",
-            "On surface",
-            "Primary",
-            "On surface",
-            "Secondary container",
-            "On secondary container",
-            "Outline variant",
-            "On surface variant",
-            "Primary",
+            "ui-on-surface",
+            "ui-on-surface-variant",
+            "ui-on-surface-variant",
+            "ui-surface-container-high",
+            "ui-primary",
+            "ui-on-surface-variant",
+            "ui-on-surface",
+            "ui-primary",
+            "ui-on-surface",
+            "ui-secondary-container",
+            "ui-on-secondary-container",
+            "ui-outline-variant",
+            "ui-on-surface-variant",
+            "ui-primary",
         ],
         _ if year => vec![
-            "On surface",
-            "On surface variant",
-            "Surface container high",
-            "On surface variant",
-            "On surface variant",
-            "Primary",
-            "Primary",
-            "Outline variant",
-            "On surface variant",
+            "ui-on-surface",
+            "ui-on-surface-variant",
+            "ui-surface-container-high",
+            "ui-on-surface-variant",
+            "ui-on-surface-variant",
+            "ui-primary",
+            "ui-primary",
+            "ui-outline-variant",
+            "ui-on-surface-variant",
         ],
         _ => vec![
-            "On surface",
-            "On surface variant",
-            "Surface container high",
-            "On surface variant",
-            "On surface variant",
-            "On surface",
-            "Primary",
-            "On surface",
-            "Primary",
-            "Primary",
-            "On surface variant",
-            "Outline variant",
+            "ui-on-surface",
+            "ui-on-surface-variant",
+            "ui-surface-container-high",
+            "ui-on-surface-variant",
+            "ui-on-surface-variant",
+            "ui-on-surface",
+            "ui-primary",
+            "ui-on-surface",
+            "ui-primary",
+            "ui-primary",
+            "ui-on-surface-variant",
+            "ui-outline-variant",
         ],
     }
 }
@@ -1335,7 +1391,7 @@ fn date_color_pair(figure: Figure, menu: bool, year: bool) {
                         .clip_shape(Shape::rounded_rectangle(Dp(24.0)))
                         .semantics(SemanticsArgs {
                             role: Some(Role::Group),
-                            label: Some(date_color_title(figure, menu, year).into()),
+                            label: Some(I18N.text(date_color_title(figure, menu, year))),
                             merge_descendants: true,
                             ..Default::default()
                         }),
@@ -1361,9 +1417,12 @@ fn date_color_pair(figure: Figure, menu: bool, year: bool) {
     );
     gap(Dp(24.0));
     text()
-        .content(format!(
-            "{} used for light and dark themes:",
-            date_color_title(figure, menu, year)
+        .content(I18N.format(
+            "ui-value-used-for-light-and-dark-themes",
+            [(
+                "v0",
+                I18N.text(&date_color_title(figure, menu, year)).into(),
+            )],
         ))
         .style(type_style(16.0, 24.0));
     gap(Dp(16.0));
@@ -1388,7 +1447,7 @@ fn date_color_pair(figure: Figure, menu: bool, year: bool) {
                             .style(type_style(14.0, 20.0));
                     });
                 text()
-                    .content(label)
+                    .content(I18N.text(label))
                     .style(type_style(16.0, 24.0))
                     .modifier(Modifier::new().padding_symmetric(Dp(12.0), Dp::ZERO));
             });
@@ -1537,21 +1596,21 @@ fn date_figure(
             boxed().modifier(if figure == Figure::Docked {watch_observed(geometry,"container").size(Dp(360.0), Dp(544.0))} else {watch_observed(geometry,"container").width(Dp(360.0))}).children(move || {
                 if figure==Figure::Docked {
                     column().modifier(Modifier::new().width(Dp(312.0))).children(move || {
-                        text_field().outlined().controller(controller).label("Date").accessibility_label("Event date").accessibility_description(if error.with(String::is_empty) {"MM/DD/YYYY".to_owned()} else {error.get()}).is_error(!error.with(String::is_empty))
+                        text_field().outlined().controller(controller).label(I18N.text("ui-date")).accessibility_label(I18N.text("ui-event-date-1862")).accessibility_description(I18N.text(if error.with(String::is_empty) {"MM/DD/YYYY".to_owned()} else {error.get()})).is_error(!error.with(String::is_empty))
                             .modifier(watch_observed(geometry,"field").width(Dp(312.0)).height(Dp(56.0)).semantics(SemanticsArgs {test_tag:Some("docked-date-field".into()), merge_descendants:true,..Default::default()})).min_width(Dp::ZERO)
                             .on_submit(move || {submit_docked_date(state,controller,committed,error);})
-                            .trailing_icon(move || {icon_button().standard().icon(filled::CALENDAR_TODAY_SVG).accessibility_label("Toggle event date calendar").on_click(move || {
+                            .trailing_icon(move || {icon_button().standard().icon(filled::CALENDAR_TODAY_SVG).accessibility_label(I18N.text("ui-toggle-event-date-calendar")).on_click(move || {
                                 if open.get() {restore_docked_date(state,controller,committed,error);}
                                 open.set(!open.get());FocusManager::current().defer_keyboard_until_layout();
                             });});
-                        gap(Dp(4.0));text().content(if error.with(String::is_empty) {"MM/DD/YYYY".to_owned()} else {error.get()}).style(type_style(12.0,16.0)).color(if error.with(String::is_empty) {scheme.on_surface_variant} else {scheme.error});
+                        gap(Dp(4.0));text().content(I18N.text(if error.with(String::is_empty) {"MM/DD/YYYY".to_owned()} else {error.get()})).style(type_style(12.0,16.0)).color(if error.with(String::is_empty) {scheme.on_surface_variant} else {scheme.error});
                     });
                     if open.get() {
                         boxed().modifier(Modifier::new().offset(Dp::ZERO,Dp(84.0))).children(move || {
                             docked_date_picker().today(illustration_today()).state(state).view(view).first_day_of_week(Weekday::Sunday).modifier(watch_observed(geometry,"calendar"))
                                 .on_date_change(move |date:CalendarDate|{let formatted=format!("{:02}/{:02}/{:04}",date.month(),date.day(),date.year()); controller.with_mut(|value|value.set_text(&formatted));error.set(String::new());})
-                                .on_cancel(move || {restore_docked_date(state,controller,committed,error);open.set(false);status.set("Date selection cancelled".into());FocusManager::current().defer_keyboard_until_layout();})
-                                .on_confirm(move || {if submit_docked_date(state,controller,committed,error) {open.set(false);status.set("Event date confirmed".into());FocusManager::current().defer_keyboard_until_layout();}});
+                                .on_cancel(move || {restore_docked_date(state,controller,committed,error);open.set(false);status.set("ui-date-selection-cancelled".into());FocusManager::current().defer_keyboard_until_layout();})
+                                .on_confirm(move || {if submit_docked_date(state,controller,committed,error) {open.set(false);status.set("ui-event-date-confirmed".into());FocusManager::current().defer_keyboard_until_layout();}});
                         });
                     }
                 } else if open.get() {
@@ -1560,16 +1619,16 @@ fn date_figure(
                             column().modifier(Modifier::new().width(Dp(360.0))).children(move || {
                                 if figure==Figure::FullScreen {
                                     row().modifier(Modifier::new().fill_max_width().padding_all(Dp(8.0))).main_axis_alignment(MainAxisAlignment::SpaceBetween).children(move || {
-                                        icon_button().standard().icon(filled::CLOSE_SVG).accessibility_label("Close full-screen date selection").on_click(move ||{ let (start,end)=committed_range.get(); range.with_mut(|range|range.set_selection(start,end)); open.set(false); status.set("Full-screen date selection closed".into()); FocusManager::current().defer_keyboard_until_layout(); });
-                                        button().text().accessibility_label("Save").enabled(range.with(DateRangePickerState::is_complete)).on_click(move ||{ if !range.with(DateRangePickerState::is_complete) {return;} committed_range.set(range.with(|range|(range.selected_start_date(),range.selected_end_date()))); open.set(false); status.set("Date range saved".into()); FocusManager::current().defer_keyboard_until_layout(); }).child(||{text().content("Save");});
+                                        icon_button().standard().icon(filled::CLOSE_SVG).accessibility_label(I18N.text("ui-close-full-screen-date-selection")).on_click(move ||{ let (start,end)=committed_range.get(); range.with_mut(|range|range.set_selection(start,end)); open.set(false); status.set("ui-full-screen-date-selection-closed".into()); FocusManager::current().defer_keyboard_until_layout(); });
+                                        button().text().accessibility_label(I18N.text("ui-save")).enabled(range.with(DateRangePickerState::is_complete)).on_click(move ||{ if !range.with(DateRangePickerState::is_complete) {return;} committed_range.set(range.with(|range|(range.selected_start_date(),range.selected_end_date()))); open.set(false); status.set("ui-date-range-saved".into()); FocusManager::current().defer_keyboard_until_layout(); }).child(move ||{text().content(I18N.text("ui-save"));});
                                     });
                                 }
                                 date_range_picker().today(illustration_today()).state(range).first_day_of_week(Weekday::Sunday).calendar_height(Dp(if color_roles {624.0} else {336.0}));
                                 if figure!=Figure::FullScreen {figure_actions(status, open, range, committed_range);}
                             });
                         } else {
-                            date_picker_dialog().picker_today(illustration_today()).state(state).picker_view(modal_view).picker_title("Select date").picker_headline_optional(if state.with(DatePickerState::display_mode)==DatePickerDisplayMode::Input {Some("Enter dates".into())} else {None}).picker_first_day_of_week(Weekday::Sunday).dismiss_button(move || {button().text().accessibility_label("Reference date cancel").on_click(move ||{ open.set(false); status.set("Date selection cancelled".into()); FocusManager::current().defer_keyboard_until_layout(); }).child(||{text().content("Cancel");});})
-                                .confirm_button(move || {button().text().enabled(state.with(|state| state.selected_date().is_some())).accessibility_label("Reference date confirm").on_click(move ||{ if state.with(|state| state.selected_date().is_none()) { return; } open.set(false); status.set("Date selection confirmed".into()); FocusManager::current().defer_keyboard_until_layout(); }).child(||{text().content("OK");});});
+                            date_picker_dialog().picker_today(illustration_today()).state(state).picker_view(modal_view).picker_title(I18N.text("ui-select-date")).picker_headline_optional(if state.with(DatePickerState::display_mode)==DatePickerDisplayMode::Input {Some(I18N.text("ui-enter-dates"))} else {None}).picker_first_day_of_week(Weekday::Sunday).dismiss_button(move || {button().text().accessibility_label(I18N.text("ui-reference-date-cancel")).on_click(move ||{ open.set(false); status.set("ui-date-selection-cancelled".into()); FocusManager::current().defer_keyboard_until_layout(); }).child(move ||{text().content(I18N.text("ui-cancel"));});})
+                                .confirm_button(move || {button().text().enabled(state.with(|state| state.selected_date().is_some())).accessibility_label(I18N.text("ui-reference-date-confirm")).on_click(move ||{ if state.with(|state| state.selected_date().is_none()) { return; } open.set(false); status.set("ui-date-selection-confirmed".into()); FocusManager::current().defer_keyboard_until_layout(); }).child(move ||{text().content(I18N.text("ui-ok"));});});
                         }
                     });
                 }
@@ -1586,15 +1645,17 @@ fn date_figure(
         gap(Dp(12.0));
         button()
             .outlined()
-            .accessibility_label("Reopen reference date picker")
+            .accessibility_label(I18N.text("ui-reopen-reference-date-picker"))
             .on_click(move || open.set(true))
-            .child(|| {
-                text().content("Open date picker");
+            .child(move || {
+                text().content(I18N.text("ui-open-date-picker"));
             });
     }
     if !status.with(String::is_empty) {
         gap(Dp(12.0));
-        text().content(status.get()).style(type_style(14.0, 20.0));
+        text()
+            .content(I18N.text(status.get()))
+            .style(type_style(14.0, 20.0));
     }
 }
 
@@ -1921,14 +1982,17 @@ fn date_color_marker(number: usize, label: String, x: Dp, y: Dp) {
                 .background_with_shape(scheme.on_surface, Shape::CAPSULE)
                 .semantics(SemanticsArgs {
                     role: Some(Role::Note),
-                    label: Some(format!("Color role {number}: {label}")),
+                    label: Some(I18N.format(
+                        "ui-color-role-value-value",
+                        [("v0", (number).into()), ("v1", I18N.text(&label).into())],
+                    )),
                     merge_descendants: true,
                     ..Default::default()
                 }),
         )
         .children(move || {
             text()
-                .content(number.to_string())
+                .content((number).to_string())
                 .style(type_style(14.0, 20.0))
                 .color(scheme.surface);
         });
@@ -1947,20 +2011,20 @@ fn figure_actions(
         .children(move || {
             button()
                 .text()
-                .accessibility_label("Reference range cancel")
+                .accessibility_label(I18N.text("ui-reference-range-cancel"))
                 .on_click(move || {
                     let (start, end) = committed.get();
                     range.with_mut(|range| range.set_selection(start, end));
                     open.set(false);
-                    status.set("Date range cancelled".into());
+                    status.set("ui-date-range-cancelled".into());
                     FocusManager::current().defer_keyboard_until_layout();
                 })
-                .child(|| {
-                    text().content("Cancel");
+                .child(move || {
+                    text().content(I18N.text("ui-cancel"));
                 });
             button()
                 .text()
-                .accessibility_label("Reference range confirm")
+                .accessibility_label(I18N.text("ui-reference-range-confirm"))
                 .enabled(range.with(DateRangePickerState::is_complete))
                 .on_click(move || {
                     if !range.with(DateRangePickerState::is_complete) {
@@ -1971,11 +2035,11 @@ fn figure_actions(
                             (range.selected_start_date(), range.selected_end_date())
                         }));
                     open.set(false);
-                    status.set("Date range confirmed".into());
+                    status.set("ui-date-range-confirmed".into());
                     FocusManager::current().defer_keyboard_until_layout();
                 })
-                .child(|| {
-                    text().content("OK");
+                .child(move || {
+                    text().content(I18N.text("ui-ok"));
                 });
         });
 }
@@ -2020,15 +2084,17 @@ fn submit_docked_date(
     error: State<String>,
 ) -> bool {
     let Some(date) = parse_form_date(&controller.with(TextInputController::text)) else {
-        error.set("Enter a valid date (MM/DD/YYYY)".into());
+        error.set("ui-enter-a-valid-date-mm-dd-yyyy".into());
         return false;
     };
     if !state.with_mut(|state| state.set_selected_date(date)) {
         error.set(state.with(|state| {
-            format!(
-                "Date must be from {} to {}",
-                state.year_range().start(),
-                state.year_range().end()
+            I18N.format(
+                "ui-date-must-be-from-value-to-value",
+                [
+                    ("v0", (state.year_range().start()).into()),
+                    ("v1", (state.year_range().end()).into()),
+                ],
             )
         }));
         return false;
@@ -2830,7 +2896,7 @@ fn modal_configurations() {
     );
     gap(Dp(24.0));
     text()
-        .content("1  Single date selection     2  Date range selection     3  Year selection")
+        .content(I18N.text("ui-1-single-date-selection-2-date-range-selection-3-year-selection"))
         .style(type_style(16.0, 24.0));
 }
 
@@ -2846,7 +2912,7 @@ fn input_configurations() {
     );
     gap(Dp(24.0));
     text()
-        .content("1  Single date input     2  Date range input")
+        .content(I18N.text("ui-1-single-date-input-2-date-range-input"))
         .style(type_style(16.0, 24.0));
 }
 
@@ -2929,12 +2995,12 @@ fn modal_configuration(number: usize, initial_view: DatePickerView, input: bool)
                             .picker_today(illustration_today())
                             .state(state)
                             .picker_view(view)
-                            .picker_title("Select date")
+                            .picker_title(I18N.text("ui-select-date"))
                             .picker_headline_optional(
                                 if state.with(DatePickerState::display_mode)
                                     == DatePickerDisplayMode::Input
                                 {
-                                    Some("Enter dates".into())
+                                    Some(I18N.text("ui-enter-dates"))
                                 } else {
                                     None
                                 },
@@ -2943,22 +3009,24 @@ fn modal_configuration(number: usize, initial_view: DatePickerView, input: bool)
                             .dismiss_button(move || {
                                 button()
                                     .text()
-                                    .accessibility_label(format!(
-                                        "Cancel modal configuration {number}"
+                                    .accessibility_label(I18N.format(
+                                        "ui-cancel-modal-configuration-value",
+                                        [("v0", (number).into())],
                                     ))
                                     .on_click(move || {
                                         open.set(false);
-                                        status.set("Date selection cancelled".into());
+                                        status.set("ui-date-selection-cancelled".into());
                                     })
-                                    .child(|| {
-                                        text().content("Cancel");
+                                    .child(move || {
+                                        text().content(I18N.text("ui-cancel"));
                                     });
                             })
                             .confirm_button(move || {
                                 button()
                                     .text()
-                                    .accessibility_label(format!(
-                                        "Confirm modal configuration {number}"
+                                    .accessibility_label(I18N.format(
+                                        "ui-confirm-modal-configuration-value",
+                                        [("v0", (number).into())],
                                     ))
                                     .enabled(state.with(|state| state.selected_date().is_some()))
                                     .on_click(move || {
@@ -2966,21 +3034,26 @@ fn modal_configuration(number: usize, initial_view: DatePickerView, input: bool)
                                             return;
                                         }
                                         open.set(false);
-                                        status.set("Date selection confirmed".into());
+                                        status.set("ui-date-selection-confirmed".into());
                                     })
-                                    .child(|| {
-                                        text().content("OK");
+                                    .child(move || {
+                                        text().content(I18N.text("ui-ok"));
                                     });
                             });
                     });
             } else {
-                text().content(status.get()).style(type_style(14.0, 20.0));
+                text()
+                    .content(I18N.text(status.get()))
+                    .style(type_style(14.0, 20.0));
                 button()
                     .text()
-                    .accessibility_label(format!("Reopen modal configuration {number}"))
+                    .accessibility_label(I18N.format(
+                        "ui-reopen-modal-configuration-value",
+                        [("v0", (number).into())],
+                    ))
                     .on_click(move || open.set(true))
-                    .child(|| {
-                        text().content("Open date picker");
+                    .child(move || {
+                        text().content(I18N.text("ui-open-date-picker"));
                     });
             }
         });
@@ -3053,7 +3126,9 @@ fn range_configuration(number: usize, input: bool) {
                                         icon_button()
                                             .standard()
                                             .icon(filled::CLOSE_SVG)
-                                            .accessibility_label("Close configuration date range")
+                                            .accessibility_label(
+                                                I18N.text("ui-close-configuration-date-range"),
+                                            )
                                             .on_click(move || {
                                                 let (start, end) = committed.get();
                                                 state.with_mut(|state| {
@@ -3063,7 +3138,9 @@ fn range_configuration(number: usize, input: bool) {
                                             });
                                         button()
                                             .text()
-                                            .accessibility_label("Save configuration date range")
+                                            .accessibility_label(
+                                                I18N.text("ui-save-configuration-date-range"),
+                                            )
                                             .enabled(state.with(DateRangePickerState::is_complete))
                                             .on_click(move || {
                                                 if !state.with(DateRangePickerState::is_complete) {
@@ -3076,10 +3153,10 @@ fn range_configuration(number: usize, input: bool) {
                                                     )
                                                 }));
                                                 open.set(false);
-                                                status.set("Date range saved".into());
+                                                status.set("ui-date-range-saved".into());
                                             })
-                                            .child(|| {
-                                                text().content("Save");
+                                            .child(move || {
+                                                text().content(I18N.text("ui-save"));
                                             });
                                     });
                             }
@@ -3087,13 +3164,13 @@ fn range_configuration(number: usize, input: bool) {
                                 .today(illustration_today())
                                 .state(state)
                                 .first_day_of_week(Weekday::Sunday)
-                                .title(if input {
-                                    "Select date"
+                                .title(I18N.text(if input {
+                                    "ui-select-date"
                                 } else {
-                                    "Depart - Return dates"
-                                })
+                                    "ui-depart-return-dates"
+                                }))
                                 .headline_optional(if input {
-                                    Some("Enter dates".into())
+                                    Some(I18N.text("ui-enter-dates"))
                                 } else {
                                     None
                                 })
@@ -3102,13 +3179,15 @@ fn range_configuration(number: usize, input: bool) {
                         });
                     });
             } else {
-                text().content(status.get()).style(type_style(14.0, 20.0));
+                text()
+                    .content(I18N.text(status.get()))
+                    .style(type_style(14.0, 20.0));
                 button()
                     .text()
-                    .accessibility_label("Reopen configuration date range")
+                    .accessibility_label(I18N.text("ui-reopen-configuration-date-range"))
                     .on_click(move || open.set(true))
-                    .child(|| {
-                        text().content("Open date picker");
+                    .child(move || {
+                        text().content(I18N.text("ui-open-date-picker"));
                     });
             }
         });
@@ -3148,7 +3227,7 @@ fn docked_configurations() {
     );
     gap(Dp(24.0));
     text()
-        .content("1  Day selection     2  Month selection     3  Year selection")
+        .content(I18N.text("ui-1-day-selection-2-month-selection-3-year-selection"))
         .style(type_style(16.0, 24.0));
 }
 
@@ -3197,7 +3276,7 @@ fn docked_configuration(number: usize, initial_view: DockedDatePickerView) {
                         ))
                         .children(move || {
                             text()
-                                .content(number.to_string())
+                                .content((number).to_string())
                                 .style(type_style(14.0, 20.0));
                         });
                 });
@@ -3207,13 +3286,15 @@ fn docked_configuration(number: usize, initial_view: DockedDatePickerView) {
                 .modifier(Modifier::new().width(Dp(312.0)).height(Dp(56.0)))
                 .min_width(Dp::ZERO)
                 .controller(controller)
-                .label("Date")
-                .accessibility_label(format!("Configuration {number} date"))
-                .accessibility_description(if error.with(String::is_empty) {
+                .label(I18N.text("ui-date"))
+                .accessibility_label(
+                    I18N.format("ui-configuration-value-date", [("v0", (number).into())]),
+                )
+                .accessibility_description(I18N.text(if error.with(String::is_empty) {
                     "MM/DD/YYYY".to_owned()
                 } else {
                     error.get()
-                })
+                }))
                 .is_error(!error.with(String::is_empty))
                 .on_submit(move || {
                     submit_docked_date(state, controller, committed, error);
@@ -3222,7 +3303,10 @@ fn docked_configuration(number: usize, initial_view: DockedDatePickerView) {
                     icon_button()
                         .standard()
                         .icon(filled::CALENDAR_TODAY_SVG)
-                        .accessibility_label(format!("Toggle configuration {number} calendar"))
+                        .accessibility_label(I18N.format(
+                            "ui-toggle-configuration-value-calendar",
+                            [("v0", (number).into())],
+                        ))
                         .on_click(move || {
                             if open.get() {
                                 restore_docked_date(state, controller, committed, error);
@@ -3233,11 +3317,11 @@ fn docked_configuration(number: usize, initial_view: DockedDatePickerView) {
                 });
             gap(Dp(4.0));
             text()
-                .content(if error.with(String::is_empty) {
+                .content(I18N.text(if error.with(String::is_empty) {
                     "MM/DD/YYYY".to_owned()
                 } else {
                     error.get()
-                })
+                }))
                 .style(type_style(12.0, 16.0));
             gap(Dp(8.0));
             if open.get() {
@@ -3327,77 +3411,77 @@ fn modal_day_visual(cell: Rect) -> Rect {
 fn anatomy_legend(figure: Figure, view: DockedDatePickerView) {
     let labels: Vec<&str> = match figure {
         Figure::Docked if view != DockedDatePickerView::Calendar => vec![
-            "Outlined text field",
+            "ui-outlined-text-field",
             if view == DockedDatePickerView::Month {
-                "Month selection (pressed)"
+                "ui-month-selection-pressed"
             } else {
-                "Month selection (disabled)"
+                "ui-month-selection-disabled"
             },
             if view == DockedDatePickerView::Year {
-                "Year selection (pressed)"
+                "ui-year-selection-pressed"
             } else {
-                "Year selection (disabled)"
+                "ui-year-selection-disabled"
             },
-            "Header",
-            "Menu",
-            "Selected list item",
-            "Unselected menu list item",
-            "Container",
+            "ui-header",
+            "ui-menu",
+            "ui-selected-list-item",
+            "ui-unselected-menu-list-item",
+            "ui-container",
         ],
         Figure::Docked => vec![
-            "Outlined text field",
-            "Menu button: Month selection",
-            "Menu button: Year selection",
-            "Icon button",
-            "Weekdays label text",
-            "Unselected date",
-            "Today's date",
-            "Outside month date",
-            "Text buttons",
-            "Selected date",
-            "Container",
+            "ui-outlined-text-field",
+            "ui-menu-button-month-selection",
+            "ui-menu-button-year-selection",
+            "ui-icon-button",
+            "ui-weekdays-label-text",
+            "ui-unselected-date",
+            "ui-today-s-date",
+            "ui-outside-month-date",
+            "ui-text-buttons",
+            "ui-selected-date",
+            "ui-container",
         ],
         Figure::Input | Figure::RangeInput => vec![
-            "Headline",
-            "Supporting text",
-            "Header",
-            "Container",
-            "Icon button",
-            "Outlined text field",
-            "Text buttons",
-            "Divider",
+            "ui-headline",
+            "ui-supporting-text",
+            "ui-header",
+            "ui-container",
+            "ui-icon-button",
+            "ui-outlined-text-field",
+            "ui-text-buttons",
+            "ui-divider",
         ],
         Figure::Range => vec![
-            "Headline",
-            "Supporting text",
-            "Icon button",
-            "Header",
-            "Text button",
-            "Icon button",
-            "Weekdays label text",
-            "Container",
-            "Today's date",
-            "Unselected date",
-            "In-range active indicator",
-            "In-range date",
-            "Month subhead",
-            "Selected date",
-            "Divider",
+            "ui-headline",
+            "ui-supporting-text",
+            "ui-icon-button",
+            "ui-header",
+            "ui-text-button",
+            "ui-icon-button",
+            "ui-weekdays-label-text",
+            "ui-container",
+            "ui-today-s-date",
+            "ui-unselected-date",
+            "ui-in-range-active-indicator",
+            "ui-in-range-date",
+            "ui-month-subhead",
+            "ui-selected-date",
+            "ui-divider",
         ],
         _ => vec![
-            "Headline",
-            "Supporting text",
-            "Header",
-            "Container",
-            "Icon button",
-            "Icon buttons",
-            "Weekdays",
-            "Today's date",
-            "Unselected date",
-            "Text buttons",
-            "Selected date",
-            "Menu button",
-            "Divider",
+            "ui-headline",
+            "ui-supporting-text",
+            "ui-header",
+            "ui-container",
+            "ui-icon-button",
+            "ui-icon-buttons",
+            "ui-weekdays",
+            "ui-today-s-date",
+            "ui-unselected-date",
+            "ui-text-buttons",
+            "ui-selected-date",
+            "ui-menu-button",
+            "ui-divider",
         ],
     };
     let scheme = use_context::<MaterialTheme>().unwrap().get().color_scheme;
@@ -3424,7 +3508,9 @@ fn anatomy_legend(figure: Figure, view: DockedDatePickerView) {
                         boxed()
                             .modifier(Modifier::new().padding_symmetric(Dp(16.0), Dp::ZERO))
                             .children(move || {
-                                text().content(label).style(type_style(16.0, 24.0));
+                                text()
+                                    .content(I18N.text(label))
+                                    .style(type_style(16.0, 24.0));
                             });
                     });
                 gap(Dp(8.0));

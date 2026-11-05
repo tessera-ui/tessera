@@ -14,7 +14,7 @@ use cargo_metadata::MetadataCommand;
 use handlebars::Handlebars;
 use notify::{Event, EventKind, RecursiveMode, Watcher};
 use serde_json::json;
-use tessera_build::{AssetBackend, load_tessera_config_from_dir, resolve_assets_dir};
+use tessera_build::{AssetBackend, load_tessera_config_from_dir, resolve_resource_dirs};
 use wasm_bindgen_cli_support::Bindgen;
 
 use crate::{call_guard, output};
@@ -168,11 +168,11 @@ pub fn dev(release: bool, package: Option<&str>, port: u16) -> Result<()> {
         watcher.watch(&index_path, RecursiveMode::NonRecursive)?;
     }
 
-    if let Some(config) = load_tessera_config_from_dir(&project_dir)?
-        && let Some(assets_dir) = resolve_assets_dir(&project_dir, Some(&config))
-        && assets_dir.exists()
-    {
-        watcher.watch(&assets_dir, RecursiveMode::Recursive)?;
+    let config = load_tessera_config_from_dir(&project_dir)?;
+    for directory in resolve_resource_dirs(&project_dir, config.as_ref()) {
+        if directory.is_dir() {
+            watcher.watch(&directory, RecursiveMode::Recursive)?;
+        }
     }
 
     let mut pending_change = false;

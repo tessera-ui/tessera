@@ -15,6 +15,7 @@ Read the reference for the Tessera API or tool in use.
 | Own state, identify items, or manage tasks and animation | [State and resources](references/state-and-resources.md) |
 | Size, position, style, or load visual content | [Layout and visuals](references/layout-and-visuals.md) |
 | Handle actions, editing, focus, or accessibility | [Interaction](references/interaction.md) |
+| Translate UI or switch languages | [Localization](references/i18n.md) |
 | Configure startup, routing, platform services, or extensions | [Platform and extensions](references/platform-and-extensions.md) |
 | Render offscreen, inject input, or inspect UI bounds | [Headless](references/headless.md) |
 | Scaffold, develop, build, or collect profiling output | [CLI tools](references/tooling.md) |

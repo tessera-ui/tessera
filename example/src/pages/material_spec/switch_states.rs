@@ -21,9 +21,17 @@ use tessera_ui::{
     remember, scaled_box, tessera, use_context,
 };
 
+use crate::res::I18N;
+
 use super::super::{ACCENT, annotations, gap, spec_table, type_style};
 
-const LABELS: [&str; 5] = ["Enabled", "Hovered", "Focused", "Pressed", "Disabled"];
+const LABELS: [&str; 5] = [
+    "ui-enabled",
+    "ui-hovered",
+    "ui-focused",
+    "ui-pressed",
+    "ui-disabled",
+];
 
 #[tessera]
 pub(super) fn states() {
@@ -52,7 +60,7 @@ pub(super) fn states() {
         });
     gap(Dp(24.0));
     spec_table(
-        vec!["State".into(), "Interaction".into()],
+        vec!["ui-state".into(), "ui-interaction".into()],
         LABELS
             .iter()
             .enumerate()
@@ -64,7 +72,7 @@ pub(super) fn states() {
 #[tessera]
 fn panel(dark: bool) {
     let scheme = use_context::<MaterialTheme>().unwrap().get().color_scheme;
-    let theme_name = if dark { "Dark" } else { "Light" };
+    let theme_name = if dark { "ui-dark" } else { "ui-light" };
     boxed()
         .modifier(
             Modifier::new()
@@ -72,7 +80,10 @@ fn panel(dark: bool) {
                 .background(scheme.surface)
                 .semantics(SemanticsArgs {
                     role: Some(Role::Group),
-                    label: Some(format!("{theme_name} switch states")),
+                    label: Some(I18N.format(
+                        "ui-switch-state-theme",
+                        [("theme", I18N.text(theme_name).into())],
+                    )),
                     merge_descendants: true,
                     ..Default::default()
                 }),
@@ -148,17 +159,33 @@ fn cell(dark: bool, selected: bool, column: usize) {
         InteractionVisualState::Pressed,
         InteractionVisualState::Rest,
     ][column];
-    let label = format!(
-        "{} {} {} switch state",
-        if dark { "Dark" } else { "Light" },
-        LABELS[column],
-        if selected { "selected" } else { "unselected" }
+    let label = I18N.format(
+        "ui-value-value-value-switch-state",
+        [
+            (
+                "v0",
+                I18N.text(&(if dark { "ui-dark" } else { "ui-light" }))
+                    .into(),
+            ),
+            ("v1", I18N.text(&(LABELS[column])).into()),
+            (
+                "v2",
+                I18N.text(
+                    &(if selected {
+                        "ui-selected-7075"
+                    } else {
+                        "ui-unselected-7076"
+                    }),
+                )
+                .into(),
+            ),
+        ],
     );
     switch()
         .checked(checked.get())
         .enabled(column != 4)
         .presentation_state(presentation)
-        .accessibility_label(label)
+        .accessibility_label(I18N.text(label))
         .modifier(Modifier::new().offset(Dp(left), Dp(track_y - 8.0)))
         .on_toggle(move |value| checked.set(value))
         .child_optional(if checked.get() || (!dark && column != 4) {

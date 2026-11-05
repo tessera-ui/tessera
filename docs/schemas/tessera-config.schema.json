@@ -65,6 +65,24 @@
           ]
         }
       }
+    },
+    "i18n": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "dir": {
+          "type": "string",
+          "default": "locales",
+          "description": "Localization catalog directory relative to the crate root."
+        },
+        "fallback": {
+          "type": "string",
+          "description": "Fallback language and initial entry language, such as en or zh-CN."
+        }
+      },
+      "required": [
+        "fallback"
+      ]
     }
   }
 }

@@ -20,6 +20,8 @@ use tessera_ui::{
     modifier::FocusModifierExt as _, remember, remember_with_key, tessera,
 };
 
+use crate::res::I18N;
+
 use super::{
     super::{ACCENT, INK, gap, media, type_style},
     ArticleData, ArticlePage, ArticleRoute, article_footer, article_section, article_tabs,
@@ -251,14 +253,14 @@ fn contents(data: State<ArticleData>, width: State<Dp>, bindings: State<ChapterB
                     )
                     .children(move || {
                         text()
-                            .content("On this page")
+                            .content(I18N.text("ui-on-this-page"))
                             .style(type_style(14.0, 20.0))
                             .color(INK);
                         gap(Dp(8.0));
                         let page = data.get();
                         for (index, section) in page.sections.iter().enumerate() {
                             text()
-                                .content(section.title)
+                                .content(I18N.text(section.title))
                                 .style(type_style(16.0, 24.0))
                                 .color(ACCENT)
                                 .modifier(
