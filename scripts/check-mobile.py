@@ -85,16 +85,13 @@ def android(directory):
                                 capture_output=True, text=True, timeout=15)
         return result.stdout
     launch()
-    try:
-        pid = run("adb", "shell", "pidof", identifier)
-        verify(read, lambda: run("adb", "shell", "input", "keyevent", "KEYCODE_HOME"), launch)
-        assert run("adb", "shell", "pidof", identifier) == pid, "Application restarted instead of resuming"
-        run("adb", "shell", "am", "force-stop", identifier)
-        output = Path("target/mobile-acceptance/android.jsonl")
-        output.parent.mkdir(parents=True, exist_ok=True)
-        output.write_text(read())
-    finally:
-        run("adb", "shell", "am", "force-stop", identifier)
+    pid = run("adb", "shell", "pidof", identifier)
+    verify(read, lambda: run("adb", "shell", "input", "keyevent", "KEYCODE_HOME"), launch)
+    assert run("adb", "shell", "pidof", identifier) == pid, "Application restarted instead of resuming"
+    run("adb", "shell", "am", "force-stop", identifier)
+    output = Path("target/mobile-acceptance/android.jsonl")
+    output.parent.mkdir(parents=True, exist_ok=True)
+    output.write_text(read())
 
 
 def ios(udid, bundle):
