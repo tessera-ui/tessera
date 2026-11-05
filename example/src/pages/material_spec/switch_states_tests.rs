@@ -1,10 +1,3 @@
-//! Native switch state artboard interaction regressions.
-//!
-//! ## Usage
-//!
-//! Preserve themed state controls and pointer mapping across responsive
-//! scaling.
-
 use tessera_ui::{
     HeadlessConfig, HeadlessRenderer, MOUSE_POINTER_ID, PressKeyEventType, PxPosition,
     accesskit::{Action, ActionRequest, Node, Role, Toggled, TreeId},
@@ -26,7 +19,7 @@ fn node(renderer: &HeadlessRenderer, label: &str) -> Node {
         .unwrap()
         .nodes
         .into_iter()
-        .find(|(_, node)| node.label() == Some(label))
+        .find(|(_, node)| crate::has_label(&node, label))
         .unwrap()
         .1
 }
@@ -113,7 +106,7 @@ fn switch_states_keep_twenty_independent_native_controls_and_scaled_pointer_targ
         .unwrap()
         .nodes
         .into_iter()
-        .find(|(_, node)| node.label() == Some("Light Focused selected switch state"))
+        .find(|(_, node)| crate::has_label(&node, "Light Focused selected switch state"))
         .unwrap();
     assert!(renderer.dispatch_accessibility_action(ActionRequest {
         action: Action::Focus,

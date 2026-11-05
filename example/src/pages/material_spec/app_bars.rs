@@ -3795,7 +3795,7 @@ mod tests {
                 .nodes
                 .iter()
                 .find(|(_, node)| {
-                    node.role() == Role::Button && node.label() == Some("Figure calendar")
+                    node.role() == Role::Button && crate::has_label(&node, "Figure calendar")
                 })
                 .expect("last native action")
                 .1
@@ -3806,7 +3806,7 @@ mod tests {
                 snapshot
                     .nodes
                     .iter()
-                    .any(|(_, node)| node.label() == Some("Dimension 4"))
+                    .any(|(_, node)| crate::has_label(&node, "Dimension 4"))
             );
             assert!(
                 !snapshot
@@ -3819,14 +3819,14 @@ mod tests {
                     !snapshot
                         .nodes
                         .iter()
-                        .any(|(_, node)| node.label() == Some("Dimension 0"))
+                        .any(|(_, node)| crate::has_label(&node, "Dimension 0"))
                 );
             }
             let back = snapshot
                 .nodes
                 .iter()
                 .find(|(_, node)| {
-                    node.role() == Role::Button && node.label() == Some("Figure back")
+                    node.role() == Role::Button && crate::has_label(&node, "Figure back")
                 })
                 .expect("actual navigation button")
                 .1
@@ -3853,14 +3853,14 @@ mod tests {
                     .nodes
                     .iter()
                     .any(|(_, node)| node.role() == Role::Dialog
-                        && node.label() == Some("Search library view")),
+                        && crate::has_label(&node, "Search library view")),
                 "search app bar opens its real search view"
             );
             let close = snapshot
                 .nodes
                 .iter()
                 .find(|(_, node)| {
-                    node.role() == Role::Button && node.label() == Some("Close app bar search")
+                    node.role() == Role::Button && crate::has_label(&node, "Close app bar search")
                 })
                 .expect("search view back button")
                 .1
@@ -3882,7 +3882,7 @@ mod tests {
                     .nodes
                     .iter()
                     .any(|(_, node)| node.role() == Role::Dialog
-                        && node.label() == Some("Search library view"))
+                        && crate::has_label(&node, "Search library view"))
             );
         }
         for scale in [0.5, 1.5] {
@@ -3909,7 +3909,7 @@ mod tests {
                 .nodes
                 .iter()
                 .filter(|(_, node)| {
-                    node.role() == Role::Note && node.label() == Some("Dimension 56")
+                    node.role() == Role::Note && crate::has_label(&node, "Dimension 56")
                 })
                 .map(|(_, node)| node.bounds().unwrap())
                 .collect();
@@ -3960,7 +3960,7 @@ mod tests {
             .nodes
             .into_iter()
             .find(|(_, node)| {
-                role.is_none_or(|role| node.role() == role) && node.label() == Some(label)
+                role.is_none_or(|role| node.role() == role) && crate::has_label(&node, label)
             })
             .and_then(|(_, node)| node.bounds())
             .map(|rect| [rect.x0, rect.y0, rect.x1, rect.y1])

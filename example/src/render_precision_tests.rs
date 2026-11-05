@@ -1,9 +1,3 @@
-//! Native render-target precision and linear scrim regressions.
-//!
-//! ## Usage
-//!
-//! Verify sRGB readback bytes across output formats and multisampling modes.
-
 use std::time::Duration;
 
 use tessera_components::{
@@ -151,7 +145,9 @@ fn render<Output: 'static>(
 fn bounds(nodes: &[(NodeId, Node)], label: &str, role: Role) -> Rect {
     nodes
         .iter()
-        .find(|(_, node)| node.role() == role && node.label() == Some(label) && !node.is_hidden())
+        .find(|(_, node)| {
+            node.role() == role && crate::has_label(&node, label) && !node.is_hidden()
+        })
         .unwrap_or_else(|| panic!("missing actual geometry for {label}"))
         .1
         .bounds()

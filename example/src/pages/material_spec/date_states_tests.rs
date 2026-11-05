@@ -1,9 +1,3 @@
-//! Native state-matrix selection and scaling regressions.
-//!
-//! ## Usage
-//!
-//! Preserve interactive calendar choices during uniform scaling.
-
 use tessera_ui::{
     HeadlessConfig, HeadlessRenderer, MOUSE_POINTER_ID, PressKeyEventType, PxPosition,
     accesskit::{Node, Role},
@@ -24,7 +18,7 @@ fn choice(renderer: &HeadlessRenderer, group: &str, label: &str) -> Node {
     let bounds = snapshot
         .nodes
         .iter()
-        .find(|(_, node)| node.role() == Role::Group && node.label() == Some(group))
+        .find(|(_, node)| node.role() == Role::Group && crate::has_label(&node, group))
         .unwrap_or_else(|| panic!("missing native state context {group}"))
         .1
         .bounds()
@@ -34,7 +28,7 @@ fn choice(renderer: &HeadlessRenderer, group: &str, label: &str) -> Node {
         .into_iter()
         .find(|(_, node)| {
             node.role() == Role::Button
-                && node.label() == Some(label)
+                && crate::has_label(&node, label)
                 && node.bounds().is_some_and(|cell| {
                     cell.x0 >= bounds.x0
                         && cell.y0 >= bounds.y0
@@ -79,7 +73,7 @@ fn states_matrix_preserves_themed_native_choices_and_scaled_pointer_input() {
         let panel = snapshot
             .nodes
             .iter()
-            .find(|(_, node)| node.role() == Role::Group && node.label() == Some(name.as_str()))
+            .find(|(_, node)| node.role() == Role::Group && crate::has_label(&node, name.as_str()))
             .unwrap()
             .1
             .bounds()
@@ -92,7 +86,7 @@ fn states_matrix_preserves_themed_native_choices_and_scaled_pointer_input() {
             for row in 0..6 {
                 let group = cell_name(dark, column, row);
                 let exists = snapshot.nodes.iter().any(|(_, node)| {
-                    node.role() == Role::Group && node.label() == Some(group.as_str())
+                    node.role() == Role::Group && crate::has_label(&node, group.as_str())
                 });
                 assert_eq!(
                     exists,
@@ -106,7 +100,9 @@ fn states_matrix_preserves_themed_native_choices_and_scaled_pointer_input() {
     let range_bounds = snapshot
         .nodes
         .iter()
-        .find(|(_, node)| node.role() == Role::Group && node.label() == Some(range_name.as_str()))
+        .find(|(_, node)| {
+            node.role() == Role::Group && crate::has_label(&node, range_name.as_str())
+        })
         .unwrap()
         .1
         .bounds()

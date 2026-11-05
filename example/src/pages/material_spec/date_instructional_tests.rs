@@ -1,9 +1,3 @@
-//! Date accessibility figure interaction regressions.
-//!
-//! ## Usage
-//!
-//! Exercise editing, selection, clearing, and focus in date figures.
-
 use std::time::Duration;
 
 use tessera_components::theme::material_theme;
@@ -155,7 +149,9 @@ fn node(renderer: &HeadlessRenderer, label: &str, role: Role) -> (NodeId, Node) 
     let snapshot = renderer
         .inspect_accessibility()
         .expect("accessibility tree");
-    let (id, node) = snapshot.find(label, role).expect("native date control");
+    let (id, node) = snapshot
+        .find(&crate::res::I18N.text(label), role)
+        .expect("native date control");
     (id, node.clone())
 }
 
@@ -163,7 +159,7 @@ fn exists(renderer: &HeadlessRenderer, label: &str, role: Role) -> bool {
     renderer
         .inspect_accessibility()
         .expect("accessibility tree")
-        .find(label, role)
+        .find(&crate::res::I18N.text(label), role)
         .is_some()
 }
 
@@ -326,12 +322,12 @@ fn illustrated_date_input_formats_on_submission_or_focus_exit_and_preserves_inva
     assert_eq!(value(&renderer, "Formatted date"), "08/17/2023");
     assert_native_field(&renderer, "raw", 334.0, 124.0);
     assert_native_field(&renderer, "formatted", 334.0, 344.0);
-    assert_eq!(
+    assert!(crate::text_matches(
         node(&renderer, "Unformatted date", Role::TextInput)
             .1
             .description(),
-        Some("Enter a valid date (MM/DD/YYYY)")
-    );
+        "Enter a valid date (MM/DD/YYYY)"
+    ));
     drop(renderer);
     let mut renderer = self::renderer(Illustration::Formatting);
     act(
@@ -447,12 +443,12 @@ fn labeled_date_composite_keeps_editing_and_native_month_chooser_functional() {
     let composite = node(&renderer, "Event date, YYYY/MM/DD", Role::ComboBox).1;
     assert_eq!(composite.is_expanded(), Some(false));
     assert_eq!(composite.has_popup(), Some(HasPopup::Dialog));
-    assert_eq!(
+    assert!(crate::text_matches(
         node(&renderer, "Event date", Role::TextInput)
             .1
             .description(),
-        Some("YYYY/MM/DD")
-    );
+        "YYYY/MM/DD"
+    ));
     click(&mut renderer, "Previous labeled month", Role::Button);
     node(&renderer, "Jul", Role::Label);
     click(&mut renderer, "Choose labeled month", Role::Button);
@@ -503,7 +499,7 @@ fn article_target(renderer: &HeadlessRenderer, label: &str, role: Option<Role>) 
         .nodes
         .into_iter()
         .find(|(_, node)| {
-            node.label() == Some(label)
+            crate::has_label(&node, label)
                 && role.is_none_or(|role| node.role() == role)
                 && !node.is_hidden()
                 && node.bounds().is_some()
@@ -537,7 +533,7 @@ fn reveal_article_target(renderer: &mut HeadlessRenderer, label: &str, role: Opt
             .nodes
             .into_iter()
             .find(|(_, node)| {
-                node.label() == Some(label)
+                crate::has_label(&node, label)
                     && role.is_none_or(|role| node.role() == role)
                     && !node.is_hidden()
                     && node.bounds().is_some()
@@ -714,7 +710,7 @@ fn assert_article_modal(
     let (dialog_id, dialog_node) = tree
         .nodes
         .iter()
-        .find(|(_, node)| node.role() == Role::Dialog && node.label() == Some(label))
+        .find(|(_, node)| node.role() == Role::Dialog && crate::has_label(&node, label))
         .unwrap_or_else(|| {
             if let Some(directory) = std::env::var_os("TESSERA_MENU_QA_DIR") {
                 std::fs::write(
@@ -830,7 +826,7 @@ fn real_date_article_routes_instructional_dialogs_above_scrolled_content_and_kee
     for _ in 0..90 {
         let tree = renderer.accessibility_snapshot().unwrap();
         if tree.nodes.iter().any(|(_, node)| {
-            node.label() == Some("Open Date pickers specifications") && !node.is_hidden()
+            crate::has_label(&node, "Open Date pickers specifications") && !node.is_hidden()
         }) && !tree
             .nodes
             .iter()

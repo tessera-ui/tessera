@@ -1,13 +1,7 @@
-//! Native calendar focus indicator regressions.
-//!
-//! ## Usage
-//!
-//! Keep day and year focus visible without activating their selection
-//! callbacks.
-
 use tessera_ui::{
     HeadlessConfig, HeadlessRenderer,
     accesskit::{Action, ActionRequest, Node, NodeId, TreeId},
+    testing::text_matches,
 };
 
 use crate::{column::column, theme::material_theme};
@@ -53,7 +47,7 @@ fn node(renderer: &HeadlessRenderer, label: &str) -> (NodeId, Node) {
         .unwrap()
         .nodes
         .into_iter()
-        .find(|(_, node)| node.label() == Some(label) && node.supports_action(Action::Click))
+        .find(|(_, node)| text_matches(node.label(), label) && node.supports_action(Action::Click))
         .unwrap_or_else(|| panic!("missing calendar choice {label}"))
 }
 

@@ -1,10 +1,3 @@
-//! Dialog figures at fractional positions and narrow widths.
-//!
-//! ## Usage
-//!
-//! Keep native dialog actions and annotations aligned while scrolling and
-//! resizing.
-
 use std::time::Duration;
 
 use tessera_components::{
@@ -85,7 +78,7 @@ fn node(renderer: &HeadlessRenderer, label: &str, role: Role) -> Node {
         .inspect_accessibility()
         .expect("accessibility tree");
     snapshot
-        .find(label, role)
+        .find(&crate::res::I18N.text(label), role)
         .unwrap_or_else(|| panic!("missing {label} {role:?}"))
         .1
         .clone()
@@ -223,7 +216,7 @@ fn exercise(scenes: &[usize]) {
                     .unwrap()
                     .nodes()
                     .iter()
-                    .any(|(_, node)| node.label() == Some(expected_notice)),
+                    .any(|(_, node)| crate::has_label(&node, expected_notice)),
                 "the activated action publishes its notice"
             );
         }

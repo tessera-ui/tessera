@@ -1909,13 +1909,12 @@ fn configurations() {
 
 fn request(two_lines: bool, action: bool, dismiss: bool) -> SnackbarRequest {
     SnackbarRequest {
-        message: if two_lines {
+        message: I18N.text(if two_lines {
             "ui-your-photo-was-saved-it-is-ready-to-share"
         } else {
             "ui-photo-saved"
-        }
-        .to_owned(),
-        action_label: action.then(|| "ui-undo".to_owned()),
+        }),
+        action_label: action.then(|| I18N.text("ui-undo")),
         with_dismiss_action: dismiss,
         duration: None,
     }
@@ -2594,7 +2593,7 @@ fn timing_demo() {
                         .on_click(move || {
                             host.with_mut(|state| {
                                 state.show_snackbar(SnackbarRequest {
-                                    message: "ui-message-archived".into(),
+                                    message: I18N.text("ui-message-archived"),
                                     action_label: None,
                                     with_dismiss_action: false,
                                     duration: Some(SnackbarDuration::Short),
@@ -2610,8 +2609,8 @@ fn timing_demo() {
                         .on_click(move || {
                             host.with_mut(|state| {
                                 state.show_snackbar(SnackbarRequest {
-                                    message: "ui-message-archived".into(),
-                                    action_label: Some("ui-undo".into()),
+                                    message: I18N.text("ui-message-archived"),
+                                    action_label: Some(I18N.text("ui-undo")),
                                     with_dismiss_action: true,
                                     duration: None,
                                 });
@@ -2727,7 +2726,7 @@ fn inline_feedback() {
                         saved.set(true);
                         host.with_mut(|state| {
                             state.show_snackbar(SnackbarRequest {
-                                message: "ui-all-changes-saved".into(),
+                                message: I18N.text("ui-all-changes-saved"),
                                 action_label: None,
                                 with_dismiss_action: false,
                                 duration: Some(SnackbarDuration::Short),
@@ -2773,8 +2772,8 @@ fn actionable_demo() {
                         kept.set(false);
                         host.with_mut(|state| {
                             state.show_snackbar(SnackbarRequest {
-                                message: "ui-photo-deleted".into(),
-                                action_label: Some("ui-undo".into()),
+                                message: I18N.text("ui-photo-deleted"),
+                                action_label: Some(I18N.text("ui-undo")),
                                 with_dismiss_action: true,
                                 duration: None,
                             });
@@ -2999,7 +2998,7 @@ mod anatomy_tests {
             .inspect_accessibility()
             .expect("accessibility tree");
         let (id, node) = snapshot
-            .find(label, role)
+            .find(&crate::res::I18N.text(label), role)
             .unwrap_or_else(|| panic!("missing {label} {role:?}"));
         (id, node.clone())
     }

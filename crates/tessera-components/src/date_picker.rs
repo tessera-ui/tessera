@@ -1492,6 +1492,7 @@ fn civil_from_days(days: i64) -> (i32, u8, u8) {
 
 #[cfg(test)]
 mod tests {
+    use tessera_ui::testing::{text_matches, visible_text};
 
     use tessera_ui::{
         CursorEventContent, GestureState, PointerChange, PressKeyEventType, PxPosition, State,
@@ -1593,7 +1594,8 @@ mod tests {
             .nodes
             .iter()
             .find(|(_, node)| {
-                node.label() == Some(label) && node.role() == tessera_ui::accesskit::Role::Button
+                text_matches(node.label(), label)
+                    && node.role() == tessera_ui::accesskit::Role::Button
             })
             .unwrap_or_else(|| panic!("missing actionable {label}"));
         let rect = node.1.bounds().expect("date target bounds");
@@ -1639,13 +1641,13 @@ mod tests {
         observed.focus.get().unwrap().request_focus();
         renderer.render_frames(4);
         let tree = renderer.accessibility_snapshot().unwrap();
-        assert_eq!(
+        assert!(text_matches(
             tree.nodes
                 .iter()
                 .find(|(id, _)| *id == tree.focus)
                 .and_then(|(_, node)| node.label()),
-            Some("July 16, 2026")
-        );
+            "July 16, 2026"
+        ));
         FocusManager::current().clear_focus(true);
         observed
             .today
@@ -1683,13 +1685,13 @@ mod tests {
             observed.focus.get().unwrap().request_focus();
             renderer.render_frames(4);
             let tree = renderer.accessibility_snapshot().unwrap();
-            assert_eq!(
+            assert!(text_matches(
                 tree.nodes
                     .iter()
                     .find(|(id, _)| *id == tree.focus)
                     .and_then(|(_, node)| node.label()),
-                Some("July 17, 2028")
-            );
+                "July 17, 2028"
+            ));
         } else {
             observed
                 .today
@@ -1705,13 +1707,13 @@ mod tests {
             observed.focus.get().unwrap().request_focus();
             renderer.render_frames(4);
             let tree = renderer.accessibility_snapshot().unwrap();
-            assert_eq!(
+            assert!(text_matches(
                 tree.nodes
                     .iter()
                     .find(|(id, _)| *id == tree.focus)
                     .and_then(|(_, node)| node.label()),
-                Some("July 17, 2028")
-            );
+                "July 17, 2028"
+            ));
         }
     }
 
@@ -1794,7 +1796,7 @@ mod tests {
                 .nodes
                 .into_iter()
                 .find(|(_, node)| {
-                    node.label() == Some(label) && node.supports_action(Action::Click)
+                    text_matches(node.label(), label) && node.supports_action(Action::Click)
                 })
                 .unwrap_or_else(|| panic!("missing actionable {label}"))
                 .0;
@@ -1825,9 +1827,11 @@ mod tests {
         let selected = CalendarDate::new(2025, 8, 17);
         let initial_tree = renderer.accessibility_snapshot().unwrap();
         assert!(
-            initial_tree.nodes.iter().any(
-                |(_, node)| node.label() == Some("2025") && node.supports_action(Action::Click)
-            ),
+            initial_tree
+                .nodes
+                .iter()
+                .any(|(_, node)| text_matches(node.label(), "2025")
+                    && node.supports_action(Action::Click)),
             "initial Year view must expose its selected year as a named action: {:?}",
             initial_tree.nodes
         );
@@ -1836,7 +1840,7 @@ mod tests {
                 .nodes
                 .iter()
                 .find(|(_, node)| {
-                    node.label() == Some(label) && node.supports_action(Action::Click)
+                    text_matches(node.label(), label) && node.supports_action(Action::Click)
                 })
                 .unwrap()
                 .1
@@ -1853,7 +1857,7 @@ mod tests {
             .nodes
             .iter()
             .find(|(_, node)| {
-                node.label() == Some("Choose year")
+                text_matches(node.label(), "Choose year")
                     && node.bounds().is_some_and(|rect| rect.height() == 288.0)
             })
             .unwrap()
@@ -1869,7 +1873,7 @@ mod tests {
             .nodes
             .iter()
             .find(|(_, node)| {
-                node.label() == Some("2039")
+                text_matches(node.label(), "2039")
                     && node.role() == tessera_ui::accesskit::Role::Button
                     && node.supports_action(Action::Focus)
             })
@@ -1888,7 +1892,7 @@ mod tests {
             .iter()
             .find(|(id, _)| *id == focused_tree.focus)
             .unwrap();
-        assert_eq!(focused.1.label(), Some("2039"));
+        assert!(text_matches(focused.1.label(), "2039"));
         let revealed = focused.1.bounds().unwrap();
         assert!(revealed.y0 >= viewport.y0 && revealed.y1 <= viewport.y1);
         assert_eq!(state.with(DatePickerState::selected_date), selected);
@@ -1900,7 +1904,7 @@ mod tests {
                 .unwrap()
                 .nodes
                 .iter()
-                .any(|(_, node)| node.label() == Some("August 17, 2025"))
+                .any(|(_, node)| text_matches(node.label(), "August 17, 2025"))
         );
         view.set(DatePickerView::Year);
         renderer.render_frames(4);
@@ -2001,9 +2005,9 @@ mod tests {
                 .nodes
                 .iter()
                 .filter(|(_, node)| node.role() == Role::Button
-                    && node.label().is_some_and(
-                        |label| label.starts_with("July ") && label.ends_with(", 2026")
-                    ))
+                    && node.label().map(visible_text).is_some_and(|label| label
+                        .starts_with("July ")
+                        && label.ends_with(", 2026")))
                 .count(),
             31,
             "the published calendar must expose every July date"
@@ -2011,25 +2015,25 @@ mod tests {
         observed.focus.get().unwrap().request_focus();
         renderer.render_frames(8);
         let accessibility = renderer.accessibility_snapshot().expect("tree");
-        assert_eq!(
+        assert!(text_matches(
             accessibility
                 .nodes
                 .iter()
                 .find(|(id, _)| *id == accessibility.focus)
                 .and_then(|(_, node)| node.label()),
-            Some("July 16, 2026")
-        );
+            "July 16, 2026"
+        ));
         assert!(FocusManager::current().request_move_focus(FocusDirection::Next));
         renderer.render_frames(8);
         let accessibility = renderer.accessibility_snapshot().expect("tree");
-        assert_eq!(
+        assert!(text_matches(
             accessibility
                 .nodes
                 .iter()
                 .find(|(id, _)| *id == accessibility.focus)
                 .and_then(|(_, node)| node.label()),
-            Some("After single calendar")
-        );
+            "After single calendar"
+        ));
         let state = observed.state.get().expect("single state");
         assert_eq!(state.with(DatePickerState::selected_date), None);
         for label in ["Choose year", "2027"] {
@@ -2037,7 +2041,7 @@ mod tests {
             let bounds = accessibility
                 .nodes
                 .iter()
-                .find(|(_, node)| node.label() == Some(label) && node.bounds().is_some())
+                .find(|(_, node)| text_matches(node.label(), label) && node.bounds().is_some())
                 .expect("published year target")
                 .1
                 .bounds()
@@ -2063,7 +2067,7 @@ mod tests {
                 .expect("tree")
                 .nodes
                 .iter()
-                .any(|(_, node)| node.label() == Some("July 1, 2027"))
+                .any(|(_, node)| text_matches(node.label(), "July 1, 2027"))
         );
         state.with_mut(|state| state.set_display_mode(super::DatePickerDisplayMode::Input));
         renderer.render_frames(8);

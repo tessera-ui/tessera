@@ -1,9 +1,3 @@
-//! Date-field anchoring and calendar interaction regressions.
-//!
-//! ## Usage
-//!
-//! Keep the input stationary while its optional calendar opens and closes.
-
 use std::time::Duration;
 
 use tessera_components::{
@@ -125,7 +119,10 @@ fn date_dialog_example_commits_only_confirmed_selection() {
         source.single.with(super::DatePickerState::selected_date),
         Some(super::date(22))
     );
-    assert_eq!(source.status.get(), "Confirmed date: 2026-07-22");
+    assert_eq!(
+        crate::visible_text(&source.status.get()),
+        "Confirmed date: 2026-07-22"
+    );
 }
 
 #[tessera]
@@ -184,7 +181,7 @@ fn date_annotation_translation_keeps_raw_coordinates_without_rebuilding_local_ca
             .nodes
             .iter()
             .any(|(_, node)| {
-                node.role() == Role::Note && node.label() == Some("Anatomy marker 2")
+                node.role() == Role::Note && crate::has_label(&node, "Anatomy marker 2")
             }),
         "The native figure must publish its actual callouts before translation"
     );
@@ -226,7 +223,7 @@ fn date_annotation_translation_keeps_raw_coordinates_without_rebuilding_local_ca
             .iter()
             .any(|(_, node)| {
                 node.role() == Role::ListBoxOption
-                    && node.label() == Some("August")
+                    && crate::has_label(&node, "August")
                     && node.is_selected() == Some(true)
             })
     );
@@ -250,9 +247,9 @@ fn guideline_fixture(year: bool) {
         super::chapter_figure(
             super::Figure::Docked,
             if year {
-                "Year selection"
+                "ui-year-selection"
             } else {
-                "Month selection"
+                "ui-month-selection"
             }
             .into(),
             false,
@@ -277,7 +274,7 @@ fn field(renderer: &HeadlessRenderer) -> Node {
         .unwrap()
         .nodes
         .into_iter()
-        .find(|(_, node)| node.role() == Role::TextInput && node.label() == Some("Event date"))
+        .find(|(_, node)| node.role() == Role::TextInput && crate::has_label(&node, "Event date"))
         .expect("date field")
         .1
 }
@@ -288,7 +285,7 @@ fn activate(renderer: &mut HeadlessRenderer, label: &str) {
         .unwrap()
         .nodes
         .into_iter()
-        .find(|(_, node)| node.label() == Some(label) && node.supports_action(Action::Click))
+        .find(|(_, node)| crate::has_label(&node, label) && node.supports_action(Action::Click))
         .unwrap_or_else(|| panic!("missing actionable {label}"))
         .0;
     assert!(renderer.dispatch_accessibility_action(ActionRequest {
@@ -325,7 +322,7 @@ fn date_figures_keep_docked_anchors_and_commit_only_complete_ranges() {
         let marker = snapshot
             .nodes
             .iter()
-            .find(|(_, node)| node.role() == Role::Note && node.label() == Some(label))
+            .find(|(_, node)| node.role() == Role::Note && crate::has_label(&node, label))
             .unwrap_or_else(|| panic!("missing {label}"));
         let bounds = marker.1.bounds().unwrap();
         let mut ink = 0;
@@ -362,7 +359,7 @@ fn date_figures_keep_docked_anchors_and_commit_only_complete_ranges() {
             .unwrap()
             .nodes
             .iter()
-            .any(|(_, node)| node.label() == Some("Docked calendar"))
+            .any(|(_, node)| crate::has_label(&node, "Docked calendar"))
     );
     activate(&mut renderer, "Toggle event date calendar");
     assert_eq!(field(&renderer).bounds(), Some(before));
@@ -374,7 +371,7 @@ fn date_figures_keep_docked_anchors_and_commit_only_complete_ranges() {
         .nodes
         .iter()
         .find(|(_, node)| {
-            node.label() == Some("August 26, 2025") && node.supports_action(Action::Click)
+            crate::has_label(&node, "August 26, 2025") && node.supports_action(Action::Click)
         })
         .unwrap()
         .1
@@ -383,7 +380,7 @@ fn date_figures_keep_docked_anchors_and_commit_only_complete_ranges() {
     let annotation = snapshot
         .nodes
         .iter()
-        .find(|(_, node)| node.role() == Role::Note && node.label() == Some("Anatomy marker 10"))
+        .find(|(_, node)| node.role() == Role::Note && crate::has_label(&node, "Anatomy marker 10"))
         .unwrap()
         .1
         .bounds()
@@ -421,7 +418,7 @@ fn date_figures_keep_docked_anchors_and_commit_only_complete_ranges() {
         .nodes
         .into_iter()
         .find(|(_, node)| {
-            node.label() == Some("August 19, 2025") && node.supports_action(Action::Click)
+            crate::has_label(&node, "August 19, 2025") && node.supports_action(Action::Click)
         })
         .unwrap()
         .1
@@ -507,7 +504,7 @@ fn check_single_date_input_confirmation() {
                 .unwrap()
                 .nodes
                 .iter()
-                .any(|(_, node)| node.label() == Some(expected))
+                .any(|(_, node)| crate::has_label(&node, expected))
         );
     }
 }
@@ -565,7 +562,7 @@ fn range_action(renderer: &HeadlessRenderer, label: &str) -> Node {
         .unwrap()
         .nodes
         .into_iter()
-        .find(|(_, node)| node.role() == Role::Button && node.label() == Some(label))
+        .find(|(_, node)| node.role() == Role::Button && crate::has_label(&node, label))
         .unwrap_or_else(|| panic!("missing range action {label}"))
         .1
 }
@@ -576,7 +573,8 @@ fn assert_range_endpoints(renderer: &HeadlessRenderer, start: u8, end: u8) {
         let label = format!("August {day}, 2025");
         assert!(
             snapshot.nodes.iter().any(|(_, node)| {
-                node.label() == Some(label.as_str()) && node.description() == Some(description)
+                crate::has_label(&node, label.as_str())
+                    && crate::text_matches(node.description(), description)
             }),
             "{label} must remain the committed {description}"
         );
@@ -609,21 +607,21 @@ fn date_article_switches_real_chapters_and_unmounts_inactive_pages() {
         let snapshot = renderer.accessibility_snapshot().unwrap();
         assert!(snapshot.nodes.iter().any(|(_, node)| {
             node.role() == Role::Tab
-                && node.label() == Some(page)
+                && crate::has_label(&node, page)
                 && node.is_selected() == Some(true)
         }));
         assert!(
             snapshot
                 .nodes
                 .iter()
-                .any(|(_, node)| node.role() == Role::Heading && node.label() == Some(present)),
+                .any(|(_, node)| node.role() == Role::Heading && crate::has_label(&node, present)),
             "missing {present} on {page}"
         );
         assert!(
             !snapshot
                 .nodes
                 .iter()
-                .any(|(_, node)| node.role() == Role::Heading && node.label() == Some(absent)),
+                .any(|(_, node)| node.role() == Role::Heading && crate::has_label(&node, absent)),
             "inactive {absent} remained on {page}"
         );
         if page == "Overview" {
@@ -631,7 +629,7 @@ fn date_article_switches_real_chapters_and_unmounts_inactive_pages() {
                 .nodes
                 .iter()
                 .find(|(_, node)| {
-                    node.role() == Role::Group && node.label() == Some("Date picker variants")
+                    node.role() == Role::Group && crate::has_label(&node, "Date picker variants")
                 })
                 .expect("native date picker overview figure")
                 .1
@@ -650,7 +648,7 @@ fn date_article_switches_real_chapters_and_unmounts_inactive_pages() {
                 let marker = snapshot
                     .nodes
                     .iter()
-                    .find(|(_, node)| node.role() == Role::Note && node.label() == Some(label))
+                    .find(|(_, node)| node.role() == Role::Note && crate::has_label(&node, label))
                     .unwrap_or_else(|| panic!("missing overview variant {label}"))
                     .1
                     .bounds()
@@ -664,16 +662,16 @@ fn date_article_switches_real_chapters_and_unmounts_inactive_pages() {
             }
             assert!(snapshot.nodes.iter().any(|(_, node)| {
                 node.role() == Role::TextInput
-                    && node.label() == Some("Overview docked date")
+                    && crate::has_label(&node, "Overview docked date")
                     && node.value() == Some("08/17/2025")
             }));
             for label in ["Docked calendar", "Select date"] {
                 assert!(snapshot.nodes.iter().any(|(_, node)| {
-                    node.role() == Role::Group && node.label() == Some(label)
+                    node.role() == Role::Group && crate::has_label(&node, label)
                 }));
             }
             assert!(snapshot.nodes.iter().any(|(_, node)| {
-                node.role() == Role::TextInput && node.label() == Some("Start date")
+                node.role() == Role::TextInput && crate::has_label(&node, "Start date")
             }));
         }
     }
@@ -694,7 +692,7 @@ fn date_reference_guidelines_and_color_pairs_mount_native_views() {
                 .iter()
                 .any(|(_, node)| {
                     node.role() == Role::ListBoxOption
-                        && node.label() == Some(label)
+                        && crate::has_label(&node, label)
                         && node.is_selected() == Some(true)
                 }),
             "the {label} menu must be open in its navigation guideline"
@@ -751,13 +749,15 @@ fn date_reference_guidelines_and_color_pairs_mount_native_views() {
             snapshot
                 .nodes
                 .iter()
-                .any(|(_, node)| { node.role() == Role::Group && node.label() == Some(title) })
+                .any(|(_, node)| { node.role() == Role::Group && crate::has_label(&node, title) })
         );
         assert_eq!(
             snapshot
                 .nodes
                 .iter()
-                .filter(|(_, node)| { node.role() == Role::Note && node.label() == Some(marker) })
+                .filter(|(_, node)| {
+                    node.role() == Role::Note && crate::has_label(&node, marker)
+                })
                 .count(),
             2,
             "both themes must paint {marker} in {title}"
@@ -768,7 +768,7 @@ fn date_reference_guidelines_and_color_pairs_mount_native_views() {
                 .iter()
                 .filter(|(_, node)| {
                     node.role() == Role::Note
-                        && node.label() == Some("Color role 3: Surface container high")
+                        && crate::has_label(&node, "Color role 3: Surface container high")
                 })
                 .collect();
             assert_eq!(containers.len(), 2);

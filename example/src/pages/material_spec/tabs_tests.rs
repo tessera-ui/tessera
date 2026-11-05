@@ -1,9 +1,3 @@
-//! Tabs article interaction regressions.
-//!
-//! ## Usage
-//!
-//! Verify swipeable fixed tabs and badge dismissal through real pointer input.
-
 use std::time::Duration;
 
 use tessera_ui::{
@@ -63,7 +57,7 @@ fn node(renderer: &HeadlessRenderer, matches: impl Fn(&Node) -> bool) -> Option<
 
 fn tab_bounds(renderer: &HeadlessRenderer, label: &str) -> AccessRect {
     node(renderer, |node| {
-        node.role() == Role::Tab && node.label() == Some(label)
+        node.role() == Role::Tab && crate::has_label(&node, label)
     })
     .unwrap_or_else(|| panic!("tab {label} must be published"))
     .bounds()
@@ -123,7 +117,7 @@ fn swiping_fixed_tab_content_moves_selection_between_neighbours() {
     swipe(&mut renderer, start, -200.0);
     assert_eq!(selected.get(), 1, "a leftward swipe opens the next tab");
     assert!(
-        node(&renderer, |node| node.label() == Some("Trips content")).is_some(),
+        node(&renderer, |node| crate::has_label(&node, "Trips content")).is_some(),
         "the content panel follows the selected tab"
     );
 
@@ -167,7 +161,7 @@ fn viewing_badged_tab_removes_badge_from_its_accessibility_label() {
     click(&mut renderer, badged);
     assert!(
         node(&renderer, |node| node.role() == Role::Tab
-            && node.label() == Some("Flights, 3 new items"))
+            && crate::has_label(&node, "Flights, 3 new items"))
         .is_none(),
         "the badge count is removed once the tab has been viewed"
     );

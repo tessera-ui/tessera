@@ -73,3 +73,11 @@ impl tessera_ui::RenderModule for TestPipelines {
         tessera_components::pipelines::register_pipelines(context);
     }
 }
+
+#[cfg(test)]
+use tessera_ui::testing::{text_matches, visible_text};
+
+#[cfg(test)]
+fn has_label(node: &tessera_ui::accesskit::Node, expected: &str) -> bool {
+    tessera_ui::testing::text_matches(node.label(), &res::I18N.text(expected))
+}

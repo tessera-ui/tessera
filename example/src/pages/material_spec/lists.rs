@@ -1075,7 +1075,7 @@ mod collection_article_tests {
             .inspect_accessibility()
             .expect("accessibility tree");
         snapshot
-            .find(label, role)
+            .find(&crate::res::I18N.text(label), role)
             .unwrap_or_else(|| panic!("missing {label} {role:?}"))
             .1
             .clone()
@@ -1241,7 +1241,7 @@ mod collection_article_tests {
                     .nodes
                     .iter()
                     .filter(|(_, node)| {
-                        node.label() == Some("Alex") && node.role() == Role::CheckBox
+                        crate::has_label(&node, "Alex") && node.role() == Role::CheckBox
                     })
                     .count();
                 assert!(
@@ -1252,7 +1252,7 @@ mod collection_article_tests {
                     .nodes
                     .iter()
                     .filter_map(|(id, node)| {
-                        (node.label() == Some("Sam") && node.role() == Role::CheckBox)
+                        (crate::has_label(&node, "Sam") && node.role() == Role::CheckBox)
                             .then_some(*id)
                     })
                     .collect::<Vec<_>>();
@@ -1261,7 +1261,7 @@ mod collection_article_tests {
                     .nodes
                     .iter()
                     .filter_map(|(id, node)| {
-                        (node.role() == Role::Button && node.label() == Some("Remove Alex"))
+                        (node.role() == Role::Button && crate::has_label(&node, "Remove Alex"))
                             .then_some(*id)
                     })
                     .collect::<Vec<_>>();
@@ -1279,7 +1279,7 @@ mod collection_article_tests {
                             .nodes
                             .iter()
                             .filter(|(_, node)| {
-                                node.label() == Some("Alex") && node.role() == Role::CheckBox
+                                crate::has_label(&node, "Alex") && node.role() == Role::CheckBox
                             })
                             .count(),
                         alex_count - index - 1,
@@ -1288,7 +1288,7 @@ mod collection_article_tests {
                     for id in &sam_ids {
                         assert!(snapshot.nodes.iter().any(|(current, node)| {
                             current == id
-                                && node.label() == Some("Sam")
+                                && crate::has_label(&node, "Sam")
                                 && node.role() == Role::CheckBox
                         }));
                     }
@@ -1298,14 +1298,15 @@ mod collection_article_tests {
                     !snapshot
                         .nodes
                         .iter()
-                        .any(|(_, node)| node.label() == Some("Alex")
+                        .any(|(_, node)| crate::has_label(&node, "Alex")
                             && node.role() == Role::CheckBox)
                 );
                 let restores = snapshot
                     .nodes
                     .iter()
                     .filter_map(|(id, node)| {
-                        (node.label() == Some("Restore recipients") && node.role() == Role::Button)
+                        (crate::has_label(&node, "Restore recipients")
+                            && node.role() == Role::Button)
                             .then_some(*id)
                     })
                     .collect::<Vec<_>>();
@@ -1327,7 +1328,7 @@ mod collection_article_tests {
                             .nodes
                             .iter()
                             .filter(|(_, node)| {
-                                node.label() == Some("Alex") && node.role() == Role::CheckBox
+                                crate::has_label(&node, "Alex") && node.role() == Role::CheckBox
                             })
                             .count(),
                         index + 1,

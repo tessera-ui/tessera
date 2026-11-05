@@ -46,7 +46,7 @@ fn activate(renderer: &mut HeadlessRenderer, target_node: NodeId) {
 fn click_button(renderer: &mut HeadlessRenderer, label: &str) {
     let target = nodes(renderer)
         .into_iter()
-        .find(|(_, node)| node.role() == Role::Button && node.label() == Some(label))
+        .find(|(_, node)| node.role() == Role::Button && crate::has_label(&node, label))
         .unwrap_or_else(|| panic!("missing dialog token button {label}"))
         .0;
     activate(renderer, target);
@@ -54,7 +54,9 @@ fn click_button(renderer: &mut HeadlessRenderer, label: &str) {
 
 fn contains_text(renderer: &HeadlessRenderer, expected: &str) -> bool {
     nodes(renderer).iter().any(|(_, node)| {
-        node.label().is_some_and(|label| label.contains(expected))
+        node.label()
+            .map(crate::visible_text)
+            .is_some_and(|label| label.contains(expected))
             || node.value().is_some_and(|value| value.contains(expected))
     })
 }
@@ -72,7 +74,7 @@ fn select(renderer: &mut HeadlessRenderer, label: &str) {
     assert_eq!(options.len(), 2, "both dialog token sets are offered");
     let target = options
         .into_iter()
-        .find(|(_, node)| node.label() == Some(label))
+        .find(|(_, node)| crate::has_label(&node, label))
         .unwrap_or_else(|| panic!("missing token set {label}"))
         .0;
     activate(renderer, target);
@@ -148,7 +150,7 @@ fn dialog_token_sets_switch_variants_and_accordion_controls_reveal_their_own_row
     for (_, node) in menu_options(&renderer) {
         assert_eq!(
             node.toggled(),
-            Some(if node.label() == Some("Dialog - Full screen") {
+            Some(if crate::has_label(&node, "Dialog - Full screen") {
                 Toggled::True
             } else {
                 Toggled::False
@@ -157,7 +159,7 @@ fn dialog_token_sets_switch_variants_and_accordion_controls_reveal_their_own_row
     }
     let basic = menu_options(&renderer)
         .into_iter()
-        .find(|(_, node)| node.label() == Some("Dialog - Basic"))
+        .find(|(_, node)| crate::has_label(&node, "Dialog - Basic"))
         .unwrap()
         .0;
     activate(&mut renderer, basic);

@@ -1,9 +1,3 @@
-//! Native tooltip example interaction regressions.
-//!
-//! ## Usage
-//!
-//! Verify trigger actions and the active explanation in live examples.
-
 use std::time::Duration;
 
 use tessera_ui::{
@@ -97,7 +91,9 @@ fn semantic_node(renderer: &HeadlessRenderer, label: &str, role: Role) -> (NodeI
     let snapshot = renderer
         .inspect_accessibility()
         .expect("accessibility tree");
-    let (id, node) = snapshot.find(label, role).expect("tooltip control");
+    let (id, node) = snapshot
+        .find(&crate::res::I18N.text(label), role)
+        .expect("tooltip control");
     (id, node.clone())
 }
 
@@ -116,9 +112,10 @@ fn settle_color_pair_geometry(renderer: &mut HeadlessRenderer) {
                     || (node.role() == Role::Note
                         && node
                             .label()
+                            .map(crate::visible_text)
                             .is_some_and(|label| label.starts_with("Tooltip color role ")))
                     || (matches!(node.role(), Role::Button | Role::Label)
-                        && node.label() == Some("Action"))
+                        && crate::has_label(&node, "Action"))
             })
             .map(|(id, node)| {
                 (
@@ -166,6 +163,7 @@ fn tooltip_color_pairs_keep_native_popups_and_annotations_in_both_themes() {
                     node.role() == Role::Note
                         && node
                             .label()
+                            .map(crate::visible_text)
                             .is_some_and(|label| label.starts_with("Tooltip color role "))
                 })
                 .count(),
@@ -193,7 +191,7 @@ fn tooltip_color_pairs_keep_native_popups_and_annotations_in_both_themes() {
         let mut markers: Vec<_> = snapshot
             .nodes
             .iter()
-            .filter(|(_, node)| node.role() == Role::Note && node.label() == Some(label))
+            .filter(|(_, node)| node.role() == Role::Note && crate::has_label(&node, label))
             .map(|(_, node)| node.bounds().unwrap())
             .collect();
         markers.sort_by(|left, right| left.x0.total_cmp(&right.x0));
@@ -205,7 +203,7 @@ fn tooltip_color_pairs_keep_native_popups_and_annotations_in_both_themes() {
                     .iter()
                     .find(|(_, node)| {
                         node.role() == Role::Button
-                            && node.label() == Some("Action")
+                            && crate::has_label(&node, "Action")
                             && node.bounds().is_some_and(|bounds| {
                                 bounds.x0 >= popup.x0 && bounds.x1 <= popup.x1
                             })
@@ -219,7 +217,7 @@ fn tooltip_color_pairs_keep_native_popups_and_annotations_in_both_themes() {
                     .iter()
                     .find(|(_, node)| {
                         node.role() == Role::Label
-                            && node.label() == Some("Action")
+                            && crate::has_label(&node, "Action")
                             && node.bounds().is_some_and(|bounds| {
                                 bounds.x0 >= popup.x0 && bounds.x1 <= popup.x1
                             })
@@ -337,8 +335,11 @@ fn tooltip_configurations_keep_five_native_cards_static_after_pointer_clicks() {
                 .nodes
                 .iter()
                 .filter(|(_, node)| node.role() == Role::Button
-                    && node.label().is_some_and(|label| label
-                        .starts_with(&format!("Tooltip configuration {number} action "))))
+                    && node
+                        .label()
+                        .map(crate::visible_text)
+                        .is_some_and(|label| label
+                            .starts_with(&format!("Tooltip configuration {number} action "))))
                 .count(),
             count
         );
@@ -376,13 +377,13 @@ fn tooltip_configurations_keep_five_native_cards_static_after_pointer_clicks() {
             .iter()
             .filter(
                 |(_, node)| matches!(node.role(), Role::Dialog | Role::Tooltip)
-                    && node.label() == Some("Rich tooltip")
+                    && crate::has_label(&node, "Rich tooltip")
             )
             .count(),
         3
     );
     assert!(!snapshot.nodes.iter().any(|(_, node)| {
-        node.label().is_some_and(|label| {
+        node.label().map(crate::visible_text).is_some_and(|label| {
             label.starts_with("Show rich tooltip configuration") || label.contains(" actions:")
         })
     }));
@@ -400,6 +401,7 @@ fn tooltip_configurations_keep_five_native_cards_static_after_pointer_clicks() {
             node.role() == Role::Button
                 && node
                     .label()
+                    .map(crate::visible_text)
                     .is_some_and(|label| label.starts_with("Tooltip configuration "))
         })
         .map(|(_, node)| {
@@ -474,6 +476,7 @@ fn tooltip_measurements_scale_native_content_and_keep_rulers_inside_the_canvas()
                     node.role() == Role::Note
                         && node
                             .label()
+                            .map(crate::visible_text)
                             .is_some_and(|label| label.starts_with("Dimension "))
                 })
                 .collect();
@@ -659,7 +662,7 @@ fn live_tooltips_keep_trigger_actions_and_replace_the_active_explanation() {
             .nodes
             .iter()
             .any(|(_, node)| node.role() == Role::Tooltip
-                && node.label() == Some("Add to favorites"))
+                && crate::has_label(&node, "Add to favorites"))
     );
     click(&mut renderer, favorite);
     assert_eq!(actions.get(), 0);
@@ -683,7 +686,7 @@ fn live_tooltips_keep_trigger_actions_and_replace_the_active_explanation() {
         snapshot
             .nodes
             .iter()
-            .any(|(_, node)| node.role() == Role::Dialog && node.label() == Some("Collections"))
+            .any(|(_, node)| node.role() == Role::Dialog && crate::has_label(&node, "Collections"))
     );
     let action = bounds(&renderer, "Got it");
     click(&mut renderer, action);
@@ -692,7 +695,7 @@ fn live_tooltips_keep_trigger_actions_and_replace_the_active_explanation() {
         !snapshot
             .nodes
             .iter()
-            .any(|(_, node)| node.role() == Role::Dialog && node.label() == Some("Collections"))
+            .any(|(_, node)| node.role() == Role::Dialog && crate::has_label(&node, "Collections"))
     );
     assert_eq!(
         actions.get(),
@@ -753,6 +756,7 @@ fn persistent_live_tooltips_leave_the_trigger_visible_after_flow_wrapping() {
                 .iter()
                 .any(|(_, node)| node
                     .label()
+                    .map(crate::visible_text)
                     .is_some_and(|label| label.starts_with("Favorite:")
                         || label.contains("tooltip actions:")))
         );
@@ -773,17 +777,15 @@ fn corner_tooltips_flip_inside_their_device_frames_and_stay_next_to_the_trigger(
                 node.role() == Role::Group
                     && node
                         .label()
+                        .map(crate::visible_text)
                         .is_some_and(|label| label.starts_with("Placement preview "))
             })
             .collect();
         assert_eq!(frames.len(), 4);
         for (_, frame) in frames {
             let rect = frame.bounds().unwrap();
-            let alignment = frame
-                .label()
-                .unwrap()
-                .strip_prefix("Placement preview ")
-                .unwrap();
+            let label = crate::visible_text(frame.label().unwrap());
+            let alignment = label.strip_prefix("Placement preview ").unwrap();
             let trigger = bounds(&renderer, &format!("Corner tooltip {alignment}"));
             let popups: Vec<_> = tree
                 .nodes
@@ -792,7 +794,7 @@ fn corner_tooltips_flip_inside_their_device_frames_and_stay_next_to_the_trigger(
                     // The corner tooltips carry a Learn more action, so they
                     // publish the interactive dialog role.
                     node.role() == Role::Dialog
-                        && node.label() == Some("Paint Tool")
+                        && crate::has_label(&node, "Paint Tool")
                         && node.bounds().is_some_and(|popup| {
                             popup.x0 >= rect.x0
                                 && popup.y0 >= rect.y0
@@ -893,7 +895,8 @@ fn writing_examples_keep_plain_tooltips_content_sized_and_publish_advice_bars() 
             .unwrap()
             .nodes
             .iter()
-            .filter(|(_, node)| node.role() == Role::Button && node.label() == Some("Learn more"))
+            .filter(|(_, node)| node.role() == Role::Button
+                && crate::has_label(&node, "Learn more"))
             .count(),
         2
     );

@@ -1,10 +1,3 @@
-//! Native contextual icon button diagrams.
-//!
-//! ## Usage
-//!
-//! Verify action targets, live labeling and anchored annotations after resize
-//! and scroll.
-
 use tessera_components::{scrollable::ScrollableController, theme::material_theme};
 use tessera_ui::{
     HeadlessConfig, HeadlessRenderer, MOUSE_POINTER_ID, PressKeyEventType, PxPosition,
@@ -49,7 +42,7 @@ fn node(renderer: &HeadlessRenderer, label: &str, role: Role) -> Node {
         .inspect_accessibility()
         .expect("accessibility tree");
     snapshot
-        .find(label, role)
+        .find(&crate::res::I18N.text(label), role)
         .unwrap_or_else(|| panic!("missing {label} {role:?}"))
         .1
         .clone()
@@ -136,18 +129,17 @@ fn contextual_actions_and_annotations_survive_scaled_resize_and_scroll() {
                     "Undo message action",
                 ] {
                     let before = node(&renderer, label, Role::Button);
-                    let count = before
-                        .description()
-                        .unwrap()
+                    let description = crate::visible_text(before.description().unwrap());
+                    let count = description
                         .strip_prefix("Activations: ")
                         .unwrap()
                         .parse::<u32>()
                         .unwrap();
                     click(&mut renderer, label);
-                    assert_eq!(
+                    assert!(crate::text_matches(
                         node(&renderer, label, Role::Button).description(),
-                        Some(format!("Activations: {}", count + 1).as_str())
-                    );
+                        &format!("Activations: {}", count + 1)
+                    ));
                 }
             }
             if scene == 3 {
@@ -161,17 +153,18 @@ fn contextual_actions_and_annotations_survive_scaled_resize_and_scroll() {
                     let bounds = before.bounds().unwrap();
                     assert!((bounds.width() - 48.0 * scale).abs() < 2.0);
                     assert!((bounds.height() - 48.0 * scale).abs() < 2.0);
-                    let count = before
-                        .description()
-                        .unwrap()
+                    let description = crate::visible_text(before.description().unwrap());
+                    let count = description
                         .strip_prefix("Activations: ")
                         .unwrap()
                         .parse::<u32>()
                         .unwrap();
                     click(&mut renderer, label);
-                    assert_eq!(
-                        node(&renderer, label, Role::Button).description(),
-                        Some(format!("Activations: {}", count + 1).as_str()),
+                    assert!(
+                        crate::text_matches(
+                            node(&renderer, label, Role::Button).description(),
+                            &format!("Activations: {}", count + 1)
+                        ),
                         "target highlight must not intercept the actual button"
                     );
                 }

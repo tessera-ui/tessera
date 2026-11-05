@@ -1,9 +1,3 @@
-//! Radio figure selection and compact label interaction regressions.
-//!
-//! ## Usage
-//!
-//! Verify native selection through radio targets and their adjacent labels.
-
 use std::time::Duration;
 
 use tessera_components::theme::material_theme;
@@ -51,7 +45,7 @@ fn radio(renderer: &HeadlessRenderer, label: &str) -> (NodeId, Node) {
         .unwrap()
         .nodes
         .into_iter()
-        .find(|(_, node)| node.role() == Role::RadioButton && node.label() == Some(label))
+        .find(|(_, node)| node.role() == Role::RadioButton && crate::has_label(&node, label))
         .unwrap_or_else(|| panic!("missing radio {label}"));
     assert_eq!(
         radio.1.is_selected(),
@@ -170,7 +164,7 @@ fn click_button(renderer: &mut HeadlessRenderer, label: &str) {
         .unwrap()
         .nodes
         .into_iter()
-        .find(|(_, node)| node.role() == Role::Button && node.label() == Some(label))
+        .find(|(_, node)| node.role() == Role::Button && crate::has_label(&node, label))
         .unwrap_or_else(|| panic!("missing radio figure action {label}"))
         .1
         .bounds()

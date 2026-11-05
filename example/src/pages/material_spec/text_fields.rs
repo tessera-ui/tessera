@@ -1125,6 +1125,12 @@ fn contact_form(outlined: bool) {
 
 #[tessera]
 fn form_field(label: String, outlined: bool, mode: u8) {
+    let label = I18N.text(label);
+    let label = if mode == 2 {
+        format!("{label}*")
+    } else {
+        label
+    };
     let controller = remember(|| {
         let mut value = TextInputController::new(Dp(16.0), Some(Dp(24.0)));
         value.set_text(&I18N.text(if mode == 8 {
@@ -1145,7 +1151,7 @@ fn form_field(label: String, outlined: bool, mode: u8) {
         .children(move || {
             let label = label.clone();
             if mode == 1 {
-                text(I18N.text(&(label))).style(type_style(16.0, 24.0));
+                text(label.clone()).style(type_style(16.0, 24.0));
                 gap(Dp(8.0));
             }
             let field = if outlined {
@@ -1157,11 +1163,7 @@ fn form_field(label: String, outlined: bool, mode: u8) {
                 .modifier(Modifier::new().fill_max_width())
                 .min_width(Dp::ZERO)
                 .controller(controller)
-                .accessibility_label(I18N.text(if mode == 2 {
-                    format!("{label}*")
-                } else {
-                    label.clone()
-                }))
+                .accessibility_label(label.clone())
                 .accessibility_description(I18N.text(if overflow {
                     "ui-use-100-characters-or-fewer"
                 } else {
@@ -1175,11 +1177,7 @@ fn form_field(label: String, outlined: bool, mode: u8) {
                 .read_only(mode == 8)
                 .is_error(mode == 7 || overflow);
             if mode != 1 {
-                field.label(I18N.text(if mode == 2 {
-                    format!("{label}*")
-                } else {
-                    label
-                }));
+                field.label(label);
             }
             if mode == 3 {
                 field

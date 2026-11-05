@@ -50,7 +50,7 @@ fn nodes(renderer: &HeadlessRenderer) -> Vec<(NodeId, Node)> {
 fn button(renderer: &HeadlessRenderer, label: &str) -> NodeId {
     nodes(renderer)
         .into_iter()
-        .find(|(_, node)| node.role() == Role::Button && node.label() == Some(label))
+        .find(|(_, node)| node.role() == Role::Button && crate::has_label(&node, label))
         .unwrap_or_else(|| {
             let published: Vec<_> = nodes(renderer)
                 .into_iter()
@@ -78,7 +78,9 @@ fn click_button(renderer: &mut HeadlessRenderer, label: &str) {
 
 fn contains_text(renderer: &HeadlessRenderer, expected: &str) -> bool {
     nodes(renderer).iter().any(|(_, node)| {
-        node.label().is_some_and(|label| label.contains(expected))
+        node.label()
+            .map(crate::visible_text)
+            .is_some_and(|label| label.contains(expected))
             || node.value().is_some_and(|value| value.contains(expected))
     })
 }
@@ -139,11 +141,11 @@ fn token_selector_switches_all_sets_and_accordion_controls_hide_and_restore_rows
         let menu = menu_options(&renderer);
         assert_eq!(menu.len(), 6, "all six token sets are available");
         for (label, ..) in options {
-            assert!(menu.iter().any(|(_, node)| node.label() == Some(label)));
+            assert!(menu.iter().any(|(_, node)| crate::has_label(&node, label)));
         }
         let target = menu
             .into_iter()
-            .find(|(_, node)| node.label() == Some(selected))
+            .find(|(_, node)| crate::has_label(&node, selected))
             .unwrap()
             .0;
         activate(&mut renderer, target);
@@ -166,7 +168,7 @@ fn token_selector_switches_all_sets_and_accordion_controls_hide_and_restore_rows
         for (_, node) in &reopened {
             assert_eq!(
                 node.toggled(),
-                Some(if node.label() == Some(selected) {
+                Some(if crate::has_label(&node, selected) {
                     Toggled::True
                 } else {
                     Toggled::False
@@ -176,7 +178,7 @@ fn token_selector_switches_all_sets_and_accordion_controls_hide_and_restore_rows
         }
         let target = reopened
             .into_iter()
-            .find(|(_, node)| node.label() == Some(selected))
+            .find(|(_, node)| crate::has_label(&node, selected))
             .unwrap()
             .0;
         activate(&mut renderer, target);
@@ -226,6 +228,7 @@ fn translated_expanded_tokens_reuse_drawing_and_keep_the_popup_on_its_selector()
         .into_iter()
         .find(|(_, node)| {
             node.label()
+                .map(crate::visible_text)
                 .is_some_and(|label| label.contains("md.comp.slider.active.track.height"))
         })
         .expect("expanded token row");
@@ -233,7 +236,7 @@ fn translated_expanded_tokens_reuse_drawing_and_keep_the_popup_on_its_selector()
     let popup_before = menu_options(&renderer)[0].1.bounds().unwrap();
     let selected = menu_options(&renderer)
         .into_iter()
-        .find(|(_, node)| node.label() == Some("Slider"))
+        .find(|(_, node)| crate::has_label(&node, "Slider"))
         .unwrap()
         .0;
     activate(&mut renderer, selected);
@@ -271,7 +274,7 @@ fn translated_expanded_tokens_reuse_drawing_and_keep_the_popup_on_its_selector()
     let current = nodes(&renderer);
     let selector_after = current
         .iter()
-        .find(|(_, node)| node.label() == Some("Slider token set selector"))
+        .find(|(_, node)| crate::has_label(&node, "Slider token set selector"))
         .unwrap()
         .1
         .bounds()

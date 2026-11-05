@@ -3,6 +3,7 @@ use tessera_ui::{
     MOUSE_POINTER_ID, Modifier, PressKeyEventType, PxPosition, State,
     accesskit::{Rect, Role},
     remember, tessera,
+    testing::text_matches,
 };
 
 use crate::{
@@ -169,7 +170,7 @@ fn check_nested_scroll(samples: u32) {
         .iter()
         .find(|(id, _)| *id == accessibility.focus)
         .expect("focused date");
-    assert_eq!(focused.1.label(), Some("July 29, 2026"));
+    assert!(text_matches(focused.1.label(), "July 29, 2026"));
     let before = outer.with(|list| list.scroll_controller().child_position());
     assert!(
         before.y < 0.0,
@@ -192,9 +193,8 @@ fn check_nested_scroll(samples: u32) {
         .iter()
         .find(|(id, _)| *id == accessibility.focus)
         .expect("restored focus");
-    assert_eq!(
-        focused.1.label(),
-        Some("Date range calendar"),
+    assert!(
+        text_matches(focused.1.label(), "Date range calendar"),
         "virtualizing a focused month restores focus to the stable calendar viewport"
     );
     assert_ne!(
@@ -225,7 +225,7 @@ fn check_nested_scroll(samples: u32) {
         .find(|(id, _)| *id == accessibility.focus)
         .expect("focused visible date");
     assert_eq!(focused.1.role(), Role::Button);
-    assert_eq!(focused.1.label(), Some("August 1, 2026"));
+    assert!(text_matches(focused.1.label(), "August 1, 2026"));
     assert_eq!(
         outer.with(|list| list.scroll_controller().child_position()),
         before,
@@ -239,13 +239,15 @@ fn check_nested_scroll(samples: u32) {
     assert!(FocusManager::current().request_move_focus(FocusDirection::Next));
     renderer.render_frames(12);
     let accessibility = renderer.accessibility_snapshot().expect("tree");
-    assert_eq!(
-        accessibility
-            .nodes
-            .iter()
-            .find(|(id, _)| *id == accessibility.focus)
-            .and_then(|(_, node)| node.label()),
-        Some("After calendar"),
+    assert!(
+        text_matches(
+            accessibility
+                .nodes
+                .iter()
+                .find(|(id, _)| *id == accessibility.focus)
+                .and_then(|(_, node)| node.label()),
+            "After calendar"
+        ),
         "Tab navigation leaves the calendar after its single date stop"
     );
 }
@@ -294,7 +296,7 @@ fn bounds(renderer: &HeadlessRenderer, label: &str) -> Rect {
         .expect("tree")
         .nodes
         .into_iter()
-        .find(|(_, node)| node.label() == Some(label) && node.role() != Role::Label)
+        .find(|(_, node)| text_matches(node.label(), label) && node.role() != Role::Label)
         .unwrap_or_else(|| panic!("missing {label}"))
         .1
         .bounds()
@@ -330,7 +332,7 @@ fn input_bounds(renderer: &HeadlessRenderer) -> Vec<Rect> {
     let input = |label| {
         nodes
             .iter()
-            .find(|(_, node)| node.role() == Role::TextInput && node.label() == Some(label))
+            .find(|(_, node)| node.role() == Role::TextInput && text_matches(node.label(), label))
             .unwrap_or_else(|| panic!("missing named input {label}"))
             .1
             .bounds()
@@ -381,7 +383,7 @@ fn check_range(samples: u32) {
         .expect("tree")
         .nodes
         .into_iter()
-        .find(|(_, node)| node.role() == Role::Label && node.label() == Some("July 2026"))
+        .find(|(_, node)| node.role() == Role::Label && text_matches(node.label(), "July 2026"))
         .expect("month heading")
         .1
         .bounds()
@@ -399,7 +401,7 @@ fn check_range(samples: u32) {
         .expect("tree")
         .nodes
         .into_iter()
-        .filter(|(_, node)| node.role() == Role::Label && node.label() == Some("S"))
+        .filter(|(_, node)| node.role() == Role::Label && text_matches(node.label(), "S"))
         .map(|(_, node)| node.bounds().expect("weekday bounds"))
         .collect::<Vec<_>>();
     assert_eq!(weekdays.len(), 2);
@@ -455,7 +457,7 @@ fn check_range(samples: u32) {
         .expect("tree")
         .nodes
         .into_iter()
-        .find(|(_, node)| node.label() == Some("July 13, 2026") && node.role() != Role::Label)
+        .find(|(_, node)| text_matches(node.label(), "July 13, 2026") && node.role() != Role::Label)
         .unwrap_or_else(|| {
             panic!(
                 "missing July date; displayed {:?}; labels {labels:?}",
@@ -491,7 +493,7 @@ fn check_range(samples: u32) {
         .iter()
         .find(|(id, _)| *id == accessibility.focus)
         .expect("focused unavailable date");
-    assert_eq!(focused.1.label(), Some("July 13, 2026"));
+    assert!(text_matches(focused.1.label(), "July 13, 2026"));
     assert!(focused.1.is_disabled());
     let pixels = renderer.read_pixels().expect("focused pixels");
     let offset =
@@ -713,7 +715,7 @@ fn gpu_range_input_uses_modal_header_while_calendar_keeps_compact_header() {
             .unwrap()
             .nodes
             .into_iter()
-            .find(|(_, node)| node.label() == Some(label) && node.bounds().is_some())
+            .find(|(_, node)| text_matches(node.label(), label) && node.bounds().is_some())
             .unwrap_or_else(|| panic!("missing {label}"))
             .1
             .bounds()

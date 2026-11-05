@@ -321,7 +321,7 @@ mod tests {
             let bounds = tree
                 .nodes
                 .iter()
-                .find(|(_, node)| node.role() == Role::Tab && node.label() == Some("Specs"))
+                .find(|(_, node)| node.role() == Role::Tab && crate::has_label(&node, "Specs"))
                 .unwrap()
                 .1
                 .bounds()
@@ -504,7 +504,7 @@ mod tests {
         let target_node = tree
             .nodes
             .iter()
-            .find(|(_, node)| node.label() == Some(label) && node.role() == Role::Tab)
+            .find(|(_, node)| crate::has_label(&node, label) && node.role() == Role::Tab)
             .unwrap_or_else(|| panic!("missing native tab {label}: {tree:#?}"));
         assert!(
             target_node.1.supports_action(action),
@@ -569,7 +569,7 @@ mod tests {
                 .iter()
                 .find(|(_, node)| {
                     node.role() == Role::Tab
-                        && node.label() == Some(I18N.text(ARTICLE_TAB_TITLES[initial]).as_str())
+                        && crate::has_label(&node, I18N.text(ARTICLE_TAB_TITLES[initial]).as_str())
                 })
                 .unwrap()
                 .1
@@ -647,7 +647,7 @@ mod tests {
             for (_, tab) in tabs {
                 assert_eq!(
                     tab.is_selected(),
-                    Some(tab.label() == Some("Accessibility"))
+                    Some(crate::has_label(&tab, "Accessibility"))
                 );
             }
             output.get().unwrap().1.set("ui-overview");

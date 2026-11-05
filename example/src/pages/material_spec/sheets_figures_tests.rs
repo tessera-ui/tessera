@@ -1,9 +1,3 @@
-//! Native sheet context figure interaction regressions.
-//!
-//! ## Usage
-//!
-//! Verify playback actions, photo updates and retained filter selections.
-
 use std::time::Duration;
 
 use tessera_components::theme::material_theme;
@@ -63,7 +57,7 @@ fn node(renderer: &HeadlessRenderer, label: &str, role: Role) -> Node {
         .inspect_accessibility()
         .expect("accessibility tree");
     snapshot
-        .find(label, role)
+        .find(&crate::res::I18N.text(label), role)
         .unwrap_or_else(|| panic!("missing {label} {role:?}"))
         .1
         .clone()
@@ -88,7 +82,7 @@ fn labelled(renderer: &HeadlessRenderer, label: &str) -> bool {
         .unwrap()
         .nodes
         .iter()
-        .any(|(_, node)| node.label() == Some(label))
+        .any(|(_, node)| crate::has_label(&node, label))
 }
 
 #[test]
@@ -179,7 +173,7 @@ fn filters_context_keeps_checkbox_selections_when_closed_and_reopened() {
             .iter()
             .all(|(_, node)| {
                 node.role() != Role::CheckBox
-                    && !(node.role() == Role::Button && node.label() == Some("Close filters"))
+                    && !(node.role() == Role::Button && crate::has_label(&node, "Close filters"))
             })
     );
     click(&mut renderer, "Open filters", Role::Button);

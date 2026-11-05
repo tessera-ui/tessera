@@ -1,9 +1,3 @@
-//! Interactive token-set selection and native preview regressions.
-//!
-//! ## Usage
-//!
-//! Keep token menus connected to readable values and real icon-button actions.
-
 use tessera_components::{column::column, theme::material_theme};
 use tessera_ui::{
     HeadlessConfig, HeadlessRenderer, MOUSE_POINTER_ID, PressKeyEventType, PxPosition,
@@ -24,7 +18,7 @@ fn node(renderer: &HeadlessRenderer, role: Role, label: &str) -> Node {
         .unwrap()
         .nodes
         .into_iter()
-        .find(|(_, node)| node.role() == role && node.label() == Some(label))
+        .find(|(_, node)| node.role() == role && crate::has_label(&node, label))
         .unwrap_or_else(|| panic!("Missing {role:?}: {label}"))
         .1
 }

@@ -315,7 +315,7 @@ mod tests {
         let node = snapshot
             .nodes
             .iter()
-            .find(|(_, node)| node.label() == Some(label))
+            .find(|(_, node)| crate::has_label(&node, label))
             .unwrap_or_else(|| panic!("missing {label}"));
         let bounds = node.1.bounds().unwrap();
         let position = PxPosition::from_f32_xy(
@@ -348,15 +348,19 @@ mod tests {
             snapshot
                 .nodes
                 .iter()
-                .any(|(_, node)| node.label() == Some("AK")
+                .any(|(_, node)| crate::has_label(&node, "AK")
                     && node.role() == Role::MenuItemRadio
                     && node.toggled() == Some(Toggled::True))
         );
         click(&mut renderer, "AZ");
         let snapshot = renderer.accessibility_snapshot().unwrap();
-        assert!(snapshot.nodes.iter().any(
-            |(_, node)| node.label() == Some("State: AZ") && node.is_expanded() == Some(false)
-        ));
+        assert!(
+            snapshot
+                .nodes
+                .iter()
+                .any(|(_, node)| crate::has_label(&node, "State: AZ")
+                    && node.is_expanded() == Some(false))
+        );
         assert!(
             !snapshot
                 .nodes
@@ -369,7 +373,7 @@ mod tests {
             snapshot
                 .nodes
                 .iter()
-                .any(|(_, node)| node.label() == Some("AZ")
+                .any(|(_, node)| crate::has_label(&node, "AZ")
                     && node.role() == Role::MenuItemRadio
                     && node.toggled() == Some(Toggled::True))
         );
@@ -377,7 +381,7 @@ mod tests {
             snapshot
                 .nodes
                 .iter()
-                .any(|(_, node)| node.label() == Some("AK")
+                .any(|(_, node)| crate::has_label(&node, "AK")
                     && node.role() == Role::MenuItemRadio
                     && node.toggled() == Some(Toggled::False))
         );

@@ -1,9 +1,3 @@
-//! Text field showcase input and validation regressions.
-//!
-//! ## Usage
-//!
-//! Verify editing, validation and anatomy in real showcase fields.
-
 use std::time::Duration;
 
 use tessera_components::scrollable::ScrollableController;
@@ -109,7 +103,7 @@ fn node(renderer: &HeadlessRenderer, label: &str, role: Role) -> (NodeId, Node) 
         .inspect_accessibility()
         .expect("accessibility tree");
     let (id, node) = snapshot
-        .find(label, role)
+        .find(&crate::res::I18N.text(label), role)
         .unwrap_or_else(|| panic!("missing {label} {role:?}"));
     (id, node.clone())
 }
@@ -118,7 +112,7 @@ fn group_descendants(renderer: &HeadlessRenderer, label: &str) -> Vec<(NodeId, N
         .inspect_accessibility()
         .expect("accessibility tree");
     let root = snapshot
-        .find(label, Role::Group)
+        .find(&crate::res::I18N.text(label), Role::Group)
         .expect("text field group")
         .0;
     snapshot
@@ -152,7 +146,7 @@ fn sample_node(renderer: &HeadlessRenderer, group: &str, role: Role) -> (NodeId,
     assert!(
         group_descendants(renderer, group)
             .iter()
-            .any(|(_, node)| { node.role() == Role::Label && node.label() == Some(label) }),
+            .any(|(_, node)| { node.role() == Role::Label && crate::has_label(&node, label) }),
         "the editor name must match visible label text in its own preview"
     );
     found
@@ -176,7 +170,7 @@ fn exists(renderer: &HeadlessRenderer, label: &str, role: Role) -> bool {
         .unwrap()
         .nodes
         .iter()
-        .any(|(_, node)| node.role() == role && node.label() == Some(label))
+        .any(|(_, node)| node.role() == role && crate::has_label(&node, label))
 }
 fn act(renderer: &mut HeadlessRenderer, label: &str, role: Role, action: Action) {
     act_node(renderer, node(renderer, label, role).0, action);
@@ -213,12 +207,12 @@ fn input_value(renderer: &HeadlessRenderer, label: &str) -> String {
 fn constrained_showcase_preserves_rapid_ime_clear_focus_and_state_restrictions() {
     for kind in [0, 14] {
         let mut renderer = renderer(kind);
-        assert_eq!(
+        assert!(crate::text_matches(
             sample_node(&renderer, "Regression field preview", Role::TextInput)
                 .1
                 .label(),
-            Some("Label")
-        );
+            "Label"
+        ));
         act(
             &mut renderer,
             "Clear Regression icon",
@@ -443,12 +437,12 @@ fn counter_overflow_and_password_visibility_keep_real_editor_values() {
         assert_eq!(input_value(&renderer, "Description"), value);
         node(&renderer, "Character count: 101 of 100", Role::Label);
         node(&renderer, "Use 100 characters or fewer", Role::Alert);
-        assert_eq!(
+        assert!(crate::text_matches(
             node(&renderer, "Description", Role::TextInput)
                 .1
                 .description(),
-            Some("Use 100 characters or fewer")
-        );
+            "Use 100 characters or fewer"
+        ));
         // The overflow value is one word, so a real double-click selects it.
         // Recorded intervals keep multi-click recognition independent of GPU
         // time.
@@ -482,12 +476,12 @@ fn counter_overflow_and_password_visibility_keep_real_editor_values() {
         assert_eq!(input_value(&renderer, "Description"), "Corrected");
         node(&renderer, "Character count: 9 of 100", Role::Label);
         node(&renderer, "Supporting text", Role::Label);
-        assert_eq!(
+        assert!(crate::text_matches(
             node(&renderer, "Description", Role::TextInput)
                 .1
                 .description(),
-            Some("Supporting text")
-        );
+            "Supporting text"
+        ));
         assert!(!exists(
             &renderer,
             "Use 100 characters or fewer",
@@ -531,10 +525,10 @@ fn counter_overflow_and_password_visibility_keep_real_editor_values() {
         assert_eq!(input_value(&renderer, "Username"), "Sam");
         let password = node(&renderer, "Password", Role::PasswordInput).1;
         assert_eq!(password.value(), None);
-        assert_eq!(
+        assert!(crate::text_matches(
             password.description(),
-            Some("Include an uppercase letter, a lowercase letter, and a numeric character")
-        );
+            "Include an uppercase letter, a lowercase letter, and a numeric character"
+        ));
         node(&renderer, "Use at least 6 characters", Role::Alert);
         node(
             &renderer,
@@ -603,7 +597,7 @@ fn accessibility_labeling_diagrams_keep_native_actions_values_and_live_callouts(
     let initial = renderer.inspect_accessibility().expect("labeling diagrams");
     let (email_id, email) = initial
         .reading_order()
-        .find(|(_, node)| node.role() == Role::TextInput && node.label() == Some("Email"))
+        .find(|(_, node)| node.role() == Role::TextInput && crate::has_label(&node, "Email"))
         .expect("first Email labeling example");
     let email = email.bounds().unwrap();
     let email_callout = node(&renderer, "UI text (“Email”)", Role::Label)
@@ -614,7 +608,7 @@ fn accessibility_labeling_diagrams_keep_native_actions_values_and_live_callouts(
     assert!(email_callout.y0 < email.y1 && email_callout.y1 > email.y0);
     let phone = initial
         .reading_order()
-        .find(|(_, node)| node.role() == Role::TextInput && node.label() == Some("Phone number"))
+        .find(|(_, node)| node.role() == Role::TextInput && crate::has_label(&node, "Phone number"))
         .expect("first Phone number labeling example")
         .1
         .bounds()
@@ -719,8 +713,8 @@ fn accessibility_labeling_diagrams_keep_native_actions_values_and_live_callouts(
         .into_iter()
         .find(|(_, node)| {
             node.role() == Role::TextInput
-                && node.label() == Some("Email")
-                && node.description() == Some("Please use the company email address")
+                && crate::has_label(&node, "Email")
+                && crate::text_matches(node.description(), "Please use the company email address")
         })
         .expect("supporting text must describe its own Email editor")
         .1;
@@ -837,10 +831,10 @@ fn outlined_anatomy_uses_one_reference_artboard_and_retains_input_on_resize() {
             "Anatomy capsules retain their open interior"
         );
         let input = format!("{prefix}Outlined populated anatomy field preview");
-        assert_eq!(
+        assert!(crate::text_matches(
             sample_node(&renderer, &input, Role::TextInput).1.label(),
-            Some("Label text")
-        );
+            "Label text"
+        ));
         assert_eq!(group_input_value(&renderer, &input), "Input text");
         pointer_click(
             &mut renderer,
@@ -1056,7 +1050,7 @@ fn field_color_panels_use_their_own_theme_surface_and_readable_supporting_text()
         let supports = group_descendants(&renderer, &panel_label)
             .into_iter()
             .filter(|(_, node)| {
-                node.role() == Role::Label && node.label() == Some("Supporting text")
+                node.role() == Role::Label && crate::has_label(&node, "Supporting text")
             })
             .map(|(_, node)| node.bounds().unwrap())
             .collect::<Vec<_>>();
@@ -1136,7 +1130,7 @@ fn measurement_figures_keep_native_field_icon_support_and_counter_geometry() {
                     assert!(
                         snapshot.nodes.iter().any(|(_, annotation)| {
                             annotation.role() == Role::Note
-                                && annotation.label() == Some(label)
+                                && crate::has_label(&annotation, label)
                                 && annotation.bounds().is_some_and(|bounds| {
                                     (bounds.x0 - x).abs() < 0.01 && (bounds.y0 - y).abs() < 0.01
                                 })
@@ -1349,7 +1343,7 @@ fn translated_measurement_figures_retain_callouts_and_scale_without_reflow_after
             assert!(
                 snapshot.nodes.iter().any(|(_, annotation)| {
                     annotation.role() == Role::Note
-                        && annotation.label() == Some("Dimension 24")
+                        && crate::has_label(&annotation, "Dimension 24")
                         && annotation.bounds().is_some_and(|bounds| {
                             (bounds.x0 - icon.x0 - 2.5).abs() < 0.01
                                 && (bounds.y0 - field.y0 + 38.75).abs() < 0.01

@@ -1,14 +1,9 @@
-//! Published time-picker controls and assistive-technology actions.
-//!
-//! ## Usage
-//!
-//! Verify clock values, focus, periods, and manual-entry transitions.
-
 use tessera_ui::{
     FocusDirection, FocusManager, HeadlessConfig, HeadlessRenderer, MOUSE_POINTER_ID, Modifier,
     PressKeyEventType, PxPosition, State,
     accesskit::{Action, ActionRequest, Node, NodeId, Role, Toggled, TreeId},
     remember, tessera,
+    testing::{text_matches, visible_text},
     winit::event::Ime,
 };
 
@@ -76,7 +71,7 @@ fn control(renderer: &HeadlessRenderer, label: &str, role: Role) -> (NodeId, Nod
         .expect("tree")
         .nodes
         .into_iter()
-        .find(|(_, node)| node.label() == Some(label) && node.role() == role)
+        .find(|(_, node)| text_matches(node.label(), label) && node.role() == role)
         .unwrap_or_else(|| panic!("missing {label} ({role:?})"))
 }
 
@@ -145,7 +140,11 @@ fn check_accessibility(samples: u32) {
     let slots: Vec<_> = tree
         .nodes
         .iter()
-        .filter(|(_, node)| node.label().is_some_and(|label| label.starts_with("Hour ")))
+        .filter(|(_, node)| {
+            node.label()
+                .map(visible_text)
+                .is_some_and(|label| label.starts_with("Hour "))
+        })
         .collect();
     assert_eq!(slots.len(), 12);
     assert_eq!(
@@ -187,7 +186,7 @@ fn check_accessibility(samples: u32) {
     for label in ["Minute", "PM", "Hour 2 of 12"] {
         FocusManager::current().request_move_focus(FocusDirection::Next);
         renderer.render_frames(8);
-        assert_eq!(focused_label(&renderer).as_deref(), Some(label));
+        assert!(text_matches(focused_label(&renderer).as_deref(), label));
         if label == "PM" {
             assert!(renderer.read_pixels().expect("period focus pixels") != initial);
         }
@@ -195,7 +194,7 @@ fn check_accessibility(samples: u32) {
     for label in ["PM", "Minute"] {
         FocusManager::current().request_move_focus(FocusDirection::Previous);
         renderer.render_frames(8);
-        assert_eq!(focused_label(&renderer).as_deref(), Some(label));
+        assert!(text_matches(focused_label(&renderer).as_deref(), label));
     }
     assert_eq!(state.with(TimePickerState::hour), 14);
     FocusManager::current().clear_focus(true);
@@ -204,17 +203,23 @@ fn check_accessibility(samples: u32) {
     let third = control(&renderer, "Hour 3 of 12", Role::Button).0;
     action(&mut renderer, third, Action::Focus);
     assert_eq!(state.with(TimePickerState::hour), 14);
-    assert_eq!(focused_label(&renderer).as_deref(), Some("Hour 3 of 12"));
+    assert!(text_matches(
+        focused_label(&renderer).as_deref(),
+        "Hour 3 of 12"
+    ));
     assert!(renderer.read_pixels().expect("focus pixels") != initial);
     FocusManager::current().request_move_focus(FocusDirection::Next);
     renderer.render_frames(8);
-    assert_eq!(
+    assert!(text_matches(
         focused_label(&renderer).as_deref(),
-        Some("Switch to time input")
-    );
+        "Switch to time input"
+    ));
     FocusManager::current().request_move_focus(FocusDirection::Previous);
     renderer.render_frames(8);
-    assert_eq!(focused_label(&renderer).as_deref(), Some("Hour 2 of 12"));
+    assert!(text_matches(
+        focused_label(&renderer).as_deref(),
+        "Hour 2 of 12"
+    ));
     FocusManager::current().clear_focus(true);
     renderer.render_frames(8);
     assert!(renderer.read_pixels().expect("restored focus pixels") == initial);
@@ -253,7 +258,11 @@ fn check_accessibility(samples: u32) {
         .expect("tree")
         .nodes
         .into_iter()
-        .filter(|(_, node)| node.label().is_some_and(|label| label.starts_with("Hour ")))
+        .filter(|(_, node)| {
+            node.label()
+                .map(visible_text)
+                .is_some_and(|label| label.starts_with("Hour "))
+        })
         .count();
     assert_eq!(slots, 24);
     let last = control(&renderer, "Hour 23 of 24", Role::Button).0;
@@ -261,7 +270,10 @@ fn check_accessibility(samples: u32) {
     assert_eq!(state.with(TimePickerState::hour), 23);
     state.with_mut(|state| state.set_is_24_hour(false));
     renderer.render_frames(8);
-    assert_eq!(focused_label(&renderer).as_deref(), Some("Hour 11 of 12"));
+    assert!(text_matches(
+        focused_label(&renderer).as_deref(),
+        "Hour 11 of 12"
+    ));
     assert_eq!(
         control(&renderer, "Hour 11 of 12", Role::Button)
             .1
@@ -270,13 +282,16 @@ fn check_accessibility(samples: u32) {
     );
     FocusManager::current().request_move_focus(FocusDirection::Next);
     renderer.render_frames(8);
-    assert_eq!(
+    assert!(text_matches(
         focused_label(&renderer).as_deref(),
-        Some("Switch to time input")
-    );
+        "Switch to time input"
+    ));
     FocusManager::current().request_move_focus(FocusDirection::Previous);
     renderer.render_frames(8);
-    assert_eq!(focused_label(&renderer).as_deref(), Some("Hour 11 of 12"));
+    assert!(text_matches(
+        focused_label(&renderer).as_deref(),
+        "Hour 11 of 12"
+    ));
     state.with_mut(|state| state.set_is_24_hour(true));
     renderer.render_frames(8);
     let midnight = control(&renderer, "Hour 0 of 24", Role::Button).0;
@@ -337,7 +352,10 @@ fn check_accessibility(samples: u32) {
         8,
         "hour release must not also activate a minute slot"
     );
-    assert_eq!(focused_label(&renderer).as_deref(), Some("Minute 10 of 60"));
+    assert!(text_matches(
+        focused_label(&renderer).as_deref(),
+        "Minute 10 of 60"
+    ));
     tap(&mut renderer, point);
     assert_eq!(state.with(TimePickerState::minute), 14);
     assert_eq!(
@@ -395,7 +413,7 @@ fn check_accessibility(samples: u32) {
     renderer.resize(1000, 1000);
     renderer.render_frames(8);
     assert_eq!(control(&renderer, "PM", Role::RadioButton).0, pm);
-    assert_eq!(focused_label(&renderer).as_deref(), Some("PM"));
+    assert!(text_matches(focused_label(&renderer).as_deref(), "PM"));
     let bounds = control(&renderer, "PM", Role::RadioButton)
         .1
         .bounds()
@@ -441,7 +459,7 @@ fn check_accessibility(samples: u32) {
     renderer.resize(600, 1000);
     renderer.render_frames(8);
     assert_eq!(control(&renderer, "PM", Role::RadioButton).0, pm);
-    assert_eq!(focused_label(&renderer).as_deref(), Some("PM"));
+    assert!(text_matches(focused_label(&renderer).as_deref(), "PM"));
     let bounds = control(&renderer, "PM", Role::RadioButton)
         .1
         .bounds()

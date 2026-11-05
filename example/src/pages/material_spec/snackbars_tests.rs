@@ -1,9 +1,3 @@
-//! Snackbar article queue and automatic dismissal regressions.
-//!
-//! ## Usage
-//!
-//! Verify consecutive notifications through the live article controls.
-
 use std::time::Duration;
 
 use tessera_ui::{
@@ -25,7 +19,7 @@ fn node(renderer: &HeadlessRenderer, label: &str, role: Role) -> (NodeId, Node) 
         .inspect_accessibility()
         .expect("accessibility tree");
     let (id, node) = snapshot
-        .find(label, role)
+        .find(&crate::res::I18N.text(label), role)
         .unwrap_or_else(|| panic!("missing {label} {role:?}"));
     (id, node.clone())
 }
@@ -48,7 +42,7 @@ fn assert_message(renderer: &HeadlessRenderer, message: &str) {
         .filter(|(_, node)| node.role() == Role::Status)
         .collect();
     assert_eq!(statuses.len(), 1, "queued notifications must never stack");
-    assert_eq!(statuses[0].1.label(), Some(message));
+    assert!(crate::text_matches(statuses[0].1.label(), message));
     assert!(statuses[0].1.bounds().unwrap().height() > 0.0);
 }
 

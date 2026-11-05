@@ -1,9 +1,3 @@
-//! Dialog article retained draft and discard confirmation regressions.
-//!
-//! ## Usage
-//!
-//! Verify real event edits survive cancellation and reset after completion.
-
 use std::time::Duration;
 
 use tessera_components::theme::material_theme;
@@ -26,7 +20,7 @@ fn node(renderer: &HeadlessRenderer, label: &str, role: Role) -> (NodeId, Node) 
         .inspect_accessibility()
         .expect("accessibility tree");
     let (id, node) = snapshot
-        .find(label, role)
+        .find(&crate::res::I18N.text(label), role)
         .unwrap_or_else(|| panic!("missing {label} {role:?}"));
     (id, node.clone())
 }
@@ -37,7 +31,7 @@ fn exists(renderer: &HeadlessRenderer, label: &str, role: Role) -> bool {
         .unwrap()
         .nodes
         .iter()
-        .any(|(_, node)| node.role() == role && node.label() == Some(label))
+        .any(|(_, node)| node.role() == role && crate::has_label(&node, label))
 }
 
 fn action(renderer: &mut HeadlessRenderer, label: &str, role: Role, action: Action) {

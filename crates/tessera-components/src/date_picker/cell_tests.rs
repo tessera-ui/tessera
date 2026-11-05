@@ -1,12 +1,7 @@
-//! Authored calendar cell interaction regressions.
-//!
-//! ## Usage
-//!
-//! Verify real dates, selection, focus, and disabled calendar choices.
-
 use tessera_ui::{
     HeadlessConfig, HeadlessRenderer, MOUSE_POINTER_ID, PressKeyEventType, PxPosition,
     accesskit::{Action, ActionRequest, Node, NodeId, TreeId},
+    testing::text_matches,
 };
 
 use crate::{column::column, row::row, theme::material_theme};
@@ -88,7 +83,7 @@ fn node(renderer: &HeadlessRenderer, label: &str) -> (NodeId, Node) {
         .nodes
         .into_iter()
         .find(|(_, node)| {
-            node.label() == Some(label) && node.role() == tessera_ui::accesskit::Role::Button
+            text_matches(node.label(), label) && node.role() == tessera_ui::accesskit::Role::Button
         })
         .unwrap_or_else(|| panic!("missing actual calendar cell {label}"))
 }
@@ -144,7 +139,7 @@ fn authored_cells_keep_actual_dates_callbacks_focus_and_disabled_state() {
             let captions: Vec<_> = published
                 .nodes
                 .iter()
-                .filter(|(_, node)| node.label() == Some("00"))
+                .filter(|(_, node)| text_matches(node.label(), "00"))
                 .map(|(id, node)| {
                     let parents: Vec<_> = published
                         .nodes
@@ -159,7 +154,7 @@ fn authored_cells_keep_actual_dates_callbacks_focus_and_disabled_state() {
                 published
                     .nodes
                     .iter()
-                    .filter(|(_, node)| node.label() == Some("00"))
+                    .filter(|(_, node)| text_matches(node.label(), "00"))
                     .all(|(_, node)| node.is_hidden()
                         && !node.supports_action(Action::Click)
                         && !node.supports_action(Action::Focus)),

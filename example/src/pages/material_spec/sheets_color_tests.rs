@@ -1,9 +1,3 @@
-//! Combined light and dark native sheet color diagrams.
-//!
-//! ## Usage
-//!
-//! Verify fractional panel seams, semantic color roles and real icon callbacks.
-
 use std::time::Duration;
 
 use tessera_components::{column::column, scrollable::ScrollableController};
@@ -197,7 +191,7 @@ fn node(renderer: &HeadlessRenderer, label: &str, role: Role) -> Node {
         .inspect_accessibility()
         .expect("accessibility tree");
     snapshot
-        .find(label, role)
+        .find(&crate::res::I18N.text(label), role)
         .unwrap_or_else(|| panic!("missing {label} {role:?}"))
         .1
         .clone()
@@ -454,7 +448,7 @@ fn sheet_color_pairs_keep_fractional_seams_roles_and_callbacks_when_scrolled_and
                     renderer.pointer_release(MOUSE_POINTER_ID, point, PressKeyEventType::Left);
                     renderer.render_frames(4);
                     assert_eq!(
-                        observed.get().notice.unwrap().get(),
+                        I18N.text(observed.get().notice.unwrap().get()),
                         "Sheet close action selected"
                     );
                 }

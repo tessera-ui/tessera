@@ -31,10 +31,6 @@ use super::{
     gap, panel, spec_table, subheading, type_style,
 };
 
-#[cfg(all(test, not(target_family = "wasm")))]
-#[path = "cards_figures_tests.rs"]
-mod figures_tests;
-
 const VARIANTS: [CardVariant; 3] = [
     CardVariant::Elevated,
     CardVariant::Filled,

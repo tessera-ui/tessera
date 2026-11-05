@@ -1,9 +1,3 @@
-//! Native controls rendered and operated through a fractional scale boundary.
-//!
-//! ## Usage
-//!
-//! Verify native control rendering and interaction after uniform scaling.
-
 use std::time::Duration;
 
 use tessera_ui::{
@@ -12,6 +6,7 @@ use tessera_ui::{
     accesskit::{Action, ActionRequest, Node, NodeId, Role, TreeId},
     modifier::ModifierCapabilityExt as _,
     remember, scaled_box, tessera,
+    testing::text_matches,
     winit::event::Ime,
 };
 
@@ -163,7 +158,7 @@ fn control(renderer: &HeadlessRenderer, label: &str, role: Role) -> (NodeId, Nod
         .unwrap()
         .nodes
         .into_iter()
-        .find(|(_, node)| node.role() == role && node.label() == Some(label))
+        .find(|(_, node)| node.role() == role && text_matches(node.label(), label))
         .unwrap_or_else(|| panic!("missing native {label} {role:?}"))
 }
 

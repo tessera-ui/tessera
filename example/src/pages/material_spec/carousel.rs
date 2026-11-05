@@ -2012,7 +2012,7 @@ mod tests {
             let item = tree
                 .nodes
                 .iter()
-                .find(|(_, node)| node.label() == Some("Open collection 1 of 6"))
+                .find(|(_, node)| crate::has_label(&node, "Open collection 1 of 6"))
                 .expect("first collection item");
             assert_eq!(item.1.is_disabled(), !enabled);
             let bounds = item.1.bounds().expect("visible first item");
@@ -2081,18 +2081,18 @@ mod tests {
         assert!(
             tree.nodes
                 .iter()
-                .any(|(_, node)| node.label() == Some("Dimension 16 start"))
+                .any(|(_, node)| crate::has_label(&node, "Dimension 16 start"))
         );
         assert!(
             !tree
                 .nodes
                 .iter()
-                .any(|(_, node)| node.label() == Some("Dimension 16 end"))
+                .any(|(_, node)| crate::has_label(&node, "Dimension 16 end"))
         );
         let target_node = tree
             .nodes
             .iter()
-            .find(|(_, node)| node.label() == Some("Inspect collection end"))
+            .find(|(_, node)| crate::has_label(&node, "Inspect collection end"))
             .unwrap()
             .0;
         assert!(renderer.dispatch_accessibility_action(ActionRequest {
@@ -2115,13 +2115,13 @@ mod tests {
         assert!(
             tree.nodes
                 .iter()
-                .any(|(_, node)| node.label() == Some("Dimension 16 end"))
+                .any(|(_, node)| crate::has_label(&node, "Dimension 16 end"))
         );
         assert!(
             !tree
                 .nodes
                 .iter()
-                .any(|(_, node)| node.label() == Some("Dimension 16 start"))
+                .any(|(_, node)| crate::has_label(&node, "Dimension 16 start"))
         );
     }
 
@@ -2185,11 +2185,13 @@ mod tests {
             let snapshot = renderer
                 .accessibility_snapshot()
                 .expect("published carousel");
-            let label = format!("{} collections", name(variant));
+            let label = format!("{} collections", I18N.text(name(variant)));
             let viewport = snapshot
                 .nodes
                 .iter()
-                .find(|(_, node)| node.role() == Role::List && node.label() == Some(label.as_str()))
+                .find(|(_, node)| {
+                    node.role() == Role::List && crate::has_label(&node, label.as_str())
+                })
                 .unwrap_or_else(|| {
                     panic!(
                         "missing {label}: {:?}",
@@ -2282,8 +2284,10 @@ mod tests {
                 snapshot.nodes.iter().any(|(_, node)| matches!(
                     node.role(),
                     Role::Button | Role::ListItem
-                ) && node.label()
-                    == Some("Open collection 1 of 6")),
+                ) && crate::has_label(
+                    &node,
+                    "Open collection 1 of 6"
+                )),
                 "{} mounts real interactive content",
                 name(variant)
             );
@@ -2310,7 +2314,7 @@ mod tests {
     )> {
         tree.nodes
             .iter()
-            .find(|(_, node)| node.label() == Some(label))
+            .find(|(_, node)| crate::has_label(&node, label))
             .map(|(id, node)| (*id, node))
     }
 
@@ -2364,13 +2368,13 @@ mod tests {
             tree.nodes
                 .iter()
                 .any(|(_, node)| node.role() == Role::Dialog
-                    && node.label() == Some("All carousel collections")),
+                    && crate::has_label(&node, "All carousel collections")),
             "the arrow opens the all-items page"
         );
         assert!(
             tree.nodes
                 .iter()
-                .filter(|(_, node)| node.label() == Some("Recent collections"))
+                .filter(|(_, node)| crate::has_label(&node, "Recent collections"))
                 .count()
                 >= 1,
             "the all-items page repeats the carousel header"

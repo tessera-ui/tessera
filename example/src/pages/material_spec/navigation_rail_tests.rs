@@ -1,9 +1,3 @@
-//! Navigation rail reference color and native rendering regressions.
-//!
-//! ## Usage
-//!
-//! Verify unmodified theme colors separately from reference role mappings.
-
 use std::time::Duration;
 
 use tessera_ui::{
@@ -84,7 +78,7 @@ fn rgba(pixels: &[u8], width: usize, x: usize, y: usize) -> [u8; 4] {
 fn group(nodes: &[(NodeId, Node)], label: &str) -> Rect {
     nodes
         .iter()
-        .find(|(_, node)| node.role() == Role::Group && node.label() == Some(label))
+        .find(|(_, node)| node.role() == Role::Group && crate::has_label(&node, label))
         .unwrap_or_else(|| panic!("missing group {label}"))
         .1
         .bounds()

@@ -1,9 +1,3 @@
-//! Native switch anatomy and configuration regressions.
-//!
-//! ## Usage
-//!
-//! Preserve responsive control placement, annotations and independent toggles.
-
 use tessera_ui::{
     HeadlessConfig, HeadlessRenderer, MOUSE_POINTER_ID, PressKeyEventType, PxPosition,
     accesskit::{Node, Role, Toggled},
@@ -35,7 +29,7 @@ fn node(renderer: &HeadlessRenderer, label: &str, role: Role) -> Node {
         .inspect_accessibility()
         .expect("accessibility tree");
     snapshot
-        .find(label, role)
+        .find(&crate::res::I18N.text(label), role)
         .unwrap_or_else(|| panic!("missing {label} {role:?}"))
         .1
         .clone()

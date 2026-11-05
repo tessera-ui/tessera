@@ -1,9 +1,3 @@
-//! Live corner-radius table layout and horizontal-scroll regressions.
-//!
-//! ## Usage
-//!
-//! Preserve accessible cell geometry and readable text across viewport changes.
-
 use std::{collections::BTreeMap, time::Duration};
 
 use tessera_components::theme::material_theme;
@@ -31,7 +25,8 @@ fn table(nodes: &BTreeMap<NodeId, Node>) -> &Node {
     nodes
         .values()
         .find(|node| {
-            node.role() == Role::Table && node.label() == Some("Icon button corner radius values")
+            node.role() == Role::Table
+                && crate::has_label(&node, "Icon button corner radius values")
         })
         .expect("Native radius table")
 }
@@ -39,7 +34,7 @@ fn table(nodes: &BTreeMap<NodeId, Node>) -> &Node {
 fn header<'a>(nodes: &'a BTreeMap<NodeId, Node>, label: &str) -> &'a Node {
     nodes
         .values()
-        .find(|node| node.role() == Role::ColumnHeader && node.label() == Some(label))
+        .find(|node| node.role() == Role::ColumnHeader && crate::has_label(&node, label))
         .expect("Native radius column header")
 }
 

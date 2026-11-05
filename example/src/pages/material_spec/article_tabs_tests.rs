@@ -80,7 +80,7 @@ fn tab(renderer: &HeadlessRenderer, title: &str) -> (NodeId, Node) {
         .nodes
         .into_iter()
         .find(|(_, node)| {
-            node.role() == Role::Tab && node.label() == Some(I18N.text(title).as_str())
+            node.role() == Role::Tab && crate::has_label(&node, I18N.text(title).as_str())
         })
         .expect("native article tab")
 }
@@ -521,7 +521,7 @@ fn narrow_article_arrows_select_adjacent_pages_and_reveal_the_selected_tab() {
             let button = tree
                 .nodes
                 .iter()
-                .find(|(_, node)| node.role() == Role::Button && node.label() == Some(label))
+                .find(|(_, node)| node.role() == Role::Button && crate::has_label(&node, label))
                 .expect("adjacent page control");
             assert!(renderer.dispatch_accessibility_action(ActionRequest {
                 target_node: button.0,
@@ -554,9 +554,11 @@ fn narrow_article_arrows_select_adjacent_pages_and_reveal_the_selected_tab() {
             };
             if let Some(absent) = absent {
                 assert!(
-                    !tree.nodes.iter().any(
-                        |(_, node)| node.role() == Role::Button && node.label() == Some(absent)
-                    ),
+                    !tree
+                        .nodes
+                        .iter()
+                        .any(|(_, node)| node.role() == Role::Button
+                            && crate::has_label(&node, absent)),
                     "boundary control must be absent"
                 );
             }

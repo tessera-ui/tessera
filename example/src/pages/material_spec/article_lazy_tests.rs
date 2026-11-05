@@ -1,9 +1,3 @@
-//! Actual article route lazy navigation regressions.
-//!
-//! ## Usage
-//!
-//! Keep cold section navigation, wheel ordering and native example state.
-
 use tessera_ui::{
     FocusDirection, FocusManager, HeadlessConfig, HeadlessRenderer, MOUSE_POINTER_ID,
     PressKeyEventType, PxPosition,
@@ -20,7 +14,7 @@ fn find(
         .expect("published accessibility")
         .reading_order()
         .find(|(_, node)| {
-            node.label() == Some(label)
+            crate::has_label(&node, label)
                 && role.is_none_or(|role| node.role() == role)
                 && !node.is_hidden()
                 && node.bounds().is_some()
@@ -195,7 +189,7 @@ fn text_field_route_compacts_navigation_and_reveals_retained_outlined_callouts_a
         assert!(
             snapshot.nodes.iter().any(|(_, node)| {
                 node.role() == Role::Note
-                    && node.label() == Some(label.as_str())
+                    && crate::has_label(&node, label.as_str())
                     && node.bounds().is_some_and(|bounds| {
                         bounds.x0 >= panel.x0
                             && bounds.x1 <= panel.x1
@@ -411,7 +405,10 @@ fn real_buttons_route_retains_visited_native_state_reveals_cold_sections_and_pre
     click(&mut renderer, "Play", Some(Role::Button), -600.0, None);
     let selected = find(&renderer, "Play", Some(Role::Button)).unwrap();
     assert_eq!(selected.1.toggled(), Some(Toggled::True));
-    assert_eq!(selected.1.description(), Some("Activations: 1"));
+    assert!(crate::text_matches(
+        selected.1.description(),
+        "Activations: 1"
+    ));
     let selected_id = selected.0;
     click(&mut renderer, "Measurements", Some(Role::Link), 800.0, None);
     let heading = find(&renderer, "Measurements", Some(Role::Heading))
@@ -476,7 +473,7 @@ fn real_buttons_route_retains_visited_native_state_reveals_cold_sections_and_pre
     let label = semantics
         .reading_order()
         .find(|(_, node)| {
-            node.label() == Some("Label")
+            crate::has_label(&node, "Label")
                 && node.role() == Role::Button
                 && node.bounds().is_some_and(|bounds| {
                     bounds.y0 >= heading.y1
@@ -499,7 +496,10 @@ fn real_buttons_route_retains_visited_native_state_reveals_cold_sections_and_pre
         "visited composition must retain the original actual control identity"
     );
     assert_eq!(restored.1.toggled(), Some(Toggled::True));
-    assert_eq!(restored.1.description(), Some("Activations: 1"));
+    assert!(crate::text_matches(
+        restored.1.description(),
+        "Activations: 1"
+    ));
     assert!(renderer.dispatch_accessibility_action(ActionRequest {
         action: Action::Focus,
         target_tree: TreeId::ROOT,
@@ -540,7 +540,10 @@ fn real_buttons_route_retains_visited_native_state_reveals_cold_sections_and_pre
         selected_id
     );
     assert_eq!(selected.1.toggled(), Some(Toggled::True));
-    assert_eq!(selected.1.description(), Some("Activations: 1"));
+    assert!(crate::text_matches(
+        selected.1.description(),
+        "Activations: 1"
+    ));
     let bounds = selected.1.bounds().unwrap();
     assert!(
         bounds.y0 >= 64.0 && bounds.y1 <= 871.0,
@@ -905,7 +908,7 @@ fn required_field_remains_pointer_editable_after_article_tab_and_scrolled_reveal
     renderer.pointer_press(MOUSE_POINTER_ID, point, PressKeyEventType::Left);
     renderer.pointer_release(MOUSE_POINTER_ID, point, PressKeyEventType::Left);
     renderer.render_frames(3);
-    assert_eq!(field.description(), Some("Required"));
+    assert!(crate::text_matches(field.description(), "Required"));
     assert_eq!(
         renderer.accessibility_snapshot().unwrap().focus,
         id,
@@ -976,7 +979,7 @@ fn app_mail_destination(renderer: &HeadlessRenderer, label: &str) -> (NodeId, No
     tree.subtree(dialog)
         .find(|(id, node)| {
             node.role() == Role::Tab
-                && node.label() == Some(label)
+                && crate::has_label(&node, label)
                 && node_is_exposed(tree.nodes(), *id)
         })
         .map(|(id, node)| (id, node.clone()))
@@ -1328,7 +1331,7 @@ fn app_rail_destination(renderer: &HeadlessRenderer, label: &str) -> (NodeId, No
     tree.subtree(dialog)
         .find(|(id, node)| {
             node.role() == Role::Tab
-                && node.label() == Some(label)
+                && crate::has_label(&node, label)
                 && node_is_exposed(tree.nodes(), *id)
         })
         .map(|(id, node)| (id, node.clone()))

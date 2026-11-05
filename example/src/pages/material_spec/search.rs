@@ -766,13 +766,13 @@ fn result_item(
 ) {
     if shown {
         list_item()
-            .headline(I18N.text(&(label)))
+            .headline(I18N.text(&label))
             .min_height(Dp(48.0))
             .leading(|| {
                 icon().painter(filled::HISTORY_SVG).size(Dp(24.0));
             })
             .on_click(move || {
-                controller.with_mut(|value| value.set_query(label.clone()));
+                controller.with_mut(|value| value.set_query(I18N.text(&label)));
                 submitted.set(true);
             });
     }
@@ -1360,7 +1360,7 @@ mod tests {
             .unwrap()
             .nodes
             .into_iter()
-            .find(|(_, node)| node.label() == Some(label))
+            .find(|(_, node)| crate::has_label(&node, label))
             .unwrap_or_else(|| panic!("missing {label}"))
             .1;
         let bounds = node.bounds().unwrap();
@@ -1403,7 +1403,7 @@ mod tests {
             let bounds = tree
                 .nodes
                 .iter()
-                .find(|(_, node)| node.role() == Role::Button && node.label() == Some(label))
+                .find(|(_, node)| node.role() == Role::Button && crate::has_label(&node, label))
                 .unwrap()
                 .1
                 .bounds()
@@ -1448,7 +1448,7 @@ mod tests {
                 .nodes
                 .iter()
                 .any(|(_, node)| node.role() == Role::TextInput
-                    && node.label() == Some("Search your messages"))
+                    && crate::has_label(&node, "Search your messages"))
         );
         click(&mut renderer, "Search your messages");
         for character in "Weekend".chars() {
@@ -1469,7 +1469,7 @@ mod tests {
             snapshot
                 .nodes
                 .iter()
-                .any(|(_, node)| node.label() == Some("Weekend plans")
+                .any(|(_, node)| crate::has_label(&node, "Weekend plans")
                     && node.role() == Role::ListItem),
             "published focus {:?}; nodes {:?}",
             snapshot.focus,
@@ -1483,7 +1483,7 @@ mod tests {
             !snapshot
                 .nodes
                 .iter()
-                .any(|(_, node)| node.label() == Some("Dinner with friends"))
+                .any(|(_, node)| crate::has_label(&node, "Dinner with friends"))
         );
         click(&mut renderer, "Weekend plans");
         assert!(
@@ -1493,7 +1493,7 @@ mod tests {
                 .nodes
                 .iter()
                 .any(|(_, node)| node.role() == Role::List
-                    && node.label() == Some("1 search results"))
+                    && crate::has_label(&node, "1 search results"))
         );
         click(&mut renderer, "Clear search");
         let snapshot = renderer.accessibility_snapshot().unwrap();
@@ -1501,7 +1501,7 @@ mod tests {
             snapshot
                 .nodes
                 .iter()
-                .any(|(_, node)| node.label() == Some("Dinner with friends")),
+                .any(|(_, node)| crate::has_label(&node, "Dinner with friends")),
             "after clear {:?}",
             snapshot
                 .nodes
@@ -1514,7 +1514,7 @@ mod tests {
                 .nodes
                 .iter()
                 .any(|(_, node)| node.role() == Role::List
-                    && node.label() == Some("4 search suggestions"))
+                    && crate::has_label(&node, "4 search suggestions"))
         );
     }
     #[tessera]
@@ -1546,7 +1546,7 @@ mod tests {
                 .unwrap()
                 .nodes
                 .into_iter()
-                .find(|(_, node)| node.label() == Some(label))
+                .find(|(_, node)| crate::has_label(&node, label))
                 .unwrap_or_else(|| panic!("missing {label}"))
                 .1
                 .bounds()

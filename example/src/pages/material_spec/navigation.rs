@@ -239,7 +239,7 @@ fn rail_header(
                 .on_click(move || expanded.set(!expanded.get()));
         }
         if fab {
-            extended_floating_action_button("ui-compose")
+            extended_floating_action_button(I18N.text("ui-compose"))
                 .icon(filled::EDIT_SVG)
                 .expanded(expanded.get())
                 .elevation(FloatingActionButtonElevation::new(
@@ -457,7 +457,7 @@ fn color_specimen(rail: bool, initially_expanded: bool, dark: bool, backdrop: Co
                                                 ))
                                                 .on_click(move || expanded.set(!expanded.get()));
                                             gap(Dp(8.0));
-                                            extended_floating_action_button("ui-label")
+                                            extended_floating_action_button(I18N.text("ui-label"))
                                                 .expanded(expanded.get())
                                                 .icon(filled::EDIT_SVG)
                                                 .elevation(FloatingActionButtonElevation::new(
@@ -1250,7 +1250,7 @@ fn native_figure(rail: bool, expanded: bool, annotation: usize, badges: bool) {
                                                         .modifier(watch(geometry, "fab"))
                                                         .children(move || {
                                                             extended_floating_action_button(
-                                                                "ui-label",
+                                                                I18N.text("ui-label"),
                                                             )
                                                             .expanded(expanded.get())
                                                             .icon(filled::EDIT_SVG)
@@ -1661,7 +1661,7 @@ fn placement(rail: bool) {
                                     .alignment(Alignment::CenterEnd)
                                     .modifier(Modifier::new().fill_max_width())
                                     .children(move || {
-                                        extended_floating_action_button("ui-compose")
+                                        extended_floating_action_button(I18N.text("ui-compose"))
                                             .icon(filled::EDIT_SVG)
                                             .on_click(move || count.set(count.get() + 1));
                                     });

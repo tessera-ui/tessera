@@ -1,9 +1,3 @@
-//! Navigation drawer example geometry and interaction regressions.
-//!
-//! ## Usage
-//!
-//! Verify reference figures and real modal destinations.
-
 use tessera_components::theme::material_theme;
 use tessera_ui::{
     CursorEventContent, GestureState, PointerChange, PressKeyEventType, PxPosition,
@@ -256,7 +250,9 @@ fn drawer_reference_rulers_measure_native_items_in_one_canonical_space() {
                 .nodes
                 .iter()
                 .find(|(_, node)| {
-                    node.role() == Role::Label && node.label() == Some("Inbox") && !node.is_hidden()
+                    node.role() == Role::Label
+                        && crate::has_label(&node, "Inbox")
+                        && !node.is_hidden()
                 })
                 .expect("native item label")
                 .1
@@ -269,6 +265,7 @@ fn drawer_reference_rulers_measure_native_items_in_one_canonical_space() {
                     node.role() == Role::Group
                         && node
                             .label()
+                            .map(crate::visible_text)
                             .is_some_and(|label| label.starts_with("Modal navigation drawer"))
                 })
                 .unwrap()
@@ -350,7 +347,7 @@ fn overview_and_color_figures_publish_distinct_native_drawers_and_legends() {
         let canvas = tree
             .nodes
             .iter()
-            .find(|(_, node)| node.role() == Role::Group && node.label() == Some(group))
+            .find(|(_, node)| node.role() == Role::Group && crate::has_label(&node, group))
             .expect("production figure canvas")
             .1
             .bounds()
@@ -362,6 +359,7 @@ fn overview_and_color_figures_publish_distinct_native_drawers_and_legends() {
                 node.role() == Role::Note
                     && node
                         .label()
+                        .map(crate::visible_text)
                         .is_some_and(|label| label.starts_with("Drawer marker "))
                     && node.bounds().is_some_and(|bounds| {
                         bounds.x0 >= canvas.x0
@@ -383,7 +381,7 @@ fn overview_and_color_figures_publish_distinct_native_drawers_and_legends() {
                 assert!(
                     tree.nodes.iter().any(|(_, node)| {
                         node.role() == Role::Label
-                            && node.label() == Some(caption)
+                            && crate::has_label(&node, caption)
                             && !figure_contains(canvas, node)
                     }),
                     "the overview legend below the shared canvas must name {caption}"
@@ -408,7 +406,7 @@ fn visibility_group(renderer: &tessera_ui::HeadlessRenderer, label: &str) -> Acc
         .unwrap()
         .nodes
         .into_iter()
-        .find(|(_, node)| node.role() == Role::Group && node.label() == Some(label))
+        .find(|(_, node)| node.role() == Role::Group && crate::has_label(&node, label))
         .unwrap_or_else(|| panic!("missing actual visibility group {label}"))
         .1
         .bounds()
@@ -450,7 +448,7 @@ fn assert_visibility_panel(
     assert_eq!(native.len(), usize::from(shown));
     let surface = tree.nodes.iter().find(|(_, node)| {
         node.role() == Role::Group
-            && node.label() == Some(format!("Standard drawer surface {number}").as_str())
+            && crate::has_label(&node, format!("Standard drawer surface {number}").as_str())
     });
     if shown {
         let surface = surface
@@ -473,7 +471,7 @@ fn assert_visibility_panel(
             "every destination must fit the complete drawer"
         );
         assert!(destinations.iter().any(|(_, node)| {
-            node.label() == Some(destination) && node.is_selected() == Some(true)
+            crate::has_label(&node, destination) && node.is_selected() == Some(true)
         }));
     } else {
         assert!(surface.is_none());
@@ -481,7 +479,7 @@ fn assert_visibility_panel(
     }
     assert!(tree.nodes.iter().any(|(_, node)| {
         node.role() == Role::Label
-            && node.label() == Some(destination)
+            && crate::has_label(&node, destination)
             && figure_contains(content, node)
     }));
 }
@@ -499,7 +497,7 @@ fn tap_visibility_node(
         .into_iter()
         .find(|(_, node)| {
             node.role() == role
-                && node.label() == Some(label)
+                && crate::has_label(&node, label)
                 && within.is_none_or(|within| figure_contains(within, node))
         })
         .unwrap_or_else(|| panic!("missing actual pointer target {label}"))
@@ -571,12 +569,12 @@ fn static_state_presentations_render_hover_focus_and_press_without_changing_sele
     let tree = renderer.accessibility_snapshot().unwrap();
     for label in ["Enabled", "Hovered", "Focused", "Pressed"] {
         assert!(tree.nodes.iter().any(|(_, node)| node.role() == Role::Group
-            && node.label() == Some(format!("Drawer {label} state presentation").as_str())));
+            && crate::has_label(&node, format!("Drawer {label} state presentation").as_str())));
     }
     assert_eq!(
         tree.nodes
             .iter()
-            .filter(|(_, node)| node.role() == Role::Tab && node.label() == Some("Inbox"))
+            .filter(|(_, node)| node.role() == Role::Tab && crate::has_label(&node, "Inbox"))
             .count(),
         4
     );
@@ -587,7 +585,10 @@ fn static_state_presentations_render_hover_focus_and_press_without_changing_sele
             .iter()
             .find(|(_, node)| {
                 node.role() == Role::Group
-                    && node.label() == Some(format!("Drawer {label} state presentation").as_str())
+                    && crate::has_label(
+                        &node,
+                        format!("Drawer {label} state presentation").as_str(),
+                    )
             })
             .and_then(|(_, node)| node.bounds())
             .unwrap_or_else(|| panic!("missing {label} state presentation bounds"));
@@ -620,7 +621,7 @@ fn modal_drawer_initial_focus_targets_the_first_actual_destination() {
     let inbox = tree
         .nodes
         .iter()
-        .find(|(_, node)| node.role() == Role::Tab && node.label() == Some("Inbox"))
+        .find(|(_, node)| node.role() == Role::Tab && crate::has_label(&node, "Inbox"))
         .expect("first native destination")
         .0;
     assert_eq!(
@@ -728,7 +729,7 @@ fn check_cold_specs_svg(count: usize) {
         .nodes
         .iter()
         .filter(|(_, node)| {
-            node.role() == Role::Group && node.label() == Some("Modal navigation drawer anatomy")
+            node.role() == Role::Group && crate::has_label(&node, "Modal navigation drawer anatomy")
         })
         .map(|(_, node)| node.bounds().unwrap())
         .collect();
@@ -744,7 +745,7 @@ fn check_cold_specs_svg(count: usize) {
             .iter()
             .find(|(_, node)| {
                 node.role() == Role::Note
-                    && node.label() == Some("Drawer marker 4")
+                    && crate::has_label(&node, "Drawer marker 4")
                     && node.bounds().is_some_and(|bounds| {
                         bounds.x0 >= canvas.x0
                             && bounds.x1 <= canvas.x1

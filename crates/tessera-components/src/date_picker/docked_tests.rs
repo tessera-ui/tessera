@@ -1,15 +1,10 @@
-//! Docked-calendar geometry and date-selection regressions.
-//!
-//! ## Usage
-//!
-//! Keep compact calendars usable through month changes and restricted dates.
-
 use std::time::Duration;
 
 use tessera_ui::{
     HeadlessConfig, HeadlessRenderer, State,
     accesskit::{Action, ActionRequest, Node, NodeId, TreeId},
     remember, tessera,
+    testing::text_matches,
 };
 
 use crate::{modifier::ModifierExt as _, theme::material_theme};
@@ -63,7 +58,7 @@ fn node(renderer: &HeadlessRenderer, label: &str) -> (NodeId, Node) {
         .unwrap()
         .nodes
         .into_iter()
-        .find(|(_, node)| node.label() == Some(label))
+        .find(|(_, node)| text_matches(node.label(), label))
         .unwrap_or_else(|| panic!("missing {label}"))
 }
 
@@ -72,7 +67,7 @@ fn activate(renderer: &mut HeadlessRenderer, label: &str) {
     let target_node = snapshot
         .nodes
         .iter()
-        .find(|(_, node)| node.label() == Some(label) && node.supports_action(Action::Click))
+        .find(|(_, node)| text_matches(node.label(), label) && node.supports_action(Action::Click))
         .unwrap_or_else(|| panic!("missing actionable {label}: {snapshot:#?}"))
         .0;
     assert!(
@@ -132,7 +127,7 @@ fn check_calendar() {
             .iter()
             .any(|(_, node)| {
                 node.role() == tessera_ui::accesskit::Role::ListBoxOption
-                    && node.label() == Some("August")
+                    && text_matches(node.label(), "August")
                     && node.is_selected() == Some(true)
             })
     );
@@ -227,7 +222,7 @@ fn check_calendar() {
             .iter()
             .any(|(_, node)| {
                 node.role() == tessera_ui::accesskit::Role::ListBoxOption
-                    && node.label() == Some("2025")
+                    && text_matches(node.label(), "2025")
                     && node.is_selected() == Some(true)
             })
     );

@@ -562,7 +562,7 @@ mod tests {
             .unwrap()
             .nodes
             .into_iter()
-            .find(|(_, node)| node.label() == Some(label))
+            .find(|(_, node)| crate::has_label(&node, label))
             .unwrap_or_else(|| panic!("missing {label}"))
             .1
             .bounds()
@@ -575,8 +575,8 @@ mod tests {
         let article_tab = snapshot.nodes.iter().any(|(_, node)| {
             node.bounds() == Some(bounds)
                 && node.role() == Role::Tab
-                && node.label().is_some_and(|label| {
-                    ["Overview", "Specs", "Guidelines", "Accessibility"].contains(&label)
+                && node.label().map(crate::visible_text).is_some_and(|label| {
+                    ["Overview", "Specs", "Guidelines", "Accessibility"].contains(&label.as_str())
                 })
         });
         let content_top = if bounds.y1 <= 64.0 {
@@ -588,7 +588,7 @@ mod tests {
                 .nodes
                 .iter()
                 .find(|(_, node)| {
-                    node.role() == Role::TabList && node.label() == Some("Article sections")
+                    node.role() == Role::TabList && crate::has_label(&node, "Article sections")
                 })
                 .and_then(|(_, node)| node.bounds())
                 .filter(|bounds| bounds.y0 <= 73.0)
@@ -641,7 +641,7 @@ mod tests {
         nodes
             .iter()
             .find(|(_, node)| {
-                node.label() == Some(label)
+                crate::has_label(&node, label)
                     && matches!(
                         node.role(),
                         Role::Button
@@ -676,18 +676,19 @@ mod tests {
         let root = tree
             .reading_order()
             .find(|(_, node)| {
-                matches!(node.role(), Role::Group | Role::Navigation) && node.label() == Some(group)
+                matches!(node.role(), Role::Group | Role::Navigation)
+                    && crate::has_label(&node, group)
             })
             .unwrap_or_else(|| panic!("missing group {group}"));
         tree.subtree(root.0)
             .skip(1)
             .find(|(id, node)| {
                 node.role() == role
-                    && (node.label() == Some(label)
+                    && (crate::has_label(&node, label)
                         || node.label().is_none()
                             && tree
                                 .subtree(*id)
-                                .any(|(_, child)| child.label() == Some(label)))
+                                .any(|(_, child)| crate::has_label(&child, label)))
             })
             .map(|(_, node)| node.clone())
     }
@@ -709,7 +710,7 @@ mod tests {
             .unwrap()
             .nodes
             .into_iter()
-            .find(|(_, node)| node.role() == Role::Tab && node.label() == Some(label))
+            .find(|(_, node)| node.role() == Role::Tab && crate::has_label(&node, label))
             .unwrap_or_else(|| panic!("missing article tab {label}"))
             .1
     }
@@ -742,7 +743,7 @@ mod tests {
                 .unwrap()
                 .nodes
                 .iter()
-                .any(|(_, node)| node.role() == role && node.label() == Some(label))
+                .any(|(_, node)| node.role() == role && crate::has_label(&node, label))
             {
                 return;
             }
@@ -783,7 +784,7 @@ mod tests {
                 .unwrap()
                 .nodes
                 .into_iter()
-                .find(|(_, node)| node.role() == role && node.label() == Some(label))
+                .find(|(_, node)| node.role() == role && crate::has_label(&node, label))
                 .unwrap_or_else(|| panic!("missing navigation {label}"))
                 .0;
             assert!(renderer.dispatch_accessibility_action(ActionRequest {
@@ -802,7 +803,7 @@ mod tests {
         for same_frame in [false, true] {
             let initial_component = COMPONENTS
                 .iter()
-                .position(|component| component.title == "Text fields");
+                .position(|component| component.title == "ui-text-fields");
             let mut renderer = HeadlessRenderer::new(
                 Box::new(move || {
                     fixture().initial_component_optional(initial_component);
@@ -828,7 +829,10 @@ mod tests {
                     .and_then(|(_, node)| node.label())
                     .map(str::to_owned)
             };
-            assert_eq!(focused_label(&renderer).as_deref(), Some("Specs"));
+            assert!(crate::text_matches(
+                focused_label(&renderer).as_deref(),
+                "Specs"
+            ));
             let label = "Outlined measurement with icons populated";
             let clear = format!("Clear {label}");
             let container = format!("{label} container");
@@ -840,7 +844,7 @@ mod tests {
                     .nodes
                     .into_iter()
                     .find(|(_, node)| {
-                        node.role() == Role::Button && node.label() == Some(clear.as_str())
+                        node.role() == Role::Button && crate::has_label(&node, clear.as_str())
                     })
                     .and_then(|(_, node)| node.bounds());
                 let Some(current) = current else {
@@ -876,9 +880,8 @@ mod tests {
                 target.y0 >= 64.0 && target.y1 <= 900.0,
                 "Clear must be visible before pressing: {target:?}; wheel observations: {observations:?}"
             );
-            assert_eq!(
-                focused_label(&renderer).as_deref(),
-                Some("Specs"),
+            assert!(
+                crate::text_matches(focused_label(&renderer).as_deref(), "Specs"),
                 "scrolling into view must retain the original Specs focus before Clear is pressed"
             );
             let before = bounds(&renderer, &container);
@@ -901,7 +904,9 @@ mod tests {
                 let input = tree
                     .nodes
                     .iter()
-                    .find(|(_, node)| node.role() == Role::TextInput && node.label() == Some(label))
+                    .find(|(_, node)| {
+                        node.role() == Role::TextInput && crate::has_label(&node, label)
+                    })
                     .unwrap();
                 assert_eq!(
                     input.1.value(),
@@ -920,13 +925,17 @@ mod tests {
             let input = tree
                 .nodes
                 .iter()
-                .find(|(_, node)| node.role() == Role::TextInput && node.label() == Some(label))
+                .find(|(_, node)| node.role() == Role::TextInput && crate::has_label(&node, label))
                 .unwrap();
             assert_eq!(input.1.value().unwrap_or_default(), "");
             assert_eq!(tree.focus, input.0, "Clear returns focus to its own editor");
-            assert!(!tree.nodes.iter().any(
-                |(_, node)| node.role() == Role::Button && node.label() == Some(clear.as_str())
-            ));
+            assert!(
+                !tree
+                    .nodes
+                    .iter()
+                    .any(|(_, node)| node.role() == Role::Button
+                        && crate::has_label(&node, clear.as_str()))
+            );
         }
     }
 
@@ -935,7 +944,7 @@ mod tests {
     fn article_footer_routes_between_pages_and_components_and_resets_directory_entry() {
         let initial_component = COMPONENTS
             .iter()
-            .position(|component| component.title == "Text fields");
+            .position(|component| component.title == "ui-text-fields");
         let mut renderer = HeadlessRenderer::new(
             Box::new(move || {
                 fixture().initial_component_optional(initial_component);
@@ -958,7 +967,8 @@ mod tests {
             .nodes
             .iter()
             .find(|(_, node)| {
-                node.role() == Role::Group && node.label() == Some("Previous and up next articles")
+                node.role() == Role::Group
+                    && crate::has_label(&node, "Previous and up next articles")
             })
             .expect("native article footer group");
         let mut pending = vec![footer.0];
@@ -1001,7 +1011,7 @@ mod tests {
         ] {
             assert!(
                 links.iter().any(|node| node.role() == Role::Link
-                    && node.label() == Some(label)
+                    && crate::has_label(&node, label)
                     && node.supports_action(Action::Click)),
                 "footer is missing actionable link {label}: {observed:#?}"
             );
@@ -1175,7 +1185,7 @@ mod tests {
         for label in tabs() {
             let (_, node) = nodes
                 .iter()
-                .find(|(_, node)| node.role() == Role::Tab && node.label() == Some(label))
+                .find(|(_, node)| node.role() == Role::Tab && crate::has_label(&node, label))
                 .unwrap_or_else(|| {
                     panic!(
                         "Missing tab {label}: {:?}",
@@ -1246,7 +1256,7 @@ mod tests {
                 .unwrap()
                 .nodes
                 .iter()
-                .any(|(_, node)| node.label() == Some("Basic dialog measurement figure")),
+                .any(|(_, node)| crate::has_label(&node, "Basic dialog measurement figure")),
             "inactive tab figures must be unmounted"
         );
         let overview = bounds(&renderer, "Overview");
@@ -1268,7 +1278,7 @@ mod tests {
                 .nodes
                 .iter()
                 .any(|(_, node)| node.role() == Role::AlertDialog
-                    && node.label() == Some("Reset settings?"))
+                    && crate::has_label(&node, "Reset settings?"))
         );
         let cancel = control(&renderer, "Cancel");
         click(&mut renderer, cancel.bounds().unwrap());
@@ -1307,7 +1317,7 @@ mod tests {
                     .unwrap()
                     .nodes
                     .into_iter()
-                    .find(|(_, node)| node.role() == Role::Tab && node.label() == Some(label))
+                    .find(|(_, node)| node.role() == Role::Tab && crate::has_label(&node, label))
                     .unwrap()
                     .1
             };
@@ -1344,7 +1354,7 @@ mod tests {
                         "label must read the current selection"
                     );
                     let snapshot = renderer.accessibility_snapshot().unwrap();
-                    assert_eq!(
+                    assert!(crate::text_matches(
                         snapshot
                             .nodes
                             .iter()
@@ -1352,8 +1362,8 @@ mod tests {
                             .unwrap()
                             .1
                             .label(),
-                        Some(name)
-                    );
+                        name
+                    ));
                 }
             }
             let guidelines = tab(&renderer, "Guidelines").bounds().unwrap();
@@ -1397,7 +1407,7 @@ mod tests {
                     Some(Toggled::False)
                 );
                 let snapshot = renderer.accessibility_snapshot().unwrap();
-                assert_eq!(
+                assert!(crate::text_matches(
                     snapshot
                         .nodes
                         .iter()
@@ -1405,8 +1415,8 @@ mod tests {
                         .unwrap()
                         .1
                         .label(),
-                    Some("Turn off notifications")
-                );
+                    "Turn off notifications"
+                ));
             } else if title == "Checkbox" {
                 assert_eq!(
                     control(&renderer, "All items").toggled(),
@@ -1458,7 +1468,8 @@ mod tests {
                     .unwrap()
                     .nodes
                     .iter()
-                    .any(|(_, node)| node.role() == Role::Heading && node.label() == Some("Usage")),
+                    .any(|(_, node)| node.role() == Role::Heading
+                        && crate::has_label(&node, "Usage")),
                 "inactive Guidelines chapters must be removed"
             );
             let back = bounds(&renderer, "Back to components");
@@ -1485,7 +1496,7 @@ mod tests {
             let component = COMPONENTS[component_index(demo).unwrap()];
             let card = bounds(
                 &renderer,
-                &format!("Open {} specifications", component.title),
+                &format!("Open {} specifications", I18N.text(component.title)),
             );
             click(&mut renderer, card);
             renderer.render_frames(4);
@@ -1499,7 +1510,7 @@ mod tests {
                 let tabs = renderer.accessibility_snapshot().unwrap().nodes;
                 let tab = tabs
                     .iter()
-                    .find(|(_, node)| node.role() == Role::Tab && node.label() == Some(page))
+                    .find(|(_, node)| node.role() == Role::Tab && crate::has_label(&node, page))
                     .unwrap_or_else(|| panic!("missing {page} tab for {}", component.title))
                     .1
                     .bounds()
@@ -1512,7 +1523,7 @@ mod tests {
                         .nodes
                         .iter()
                         .any(|(_, node)| node.role() == Role::Tab
-                            && node.label() == Some(page)
+                            && crate::has_label(&node, page)
                             && node.is_selected() == Some(true)),
                     "{} did not select {page}",
                     component.title
@@ -1528,7 +1539,7 @@ mod tests {
                         .into_iter()
                         .find(|(_, node)| {
                             node.role() == Role::Button
-                                && node.label() == Some("Show all carousel items")
+                                && crate::has_label(&node, "Show all carousel items")
                         })
                         .unwrap()
                         .0;
@@ -1543,7 +1554,7 @@ mod tests {
                     assert!(
                         !restored.nodes.iter().any(|(_, node)| {
                             node.role() == Role::Dialog
-                                && node.label() == Some("All carousel collections")
+                                && crate::has_label(&node, "All carousel collections")
                         }),
                         "the real return action must close the collection page"
                     );
@@ -1553,7 +1564,7 @@ mod tests {
                             .iter()
                             .find(|(_, node)| {
                                 node.role() == Role::Button
-                                    && node.label() == Some("Show all carousel items")
+                                    && crate::has_label(&node, "Show all carousel items")
                             })
                             .expect("restored carousel action")
                             .0,
@@ -1568,7 +1579,7 @@ mod tests {
                         .nodes
                         .into_iter()
                         .find(|(_, node)| {
-                            node.role() == Role::Tab && node.label() == Some("Accessibility")
+                            node.role() == Role::Tab && crate::has_label(&node, "Accessibility")
                         })
                         .unwrap()
                         .1
@@ -1586,7 +1597,7 @@ mod tests {
                             .nodes
                             .iter()
                             .filter(|(_, node)| {
-                                node.role() == Role::Button && node.label() == Some("Brush")
+                                node.role() == Role::Button && crate::has_label(&node, "Brush")
                             })
                             .count()
                     };
@@ -1618,7 +1629,7 @@ mod tests {
                             .nodes
                             .into_iter()
                             .find(|(_, node)| {
-                                node.role() == Role::Tab && node.label() == Some("Outbox")
+                                node.role() == Role::Tab && crate::has_label(&node, "Outbox")
                             })
                             .expect("modal destination")
                             .1;
@@ -1718,7 +1729,7 @@ mod tests {
     fn time_modal_commits_only_on_confirmation_and_reopens_from_saved_time() {
         let initial_component = COMPONENTS
             .iter()
-            .position(|component| component.title == "Time pickers");
+            .position(|component| component.title == "ui-time-pickers");
         let mut renderer = HeadlessRenderer::new(
             Box::new(move || {
                 fixture().initial_component_optional(initial_component);
@@ -1850,7 +1861,7 @@ mod tests {
     fn initial_app_bar_article_updates_its_variant_after_compact_resize() {
         let initial_component = COMPONENTS
             .iter()
-            .position(|component| component.title == "App bars");
+            .position(|component| component.title == "ui-app-bars");
         let mut renderer = HeadlessRenderer::new(
             Box::new(move || {
                 fixture().initial_component_optional(initial_component);
@@ -1873,7 +1884,7 @@ mod tests {
             .unwrap()
             .nodes
             .into_iter()
-            .find(|(_, node)| node.label() == Some("Configured app bar bar"))
+            .find(|(_, node)| crate::has_label(&node, "Configured app bar bar"))
             .expect("configured native app bar")
             .0;
         renderer.resize(390, 900);
@@ -1899,7 +1910,7 @@ mod tests {
                 .unwrap()
                 .nodes
                 .into_iter()
-                .find(|(_, node)| node.label() == Some("Configured app bar bar"))
+                .find(|(_, node)| crate::has_label(&node, "Configured app bar bar"))
                 .expect("retained configured native app bar")
                 .0,
             configured_bar,
@@ -1953,7 +1964,9 @@ mod tests {
             .unwrap()
             .nodes
             .into_iter()
-            .find(|(_, node)| node.role() == Role::MenuItem && node.label() == Some("Save draft"))
+            .find(|(_, node)| {
+                node.role() == Role::MenuItem && crate::has_label(&node, "Save draft")
+            })
             .expect("the open XL menu must expose its actual Save draft item")
             .1;
         click(&mut renderer, draft.bounds().unwrap());
@@ -2054,10 +2067,10 @@ mod tests {
                 .iter()
                 .filter(|component| component.category == category)
                 .map(|component| {
-                    let label = format!("Open {} specifications", component.title);
+                    let label = format!("Open {} specifications", I18N.text(component.title));
                     let mut matches = nodes
                         .iter()
-                        .filter(|(_, node)| node.label() == Some(label.as_str()));
+                        .filter(|(_, node)| crate::has_label(&node, label.as_str()));
                     let card = matches
                         .next()
                         .unwrap_or_else(|| panic!("missing {label}"))

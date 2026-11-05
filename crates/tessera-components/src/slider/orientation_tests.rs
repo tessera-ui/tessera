@@ -3,7 +3,9 @@ use tessera_ui::{
     PlacementModifierNode, PressKeyEventType, PxPosition, State,
     accesskit::{Orientation, Rect, Role},
     modifier::ModifierCapabilityExt as _,
-    remember, tessera, use_context,
+    remember, tessera,
+    testing::text_matches,
+    use_context,
 };
 
 use crate::{
@@ -339,7 +341,7 @@ fn control(renderer: &HeadlessRenderer, label: &str) -> tessera_ui::accesskit::N
         .unwrap()
         .nodes
         .into_iter()
-        .find(|(_, node)| node.label() == Some(label))
+        .find(|(_, node)| text_matches(node.label(), label))
         .expect("control")
         .1
 }
@@ -1367,7 +1369,7 @@ fn presentation_uses_native_handle_geometry_without_starting_interaction() {
                     let id = semantics
                         .nodes
                         .iter()
-                        .find(|(_, node)| node.label() == Some("Value"))
+                        .find(|(_, node)| text_matches(node.label(), "Value"))
                         .unwrap()
                         .0;
                     assert_ne!(semantics.focus, id);

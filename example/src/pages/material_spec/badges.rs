@@ -910,7 +910,7 @@ mod form_article_tests {
             .unwrap()
             .nodes
             .into_iter()
-            .find(|(_, node)| node.label() == Some(label) && node.role() == role)
+            .find(|(_, node)| crate::has_label(&node, label) && node.role() == role)
             .unwrap_or_else(|| panic!("missing {label} {role:?}"))
             .0;
         for action in [Action::Focus, Action::Click] {
@@ -930,7 +930,7 @@ mod form_article_tests {
             .unwrap()
             .nodes
             .iter()
-            .any(|(_, node)| node.label() == Some(label) && node.role() == role)
+            .any(|(_, node)| crate::has_label(&node, label) && node.role() == role)
     }
     #[test]
     #[ignore = "requires a native GPU adapter"]
@@ -1006,7 +1006,7 @@ mod form_article_tests {
                     .nodes
                     .into_iter()
                     .filter_map(|(_, node)| {
-                        (node.role() == Role::Label && node.label() == Some("Label"))
+                        (node.role() == Role::Label && crate::has_label(&node, "Label"))
                             .then(|| node.bounds().unwrap())
                     })
                     .collect::<Vec<_>>();
@@ -1036,7 +1036,7 @@ mod form_article_tests {
                             .find(|(_, node)| {
                                 node.role() == Role::Heading
                                     && node.level() == Some(level)
-                                    && node.label() == Some(*section)
+                                    && crate::has_label(&node, *section)
                             })
                             .unwrap_or_else(|| {
                                 panic!(
@@ -1063,7 +1063,7 @@ mod form_article_tests {
                         .nodes
                         .iter()
                         .find(|(_, node)| {
-                            node.role() == Role::Heading && node.label() == Some("Use cases")
+                            node.role() == Role::Heading && crate::has_label(&node, "Use cases")
                         })
                         .unwrap()
                         .1
@@ -1074,12 +1074,12 @@ mod form_article_tests {
                         !snapshot
                             .nodes
                             .iter()
-                            .any(|(_, node)| node.label() == Some("On this page"))
+                            .any(|(_, node)| crate::has_label(&node, "On this page"))
                     );
                     assert!(snapshot.nodes.iter().any(|(_, node)| {
                         node.role() == Role::Heading
                             && node.level() == Some(4)
-                            && node.label() == Some("1. Add inline feedback")
+                            && crate::has_label(&node, "1. Add inline feedback")
                     }));
                 }
             }
@@ -1100,7 +1100,7 @@ mod form_article_tests {
                             .unwrap()
                             .nodes
                             .iter()
-                            .any(|(id, node)| *id == trigger && node.label() == Some("Saved"))
+                            .any(|(id, node)| *id == trigger && crate::has_label(&node, "Saved"))
                     );
                     assert!(contains(&renderer, "All changes saved", Role::Status));
                     activate(&mut renderer, "Saved", Role::Button);
@@ -1110,7 +1110,7 @@ mod form_article_tests {
                             .unwrap()
                             .nodes
                             .iter()
-                            .any(|(id, node)| *id == trigger && node.label() == Some("Save"))
+                            .any(|(id, node)| *id == trigger && crate::has_label(&node, "Save"))
                     );
                 }
                 _ => {

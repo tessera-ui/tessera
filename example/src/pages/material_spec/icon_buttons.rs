@@ -286,7 +286,7 @@ fn hover_preview() {
         column()
             .modifier(Modifier::new().fill_max_width())
             .children(move || {
-                tooltip_provider("ui-add-to-favorites")
+                tooltip_provider(I18N.text("ui-add-to-favorites"))
                     .controller(controller)
                     .placement(TooltipPlacement::Above)
                     .child(move |_| {

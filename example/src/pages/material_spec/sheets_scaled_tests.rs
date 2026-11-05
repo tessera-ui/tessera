@@ -1,9 +1,3 @@
-//! Sheet figures under parent scrolling and fractional placement.
-//!
-//! ## Usage
-//!
-//! Keep diagram annotations and native sheet actions aligned at narrow widths.
-
 use std::time::Duration;
 
 use tessera_components::{
@@ -77,7 +71,7 @@ fn node(renderer: &HeadlessRenderer, label: &str, role: Role) -> Node {
         .inspect_accessibility()
         .expect("accessibility tree");
     snapshot
-        .find(label, role)
+        .find(&crate::res::I18N.text(label), role)
         .unwrap_or_else(|| panic!("missing {label} {role:?}"))
         .1
         .clone()

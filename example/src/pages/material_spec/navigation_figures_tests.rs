@@ -55,7 +55,9 @@ fn nodes(renderer: &HeadlessRenderer) -> Vec<(NodeId, Node)> {
 fn destination(renderer: &HeadlessRenderer, description: &str) -> (NodeId, Node) {
     nodes(renderer)
         .into_iter()
-        .find(|(_, node)| node.role() == Role::Tab && node.description() == Some(description))
+        .find(|(_, node)| {
+            node.role() == Role::Tab && crate::text_matches(node.description(), description)
+        })
         .unwrap_or_else(|| panic!("missing navigation destination {description}"))
 }
 
@@ -90,7 +92,7 @@ fn active_icon_marker(renderer: &HeadlessRenderer, prefix: &str) -> tessera_ui::
         .into_iter()
         .find(|(_, node)| {
             node.role() == Role::Group
-                && node.label() == Some(format!("{prefix} color roles").as_str())
+                && crate::has_label(&node, format!("{prefix} color roles").as_str())
         })
         .expect("native navigation color panel")
         .1
@@ -100,7 +102,7 @@ fn active_icon_marker(renderer: &HeadlessRenderer, prefix: &str) -> tessera_ui::
         .into_iter()
         .find_map(|(_, node)| {
             if node.role() != Role::Note
-                || node.label() != Some("Navigation color role 2: On secondary container")
+                || !crate::has_label(&node, "Navigation color role 2: On secondary container")
             {
                 return None;
             }
@@ -143,7 +145,7 @@ fn baseline_figures_keep_native_destination_dimensions_and_focus_without_selecti
         );
         let container = nodes(&renderer)
             .into_iter()
-            .find(|(_, node)| node.role() == Role::TabList && node.label() == Some(prefix))
+            .find(|(_, node)| node.role() == Role::TabList && crate::has_label(&node, prefix))
             .expect("baseline navigation container")
             .1
             .bounds()
@@ -226,6 +228,7 @@ fn color_figures_publish_official_role_markers_and_independent_live_destination_
                 node.role() == Role::Note
                     && node
                         .label()
+                        .map(crate::visible_text)
                         .is_some_and(|label| label.starts_with("Navigation color role "))
             })
             .collect();
@@ -234,7 +237,7 @@ fn color_figures_publish_official_role_markers_and_independent_live_destination_
             let label = format!("Navigation color role {}: {role}", index + 1);
             let matching: Vec<_> = markers
                 .iter()
-                .filter(|(_, node)| node.label() == Some(label.as_str()))
+                .filter(|(_, node)| crate::has_label(&node, label.as_str()))
                 .collect();
             assert_eq!(matching.len(), if rail { 4 } else { 2 }, "{label}");
             for (_, node) in matching {

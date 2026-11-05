@@ -52,6 +52,7 @@ mod canonical_tests;
 struct EventDraft {
     name: String,
     from: String,
+    initial_date: String,
     to: String,
     time_zone: String,
     all_day: bool,
@@ -59,10 +60,12 @@ struct EventDraft {
 
 impl Default for EventDraft {
     fn default() -> Self {
+        let date = I18N.text("ui-mon-may-18");
         Self {
             name: String::new(),
-            from: "ui-mon-may-18".into(),
-            to: "ui-mon-may-18".into(),
+            from: date.clone(),
+            initial_date: date.clone(),
+            to: date,
             time_zone: "GMT-07:00".into(),
             all_day: false,
         }
@@ -71,7 +74,11 @@ impl Default for EventDraft {
 
 impl EventDraft {
     fn is_dirty(&self) -> bool {
-        self != &Self::default()
+        !self.name.is_empty()
+            || self.from != self.initial_date
+            || self.to != self.initial_date
+            || self.time_zone != "GMT-07:00"
+            || self.all_day
     }
 }
 

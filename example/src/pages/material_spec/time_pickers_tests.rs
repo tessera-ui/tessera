@@ -1,9 +1,3 @@
-//! Native time-picker figure surface regressions.
-//!
-//! ## Usage
-//!
-//! Keep the dialog background around its content padding.
-
 use std::time::Duration;
 
 use tessera_components::{column::column, modifier::ModifierExt as _, theme::material_theme};
@@ -177,7 +171,7 @@ fn node(
         .into_iter()
         .find(|(_, node)| {
             node.role() == role
-                && node.label() == Some(label)
+                && crate::has_label(&node, label)
                 && within.is_none_or(|parent| {
                     node.bounds().is_some_and(|bounds| {
                         bounds.x0 >= parent.x0
@@ -245,7 +239,7 @@ fn time_color_pairs_keep_native_roles_aligned_and_selection_independent() {
             .nodes
             .iter()
             .filter(|(_, node)| {
-                node.role() == Role::Note && node.label() == Some(marker_label.as_str())
+                node.role() == Role::Note && crate::has_label(&node, marker_label.as_str())
             })
             .collect();
         assert_eq!(markers.len(), 2);
@@ -264,6 +258,7 @@ fn time_color_pairs_keep_native_roles_aligned_and_selection_independent() {
                 (node.role() == Role::Note
                     && node
                         .label()
+                        .map(crate::visible_text)
                         .is_some_and(|label| label.starts_with("Time color role ")))
                 .then(|| (node.label().unwrap(), node.bounds().unwrap()))
             })
@@ -287,6 +282,7 @@ fn time_color_pairs_keep_native_roles_aligned_and_selection_independent() {
                 .filter(|(_, node)| node.role() == Role::Note
                     && node
                         .label()
+                        .map(crate::visible_text)
                         .is_some_and(|label| label.starts_with("Time color role ")))
                 .count(),
             expected * 2

@@ -1,10 +1,3 @@
-//! Native list baseline figure and single-selection regressions.
-//!
-//! ## Usage
-//!
-//! Verify the baseline rows and single-selection feedback of the live list
-//! article.
-
 use std::time::Duration;
 
 use tessera_ui::{
@@ -65,7 +58,7 @@ fn labeled(renderer: &HeadlessRenderer, label: &str) -> (NodeId, Node) {
         .unwrap()
         .nodes
         .into_iter()
-        .find(|(_, node)| node.label() == Some(label))
+        .find(|(_, node)| crate::has_label(&node, label))
         .unwrap_or_else(|| panic!("missing {label}"))
 }
 

@@ -188,7 +188,7 @@ fn measurement_figures_publish_real_headlines_content_and_controls_in_both_varia
                     snapshot
                         .nodes
                         .iter()
-                        .any(|(_, node)| node.label() == Some(label) && !node.is_hidden()),
+                        .any(|(_, node)| crate::has_label(&node, label) && !node.is_hidden()),
                     "missing measured sheet content: {label}"
                 );
             }
@@ -208,7 +208,7 @@ fn measurement_figures_publish_real_headlines_content_and_controls_in_both_varia
                     .iter()
                     .find(|(_, node)| {
                         node.role() == Role::Button
-                            && node.label() == Some(*label)
+                            && crate::has_label(&node, *label)
                             && !node.is_hidden()
                     })
                     .unwrap_or_else(|| panic!("missing measured sheet button: {label}"));
@@ -225,7 +225,7 @@ fn measurement_figures_publish_real_headlines_content_and_controls_in_both_varia
                     snapshot
                         .nodes
                         .iter()
-                        .any(|(_, node)| node.label() == Some(label)),
+                        .any(|(_, node)| crate::has_label(&node, label)),
                     "missing measurement label: {label}"
                 );
             }

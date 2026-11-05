@@ -1,9 +1,3 @@
-//! Native adjacent label placement and activation regressions.
-//!
-//! ## Usage
-//!
-//! Preserve independent label activation through canonical artboard scaling.
-
 use tessera_ui::{
     HeadlessConfig, HeadlessRenderer, MOUSE_POINTER_ID, PressKeyEventType, PxPosition,
     accesskit::{Node, Role, Toggled},
@@ -35,7 +29,7 @@ fn node(renderer: &HeadlessRenderer, label: &str, role: Role) -> Node {
         .inspect_accessibility()
         .expect("accessibility tree");
     snapshot
-        .find(label, role)
+        .find(&crate::res::I18N.text(label), role)
         .unwrap_or_else(|| panic!("missing {label} {role:?}"))
         .1
         .clone()
@@ -123,7 +117,7 @@ fn adjacent_labels_activate_their_native_control_and_preserve_canonical_scaled_g
         let id = tree
             .nodes
             .iter()
-            .find(|(_, node)| node.role() == role && node.label() == Some(first))
+            .find(|(_, node)| node.role() == role && crate::has_label(&node, first))
             .unwrap()
             .0;
         assert_eq!(

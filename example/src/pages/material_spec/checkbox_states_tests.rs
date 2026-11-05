@@ -1,9 +1,3 @@
-//! Native checkbox state matrix interaction regressions.
-//!
-//! ## Usage
-//!
-//! Preserve selection, validation, focus and responsive pointer mapping.
-
 use tessera_ui::{
     HeadlessConfig, HeadlessRenderer, MOUSE_POINTER_ID, PressKeyEventType, PxPosition,
     accesskit::{Action, ActionRequest, Invalid, Node, Role, Toggled, TreeId},
@@ -26,7 +20,7 @@ fn node(renderer: &HeadlessRenderer, label: &str) -> Node {
         .unwrap()
         .nodes
         .into_iter()
-        .find(|(_, node)| node.label() == Some(label))
+        .find(|(_, node)| crate::has_label(&node, label))
         .unwrap()
         .1
 }
@@ -131,7 +125,7 @@ fn checkbox_states_preserve_sixty_native_controls_error_mixed_and_scaled_pointer
         .unwrap()
         .nodes
         .into_iter()
-        .find(|(_, node)| node.label() == Some("Light Focused error mixed checkbox state"))
+        .find(|(_, node)| crate::has_label(&node, "Light Focused error mixed checkbox state"))
         .unwrap();
     assert!(renderer.dispatch_accessibility_action(ActionRequest {
         action: Action::Focus,

@@ -221,7 +221,7 @@ fn fab(
     let (container, content) = tone_colors(&scheme, tone.unwrap_or(0));
     let activations = remember(|| 0_u32);
     column().children(move || {
-        extended_floating_action_button(label.clone())
+        extended_floating_action_button(I18N.text(label.clone()))
             .size(size.unwrap_or(ExtendedFloatingActionButtonSize::Small))
             .icon_optional(if with_icon.unwrap_or(true) {
                 Some(filled::EDIT_SVG.into())
@@ -500,7 +500,7 @@ fn collapsible(#[prop(into)] label: String) {
                         }));
                     });
                 gap(Dp(32.0));
-                extended_floating_action_button(label.clone())
+                extended_floating_action_button(I18N.text(label.clone()))
                     .size(ExtendedFloatingActionButtonSize::Small)
                     .icon(filled::EDIT_SVG)
                     .expanded(expanded.get())
@@ -928,7 +928,7 @@ fn placement() {
                         .modifier(Modifier::new().fill_max_width())
                         .children(move || {
                             spacer().modifier(Modifier::new().weight(1.0));
-                            extended_floating_action_button("ui-compose")
+                            extended_floating_action_button(I18N.text("ui-compose"))
                                 .size(ExtendedFloatingActionButtonSize::Small)
                                 .icon(filled::EDIT_SVG)
                                 .container_color(scheme.primary_container)
@@ -1008,7 +1008,7 @@ fn interaction_style() {
         row()
             .modifier(Modifier::new().fill_max_width())
             .children(move || {
-                extended_floating_action_button("ui-compose")
+                extended_floating_action_button(I18N.text("ui-compose"))
                     .size(ExtendedFloatingActionButtonSize::Small)
                     .icon(filled::EDIT_SVG)
                     .container_color(scheme.primary_container)
@@ -1016,7 +1016,7 @@ fn interaction_style() {
                     .accessibility_label(I18N.text("ui-above-three-to-one-compose"))
                     .on_click(|| {});
                 spacer().modifier(Modifier::new().width(Dp(32.0)));
-                extended_floating_action_button("ui-compose")
+                extended_floating_action_button(I18N.text("ui-compose"))
                     .size(ExtendedFloatingActionButtonSize::Small)
                     .icon(filled::EDIT_SVG)
                     .container_color(scheme.surface_container)

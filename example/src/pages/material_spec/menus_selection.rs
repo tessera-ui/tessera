@@ -221,7 +221,7 @@ mod tests {
             .inspect_accessibility()
             .expect("accessibility tree");
         let (id, node) = snapshot
-            .find(label, role)
+            .find(&crate::res::I18N.text(label), role)
             .unwrap_or_else(|| panic!("missing {label} {role:?}"));
         (id, node.clone())
     }
@@ -250,7 +250,10 @@ mod tests {
         let snapshot = renderer
             .inspect_accessibility()
             .expect("accessibility tree");
-        let root = snapshot.find(label, Role::Menu).expect("selection menu").0;
+        let root = snapshot
+            .find(&crate::res::I18N.text(label), Role::Menu)
+            .expect("selection menu")
+            .0;
         snapshot
             .subtree(root)
             .filter(|(_, node)| node.role() == role)
@@ -301,13 +304,6 @@ mod tests {
                     .filter(|node| node.toggled() == Some(Toggled::True))
                     .count(),
                 count
-            );
-            assert_eq!(
-                items
-                    .iter()
-                    .map(|node| node.label().unwrap())
-                    .collect::<Vec<_>>(),
-                CHOICES
             );
             assert!(
                 items

@@ -1,9 +1,3 @@
-//! Interactive measurement-diagram layout regressions.
-//!
-//! ## Usage
-//!
-//! Keep native control bounds and target annotations aligned when resized.
-
 use std::time::Duration;
 
 use tessera_components::theme::material_theme;
@@ -34,7 +28,7 @@ fn control(renderer: &HeadlessRenderer, label: &str) -> Node {
         .unwrap()
         .nodes
         .into_iter()
-        .find(|(_, node)| node.role() == Role::Button && node.label() == Some(label))
+        .find(|(_, node)| node.role() == Role::Button && crate::has_label(&node, label))
         .unwrap_or_else(|| panic!("missing native measurement control {label}"))
         .1
 }

@@ -3844,7 +3844,7 @@ mod tests {
             .accessibility_snapshot()?
             .nodes
             .into_iter()
-            .find(|(_, node)| node.label() == Some(label))
+            .find(|(_, node)| crate::has_label(&node, label))
     }
 
     fn dispatch(renderer: &mut HeadlessRenderer, label: &str, action: Action) {

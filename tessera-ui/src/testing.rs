@@ -28,7 +28,9 @@ mod probe;
 mod query;
 
 pub use probe::TestProbe;
-pub use query::{AccessibilitySnapshot, ComponentSnapshot, ComponentSnapshotNode};
+pub use query::{
+    AccessibilitySnapshot, ComponentSnapshot, ComponentSnapshotNode, text_matches, visible_text,
+};
 
 /// Create a headless layout test harness for the provided component content.
 pub fn layout_test<F, Output>(content: F) -> LayoutTestHarness<impl Fn()>

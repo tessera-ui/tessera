@@ -3205,7 +3205,7 @@ mod tests {
                 assert!(
                     destinations
                         .iter()
-                        .any(|(_, node)| node.label() == Some(label))
+                        .any(|(_, node)| crate::has_label(&node, label))
                 );
             }
             if let Some(menu) = menu {
@@ -3214,13 +3214,13 @@ mod tests {
                         .nodes
                         .iter()
                         .any(|(_, node)| node.role() == Role::Button
-                            && node.label() == Some(menu)
+                            && crate::has_label(&node, menu)
                             && !node.is_hidden())
                 );
             }
             let saved = destinations
                 .iter()
-                .find(|(_, node)| node.label() == Some("Saved"))
+                .find(|(_, node)| crate::has_label(&node, "Saved"))
                 .unwrap()
                 .0;
             assert!(renderer.dispatch_accessibility_action(ActionRequest {
@@ -3239,7 +3239,7 @@ mod tests {
                 .collect();
             assert_eq!(
                 tabs.iter()
-                    .find(|(_, node)| node.label() == Some("Home"))
+                    .find(|(_, node)| crate::has_label(&node, "Home"))
                     .unwrap()
                     .1
                     .is_selected(),
@@ -3247,7 +3247,7 @@ mod tests {
             );
             assert_eq!(
                 tabs.iter()
-                    .find(|(_, node)| node.label() == Some("Saved"))
+                    .find(|(_, node)| crate::has_label(&node, "Saved"))
                     .unwrap()
                     .1
                     .is_selected(),

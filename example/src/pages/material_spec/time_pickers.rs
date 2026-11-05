@@ -901,7 +901,7 @@ fn time_variants() {
         "ui-select-hours-minutes-and-for-a-12-hour-clock-am-or-pm",
         "ui-keep-touch-selection-comfortable-on-mobile-devices",
     ] {
-        prose(format!("• {item}"));
+        prose(format!("• {}", I18N.text(item)));
         gap(Dp(12.0));
     }
     gap(Dp(12.0));

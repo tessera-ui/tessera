@@ -482,7 +482,7 @@ fn specimen_header(
         if fab {
             let label = label.clone();
             boxed().modifier(watch(geometry, "fab")).children(move || {
-                extended_floating_action_button("ui-label")
+                extended_floating_action_button(I18N.text("ui-label"))
                     .expanded(expanded)
                     .icon(filled::EDIT_SVG)
                     .elevation(FloatingActionButtonElevation::new(

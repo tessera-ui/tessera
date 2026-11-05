@@ -154,7 +154,7 @@ fn tooltip_points(items: Vec<&'static str>) {
         .modifier(Modifier::new().fill_max_width())
         .children(move || {
             for item in &items {
-                prose(format!("•  {item}"));
+                prose(format!("•  {}", I18N.text(item)));
                 gap(Dp(12.0));
             }
         });
@@ -1259,7 +1259,7 @@ fn tooltip_plain_placement() {
                             Shape::rounded_rectangle(Dp(24.0)),
                         ),
                 );
-                tooltip_provider("ui-add-to-list")
+                tooltip_provider(I18N.text("ui-add-to-list"))
                     .controller(controller)
                     .placement(TooltipPlacement::Above)
                     .popup_modifier(watch_in_space(geometry, "placement_popup"))
@@ -1706,7 +1706,7 @@ fn tooltip_role_box(entries: Vec<(String, String)>, x: f64, y: f64, width: f64) 
     let pink = srgb(244, 168, 246);
     let label = entries
         .iter()
-        .map(|(name, value)| format!("{name}: {value}"))
+        .map(|(name, value)| format!("{}: {}", I18N.text(name), I18N.text(value)))
         .collect::<Vec<_>>()
         .join("\n");
     column()
@@ -2195,7 +2195,7 @@ fn tooltip_configuration(number: usize, headline: bool, actions: usize, x: Dp, y
         role:Some(Role::Group),label:Some(I18N.format("ui-rich-tooltip-configuration-value", [("v0", (number).into())])),merge_descendants:true,..Default::default()
     })).children(move || {
         let content = RenderSlot::new(move || {
-            let provider = tooltip_provider("ui-rich-tooltips-bring-attention-to-a-particular-element-or-feature-that-warrants-a-person-s")
+            let provider = tooltip_provider(I18N.text("ui-rich-tooltips-bring-attention-to-a-particular-element-or-feature-that-warrants-a-person-s"))
                 .controller(controller)
                 .variant(TooltipVariant::Rich);
             if headline {
@@ -2418,7 +2418,7 @@ fn tooltip_reference_popup(
                     });
             });
         if rich {
-            tooltip_provider(message.clone())
+            tooltip_provider(I18N.text(message.clone()))
                 .controller(controller)
                 .variant(TooltipVariant::Rich)
                 .headline(I18N.text(headline))
@@ -2444,7 +2444,7 @@ fn tooltip_reference_popup(
                     (anchor).render();
                 });
         } else {
-            tooltip_provider(message.clone())
+            tooltip_provider(I18N.text(message.clone()))
                 .controller(controller)
                 .variant(TooltipVariant::Plain)
                 .popup_modifier(modifier.clone())
@@ -2933,16 +2933,16 @@ fn live_tooltips(on_acknowledge: Option<tessera_ui::Callback>) {
     let favorite = remember(|| false);
     let acknowledged = remember(|| false);
     let scheme = use_context::<MaterialTheme>().unwrap().get().color_scheme;
-    tooltip_provider(if favorite.get() {
+    tooltip_provider(I18N.text(if favorite.get() {
         "ui-remove-from-favorites"
     } else {
         "ui-add-to-favorites"
-    })
+    }))
     .controller(plain)
     .group(group)
     .persistent(false)
     .child(move |_| {
-        tooltip_provider("ui-keep-related-items-together-so-you-can-find-them-again")
+        tooltip_provider(I18N.text("ui-keep-related-items-together-so-you-can-find-them-again"))
             .controller(rich)
             .group(group)
             .variant(TooltipVariant::Rich)
@@ -3073,41 +3073,43 @@ fn placement_examples() {
                                     ),
                                 );
                             });
-                        tooltip_provider("ui-add-annotations-and-highlights-with-the-paint-tool")
-                            .controller(controller)
-                            .variant(TooltipVariant::Rich)
-                            .headline(I18N.text("ui-paint-tool"))
-                            .placement(placement)
-                            .persistent(false)
-                            .modifier(Modifier::new().fill_max_size())
-                            .actions(move || {
-                                button()
-                                    .text()
-                                    .accessibility_label(I18N.text("ui-learn-more"))
-                                    .child(move || {
-                                        text(I18N.text("ui-learn-more"));
-                                    });
-                            })
-                            .child(move |_| {
-                                boxed()
-                                    .modifier(Modifier::new().fill_max_size().padding_all(Dp(36.0)))
-                                    .children(move || {
-                                        tooltip_anchor(controller)
-                                            .modifier(Modifier::new().align(alignment))
-                                            .child(move || {
-                                                icon_button()
-                                                    .standard()
-                                                    .icon(filled::BRUSH_SVG)
-                                                    .accessibility_label(I18N.format(
-                                                        "ui-corner-tooltip-value",
-                                                        [("v0", format!("{:?}", alignment).into())],
-                                                    ))
-                                                    .on_click(move || {
-                                                        controller.with_mut(TooltipController::show)
-                                                    });
-                                            });
-                                    });
-                            });
+                        tooltip_provider(
+                            I18N.text("ui-add-annotations-and-highlights-with-the-paint-tool"),
+                        )
+                        .controller(controller)
+                        .variant(TooltipVariant::Rich)
+                        .headline(I18N.text("ui-paint-tool"))
+                        .placement(placement)
+                        .persistent(false)
+                        .modifier(Modifier::new().fill_max_size())
+                        .actions(move || {
+                            button()
+                                .text()
+                                .accessibility_label(I18N.text("ui-learn-more"))
+                                .child(move || {
+                                    text(I18N.text("ui-learn-more"));
+                                });
+                        })
+                        .child(move |_| {
+                            boxed()
+                                .modifier(Modifier::new().fill_max_size().padding_all(Dp(36.0)))
+                                .children(move || {
+                                    tooltip_anchor(controller)
+                                        .modifier(Modifier::new().align(alignment))
+                                        .child(move || {
+                                            icon_button()
+                                                .standard()
+                                                .icon(filled::BRUSH_SVG)
+                                                .accessibility_label(I18N.format(
+                                                    "ui-corner-tooltip-value",
+                                                    [("v0", format!("{:?}", alignment).into())],
+                                                ))
+                                                .on_click(move || {
+                                                    controller.with_mut(TooltipController::show)
+                                                });
+                                        });
+                                });
+                        });
                     });
             }
         });

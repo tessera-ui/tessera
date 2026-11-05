@@ -13,6 +13,25 @@ use crate::{
     RuntimeSessionId, runtime::TesseraRuntime,
 };
 
+fn visible_character(character: &char) -> bool {
+    !matches!(*character, '\u{2066}'..='\u{2069}')
+}
+
+/// Compares displayed text, ignoring Unicode bidirectional isolates.
+pub fn text_matches(actual: Option<&str>, expected: &str) -> bool {
+    actual.is_some_and(|actual| {
+        actual
+            .chars()
+            .filter(visible_character)
+            .eq(expected.chars().filter(visible_character))
+    })
+}
+
+/// Returns displayed text without Unicode bidirectional isolates.
+pub fn visible_text(text: &str) -> String {
+    text.chars().filter(visible_character).collect()
+}
+
 /// Component geometry and semantics captured from a completed frame.
 pub struct ComponentSnapshot {
     session: RuntimeSessionId,
@@ -121,16 +140,18 @@ impl ComponentSnapshot {
         self.session
     }
 
-    /// Returns all components with the requested accessible label.
+    /// Returns components whose labels match, ignoring bidirectional isolates.
     pub fn matching_label<'a>(
         &'a self,
         label: &str,
     ) -> impl Iterator<Item = &'a ComponentSnapshotNode> {
         self.nodes.iter().filter(move |node| {
-            node.semantics
-                .as_ref()
-                .and_then(|value| value.label.as_deref())
-                == Some(label)
+            text_matches(
+                node.semantics
+                    .as_ref()
+                    .and_then(|value| value.label.as_deref()),
+                label,
+            )
         })
     }
 
@@ -251,13 +272,14 @@ impl AccessibilitySnapshot {
             .map(|index| &self.tree.nodes[*index].1)
     }
 
-    /// Finds a uniquely labeled node with a role, panicking if ambiguous.
+    /// Finds a uniquely labeled node with a role, ignoring bidirectional isolates.
+    /// Panics if the label and role match more than one node.
     pub fn find(&self, label: &str, role: Role) -> Option<(SemanticId, &Node)> {
         let mut found = self
             .tree
             .nodes
             .iter()
-            .filter(|(_, node)| node.label() == Some(label) && node.role() == role);
+            .filter(|(_, node)| text_matches(node.label(), label) && node.role() == role);
         let (id, node) = found.next()?;
         assert!(
             found.next().is_none(),
@@ -297,7 +319,7 @@ mod tests {
     impl SemanticsModifierNode for Target {
         fn apply(&self, node: &mut AccessibilityNode, _: &mut Option<AccessibilityActionHandler>) {
             node.key = Some(self.0.into());
-            node.label = Some(self.0.into());
+            node.label = Some(format!("\u{2068}{}\u{2069}", self.0));
             node.role = Some(self.1);
         }
     }

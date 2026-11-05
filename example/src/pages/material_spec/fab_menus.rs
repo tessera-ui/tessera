@@ -281,17 +281,17 @@ fn menu_demo(
                 .modifier(Modifier::new().fill_max_width().height(Dp(300.0)))
                 .items(vec![
                     FloatingActionButtonMenuItem::new(
-                        ITEMS[0].0,
+                        I18N.text(ITEMS[0].0),
                         Some(filled::EDIT_SVG.into()),
                         Callback::new(move || status.set(ITEMS[0].1.into())),
                     ),
                     FloatingActionButtonMenuItem::new(
-                        ITEMS[1].0,
+                        I18N.text(ITEMS[1].0),
                         Some(filled::FOLDER_SVG.into()),
                         Callback::new(move || status.set(ITEMS[1].1.into())),
                     ),
                     FloatingActionButtonMenuItem::new(
-                        ITEMS[2].0,
+                        I18N.text(ITEMS[2].0),
                         Some(filled::UPLOAD_SVG.into()),
                         Callback::new(move || status.set(ITEMS[2].1.into())),
                     ),
@@ -630,32 +630,32 @@ fn six_items() {
                 .modifier(Modifier::new().fill_max_width().height(Dp(480.0)))
                 .items(vec![
                     FloatingActionButtonMenuItem::new(
-                        "ui-first",
+                        I18N.text("ui-first"),
                         Some(filled::EDIT_SVG.into()),
                         Callback::new(move || status.set("ui-first".into())),
                     ),
                     FloatingActionButtonMenuItem::new(
-                        "ui-second",
+                        I18N.text("ui-second"),
                         Some(filled::FOLDER_SVG.into()),
                         Callback::new(move || status.set("ui-second".into())),
                     ),
                     FloatingActionButtonMenuItem::new(
-                        "ui-third",
+                        I18N.text("ui-third"),
                         Some(filled::UPLOAD_SVG.into()),
                         Callback::new(move || status.set("ui-third".into())),
                     ),
                     FloatingActionButtonMenuItem::new(
-                        "ui-fourth",
+                        I18N.text("ui-fourth"),
                         Some(filled::IMAGE_SVG.into()),
                         Callback::new(move || status.set("ui-fourth".into())),
                     ),
                     FloatingActionButtonMenuItem::new(
-                        "ui-fifth",
+                        I18N.text("ui-fifth"),
                         Some(filled::EVENT_SVG.into()),
                         Callback::new(move || status.set("ui-fifth".into())),
                     ),
                     FloatingActionButtonMenuItem::new(
-                        "ui-sixth",
+                        I18N.text("ui-sixth"),
                         Some(filled::CHECK_SVG.into()),
                         Callback::new(move || status.set("ui-sixth".into())),
                     ),

@@ -2053,7 +2053,7 @@ mod size_figure_tests {
             .inspect_accessibility()
             .expect("accessibility tree");
         let (id, node) = snapshot
-            .find(label, role)
+            .find(&crate::res::I18N.text(label), role)
             .unwrap_or_else(|| panic!("missing {label} {role:?}"));
         (id, node.clone())
     }

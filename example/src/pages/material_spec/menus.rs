@@ -1720,7 +1720,7 @@ mod tests {
             .unwrap()
             .nodes
             .into_iter()
-            .find(|(_, node)| node.label() == Some(label))
+            .find(|(_, node)| crate::has_label(&node, label))
             .unwrap_or_else(|| panic!("missing {label}"))
             .1;
         let bounds = node.bounds().unwrap();
@@ -1757,7 +1757,7 @@ mod tests {
                 .unwrap()
                 .nodes
                 .iter()
-                .any(|(_, node)| node.label() == Some("Preview")
+                .any(|(_, node)| crate::has_label(&node, "Preview")
                     && node.role() == tessera_ui::accesskit::Role::MenuItem)
         );
         click(&mut renderer, "Preview");
@@ -1766,13 +1766,13 @@ mod tests {
             snapshot
                 .nodes
                 .iter()
-                .any(|(_, node)| node.label() == Some("Preview selected"))
+                .any(|(_, node)| crate::has_label(&node, "Preview selected"))
         );
         assert!(
             !snapshot
                 .nodes
                 .iter()
-                .any(|(_, node)| node.label() == Some("Preview")
+                .any(|(_, node)| crate::has_label(&node, "Preview")
                     && node.role() == tessera_ui::accesskit::Role::MenuItem)
         );
         click(&mut renderer, "Open menu");
@@ -1783,7 +1783,7 @@ mod tests {
             snapshot
                 .nodes
                 .iter()
-                .any(|(_, node)| node.label() == Some("Link copied"))
+                .any(|(_, node)| crate::has_label(&node, "Link copied"))
         );
         assert!(!snapshot.nodes.iter().any(|(_, node)| {
             node.role() == tessera_ui::accesskit::Role::MenuItem

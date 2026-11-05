@@ -1,9 +1,3 @@
-//! Search configuration email result interaction regressions.
-//!
-//! ## Usage
-//!
-//! Verify native filtering and navigation in the full-screen divided example.
-
 use std::time::Duration;
 
 use tessera_components::theme::material_theme;
@@ -26,7 +20,7 @@ fn node(renderer: &HeadlessRenderer, label: &str, role: Role) -> (NodeId, Node) 
         .inspect_accessibility()
         .expect("accessibility tree");
     let (id, node) = snapshot
-        .find(label, role)
+        .find(&crate::res::I18N.text(label), role)
         .unwrap_or_else(|| panic!("missing {label} {role:?}"));
     (id, node.clone())
 }
