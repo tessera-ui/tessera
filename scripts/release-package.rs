@@ -66,6 +66,7 @@ const PUBLISHABLE_PACKAGES: &[&str] = &[
     "tessera-mobile",
     "tessera-platform",
     "tessera-build",
+    "tessera-i18n",
 ];
 
 fn release_package(
