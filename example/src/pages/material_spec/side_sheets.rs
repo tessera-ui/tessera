@@ -373,22 +373,22 @@ fn availability() {
             ],
             vec![
                 "ui-implementation".into(),
-                "ui-flutter".into(),
+                "Flutter".into(),
                 "ui-unavailable".into(),
             ],
             vec![
                 "ui-implementation".into(),
-                "ui-jetpack-compose".into(),
+                "Jetpack Compose".into(),
                 "ui-unavailable".into(),
             ],
             vec![
                 "ui-implementation".into(),
-                "ui-android-views-mdc-android".into(),
+                "Android Views (MDC-Android)".into(),
                 "ui-available".into(),
             ],
             vec![
                 "ui-implementation".into(),
-                "ui-web".into(),
+                "Web".into(),
                 "ui-unavailable".into(),
             ],
         ],
@@ -504,7 +504,7 @@ const TOKENS: [Token; 31] = [
         group: "ui-enabled",
         section: "ui-headline",
         name: "ui-sheet-side-docked-headline-font",
-        value: "ui-roboto",
+        value: "Roboto",
     },
     Token {
         group: "ui-enabled",
@@ -534,7 +534,7 @@ const TOKENS: [Token; 31] = [
         group: "ui-enabled",
         section: "ui-headline",
         name: "ui-sheet-side-docked-headline-type-style",
-        value: "ui-title-large",
+        value: "Title large",
     },
     Token {
         group: "ui-enabled",

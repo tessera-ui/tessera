@@ -56,7 +56,7 @@ ui-input-measurements = 输入测量
 
 ui-measurement = 测量
 
-ui-container-padding = 集装箱填料
+ui-container-padding = 容器填料
 
 ui-dial-time-selector = 拨号时间选择器
 
@@ -106,7 +106,7 @@ ui-select-hours-minutes-and-for-a-12-hour-clock-am-or-pm = 选择小时、分钟
 
 ui-keep-touch-selection-comfortable-on-mobile-devices = 在移动设备上保持触摸选择舒适。
 
-ui-the-availability-above-describes-the-material-libraries-the-live-examples-on-this-page-are = 上面的可用性描述了材质库。此页面上的实例由 Tessera 渲染。
+ui-the-availability-above-describes-the-material-libraries-the-live-examples-on-this-page-are = 上面的可用性描述了Material 库。此页面上的实例由 Tessera 渲染。
 
 ui-material-3-keeps-the-dial-and-keyboard-variants-with-new-color-mappings-that-support-dynam = Material 3 保留了表盘和键盘的变体，并具有支持动态颜色的新颜色映射。选定的时间和期间字段使用不同的容器角色，而不是一种共享的重音处理。
 
@@ -122,7 +122,7 @@ ui-m3-dynamic-color-mapping = M3动态色彩映射
 
 ui-m3-selected-hour-and-selected-period-have-distinct-color-mappings = M3：所选时间和所选时段具有不同的颜色映射。
 
-ui-center-a-modal-time-picker-above-a-scrim-the-main-content-remains-visible-for-context-but = 将模态时间选择器置于稀松布上方的中心。主要内容对于上下文仍然可见，但在选择器关闭之前不可用。将整个容器、输入模式切换和确认操作保留在屏幕上。
+ui-center-a-modal-time-picker-above-a-scrim-the-main-content-remains-visible-for-context-but = 将模态时间选择器置于遮罩上方的中心。主要内容对于上下文仍然可见，但在选择器关闭之前不可用。将整个容器、输入模式切换和确认操作保留在屏幕上。
 
 ui-use-the-dialog-below-to-try-a-real-modal-changes-remain-a-draft-until-ok-cancel-or-a-click = 使用下面的对话框尝试真正的模态。在确定之前，更改仍为草稿；取消或在对话框外部单击将保留保存的值。
 
@@ -206,7 +206,7 @@ ui-guidelines-dial-anatomy = 表盘解剖指南
 
 ui-guidelines-input-anatomy = 指南输入解剖
 
-ui-the-modal-surface-contains-all-controls-and-appears-above-a-scrim = 模态表面包含所有控件并显示在稀松布上方。
+ui-the-modal-surface-contains-all-controls-and-appears-above-a-scrim = 模态容器包含全部控件，并显示在遮罩上方。
 
 ui-input-selector = 输入选择器
 
@@ -290,13 +290,7 @@ ui-value-annotated-time-picker = { $v0 } 带注释的时间选择器
 
 ui-time-color-role-value-value = 时间颜色角色 { $v0 }: { $v1 }
 
-ui-primary-container-on-primary-container = 主容器/主容器上
-
 ui-unselected-time-field-clock-dial = 未选择的时间字段/时钟表盘
-
-ui-surface-container-highest-on-surface = 水面容器最高/在水面上
-
-ui-tertiary-container-on-tertiary-container = 三级容器/在三级容器上
 
 ui-selector-handle-center = 选择器手柄/中心
 

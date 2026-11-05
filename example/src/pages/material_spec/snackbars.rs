@@ -232,7 +232,7 @@ fn bullets(items: Vec<&'static str>) {
             for &item in &items {
                 row().children(move || {
                     text()
-                        .content(I18N.text("•"))
+                        .content("•")
                         .style(type_style(16.0, 24.0))
                         .modifier(Modifier::new().width(Dp(20.0)));
                     text()
@@ -849,7 +849,7 @@ fn message_list() {
         .modifier(Modifier::new().fill_max_width())
         .children(move || {
             text()
-                .content(I18N.text("9:30"))
+                .content("9:30")
                 .style(type_style(11.0, 16.0))
                 .color(scheme.on_surface)
                 .modifier(Modifier::new().padding(Padding::new(
@@ -1634,7 +1634,7 @@ const TOKENS: [(&str, &str, &str); 28] = [
     (
         "ui-enabled",
         "ui-snackbar-container-color",
-        "ui-inverse-surface-322f35",
+        "Inverse surface · #322F35",
     ),
     (
         "ui-enabled",
@@ -1661,13 +1661,13 @@ const TOKENS: [(&str, &str, &str); 28] = [
         "ui-snackbar-container-with-two-lines-height",
         "68dp",
     ),
-    ("ui-enabled", "ui-snackbar-label-text", "ui-label-large"),
+    ("ui-enabled", "ui-snackbar-label-text", "Label large"),
     (
         "ui-enabled",
         "ui-snackbar-label-text-color",
-        "ui-inverse-primary-d0bcff",
+        "Inverse primary · #D0BCFF",
     ),
-    ("ui-enabled", "ui-snackbar-label-text-font", "ui-roboto"),
+    ("ui-enabled", "ui-snackbar-label-text-font", "Roboto"),
     ("ui-enabled", "ui-snackbar-label-text-line-height", "20pt"),
     ("ui-enabled", "ui-snackbar-label-text-size", "14pt"),
     ("ui-enabled", "ui-snackbar-label-text-tracking", "0.1pt"),
@@ -1675,24 +1675,16 @@ const TOKENS: [(&str, &str, &str); 28] = [
     (
         "ui-enabled",
         "ui-snackbar-icon-color",
-        "ui-inverse-on-surface-f5eff7",
+        "Inverse on surface · #F5EFF7",
     ),
     ("ui-enabled", "ui-snackbar-icon-size", "24dp"),
-    (
-        "ui-enabled",
-        "ui-snackbar-supporting-text",
-        "ui-body-medium",
-    ),
+    ("ui-enabled", "ui-snackbar-supporting-text", "Body medium"),
     (
         "ui-enabled",
         "ui-snackbar-supporting-text-color",
-        "ui-inverse-on-surface-f5eff7",
+        "Inverse on surface · #F5EFF7",
     ),
-    (
-        "ui-enabled",
-        "ui-snackbar-supporting-text-font",
-        "ui-roboto",
-    ),
+    ("ui-enabled", "ui-snackbar-supporting-text-font", "Roboto"),
     (
         "ui-enabled",
         "ui-snackbar-supporting-text-line-height",
@@ -1708,7 +1700,7 @@ const TOKENS: [(&str, &str, &str); 28] = [
     (
         "ui-hovered",
         "ui-snackbar-hover-label-text-color",
-        "ui-inverse-primary-d0bcff",
+        "Inverse primary · #D0BCFF",
     ),
     (
         "ui-hovered",
@@ -1718,13 +1710,13 @@ const TOKENS: [(&str, &str, &str); 28] = [
     (
         "ui-focused",
         "ui-snackbar-focus-label-text-color",
-        "ui-inverse-primary-d0bcff",
+        "Inverse primary · #D0BCFF",
     ),
     ("ui-focused", "ui-snackbar-focus-state-layer-opacity", "0.1"),
     (
         "ui-pressed-ripple",
         "ui-snackbar-pressed-label-text-color",
-        "ui-inverse-primary-d0bcff",
+        "Inverse primary · #D0BCFF",
     ),
     (
         "ui-pressed-ripple",
@@ -1770,10 +1762,10 @@ fn colors() {
     caption("ui-snackbar-color-roles-used-for-light-and-dark-schemes");
     gap(Dp(12.0));
     numbered(vec![
-        "ui-inverse-surface",
-        "ui-inverse-on-surface",
-        "ui-inverse-primary",
-        "ui-inverse-on-surface",
+        "Inverse surface",
+        "Inverse on surface",
+        "Inverse primary",
+        "Inverse on surface",
     ]);
 }
 
@@ -2106,22 +2098,22 @@ fn resources() {
             ],
             vec![
                 "ui-implementation".into(),
-                "ui-flutter".into(),
+                "Flutter".into(),
                 "ui-available".into(),
             ],
             vec![
                 "ui-implementation".into(),
-                "ui-jetpack-compose".into(),
+                "Jetpack Compose".into(),
                 "ui-available".into(),
             ],
             vec![
                 "ui-implementation".into(),
-                "ui-android-views-mdc-android".into(),
+                "Android Views (MDC-Android)".into(),
                 "ui-available".into(),
             ],
             vec![
                 "ui-implementation".into(),
-                "ui-web".into(),
+                "Web".into(),
                 "ui-unavailable".into(),
             ],
         ],

@@ -171,16 +171,16 @@ fn tokens() {
     gap(Dp(24.0));
     let (container, outline, shadow, tint, resting, hover, dragged) = match variant.get() {
         CardVariant::Elevated => (
-            "ui-surface-container-low",
+            "Surface container low",
             "ui-none",
             "#000000",
-            "ui-primary",
+            "Primary",
             "1dp",
             "2dp",
             "4dp",
         ),
         CardVariant::Filled => (
-            "ui-surface-container-highest",
+            "Surface container highest",
             "ui-none",
             "ui-none",
             "ui-none",
@@ -189,8 +189,8 @@ fn tokens() {
             "3dp",
         ),
         CardVariant::Outlined => (
-            "ui-surface",
-            "ui-outline-variant-1dp",
+            "Surface",
+            "Outline variant · 1dp",
             "ui-none",
             "ui-none",
             "0dp",
@@ -209,7 +209,7 @@ fn tokens() {
                 container.into(),
             ],
             vec![
-                "ui-outline".into(),
+                "ui-outline-element".into(),
                 "ui-outline-color-and-width".into(),
                 outline.into(),
             ],
@@ -227,12 +227,12 @@ fn tokens() {
             vec![
                 "ui-label".into(),
                 "ui-label-text-color".into(),
-                "ui-on-surface".into(),
+                "On surface".into(),
             ],
             vec![
                 "ui-icon".into(),
                 "ui-icon-color-and-size".into(),
-                "ui-on-surface-variant-24dp".into(),
+                "On surface variant · 24dp".into(),
             ],
         ],
     );

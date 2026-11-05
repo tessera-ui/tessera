@@ -1,4 +1,4 @@
-ui-standard-filled-unselected-filled-selected-filled-tonal-and-outlined-icon-buttons = 标准、填充未选择、填充选择、填充色调和轮廓图标按钮
+ui-standard-filled-unselected-filled-selected-filled-tonal-and-outlined-icon-buttons = 标准、填充未选择、填充选择、填充色调和描边图标按钮
 
 ui-download = 下载
 
@@ -18,7 +18,7 @@ ui-extra-small-medium-large-extra-large = 特小号、中号、大号、特大�
 
 ui-color-style = 颜色款式
 
-ui-filled-default-tonal-outlined-standard = 填充（默认）、色调、轮廓、标准
+ui-filled-default-tonal-outlined-standard = 填充（默认）、色调、描边、标准
 
 ui-narrow-wide = 窄、宽
 
@@ -26,7 +26,7 @@ ui-anatomy-add-action = 解剖添加动作
 
 ui-1-icon = 1 个图标
 
-ui-2-container = 2 集装箱
+ui-2-container = 2 容器
 
 ui-toggle-off = 关闭
 

@@ -283,7 +283,7 @@ pub(super) fn availability() {
         }
     }
     super::spec_table_cells(
-        ["ui-category", "ui-configuration", "M3", "ui-m3-expressive"]
+        ["ui-category", "ui-configuration", "M3", "M3 Expressive"]
             .map(str::to_owned)
             .to_vec(),
         cells,
@@ -299,19 +299,19 @@ const TOKEN_SETS: [&[Token]; 6] = [
             group: "ui-disabled",
             section: "ui-stop-indicator",
             name: "ui-slider-disabled-active-stop-indicator-container-color-md-comp-slider-disabled-active",
-            value: "ui-inverse-on-surface",
+            value: "Inverse on surface",
         },
         Token {
             group: "ui-disabled",
             section: "ui-stop-indicator",
             name: "ui-slider-disabled-inactive-stop-indicator-container-color-md-comp-slider-disabled-inact",
-            value: "ui-on-surface",
+            value: "On surface",
         },
         Token {
             group: "ui-disabled",
             section: "ui-track",
             name: "ui-slider-disabled-active-track-color-md-comp-slider-disabled-active-track-color",
-            value: "ui-on-surface",
+            value: "On surface",
         },
         Token {
             group: "ui-disabled",
@@ -323,7 +323,7 @@ const TOKEN_SETS: [&[Token]; 6] = [
             group: "ui-disabled",
             section: "ui-track",
             name: "ui-slider-disabled-inactive-track-color-md-comp-slider-disabled-inactive-track-color",
-            value: "ui-on-surface",
+            value: "On surface",
         },
         Token {
             group: "ui-disabled",
@@ -335,7 +335,7 @@ const TOKEN_SETS: [&[Token]; 6] = [
             group: "ui-disabled",
             section: "ui-handle",
             name: "ui-slider-disabled-handle-color-md-comp-slider-disabled-handle-color",
-            value: "ui-on-surface",
+            value: "On surface",
         },
         Token {
             group: "ui-disabled",
@@ -371,19 +371,19 @@ const TOKEN_SETS: [&[Token]; 6] = [
             group: "ui-enabled",
             section: "ui-stop-indicator",
             name: "ui-slider-stop-indicator-color-md-comp-slider-stop-indicator-color",
-            value: "ui-on-secondary-container",
+            value: "On secondary container",
         },
         Token {
             group: "ui-enabled",
             section: "ui-stop-indicator",
             name: "ui-slider-stop-indicator-color-selected-md-comp-slider-stop-indicator-color-selected",
-            value: "ui-on-primary",
+            value: "On primary",
         },
         Token {
             group: "ui-enabled",
             section: "ui-container",
             name: "ui-slider-active-stop-indicator-container-color-md-comp-slider-active-stop-indicator-con",
-            value: "ui-on-primary",
+            value: "On primary",
         },
         Token {
             group: "ui-enabled",
@@ -395,7 +395,7 @@ const TOKEN_SETS: [&[Token]; 6] = [
             group: "ui-enabled",
             section: "ui-container",
             name: "ui-slider-inactive-stop-indicator-container-color-md-comp-slider-inactive-stop-indicator",
-            value: "ui-on-secondary-container",
+            value: "On secondary container",
         },
         Token {
             group: "ui-enabled",
@@ -443,13 +443,13 @@ const TOKEN_SETS: [&[Token]; 6] = [
             group: "ui-enabled",
             section: "ui-track",
             name: "ui-slider-active-track-color-md-comp-slider-active-track-color",
-            value: "ui-primary",
+            value: "Primary",
         },
         Token {
             group: "ui-enabled",
             section: "ui-track",
             name: "ui-slider-inactive-track-color-md-comp-slider-inactive-track-color",
-            value: "ui-secondary-container",
+            value: "Secondary container",
         },
         Token {
             group: "ui-enabled",
@@ -473,13 +473,13 @@ const TOKEN_SETS: [&[Token]; 6] = [
             group: "ui-enabled",
             section: "ui-handle",
             name: "ui-slider-handle-color-md-comp-slider-handle-color",
-            value: "ui-primary",
+            value: "Primary",
         },
         Token {
             group: "ui-enabled",
             section: "ui-handle",
             name: "ui-slider-active-handle-color-md-comp-slider-active-handle-color",
-            value: "ui-primary",
+            value: "Primary",
         },
         Token {
             group: "ui-enabled",
@@ -521,13 +521,13 @@ const TOKEN_SETS: [&[Token]; 6] = [
             group: "ui-focused",
             section: "ui-track",
             name: "ui-slider-focus-active-track-color-md-comp-slider-focus-active-track-color",
-            value: "ui-primary",
+            value: "Primary",
         },
         Token {
             group: "ui-focused",
             section: "ui-track",
             name: "ui-slider-focus-inactive-track-color-md-comp-slider-focus-inactive-track-color",
-            value: "ui-secondary-container",
+            value: "Secondary container",
         },
         Token {
             group: "ui-focused",
@@ -545,7 +545,7 @@ const TOKEN_SETS: [&[Token]; 6] = [
             group: "ui-pressed-ripple",
             section: "ui-handle",
             name: "ui-slider-pressed-handle-color-md-comp-slider-pressed-handle-color",
-            value: "ui-primary",
+            value: "Primary",
         },
         Token {
             group: "ui-pressed-ripple",
@@ -557,19 +557,19 @@ const TOKEN_SETS: [&[Token]; 6] = [
             group: "ui-pressed-ripple",
             section: "ui-track",
             name: "ui-slider-pressed-active-track-color-md-comp-slider-pressed-active-track-color",
-            value: "ui-primary",
+            value: "Primary",
         },
         Token {
             group: "ui-pressed-ripple",
             section: "ui-track",
             name: "ui-slider-pressed-inactive-track-color-md-comp-slider-pressed-inactive-track-color",
-            value: "ui-secondary-container",
+            value: "Secondary container",
         },
         Token {
             group: "ui-pressed-ripple",
             section: "ui-value-indicator",
             name: "ui-slider-value-indicator-container-color-md-comp-slider-value-indicator-container-color",
-            value: "ui-inverse-surface",
+            value: "Inverse surface",
         },
         Token {
             group: "ui-pressed-ripple",
@@ -581,7 +581,7 @@ const TOKEN_SETS: [&[Token]; 6] = [
             group: "ui-pressed-ripple",
             section: "ui-value-indicator",
             name: "ui-slider-value-indicator-label-font-color-md-comp-slider-value-indicator-label-label-te",
-            value: "ui-inverse-on-surface",
+            value: "Inverse on surface",
         },
         Token {
             group: "ui-pressed-ripple",

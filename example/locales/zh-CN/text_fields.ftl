@@ -1,10 +1,10 @@
-ui-enter-and-edit-text-in-filled-or-outlined-fields = 在填充或轮廓字段中输入和编辑文本。
+ui-enter-and-edit-text-in-filled-or-outlined-fields = 在填充或描边字段中输入和编辑文本。
 
 ui-use-a-text-field-when-someone-needs-to-enter-text-into-a-ui-such-as-filling-in-contact-or = 当有人需要在 UI 中输入文本（例如填写联系信息或付款信息）时，请使用文本字段。文本字段的两种变体都使用容器来提供交互的视觉提示并提供相同的功能。
 
-ui-outlined-text-fields = 概述文本字段
+ui-outlined-text-fields = 描边文本字段
 
-ui-outlined-text-fields-have-less-visual-emphasis-than-filled-text-fields-when-they-appear-in = 轮廓文本字段的视觉强调程度低于填充文本字段。当它们出现在表单等许多文本字段放置在一起的地方时，它们的强调程度降低有助于简化布局。
+ui-outlined-text-fields-have-less-visual-emphasis-than-filled-text-fields-when-they-appear-in = 描边文本字段的视觉强调程度低于填充文本字段。当它们出现在表单等许多文本字段放置在一起的地方时，它们的强调程度降低有助于简化布局。
 
 ui-both-variants-of-text-field-provide-the-same-functionality-the-variant-used-can-depend-on = 文本字段的两种变体都提供相同的功能。使用的变体可以仅取决于样式。选择最适合应用程序视觉风格、最适合 UI 目标并且与其他组件和周围内容最不同的变体。
 
@@ -30,7 +30,7 @@ ui-navigate-to-and-select-interactive-icons = 导航到并选择交互式图标
 
 ui-password = 密码
 
-ui-the-containers-for-both-filled-and-outlined-text-fields-provide-the-same-functionality-cha = 填充文本字段和轮廓文本字段的容器提供相同的功能。颜色和笔划粗细的变化有助于为交互提供清晰的视觉提示。确保容器轮廓与背景的对比度至少为 3:1。
+ui-the-containers-for-both-filled-and-outlined-text-fields-provide-the-same-functionality-cha = 填充文本字段和描边文本字段的容器提供相同的功能。颜色和笔划粗细的变化有助于为交互提供清晰的视觉提示。确保容器描边与背景的对比度至少为 3:1。
 
 ui-key = 钥匙
 
@@ -114,7 +114,7 @@ ui-focused-label-outline-and-caret = 重点标签、轮廓和插入符
 
 ui-error-label-and-indicator = 错误标签和指示器
 
-ui-outlined-resting-border = 概述休息边框
+ui-outlined-resting-border = 描边休息边框
 
 ui-error-message = 错误信息
 
@@ -122,7 +122,7 @@ ui-clear-illustrated-text-field = 清晰的图解文本字段
 
 ui-make-sure-text-fields-look-interactive = 确保文本字段看起来具有交互性
 
-ui-two-variants-filled-and-outlined = 两种变体：填充和轮廓
+ui-two-variants-filled-and-outlined = 两种变体：填充和描边
 
 ui-the-text-field-s-state-blank-with-input-error-etc-should-be-visible-at-a-glance = 文本字段的状态（空白、有输入、错误等）应该一目了然
 
@@ -134,11 +134,11 @@ ui-text-fields-have-new-color-mappings = 文本字段具有新的颜色映射
 
 ui-pietersen = 彼得森
 
-ui-outlined-name = 概述名称
+ui-outlined-name = 描边名称
 
 ui-filled-name = 填写姓名
 
-ui-text-fields-let-people-enter-and-edit-text-choose-filled-or-outlined-fields-consistently-w = 文本字段允许人们输入和编辑文本。选择表格中一致的填充或轮廓字段。
+ui-text-fields-let-people-enter-and-edit-text-choose-filled-or-outlined-fields-consistently-w = 文本字段允许人们输入和编辑文本。选择表格中一致的填充或描边字段。
 
 ui-contact-information = 联系方式
 
@@ -154,9 +154,9 @@ ui-at-gmail-dot-com = 在 gmail dot com
 
 ui-required-5883 = * 必填
 
-ui-containers = 集装箱
+ui-containers = 容器
 
-ui-containers-improve-the-discoverability-of-text-fields-by-creating-contrast-between-the-tex = 容器通过在文本字段和周围内容之间创建对比来提高文本字段的可发现性。轮廓文本字段的容器具有圆角，而填充文本字段的容器具有圆顶角和方形底角。
+ui-containers-improve-the-discoverability-of-text-fields-by-creating-contrast-between-the-tex = 容器通过在文本字段和周围内容之间创建对比来提高文本字段的可发现性。描边文本字段的容器具有圆角，而填充文本字段的容器具有圆顶角和方形底角。
 
 ui-label-text-tells-people-what-information-is-requested-every-text-field-should-have-a-label = 标签文本告诉人们需要什么信息。每个文本字段都应该有一个标签。标签文本应与输入文本对齐并且始终可见。它不应被截断或占用多行。
 
@@ -202,7 +202,7 @@ ui-read-only-label = 只读标签
 
 ui-filled-text-field-container = 填充文本字段容器
 
-ui-outlined-text-field-container = 轮廓文本字段容器
+ui-outlined-text-field-container = 描边文本字段容器
 
 ui-include-an-uppercase-letter-a-lowercase-letter-and-a-numeric-character = 包含一个大写字母、一个小写字母和一个数字字符
 
@@ -320,7 +320,7 @@ ui-support-and-counter = 支持与反制
 
 ui-value-100 = { $v0 } / 100
 
-ui-outlined-7110 = 概述
+ui-outlined-7110 = 描边
 
 ui-filled-7111 = 充满
 

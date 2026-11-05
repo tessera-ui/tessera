@@ -2,7 +2,7 @@ ui-filled-color = 填充颜色
 
 ui-tonal-color = 色调颜色
 
-ui-outlined-color = 轮廓颜色
+ui-outlined-color = 描边颜色
 
 ui-standard-color = 标准颜色
 
@@ -50,11 +50,11 @@ ui-disabled-outline-opacity = 禁用轮廓不透明度
 
 ui-disabled-content-role = 禁用的内容角色
 
-ui-narrow-container-width = 集装箱宽度窄
+ui-narrow-container-width = 容器宽度窄
 
 ui-default-container-width = 默认容器宽度
 
-ui-wide-container-width = 集装箱宽度宽
+ui-wide-container-width = 容器宽度宽
 
 ui-selected-round-resting-shape = 选定的圆形静止形状
 
@@ -68,7 +68,7 @@ ui-square-container-corner-radius = 方形容器角半径
 
 ui-pressed-container-corner-radius = 压制容器圆角半径
 
-ui-outlined-container-outline-width = 概述容器轮廓宽度
+ui-outlined-container-outline-width = 描边容器描边宽度
 
 ui-default-container-color = 默认容器颜色
 
@@ -84,17 +84,11 @@ ui-selected-icon-color = 选定的图标颜色
 
 ui-disabled-icon-color = 禁用图标颜色
 
-ui-on-surface-38 = 表面 · 38%
-
 ui-disabled-container-color = 禁用容器颜色
-
-ui-on-surface-10 = 表面·10%
 
 ui-selected-outline-color = 选定的轮廓颜色
 
 ui-disabled-outline-color = 禁用轮廓颜色
-
-ui-outline-variant-38 = 轮廓变体 · 38%
 
 ui-token-preview-favorite = 设计令牌预览最爱
 
@@ -112,7 +106,7 @@ ui-disabled-filled-tonal-container-opacity = 禁用填充/色调容器不透明�
 
 ui-narrow-leading-trailing-space = 狭窄的前导/尾随空间
 
-ui-default-leading-trailing-space = 默认前导/尾随空格
+ui-default-leading-trailing-space = 默认前导/末尾间距
 
 ui-wide-leading-trailing-space = 宽的前导/尾随空间
 

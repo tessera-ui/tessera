@@ -142,7 +142,7 @@ fn common_rows() -> Vec<Vec<String>> {
         ("ui-disabled-icon-opacity", "38%".into()),
         ("ui-disabled-filled-tonal-container-opacity", "10%".into()),
         ("ui-disabled-outline-opacity", "38%".into()),
-        ("ui-disabled-content-role", "ui-on-surface".into()),
+        ("ui-disabled-content-role", "On surface".into()),
     ])
 }
 
@@ -236,36 +236,36 @@ fn size_rows(size: IconButtonSize) -> Vec<Vec<String>> {
 fn color_rows(style: IconButtonVariant) -> Vec<Vec<String>> {
     let (container, icon, off_container, off_icon, on_container, on_icon) = match style {
         IconButtonVariant::Filled => (
-            "ui-primary",
-            "ui-on-primary",
-            "ui-surface-container",
-            "ui-on-surface-variant",
-            "ui-primary",
-            "ui-on-primary",
+            "Primary",
+            "On primary",
+            "Surface container",
+            "On surface variant",
+            "Primary",
+            "On primary",
         ),
         IconButtonVariant::FilledTonal => (
-            "ui-secondary-container",
-            "ui-on-secondary-container",
-            "ui-secondary-container",
-            "ui-on-secondary-container",
-            "ui-secondary",
-            "ui-on-secondary",
+            "Secondary container",
+            "On secondary container",
+            "Secondary container",
+            "On secondary container",
+            "Secondary",
+            "On secondary",
         ),
         IconButtonVariant::Outlined => (
             "ui-transparent",
-            "ui-on-surface-variant",
+            "On surface variant",
             "ui-transparent",
-            "ui-on-surface-variant",
-            "ui-inverse-surface",
-            "ui-inverse-on-surface",
+            "On surface variant",
+            "Inverse surface",
+            "Inverse on surface",
         ),
         IconButtonVariant::Standard => (
             "ui-transparent",
-            "ui-on-surface-variant",
+            "On surface variant",
             "ui-transparent",
-            "ui-on-surface-variant",
+            "On surface variant",
             "ui-transparent",
-            "ui-primary",
+            "Primary",
         ),
     };
     let mut values = vec![
@@ -287,22 +287,22 @@ fn color_rows(style: IconButtonVariant) -> Vec<Vec<String>> {
             "ui-selected-hovered-focused-pressed-state-layer-color",
             on_icon.into(),
         ),
-        ("ui-disabled-icon-color", "ui-on-surface-38".into()),
+        ("ui-disabled-icon-color", "On surface · 38%".into()),
     ];
     if matches!(
         style,
         IconButtonVariant::Filled | IconButtonVariant::FilledTonal
     ) {
-        values.push(("ui-disabled-container-color", "ui-on-surface-10".into()));
+        values.push(("ui-disabled-container-color", "On surface · 10%".into()));
     }
     if style == IconButtonVariant::Outlined {
         values.extend([
             (
                 "ui-default-unselected-outline-color",
-                "ui-outline-variant".into(),
+                "Outline variant".into(),
             ),
             ("ui-selected-outline-color", "ui-none".into()),
-            ("ui-disabled-outline-color", "ui-outline-variant-38".into()),
+            ("ui-disabled-outline-color", "Outline variant · 38%".into()),
         ]);
     }
     rows(values)

@@ -24,13 +24,9 @@ ui-expose-meaningful-headings-text-and-actions-in-reading-order-hide-purely-deco
 
 ui-a-focused-collection-of-related-content = A focused collection of related content.
 
-ui-surface-container-highest = Surface container highest
-
 ui-element-tokens = Element tokens
 
 ui-container-color = Container color
-
-ui-outline = Outline
 
 ui-outline-color-and-width = Outline color and width
 
@@ -49,8 +45,6 @@ ui-surface-tint-layer-color = Surface tint layer color
 ui-label-text-color = Label text color
 
 ui-icon-color-and-size = Icon color and size
-
-ui-on-surface-variant-24dp = On surface variant · 24dp
 
 ui-state-tokens = State tokens
 

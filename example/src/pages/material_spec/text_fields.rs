@@ -332,10 +332,10 @@ fn sample(
                     if affixes.get() {
                         field
                             .prefix(move || {
-                                text().content(I18N.text("$"));
+                                text().content("$");
                             })
                             .suffix(move || {
-                                text().content(I18N.text(".00"));
+                                text().content(".00");
                             });
                     }
                     if secure.get() {
@@ -479,28 +479,28 @@ fn detail(outlined: bool) {
             gap(Dp(24.0));
             anatomy_legend(if outlined {
                 vec![
-                    "ui-outline",
-                    "ui-on-surface-variant",
-                    "ui-on-surface-variant",
-                    "ui-primary",
-                    "ui-on-surface-variant",
-                    "ui-primary",
-                    "ui-primary",
-                    "ui-on-surface",
-                    "ui-on-surface-variant",
+                    "Outline",
+                    "On surface variant",
+                    "On surface variant",
+                    "Primary",
+                    "On surface variant",
+                    "Primary",
+                    "Primary",
+                    "On surface",
+                    "On surface variant",
                 ]
             } else {
                 vec![
-                    "ui-surface-container-highest",
-                    "ui-on-surface-variant",
-                    "ui-on-surface-variant",
-                    "ui-primary",
-                    "ui-on-surface-variant",
-                    "ui-primary",
-                    "ui-primary",
-                    "ui-on-surface",
-                    "ui-on-surface-variant",
-                    "ui-on-surface",
+                    "Surface container highest",
+                    "On surface variant",
+                    "On surface variant",
+                    "Primary",
+                    "On surface variant",
+                    "Primary",
+                    "Primary",
+                    "On surface",
+                    "On surface variant",
+                    "On surface",
                 ]
             });
             gap(Dp(88.0));
@@ -675,19 +675,19 @@ fn tokens() {
         vec![
             vec![
                 "ui-filled-container".into(),
-                "ui-surface-container-highest".into(),
+                "Surface container highest".into(),
             ],
-            vec!["ui-input-text".into(), "ui-on-surface".into()],
+            vec!["ui-input-text".into(), "On surface".into()],
             vec![
                 "ui-resting-label-and-icons".into(),
-                "ui-on-surface-variant".into(),
+                "On surface variant".into(),
             ],
             vec![
                 "ui-focused-label-outline-and-caret".into(),
-                "ui-primary".into(),
+                "Primary".into(),
             ],
-            vec!["ui-error-label-and-indicator".into(), "ui-error".into()],
-            vec!["ui-outlined-resting-border".into(), "ui-outline".into()],
+            vec!["ui-error-label-and-indicator".into(), "Error".into()],
+            vec!["ui-outlined-resting-border".into(), "Outline".into()],
         ],
     );
 }
@@ -880,7 +880,7 @@ fn bullets(items: Vec<String>) {
     for item in items {
         row().children(move || {
             text()
-                .content(I18N.text("•"))
+                .content("•")
                 .style(type_style(16.0, 24.0))
                 .modifier(Modifier::new().width(Dp(24.0)));
             text()
@@ -919,22 +919,22 @@ fn availability() {
             ],
             vec![
                 "ui-implementation".into(),
-                "ui-flutter".into(),
+                "Flutter".into(),
                 "ui-available".into(),
             ],
             vec![
                 "ui-implementation".into(),
-                "ui-jetpack-compose".into(),
+                "Jetpack Compose".into(),
                 "ui-available".into(),
             ],
             vec![
                 "ui-implementation".into(),
-                "ui-android-views-mdc-android".into(),
+                "Android Views (MDC-Android)".into(),
                 "ui-available".into(),
             ],
             vec![
                 "ui-implementation".into(),
-                "ui-web".into(),
+                "Web".into(),
                 "ui-available".into(),
             ],
         ],
@@ -1216,7 +1216,7 @@ fn form_field(label: String, outlined: bool, mode: u8) {
             if mode == 4 {
                 field.prefix(move || {
                     text()
-                        .content(I18N.text("$"))
+                        .content("$")
                         .modifier(Modifier::new().semantics(SemanticsArgs {
                             role: Some(Role::Label),
                             label: Some(I18N.text("ui-us-dollars")),
@@ -1227,7 +1227,7 @@ fn form_field(label: String, outlined: bool, mode: u8) {
             if mode == 5 {
                 field.suffix(move || {
                     text()
-                        .content(I18N.text("@gmail.com"))
+                        .content("@gmail.com")
                         .modifier(Modifier::new().semantics(SemanticsArgs {
                             role: Some(Role::Label),
                             label: Some(I18N.text("ui-at-gmail-dot-com")),
@@ -2499,28 +2499,28 @@ fn field_color_callouts(outlined: bool, scale: f64) {
     let scheme = use_context::<MaterialTheme>().unwrap().get().color_scheme;
     let roles = if outlined {
         vec![
-            "ui-outline",
-            "ui-on-surface-variant",
-            "ui-on-surface-variant",
-            "ui-primary",
-            "ui-on-surface-variant",
-            "ui-primary",
-            "ui-primary",
-            "ui-on-surface",
-            "ui-on-surface-variant",
+            "Outline",
+            "On surface variant",
+            "On surface variant",
+            "Primary",
+            "On surface variant",
+            "Primary",
+            "Primary",
+            "On surface",
+            "On surface variant",
         ]
     } else {
         vec![
-            "ui-surface-container-highest",
-            "ui-on-surface-variant",
-            "ui-on-surface-variant",
-            "ui-primary",
-            "ui-on-surface-variant",
-            "ui-primary",
-            "ui-primary",
-            "ui-on-surface",
-            "ui-on-surface-variant",
-            "ui-on-surface",
+            "Surface container highest",
+            "On surface variant",
+            "On surface variant",
+            "Primary",
+            "On surface variant",
+            "Primary",
+            "Primary",
+            "On surface",
+            "On surface variant",
+            "On surface",
         ]
     };
     let anchors = [
@@ -2999,7 +2999,7 @@ fn field_configuration_item(outlined: bool, row: usize, populated: bool, scale: 
             }
             if row == 4 {
                 field.prefix(move || {
-                    text().content(I18N.text("$"));
+                    text().content("$");
                 });
             }
             if row == 5 {

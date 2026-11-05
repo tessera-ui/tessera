@@ -18,7 +18,7 @@ ui-available-on-the-live-controls = 可在实时控制上使用
 
 ui-what-s-new = 有什么新消息
 
-ui-radio-buttons-use-new-color-mappings-and-support-dynamic-color-selected-icons-use-primary = 单选按钮使用新的颜色映射并支持动态颜色。选定的图标使用主图标；未选择的图标在表面变体上使用。相邻文本保留表面颜色。
+ui-radio-buttons-use-new-color-mappings-and-support-dynamic-color-selected-icons-use-primary = 单选按钮采用新的配色并支持动态颜色。选中图标使用 Primary，未选中图标使用 On Surface Variant；相邻文字保持 On Surface。
 
 ui-color-changes-emphasize-the-selection-without-changing-the-label-these-native-choices-demo = 颜色变化强调选择而不改变标签。这些原生选择展示了当前主题的颜色角色。
 
@@ -46,7 +46,7 @@ ui-radio-buttons-are-often-arranged-in-stacked-layouts-list-them-vertically-with
 
 ui-adjacent-label-text = 相邻标签文本
 
-ui-always-pair-a-radio-button-with-a-label-describing-what-it-selects-each-choice-needs-its-o = 始终将单选按钮与描述其选择内容的标签配对。每个选择都需要有自己的标签。标签和单选选择相同的选项；标签文本在交互过程中保持表面颜色。
+ui-always-pair-a-radio-button-with-a-label-describing-what-it-selects-each-choice-needs-its-o = 每个单选按钮都应配有说明选项含义的标签。点击标签或按钮应选中同一项；交互过程中，标签文字保持 On Surface 颜色。
 
 ui-selecting-a-radio-button-deselects-the-previous-option-activating-the-selected-option-does = 选择单选按钮将取消选择上一个选项。激活所选选项并不会清除它。组可以从选择或不选择开始，但应尽可能提供合适的默认值。
 
@@ -147,13 +147,13 @@ ui-horizontal-placement-example = 水平放置示例
 
 ui-stacked-placement-example = 堆叠放置示例
 
-ui-radio-button-color-roles-in-light-and-dark-themes-1-primary-2-on-surface-variant = 单选按钮颜色在浅色和深色主题中的作用：
-    1. 小学
-    2. 表面变体
+ui-radio-button-color-roles-in-light-and-dark-themes-1-primary-2-on-surface-variant = 浅色和深色主题下的单选按钮颜色角色：
+    1. Primary
+    2. On Surface Variant
 
 ui-adjacent-text-label-color = 相邻文本标签颜色
 
-ui-use-on-surface-for-adjacent-text-labels-this-color-remains-the-same-when-the-label-or-radi = 用于相邻文本标签的表面。当选择、悬停、聚焦或按下标签或单选按钮时，此颜色保持不变。
+ui-use-on-surface-for-adjacent-text-labels-this-color-remains-the-same-when-the-label-or-radi = 相邻文字标签使用 On Surface。标签或单选按钮在选中、悬停、聚焦和按下时均保持此颜色。
 
 ui-states-communicate-the-status-of-a-component-these-examples-retain-real-radio-controls-the = 状态传达组件的状态。这些例子保留了真实的无线电控制；它们的原生周围圆圈说明了悬停、焦点和按下状态层。
 

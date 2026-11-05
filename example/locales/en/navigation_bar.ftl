@@ -54,8 +54,6 @@ ui-active-icon = Active icon
 
 ui-active-label = Active label
 
-ui-label-medium = Label medium
-
 ui-hover-8-focus-10-press-10 = Hover 8% · Focus 10% · Press 10%
 
 ui-inactive-icon = Inactive icon

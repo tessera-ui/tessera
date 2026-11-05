@@ -88,9 +88,9 @@ ui-divider-thickness = 分隔板厚度
 
 ui-divider-color = 分隔线颜色
 
-ui-dark-theme-outline-variant = 深色主题轮廓变体
+ui-dark-theme-outline-variant = 深色主题的 Outline Variant
 
-ui-light-theme-outline-variant = 浅色主题轮廓变体
+ui-light-theme-outline-variant = 浅色主题的 Outline Variant
 
 ui-learn-more-about-design-tokens = 了解有关设计令牌的更多信息
 

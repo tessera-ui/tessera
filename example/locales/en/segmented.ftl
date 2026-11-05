@@ -150,8 +150,6 @@ ui-value-segmented-buttons = { $v0 } segmented buttons
 
 ui-value-selection-value = { $v0 } selection: { $v1 }
 
-ui-label-large-14dp-20dp = Label large · 14dp / 20dp
-
 ui-minimum-maximum-segments = Minimum / maximum segments
 
 ui-selection-none = none

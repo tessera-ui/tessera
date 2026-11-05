@@ -70,15 +70,15 @@ ui-mirrored-page-navigation = 镜像页面导航
 
 ui-page-navigation = 页面导航
 
-ui-filled-button-primary-on-primary = 已填充按钮（主要、主要）
+ui-filled-button-primary-on-primary = 实心按钮（Primary、On Primary）
 
-ui-toggle-tonal-button-surface-container-on-surface = 切换色调按钮（表面容器、表面上）
+ui-toggle-tonal-button-surface-container-on-surface = 色调切换按钮（Surface Container、On Surface）
 
-ui-standard-button-on-primary-container = 标准按钮（在主容器上）
+ui-standard-button-on-primary-container = 标准按钮（On Primary Container）
 
-ui-toggle-tonal-button-secondary-container-on-secondary-container = 切换色调按钮（辅助容器，在辅助容器上）
+ui-toggle-tonal-button-secondary-container-on-secondary-container = 色调切换按钮（Secondary Container、On Secondary Container）
 
-ui-standard-button-on-surface-variant = 标准按钮（表面版本）
+ui-standard-button-on-surface-variant = 标准按钮（On Surface Variant）
 
 ui-docked-toolbar-at-the-bottom-of-the-window = 停靠在窗口底部的工具栏
 
@@ -122,7 +122,7 @@ ui-icon-buttons-and-fab = 图标按钮和 FAB
 
 ui-icon-buttons-and-no-fab = 图标按钮，没有 FAB
 
-ui-two-expressive-variants-docked-toolbar-and-floating-toolbar = 两种富有表现力的变体：停靠工具栏和浮动工具栏
+ui-two-expressive-variants-docked-toolbar-and-floating-toolbar = 两种Expressive变体：停靠工具栏和浮动工具栏
 
 ui-use-the-vibrant-color-style-for-greater-emphasis = 使用鲜艳的色彩风格更加强调
 
@@ -136,15 +136,15 @@ ui-configurations-of-floating-toolbars = 浮动工具栏的配置
 
 ui-jetpack-compose-bottom-app-bar = Jetpack Compose - 底部应用栏
 
-ui-jetpack-compose-expressive-docked-toolbar = Jetpack Compose：富有表现力 - 停靠工具栏
+ui-jetpack-compose-expressive-docked-toolbar = Jetpack Compose：Expressive - 停靠工具栏
 
-ui-jetpack-compose-expressive-floating-toolbar = Jetpack Compose：富有表现力 - 浮动工具栏
+ui-jetpack-compose-expressive-floating-toolbar = Jetpack Compose：Expressive - 浮动工具栏
 
-ui-android-views-mdc-android-bottom-app-bar = Android 视图 (MDC-Android) - 底部应用栏
+ui-android-views-mdc-android-bottom-app-bar = Android Views (MDC-Android) - 底部应用栏
 
-ui-android-views-mdc-android-expressive-docked-toolbar = Android 视图 (MDC-Android)：富有表现力 - 停靠工具栏
+ui-android-views-mdc-android-expressive-docked-toolbar = Android Views (MDC-Android)：Expressive - 停靠工具栏
 
-ui-android-views-mdc-android-expressive-floating-toolbar = Android 视图 (MDC-Android)：富有表现力 - 浮动工具栏
+ui-android-views-mdc-android-expressive-floating-toolbar = Android Views (MDC-Android)：Expressive - 浮动工具栏
 
 ui-flutter-bottom-app-bar = Flutter - 底部应用栏
 
@@ -170,7 +170,7 @@ ui-floating-vibrant-color-scheme-and-paired-with-fab = 浮动、充满活力的�
 
 ui-docked-with-embedded-primary-action-instead-of-fab = 对接嵌入式主要操作而不是 FAB
 
-ui-elevation-no-shadow = 海拔：无阴影
+ui-elevation-no-shadow = 阴影高度：无阴影
 
 ui-layout-container-height-is-taller-and-the-fab-is-now-contained-within-the-app-bar-containe = 布局：容器高度更高，FAB 现在包含在应用栏容器内
 
@@ -260,9 +260,9 @@ ui-floating-toolbar-container-height-horizontal = 浮动工具栏容器高度 - 
 
 ui-floating-toolbar-container-width-vertical = 浮动工具栏容器宽度 - 垂直
 
-ui-floating-toolbar-leading-space = 浮动工具栏前导空间
+ui-floating-toolbar-leading-space = 浮动工具栏起始间距
 
-ui-floating-toolbar-trailing-space = 浮动工具栏尾随空格
+ui-floating-toolbar-trailing-space = 浮动工具栏末尾间距
 
 ui-floating-toolbar-margin-from-screen-edge-horizontal = 浮动工具栏距屏幕边缘的边距 - 水平
 
@@ -272,7 +272,7 @@ ui-floating-toolbar-space-between-actions = 操作之间的浮动工具栏空间
 
 ui-floating-toolbar-container-shape = 浮动工具栏容器形状
 
-ui-floating-toolbar-container-elevation = 浮动工具栏容器标高
+ui-floating-toolbar-container-elevation = 浮动工具栏容器阴影高度
 
 ui-level-3-6dp-6307 = 3级（6dp）
 
@@ -304,7 +304,7 @@ ui-toolbar-floating = 工具栏 - 浮动
 
 ui-toolbar-floating-fab = 工具栏 - 浮动 - FAB
 
-ui-browse-the-component-elements-attributes-tokens-and-their-values-color-tokens-resolve-thro = 浏览组件元素、属性、标记及其值。颜色标记通过活动材质主题解析；基线底部应用栏规格位于此选项卡的末尾。
+ui-browse-the-component-elements-attributes-tokens-and-their-values-color-tokens-resolve-thro = 查看组件元素、属性、设计令牌及其取值。颜色令牌由当前 Material 主题解析；本选项卡末尾还列出了基线底部应用栏的规格。
 
 ui-when-configuring-a-toolbar-think-of-it-as-a-container-with-several-slots-each-slot-can-be = 配置工具栏时，请将其视为具有多个插槽的容器。每个槽可以是不同的元素。最常见的元素是图标按钮、按钮和文本字段。
 
@@ -418,9 +418,9 @@ ui-choose-the-most-essential-actions-to-show-on-screen-by-default = 选择默认
 
 ui-floating-toolbars-shouldn-t-exceed-the-edge-of-the-window-or-pane = 浮动工具栏不应超出窗口或窗格的边缘
 
-ui-floating-toolbars-have-elevation-by-default-if-the-content-beneath-the-toolbar-is-visually = 浮动工具栏默认具有高度。如果工具栏下方的内容在视觉上很明显，则可以删除标高。
+ui-floating-toolbars-have-elevation-by-default-if-the-content-beneath-the-toolbar-is-visually = 浮动工具栏默认具有高度。如果工具栏下方的内容在视觉上很明显，则可以删除阴影高度。
 
-ui-the-elevation-on-floating-toolbars-can-be-removed-if-on-a-visually-distinct-background = 如果在视觉上不同的背景上，可以删除浮动工具栏上的标高
+ui-the-elevation-on-floating-toolbars-can-be-removed-if-on-a-visually-distinct-background = 如果在视觉上不同的背景上，可以删除浮动工具栏上的阴影高度
 
 ui-when-configuring-a-toolbar-think-of-it-as-a-container-with-several-slots-these-slots-can-b = 配置工具栏时，请将其视为具有多个插槽的容器。这些槽可以由按钮、图标按钮、图像、文本字段或任何类型的自定义组件填充。图标按钮提供了均匀的控件层次结构。混合填充图标按钮可以帮助强调单个操作。
 
@@ -548,11 +548,11 @@ ui-do-use-a-toolbar-to-display-local-navigation-on-a-specific-page = 做法：�
 
 ui-don-t-show-a-navigation-bar-and-a-toolbar-with-navigation-controls-at-the-same-time-6443 = 不要：同时显示导航栏和带有导航控件的工具栏
 
-ui-m2-bottom-app-bar-in-the-primary-color-with-8dp-elevation-and-a-fab-overlapping-its-top-ed = M2 底部应用栏采用原色，高度为 8dp，FAB 与其顶部边缘重叠
+ui-m2-bottom-app-bar-in-the-primary-color-with-8dp-elevation-and-a-fab-overlapping-its-top-ed = 采用 Primary 的 M2 底部应用栏，阴影高度为 8dp，FAB 与其顶部边缘重叠
 
 ui-m2-bottom-app-bar-had-higher-elevation-of-8dp-and-didn-t-contain-the-fab = M2：底部应用栏的高度较高，为 8dp，并且不包含 FAB
 
-ui-m3-bottom-app-bar-has-new-colors-a-taller-container-no-elevation-or-shadow-and-contains-th = M3：底部应用栏具有新颜色、更高的容器、没有标高或阴影，并且包含 FAB
+ui-m3-bottom-app-bar-has-new-colors-a-taller-container-no-elevation-or-shadow-and-contains-th = M3：底部应用栏具有新颜色、更高的容器、没有阴影高度或阴影，并且包含 FAB
 
 ui-toggle-toolbar-expansion = 切换工具栏扩展
 
@@ -580,7 +580,7 @@ ui-searched-for-value = 搜索“{ $v0 }”
 
 ui-value-screenvaluevalue = { $v0 } 屏幕{ $v1 }{ $v2 }
 
-ui-container-height-vertical-width = 集装箱高度/垂直宽度
+ui-container-height-vertical-width = 容器高度/垂直宽度
 
 ui-docked-leading-trailing-padding = 停靠的前导/尾随填充
 

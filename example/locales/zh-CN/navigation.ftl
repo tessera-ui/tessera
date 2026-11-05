@@ -1,6 +1,6 @@
-ui-expand-navigation-rail = 展开导航轨道
+ui-expand-navigation-rail = 展开导航侧栏
 
-ui-hide-collapsed-rail = 隐藏折叠的铁轨
+ui-hide-collapsed-rail = 隐藏折叠的导航侧栏
 
 ui-hide-when-collapsed = 折叠时隐藏
 
@@ -12,7 +12,7 @@ ui-collapsed = 倒塌
 
 ui-flexible = 灵活
 
-ui-surface-uncontained = 表面（非封闭）
+ui-surface-uncontained = Surface（无容器）
 
 ui-selected-indicator = 所选指标
 
@@ -22,13 +22,13 @@ ui-1-container-2-optional-menu-3-optional-fab-4-icon-5-active-indicator-6-label 
 
 ui-1-container-2-icon-3-label-4-active-indicator = 1 容器 2 图标 3 标签 4 活动指示器
 
-ui-expanded-rail = 扩展铁路
+ui-expanded-rail = 扩展导航侧栏
 
-ui-collapsed-rail = 倒塌的铁轨
+ui-collapsed-rail = 折叠的导航侧栏
 
-ui-surface-container-optional = 表面容器（可选）
+ui-surface-container-optional = Surface Container（可选）
 
-ui-the-baseline-rail-is-retained-for-comparison-use-a-collapsed-or-expanded-navigation-rail-f = 保留基线轨道以供比较。使用折叠或展开的导航导轨进行新设计。
+ui-the-baseline-rail-is-retained-for-comparison-use-a-collapsed-or-expanded-navigation-rail-f = 保留基线轨道以供比较。使用折叠或展开的导航侧栏进行新设计。
 
 ui-the-baseline-bar-is-retained-for-comparison-use-the-flexible-navigation-bar-for-new-design = 保留基线条以进行比较。使用灵活的导航栏进行新设计。
 
@@ -40,7 +40,7 @@ ui-icon-to-label-gap-3995 = 图标到标签的间隙
 
 ui-item-gap = 项目差距
 
-ui-baseline-navigation-rail = 基线导航轨道
+ui-baseline-navigation-rail = 基线导航侧栏
 
 ui-baseline-navigation-bar = 基线导航栏
 
@@ -76,7 +76,7 @@ ui-open-modal-expanded-rail = 开放式扩展轨道
 
 ui-select-the-menu-to-reveal-navigation-over-this-page = 选择菜单以显示此页面的导航。
 
-ui-close-modal-expanded-rail = 闭合模态扩展导轨
+ui-close-modal-expanded-rail = 闭合模态扩展导航侧栏
 
 ui-value-navigation-preview = { $v0 } 导航预览
 
@@ -114,16 +114,14 @@ ui-figure-compositions-value = 图形构成：{ $v0 }
 
 ui-selected-label-vertical-horizontal = 选定标签·垂直/水平
 
-ui-secondary-on-secondary-container = 辅助/辅助容器上
-
 ui-hover-focus-press-state-layer = 悬停/焦点/按下状态层
 
-ui-secondary-vertical-on-secondary-container-horizontal = 辅助（垂直）/辅助容器上（水平）
+ui-secondary-vertical-on-secondary-container-horizontal = Secondary（垂直）/ On Secondary Container（水平）
 
 ui-top-bottom-padding-6966 = 顶部/底部填充
 
 ui-collapsed-minimum-expanded-width = 折叠/最小展开宽度
 
-ui-rail-7098 = 铁路
+ui-rail-7098 = 导航侧栏
 
-ui-bar = 酒吧
+ui-bar = 栏

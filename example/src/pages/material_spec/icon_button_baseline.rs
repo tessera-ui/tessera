@@ -50,21 +50,21 @@ pub(super) fn figure() {
     let (prefix, container, icon, outline) = match variant.get() {
         IconButtonVariant::Filled => (
             "md.comp.filled-icon-button",
-            "ui-primary",
-            "ui-on-primary",
+            "Primary",
+            "On primary",
             "ui-none",
         ),
         IconButtonVariant::FilledTonal => (
             "md.comp.filled-tonal-icon-button",
-            "ui-secondary-container",
-            "ui-on-secondary-container",
+            "Secondary container",
+            "On secondary container",
             "ui-none",
         ),
         _ => (
             "md.comp.outlined-icon-button",
             "ui-transparent",
-            "ui-on-surface-variant",
-            "ui-outline",
+            "On surface variant",
+            "Outline",
         ),
     };
     icon_button()

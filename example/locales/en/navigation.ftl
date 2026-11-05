@@ -114,8 +114,6 @@ ui-figure-compositions-value = Figure compositions: { $v0 }
 
 ui-selected-label-vertical-horizontal = Selected label · vertical / horizontal
 
-ui-secondary-on-secondary-container = Secondary / on secondary container
-
 ui-hover-focus-press-state-layer = Hover / focus / press state layer
 
 ui-secondary-vertical-on-secondary-container-horizontal = Secondary (vertical) / On secondary container (horizontal)

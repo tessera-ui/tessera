@@ -1,14 +1,14 @@
-ui-present-content-and-actions-about-one-subject-in-a-distinct-container = 在不同的容器中呈现有关一个主题的内容和操作。
+ui-present-content-and-actions-about-one-subject-in-a-distinct-container = 在独立容器中展示同一主题的内容和操作。
 
-ui-elevated-card = 高架卡
+ui-elevated-card = 阴影卡片
 
-ui-filled-card = 填满的卡片
+ui-filled-card = 填充卡片
 
-ui-outlined-card = 概述卡
+ui-outlined-card = 描边卡片
 
 ui-cards-contain-related-elements-about-a-single-subject-they-can-hold-images-headlines-suppo = 卡片包含有关单个主题的相关元素。它们可以容纳图像、标题、支持文本、按钮和列表，并且它们的布局适应其内容。
 
-ui-cards-use-dynamic-color-mappings-and-lower-resting-elevation-choose-elevated-filled-or-out = 卡片使用动态颜色映射和较低的静止高度。根据所需的视觉重点，选择高架、填充或轮廓围堵。
+ui-cards-use-dynamic-color-mappings-and-lower-resting-elevation-choose-elevated-filled-or-out = 卡片采用动态配色，并降低静止时的阴影高度。根据所需的视觉重点，选择带阴影、填充或描边样式。
 
 ui-keep-each-card-about-one-subject-establish-a-readable-hierarchy-and-use-a-collection-when = 每张卡片都围绕一个主题。当多个主题属于同一类时，建立一个可读的层次结构并使用集合。当容器会增加不必要的复杂性时，最好使用间距或分隔线。
 
@@ -24,13 +24,9 @@ ui-expose-meaningful-headings-text-and-actions-in-reading-order-hide-purely-deco
 
 ui-a-focused-collection-of-related-content = 相关内容的集中集合。
 
-ui-surface-container-highest = 水面集装箱最高
-
 ui-element-tokens = 元素设计令牌
 
 ui-container-color = 容器颜色
-
-ui-outline = 概要
 
 ui-outline-color-and-width = 轮廓颜色和宽度
 
@@ -44,13 +40,11 @@ ui-shadow-color = 阴影颜色
 
 ui-tint = 色调
 
-ui-surface-tint-layer-color = 表面着色层颜色
+ui-surface-tint-layer-color = Surface Tint 图层颜色
 
 ui-label-text-color = 标签文字颜色
 
 ui-icon-color-and-size = 图标颜色和大小
-
-ui-on-surface-variant-24dp = 表面变体 · 24dp
 
 ui-state-tokens = 状态设计令牌
 
@@ -72,7 +66,7 @@ ui-light-theme = 浅色主题
 
 ui-1-container-2-outline = 1 容器 2 轮廓
 
-ui-1-container = 1 集装箱
+ui-1-container = 1 容器
 
 ui-hover-focus-with-tab-or-hold-a-card-to-inspect-actual-feedback-disabled-cards-do-not-activ = 将鼠标悬停、使用 Tab 聚焦或拿着卡片来检查实际反馈。禁用卡不会激活。
 
@@ -202,13 +196,13 @@ ui-card-actions-value = 卡片动作：{ $v0 }
 
 ui-content-left-right-padding = 内容左/右填充
 
-ui-value-resting-elevation-with-the-element-tokens-above = { $v0 } 与上面的元素标记的静止高程
+ui-value-resting-elevation-with-the-element-tokens-above = { $v0 } 与上面的元素标记的静止阴影高度
 
-ui-value-elevation-and-an-8-state-layer = { $v0 } 高程和 8% 状态层
+ui-value-elevation-and-an-8-state-layer = { $v0 } 阴影高度和 8% 状态层
 
 ui-3dp-focus-indicator-at-value-elevation = { $v0 } 高度处的 3dp 焦点指示器
 
-ui-value-elevation-without-a-state-layer = { $v0 } 无状态层的高程
+ui-value-elevation-without-a-state-layer = { $v0 } 无状态层的阴影高度
 
 ui-value-value-format-25 = { $v0 } · { $v1 }
 

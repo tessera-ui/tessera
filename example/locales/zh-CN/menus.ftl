@@ -10,7 +10,7 @@ ui-use-a-menu-to-show-a-temporary-set-of-actions-to-show-actions-on-screen-at-al
 
 ui-menus-can-open-from-many-components-including-icon-buttons-split-buttons-and-text-fields = 菜单可以从许多组件打开，包括图标按钮、拆分按钮和文本字段
 
-ui-context-menus-provide-actions-for-a-specific-element-like-an-image-or-highlighted-text-and = 上下文菜单提供针对特定元素（例如图像或突出显示的文本）的操作，通常通过二次单击打开
+ui-context-menus-provide-actions-for-a-specific-element-like-an-image-or-highlighted-text-and = 上下文菜单提供针对图像、选中文字等元素的操作，通常通过鼠标右键等辅助点击打开
 
 ui-line-spacing = 行距
 
@@ -44,9 +44,9 @@ ui-color-options = 颜色选择
 
 ui-menus-have-two-color-mappings = 菜单有两种颜色映射：
 
-ui-standard-surface-based-lower-visual-emphasis = 标准：基于表面，较低的视觉重点
+ui-standard-surface-based-lower-visual-emphasis = Standard：基于 Surface，视觉强调较弱
 
-ui-vibrant-tertiary-based-higher-visual-emphasis = 充满活力：基于第三级，更高的视觉重点
+ui-vibrant-tertiary-based-higher-visual-emphasis = Vibrant：基于 Tertiary，视觉强调较强
 
 ui-vibrant-menus-are-more-prominent-and-should-be-used-sparingly = 充满活力的菜单更加突出，应谨慎使用。
 
@@ -84,7 +84,7 @@ ui-standard-vertical-menu = 标准垂直菜单
 
 ui-grouped-vertical-menu = 分组垂直菜单
 
-ui-context-menus-provide-a-list-of-additional-actions-a-person-can-take-on-an-item-a-secondar = 上下文菜单提供了人们可以对某个项目执行的其他操作的列表。二次单击（例如右键单击鼠标或用两根手指点击触控板）会打开上下文菜单。
+ui-context-menus-provide-a-list-of-additional-actions-a-person-can-take-on-an-item-a-secondar = 上下文菜单列出可对某个项目执行的额外操作。可通过鼠标右键，或触控板双指轻点等辅助点击方式打开。
 
 ui-a-context-menu-appears-when-right-clicking-with-a-mouse-or-trackpad-it-can-reveal-key-acti = 使用鼠标或触控板右键单击时会出现上下文菜单。它可以揭示与相关内容相关的关键操作。
 
@@ -100,7 +100,7 @@ ui-gaps-and-dividers-can-be-used-to-separate-and-group-menu-items = 间隙和分
 
 ui-gaps = 差距
 
-ui-use-a-gap-to-visually-divide-menu-items-into-distinct-groups-gaps-are-more-expressive-than = 使用间隙在视觉上将菜单项分为不同的组。间隙比分隔线更具表现力，可以使项目之间的关系变得清晰。
+ui-use-a-gap-to-visually-divide-menu-items-into-distinct-groups-gaps-are-more-expressive-than = 使用间隙在视觉上将菜单项分为不同的组。间隙比分隔线更具Expressive，可以使项目之间的关系变得清晰。
 
 ui-avoid-changing-the-size-of-the-gap = 避免改变间隙大小
 
@@ -108,7 +108,7 @@ ui-limit-the-number-of-gaps-in-a-menu-to-one-or-two = 将菜单中的间隙数�
 
 ui-don-t-use-gaps-in-scrollable-menus = 不要在可滚动菜单中使用间隙
 
-ui-gaps-separate-menu-items-using-expressive-shapes = 使用富有表现力的形状分隔菜单项
+ui-gaps-separate-menu-items-using-expressive-shapes = 使用Expressive形状分隔菜单项
 
 ui-note-gaps-are-not-currently-available-in-the-material-web-library = 注意：Material Web 库中当前不提供间隙
 
@@ -286,7 +286,7 @@ ui-for-menu-items-with-text-and-an-icon-the-icon-s-accessibility-label-should-be
 
 ui-for-menu-items-with-text-and-an-icon-the-icon-s-accessibility-label-is-decorative = 对于带有文本和图标的菜单项，图标的辅助功能标签是装饰性的
 
-ui-use-vertical-menus-for-a-more-expressive-look-and-feel-including-rounded-corners-standard = 使用垂直菜单以获得更具表现力的外观和感觉，包括圆角、标准和鲜艳的颜色样式、更多选择状态和子菜单运动。
+ui-use-vertical-menus-for-a-more-expressive-look-and-feel-including-rounded-corners-standard = 使用垂直菜单以获得更具Expressive的外观和感觉，包括圆角、标准和鲜艳的颜色样式、更多选择状态和子菜单运动。
 
 ui-vertical-menu-with-gap = 带间隙的垂直菜单
 
@@ -350,9 +350,9 @@ ui-gap-optional = 间隙（可选）
 
 ui-vertical-menu-padding-and-size-measurements = 垂直菜单填充和尺寸测量
 
-ui-standard-surface-based = 标准：基于表面
+ui-standard-surface-based = Standard：基于 Surface
 
-ui-vibrant-tertiary-based = 充满活力：基于高等教育
+ui-vibrant-tertiary-based = Vibrant：基于 Tertiary
 
 ui-these-mappings-provide-options-for-lower-or-higher-visual-emphasis-vibrant-menus-are-more = 这些映射提供了较低或较高视觉强调的选项。充满活力的菜单更加突出，因此应谨慎使用。
 
@@ -366,29 +366,29 @@ ui-vibrant-colors = 鲜艳的色彩
 
 ui-vertical-menus-color-roles-used-for-light-and-dark-themes = 用于浅色和深色主题的垂直菜单颜色角色：
 
-ui-on-surface-state-layer = 表面（状态层）
+ui-on-surface-state-layer = On Surface（状态层）
 
-ui-tertiary-container-selected = 第三级容器（已选）
+ui-tertiary-container-selected = Tertiary Container（已选中）
 
-ui-on-tertiary-container-selected = 在第三级容器上（选定）
+ui-on-tertiary-container-selected = On Tertiary Container（已选中）
 
-ui-on-tertiary-container-state-layer = 三级容器上（状态层）
+ui-on-tertiary-container-state-layer = On Tertiary Container（状态层）
 
-ui-tertiary-selected = 大专（选修）
+ui-tertiary-selected = Tertiary（已选中）
 
-ui-on-tertiary-selected = 上大专（选）
+ui-on-tertiary-selected = On Tertiary（已选中）
 
 ui-light = 光
 
 ui-states-are-visual-representations-used-to-communicate-the-status-of-a-component-or-an-inte = 状态是用于传达组件或交互元素状态的视觉表示。
 
-ui-shape-morphing-in-vertical-menus-creates-an-expressive-active-state-as-focus-moves-between = 垂直菜单中的形状变形创建了一种富有表现力的活动状态。当焦点在子菜单之间移动时，角形状会发生变化以突出显示活动菜单。
+ui-shape-morphing-in-vertical-menus-creates-an-expressive-active-state-as-focus-moves-between = 垂直菜单中的形状变形创建了一种Expressive活动状态。当焦点在子菜单之间移动时，角形状会发生变化以突出显示活动菜单。
 
 ui-menu-gap = 菜单间隙
 
 ui-menu-group-padding = 菜单组填充
 
-ui-menu-container-elevation = 菜单容器标高
+ui-menu-container-elevation = 菜单容器阴影高度
 
 ui-level-2-3dp = 2级，3dp
 
@@ -398,9 +398,9 @@ ui-menu-item-top-space = 菜单项顶部空间
 
 ui-menu-item-bottom-space = 菜单项底部空间
 
-ui-menu-item-leading-space = 菜单项前导空格
+ui-menu-item-leading-space = 菜单项起始间距
 
-ui-menu-item-trailing-space = 菜单项尾随空格
+ui-menu-item-trailing-space = 菜单项末尾间距
 
 ui-menu-item-between-space = 菜单项之间有空格
 

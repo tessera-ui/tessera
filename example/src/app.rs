@@ -82,7 +82,7 @@ pub(crate) fn app(
                                 if nav_controller
                                     .with(|c| c.current_is::<MaterialComponentsPageDestination>())
                                 {
-                                    "ui-material-design-3"
+                                    "Material Design 3"
                                 } else {
                                     "ui-examples"
                                 },
@@ -161,7 +161,7 @@ pub(crate) fn app(
                                             spacer().modifier(Modifier::new().height(Dp(8.0)));
 
                                             nav_item(
-                                                "ui-material-components",
+                                                "Material Components",
                                                 MaterialComponentsPageDestination {
                                                     selected: Some(selected),
                                                     sessions: Some(sessions),

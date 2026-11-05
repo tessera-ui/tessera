@@ -1,4 +1,4 @@
-ui-uncontained = 未收容
+ui-uncontained = 无容器
 
 ui-uncontained-multi-aspect-ratio = 不受约束的多纵横比
 
@@ -166,7 +166,7 @@ ui-hero-carousel-layout-at-least-one-large-and-one-small-item-at-a-time = 英雄
 
 ui-multi-browse-layout-at-least-one-large-medium-and-small-carousel-item-at-a-time = 多浏览布局：一次至少一个大、中、小轮播项目
 
-ui-this-component-is-new-in-material-3 = 该组件是材质 3 中的新增组件。
+ui-this-component-is-new-in-material-3 = 该组件是Material 3 中的新增组件。
 
 ui-shape-dynamic-carousel-items-change-shape-when-scrolled = 形状：动态轮播项目在滚动时会改变形状
 
@@ -176,7 +176,7 @@ ui-interaction-when-scrolled-carousel-items-snap-into-place-to-maintain-the-same
 
 ui-hero-carousels-scroll-through-one-large-item-at-a-time = 英雄轮播一次滚动浏览一个大项目
 
-ui-the-material-research-team-conducted-two-studies-quantitative-and-qualitative-with-over-20 = 材料研究团队对 200 多名参与者进行了两项研究（定量和定性），以了解他们对五种不同轮播设计的看法。这些研究衡量了他们对如何与每个轮播交互的理解、他们对每个设计中项目数量的期望以及他们期望如何使用轮播。
+ui-the-material-research-team-conducted-two-studies-quantitative-and-qualitative-with-over-20 = Material Research Team对 200 多名参与者进行了两项研究（定量和定性），以了解他们对五种不同轮播设计的看法。这些研究衡量了他们对如何与每个轮播交互的理解、他们对每个设计中项目数量的期望以及他们期望如何使用轮播。
 
 ui-summary-of-findings = 调查结果摘要：
 
@@ -324,7 +324,7 @@ ui-carousels-can-show-more-items-at-once-on-larger-screens-resize-the-window-to-
 
 ui-carousel-items-have-a-parallax-effect-when-they-re-scrolled = 轮播项目在滚动时具有视差效果。
 
-ui-the-default-scrolling-behavior-doesn-t-snap-items-to-a-layout-grid-they-can-stop-anywhere = 默认滚动行为不会将项目对齐到布局网格。他们可以停在集装箱内的任何地方。仅将其用于非包含布局。
+ui-the-default-scrolling-behavior-doesn-t-snap-items-to-a-layout-grid-they-can-stop-anywhere = 默认滚动行为不会将项目对齐到布局网格。他们可以停在容器内的任何地方。仅将其用于非包含布局。
 
 ui-the-snap-scrolling-behavior-aligns-carousel-items-to-the-layout-grid-after-they-re-scrolle = 快速滚动行为在滚动后将轮播项目与布局网格对齐。项目在释放时会捕捉到网格。将此用于多浏览、英雄和全屏布局。
 

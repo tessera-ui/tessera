@@ -42,8 +42,6 @@ ui-extra-small-4dp = Extra small, 4dp
 
 ui-list-item-height = List item height
 
-ui-24dp-on-surface-variant = 24dp, On surface variant
-
 ui-hover-state-layer = Hover state layer
 
 ui-on-surface-opacity-0-08-3932 = On surface, opacity 0.08
@@ -51,8 +49,6 @@ ui-on-surface-opacity-0-08-3932 = On surface, opacity 0.08
 ui-on-surface-opacity-0-10 = On surface, opacity 0.10
 
 ui-focus-indicator = Focus indicator
-
-ui-secondary-3dp = Secondary, 3dp
 
 ui-default-menu-items = Default menu items
 

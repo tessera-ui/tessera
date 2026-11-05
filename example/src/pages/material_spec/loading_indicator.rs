@@ -223,17 +223,17 @@ fn resources() {
             ],
             vec![
                 "ui-implementation".into(),
-                "ui-jetpack-compose-expressive".into(),
+                "Jetpack Compose: Expressive".into(),
                 "ui-available".into(),
             ],
             vec![
                 "ui-implementation".into(),
-                "ui-flutter".into(),
+                "Flutter".into(),
                 "ui-unavailable".into(),
             ],
             vec![
                 "ui-implementation".into(),
-                "ui-web".into(),
+                "Web".into(),
                 "ui-unavailable".into(),
             ],
         ],
@@ -284,11 +284,7 @@ fn differences() {
     );
     gap(Dp(24.0));
     spec_table(
-        vec![
-            "ui-attribute".into(),
-            "M2".into(),
-            "ui-m3-expressive".into(),
-        ],
+        vec!["ui-attribute".into(), "M2".into(), "M3 Expressive".into()],
         vec![
             vec![
                 "ui-shape".into(),
@@ -327,7 +323,7 @@ fn variants() {
     caption("ui-1-loading-indicator-3589");
     gap(Dp(32.0));
     spec_table(
-        vec!["ui-variant".into(), "M3".into(), "ui-m3-expressive".into()],
+        vec!["ui-variant".into(), "M3".into(), "M3 Expressive".into()],
         vec![vec![
             "ui-loading-indicator".into(),
             "--".into(),
@@ -405,7 +401,7 @@ fn configurations() {
         vec![
             "ui-configuration".into(),
             "ui-options".into(),
-            "ui-m3-expressive".into(),
+            "M3 Expressive".into(),
         ],
         vec![
             vec![
@@ -436,15 +432,15 @@ fn tokens() {
         vec![
             vec![
                 "md.comp.loading-indicator.indicator.color".into(),
-                "ui-primary".into(),
+                "Primary".into(),
             ],
             vec![
                 "md.comp.loading-indicator.contained.indicator.color".into(),
-                "ui-on-primary-container".into(),
+                "On primary container".into(),
             ],
             vec![
                 "md.comp.loading-indicator.contained.container.color".into(),
-                "ui-primary-container".into(),
+                "Primary container".into(),
             ],
             vec![
                 "md.comp.loading-indicator.size".into(),

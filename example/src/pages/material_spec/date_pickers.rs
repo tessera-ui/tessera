@@ -552,22 +552,19 @@ fn tokens() {
     spec_table(
         vec!["ui-element".into(), "ui-token-value".into()],
         vec![
-            vec![
-                "ui-modal-container".into(),
-                "ui-surface-container-high".into(),
-            ],
-            vec!["ui-selected-date".into(), "ui-primary-on-primary".into()],
+            vec!["ui-modal-container".into(), "Surface container high".into()],
+            vec!["ui-selected-date".into(), "Primary / on primary".into()],
             vec![
                 "ui-range-highlight".into(),
-                "ui-secondary-container-on-secondary-container".into(),
+                "Secondary container / on secondary container".into(),
             ],
-            vec!["ui-today-outline".into(), "ui-primary".into()],
-            vec!["ui-headline-unselected-date".into(), "ui-on-surface".into()],
+            vec!["ui-today-outline".into(), "Primary".into()],
+            vec!["ui-headline-unselected-date".into(), "On surface".into()],
             vec![
                 "ui-supporting-text-weekdays-icons".into(),
-                "ui-on-surface-variant".into(),
+                "On surface variant".into(),
             ],
-            vec!["ui-divider".into(), "ui-outline-variant".into()],
+            vec!["ui-divider".into(), "Outline variant".into()],
         ],
     );
 }
@@ -967,27 +964,27 @@ fn date_resources() {
         vec![
             vec![
                 "ui-design".into(),
-                "ui-material-3-design-kit-figma".into(),
+                "Material 3 Design Kit (Figma)".into(),
                 "ui-available".into(),
             ],
             vec![
                 "ui-implementation".into(),
-                "ui-flutter".into(),
+                "Flutter".into(),
                 "ui-available".into(),
             ],
             vec![
                 "ui-implementation".into(),
-                "ui-jetpack-compose".into(),
+                "Jetpack Compose".into(),
                 "ui-available".into(),
             ],
             vec![
                 "ui-implementation".into(),
-                "ui-android-views-mdc-android".into(),
+                "Android Views (MDC-Android)".into(),
                 "ui-available".into(),
             ],
             vec![
                 "ui-implementation".into(),
-                "ui-material-web".into(),
+                "Material Web".into(),
                 "ui-unavailable".into(),
             ],
         ],
@@ -1138,7 +1135,7 @@ fn overview_docked_picker() {
         .controller(controller)
         .label(I18N.text("ui-date"))
         .accessibility_label(I18N.text("ui-overview-docked-date"))
-        .accessibility_description(I18N.text("MM/DD/YYYY"))
+        .accessibility_description("MM/DD/YYYY")
         .modifier(Modifier::new().width(Dp(312.0)).height(Dp(56.0)))
         .on_change(move |value: String| {
             if let Some(date) = parse_form_date(&value) {
@@ -1147,7 +1144,7 @@ fn overview_docked_picker() {
             value
         });
     text()
-        .content(I18N.text("MM/DD/YYYY"))
+        .content("MM/DD/YYYY")
         .style(type_style(12.0, 16.0))
         .color(scheme.on_surface_variant)
         .modifier(Modifier::new().offset(Dp(16.0), Dp(60.0)));
@@ -1292,76 +1289,76 @@ fn date_color_title(figure: Figure, menu: bool, year: bool) -> &'static str {
 fn date_color_labels(figure: Figure, menu: bool, year: bool) -> Vec<&'static str> {
     match figure {
         Figure::Docked if menu => vec![
-            "ui-primary",
-            "ui-on-surface-variant",
-            "ui-on-surface",
-            "ui-outline-variant",
-            "ui-surface-container-high",
-            "ui-surface-variant",
-            "ui-on-surface",
+            "Primary",
+            "On surface variant",
+            "On surface",
+            "Outline variant",
+            "Surface container high",
+            "Surface variant",
+            "On surface",
         ],
         Figure::Docked => vec![
-            "ui-primary",
-            "ui-on-surface-variant",
-            "ui-on-surface-variant",
-            "ui-on-surface",
-            "ui-on-surface",
-            "ui-primary",
-            "ui-on-surface-variant",
-            "ui-primary",
-            "ui-surface-container-high",
-            "ui-primary",
-            "ui-on-primary",
+            "Primary",
+            "On surface variant",
+            "On surface variant",
+            "On surface",
+            "On surface",
+            "Primary",
+            "On surface variant",
+            "Primary",
+            "Surface container high",
+            "Primary",
+            "On primary",
         ],
         Figure::Input => vec![
-            "ui-on-surface",
-            "ui-on-surface-variant",
-            "ui-surface-container-high",
-            "ui-on-surface-variant",
-            "ui-primary",
-            "ui-primary",
-            "ui-outline-variant",
+            "On surface",
+            "On surface variant",
+            "Surface container high",
+            "On surface variant",
+            "Primary",
+            "Primary",
+            "Outline variant",
         ],
         Figure::FullScreen => vec![
-            "ui-on-surface",
-            "ui-on-surface-variant",
-            "ui-on-surface-variant",
-            "ui-surface-container-high",
-            "ui-primary",
-            "ui-on-surface-variant",
-            "ui-on-surface",
-            "ui-primary",
-            "ui-on-surface",
-            "ui-secondary-container",
-            "ui-on-secondary-container",
-            "ui-outline-variant",
-            "ui-on-surface-variant",
-            "ui-primary",
+            "On surface",
+            "On surface variant",
+            "On surface variant",
+            "Surface container high",
+            "Primary",
+            "On surface variant",
+            "On surface",
+            "Primary",
+            "On surface",
+            "Secondary container",
+            "On secondary container",
+            "Outline variant",
+            "On surface variant",
+            "Primary",
         ],
         _ if year => vec![
-            "ui-on-surface",
-            "ui-on-surface-variant",
-            "ui-surface-container-high",
-            "ui-on-surface-variant",
-            "ui-on-surface-variant",
-            "ui-primary",
-            "ui-primary",
-            "ui-outline-variant",
-            "ui-on-surface-variant",
+            "On surface",
+            "On surface variant",
+            "Surface container high",
+            "On surface variant",
+            "On surface variant",
+            "Primary",
+            "Primary",
+            "Outline variant",
+            "On surface variant",
         ],
         _ => vec![
-            "ui-on-surface",
-            "ui-on-surface-variant",
-            "ui-surface-container-high",
-            "ui-on-surface-variant",
-            "ui-on-surface-variant",
-            "ui-on-surface",
-            "ui-primary",
-            "ui-on-surface",
-            "ui-primary",
-            "ui-primary",
-            "ui-on-surface-variant",
-            "ui-outline-variant",
+            "On surface",
+            "On surface variant",
+            "Surface container high",
+            "On surface variant",
+            "On surface variant",
+            "On surface",
+            "Primary",
+            "On surface",
+            "Primary",
+            "Primary",
+            "On surface variant",
+            "Outline variant",
         ],
     }
 }

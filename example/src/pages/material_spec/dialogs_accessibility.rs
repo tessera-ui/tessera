@@ -553,7 +553,7 @@ fn photo_content(modal: bool, scale: f64) {
         )
         .children(move || {
             text()
-                .content(I18N.text("Jun\n8"))
+                .content("Jun\n8")
                 .style(dialog_type_style(12.0, 16.0, scale))
                 .color(scheme.on_primary_container);
         });

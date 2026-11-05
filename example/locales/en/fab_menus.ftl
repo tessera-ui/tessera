@@ -80,19 +80,11 @@ ui-56-56dp-full-round = 56 × 56dp · full round
 
 ui-close-button-color = Close button color
 
-ui-primary-secondary-tertiary = Primary · secondary · tertiary
-
 ui-close-button-icon = Close button icon
-
-ui-on-primary-on-secondary-on-tertiary = On primary · on secondary · on tertiary
 
 ui-item-container = Item container
 
-ui-primary-container-secondary-container-tertiary-container = Primary container · secondary container · tertiary container
-
 ui-item-label = Item label
-
-ui-on-primary-container-on-secondary-container-on-tertiary-container = On primary container · on secondary container · on tertiary container
 
 ui-item-shape = Item shape
 
@@ -141,14 +133,6 @@ ui-color-role = Color role
 ui-item-label-and-icon = Item label and icon
 
 ui-close-icon = Close icon
-
-ui-tertiary = Tertiary
-
-ui-tertiary-container = Tertiary container
-
-ui-on-tertiary-container = On tertiary container
-
-ui-on-tertiary = On tertiary
 
 ui-enabled-hovered-focused-and-pressed-states-share-the-same-close-button-colors-hover-focus = Enabled, hovered, focused and pressed states share the same close button colors. Hover, focus with Tab, or press and hold in the live sample below.
 

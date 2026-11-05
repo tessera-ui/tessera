@@ -349,17 +349,17 @@ fn availability() {
             ],
             vec![
                 "ui-implementation".into(),
-                "ui-jetpack-compose".into(),
+                "Jetpack Compose".into(),
                 "ui-available".into(),
             ],
             vec![
                 "ui-implementation".into(),
-                "ui-android-views-mdc-android".into(),
+                "Android Views (MDC-Android)".into(),
                 "ui-available".into(),
             ],
             vec![
                 "ui-implementation".into(),
-                "ui-web".into(),
+                "Web".into(),
                 "ui-available".into(),
             ],
         ],
@@ -427,7 +427,7 @@ fn variants() {
     caption("ui-there-is-one-navigation-bar-variant-holding-three-to-five-destinations");
     gap(Dp(32.0));
     spec_table(
-        vec!["ui-variant".into(), "M3".into(), "ui-m3-expressive".into()],
+        vec!["ui-variant".into(), "M3".into(), "M3 Expressive".into()],
         vec![vec![
             "ui-navigation-bar".into(),
             "ui-available".into(),
@@ -506,7 +506,7 @@ fn tokens() {
             vec![
                 "ui-container".into(),
                 "md.comp.navigation-bar.container.color".into(),
-                "ui-surface-container".into(),
+                "Surface container".into(),
             ],
             vec![
                 "ui-container".into(),
@@ -516,7 +516,7 @@ fn tokens() {
             vec![
                 "ui-active-indicator".into(),
                 "md.comp.navigation-bar.active-indicator.color".into(),
-                "ui-secondary-container".into(),
+                "Secondary container".into(),
             ],
             vec![
                 "ui-active-indicator".into(),
@@ -526,17 +526,17 @@ fn tokens() {
             vec![
                 "ui-active-icon".into(),
                 "md.comp.navigation-bar.active-icon.color".into(),
-                "ui-on-secondary-container".into(),
+                "On secondary container".into(),
             ],
             vec![
                 "ui-active-label".into(),
                 "md.comp.navigation-bar.active-label-text.color".into(),
-                "ui-secondary".into(),
+                "Secondary".into(),
             ],
             vec![
                 "ui-inactive-icon-and-label".into(),
                 "md.comp.navigation-bar.inactive-icon.color".into(),
-                "ui-on-surface-variant".into(),
+                "On surface variant".into(),
             ],
             vec![
                 "ui-icon-size".into(),
@@ -546,7 +546,7 @@ fn tokens() {
             vec![
                 "ui-label".into(),
                 "md.comp.navigation-bar.label-text".into(),
-                "ui-label-medium".into(),
+                "Label medium".into(),
             ],
             vec![
                 "ui-state-layer".into(),
@@ -598,16 +598,13 @@ fn colors() {
     spec_table(
         vec!["ui-element".into(), "ui-color-role".into()],
         vec![
-            vec!["ui-container".into(), "ui-surface-container".into()],
-            vec![
-                "ui-active-indicator".into(),
-                "ui-secondary-container".into(),
-            ],
-            vec!["ui-active-icon".into(), "ui-on-secondary-container".into()],
-            vec!["ui-active-label".into(), "ui-secondary".into()],
+            vec!["ui-container".into(), "Surface container".into()],
+            vec!["ui-active-indicator".into(), "Secondary container".into()],
+            vec!["ui-active-icon".into(), "On secondary container".into()],
+            vec!["ui-active-label".into(), "Secondary".into()],
             vec![
                 "ui-inactive-icon-and-label".into(),
-                "ui-on-surface-variant".into(),
+                "On surface variant".into(),
             ],
         ],
     );
@@ -658,7 +655,7 @@ fn measurements() {
             vec![
                 "ui-label".into(),
                 "ui-typography".into(),
-                "ui-label-medium".into(),
+                "Label medium".into(),
             ],
             vec![
                 "ui-destination".into(),
@@ -742,7 +739,7 @@ fn guide_color() {
     );
     gap(Dp(24.0));
     panel(RenderSlot::new(|| {
-        bar_demo("ui-primary", 4, NavigationBarLabelBehavior::AlwaysShow, 0);
+        bar_demo("Primary", 4, NavigationBarLabelBehavior::AlwaysShow, 0);
     }));
     gap(Dp(16.0));
     caption(

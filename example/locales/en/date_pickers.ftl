@@ -34,8 +34,6 @@ ui-cancelled = Cancelled
 
 ui-modal-container = Modal container
 
-ui-surface-container-high = Surface container high
-
 ui-selected-date = Selected date
 
 ui-range-highlight = Range highlight
@@ -166,10 +164,6 @@ ui-escape = Escape
 
 ui-dismiss-the-modal-without-saving-its-draft = Dismiss the modal without saving its draft
 
-ui-material-3-design-kit-figma = Material 3 Design Kit (Figma)
-
-ui-material-web = Material Web
-
 ui-date-pickers-can-display-past-present-and-future-dates = Date pickers can display past, present and future dates.
 
 ui-three-variants-docked-date-picker-modal-date-picker-and-modal-date-input = Three variants: docked date picker, modal date picker and modal date input.
@@ -215,8 +209,6 @@ ui-modal-date-range-picker-color-roles = Modal date range picker color roles
 ui-modal-date-picker-year-color-roles = Modal date picker year color roles
 
 ui-modal-date-picker-color-roles = Modal date picker color roles
-
-ui-surface-variant = Surface variant
 
 ui-toggle-event-date-calendar = Toggle event date calendar
 
@@ -341,10 +333,6 @@ ui-reopen-modal-configuration-value = Reopen modal configuration { $v0 }
 ui-configuration-value-date = Configuration { $v0 } date
 
 ui-toggle-configuration-value-calendar = Toggle configuration { $v0 } calendar
-
-ui-primary-on-primary = Primary / on primary
-
-ui-secondary-container-on-secondary-container = Secondary container / on secondary container
 
 ui-headline-unselected-date = Headline / unselected date
 

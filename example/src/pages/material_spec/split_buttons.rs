@@ -485,17 +485,17 @@ fn availability() {
             ],
             vec![
                 "ui-implementation".into(),
-                "ui-jetpack-compose-expressive".into(),
+                "Jetpack Compose: Expressive".into(),
                 "ui-available".into(),
             ],
             vec![
                 "ui-implementation".into(),
-                "ui-android-views-mdc-android-expressive".into(),
+                "Android Views (MDC-Android): Expressive".into(),
                 "ui-available".into(),
             ],
             vec![
                 "ui-implementation".into(),
-                "ui-web-expressive".into(),
+                "Web: Expressive".into(),
                 "ui-unavailable".into(),
             ],
         ],
@@ -562,7 +562,7 @@ fn variants(menu: Menu) {
     caption("ui-a-split-button-pairs-a-leading-action-with-a-trailing-menu-segment");
     gap(Dp(32.0));
     spec_table(
-        vec!["ui-variant".into(), "M3".into(), "ui-m3-expressive".into()],
+        vec!["ui-variant".into(), "M3".into(), "M3 Expressive".into()],
         vec![vec![
             "ui-split-button".into(),
             "--".into(),
@@ -646,7 +646,7 @@ fn configurations(menu: Menu) {
             "ui-category".into(),
             "ui-configuration".into(),
             "M3".into(),
-            "ui-m3-expressive".into(),
+            "M3 Expressive".into(),
         ],
         vec![
             vec![
@@ -684,25 +684,21 @@ fn tokens() {
             "ui-label-and-icon".into(),
         ],
         vec![
-            vec![
-                "ui-filled".into(),
-                "ui-primary".into(),
-                "ui-on-primary".into(),
-            ],
+            vec!["ui-filled".into(), "Primary".into(), "On primary".into()],
             vec![
                 "ui-tonal".into(),
-                "ui-secondary-container".into(),
-                "ui-on-secondary-container".into(),
+                "Secondary container".into(),
+                "On secondary container".into(),
             ],
             vec![
                 "ui-elevated".into(),
-                "ui-surface-container-low".into(),
-                "ui-primary".into(),
+                "Surface container low".into(),
+                "Primary".into(),
             ],
             vec![
                 "ui-outlined".into(),
                 "ui-transparent".into(),
-                "ui-on-surface-variant".into(),
+                "On surface variant".into(),
             ],
         ],
     );
@@ -824,25 +820,21 @@ fn colors(menu: Menu) {
             "ui-label-color".into(),
         ],
         vec![
-            vec![
-                "ui-filled".into(),
-                "ui-primary".into(),
-                "ui-on-primary".into(),
-            ],
+            vec!["ui-filled".into(), "Primary".into(), "On primary".into()],
             vec![
                 "ui-tonal".into(),
-                "ui-secondary-container".into(),
-                "ui-on-secondary-container".into(),
+                "Secondary container".into(),
+                "On secondary container".into(),
             ],
             vec![
                 "ui-elevated".into(),
-                "ui-surface-container-low".into(),
-                "ui-primary".into(),
+                "Surface container low".into(),
+                "Primary".into(),
             ],
             vec![
                 "ui-outlined".into(),
                 "ui-transparent".into(),
-                "ui-on-surface-variant".into(),
+                "On surface variant".into(),
             ],
         ],
     );

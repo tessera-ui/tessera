@@ -353,22 +353,22 @@ fn resources() {
             ],
             vec![
                 "ui-implementation".into(),
-                "ui-flutter".into(),
+                "Flutter".into(),
                 "ui-available".into(),
             ],
             vec![
                 "ui-implementation".into(),
-                "ui-jetpack-compose".into(),
+                "Jetpack Compose".into(),
                 "ui-available".into(),
             ],
             vec![
                 "ui-implementation".into(),
-                "ui-android-views-mdc-android".into(),
+                "Android Views (MDC-Android)".into(),
                 "ui-available".into(),
             ],
             vec![
                 "ui-implementation".into(),
-                "ui-web".into(),
+                "Web".into(),
                 "ui-available".into(),
             ],
         ],
@@ -406,7 +406,7 @@ fn search_stroke() {
                         .on_remove(|| {});
                 });
             text()
-                .content(I18N.text("→"))
+                .content("→")
                 .color(scheme.on_surface_variant)
                 .style(type_style(16.0, 24.0));
             boxed()
@@ -1260,7 +1260,7 @@ fn token_table(variant: ChipVariant) {
             if selectable {
                 "ui-transparent"
             } else {
-                "ui-surface"
+                "Surface"
             }
             .into(),
         ],
@@ -1273,9 +1273,9 @@ fn token_table(variant: ChipVariant) {
             "ui-label-color".into(),
             format!("{prefix}.label.text.color"),
             if variant == ChipVariant::Assist {
-                "ui-on-surface"
+                "On surface"
             } else {
-                "ui-on-surface-variant"
+                "On surface variant"
             }
             .into(),
         ],
@@ -1283,9 +1283,9 @@ fn token_table(variant: ChipVariant) {
             "ui-outline-color".into(),
             format!("{prefix}.outline.color"),
             if selectable {
-                "ui-outline-variant"
+                "Outline variant"
             } else {
-                "ui-outline"
+                "Outline"
             }
             .into(),
         ],
@@ -1300,9 +1300,9 @@ fn token_table(variant: ChipVariant) {
             "ui-leading-icon-color".into(),
             format!("{prefix}.leading-icon.color"),
             if variant == ChipVariant::Assist {
-                "ui-primary"
+                "Primary"
             } else {
-                "ui-on-surface-variant"
+                "On surface variant"
             }
             .into(),
         ]);
@@ -1311,24 +1311,24 @@ fn token_table(variant: ChipVariant) {
         rows.push(vec![
             "ui-trailing-icon-color".into(),
             format!("{prefix}.trailing-icon.color"),
-            "ui-on-surface-variant".into(),
+            "On surface variant".into(),
         ]);
     }
     if selectable {
         rows.push(vec![
             "ui-selected-container".into(),
             format!("{prefix}.container.color"),
-            "ui-secondary-container".into(),
+            "Secondary container".into(),
         ]);
         rows.push(vec![
             "ui-selected-label".into(),
             format!("{prefix}.label.text.color"),
-            "ui-on-secondary-container".into(),
+            "On secondary container".into(),
         ]);
         rows.push(vec![
             "ui-selected-icon".into(),
             format!("{prefix}.leading-icon.color"),
-            "ui-on-secondary-container".into(),
+            "On secondary container".into(),
         ]);
     }
     spec_table(

@@ -24,7 +24,7 @@ ui-split-buttons-come-in-four-color-configurations = 拆分按钮有四种颜色
 
 ui-split-buttons-use-the-same-five-sizes-as-buttons-and-icon-buttons-small-is-the-default = 拆分按钮使用与按钮和图标按钮相同的五种尺寸。小是默认值。
 
-ui-elevated-filled-tonal-outlined = 升高、填充、色调、轮廓
+ui-elevated-filled-tonal-outlined = 升高、填充、色调、描边
 
 ui-split-button-token-sets-are-organized-by-size-each-size-defines-the-container-height-the-i = 拆分按钮标记集按大小组织。每个尺寸定义容器高度、内角和外角、内容填充和尾随图标尺寸。
 
@@ -94,9 +94,9 @@ ui-the-split-button-has-a-leading-button-and-a-trailing-button-separated-by-a-sm
 
 ui-the-trailing-button-contains-the-menu-icon-the-leading-button-carries-the-label = 尾随按钮包含菜单图标；前导按钮带有标签
 
-ui-use-the-split-button-color-that-matches-the-page-emphasis-filled-for-the-highest-emphasis = 使用与页面重点相匹配的拆分按钮颜色：填充为最高重点，色调为中等重点，当按钮位于图像上时升高，并在平面上勾勒轮廓。
+ui-use-the-split-button-color-that-matches-the-page-emphasis-filled-for-the-highest-emphasis = 使用与页面重点相匹配的拆分按钮颜色：填充为最高重点，色调为中等重点，当按钮位于图像上时升高，并在平面上勾勒描边。
 
-ui-filled-tonal-elevated-and-outlined-split-buttons-share-the-button-color-roles = 填充、色调、提升和轮廓分割按钮共享按钮颜色角色
+ui-filled-tonal-elevated-and-outlined-split-buttons-share-the-button-color-roles = 填充、色调、提升和描边分割按钮共享按钮颜色角色
 
 ui-split-buttons-scale-with-the-layout-keep-the-leading-and-trailing-segments-together-and-le = 拆分按钮随布局缩放。将前导段和尾随段保持在一起，并让它们在其他控件下方换行，而不是将两个段分开。
 

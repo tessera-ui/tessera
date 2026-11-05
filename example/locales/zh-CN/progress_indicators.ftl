@@ -1,16 +1,16 @@
 ui-progress-indicators-show-the-status-of-a-process-in-real-time-4416 = 进度指示器实时显示流程的状态。
 
-ui-preview-determinate = 预览确定
+ui-preview-determinate = 预览定值进度
 
-ui-preview-indeterminate = 预览不确定
+ui-preview-indeterminate = 预览不定进度
 
-ui-determinate-download-progress = 确定下载进度
+ui-determinate-download-progress = 定值下载进度
 
-ui-restart-determinate-progress = 重启确定进度
+ui-restart-determinate-progress = 重新开始定值进度
 
 ui-restart = 重新启动
 
-ui-pause-determinate-progress = 暂停确定的进度
+ui-pause-determinate-progress = 暂停定值进度
 
 ui-pause = 暂停
 
@@ -18,51 +18,51 @@ ui-resume = 简历
 
 ui-progress-indicators-express-an-unspecified-wait-time-or-display-the-length-of-a-process-us = 进度指示器表示未指定的等待时间或显示进程的长度。当完成率已知时，使用确定指标；当完成率未知时，使用不确定指标。
 
-ui-overview-determinate = 概述确定
+ui-overview-determinate = 概览：定值进度
 
-ui-overview-indeterminate = 概述不确定
+ui-overview-indeterminate = 概览：不定进度
 
-ui-overview-circular-determinate = 概述 圆形 确定
+ui-overview-circular-determinate = 概览：圆形定值进度
 
-ui-overview-circular-indeterminate = 概述圆形不定
+ui-overview-circular-indeterminate = 概览：圆形不定进度
 
-ui-determinate-indicators-show-how-much-of-a-known-process-is-complete = 确定的指标显示已知过程的完成程度。
+ui-determinate-indicators-show-how-much-of-a-known-process-is-complete = 定值进度指示器展示已知任务的完成比例。
 
-ui-indeterminate-indicators-animate-continuously-while-the-wait-time-is-unknown = 不确定的指示器持续动画，而等待时间未知。
+ui-indeterminate-indicators-animate-continuously-while-the-wait-time-is-unknown = 等待时长未知时，不定进度指示器持续播放动画。
 
 ui-use-one-linear-or-circular-indicator-per-process-close-to-its-content = 每个流程使用一个靠近其内容的线性或圆形指示器。
 
-ui-expressive-wavy-indicators-keep-the-same-meaning-as-the-flat-ones = 富有表现力的波浪指示器与扁平指示器具有相同的含义。
+ui-expressive-wavy-indicators-keep-the-same-meaning-as-the-flat-ones = Expressive波浪指示器与扁平指示器具有相同的含义。
 
-ui-the-material-3-expressive-update-adds-wavy-progress-indicators-the-wavy-active-indicator-u = Material 3 富有表现力的更新添加了波浪形进度指示器。波浪形活动指示器使用与平坦指示器相同的颜色角色和状态，并且其幅度随着报告的进度而增加，因此确定和不确定的行为保持可读。
+ui-the-material-3-expressive-update-adds-wavy-progress-indicators-the-wavy-active-indicator-u = Material 3 Expressive更新添加了波浪形进度指示器。波浪形活动指示器使用与平坦指示器相同的颜色角色和状态，并且其幅度随着报告的进度而增加，因此确定和不确定的行为保持可读。
 
-ui-expressive-linear = 富有表现力的线性
+ui-expressive-linear = Expressive线性
 
-ui-expressive-circular-determinate = 富有表现力的圆形确定
+ui-expressive-circular-determinate = Expressive 圆形定值进度
 
-ui-expressive-circular-indeterminate = 富有表现力的圆形不定式
+ui-expressive-circular-indeterminate = Expressive 圆形不定进度
 
-ui-color-progress-indicators-use-the-primary-role-for-the-active-indicator-and-the-secondary = 颜色：进度指示器使用活动指示器的主要角色和轨道的辅助容器角色，并具有动态颜色支持。形状：平面指示器保持完全圆形的末端，而富有表现力的更新添加了可选的波浪形。运动：不确定指示器连续动画，而不是使用 M2 扫描条。
+ui-color-progress-indicators-use-the-primary-role-for-the-active-indicator-and-the-secondary = 颜色：活动指示器使用 Primary，轨道使用 Secondary Container，并支持动态配色。形状：直线指示器两端为圆角，Expressive 更新新增可选的波浪形。动效：不定进度指示器持续运动，不再采用 M2 的扫过式进度条。
 
 ui-two-shapes-cover-four-combinations-a-linear-or-circular-track-each-with-a-determinate-or-i = 两种形状涵盖四种组合：线性或圆形轨道，每种组合都有确定或不确定的活动指示器。
 
-ui-variant-determinate = 变体确定
+ui-variant-determinate = 变体：定值进度
 
-ui-variant-indeterminate = 变体不确定
+ui-variant-indeterminate = 变体：不定进度
 
-ui-variant-circular-determinate = 变体圆形确定
+ui-variant-circular-determinate = 变体：圆形定值进度
 
-ui-variant-circular-indeterminate = 变体圆形不定型
+ui-variant-circular-indeterminate = 变体：圆形不定进度
 
 ui-wavy-variants = 波浪形变体
 
-ui-wavy-determinate = 波浪状确定
+ui-wavy-determinate = 波浪形定值进度
 
-ui-wavy-indeterminate = 波浪状不定
+ui-wavy-indeterminate = 波浪形不定进度
 
-ui-wavy-circular-determinate = 波状圆形确定
+ui-wavy-circular-determinate = 波浪圆形定值进度
 
-ui-wavy-circular-indeterminate = 波状圆形不定
+ui-wavy-circular-indeterminate = 波浪圆形不定进度
 
 ui-progress-configuration-wavy = 进度配置波浪形
 
@@ -72,7 +72,7 @@ ui-progress-configuration-thick = 进度配置厚
 
 ui-thick-stroke = 粗行程
 
-ui-progress-configuration-determinate = 进度配置确定
+ui-progress-configuration-determinate = 定值进度配置
 
 ui-configuration-linear = 配置线性
 
@@ -92,7 +92,7 @@ ui-circular-track = 圆形轨道
 
 ui-circular-active = 循环活跃
 
-ui-indeterminate-motion = 不定运动
+ui-indeterminate-motion = 不定进度动效
 
 ui-continuous-advance-and-retract = 连续前进和后退
 
@@ -118,7 +118,7 @@ ui-light-circular = 光圆形
 
 ui-color-roles-4475 = 颜色角色
 
-ui-track-on-a-surface-container = 地面集装箱上的轨道
+ui-track-on-a-surface-container = 轨道置于 Surface Container 上
 
 ui-measurement-linear = 测量线性
 
@@ -144,13 +144,13 @@ ui-wavy-circular-diameter = 波状圆直径
 
 ui-show-progress-as-soon-as-a-process-starts-and-keep-the-indicator-visible-until-it-finishes = 进程启动后立即显示进度，并保持指示器可见，直到进程完成。确定性指标必须报告真实的完成率；切勿以任意速率设置动画。
 
-ui-use-a-determinate-indicator-when-completion-can-be-measured = 当可以衡量完成情况时使用确定的指标
+ui-use-a-determinate-indicator-when-completion-can-be-measured = 可以计算完成比例时，使用定值进度指示器
 
-ui-use-a-determinate-indicator-for-an-unknown-wait-time = 使用确定的指示器来表示未知的等待时间
+ui-use-a-determinate-indicator-for-an-unknown-wait-time = 在等待时长未知时使用定值进度指示器
 
-ui-use-an-indeterminate-indicator-while-the-length-is-unknown = 当长度未知时使用不确定指示器
+ui-use-an-indeterminate-indicator-while-the-length-is-unknown = 任务时长未知时，使用不定进度指示器
 
-ui-switch-an-indeterminate-indicator-into-a-determinate-one-mid-process = 在流程中将不确定指标切换为确定指标
+ui-switch-an-indeterminate-indicator-into-a-determinate-one-mid-process = 在任务执行过程中，从不定进度切换为定值进度
 
 ui-keep-one-indicator-per-process-close-to-its-content = 每个进程保留一个靠近其内容的指示器
 
@@ -190,23 +190,23 @@ ui-navigate-to-the-progress-indicator = 导航至进度指示器。
 
 ui-understand-what-progress-the-indicator-is-communicating-4511 = 了解指标正在传达的进展情况。
 
-ui-hear-the-completion-value-of-a-determinate-indicator = 听到确定指标的完成值。
+ui-hear-the-completion-value-of-a-determinate-indicator = 播报定值进度指示器的完成比例。
 
-ui-accessible-determinate = 无障碍确定
+ui-accessible-determinate = 无障碍定值进度
 
 ui-a-determinate-indicator-publishes-its-value-through-the-progress-indicator-role-so-assisti = 确定性指标通过进度指示器角色发布其值，因此辅助技术可以报告百分比。不确定指标不发布数值；它绝不能公布虚假的百分比。
 
-ui-accessible-indeterminate = 可访问的不确定性
+ui-accessible-indeterminate = 无障碍不定进度
 
-ui-accessible-circular-indeterminate = 无障碍循环不定
+ui-accessible-circular-indeterminate = 无障碍圆形不定进度
 
 ui-name-the-process-rather-than-the-shape-a-determinate-indicator-reports-its-percentage-auto = 命名过程而不是形状。确定的指标会自动报告其百分比，而不确定的指标则会宣布为正在进行中。
 
-ui-determinate-indicator = 确定指标
+ui-determinate-indicator = 定值进度指示器
 
 ui-process-name-plus-the-reported-percentage = 进程名称加上报告的百分比
 
-ui-indeterminate-indicator = 不确定指标
+ui-indeterminate-indicator = 不定进度指示器
 
 ui-process-name-with-an-in-progress-state = 处于进行中状态的进程名称
 
@@ -228,8 +228,8 @@ ui-value-value-stroke = { $v0 } · { $v1 } 行程
 
 ui-circular-size-thickness = 圆形尺寸/厚度
 
-ui-determinate-7102 = 确定的
+ui-determinate-7102 = 定值进度
 
-ui-indeterminate = 不确定的
+ui-indeterminate = 不定进度
 
 ui-thick = 厚

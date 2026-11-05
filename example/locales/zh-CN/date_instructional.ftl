@@ -68,12 +68,12 @@ ui-choose-labeled-year = 选择标记年份
 
 ui-optional-clear-value = 可选清除 { $v0 }
 
-ui-enter-a-valid-date-mm-dd-yyyy = 输入有效日期（月/日/年）
+ui-enter-a-valid-date-mm-dd-yyyy = 输入有效日期（MM/DD/YYYY）
 
 ui-ui-text-event-date-yyyy-mm-dd = UI 文本（“活动日期，YYYY/MM/DD”）
 
-ui-event-date-yyyy-mm-dd = 活动日期，年/月/日
+ui-event-date-yyyy-mm-dd = 活动日期，YYYY/MM/DD
 
-ui-enter-a-valid-date-yyyy-mm-dd = 输入有效日期（年/月/日）
+ui-enter-a-valid-date-yyyy-mm-dd = 输入有效日期（YYYY/MM/DD）
 
 ui-open-named-calendar = 打开{ $name }日历

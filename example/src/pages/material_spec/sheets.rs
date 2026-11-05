@@ -113,7 +113,7 @@ fn sheet_article(
         figures::badge_legend(vec![
             "ui-container".into(),
             "ui-drag-handle-optional".into(),
-            "ui-scrim".into(),
+            "Scrim".into(),
         ]);
     })
     .pages(vec![
@@ -246,22 +246,22 @@ fn availability() {
             ],
             vec![
                 "ui-implementation".into(),
-                "ui-flutter".into(),
+                "Flutter".into(),
                 "ui-available".into(),
             ],
             vec![
                 "ui-implementation".into(),
-                "ui-android-views-mdc-android".into(),
+                "Android Views (MDC-Android)".into(),
                 "ui-available".into(),
             ],
             vec![
                 "ui-implementation".into(),
-                "ui-jetpack-compose".into(),
+                "Jetpack Compose".into(),
                 "ui-available".into(),
             ],
             vec![
                 "ui-implementation".into(),
-                "ui-web".into(),
+                "Web".into(),
                 "ui-unavailable".into(),
             ],
         ],
@@ -721,8 +721,8 @@ fn sheet_colors_section() {
     caption("ui-bottom-sheet-color-roles-used-for-both-light-and-dark-schemes");
     figures::badge_legend(vec![
         "Scrim*".into(),
-        "ui-on-surface-variant".into(),
-        "ui-surface-container-low".into(),
+        "On surface variant".into(),
+        "Surface container low".into(),
     ]);
     caption(
         "ui-on-android-platforms-the-scrim-color-and-opacity-is-automatically-handled-by-the-system-ui",

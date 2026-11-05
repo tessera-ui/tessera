@@ -18,7 +18,7 @@ ui-small-56dp-medium-80dp-and-large-96dp = 小 (56dp)、中 (80dp) 和大 (96dp)
 
 ui-type-style = 类型风格
 
-ui-the-small-extended-fab-uses-title-medium-instead-of-label-large = 小扩展FAB使用标题medium而不是标签large
+ui-the-small-extended-fab-uses-title-medium-instead-of-label-large = 小号扩展 FAB 使用 Title Medium，而不是 Label Large
 
 ui-padding = 填充
 
@@ -28,17 +28,15 @@ ui-extended-fab-baseline-is-no-longer-recommended = 不再推荐扩展 FAB（基
 
 ui-compose = 撰写
 
-ui-the-small-extended-fab-is-the-recommended-size-in-the-expressive-update = 小扩展 FAB 是表达更新中的推荐大小。
+ui-the-small-extended-fab-is-the-recommended-size-in-the-expressive-update = 小扩展 FAB 是Expressive 更新中的推荐大小。
 
-ui-m2-extended-fabs-used-a-fixed-48dp-height-a-single-primary-color-and-label-large-type-m3-i = M2：扩展FAB使用固定的48dp高度、单一原色和标签大字体。 M3 引入了遵循内容颜色的容器颜色角色、高程级别和状态图层。
+ui-m2-extended-fabs-used-a-fixed-48dp-height-a-single-primary-color-and-label-large-type-m3-i = M2 中的扩展 FAB 使用固定的 48dp 高度、Primary 单色和 Label Large 字体样式。M3 引入了容器颜色角色、阴影等级，以及随内容颜色变化的状态层。
 
 ui-m3-expressive-the-container-grew-into-three-sizes-the-label-type-moved-to-title-medium-for = M3 Expressive：容器增长为三种尺寸，小尺寸的标签类型移至标题medium，图标尺寸跟随容器高度。
 
-ui-label-large = 标签大
-
 ui-single-accent = 单一口音
 
-ui-primary-secondary-and-tertiary-containers-or-accents = 主要、次要和第三个容器或重音
+ui-primary-secondary-and-tertiary-containers-or-accents = Primary、Secondary 和 Tertiary 的容器色或强调色
 
 ui-three-sizes-share-the-same-anatomy-and-differ-in-height-icon-size-padding-and-label-type-s = 三种尺寸具有相同的结构，但在高度、图标大小、填充和标签类型方面有所不同。小是建议的默认值。
 
@@ -78,19 +76,13 @@ ui-expand-label = 展开标签
 
 ui-extended-fab-tokens-are-organized-by-size-and-color-values-below-follow-the-native-compone = 扩展 FAB 令牌按大小和颜色组织。以下值遵循此页面上使用的本机组件默认值。
 
-ui-primary-container = 主容器
-
-ui-on-primary-container = 在主容器上
-
 ui-56dp-small-80dp-medium-96dp-large = 56dp 小 · 80dp 中 · 96dp 大
-
-ui-title-medium-title-large-headline-small = 标题中·标题大·标题小
 
 ui-level-3-level-4-when-hovered = 悬停时为 3 级·4 级
 
 ui-content-color-at-8-hover-and-10-focus-or-press = 8% 悬停和 10% 焦点或按下时的内容颜色
 
-ui-when-a-non-default-color-mapping-is-used-keep-the-state-layer-color-equal-to-the-icon-colo = 当使用非默认颜色映射时，保持状态层颜色与图标颜色相同。对于主要映射，状态层是主要的。
+ui-when-a-non-default-color-mapping-is-used-keep-the-state-layer-color-equal-to-the-icon-colo = 使用非默认配色时，状态层应与图标颜色保持一致；采用 Primary 配色时，状态层也使用 Primary。
 
 ui-an-extended-fab-combines-a-container-an-optional-leading-icon-and-a-label-the-icon-and-lab = 扩展的 FAB 结合了容器、可选的前导图标和标签。图标和标签共享一种内容颜色，容器承载色调和高度。
 
@@ -100,13 +92,11 @@ ui-3-label-text = 3 标签文字
 
 ui-the-label-states-the-action-the-icon-supports-recognition-without-repeating-the-label = 标签说明了操作；图标支持识别，无需重复标签。
 
-ui-container-tones-map-to-the-primary-secondary-and-tertiary-color-roles-either-as-containers = 容器色调映射到主要、次要和第三颜色角色，作为容器或作为纯色强调。每个色调都与图标和标签的匹配颜色配对。
-
-ui-1-primary-container-2-secondary-container-3-tertiary-container-4-primary-5-secondary-6-ter = 1 一级容器 2 二级容器 3 三级容器 4 一级容器 5 二级容器 6 三级容器
+ui-container-tones-map-to-the-primary-secondary-and-tertiary-color-roles-either-as-containers = 容器配色对应 Primary、Secondary 和 Tertiary 颜色角色，可采用容器色或纯色强调。图标和标签使用对应的 On 色。
 
 ui-states-communicate-elevation-and-interaction-an-enabled-extended-fab-rests-at-level-3-rise = 国家传达高度和互动。启用的扩展 FAB 停留在级别 3，悬停时升至级别 4，并在状态层变暗时聚焦或按下时保持级别 3。禁用的扩展 FAB 保持其形状，但停止接受输入。
 
-ui-hover-focus-with-tab-or-press-the-actions-above-to-see-the-state-layer-and-elevation-respo = 将鼠标悬停、使用 Tab 聚焦或按上面的操作即可查看状态图层和高程响应。
+ui-hover-focus-with-tab-or-press-the-actions-above-to-see-the-state-layer-and-elevation-respo = 将鼠标悬停、使用 Tab 聚焦或按上面的操作即可查看状态图层和阴影高度响应。
 
 ui-level-3 = 3级
 
@@ -122,9 +112,7 @@ ui-leading-space = 领先空间
 
 ui-icon-to-label = 图标到标签
 
-ui-trailing-space = 尾随空格
-
-ui-title-medium = 标题媒体
+ui-trailing-space = 末尾间距
 
 ui-corners = 角球
 
@@ -142,7 +130,7 @@ ui-follows-the-label-minimum-80dp = 遵循标签，最小 80dp
 
 ui-minimum-interactive-target = 最小交互目标
 
-ui-the-baseline-extended-fab-is-no-longer-recommended-in-the-m3-expressive-update-use-a-small = M3 表达更新中不再推荐使用基线扩展 FAB。使用小型扩展 FAB 代替：字体样式从标签大改为标题中，并且内部填充减少。
+ui-the-baseline-extended-fab-is-no-longer-recommended-in-the-m3-expressive-update-use-a-small = M3 Expressive更新中不再推荐使用基线扩展 FAB。使用小型扩展 FAB 代替：字体样式从标签大改为标题中，并且内部填充减少。
 
 ui-1-extended-fab-baseline-is-superseded-by-the-small-extended-fab-shown-here = 1 扩展 FAB（基线）被此处所示的小型扩展 FAB 取代。
 
@@ -176,7 +164,7 @@ ui-prefer-a-fab-without-a-label-when-the-icon-alone-is-universally-understood = 
 
 ui-an-extended-fab-is-a-single-container-with-a-leading-icon-and-a-label-keep-the-icon-option = 扩展 FAB 是带有前导图标和标签的单个容器。保持图标可选：当标签已经命名操作时，图标仅支持识别。
 
-ui-use-the-default-primary-container-tone-for-most-screens-secondary-and-tertiary-tones-separ = 对大多数屏幕使用默认的主容器色调。二级和三级色调将浮动动作与其他原色元素分开，而纯​​重音则增强了其重点。
+ui-use-the-default-primary-container-tone-for-most-screens-secondary-and-tertiary-tones-separ = 大多数界面默认使用 Primary Container。Secondary 和 Tertiary 可将 FAB 与其他 Primary 元素区分开；纯色强调样式则能提高其视觉权重。
 
 ui-keep-one-tone-across-a-screen-so-the-floating-action-stays-identifiable = 在屏幕上保持一种色调，以便浮动动作保持可识别性。
 
@@ -192,7 +180,7 @@ ui-compact = 紧凑型
 
 ui-expanded = 扩展
 
-ui-the-same-label-at-two-size-presets-the-large-size-carries-more-weight-in-wide-layouts = 相同标签有两种尺寸预设；大尺寸在宽布局中具有更大的重量。
+ui-the-same-label-at-two-size-presets-the-large-size-carries-more-weight-in-wide-layouts = 相同标签有两种尺寸预设；大尺寸在宽布局中具有更大的字重。
 
 ui-an-extended-fab-can-collapse-to-an-icon-only-container-while-content-scrolls-then-expand-a = 扩展的 FAB 可以在内容滚动时折叠为仅包含图标的容器，然后在人们停止或向后滚动时再次展开。保持操作在两种状态下均可访问，并且切勿将其隐藏在滚动内容后面。
 
@@ -210,7 +198,7 @@ ui-above-three-to-one-compose = 以上三对一：撰写
 
 ui-below-three-to-one-compose = 下面三对一：撰写
 
-ui-above-3-1-on-primary-container-versus-a-low-contrast-pairing = 主容器与低对比度配对的比例高于 3:1。
+ui-above-3-1-on-primary-container-versus-a-low-contrast-pairing = On Primary Container 的组合满足 3:1 对比度，另一组合的对比度不足。
 
 ui-the-pressed-and-focused-state-layers-use-the-content-color-so-a-custom-container-keeps-rea = 按下和聚焦的状态层使用内容颜色，因此自定义容器仅在故意选择其颜色时才保留可读反馈。
 
@@ -234,6 +222,4 @@ ui-when-the-label-collapses-keep-the-same-accessible-name-provide-a-visible-labe
 
 ui-value-activations-value-format-161 = { $v0 } · 激活： { $v1 }
 
-ui-title-medium-title-large-headline-small-6940 = 标题中/标题大/标题小
-
-ui-tessera-examples-on-this-page-use-the-native-extended-floating-action-button-componen = 本页上的 Tessera 示例使用本机 extended_floating_action_button 组件。实现了小、中、大尺寸、六种色调、可选图标和标签扩展，以及高程和状态层反馈。
+ui-tessera-examples-on-this-page-use-the-native-extended-floating-action-button-componen = 本页上的 Tessera 示例使用原生 extended_floating_action_button 组件。实现了小、中、大尺寸、六种色调、可选图标和标签扩展，以及阴影高度和状态层反馈。

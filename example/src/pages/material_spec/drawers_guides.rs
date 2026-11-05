@@ -863,7 +863,7 @@ fn drawer_item(variant: u8, index: usize, selected: State<usize>) {
     let with_icon = variant != 15 && !(variant == 20 && index >= 2);
     let badge = if index == 0 && !home {
         Some(RenderSlot::new(move || {
-            text().content(I18N.text("24"));
+            text().content("24");
         }))
     } else {
         None
@@ -958,7 +958,7 @@ fn a11y_item(photos: bool, index: usize, selected: usize, outlined_selected: boo
     };
     let badge = if index == 1 && !photos {
         Some(RenderSlot::new(move || {
-            text().content(I18N.text("100+"));
+            text().content("100+");
         }))
     } else {
         None
@@ -1229,7 +1229,7 @@ pub(super) fn anatomy() {
         (5, "ui-sheet".into()),
         (6, "ui-divider".into()),
         (7, "ui-section-label-optional".into()),
-        (8, "ui-scrim".into()),
+        (8, "Scrim".into()),
     ]);
     gap(Dp(48.0));
     guide_split()

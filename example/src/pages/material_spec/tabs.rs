@@ -330,22 +330,22 @@ fn availability() {
             ],
             vec![
                 "ui-implementation".into(),
-                "ui-flutter".into(),
+                "Flutter".into(),
                 "ui-available".into(),
             ],
             vec![
                 "ui-implementation".into(),
-                "ui-jetpack-compose".into(),
+                "Jetpack Compose".into(),
                 "ui-available".into(),
             ],
             vec![
                 "ui-implementation".into(),
-                "ui-android-views-mdc-android".into(),
+                "Android Views (MDC-Android)".into(),
                 "ui-available".into(),
             ],
             vec![
                 "ui-implementation".into(),
-                "ui-web".into(),
+                "Web".into(),
                 "ui-available".into(),
             ],
         ],
@@ -977,7 +977,7 @@ fn badge_title(#[prop(into)] label: String, icon_shown: bool, index: usize) {
                     })
                     .badge(move || {
                         badge_with_content().content(move || {
-                            text().content(I18N.text("3"));
+                            text().content("3");
                         });
                     });
                 text().content(I18N.text(&(label)));
@@ -989,7 +989,7 @@ fn badge_title(#[prop(into)] label: String, icon_shown: bool, index: usize) {
                 text().content(I18N.text(&(label)));
                 spacer().modifier(Modifier::new().width(Dp(4.0)));
                 badge_with_content().content(move || {
-                    text().content(I18N.text("3"));
+                    text().content("3");
                 });
             });
     }
@@ -998,15 +998,7 @@ fn badge_title(#[prop(into)] label: String, icon_shown: bool, index: usize) {
 #[tessera]
 fn section(primary: bool) {
     panel(RenderSlot::new(move || {
-        sample(
-            if primary {
-                "ui-primary"
-            } else {
-                "ui-secondary"
-            },
-            primary,
-        )
-        .controls(true);
+        sample(if primary { "Primary" } else { "Secondary" }, primary).controls(true);
     }));
     gap(Dp(32.0));
     native_tabs_figure(primary, primary, false, 1, if primary { 3 } else { 2 });
@@ -1049,21 +1041,21 @@ fn section(primary: bool) {
     }
     legend_list(if primary {
         vec![
-            "ui-surface".into(),
-            "ui-primary".into(),
-            "ui-primary".into(),
-            "ui-on-surface-variant".into(),
-            "ui-on-surface-variant".into(),
-            "ui-outline-variant".into(),
-            "ui-primary".into(),
+            "Surface".into(),
+            "Primary".into(),
+            "Primary".into(),
+            "On surface variant".into(),
+            "On surface variant".into(),
+            "Outline variant".into(),
+            "Primary".into(),
         ]
     } else {
         vec![
-            "ui-surface".into(),
-            "ui-on-surface".into(),
-            "ui-on-surface-variant".into(),
-            "ui-outline-variant".into(),
-            "ui-primary".into(),
+            "Surface".into(),
+            "On surface".into(),
+            "On surface variant".into(),
+            "Outline variant".into(),
+            "Primary".into(),
         ]
     });
     gap(Dp(32.0));
@@ -1231,7 +1223,7 @@ const TOKEN_GROUPS: [(&str, &[(&str, &str, &str)]); 4] = [
             (
                 "ui-container-color",
                 "md.comp.primary-navigation-tab.container.color",
-                "ui-surface",
+                "Surface",
             ),
             (
                 "ui-container-height",
@@ -1256,7 +1248,7 @@ const TOKEN_GROUPS: [(&str, &[(&str, &str, &str)]); 4] = [
             (
                 "ui-active-indicator-color",
                 "md.comp.primary-navigation-tab.active-indicator.color",
-                "ui-primary",
+                "Primary",
             ),
             (
                 "ui-active-indicator-height",
@@ -1271,17 +1263,17 @@ const TOKEN_GROUPS: [(&str, &[(&str, &str, &str)]); 4] = [
             (
                 "ui-active-label-text-color",
                 "md.comp.primary-navigation-tab.with-label-text.active.label-text.color",
-                "ui-primary",
+                "Primary",
             ),
             (
                 "ui-inactive-label-text-color",
                 "md.comp.primary-navigation-tab.with-label-text.inactive.label-text.color",
-                "ui-on-surface-variant",
+                "On surface variant",
             ),
             (
                 "ui-label-text-font",
                 "md.comp.primary-navigation-tab.with-label-text.label-text.font",
-                "ui-title-small",
+                "Title small",
             ),
             (
                 "ui-label-text-size",
@@ -1301,12 +1293,12 @@ const TOKEN_GROUPS: [(&str, &[(&str, &str, &str)]); 4] = [
             (
                 "ui-active-icon-color",
                 "md.comp.primary-navigation-tab.with-icon.active.icon.color",
-                "ui-primary",
+                "Primary",
             ),
             (
                 "ui-inactive-icon-color",
                 "md.comp.primary-navigation-tab.with-icon.inactive.icon.color",
-                "ui-on-surface-variant",
+                "On surface variant",
             ),
             (
                 "ui-icon-size",
@@ -1316,7 +1308,7 @@ const TOKEN_GROUPS: [(&str, &[(&str, &str, &str)]); 4] = [
             (
                 "ui-divider-color",
                 "md.comp.primary-navigation-tab.divider.color",
-                "ui-outline-variant",
+                "Outline variant",
             ),
             (
                 "ui-divider-height",
@@ -1331,12 +1323,12 @@ const TOKEN_GROUPS: [(&str, &[(&str, &str, &str)]); 4] = [
             (
                 "ui-active-state-layer-color",
                 "md.comp.primary-navigation-tab.active.hover.state-layer.color",
-                "ui-primary",
+                "Primary",
             ),
             (
                 "ui-inactive-state-layer-color",
                 "md.comp.primary-navigation-tab.inactive.hover.state-layer.color",
-                "ui-on-surface",
+                "On surface",
             ),
             (
                 "ui-state-layer-opacity",
@@ -1346,22 +1338,22 @@ const TOKEN_GROUPS: [(&str, &[(&str, &str, &str)]); 4] = [
             (
                 "ui-active-label-text-color",
                 "md.comp.primary-navigation-tab.with-label-text.active.hover.label-text.color",
-                "ui-primary",
+                "Primary",
             ),
             (
                 "ui-inactive-label-text-color",
                 "md.comp.primary-navigation-tab.with-label-text.inactive.hover.label-text.color",
-                "ui-on-surface",
+                "On surface",
             ),
             (
                 "ui-active-icon-color",
                 "md.comp.primary-navigation-tab.with-icon.active.hover.icon.color",
-                "ui-primary",
+                "Primary",
             ),
             (
                 "ui-inactive-icon-color",
                 "md.comp.primary-navigation-tab.with-icon.inactive.hover.icon.color",
-                "ui-on-surface",
+                "On surface",
             ),
         ],
     ),
@@ -1371,12 +1363,12 @@ const TOKEN_GROUPS: [(&str, &[(&str, &str, &str)]); 4] = [
             (
                 "ui-active-state-layer-color",
                 "md.comp.primary-navigation-tab.active.focus.state-layer.color",
-                "ui-primary",
+                "Primary",
             ),
             (
                 "ui-inactive-state-layer-color",
                 "md.comp.primary-navigation-tab.inactive.focus.state-layer.color",
-                "ui-on-surface",
+                "On surface",
             ),
             (
                 "ui-state-layer-opacity",
@@ -1386,22 +1378,22 @@ const TOKEN_GROUPS: [(&str, &[(&str, &str, &str)]); 4] = [
             (
                 "ui-active-label-text-color",
                 "md.comp.primary-navigation-tab.with-label-text.active.focus.label-text.color",
-                "ui-primary",
+                "Primary",
             ),
             (
                 "ui-inactive-label-text-color",
                 "md.comp.primary-navigation-tab.with-label-text.inactive.focus.label-text.color",
-                "ui-on-surface",
+                "On surface",
             ),
             (
                 "ui-active-icon-color",
                 "md.comp.primary-navigation-tab.with-icon.active.focus.icon.color",
-                "ui-primary",
+                "Primary",
             ),
             (
                 "ui-inactive-icon-color",
                 "md.comp.primary-navigation-tab.with-icon.inactive.focus.icon.color",
-                "ui-on-surface",
+                "On surface",
             ),
         ],
     ),
@@ -1411,12 +1403,12 @@ const TOKEN_GROUPS: [(&str, &[(&str, &str, &str)]); 4] = [
             (
                 "ui-active-state-layer-color",
                 "md.comp.primary-navigation-tab.active.pressed.state-layer.color",
-                "ui-primary",
+                "Primary",
             ),
             (
                 "ui-inactive-state-layer-color",
                 "md.comp.primary-navigation-tab.inactive.pressed.state-layer.color",
-                "ui-on-surface",
+                "On surface",
             ),
             (
                 "ui-state-layer-opacity",
@@ -1426,22 +1418,22 @@ const TOKEN_GROUPS: [(&str, &[(&str, &str, &str)]); 4] = [
             (
                 "ui-active-label-text-color",
                 "md.comp.primary-navigation-tab.with-label-text.active.pressed.label-text.color",
-                "ui-primary",
+                "Primary",
             ),
             (
                 "ui-inactive-label-text-color",
                 "md.comp.primary-navigation-tab.with-label-text.inactive.pressed.label-text.color",
-                "ui-on-surface",
+                "On surface",
             ),
             (
                 "ui-active-icon-color",
                 "md.comp.primary-navigation-tab.with-icon.active.pressed.icon.color",
-                "ui-primary",
+                "Primary",
             ),
             (
                 "ui-inactive-icon-color",
                 "md.comp.primary-navigation-tab.with-icon.inactive.pressed.icon.color",
-                "ui-on-surface",
+                "On surface",
             ),
         ],
     ),
@@ -1891,7 +1883,7 @@ fn figure_badge(geometry: State<Geometry>, scale: f64) {
         .modifier(watch(geometry, "badge").size(Dp(16.0 * scale), Dp(16.0 * scale)))
         .children(move || {
             badge_with_content().content(move || {
-                text().content(I18N.text("3")).style(style);
+                text().content("3").style(style);
             });
         });
 }

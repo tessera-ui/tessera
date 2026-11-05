@@ -715,7 +715,7 @@ fn labeled_field(kind: usize, x: f64, y: f64, width: f64, scale: f64) {
     if kind == 1 {
         field.placeholder(I18N.text("ui-email")).suffix(move || {
             text()
-                .content(I18N.text("@gmail.com"))
+                .content("@gmail.com")
                 .style(type_style(16.0 * scale, 24.0 * scale))
                 .accessibility_label(I18N.text("ui-at-gmail-dot-com-5953"));
         });
@@ -723,7 +723,7 @@ fn labeled_field(kind: usize, x: f64, y: f64, width: f64, scale: f64) {
     if kind == 0 {
         field.prefix(move || {
             text()
-                .content(I18N.text("€"))
+                .content("€")
                 .style(type_style(16.0 * scale, 24.0 * scale))
                 .accessibility_label(I18N.text("ui-euro"));
         });

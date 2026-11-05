@@ -34,7 +34,7 @@ ui-tessera-examples-on-this-page-use-the-native-chip-component-with-the-flat-and
 
 ui-aug-2024 = 2024 年 8 月
 
-ui-updated-stroke-color-from-outline-to-outline-variant = 将描边颜色从轮廓更新为轮廓变体。
+ui-updated-stroke-color-from-outline-to-outline-variant = 描边颜色由 Outline 改为 Outline Variant。
 
 ui-the-stroke-color-was-softened-to-improve-visual-hierarchy-between-chips-and-buttons = 描边颜色被软化，以改善信息标签和按钮之间的视觉层次结构
 
@@ -126,7 +126,7 @@ ui-use-an-outline-to-define-the-edge-of-the-chip-s-container-on-regular-backgrou
 
 ui-chips-shouldn-t-be-elevated-when-placed-directly-on-the-page = 直接放置在页面上时，信息标签不应升高
 
-ui-chips-may-use-elevation-when-placed-on-an-image = 放置在图像上时，信息标签可能会使用标高
+ui-chips-may-use-elevation-when-placed-on-an-image = 放置在图像上时，信息标签可能会使用阴影高度
 
 ui-avoid-using-elevation-to-indicate-a-chip-s-pressed-state-instead-use-the-visual-ripple-eff = 避免使用高度来指示信息标签的按压状态。相反，使用视觉波纹效果。
 
@@ -144,7 +144,7 @@ ui-chips-can-contain-a-leading-icon-logo-or-circular-image-use-a-system-icon-to-
 
 ui-chips-can-contain-a-logo-icon-or-circular-image = 信息标签可以包含徽标、图标或圆形图像
 
-ui-the-leading-icon-color-for-unselected-chips-can-be-customized-through-theming-while-the-de = 未选定信息标签的主图标颜色可以通过主题进行自定义。虽然默认颜色角色是主要的，但当图标样式需要较少强调时，表面变体颜色角色是一个不错的选择。
+ui-the-leading-icon-color-for-unselected-chips-can-be-customized-through-theming-while-the-de = 未选中信息标签的前导图标颜色可通过主题设置。默认使用 Primary；需要降低视觉强调时，可改用 On Surface Variant。
 
 ui-leading-circular-images-are-sized-larger-than-leading-icons-to-provide-more-space-for-deta = 前导圆形图像的尺寸比前导图标大，以便为细节提供更多空间。图标设计得在小尺寸下也清晰可见。请参阅“规格”选项卡了解精确的测量值。
 
@@ -254,13 +254,11 @@ ui-offer-a-short-set-of-suggestions-next-to-the-content-they-answer = 在他们�
 
 ui-avoid-presenting-a-single-suggestion-chip-on-its-own = 避免单独呈现单个建议信息标签
 
-ui-container-elevation = 集装箱标高
+ui-container-elevation = 容器阴影高度
 
 ui-0dp-elevated-1dp = 0dp·升高1dp
 
 ui-label-color = 标签颜色
-
-ui-outline-variant = 轮廓变体
 
 ui-8dp-corner = 8dp 角
 
@@ -360,7 +358,7 @@ ui-a11y-label = A11y标签
 
 ui-role-web = 角色（网络）
 
-ui-role-android-views = 角色（Android 视图）
+ui-role-android-views = 角色（Android Views）
 
 ui-role-jetpack-compose = 角色（Jetpack Compose）
 
@@ -420,20 +418,20 @@ ui-left-right-padding-without-icon = 无图标的左/右内边距
 
 ui-left-right-padding-with-icon = 带图标的左/右内边距
 
-ui-surface-container-low-optional-on-surface-outline-primary = 表面容器低（可选）、表面、轮廓、初级
+ui-surface-container-low-optional-on-surface-outline-primary = Surface Container Low（可选）、On Surface、Outline、Primary
 
-ui-on-surface-variant-on-secondary-container-secondary-container-outline-variant-surface-cont = 表面型、辅助容器型、辅助容器型、轮廓型、低表面容器型（可选）
+ui-on-surface-variant-on-secondary-container-secondary-container-outline-variant-surface-cont = On Surface Variant、On Secondary Container、Secondary Container、Outline Variant、Surface Container Low（可选）
 
-ui-on-surface-variant-surface-container-low-optional-outline-variant-primary-secondary-contai = 表面型、低表面容器（可选）、轮廓型、主容器、辅助容器、辅助容器
+ui-on-surface-variant-surface-container-low-optional-outline-variant-primary-secondary-contai = On Surface Variant、Surface Container Low（可选）、Outline Variant、Primary、Secondary Container、On Secondary Container
 
-ui-outline-surface-container-low-optional-on-surface-variant = 轮廓，表面容器低（可选），表面变型
+ui-outline-surface-container-low-optional-on-surface-variant = Outline、Surface Container Low（可选）、On Surface Variant
 
 ui-image-icon-within-chip = 信息标签内的图像/图标
 
 ui-to = 至
 
-ui-chip-content = __保留1__
+ui-chip-content = { "{" }chip content{ "}" }
 
 ui-remove-chip-content = 删除 { "{" }chip content{ "}" }
 
-ui-chip-content-then-remove-chip-content = __保留1__。然后“删除{ "{" }chip content{ "}" }”
+ui-chip-content-then-remove-chip-content = { "{" }chip content{ "}" }，然后是“删除 { "{" }chip content{ "}" }”

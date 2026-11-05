@@ -22,11 +22,11 @@ ui-one-fab-menu-size-for-all-sizes-of-fabs = 一种 FAB 菜单尺寸适用于所
 
 ui-not-used-with-extended-fabs = 不与扩展 FAB 一起使用
 
-ui-available-in-primary-secondary-and-tertiary-color-sets = 提供原色、二次色和三次色集
+ui-available-in-primary-secondary-and-tertiary-color-sets = 提供 Primary、Secondary 和 Tertiary 三种配色
 
-ui-the-fab-menu-comes-in-three-color-sets-primary-secondary-tertiary = FAB 菜单有三种颜色集：一级、二级、三级
+ui-the-fab-menu-comes-in-three-color-sets-primary-secondary-tertiary = FAB 菜单提供三种配色：Primary、Secondary、Tertiary
 
-ui-tessera-examples-on-this-page-use-the-native-floating-action-button-menu-with-its-close-bu = 本页上的 Tessera 示例使用本机悬浮操作按钮菜单及其关闭按钮、标记项目和三种颜色集。
+ui-tessera-examples-on-this-page-use-the-native-floating-action-button-menu-with-its-close-bu = 本页上的 Tessera 示例使用原生悬浮操作按钮菜单及其关闭按钮、标记项目和三种颜色集。
 
 ui-the-fab-menu-adds-more-options-to-the-fab-it-should-replace-the-speed-dial-and-any-usage-o = FAB菜单为FAB添加了更多选项。它应该取代快速拨号和任何堆叠的小型 FAB 的使用。
 
@@ -42,7 +42,7 @@ ui-supports-dynamic-color = 支持动态色彩
 
 ui-compatible-with-any-fab-color-style = 兼容任何FAB颜色风格
 
-ui-expressive = 富有表现力
+ui-expressive = Expressive
 
 ui-the-fab-menu-uses-contrasting-color-and-large-items-to-focus-attention-it-can-open-from-an = FAB 菜单使用对比色和大项目来吸引注意力。它可以从任何尺寸的 FAB 打开
 
@@ -54,7 +54,7 @@ ui-m3-a-single-fab-menu-whose-labelled-items-expand-from-one-fab = M3：单个 F
 
 ui-differences = 差异
 
-ui-the-m3-fab-menu-replaces-stacked-small-fabs-with-labelled-expressive-items = M3 FAB 菜单用带标签、富有表现力的项目取代了堆叠的小 FAB
+ui-the-m3-fab-menu-replaces-stacked-small-fabs-with-labelled-expressive-items = M3 FAB 菜单用带标签、Expressive项目取代了堆叠的小 FAB
 
 ui-there-s-one-variant-of-fab-menu = FAB 菜单有一种变体
 
@@ -62,7 +62,7 @@ ui-color-set = 颜色设置
 
 ui-fab-menus-come-in-three-color-sets-each-set-colors-the-close-button-and-the-items-together = FAB 菜单具有三种颜色组。每组将关闭按钮和项目一起着色。
 
-ui-primary-set-secondary-set-tertiary-set = 第一组、第二组、第三组
+ui-primary-set-secondary-set-tertiary-set = Primary 配色、Secondary 配色、Tertiary 配色
 
 ui-the-fab-menu-is-aligned-to-the-trailing-edge-of-the-window-in-right-to-left-languages-it-i = FAB 菜单与窗口的后缘对齐。在从右到左的语言中，它与左边缘对齐，并且元素的布局是镜像的。
 
@@ -80,19 +80,11 @@ ui-56-56dp-full-round = 56 × 56dp · 全圆形
 
 ui-close-button-color = 关闭按钮颜色
 
-ui-primary-secondary-tertiary = 小学·中学·大学
-
 ui-close-button-icon = 关闭按钮图标
-
-ui-on-primary-on-secondary-on-tertiary = 小学·中学·大学
 
 ui-item-container = 物品容器
 
-ui-primary-container-secondary-container-tertiary-container = 一级容器 · 二级容器 · 三级容器
-
 ui-item-label = 物品标签
-
-ui-on-primary-container-on-secondary-container-on-tertiary-container = 在一级容器上 · 在二级容器上 · 在三级容器上
 
 ui-item-shape = 物品形状
 
@@ -130,7 +122,7 @@ ui-sixth = 第六
 
 ui-up-to-six-actions = 最多六个动作
 
-ui-fab-menu-colors-come-from-the-active-color-set-primary-secondary-or-tertiary-the-close-but = FAB 菜单颜色来自活动颜色集：一级、二级或三级。关闭按钮使用集合的填充颜色，而项目使用其容器颜色。
+ui-fab-menu-colors-come-from-the-active-color-set-primary-secondary-or-tertiary-the-close-but = FAB 菜单使用当前的 Primary、Secondary 或 Tertiary 配色。关闭按钮使用该配色的实心色，菜单项使用其容器色。
 
 ui-dark = 黑暗
 
@@ -141,14 +133,6 @@ ui-color-role = 色彩作用
 ui-item-label-and-icon = 项目标签和图标
 
 ui-close-icon = 关闭图标
-
-ui-tertiary = 第三系
-
-ui-tertiary-container = 三级集装箱
-
-ui-on-tertiary-container = 在三级容器上
-
-ui-on-tertiary = 上大专
 
 ui-enabled-hovered-focused-and-pressed-states-share-the-same-close-button-colors-hover-focus = 启用、悬停、聚焦和按下状态共享相同的关闭按钮颜色。将鼠标悬停在下面的实时示例中，使用 Tab 进行聚焦，或者按住。
 
@@ -170,7 +154,7 @@ ui-menu-items = 菜单项
 
 ui-spacing-between-items = 项目之间的间距
 
-ui-container-size = 集装箱尺寸
+ui-container-size = 容器尺寸
 
 ui-window-margin = 窗口边距
 
@@ -216,17 +200,17 @@ ui-the-fab-menu-has-two-elements-the-close-button-and-the-menu-items = FAB 菜�
 
 ui-the-close-button-takes-the-place-of-the-fab-and-each-item-pairs-an-icon-with-a-label = 关闭按钮取代了 FAB，每个项目都将一个图标与一个标签配对
 
-ui-fab-menus-have-three-color-sets-primary-secondary-and-tertiary-use-the-color-set-that-best = FAB 菜单具有三种颜色集：一级、二级和三级。使用与 FAB 颜色样式最匹配的颜色集。
+ui-fab-menus-have-three-color-sets-primary-secondary-and-tertiary-use-the-color-set-that-best = FAB 菜单提供 Primary、Secondary 和 Tertiary 三种配色，请选择与 FAB 颜色样式相配的一组。
 
-ui-use-the-primary-fab-menu-color-set-with-the-primary-or-primary-container-fab-color-styles = 将主 FAB 菜单颜色集与主或主容器 FAB 颜色样式一起使用。
+ui-use-the-primary-fab-menu-color-set-with-the-primary-or-primary-container-fab-color-styles = Primary FAB 菜单配色应搭配 Primary 或 Primary Container 样式的 FAB。
 
-ui-primary-pair = 主要对
+ui-primary-pair = Primary 配色组合
 
-ui-a-primary-fab-is-paired-with-a-primary-fab-menu = 主 FAB 与主 FAB 菜单配对
+ui-a-primary-fab-is-paired-with-a-primary-fab-menu = Primary FAB 搭配 Primary FAB 菜单
 
-ui-tertiary-pair = 第三对
+ui-tertiary-pair = Tertiary 配色组合
 
-ui-a-tertiary-fab-is-paired-with-a-tertiary-fab-menu = 第三 FAB 与第三 FAB 菜单配对
+ui-a-tertiary-fab-is-paired-with-a-tertiary-fab-menu = Tertiary FAB 搭配 Tertiary FAB 菜单
 
 ui-the-fab-menu-can-scroll-when-there-are-more-actions-than-fit-on-screen-make-sure-the-items = 当操作数量超出屏幕显示范围时，FAB 菜单可以滚动。确保项目滚动到关闭按钮后面，并保持关闭按钮易于访问且无障碍。
 

@@ -6,7 +6,7 @@ ui-present-a-continuous-vertical-index-of-related-content-and-actions = 呈现�
 
 ui-list-baseline = 列表（基线）
 
-ui-expressive-lists-introduce-segmented-shapes-highlighted-selection-and-flexible-content-slo = 富有表现力的列表引入了分段形状、突出显示的选择和灵活的内容槽。将这种处理方法用于新设计。
+ui-expressive-lists-introduce-segmented-shapes-highlighted-selection-and-flexible-content-slo = Expressive列表引入了分段形状、突出显示的选择和灵活的内容槽。将这种处理方法用于新设计。
 
 ui-overview-selection = 选型概览
 
@@ -40,9 +40,9 @@ ui-labeled-single-selection = 标记单选
 
 ui-folder-and-related-documents = 文件夹及相关文件
 
-ui-expressive-lists-add-grouped-corners-selection-treatment-and-flexible-slots = 富有表现力的列表添加了分组角、选择处理和灵活的插槽。
+ui-expressive-lists-add-grouped-corners-selection-treatment-and-flexible-slots = Expressive列表添加了分组角、选择处理和灵活的插槽。
 
-ui-expressive-list = 富有表现力的清单
+ui-expressive-list = Expressive清单
 
 ui-hide-related-folders = 隐藏相关文件夹
 
@@ -137,7 +137,7 @@ ui-surface-without-segmented-corners = 无分段角的表面
 
 ui-between-rows = 行与行之间
 
-ui-0dp-with-an-optional-outline-variant-divider = 0dp，带有可选的轮廓变体分隔线
+ui-0dp-with-an-optional-outline-variant-divider = 0dp，可选用 Outline Variant 分隔线
 
 ui-16dp-leading-and-trailing = 前导和尾随 16dp
 

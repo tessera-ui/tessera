@@ -1,10 +1,6 @@
-ui-material-design-3 = Material Design 3
-
 ui-examples = Examples
 
 ui-home = Home
-
-ui-material-components = Material Components
 
 ui-glass-components = Glass Components
 

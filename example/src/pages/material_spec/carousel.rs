@@ -1125,22 +1125,22 @@ fn availability() {
             ],
             vec![
                 "ui-implementation".into(),
-                "ui-flutter".into(),
+                "Flutter".into(),
                 "ui-available".into(),
             ],
             vec![
                 "ui-implementation".into(),
-                "ui-jetpack-compose".into(),
+                "Jetpack Compose".into(),
                 "ui-available".into(),
             ],
             vec![
                 "ui-implementation".into(),
-                "ui-android-views-mdc-android".into(),
+                "Android Views (MDC-Android)".into(),
                 "ui-available".into(),
             ],
             vec![
                 "ui-implementation".into(),
-                "ui-web".into(),
+                "Web".into(),
                 "ui-unavailable".into(),
             ],
         ],
@@ -1223,12 +1223,12 @@ fn tokens() {
             vec![
                 "ui-enabled".into(),
                 "ui-outline-color".into(),
-                "ui-outline".into(),
+                "Outline".into(),
             ],
             vec![
                 "ui-enabled".into(),
                 "ui-container-color".into(),
-                "ui-surface".into(),
+                "Surface".into(),
             ],
             vec![
                 "ui-enabled".into(),
@@ -1238,7 +1238,7 @@ fn tokens() {
             vec![
                 "ui-hover".into(),
                 "ui-state-layer-color".into(),
-                "ui-on-surface".into(),
+                "On surface".into(),
             ],
             vec![
                 "ui-hover".into(),
@@ -1248,12 +1248,12 @@ fn tokens() {
             vec![
                 "ui-hover".into(),
                 "ui-outline-color".into(),
-                "ui-outline".into(),
+                "Outline".into(),
             ],
             vec![
                 "ui-focus".into(),
                 "ui-focus-indicator-color".into(),
-                "ui-secondary".into(),
+                "Secondary".into(),
             ],
             vec![
                 "ui-focus".into(),
@@ -1268,12 +1268,12 @@ fn tokens() {
             vec![
                 "ui-focus".into(),
                 "ui-outline-color".into(),
-                "ui-on-surface".into(),
+                "On surface".into(),
             ],
             vec![
                 "ui-focus".into(),
                 "ui-state-layer-color".into(),
-                "ui-on-surface".into(),
+                "On surface".into(),
             ],
             vec![
                 "ui-focus".into(),
@@ -1283,12 +1283,12 @@ fn tokens() {
             vec![
                 "ui-pressed-ripple".into(),
                 "ui-outline-color".into(),
-                "ui-outline".into(),
+                "Outline".into(),
             ],
             vec![
                 "ui-pressed-ripple".into(),
                 "ui-state-layer-color".into(),
-                "ui-on-surface".into(),
+                "On surface".into(),
             ],
             vec![
                 "ui-pressed-ripple".into(),
@@ -1298,7 +1298,7 @@ fn tokens() {
             vec![
                 "ui-disabled".into(),
                 "ui-container-color".into(),
-                "ui-surface".into(),
+                "Surface".into(),
             ],
             vec![
                 "ui-disabled".into(),
@@ -1344,7 +1344,7 @@ fn colors() {
     caption("ui-carousel-color-roles-used-for-light-and-dark-schemes");
     gap(Dp(8.0));
     legend(1, "ui-container");
-    legend(2, "ui-surface");
+    legend(2, "Surface");
 }
 
 #[tessera]

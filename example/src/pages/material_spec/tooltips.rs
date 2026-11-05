@@ -174,22 +174,22 @@ fn tooltip_availability() {
             ],
             vec![
                 "ui-implementation".into(),
-                "ui-flutter".into(),
+                "Flutter".into(),
                 "ui-unavailable".into(),
             ],
             vec![
                 "ui-implementation".into(),
-                "ui-jetpack-compose".into(),
+                "Jetpack Compose".into(),
                 "ui-available".into(),
             ],
             vec![
                 "ui-implementation".into(),
-                "ui-android-views-mdc-android".into(),
+                "Android Views (MDC-Android)".into(),
                 "ui-unavailable".into(),
             ],
             vec![
                 "ui-implementation".into(),
-                "ui-web".into(),
+                "Web".into(),
                 "ui-unavailable".into(),
             ],
         ],
@@ -1560,7 +1560,7 @@ fn tooltip_focus_sequence() {
                                     row()
                                         .cross_axis_alignment(CrossAxisAlignment::Center)
                                         .children(move || {
-                                            text().content(I18N.text("Visit ")).style(type_style(14.0, 20.0));
+                                            text().content("Visit ").style(type_style(14.0, 20.0));
                                             boxed()
                                                 .modifier(
                                                     watch_in_space(geometry, "focus_link")
@@ -1898,7 +1898,7 @@ fn tooltip_browser_mock() {
         )
         .children(move || {
             text()
-                .content(I18N.text("M"))
+                .content("M")
                 .style(type_style(12.0, 16.0))
                 .color(srgb(255, 255, 255));
         });
@@ -1950,18 +1950,18 @@ fn tokens() {
         vec!["ui-element".into(), "ui-token-value".into()],
         if rich.get() {
             vec![
-                vec!["ui-container-color".into(), "ui-surface-container".into()],
+                vec!["ui-container-color".into(), "Surface container".into()],
                 vec![
                     "ui-subhead-supporting-text-color".into(),
-                    "ui-on-surface-variant".into(),
+                    "On surface variant".into(),
                 ],
-                vec!["ui-action-color".into(), "ui-primary".into()],
-                vec!["ui-subhead-type".into(), "ui-title-small-14sp-20sp".into()],
+                vec!["ui-action-color".into(), "Primary".into()],
+                vec!["ui-subhead-type".into(), "Title small · 14sp / 20sp".into()],
                 vec![
                     "ui-supporting-text-type".into(),
-                    "ui-body-medium-14sp-20sp".into(),
+                    "Body medium · 14sp / 20sp".into(),
                 ],
-                vec!["ui-action-type".into(), "ui-label-large-14sp-20sp".into()],
+                vec!["ui-action-type".into(), "Label large · 14sp / 20sp".into()],
                 vec!["ui-container-corner-size".into(), "12dp".into()],
                 vec![
                     "ui-container-elevation".into(),
@@ -1970,14 +1970,14 @@ fn tokens() {
             ]
         } else {
             vec![
-                vec!["ui-container-color".into(), "ui-inverse-surface".into()],
+                vec!["ui-container-color".into(), "Inverse surface".into()],
                 vec![
                     "ui-supporting-text-color".into(),
-                    "ui-inverse-on-surface".into(),
+                    "Inverse on surface".into(),
                 ],
                 vec![
                     "ui-supporting-text-type".into(),
-                    "ui-body-small-12sp-16sp".into(),
+                    "Body small · 12sp / 16sp".into(),
                 ],
                 vec!["ui-container-corner-size".into(), "4dp".into()],
                 vec!["ui-container-elevation".into(), "ui-level-0-0dp".into()],
@@ -2037,13 +2037,13 @@ fn detail(rich: bool) {
 fn tooltip_color_labels(rich: bool) -> Vec<&'static str> {
     if rich {
         vec![
-            "ui-on-surface-variant",
-            "ui-surface-container",
-            "ui-on-surface-variant",
-            "ui-primary",
+            "On surface variant",
+            "Surface container",
+            "On surface variant",
+            "Primary",
         ]
     } else {
-        vec!["ui-inverse-on-surface", "ui-inverse-surface"]
+        vec!["Inverse on surface", "Inverse surface"]
     }
 }
 

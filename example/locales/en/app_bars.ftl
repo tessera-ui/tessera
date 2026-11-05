@@ -104,11 +104,7 @@ ui-transparent-app-bar = Transparent app bar
 
 ui-m2-top-app-bar = M2 top app bar
 
-ui-material-2 = Material 2
-
 ui-m3-app-bar = M3 app bar
-
-ui-material-3 = Material 3
 
 ui-labeled-app-bar = Labeled app bar
 
@@ -164,21 +160,7 @@ ui-available = Available
 
 ui-implementation = Implementation
 
-ui-flutter = Flutter
-
-ui-jetpack-compose = Jetpack Compose
-
-ui-jetpack-compose-expressive = Jetpack Compose: Expressive
-
-ui-android-views-mdc-android = Android Views (MDC-Android)
-
-ui-android-views-mdc-android-expressive = Android Views (MDC-Android): Expressive
-
-ui-web = Web
-
 ui-unavailable = Unavailable
-
-ui-web-expressive = Web: Expressive
 
 ui-may-2025 = May 2025
 
@@ -500,8 +482,6 @@ ui-search-app-bar-account = Search app bar account
 
 ui-account-selected = Account selected
 
-ui-body-large = Body Large
-
 ui-search-library = Search library
 
 ui-search-library-view = Search library view
@@ -534,10 +514,6 @@ ui-baseline-reference-drawings-a-64dp-top-row-with-the-headline-in-a-fixed-heigh
 
 ui-baseline-app-bar = Baseline app bar
 
-ui-headline-medium = Headline Medium
-
-ui-headline-small = Headline Small
-
 ui-baseline-variants = Baseline variants
 
 ui-the-baseline-m3-medium-and-large-app-bars-are-no-longer-recommended-in-m3-expressive-and-s = The baseline M3 medium and large app bars are no longer recommended in M3 Expressive, and should be replaced with medium flexible and large flexible app bars, which are similar visually, but have multi-line support, a shorter height, and can contain a wide variety of elements, like images.
@@ -547,8 +523,6 @@ ui-baseline = Baseline
 ui-medium = Medium
 
 ui-large = Large
-
-ui-m3-expressive = M3 Expressive
 
 ui-merged-into-small-use-centered-text-configuration = Merged into small. Use centered-text configuration.
 
@@ -576,29 +550,19 @@ ui-configured-app-bar = Configured app bar
 
 ui-app-bar-container-color = App bar container color
 
-ui-fef7ff-surface = #FEF7FF (Surface)
-
 ui-search-container-color = Search container color
 
-ui-f3edf7-surface-container = #F3EDF7 (Surface container)
-
 ui-search-label-color = Search label color
-
-ui-49454f-on-surface-variant = #49454F (On surface variant)
 
 ui-app-bar-container-color-on-scroll = App bar container color on scroll
 
 ui-search-container-color-on-scroll = Search container color on scroll
-
-ui-e6e0e9-surface-container-highest = #E6E0E9 (Surface container highest)
 
 ui-app-bar-container-elevation = App bar container elevation
 
 ui-app-bar-container-elevation-on-scroll = App bar container elevation on scroll
 
 ui-app-bar-title-text = App bar title text
-
-ui-1d1b20-on-surface = #1D1B20 (On surface)
 
 ui-app-bar-subtitle-text = App bar subtitle text
 
@@ -671,8 +635,6 @@ ui-app-bar-large-subtitle-font = App bar large Subtitle font
 ui-roboto-16pt-line-height-24pt-weight-500-tracking-0-15pt = Roboto 16pt, line height 24pt, weight 500, tracking 0.15pt
 
 ui-search-bar-container-color = Search bar container color
-
-ui-ece6f0-surface-container-high = #ECE6F0 (Surface container high)
 
 ui-search-bar-container-elevation = Search bar container elevation
 
@@ -812,12 +774,6 @@ ui-scroll-state-menu = Scroll state menu
 
 ui-scroll-state-account = Scroll state account
 
-ui-title-large = Title large
-
-ui-headline-medium-579 = Headline medium
-
-ui-display-small = Display small
-
 ui-scroll-state-back = Scroll state back
 
 ui-scroll-state-search = Scroll state search
@@ -882,12 +838,6 @@ ui-app-bar-large-subtitle-font-611 = App bar large subtitle font
 
 ui-medium-top-app-bar-color-roles-used-for-light-and-dark-schemes = Medium top app bar color roles used for light and dark schemes:
 
-ui-surface = Surface
-
-ui-on-surface = On surface
-
-ui-on-surface-variant = On surface variant
-
 ui-medium-and-large-app-bars-share-the-same-layout-a-64dp-top-row-for-the-leading-button-and = Medium and large app bars share the same layout: a 64dp top row for the leading button and trailing icons, and a fixed-height headline area below it.
 
 ui-medium-app-bar = Medium app bar
@@ -906,8 +856,6 @@ ui-headline-bottom-padding = Headline bottom padding
 
 ui-headline-type-style = Headline type style
 
-ui-headline-small-625 = Headline small
-
 ui-1-container-2-leading-button-3-trailing-elements-4-headline-5-subtitle = 1  Container
     2  Leading button
     3  Trailing elements
@@ -921,10 +869,6 @@ ui-1-container-2-leading-icon-button-3-hinted-search-text-4-trailing-icon-or-ava
     3  Hinted search text
     4  Trailing icon or avatar
     5  Search container
-
-ui-title-large-629 = Title Large
-
-ui-display-small-630 = Display Small
 
 ui-figure-back = Figure back
 

@@ -466,37 +466,37 @@ fn availability() {
             ],
             vec![
                 "ui-implementation".into(),
-                "ui-flutter".into(),
+                "Flutter".into(),
                 "ui-available".into(),
             ],
             vec![
                 "ui-implementation".into(),
-                "ui-jetpack-compose".into(),
+                "Jetpack Compose".into(),
                 "ui-available".into(),
             ],
             vec![
                 "ui-implementation".into(),
-                "ui-jetpack-compose-expressive".into(),
+                "Jetpack Compose: Expressive".into(),
                 "ui-available".into(),
             ],
             vec![
                 "ui-implementation".into(),
-                "ui-android-views-mdc-android".into(),
+                "Android Views (MDC-Android)".into(),
                 "ui-available".into(),
             ],
             vec![
                 "ui-implementation".into(),
-                "ui-android-views-mdc-android-expressive".into(),
+                "Android Views (MDC-Android): Expressive".into(),
                 "ui-available".into(),
             ],
             vec![
                 "ui-implementation".into(),
-                "ui-web".into(),
+                "Web".into(),
                 "ui-unavailable".into(),
             ],
             vec![
                 "ui-implementation".into(),
-                "ui-web-expressive".into(),
+                "Web: Expressive".into(),
                 "ui-unavailable".into(),
             ],
         ],
@@ -674,7 +674,7 @@ fn variants() {
     );
     gap(Dp(32.0));
     spec_table(
-        vec!["ui-variant".into(), "M3".into(), "ui-m3-expressive".into()],
+        vec!["ui-variant".into(), "M3".into(), "M3 Expressive".into()],
         vec![
             vec![
                 "ui-collapsed-navigation-rail".into(),
@@ -754,7 +754,7 @@ fn configurations() {
             "ui-category".into(),
             "ui-configuration".into(),
             "M3".into(),
-            "ui-m3-expressive".into(),
+            "M3 Expressive".into(),
         ],
         vec![
             vec![
@@ -806,27 +806,27 @@ fn tokens() {
             vec![
                 "ui-active-indicator-color".into(),
                 "md.comp.navigation-rail.active-indicator.color".into(),
-                "ui-secondary-container-e8def8".into(),
+                "Secondary container #E8DEF8".into(),
             ],
             vec![
                 "ui-active-icon-color".into(),
                 "md.comp.navigation-rail.active-icon.color".into(),
-                "ui-on-secondary-container-4a4458".into(),
+                "On secondary container #4A4458".into(),
             ],
             vec![
                 "ui-active-label-text-color".into(),
                 "md.comp.navigation-rail.active-label-text.color".into(),
-                "ui-secondary-625b71".into(),
+                "Secondary #625B71".into(),
             ],
             vec![
                 "ui-inactive-icon-color".into(),
                 "md.comp.navigation-rail.inactive-icon.color".into(),
-                "ui-on-surface-variant-49454f".into(),
+                "On surface variant #49454F".into(),
             ],
             vec![
                 "ui-inactive-label-text-color".into(),
                 "md.comp.navigation-rail.inactive-label-text.color".into(),
-                "ui-on-surface-variant-49454f".into(),
+                "On surface variant #49454F".into(),
             ],
             vec![
                 "ui-icon-size".into(),
@@ -1500,8 +1500,8 @@ fn baseline() {
             vec!["ui-container-width".into(), "80dp".into(), "96dp".into()],
             vec![
                 "ui-active-label-color".into(),
-                "ui-on-surface".into(),
-                "ui-secondary".into(),
+                "On surface".into(),
+                "Secondary".into(),
             ],
             vec![
                 "ui-active-indicator".into(),

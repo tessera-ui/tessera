@@ -126,8 +126,6 @@ ui-divider-optional = Divider (optional)
 
 ui-buttons-label-text = Buttons label text
 
-ui-scrim = Scrim
-
 ui-header-region = Header region
 
 ui-icon-close-affordance = Icon (close affordance)

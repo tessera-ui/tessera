@@ -81,8 +81,6 @@ ui-enabled-icon-buttons-need-at-least-3-1-contrast-between-the-icon-and-its-adja
 
 ui-the-examples-use-the-same-white-surface-and-a-live-favorite-action-the-dark-icon-is-above = The examples use the same white surface and a live favorite action. The dark icon is above 3:1; the light gray icon is intentionally below 3:1 and is shown only as a negative example. Text labels remain readable.
 
-ui-material-3-expressive = Material 3 Expressive
-
 ui-material-2-treatment = Material 2 treatment
 
 ui-toggle-expressive-edit-action = Toggle Expressive edit action

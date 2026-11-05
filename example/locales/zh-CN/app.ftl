@@ -1,10 +1,6 @@
-ui-material-design-3 = 材料设计3
-
 ui-examples = 示例
 
 ui-home = 首页
-
-ui-material-components = Material 组件
 
 ui-glass-components = 玻璃组件
 

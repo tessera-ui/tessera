@@ -32,21 +32,21 @@ ui-use-concise-sentence-case-labels-sufficient-container-width-and-at-most-one-l
 
 ui-label-text = 标签文字
 
-ui-container = 集装箱
+ui-container = 容器
 
 ui-icon-optional = 图标（可选）
 
 ui-color-styles = 颜色款式
 
-ui-use-filled-for-primary-actions-tonal-or-outlined-for-secondary-actions-and-text-for-lower = 使用填充表示主要动作，使用色调或轮廓表示次要动作，使用文本表示较低的强调。为所需的分离预留高度。
+ui-use-filled-for-primary-actions-tonal-or-outlined-for-secondary-actions-and-text-for-lower = 使用填充表示主要动作，使用色调或描边表示次要动作，使用文本表示较低的强调。为所需的分离预留高度。
 
-ui-elevated-style = 提升风格
+ui-elevated-style = 阴影样式
 
 ui-filled-style = 填充风格
 
 ui-tonal-style = 色调风格
 
-ui-outlined-style = 轮廓式
+ui-outlined-style = 描边式
 
 ui-text-style = 文字样式
 
@@ -76,9 +76,9 @@ ui-selected = 已选择
 
 ui-use-default-icon-buttons-for-actions-and-toggle-icon-buttons-for-binary-choices = 使用默认图标按钮进行操作，并使用切换图标按钮进行二元选择。
 
-ui-use-recognizable-icons-and-distinguish-selection-through-filled-and-outlined-symbols = 使用可识别的图标并通过填充和轮廓符号区分选择。
+ui-use-recognizable-icons-and-distinguish-selection-through-filled-and-outlined-symbols = 使用可识别的图标并通过填充和描边符号区分选择。
 
-ui-choose-filled-tonal-outlined-or-standard-emphasis-for-the-surrounding-content = 为周围的内容选择填充、色调、轮廓或标准强调。
+ui-choose-filled-tonal-outlined-or-standard-emphasis-for-the-surrounding-content = 为周围的内容选择填充、色调、描边或标准强调。
 
 ui-size = 尺寸
 
@@ -230,7 +230,7 @@ ui-use-tonal-fills-for-secondary-actions-needing-moderate-emphasis = 对需要�
 
 ui-use-on-simple-backgrounds-for-supporting-actions = 在简单的背景上使用以支持操作。
 
-ui-use-for-low-emphasis-actions-including-dialog-and-snackbar-actions = 用于低重点操作，包括对话框和小吃栏操作。
+ui-use-for-low-emphasis-actions-including-dialog-and-snackbar-actions = 用于低重点操作，包括对话框和消息条操作。
 
 ui-adapt-dimensions-while-preserving-the-hierarchy-of-primary-and-secondary-actions = 调整维度，同时保留主要和次要操作的层次结构。
 
@@ -298,7 +298,7 @@ ui-keys = 按键
 
 ui-action = 行动
 
-ui-m3-expressive-recommendation = M3 表达推荐
+ui-m3-expressive-recommendation = M3 Expressive 建议
 
 ui-segmented-buttons-are-no-longer-recommended-for-m3-expressive-use-a-connected-button-group = 不再建议在 M3 Expressive 中使用分段按钮。对新界面使用连接的按钮组。
 

@@ -290,13 +290,7 @@ ui-value-annotated-time-picker = { $v0 } annotated time picker
 
 ui-time-color-role-value-value = Time color role { $v0 }: { $v1 }
 
-ui-primary-container-on-primary-container = Primary container / on primary container
-
 ui-unselected-time-field-clock-dial = Unselected time field / clock dial
-
-ui-surface-container-highest-on-surface = Surface container highest / on surface
-
-ui-tertiary-container-on-tertiary-container = Tertiary container / on tertiary container
 
 ui-selector-handle-center = Selector handle / center
 

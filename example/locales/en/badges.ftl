@@ -116,11 +116,7 @@ ui-large-badge-size = Large badge size
 
 ui-large-badge-label-color = Large badge label color
 
-ui-on-error = On error
-
 ui-large-badge-label-font = Large badge label font
-
-ui-roboto = Roboto
 
 ui-large-badge-label-line-height = Large badge label line height
 

@@ -16,19 +16,19 @@ ui-a-morphing-shape-instead-of-a-rotating-arc = 变形的形状而不是旋转�
 
 ui-containment = 遏制
 
-ui-a-contained-style-with-primary-container-color = 具有主要容器颜色的包含样式
+ui-a-contained-style-with-primary-container-color = 采用 Primary Container 颜色的容器样式
 
-ui-determinate = 确定的
+ui-determinate = 定值进度
 
 ui-the-same-shape-can-express-a-measured-completion = 相同的形状可以表达分寸的完成
 
 ui-default-loading-indicator = 默认加载指示器
 
-ui-contained-loading-indicator = 包含装载指示器
+ui-contained-loading-indicator = 带容器的加载指示器
 
-ui-default-and-contained-styles-share-the-same-morph = 默认样式和包含样式共享相同的变形。
+ui-default-and-contained-styles-share-the-same-morph = 默认样式与带容器样式使用相同的形变动画。
 
-ui-m2-a-circular-progress-indicator-rotated-a-stroke-arc-and-had-no-contained-style-m3-keeps = M2：圆形进度指示器旋转笔划弧并且没有包含样式。 M3 保留了圆形形状，但将其与富有表现力的装载指示器配对，该指示器变形为固体形状并且可以放置在容器中。
+ui-m2-a-circular-progress-indicator-rotated-a-stroke-arc-and-had-no-contained-style-m3-keeps = M2：圆形进度指示器旋转笔划弧并且没有包含样式。 M3 保留了圆形形状，但将其与Expressive装载指示器配对，该指示器变形为固体形状并且可以放置在容器中。
 
 ui-rotating-arc = 旋转弧线
 
@@ -36,7 +36,7 @@ ui-morphing-shape = 变形形状
 
 ui-48dp-target-38dp-shape = 48dp 目标，38dp 形状
 
-ui-default-or-contained = 默认或包含
+ui-default-or-contained = 默认或带容器
 
 ui-separate-component = 独立组件
 
@@ -50,7 +50,7 @@ ui-configure-containment-a-determinate-progress-value-and-a-paused-state-pausing
 
 ui-configured-loading = 配置加载
 
-ui-contained-loading = 封闭装载
+ui-contained-loading = 带容器的加载动画
 
 ui-pause-animation = 暂停动画
 
@@ -60,7 +60,7 @@ ui-1-containment = 1 遏制
 
 ui-2-progress = 2 进展
 
-ui-indeterminate-progress = 进度不确定
+ui-indeterminate-progress = 不定进度
 
 ui-loading-30 = 加载30%
 
@@ -70,13 +70,13 @@ ui-3-paused = 3 暂停
 
 ui-paused-loading-indicator = 暂停加载指示器
 
-ui-paused-contained-indicator = 暂停包含的指示器
+ui-paused-contained-indicator = 已暂停的带容器指示器
 
-ui-default-contained = 默认，包含
+ui-default-contained = 默认、带容器
 
 ui-progress = 进展
 
-ui-indeterminate-determinate-0-100 = 不确定、确定 0–100%
+ui-indeterminate-determinate-0-100 = 不定进度、定值进度 0–100%
 
 ui-paused = 已暂停
 
@@ -96,31 +96,31 @@ ui-a-loading-indicator-is-a-single-shape-inside-a-48dp-target-the-contained-styl
 
 ui-1-shape = 1 形状
 
-ui-2-container-contained-only = 2 个容器（仅包含）
+ui-2-container-contained-only = 2  容器（仅带容器样式）
 
 ui-the-shape-carries-the-animation-the-container-is-optional = 形状承载着动画；容器是可选的。
 
-ui-the-default-style-uses-the-primary-color-on-the-surface-behind-it-the-contained-style-pair = 默认样式使用其后面表面上的原色。所包含的样式将主容器与其主颜色配对，因此指示器在浅色和深色方案中都保持至少 3:1 的对比度。
+ui-the-default-style-uses-the-primary-color-on-the-surface-behind-it-the-contained-style-pair = 默认样式使用 Primary。容器样式使用 Primary Container 与 On Primary Container，使指示器在浅色和深色主题下都保持至少 3:1 的对比度。
 
 ui-dark-default-loading-indicator = 深色默认加载指示器
 
 ui-light-default-loading-indicator = 浅色默认加载指示器
 
-ui-dark-contained-loading-indicator = 暗装装载指示器
+ui-dark-contained-loading-indicator = 深色主题的带容器加载指示器
 
-ui-light-contained-loading-indicator = 轻型装载指示器
+ui-light-contained-loading-indicator = 浅色主题的带容器加载指示器
 
-ui-1-primary-2-primary-container-with-on-primary-container = 1 主容器 2 主容器与主容器
+ui-1-primary-2-primary-container-with-on-primary-container = 1  Primary    2  Primary Container 搭配 On Primary Container
 
 ui-a-loading-indicator-has-three-meaningful-states-rather-than-interaction-states-it-runs-an = 加载指示器具有三种有意义的状态，而不是交互状态：它运行不确定的变形、显示确定的值或暂停。它从不获取焦点或响应输入。
 
-ui-running-indeterminate-indicator = 运行不确定指示器
+ui-running-indeterminate-indicator = 运行中的不定进度指示器
 
-ui-determinate-indicator-at-60 = 确定指标60%
+ui-determinate-indicator-at-60 = 进度为 60% 的定值指示器
 
 ui-paused-indicator = 暂停指示器
 
-ui-1-running-2-determinate-3-paused = 1 运行 2 确定 3 暂停
+ui-1-running-2-determinate-3-paused = 1  运行中    2  定值进度    3  已暂停
 
 ui-running = 跑步
 
@@ -130,19 +130,19 @@ ui-holds-the-shape-for-the-given-progress-value = 保持给定进度值的形状
 
 ui-keeps-the-current-shape-without-animating = 保持当前形状而不设置动画
 
-ui-contained = 包含
+ui-contained = 带容器
 
 ui-adds-the-container-without-changing-the-state = 添加容器而不改变状态
 
 ui-to-ensure-sufficient-margins-the-size-is-48dp-while-the-shape-container-is-38dp-keep-the-4 = 为了保证足够的边距，尺寸为48dp，而形状容器为38dp。即使可见形状较小，也要保持 48dp 目标，并将其保留在布局中，以便周围的内容不会移动。
 
-ui-default-and-contained-styles-share-the-same-48dp-target = 默认样式和包含样式共享相同的 48dp 目标。
+ui-default-and-contained-styles-share-the-same-48dp-target = 默认样式与带容器样式均使用 48dp 交互目标。
 
 ui-target-size = 目标尺寸
 
 ui-shape-size = 外形尺寸
 
-ui-contained-container-size = 容纳容器尺寸
+ui-contained-container-size = 带容器样式的容器尺寸
 
 ui-minimum-margins = 最低保证金
 
@@ -158,7 +158,7 @@ ui-do-place-the-indicator-in-the-region-that-is-loading = 执行：将指示器�
 
 ui-loading-image-gallery = 加载图片库
 
-ui-don-t-use-a-contained-indicator-as-a-full-screen-blocker = 不要：使用包含的指示器作为全屏拦截器。
+ui-don-t-use-a-contained-indicator-as-a-full-screen-blocker = 不要用带容器的指示器阻挡整个界面。
 
 ui-loading-indicators-are-best-for-indicating-a-short-indeterminate-wait-time = 加载指示器最适合指示短暂且不确定的等待时间。
 
@@ -220,7 +220,7 @@ ui-above-three-to-one-loading-indicator = 以上三对一加载指标
 
 ui-below-three-to-one-loading-indicator = 下面三对一加载指示器
 
-ui-above-3-1-in-the-primary-role-versus-a-low-contrast-pairing = 主要角色与低对比度配对的比例高于 3:1。
+ui-above-3-1-in-the-primary-role-versus-a-low-contrast-pairing = 使用 Primary 的组合满足 3:1 对比度，另一组合的对比度不足。
 
 ui-do-not-place-the-indicator-over-content-that-people-are-reading-and-never-use-it-as-a-full = 不要将指示器放置在人们正在阅读的内容上，也不要在无法取消等待的情况下将其用作全屏拦截器。
 
@@ -234,4 +234,4 @@ ui-don-t-rely-on-the-animation-alone-a-bare-loading-without-context-is-ambiguous
 
 ui-update-the-label-when-the-wait-changes-stage-and-remove-the-indicator-once-the-content-arr = 当等待改变阶段时更新标签，并在内容到达后删除指示器，以便辅助技术停止宣布待处理状态。
 
-ui-tessera-examples-on-this-page-use-the-native-loading-indicator-component-the-indeterm = 本页上的 Tessera 示例使用本机 loading_indicator 组件。实现了不确定的变形、确定的进度、包含的样式、暂停状态和可访问性标签。
+ui-tessera-examples-on-this-page-use-the-native-loading-indicator-component-the-indeterm = 本页上的 Tessera 示例使用原生 loading_indicator 组件。实现了不确定的变形、确定的进度、包含的样式、暂停状态和可访问性标签。

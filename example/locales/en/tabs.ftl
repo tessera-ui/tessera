@@ -248,8 +248,6 @@ ui-icon-and-label-container-height = Icon and label container height
 
 ui-label-text-font = Label text font
 
-ui-title-small = Title small
-
 ui-label-text-size = Label text size
 
 ui-label-text-weight = Label text weight

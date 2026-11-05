@@ -341,22 +341,22 @@ fn availability() {
             ],
             vec![
                 "ui-implementation".into(),
-                "ui-flutter".into(),
+                "Flutter".into(),
                 "ui-available".into(),
             ],
             vec![
                 "ui-implementation".into(),
-                "ui-jetpack-compose".into(),
+                "Jetpack Compose".into(),
                 "ui-available".into(),
             ],
             vec![
                 "ui-implementation".into(),
-                "ui-android-views-mdc-android".into(),
+                "Android Views (MDC-Android)".into(),
                 "ui-available".into(),
             ],
             vec![
                 "ui-implementation".into(),
-                "ui-web".into(),
+                "Web".into(),
                 "ui-unavailable".into(),
             ],
         ],
@@ -438,27 +438,27 @@ fn tokens_and_specs() {
             vec![
                 "ui-container".into(),
                 "md.comp.segmented-button.container.color".into(),
-                "ui-surface".into(),
+                "Surface".into(),
             ],
             vec![
                 "ui-selected-container".into(),
                 "md.comp.segmented-button.selected.container.color".into(),
-                "ui-secondary-container".into(),
+                "Secondary container".into(),
             ],
             vec![
                 "ui-selected-label".into(),
                 "md.comp.segmented-button.selected.label-text.color".into(),
-                "ui-on-secondary-container".into(),
+                "On secondary container".into(),
             ],
             vec![
                 "ui-unselected-label".into(),
                 "md.comp.segmented-button.label-text.color".into(),
-                "ui-on-surface".into(),
+                "On surface".into(),
             ],
             vec![
-                "ui-outline".into(),
+                "ui-outline-element".into(),
                 "md.comp.segmented-button.outline.color".into(),
-                "ui-outline".into(),
+                "Outline".into(),
             ],
             vec![
                 "ui-height".into(),
@@ -473,7 +473,7 @@ fn tokens_and_specs() {
             vec![
                 "ui-label".into(),
                 "md.comp.segmented-button.label-text.text-style".into(),
-                "ui-label-large-14dp-20dp".into(),
+                "Label large · 14dp / 20dp".into(),
             ],
             vec![
                 "ui-horizontal-padding".into(),
@@ -604,20 +604,14 @@ fn colors() {
     spec_table(
         vec!["ui-element".into(), "ui-color-role".into()],
         vec![
-            vec![
-                "ui-selected-container".into(),
-                "ui-secondary-container".into(),
-            ],
+            vec!["ui-selected-container".into(), "Secondary container".into()],
             vec![
                 "ui-selected-label-and-icon".into(),
-                "ui-on-secondary-container".into(),
+                "On secondary container".into(),
             ],
-            vec![
-                "ui-unselected-label-and-icon".into(),
-                "ui-on-surface".into(),
-            ],
-            vec!["ui-outline".into(), "ui-outline".into()],
-            vec!["ui-state-layer".into(), "ui-on-surface".into()],
+            vec!["ui-unselected-label-and-icon".into(), "On surface".into()],
+            vec!["ui-outline-element".into(), "Outline".into()],
+            vec!["ui-state-layer".into(), "On surface".into()],
         ],
     );
 }
@@ -675,7 +669,7 @@ fn measurements() {
             vec!["ui-minimum-interactive-target".into(), "48dp".into()],
             vec!["ui-corner-radius".into(), "ui-full-20dp".into()],
             vec!["ui-icon-size".into(), "ui-18dp-inside-the-segment".into()],
-            vec!["ui-label-style".into(), "ui-label-large-14dp-20dp".into()],
+            vec!["ui-label-style".into(), "Label large · 14dp / 20dp".into()],
             vec!["ui-horizontal-padding".into(), "12dp".into()],
             vec!["ui-icon-and-label-spacing".into(), "8dp".into()],
             vec!["ui-between-segments".into(), "ui-0dp-shared-outline".into()],

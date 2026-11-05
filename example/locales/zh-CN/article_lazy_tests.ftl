@@ -1,6 +1,6 @@
 ui-filled-text-field = 填充文本字段
 
-ui-outlined-text-field = 轮廓文本字段
+ui-outlined-text-field = 描边文本字段
 
 ui-shape-morph = 形状变形
 
@@ -30,7 +30,7 @@ ui-favorites = 收藏夹
 
 ui-mail-navigation = 邮件导航
 
-ui-open-modal-navigation-rail = 开放式模态导航轨道
+ui-open-modal-navigation-rail = 开放式模态导航侧栏
 
 ui-mail-rail-navigation = 邮轨导航
 

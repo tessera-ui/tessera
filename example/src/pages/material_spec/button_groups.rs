@@ -428,19 +428,15 @@ fn resources() {
             ],
             vec![
                 "ui-implementation".into(),
-                "ui-jetpack-compose-expressive".into(),
+                "Jetpack Compose: Expressive".into(),
                 "ui-available".into(),
             ],
             vec![
                 "".into(),
-                "ui-android-views-mdc-android-expressive".into(),
+                "Android Views (MDC-Android): Expressive".into(),
                 "ui-available".into(),
             ],
-            vec![
-                "".into(),
-                "ui-web-expressive".into(),
-                "ui-unavailable".into(),
-            ],
+            vec!["".into(), "Web: Expressive".into(), "ui-unavailable".into()],
         ],
     );
 }
@@ -570,7 +566,7 @@ fn variants() {
     ]);
     gap(Dp(32.0));
     spec_table(
-        vec!["ui-variant".into(), "M3".into(), "ui-m3-expressive".into()],
+        vec!["ui-variant".into(), "M3".into(), "M3 Expressive".into()],
         vec![
             vec![
                 "ui-standard-button-group".into(),
@@ -664,7 +660,7 @@ fn configurations() {
             "ui-category".into(),
             "ui-configuration".into(),
             "M3".into(),
-            "ui-m3-expressive".into(),
+            "M3 Expressive".into(),
         ],
         vec![
             vec![

@@ -1,12 +1,12 @@
 ui-share-this-place = 分享这个地方
 
-ui-modal-bottom-sheets-are-above-a-scrim-while-standard-bottom-sheets-don-t-have-a-scrim-besi = 莫代尔底片位于稀松布之上，而标准底片没有稀松布。除此之外，两种型号的底板都具有相同的规格。
+ui-modal-bottom-sheets-are-above-a-scrim-while-standard-bottom-sheets-don-t-have-a-scrim-besi = 模态底部面板带有背景遮罩，标准底部面板没有遮罩；其余规格相同。
 
 ui-drag-handle-optional = 拖动手柄（可选）
 
-ui-standard-bottom-sheets = 标准底板
+ui-standard-bottom-sheets = 标准底部面板
 
-ui-modal-bottom-sheets = 莫代尔底片
+ui-modal-bottom-sheets = 模态底部面板
 
 ui-use-bottom-sheets-in-compact-and-medium-breakpoints = 在紧凑和中等断点处使用底部面板
 
@@ -14,9 +14,9 @@ ui-content-should-be-additional-or-secondary-not-the-app-s-main-content = 内容
 
 ui-bottom-sheets-can-be-dismissed-in-order-to-interact-with-the-main-content = 可以关闭底部表格以便与主要内容进行交互
 
-ui-standard-bottom-sheet = 标准底板
+ui-standard-bottom-sheet = 标准底部面板
 
-ui-modal-bottom-sheet = 莫代尔底片
+ui-modal-bottom-sheet = 模态底部面板
 
 ui-shape-bottom-sheets-have-a-28dp-top-corner-radius = 形状：底部面板的顶角半径为 28dp
 
@@ -32,11 +32,11 @@ ui-bottom-sheet-with-menu-items-in-a-list = 底部面板中包含列表中的菜
 
 ui-a-container-is-the-only-required-element-of-a-bottom-sheet-bottom-sheet-layouts-can-vary-w = 容器是底部面板唯一必需的元素。底页布局可以有很大不同，以支持它们包含的内容类型。
 
-ui-bottom-sheets-are-flexible-containers-that-adapt-to-their-content-and-available-space-the = 底板是灵活的容器，可以适应其内容和可用空间。容器是唯一必需的元素。
+ui-bottom-sheets-are-flexible-containers-that-adapt-to-their-content-and-available-space-the = 底部面板是灵活的容器，可以适应其内容和可用空间。容器是唯一必需的元素。
 
 ui-the-drag-handle-shows-that-the-sheet-can-move-between-heights-it-keeps-a-48-48dp-target-an = 拖动手柄表明面板可以在高度之间移动。它保留 48 × 48dp 目标，并在选择时切换预设高度。
 
-ui-a-modal-sheet-appears-above-a-scrim-that-blocks-the-rest-of-the-app-selecting-the-scrim-al = 模态表出现在遮挡应用程序其余部分的稀松布上方。选择稀松布总是会消除纸张。
+ui-a-modal-sheet-appears-above-a-scrim-that-blocks-the-rest-of-the-app-selecting-the-scrim-al = 模态面板显示在遮罩上方，遮罩会阻止与应用其余内容交互。点击遮罩即可关闭面板。
 
 ui-list-items-optional = 列出项目（可选）
 
@@ -58,35 +58,35 @@ ui-a-bottom-sheet-can-have-preset-positions-from-full-screen-height-to-preview-a
 
 ui-like-dialogs-modal-bottom-sheets-appear-in-front-of-app-content-disabling-all-other-app-fu = 与对话框一样，模式底部面板出现在应用程序内容前面，在出现时禁用所有其他应用程序功能，并保留在屏幕上，直到确认、取消或采取所需操作。
 
-ui-a-modal-bottom-sheet-must-be-interacted-with-or-dismissed-its-blocking-behavior-makes-it-s = 模态底部表单必须与之交互或关闭。它的阻塞行为使其适合菜单（例如在此文件应用程序中），以帮助人们专注于可用的选择。
+ui-a-modal-bottom-sheet-must-be-interacted-with-or-dismissed-its-blocking-behavior-makes-it-s = 模态底部面板必须与之交互或关闭。它的阻塞行为使其适合菜单（例如在此文件应用程序中），以帮助人们专注于可用的选择。
 
-ui-use-a-modal-bottom-sheet-as-an-alternative-to-inline-menus-or-simple-dialogs-on-mobile-esp = 使用模态底部表单作为移动设备上内联菜单或简单对话框的替代方案，特别是在提供一长串操作项时，或者当项需要更长的描述和图标时。
+ui-use-a-modal-bottom-sheet-as-an-alternative-to-inline-menus-or-simple-dialogs-on-mobile-esp = 使用模态底部面板作为移动设备上内联菜单或简单对话框的替代方案，特别是在提供一长串操作项时，或者当项需要更长的描述和图标时。
 
-ui-modal-bottom-sheets-can-be-used-instead-of-menus-to-present-additional-actions = 可以使用模态底部表单代替菜单来呈现附加操作
+ui-modal-bottom-sheets-can-be-used-instead-of-menus-to-present-additional-actions = 可以使用模态底部面板代替菜单来呈现附加操作
 
-ui-to-provide-access-to-its-top-actions-the-initial-vertical-position-of-modal-bottom-sheets = 为了提供对其顶部操作的访问，模态底部表单的初始垂直位置被限制在屏幕高度的 50%。
+ui-to-provide-access-to-its-top-actions-the-initial-vertical-position-of-modal-bottom-sheets = 为了提供对其顶部操作的访问，模态底部面板的初始垂直位置被限制在屏幕高度的 50%。
 
 ui-modal-bottom-sheets-whose-contents-exceed-50-of-the-screen-height-can-then-be-pulled-acros = 内容超过屏幕高度 50% 的模态底部面板可以在整个屏幕上拉动并在内部滚动以访问其剩余项目。
 
-ui-the-initial-vertical-position-of-modal-bottom-sheets-can-t-exceed-50-of-the-screen-height = 模态底部表单的初始垂直位置不能超过屏幕高度的 50%
+ui-the-initial-vertical-position-of-modal-bottom-sheets-can-t-exceed-50-of-the-screen-height = 模态底部面板的初始垂直位置不能超过屏幕高度的 50%
 
 ui-modal-bottom-sheets-appear-when-triggered-by-a-user-action-such-as-tapping-a-button-or-an = 当用户操作（例如点击按钮或溢出图标）触发时，会出现模态底部面板。他们可以通过以下方式解雇：
 
 ui-tapping-a-menu-item-or-action-within-the-bottom-sheet = 点击底部面板中的菜单项或操作
 
-ui-swiping-the-sheet-down = 向下滑动纸张
+ui-swiping-the-sheet-down = 向下滑动面板
 
-ui-using-a-close-affordance-within-the-bottom-sheet-s-app-bar-if-available = 在底部面板的应用栏中使用紧密的可供性（如果有）
+ui-using-a-close-affordance-within-the-bottom-sheet-s-app-bar-if-available = 在底部面板的应用栏中使用关闭入口（如果有）
 
-ui-display-a-close-affordance-in-a-full-screen-modal-bottom-sheet = 在全屏模式底部表单中显示紧密的可供性。
+ui-display-a-close-affordance-in-a-full-screen-modal-bottom-sheet = 全屏模态底部面板应提供关闭入口。
 
-ui-tapping-the-scrim-dismisses-a-modal-bottom-sheet = 轻敲稀松布会消除模态底部面板
+ui-tapping-the-scrim-dismisses-a-modal-bottom-sheet = 轻敲遮罩会消除模态底部面板
 
 ui-a-modal-bottom-sheet-can-be-dismissed-by-swiping-the-sheet-down = 可以通过向下滑动面板来关闭模态底部面板
 
 ui-in-compact-breakpoints-like-mobile-devices-bottom-sheets-extend-across-the-width-of-a-scre = 在紧凑的断点中，例如移动设备，底部面板延伸到屏幕的宽度并高于主要内容。
 
-ui-bottom-sheets-should-extend-to-the-width-of-the-screen-on-mobile = 底部纸张应延伸至移动设备屏幕的宽度
+ui-bottom-sheets-should-extend-to-the-width-of-the-screen-on-mobile = 底部面板应延伸至移动设备屏幕的宽度
 
 ui-for-larger-screens-with-medium-and-expanded-breakpoints-bottom-sheets-have-a-default-max-w = 对于具有中等和扩展断点的较大屏幕，底部面板具有默认的最大宽度，以防止出现不需要的布局和尴尬的间距。然而，如果需要的话，这可以被覆盖。对于更复杂的任务和流程，请考虑使用非瞬态表面，例如浮动面板。
 
@@ -104,11 +104,11 @@ ui-alternately-a-bottom-sheet-for-sharing-can-appear-collapsed-for-a-more-focuse
 
 ui-custom-positioning = 自定义定位
 
-ui-the-drag-handle-can-be-dragged-or-selected-to-change-the-bottom-sheet-height-sheets-should = 可以拖动或选择拖动手柄来更改底部图纸的高度。面板应能够在预设高度之间循环并完全关闭而无需拖动，同时选择稀松布应始终关闭底部面板。
+ui-the-drag-handle-can-be-dragged-or-selected-to-change-the-bottom-sheet-height-sheets-should = 可以拖动或选择拖动手柄来更改底部面板的高度。面板应能够在预设高度之间循环并完全关闭而无需拖动，同时选择遮罩应始终关闭底部面板。
 
 ui-if-the-bottom-sheet-has-multiple-preset-heights-but-can-t-use-a-drag-handle-material-requi = 如果底部面板具有多个预设高度但无法使用拖动手柄，则 Material 需要包含单指针替代方案来更改高度。
 
-ui-interacting-with-the-drag-handle-can-quickly-move-a-bottom-sheet-through-preset-heights = 与拖动手柄交互可以快速移动底部纸张通过预设高度
+ui-interacting-with-the-drag-handle-can-quickly-move-a-bottom-sheet-through-preset-heights = 与拖动手柄交互可以快速移动底部面板通过预设高度
 
 ui-a-bottom-sheet-can-automatically-resize-to-another-height-after-interacting-with-the-drag = 与拖动手柄交互后，底部面板可以自动调整大小到另一个高度
 
@@ -120,7 +120,7 @@ ui-open-expanded-bottom-sheet = 打开展开的底页
 
 ui-open-expanded = 打开展开
 
-ui-open-partially-expanded-bottom-sheet = 打开部分展开的底板
+ui-open-partially-expanded-bottom-sheet = 打开部分展开的底部面板
 
 ui-open-partial = 打开部分
 
@@ -136,7 +136,7 @@ ui-the-optional-drag-handle-can-be-focused-in-the-tab-order-and-interacted-with-
 
 ui-when-a-modal-bottom-sheet-opens-focus-moves-into-the-sheet-and-returns-to-the-control-that = 当模态底部面板打开时，焦点将移至面板中，并在面板关闭后返回到打开它的控件。
 
-ui-visible-focus-shown-on-the-drag-handle-affordance = 拖动手柄可供性上显示可见焦点
+ui-visible-focus-shown-on-the-drag-handle-affordance = 拖动手柄应显示清晰的焦点指示
 
 ui-dragging = 拖拽
 
@@ -148,19 +148,19 @@ ui-focus-lands-on-drag-handle = 焦点落在拖动手柄上
 
 ui-toggles-between-available-heights = 在可用高度之间切换
 
-ui-in-the-modal-sheet-escape-or-selecting-the-scrim-dismisses-the-sheet-without-changing-the = 在模式表中，Escape 或选择稀松布会关闭该表，而不更改其后面的页面。
+ui-in-the-modal-sheet-escape-or-selecting-the-scrim-dismisses-the-sheet-without-changing-the = 在模态面板中，按 Escape 或点击遮罩可关闭面板，后方页面保持不变。
 
 ui-label-only-the-drag-handle-the-accessibility-role-for-the-drag-handle-is-button = 仅标记拖动手柄。拖动手柄的辅助功能角色是“按钮”。
 
 ui-label-the-drag-handle = 标记拖动手柄
 
-ui-bottom-sheet-color-roles-used-for-both-light-and-dark-schemes = 用于浅色和深色方案的底板颜色角色：
+ui-bottom-sheet-color-roles-used-for-both-light-and-dark-schemes = 用于浅色和深色方案的底部面板颜色角色：
 
-ui-on-android-platforms-the-scrim-color-and-opacity-is-automatically-handled-by-the-system-ui = *在 Android 平台上，稀松布颜色和不透明度由系统 UI 自动处理。
+ui-on-android-platforms-the-scrim-color-and-opacity-is-automatically-handled-by-the-system-ui = *在 Android 平台上，遮罩颜色和不透明度由系统 UI 自动处理。
 
-ui-bottom-sheet-padding-and-size-measurements = 底板填充和尺寸测量
+ui-bottom-sheet-padding-and-size-measurements = 底部面板填充和尺寸测量
 
-ui-bottom-sheets-span-the-full-window-width-up-to-640dp-when-the-window-width-exceeds-640dp-b = 底部纸张跨越整个窗口宽度，最大可达 640dp。当窗口宽度超过 640dp 时，底部纸张将调整为上边距为 56dp，侧边距为 56dp。
+ui-bottom-sheets-span-the-full-window-width-up-to-640dp-when-the-window-width-exceeds-640dp-b = 底部面板跨越整个窗口宽度，最大可达 640dp。当窗口宽度超过 640dp 时，底部面板将调整为上边距为 56dp，侧边距为 56dp。
 
 ui-drag-handle-alignment-horizontal = 拖动手柄对齐（水平）
 
@@ -170,7 +170,7 @@ ui-full-width-up-to-max-width-640dp = 全宽，最大宽度 640dp
 
 ui-variable = 变量
 
-ui-open-modal-bottom-sheet = 打开模态底部表单
+ui-open-modal-bottom-sheet = 打开模态底部面板
 
 ui-close-bottom-sheet = 关闭底页
 
@@ -180,9 +180,9 @@ ui-drag-handle = 拖动手柄
 
 ui-docked-container-color = 停靠的容器颜色
 
-ui-modal-container-elevation = 模态集装箱标高
+ui-modal-container-elevation = 模态容器阴影高度
 
-ui-standard-container-elevation = 标准集装箱标高
+ui-standard-container-elevation = 标准容器阴影高度
 
 ui-minimized-container-shape = 最小化容器形状
 
@@ -200,19 +200,19 @@ ui-sheets-bottom = 面板 - 底部
 
 ui-default-light = 默认，浅色
 
-ui-open-native-bottom-sheet-handle = 打开本机底板手柄
+ui-open-native-bottom-sheet-handle = 打开本机底部面板手柄
 
 ui-open-bottom-sheet = 打开底页
 
 ui-sheet-controls = 表单控件
 
-ui-close-native-bottom-sheet-controls = 关闭本机底部表单控件
+ui-close-native-bottom-sheet-controls = 关闭本机底部面板控件
 
 ui-select-the-drag-handle-to-change-height = 选择拖动手柄以更改高度。
 
 ui-try-it = 尝试一下
 
-ui-native-bottom-sheet-controls = 本机底部表单控件
+ui-native-bottom-sheet-controls = 本机底部面板控件
 
 ui-cassette-futurism = 卡式未来主义
 
@@ -220,7 +220,7 @@ ui-various-artists = 各种艺术家
 
 ui-next-track = 下一曲目
 
-ui-the-music-player-in-this-standard-bottom-sheet-allows-people-to-control-their-music-while = 该标准底部表单中的音乐播放器允许人们在浏览专辑时控制他们的音乐。
+ui-the-music-player-in-this-standard-bottom-sheet-allows-people-to-control-their-music-while = 该标准底部面板中的音乐播放器允许人们在浏览专辑时控制他们的音乐。
 
 ui-open-filters = 打开过滤器
 
@@ -248,13 +248,13 @@ ui-format = 格式
 
 ui-all = 全部
 
-ui-side-sheets-can-contain-the-same-content-as-bottom-sheets-and-may-be-more-suitable-for-des = 侧页可以包含与底页相同的内容，并且可能更适合桌面
+ui-side-sheets-can-contain-the-same-content-as-bottom-sheets-and-may-be-more-suitable-for-des = 侧边面板可以包含与底页相同的内容，并且可能更适合桌面
 
 ui-last-sheet-action-value = 最后一个面板操作：{ $v0 }
 
 ui-sheet-value = 面板：{ $v0 }
 
-ui-bottom-sheet-value = 底板 { $v0 }
+ui-bottom-sheet-value = 底部面板 { $v0 }
 
 ui-value-tokens = { $v0 } 标记
 

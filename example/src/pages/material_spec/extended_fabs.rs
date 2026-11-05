@@ -284,32 +284,32 @@ fn resources() {
             ],
             vec![
                 "ui-implementation".into(),
-                "ui-flutter".into(),
+                "Flutter".into(),
                 "ui-available".into(),
             ],
             vec![
                 "ui-implementation".into(),
-                "ui-jetpack-compose".into(),
+                "Jetpack Compose".into(),
                 "ui-available".into(),
             ],
             vec![
                 "ui-implementation".into(),
-                "ui-jetpack-compose-expressive".into(),
+                "Jetpack Compose: Expressive".into(),
                 "ui-available".into(),
             ],
             vec![
                 "ui-implementation".into(),
-                "ui-android-views-mdc-android".into(),
+                "Android Views (MDC-Android)".into(),
                 "ui-available".into(),
             ],
             vec![
                 "ui-implementation".into(),
-                "ui-web".into(),
+                "Web".into(),
                 "ui-available".into(),
             ],
             vec![
                 "ui-implementation".into(),
-                "ui-web-expressive".into(),
+                "Web: Expressive".into(),
                 "ui-unavailable".into(),
             ],
         ],
@@ -362,17 +362,13 @@ fn differences() {
     );
     gap(Dp(24.0));
     spec_table(
-        vec![
-            "ui-attribute".into(),
-            "M2".into(),
-            "ui-m3-expressive".into(),
-        ],
+        vec!["ui-attribute".into(), "M2".into(), "M3 Expressive".into()],
         vec![
             vec!["ui-height".into(), "48dp".into(), "56 / 80 / 96dp".into()],
             vec![
                 "ui-label-type".into(),
-                "ui-label-large".into(),
-                "ui-title-medium-title-large-headline-small-6940".into(),
+                "Label large".into(),
+                "Title medium / title large / headline small".into(),
             ],
             vec![
                 "ui-icon-size".into(),
@@ -408,7 +404,7 @@ fn variants() {
     caption("ui-1-small-extended-fab-2-medium-extended-fab-3-large-extended-fab-2899");
     gap(Dp(32.0));
     spec_table(
-        vec!["ui-variant".into(), "M3".into(), "ui-m3-expressive".into()],
+        vec!["ui-variant".into(), "M3".into(), "M3 Expressive".into()],
         vec![
             vec![
                 "ui-small-extended-fab".into(),
@@ -558,15 +554,15 @@ fn tokens() {
         vec![
             vec![
                 "md.comp.extended-fab.container.color".into(),
-                "ui-primary-container".into(),
+                "Primary container".into(),
             ],
             vec![
                 "md.comp.extended-fab.icon.color".into(),
-                "ui-on-primary-container".into(),
+                "On primary container".into(),
             ],
             vec![
                 "md.comp.extended-fab.label-text.color".into(),
-                "ui-on-primary-container".into(),
+                "On primary container".into(),
             ],
             vec![
                 "md.comp.extended-fab.container.height".into(),
@@ -578,7 +574,7 @@ fn tokens() {
             ],
             vec![
                 "md.comp.extended-fab.label-text".into(),
-                "ui-title-medium-title-large-headline-small".into(),
+                "Title medium · title large · headline small".into(),
             ],
             vec![
                 "md.comp.extended-fab.icon.size".into(),
@@ -669,7 +665,7 @@ fn colors() {
                                     });
                                 gap(Dp(16.0));
                                 text()
-                                    .content(I18N.text("ui-1-primary-container-2-secondary-container-3-tertiary-container-4-primary-5-secondary-6-ter"))
+                                    .content("1  Primary container    2  Secondary container    3  Tertiary container    4  Primary    5  Secondary    6  Tertiary")
                                     .style(type_style(14.0, 20.0));
                             });
                     });
@@ -776,9 +772,9 @@ fn measurements() {
             ],
             vec![
                 "ui-label-type".into(),
-                "ui-title-medium".into(),
-                "ui-title-large".into(),
-                "ui-headline-small-625".into(),
+                "Title medium".into(),
+                "Title large".into(),
+                "Headline small".into(),
             ],
             vec![
                 "ui-corners".into(),
@@ -840,8 +836,8 @@ fn baseline() {
         vec![
             vec![
                 "ui-label-type".into(),
-                "ui-label-large".into(),
-                "ui-title-medium".into(),
+                "Label large".into(),
+                "Title medium".into(),
             ],
             vec![
                 "ui-inner-padding".into(),

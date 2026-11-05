@@ -32,7 +32,7 @@ ui-context = 背景
 
 ui-avoid = 避免
 
-ui-navigation-rail = 导航轨道
+ui-navigation-rail = 导航侧栏
 
 ui-large-badge-with-a-count = 带计数的大徽章
 
@@ -50,7 +50,7 @@ ui-anchor-at-the-icon-s-trailing-edge = 锚定在图标的后缘
 
 ui-placing-the-badge-over-the-trailing-element = 将徽章放置在尾随元素上
 
-ui-rail-placement = 导轨放置
+ui-rail-placement = 导航侧栏放置
 
 ui-people-must-be-able-to-understand-unread-counts-and-clear-the-notification-by-visiting-the = 人们必须能够了解未读计数并通过访问相关目的地来清除通知。
 
@@ -116,19 +116,15 @@ ui-large-badge-size = 大徽章尺寸
 
 ui-large-badge-label-color = 大徽章标签颜色
 
-ui-on-error = 出错时
-
 ui-large-badge-label-font = 大徽章标签字体
-
-ui-roboto = 罗博托
 
 ui-large-badge-label-line-height = 大徽章标签行高
 
 ui-large-badge-label-size = 大徽章标签尺寸
 
-ui-large-badge-label-tracking = 大型徽章标签跟踪
+ui-large-badge-label-tracking = 大型徽章标签字距
 
-ui-large-badge-label-weight = 大徽章标签重量
+ui-large-badge-label-weight = 大徽章标签字重
 
 ui-dark-scheme = 黑暗计划
 
@@ -138,15 +134,15 @@ ui-dark-navigation-bar = 深色导航栏
 
 ui-light-navigation-bar = 灯光导航栏
 
-ui-dark-navigation-rail = 深色导航轨道
+ui-dark-navigation-rail = 深色导航侧栏
 
-ui-light-navigation-rail = 轻型导航轨道
+ui-light-navigation-rail = 轻型导航侧栏
 
 ui-badge-color-roles = 徽章颜色角色
 
 ui-navigation-bar = 导航栏
 
-ui-on-error-when-active = 活动时出错
+ui-on-error-when-active = 激活时使用 On Error
 
 ui-single-digit-width = 个位数宽度
 
@@ -162,7 +158,7 @@ ui-clear = 清除
 
 ui-use-badge-navigation-rail = 使用徽章导航栏
 
-ui-rail = 铁路
+ui-rail = 导航侧栏
 
 ui-only-selected-bar-label = 仅选定的条形标签
 
@@ -208,7 +204,7 @@ ui-four-characters-including-a = 四个字符，包括 +
 
 ui-large-badge-maximum-character-count-label = 大徽章最大字符数标签
 
-ui-navigation-bar-and-rail-variants = 导航栏和导轨版本
+ui-navigation-bar-and-rail-variants = 导航栏和导航侧栏版本
 
 ui-destination-state = 目的地州
 
@@ -226,9 +222,9 @@ ui-inactive-bar-no-label = 非活动栏，无标签
 
 ui-active-bar-no-label = 活动栏，无标签
 
-ui-active-rail-with-label = 活动导轨，带标签
+ui-active-rail-with-label = 活动导航侧栏，带标签
 
-ui-active-rail-no-label = 有源导轨，无标签
+ui-active-rail-no-label = 有源导航侧栏，无标签
 
 ui-guideline = 指南
 

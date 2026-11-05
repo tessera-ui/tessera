@@ -276,7 +276,7 @@ const BASIC: &[Token] = &[
         "ui-enabled",
         "ui-label-text",
         "ui-dialog-action-label-text-font",
-        "ui-roboto",
+        "Roboto",
     ),
     token(
         "ui-enabled",
@@ -328,7 +328,7 @@ const BASIC: &[Token] = &[
         "ui-enabled",
         "ui-subhead",
         "ui-dialog-subhead-font-deprecated",
-        "ui-roboto",
+        "Roboto",
     ),
     token(
         "ui-enabled",
@@ -372,7 +372,7 @@ const BASIC: &[Token] = &[
         "ui-enabled",
         "ui-headline",
         "ui-dialog-headline-font",
-        "ui-roboto",
+        "Roboto",
     ),
     token(
         "ui-enabled",
@@ -429,7 +429,7 @@ const BASIC: &[Token] = &[
         "ui-enabled",
         "ui-supporting-text",
         "ui-dialog-supporting-text-font",
-        "ui-roboto",
+        "Roboto",
     ),
     token(
         "ui-enabled",
@@ -625,7 +625,7 @@ const FULL_SCREEN: &[Token] = &[
         "ui-enabled",
         "ui-label-text",
         "ui-full-screen-dialog-header-action-label-text-font",
-        "ui-roboto",
+        "Roboto",
     ),
     token(
         "ui-enabled",
@@ -669,7 +669,7 @@ const FULL_SCREEN: &[Token] = &[
         "ui-enabled",
         "ui-label-text",
         "ui-full-screen-dialog-action-bar-label-text-font-deprecated",
-        "ui-roboto",
+        "Roboto",
     ),
     token(
         "ui-enabled",
@@ -733,7 +733,7 @@ const FULL_SCREEN: &[Token] = &[
         "ui-enabled",
         "ui-headline",
         "ui-full-screen-dialog-header-headline-font",
-        "ui-roboto",
+        "Roboto",
     ),
     token(
         "ui-enabled",

@@ -255,7 +255,7 @@ fn comparison(modern: bool) {
         )
         .children(move || {
             paragraph(if modern {
-                "ui-material-3-expressive".into()
+                "Material 3 Expressive".into()
             } else {
                 "ui-material-2-treatment".into()
             });

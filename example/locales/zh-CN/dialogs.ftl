@@ -48,7 +48,7 @@ ui-basic-dialog-in-isolation = 隔离的基本对话框
 
 ui-basic-dialog-title = 基本对话框标题
 
-ui-a-dialog-is-a-type-of-modal-window-that-appears-in-front-of-app-content-to-provide-critica = 对话框是一种模式窗口，出现在应用程序内容前面，提供关键信息或提示做出决定。
+ui-a-dialog-is-a-type-of-modal-window-that-appears-in-front-of-app-content-to-provide-critica = 对话框是一种模态窗口，出现在应用程序内容前面，提供关键信息或提示做出决定。
 
 ui-action-2 = 行动2
 
@@ -82,7 +82,7 @@ ui-typography-larger-and-darker-headline = 版式：标题更大、颜色更深
 
 ui-new-updates-to-color-layout-position-shape-and-typography = 颜色、布局、位置、形状和版式的新更新
 
-ui-a-dialog-is-a-modal-window-that-appears-in-front-of-app-content-to-provide-critical-inform = 对话框是出现在应用程序内容前面的模式窗口，用于提供关键信息或要求做出决定。对话框出现时会禁用所有应用程序功能，并保留在屏幕上，直到确认、取消或采取所需操作。
+ui-a-dialog-is-a-modal-window-that-appears-in-front-of-app-content-to-provide-critical-inform = 对话框是出现在应用程序内容前面的模态窗口，用于提供关键信息或要求做出决定。对话框出现时会禁用所有应用程序功能，并保留在屏幕上，直到确认、取消或采取所需操作。
 
 ui-dialogs-are-purposefully-interruptive-so-they-should-be-used-sparingly-a-less-disruptive-a = 对话框是有意中断的，因此应谨慎使用。一种破坏性较小的替代方案是使用下拉菜单，它提供选项而不会中断用户的体验。
 
@@ -92,17 +92,17 @@ ui-use-dialogs-for-prompts-that-block-an-app-s-normal-operation-and-for-critical
 
 ui-delete-selected-images = 删除选定的图像？
 
-ui-don-t-use-dialogs-for-low-or-medium-priority-information-instead-use-a-snackbar-which-can = 不要使用对话框来显示低优先级或中优先级的信息。相反，请使用可以自动关闭或消失的小吃栏。
+ui-don-t-use-dialogs-for-low-or-medium-priority-information-instead-use-a-snackbar-which-can = 不要使用对话框来显示低优先级或中优先级的信息。相反，请使用可以自动关闭或消失的消息条。
 
 ui-upload-completed = 上传完成
 
 ui-similar-components = 类似组件
 
-ui-snackbars-are-also-designed-to-show-important-messages = 快捷栏还旨在显示重要消息。
+ui-snackbars-are-also-designed-to-show-important-messages = 消息条还旨在显示重要消息。
 
 ui-choose-the-right-component-based-on-the-importance-of-the-message-this-component-messaging = 根据消息的重要性选择正确的组件。此组件消息传递策略有助于避免过度使用对话框。
 
-ui-snackbars-can-disappear-automatically = 快捷栏可以自动消失
+ui-snackbars-can-disappear-automatically = 消息条可以自动消失
 
 ui-component = 组件
 
@@ -126,21 +126,19 @@ ui-divider-optional = 分隔器（可选）
 
 ui-buttons-label-text = 按钮标签文本
 
-ui-scrim = 稀松布
-
 ui-header-region = 标头区域
 
-ui-icon-close-affordance = 图标（关闭可供性）
+ui-icon-close-affordance = 图标（关闭入口）
 
 ui-button-label-text = 按钮标签文本
 
-ui-container-and-scrim = 容器和稀松布
+ui-container-and-scrim = 容器和遮罩
 
 ui-dialog-containers-appear-above-other-screen-elements-and-hold-the-dialog-s-headline-text-b = 对话框容器出现在其他屏幕元素之上，并包含对话框的标题、文本、按钮和列表项。
 
 ui-to-focus-attention-on-the-dialog-surfaces-behind-the-container-are-scrimmed-with-a-tempora = 为了将注意力集中在对话框上，容器后面的表面被临时覆盖层覆盖，以使其不那么突出。
 
-ui-basic-dialogs-appear-over-a-background-scrim = 基本对话框出现在背景稀松布上
+ui-basic-dialogs-appear-over-a-background-scrim = 基本对话框出现在背景遮罩上
 
 ui-permanently-delete = 永久删除？
 
@@ -268,7 +266,7 @@ ui-basic-dialogs-appear-in-a-center-position-by-default-their-position-can-be-ov
 
 ui-expanded-breakpoint = 扩展断点
 
-ui-dialogs-on-expanded-breakpoints-like-desktop-are-modal-windows-above-a-scrim-this-puts-the = 扩展断点上的对话框（如桌面）是稀松布上方的模式窗口。这会将对话框置于用户视图的最前面，引起人们对对话框中提示的操作的注意。
+ui-dialogs-on-expanded-breakpoints-like-desktop-are-modal-windows-above-a-scrim-this-puts-the = 扩展断点上的对话框（如桌面）是遮罩上方的模态窗口。这会将对话框置于用户视图的最前面，引起人们对对话框中提示的操作的注意。
 
 ui-basic-dialogs-can-be-custom-positioned-anywhere-on-larger-screens-respecting-margins-to-pr = 基本对话框可以自定义放置在较大屏幕上的任何位置，并尊重边距以防止边缘冲突。
 
@@ -344,7 +342,7 @@ ui-basic-dialog-padding-and-size-measurements = 基本对话框填充和尺寸�
 
 ui-28dp-corner-radius = 28dp 圆角半径
 
-ui-container-width = 集装箱宽度
+ui-container-width = 容器宽度
 
 ui-min-280dp-max-560dp = 最小 280dp；最大 560dp
 
@@ -374,13 +372,13 @@ ui-dismissed = 被解雇
 
 ui-accepted = 已接受
 
-ui-a-dialog-is-a-modal-window-that-appears-in-front-of-app-content-to-provide-critical-inform-2275 = 对话框是出现在应用程序内容前面的模式窗口，用于提供关键信息或提示做出决策。
+ui-a-dialog-is-a-modal-window-that-appears-in-front-of-app-content-to-provide-critical-inform-2275 = 对话框是出现在应用程序内容前面的模态窗口，用于提供关键信息或提示做出决策。
 
 ui-this-will-reset-your-app-preferences-back-to-their-default-settings-the-following-accounts-2276 = 这会将您的应用程序首选项重置回默认设置。以下帐户也将被注销：
 
 ui-dialogs-overview-figure = 对话框概览图
 
-ui-a-dialog-is-a-modal-window-that-appears-in-front-of-app-content-to-provide-critical-inform-2278 = 对话框是出现在应用程序内容前面的模式窗口，用于提供关键信息或要求做出决定
+ui-a-dialog-is-a-modal-window-that-appears-in-front-of-app-content-to-provide-critical-inform-2278 = 对话框是出现在应用程序内容前面的模态窗口，用于提供关键信息或要求做出决定
 
 ui-overview-basic-dismiss = 概述 基本解雇
 
@@ -414,7 +412,7 @@ ui-option-3 = 选项3
 
 ui-dialog-with-hero-icon = 带有英雄图标的对话框
 
-ui-a-dialog-is-a-modal-window-that-appears-in-front-of-app-content-to-provide-critical-inform-2295 = 对话框是出现在应用程序内容前面的模式窗口，用于提供关键信息或要求做出决定。
+ui-a-dialog-is-a-modal-window-that-appears-in-front-of-app-content-to-provide-critical-inform-2295 = 对话框是出现在应用程序内容前面的模态窗口，用于提供关键信息或要求做出决定。
 
 ui-cancel-color-dialog = 取消颜色对话框
 
@@ -442,7 +440,7 @@ ui-close-spec-dialog = 关闭规格对话框
 
 ui-save-spec-event = 保存规范事件
 
-ui-close-affordance = 近距离可供性
+ui-close-affordance = 关闭入口
 
 ui-full-screen-dialog-color = 全屏对话框颜色
 
@@ -454,7 +452,7 @@ ui-full-screen-dialog-padding-and-size-measurements = 全屏对话框填充和�
 
 ui-0dp-corner-radius = 0dp 圆角半径
 
-ui-container-width-max-560dp = 集装箱宽度；最大 560dp
+ui-container-width-max-560dp = 容器宽度；最大 560dp
 
 ui-header-height = 标头高度
 
@@ -462,7 +460,7 @@ ui-header-width = 表头宽度
 
 ui-headline-text-alignment = 标题文本对齐方式
 
-ui-icon-close-affordance-size = 图标（关闭可供性）大小
+ui-icon-close-affordance-size = 关闭图标尺寸
 
 ui-bottom-action-bar-height = 底部操作栏高度
 

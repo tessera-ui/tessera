@@ -364,7 +364,7 @@ fn variants() {
     legend(vec!["ui-default-button", "ui-toggle-button"]);
     gap(Dp(32.0));
     spec_table(
-        vec!["ui-variant".into(), "M3".into(), "ui-m3-expressive".into()],
+        vec!["ui-variant".into(), "M3".into(), "M3 Expressive".into()],
         vec![
             vec![
                 "ui-default".into(),
@@ -396,7 +396,7 @@ fn configurations() {
             "ui-category".into(),
             "ui-configuration".into(),
             "M3".into(),
-            "ui-m3-expressive".into(),
+            "M3 Expressive".into(),
         ],
         vec![
             vec![
@@ -481,42 +481,39 @@ fn tokens() {
     gap(Dp(24.0));
     let mut rows = match style.get() {
         ButtonVariant::Elevated => vec![
-            vec!["ui-container".into(), "ui-surface-container-low".into()],
-            vec!["ui-icon-and-label".into(), "ui-primary".into()],
+            vec!["ui-container".into(), "Surface container low".into()],
+            vec!["ui-icon-and-label".into(), "Primary".into()],
             vec!["ui-border".into(), "ui-none".into()],
             vec!["ui-elevation".into(), "ui-1dp-enabled-0dp-disabled".into()],
         ],
         ButtonVariant::Filled => vec![
-            vec!["ui-container".into(), "ui-primary".into()],
-            vec!["ui-icon-and-label".into(), "ui-on-primary".into()],
+            vec!["ui-container".into(), "Primary".into()],
+            vec!["ui-icon-and-label".into(), "On primary".into()],
             vec!["ui-border".into(), "ui-none".into()],
             vec!["ui-elevation".into(), "0dp".into()],
         ],
         ButtonVariant::Tonal => vec![
-            vec!["ui-container".into(), "ui-secondary-container".into()],
-            vec![
-                "ui-icon-and-label".into(),
-                "ui-on-secondary-container".into(),
-            ],
+            vec!["ui-container".into(), "Secondary container".into()],
+            vec!["ui-icon-and-label".into(), "On secondary container".into()],
             vec!["ui-border".into(), "ui-none".into()],
             vec!["ui-elevation".into(), "0dp".into()],
         ],
         ButtonVariant::Outlined => vec![
             vec!["ui-container".into(), "ui-transparent".into()],
-            vec!["ui-icon-and-label".into(), "ui-on-surface-variant".into()],
-            vec!["ui-border".into(), "ui-outline-variant-1dp".into()],
+            vec!["ui-icon-and-label".into(), "On surface variant".into()],
+            vec!["ui-border".into(), "Outline variant · 1dp".into()],
             vec!["ui-elevation".into(), "0dp".into()],
         ],
         ButtonVariant::Text => vec![
             vec!["ui-container".into(), "ui-transparent".into()],
-            vec!["ui-icon-and-label".into(), "ui-primary".into()],
+            vec!["ui-icon-and-label".into(), "Primary".into()],
             vec!["ui-border".into(), "ui-none".into()],
             vec!["ui-elevation".into(), "0dp".into()],
         ],
     };
     rows.push(vec![
         "ui-label-type".into(),
-        "ui-label-large-14sp-20sp".into(),
+        "Label large · 14sp / 20sp".into(),
     ]);
     rows.push(vec![
         "ui-shape".into(),
@@ -618,31 +615,31 @@ fn colors() {
         vec![
             vec![
                 pair("ui-elevated-container", "ui-elevated-icon-label"),
-                pair("ui-surface-container-low", "ui-primary"),
-                pair("ui-surface-container-low", "ui-primary"),
-                pair("ui-primary", "ui-on-primary"),
+                pair("Surface container low", "Primary"),
+                pair("Surface container low", "Primary"),
+                pair("Primary", "On primary"),
             ],
             vec![
                 pair("ui-filled-container", "ui-filled-icon-label"),
-                pair("ui-primary", "ui-on-primary"),
-                pair("ui-surface-container", "ui-on-surface-variant"),
-                pair("ui-primary", "ui-on-primary"),
+                pair("Primary", "On primary"),
+                pair("Surface container", "On surface variant"),
+                pair("Primary", "On primary"),
             ],
             vec![
                 pair("ui-tonal-container", "ui-tonal-icon-label"),
-                pair("ui-secondary-container", "ui-on-secondary-container"),
-                pair("ui-secondary-container", "ui-on-secondary-container"),
-                pair("ui-secondary", "ui-on-secondary"),
+                pair("Secondary container", "On secondary container"),
+                pair("Secondary container", "On secondary container"),
+                pair("Secondary", "On secondary"),
             ],
             vec![
                 pair("ui-outlined-container", "ui-outlined-icon-label"),
-                pair("ui-outline-variant-outline", "ui-on-surface-variant"),
-                pair("ui-outline-variant-outline", "ui-on-surface-variant"),
-                pair("ui-inverse-surface", "ui-inverse-on-surface"),
+                pair("Outline variant (outline)", "On surface variant"),
+                pair("Outline variant (outline)", "On surface variant"),
+                pair("Inverse surface", "Inverse on surface"),
             ],
             vec![
                 "ui-text-icon-label".into(),
-                "ui-primary".into(),
+                "Primary".into(),
                 "--".into(),
                 "--".into(),
             ],
@@ -1536,9 +1533,7 @@ fn style_grid(columns: Vec<&'static str>, rows: Vec<&'static str>) {
         RenderSlotWith::new(move |(row, column): (usize, usize)| {
             let style = STYLES[row];
             if column > 0 && style == ButtonVariant::Text {
-                text()
-                    .content(I18N.text("--"))
-                    .style(type_style(14.0, 20.0));
+                text().content("--").style(type_style(14.0, 20.0));
             } else {
                 button_preview(
                     style,
@@ -1689,37 +1684,37 @@ fn resources() {
             ],
             vec![
                 "ui-implementation".into(),
-                "ui-flutter".into(),
+                "Flutter".into(),
                 "ui-available".into(),
             ],
             vec![
                 "ui-implementation".into(),
-                "ui-jetpack-compose".into(),
+                "Jetpack Compose".into(),
                 "ui-available".into(),
             ],
             vec![
                 "ui-implementation".into(),
-                "ui-jetpack-compose-expressive".into(),
+                "Jetpack Compose: Expressive".into(),
                 "ui-available".into(),
             ],
             vec![
                 "ui-implementation".into(),
-                "ui-android-views-mdc-android".into(),
+                "Android Views (MDC-Android)".into(),
                 "ui-available".into(),
             ],
             vec![
                 "ui-implementation".into(),
-                "ui-android-views-mdc-android-expressive".into(),
+                "Android Views (MDC-Android): Expressive".into(),
                 "ui-available".into(),
             ],
             vec![
                 "ui-implementation".into(),
-                "ui-web".into(),
+                "Web".into(),
                 "ui-available".into(),
             ],
             vec![
                 "ui-implementation".into(),
-                "ui-web-expressive".into(),
+                "Web: Expressive".into(),
                 "ui-unavailable".into(),
             ],
         ],
@@ -2687,11 +2682,11 @@ fn baseline_tokens() {
         vec![
             vec![
                 "md.comp.filled-button.container.color".into(),
-                "ui-primary".into(),
+                "Primary".into(),
             ],
             vec![
                 "md.comp.filled-button.label-text.color".into(),
-                "ui-on-primary".into(),
+                "On primary".into(),
             ],
             vec![
                 "md.comp.filled-button.container.height".into(),
@@ -2703,7 +2698,7 @@ fn baseline_tokens() {
             ],
             vec![
                 "md.comp.filled-button.label-text".into(),
-                "ui-label-large-14sp-20sp".into(),
+                "Label large · 14sp / 20sp".into(),
             ],
             vec!["md.comp.filled-button.icon.size".into(), "20dp".into()],
             vec!["md.comp.filled-button.leading-space".into(), "16dp".into()],

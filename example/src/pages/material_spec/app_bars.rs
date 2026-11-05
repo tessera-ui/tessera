@@ -504,7 +504,7 @@ fn preset_for(kind: usize) -> Preset {
         },
         M2 => Preset {
             figure: "ui-m2-top-app-bar",
-            title: "ui-material-2",
+            title: "Material 2",
             actions: &[Glyph::Favorite, Glyph::Search, Glyph::More],
             elevated: true,
             content: true,
@@ -512,7 +512,7 @@ fn preset_for(kind: usize) -> Preset {
         },
         M3 => Preset {
             figure: "ui-m3-app-bar",
-            title: "ui-material-3",
+            title: "Material 3",
             actions: &[Glyph::Share],
             scrolled: true,
             content: true,
@@ -796,37 +796,37 @@ fn availability() {
             ],
             vec![
                 "ui-implementation".into(),
-                "ui-flutter".into(),
+                "Flutter".into(),
                 "ui-available".into(),
             ],
             vec![
                 "ui-implementation".into(),
-                "ui-jetpack-compose".into(),
+                "Jetpack Compose".into(),
                 "ui-available".into(),
             ],
             vec![
                 "ui-implementation".into(),
-                "ui-jetpack-compose-expressive".into(),
+                "Jetpack Compose: Expressive".into(),
                 "ui-available".into(),
             ],
             vec![
                 "ui-implementation".into(),
-                "ui-android-views-mdc-android".into(),
+                "Android Views (MDC-Android)".into(),
                 "ui-available".into(),
             ],
             vec![
                 "ui-implementation".into(),
-                "ui-android-views-mdc-android-expressive".into(),
+                "Android Views (MDC-Android): Expressive".into(),
                 "ui-available".into(),
             ],
             vec![
                 "ui-implementation".into(),
-                "ui-web".into(),
+                "Web".into(),
                 "ui-unavailable".into(),
             ],
             vec![
                 "ui-implementation".into(),
-                "ui-web-expressive".into(),
+                "Web: Expressive".into(),
                 "ui-unavailable".into(),
             ],
         ],
@@ -1775,7 +1775,7 @@ fn search_avatar(status: State<String>, geometry: Option<State<Geometry>>) {
                 )
                 .children(move || {
                     text()
-                        .content(I18N.text("A"))
+                        .content("A")
                         .color(scheme.on_primary)
                         .style(type_style(24.0, 32.0));
                 });
@@ -1825,7 +1825,7 @@ fn search_sample(
     let hint = match (specimen, placeholder) {
         (Some(0), _) => String::new(),
         (_, Some(value)) => value,
-        (Some(_), None) => "ui-body-large".to_owned(),
+        (Some(_), None) => "Body Large".to_owned(),
         (None, None) => "ui-search-library".to_owned(),
     };
     dialog_provider()
@@ -1950,7 +1950,7 @@ fn search_sample(
                                             )
                                             .children(move || {
                                                 text()
-                                                    .content(I18N.text("ui-body-large"))
+                                                    .content("Body Large")
                                                     .style(type_style(16.0, 24.0));
                                             });
                                     }
@@ -2150,9 +2150,9 @@ fn baseline_bar(large: bool, #[prop(into)] label: Option<String>) {
                 });
             text()
                 .content(I18N.text(if large {
-                    "ui-headline-medium"
+                    "Headline Medium"
                 } else {
-                    "ui-headline-small"
+                    "Headline Small"
                 }))
                 .color(scheme.on_surface)
                 .style(if large {
@@ -2196,7 +2196,7 @@ fn variants() {
             numbered(vec!["ui-medium".into(), "ui-large".into()]);
             gap(Dp(32.0));
             spec_table(
-                vec!["ui-variant".into(), "M3".into(), "ui-m3-expressive".into()],
+                vec!["ui-variant".into(), "M3".into(), "M3 Expressive".into()],
                 vec![
                     vec!["ui-search-app-bar".into(), "--".into(), "ui-available".into()],
                     vec!["ui-small".into(), "ui-available".into(), "ui-available".into()],
@@ -2248,7 +2248,7 @@ fn configurations() {
                     "ui-category".into(),
                     "ui-configuration".into(),
                     "M3".into(),
-                    "ui-m3-expressive".into(),
+                    "M3 Expressive".into(),
                 ],
                 vec![
                     vec![
@@ -2277,23 +2277,23 @@ fn configurations() {
 }
 
 const COMMON_TOKENS: &[(&str, &str)] = &[
-    ("ui-app-bar-container-color", "ui-fef7ff-surface"),
-    ("ui-search-container-color", "ui-f3edf7-surface-container"),
-    ("ui-search-label-color", "ui-49454f-on-surface-variant"),
+    ("ui-app-bar-container-color", "#FEF7FF (Surface)"),
+    ("ui-search-container-color", "#F3EDF7 (Surface container)"),
+    ("ui-search-label-color", "#49454F (On surface variant)"),
     (
         "ui-app-bar-container-color-on-scroll",
-        "ui-f3edf7-surface-container",
+        "#F3EDF7 (Surface container)",
     ),
     (
         "ui-search-container-color-on-scroll",
-        "ui-e6e0e9-surface-container-highest",
+        "#E6E0E9 (Surface container highest)",
     ),
     ("ui-app-bar-container-elevation", "0dp"),
     ("ui-app-bar-container-elevation-on-scroll", "3dp"),
-    ("ui-app-bar-title-text", "ui-1d1b20-on-surface"),
-    ("ui-app-bar-subtitle-text", "ui-49454f-on-surface-variant"),
-    ("ui-app-bar-leading-icon", "ui-1d1b20-on-surface"),
-    ("ui-app-bar-trailing-icon", "ui-49454f-on-surface-variant"),
+    ("ui-app-bar-title-text", "#1D1B20 (On surface)"),
+    ("ui-app-bar-subtitle-text", "#49454F (On surface variant)"),
+    ("ui-app-bar-leading-icon", "#1D1B20 (On surface)"),
+    ("ui-app-bar-trailing-icon", "#49454F (On surface variant)"),
     ("ui-app-bar-left-padding", "4dp"),
     ("ui-app-bar-right-padding", "4dp"),
     ("ui-app-bar-icon-spacing", "0dp"),
@@ -2358,27 +2358,27 @@ const LARGE_FLEXIBLE_TOKENS: &[(&str, &str)] = &[
 const SEARCH_BAR_TOKENS: &[(&str, &str)] = &[
     (
         "ui-search-bar-container-color",
-        "ui-ece6f0-surface-container-high",
+        "#ECE6F0 (Surface container high)",
     ),
     ("ui-search-bar-container-elevation", "6dp"),
-    ("ui-search-bar-leading-icon-color", "ui-1d1b20-on-surface"),
+    ("ui-search-bar-leading-icon-color", "#1D1B20 (On surface)"),
     (
         "ui-search-bar-trailing-icon-color",
-        "ui-49454f-on-surface-variant",
+        "#49454F (On surface variant)",
     ),
     (
         "ui-search-bar-supporting-text-color",
-        "ui-49454f-on-surface-variant",
+        "#49454F (On surface variant)",
     ),
-    ("ui-search-bar-input-text-color", "ui-1d1b20-on-surface"),
+    ("ui-search-bar-input-text-color", "#1D1B20 (On surface)"),
     (
         "ui-search-bar-hover-state-layer-color",
-        "ui-1d1b20-on-surface",
+        "#1D1B20 (On surface)",
     ),
     ("ui-search-bar-hover-state-layer-opacity", "0.08"),
     (
         "ui-search-bar-pressed-state-layer-color",
-        "ui-1d1b20-on-surface",
+        "#1D1B20 (On surface)",
     ),
     ("ui-search-bar-contained-pane-leading-margin", "24dp"),
     ("ui-search-bar-contained-pane-trailing-margin", "24dp"),
@@ -2845,9 +2845,9 @@ fn scroll_state_column(scrolled: bool) {
                 .scrolled(scrolled);
             gap(Dp(16.0));
             for (variant, title) in [
-                (TopAppBarVariant::Small, "ui-title-large"),
-                (TopAppBarVariant::MediumFlexible, "ui-headline-medium-579"),
-                (TopAppBarVariant::LargeFlexible, "ui-display-small"),
+                (TopAppBarVariant::Small, "Title large"),
+                (TopAppBarVariant::MediumFlexible, "Headline medium"),
+                (TopAppBarVariant::LargeFlexible, "Display small"),
             ] {
                 top_app_bar()
                     .variant(variant)
@@ -2977,10 +2977,10 @@ fn baseline_app_bars() {
     paragraph("ui-medium-top-app-bar-color-roles-used-for-light-and-dark-schemes".into());
     gap(Dp(8.0));
     numbered(vec![
-        "ui-surface".into(),
-        "ui-on-surface".into(),
-        "ui-on-surface".into(),
-        "ui-on-surface-variant".into(),
+        "Surface".into(),
+        "On surface".into(),
+        "On surface".into(),
+        "On surface variant".into(),
     ]);
     gap(Dp(48.0));
     subheading("ui-measurements".to_owned());
@@ -3024,8 +3024,8 @@ fn baseline_app_bars() {
             ],
             vec![
                 "ui-headline-type-style".into(),
-                "ui-headline-small-625".into(),
-                "ui-headline-medium-579".into(),
+                "Headline small".into(),
+                "Headline medium".into(),
             ],
         ],
     );
@@ -3452,9 +3452,9 @@ fn figure_bar(
         .variant(variant)
         .title(I18N.text(if measurements {
             match variant {
-                TopAppBarVariant::Small => "ui-title-large-629",
-                TopAppBarVariant::MediumFlexible => "ui-headline-medium",
-                TopAppBarVariant::LargeFlexible => "ui-display-small-630",
+                TopAppBarVariant::Small => "Title Large",
+                TopAppBarVariant::MediumFlexible => "Headline Medium",
+                TopAppBarVariant::LargeFlexible => "Display Small",
             }
         } else {
             "ui-headline"

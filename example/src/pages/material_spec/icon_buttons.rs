@@ -362,7 +362,7 @@ fn configurations() {
             "ui-category".into(),
             "ui-options".into(),
             "M3".into(),
-            "ui-m3-expressive".into(),
+            "M3 Expressive".into(),
         ],
         vec![
             vec![

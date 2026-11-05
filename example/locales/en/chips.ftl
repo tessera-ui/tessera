@@ -260,8 +260,6 @@ ui-0dp-elevated-1dp = 0dp · elevated 1dp
 
 ui-label-color = Label color
 
-ui-outline-variant = Outline variant
-
 ui-8dp-corner = 8dp corner
 
 ui-leading-icon-color = Leading icon color

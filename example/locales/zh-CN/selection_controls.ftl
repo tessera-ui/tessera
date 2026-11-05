@@ -40,11 +40,11 @@ ui-unselected-checkbox = 未选中的复选框
 
 ui-selected-checkbox = 选中的复选框
 
-ui-indeterminate-checkbox = 不确定复选框
+ui-indeterminate-checkbox = 半选复选框
 
-ui-use-on-surface-for-the-setting-name-and-on-surface-variant-for-supporting-text-keep-these = 使用“表面”作为设置名称，使用“表面变体”作为支持文本。设置更改时保留这些角色。
+ui-use-on-surface-for-the-setting-name-and-on-surface-variant-for-supporting-text-keep-these = 设置名称使用 On Surface，辅助说明使用 On Surface Variant。设置变化时保持这些颜色角色。
 
-ui-use-on-surface-for-adjacent-option-labels-selection-changes-the-checkbox-while-the-label-k = 对相邻选项标签使用“在表面上”。选择会更改复选框，而标签保持其文本颜色。
+ui-use-on-surface-for-adjacent-option-labels-selection-changes-the-checkbox-while-the-label-k = 相邻选项标签使用 On Surface。选中状态只改变复选框，标签文字颜色保持不变。
 
 ui-handle = 手柄
 

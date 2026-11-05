@@ -46,7 +46,7 @@ ui-bottom-sheets-show-secondary-content-anchored-to-the-bottom-of-the-screen = �
 
 ui-side-sheets = 侧边面板
 
-ui-side-sheets-show-secondary-content-anchored-to-the-side-of-the-screen = 侧页显示固定在屏幕一侧的次要内容
+ui-side-sheets-show-secondary-content-anchored-to-the-side-of-the-screen = 侧边面板显示固定在屏幕一侧的次要内容
 
 ui-app-bars-are-placed-at-the-top-of-the-screen-to-help-people-navigate-through-a-product = 应用栏位于屏幕顶部，帮助人们浏览产品
 

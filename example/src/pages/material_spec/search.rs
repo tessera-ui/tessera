@@ -138,7 +138,7 @@ fn variants() {
     caption("ui-when-a-person-executes-a-search-results-appear-in-a-list-below-the-search-bar");
     gap(Dp(32.0));
     spec_table(
-        vec!["ui-variant".into(), "M3".into(), "ui-m3-expressive".into()],
+        vec!["ui-variant".into(), "M3".into(), "M3 Expressive".into()],
         vec![vec![
             "ui-search".into(),
             "ui-available".into(),
@@ -174,37 +174,37 @@ fn availability() {
             ],
             vec![
                 "ui-implementation".into(),
-                "ui-android-views-mdc-android".into(),
+                "Android Views (MDC-Android)".into(),
                 "ui-available".into(),
             ],
             vec![
                 "ui-implementation".into(),
-                "ui-android-views-mdc-android-expressive".into(),
+                "Android Views (MDC-Android): Expressive".into(),
                 "ui-unavailable".into(),
             ],
             vec![
                 "ui-implementation".into(),
-                "ui-flutter".into(),
+                "Flutter".into(),
                 "ui-available".into(),
             ],
             vec![
                 "ui-implementation".into(),
-                "ui-jetpack-compose".into(),
+                "Jetpack Compose".into(),
                 "ui-available".into(),
             ],
             vec![
                 "ui-implementation".into(),
-                "ui-jetpack-compose-expressive".into(),
+                "Jetpack Compose: Expressive".into(),
                 "ui-available".into(),
             ],
             vec![
                 "ui-implementation".into(),
-                "ui-web".into(),
+                "Web".into(),
                 "ui-unavailable".into(),
             ],
             vec![
                 "ui-implementation".into(),
-                "ui-web-expressive".into(),
+                "Web: Expressive".into(),
                 "ui-unavailable".into(),
             ],
         ],
@@ -289,7 +289,7 @@ fn configurations() {
             "ui-category".into(),
             "ui-configuration".into(),
             "M3".into(),
-            "ui-m3-expressive".into(),
+            "M3 Expressive".into(),
         ],
         vec![
             vec![
@@ -377,7 +377,7 @@ fn configuration_layout(full_screen: bool, divided: bool) {
                         )
                         .children(move || {
                             text()
-                                .content(I18N.text("9:30"))
+                                .content("9:30")
                                 .style(type_style(14.0 * scale, 20.0 * scale))
                                 .modifier(Modifier::new().weight(1.0));
                             icon().vector(filled::WIFI_SVG).size(Dp(16.0 * scale));
@@ -638,7 +638,7 @@ fn search_control(
                 .icon(filled::CLOSE_SVG)
                 .accessibility_label(I18N.text("ui-clear-search"))
                 .on_click(move || {
-                    controller.with_mut(|value| value.set_query(I18N.text("")));
+                    controller.with_mut(|value| value.set_query("".to_owned()));
                     submitted.set(false);
                 });
         } else {
@@ -992,7 +992,7 @@ fn phone(geometry: State<Geometry>, active: bool) {
                         .modifier(Modifier::new().fill_max_width().height(Dp(32.0)))
                         .children(move || {
                             text()
-                                .content(I18N.text("9:30"))
+                                .content("9:30")
                                 .style(type_style(14.0, 20.0))
                                 .modifier(Modifier::new().weight(1.0));
                             icon().vector(filled::WIFI_SVG).size(Dp(16.0));
@@ -1059,7 +1059,7 @@ fn anatomy_bar(geometry: State<Geometry>, active: bool) {
                                     .icon(filled::CLOSE_SVG)
                                     .accessibility_label(I18N.text("ui-clear-search"))
                                     .on_click(move || {
-                                        controller.with_mut(|value| value.set_query(I18N.text("")))
+                                        controller.with_mut(|value| value.set_query("".to_owned()))
                                     });
                             }
                             icon_button()
@@ -1177,17 +1177,14 @@ fn colors() {
     spec_table(
         vec!["ui-element".into(), "ui-color-role".into()],
         vec![
-            vec!["ui-search-bar".into(), "ui-surface-container-high".into()],
-            vec!["ui-input-text".into(), "ui-on-surface".into()],
-            vec!["ui-hint-and-icons".into(), "ui-on-surface-variant".into()],
+            vec!["ui-search-bar".into(), "Surface container high".into()],
+            vec!["ui-input-text".into(), "On surface".into()],
+            vec!["ui-hint-and-icons".into(), "On surface variant".into()],
             vec![
                 "ui-full-screen-results".into(),
-                "ui-surface-container-low".into(),
+                "Surface container low".into(),
             ],
-            vec![
-                "ui-docked-results".into(),
-                "ui-surface-container-high".into(),
-            ],
+            vec!["ui-docked-results".into(), "Surface container high".into()],
         ],
     );
 }
@@ -1265,7 +1262,7 @@ fn tokens() {
         vec![
             vec![
                 "md.comp.search-bar.container.color".into(),
-                "ui-surface-container-high".into(),
+                "Surface container high".into(),
             ],
             vec![
                 "md.comp.search-bar.container.shape".into(),
@@ -1274,31 +1271,31 @@ fn tokens() {
             vec!["md.comp.search-bar.container.height".into(), "56dp".into()],
             vec![
                 "md.comp.search-bar.input-text.color".into(),
-                "ui-on-surface".into(),
+                "On surface".into(),
             ],
             vec![
                 "md.comp.search-bar.leading-icon.color".into(),
-                "ui-on-surface-variant".into(),
+                "On surface variant".into(),
             ],
             vec![
                 "md.comp.search-bar.trailing-icon.color".into(),
-                "ui-on-surface-variant".into(),
+                "On surface variant".into(),
             ],
             vec![
                 "md.comp.search-view.container.color".into(),
-                "ui-surface-container-low".into(),
+                "Surface container low".into(),
             ],
             vec![
                 "md.comp.search-view.divider.color".into(),
-                "ui-outline-variant".into(),
+                "Outline variant".into(),
             ],
             vec![
                 "md.comp.search-view.header.color".into(),
-                "ui-on-surface-variant".into(),
+                "On surface variant".into(),
             ],
             vec![
                 "md.comp.search-view.list-item.label.color".into(),
-                "ui-on-surface".into(),
+                "On surface".into(),
             ],
         ],
     );

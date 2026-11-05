@@ -18,7 +18,7 @@ ui-put-the-most-frequent-destinations-at-the-top-and-group-related-destinations-
 
 ui-closing = 闭幕式
 
-ui-the-navigation-drawer-is-no-longer-recommended-use-the-expanded-navigation-rail-instead-mo = 不再推荐使用抽屉式导航。请改用扩展的导航导轨。有关 M3 表达的更多信息
+ui-the-navigation-drawer-is-no-longer-recommended-use-the-expanded-navigation-rail-instead-mo = 不再推荐使用抽屉式导航。请改用扩展的导航侧栏。有关 M3 Expressive的更多信息
 
 ui-variants-distinguishes-two-separate-variants-of-navigation-drawer-standard-and-modal = 变体：区分导航抽屉的两种不同变体：标准和模态
 
@@ -46,7 +46,7 @@ ui-weekend-plans = 周末计划
 
 ui-here-are-the-details-for-our-next-community-meeting = 以下是我们下次社区会议的详细信息。
 
-ui-navigation-rail-to-navigation-drawer = 导航导轨至导航抽屉
+ui-navigation-rail-to-navigation-drawer = 导航侧栏至导航抽屉
 
 ui-hide-navigation = 隐藏导航
 
@@ -58,11 +58,11 @@ ui-drawer-hidden-content-uses-the-full-window = 抽屉隐藏：内容使用整�
 
 ui-window-size-classes = 窗口大小等级
 
-ui-m3-expressive-navigation-recommendation = M3表达性导航推荐
+ui-m3-expressive-navigation-recommendation = M3 Expressive 导航建议
 
 ui-open-recommended-navigation-rail = 打开推荐导航栏
 
-ui-expanded-navigation-rail = 扩建导航轨道
+ui-expanded-navigation-rail = 扩建导航侧栏
 
 ui-mail-destinations = 邮件目的地
 

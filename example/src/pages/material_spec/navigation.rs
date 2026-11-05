@@ -324,24 +324,18 @@ fn tokens(rail: bool) {
                 if rail {
                     "ui-surface-uncontained".into()
                 } else {
-                    "ui-surface-container".into()
+                    "Surface container".into()
                 },
             ],
-            vec![
-                "ui-selected-indicator".into(),
-                "ui-secondary-container".into(),
-            ],
-            vec![
-                "ui-selected-icon".into(),
-                "ui-on-secondary-container".into(),
-            ],
+            vec!["ui-selected-indicator".into(), "Secondary container".into()],
+            vec!["ui-selected-icon".into(), "On secondary container".into()],
             vec![
                 "ui-selected-label-vertical-horizontal".into(),
-                "ui-secondary-on-secondary-container".into(),
+                "Secondary / on secondary container".into(),
             ],
             vec![
                 "ui-inactive-icon-and-label".into(),
-                "ui-on-surface-variant".into(),
+                "On surface variant".into(),
             ],
             vec![
                 "ui-hover-focus-press-state-layer".into(),
@@ -608,43 +602,39 @@ fn navigation_grid_content(values: Geometry, dark: bool) {
 pub(super) fn navigation_color_roles(rail: bool, baseline: bool) -> Vec<&'static str> {
     if rail && baseline {
         vec![
-            "ui-on-secondary-container",
-            "ui-secondary-container",
-            "ui-on-surface",
-            "ui-on-surface-variant",
-            "ui-on-surface-variant",
-            "ui-error",
-            "ui-on-error",
-            "ui-error",
+            "On secondary container",
+            "Secondary container",
+            "On surface",
+            "On surface variant",
+            "On surface variant",
+            "Error",
+            "On error",
+            "Error",
         ]
     } else if rail {
         vec![
             "ui-surface-container-optional",
-            "ui-on-secondary-container",
-            "ui-secondary-container",
+            "On secondary container",
+            "Secondary container",
             "ui-secondary-vertical-on-secondary-container-horizontal",
-            "ui-on-surface-variant",
-            "ui-on-surface-variant",
-            "ui-error",
-            "ui-on-error",
-            "ui-error",
+            "On surface variant",
+            "On surface variant",
+            "Error",
+            "On error",
+            "Error",
         ]
     } else {
         vec![
             if baseline {
-                "ui-surface"
+                "Surface"
             } else {
-                "ui-surface-container"
+                "Surface container"
             },
-            "ui-on-secondary-container",
-            if baseline {
-                "ui-on-surface"
-            } else {
-                "ui-secondary"
-            },
-            "ui-secondary-container",
-            "ui-on-surface-variant",
-            "ui-on-surface-variant",
+            "On secondary container",
+            if baseline { "On surface" } else { "Secondary" },
+            "Secondary container",
+            "On surface variant",
+            "On surface variant",
         ]
     }
 }
@@ -1441,9 +1431,7 @@ fn navigation_badge(index: usize, geometry: State<Geometry>) {
         .children(move || {
             if index == 1 {
                 badge_with_content().content(move || {
-                    text()
-                        .content(I18N.text("3"))
-                        .modifier(watch(geometry, "badge-label"));
+                    text().content("3").modifier(watch(geometry, "badge-label"));
                 });
             } else {
                 badge();

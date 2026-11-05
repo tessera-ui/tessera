@@ -18,7 +18,7 @@ ui-docked-search-opens-below-the-bar-on-medium-and-expanded-windows-full-screen-
 
 ui-search-bar-container = 搜索栏容器
 
-ui-keep-the-rounded-container-visible-when-focus-changes-unfocused-outer-margins-are-24dp-foc = 当焦点改变时，保持圆形容器可见。未聚焦的外边距为 24dp；聚焦边距为 12dp。使用表面容器，使其紧贴至少两个色调步骤的表面。
+ui-keep-the-rounded-container-visible-when-focus-changes-unfocused-outer-margins-are-24dp-foc = 焦点变化时保持圆角容器可见。未聚焦时外边距为 24dp，聚焦后为 12dp。使用 Surface Container High，并与背景至少相差两个色阶。
 
 ui-icons-icon-buttons = 图标和图标按钮
 
@@ -90,9 +90,9 @@ ui-motion-the-search-bar-grows-wider-when-focused = 运动：聚焦时搜索栏�
 
 ui-supported-platforms-jetpack-compose = 支持的平台：Jetpack Compose
 
-ui-the-contained-search-style-features-a-persistent-filled-search-container = 包含的搜索风格具有持久的、填充的搜索容器
+ui-the-contained-search-style-features-a-persistent-filled-search-container = 带容器的搜索样式始终显示实心搜索框
 
-ui-elevation-lower-elevation-and-no-shadow-by-default = 高程：默认低高程且无阴影
+ui-elevation-lower-elevation-and-no-shadow-by-default = 阴影高度：默认低阴影高度且无阴影
 
 ui-name-search-was-formerly-known-as-open-search-bar = 名称：搜索以前称为开放搜索栏
 
@@ -104,11 +104,11 @@ ui-style = 风格
 
 ui-search-comes-in-two-styles = 搜索有两种风格：
 
-ui-contained-has-an-expressive-look-and-feel-it-uses-a-filled-container-to-separate-a-search = 包含：具有富有表现力的外观和感觉。它使用填充容器将搜索栏与建议或结果列表分开
+ui-contained-has-an-expressive-look-and-feel-it-uses-a-filled-container-to-separate-a-search = 包含：具有Expressive外观和感觉。它使用填充容器将搜索栏与建议或结果列表分开
 
 ui-divided-baseline-doesn-t-have-the-latest-visual-style-motion-or-flexibility = 分裂（基线）：没有最新的视觉风格、动作或灵活性
 
-ui-the-contained-style-has-a-persistent-filled-container-expressive-motion-and-rounded-shape = 包容的风格具有持久的、填充的容器、富有表现力的运动和圆形的形状
+ui-the-contained-style-has-a-persistent-filled-container-expressive-motion-and-rounded-shape = 带容器样式具有常驻实心容器、Expressive 动效和圆角外形
 
 ui-the-divided-baseline-style-uses-a-divider-to-separate-the-search-bar-from-suggestions-and = 分割（基线）样式使用分隔线将搜索栏与建议和结果分开
 
@@ -116,7 +116,7 @@ ui-search-suggestions-and-results-appear-in-customizable-lists-with-two-layout-o
 
 ui-divided = 分开
 
-ui-not-recommended-use-contained = 不推荐。使用包含。
+ui-not-recommended-use-contained = 不推荐，请使用带容器样式。
 
 ui-docked-full-screen = 对接、全屏
 
@@ -152,7 +152,7 @@ ui-full-screen-layout = 全屏布局
 
 ui-divided-baseline-style = 分割（基线）样式
 
-ui-docked-layout-contained-style = 停靠布局 · 包含式
+ui-docked-layout-contained-style = 停靠布局 · 带容器样式
 
 ui-dinner-with-friends = 与朋友共进晚餐
 
@@ -190,7 +190,7 @@ ui-search-query = 搜索查询
 
 ui-search-suggestions = 搜索建议
 
-ui-keep-the-current-theme-s-surface-and-content-roles-the-search-field-uses-surface-container = 保留当前主题的表面和内容角色。搜索字段采用表面容器高；全屏结果使用表面容器低。对接结果使用表面容器高。
+ui-keep-the-current-theme-s-surface-and-content-roles-the-search-field-uses-surface-container = 保持当前主题的容器和内容颜色角色。搜索框及停靠式结果使用 Surface Container High，全屏结果使用 Surface Container Low。
 
 ui-search-bar = 搜索栏
 
@@ -210,7 +210,7 @@ ui-full-screen-container = 全屏容器
 
 ui-full-screen = 全屏
 
-ui-docked-container = 停靠的集装箱
+ui-docked-container = 停靠的容器
 
 ui-focused-bar = 重点栏
 
@@ -254,4 +254,4 @@ ui-240dp-min-2-3-screen-max = 最小 240dp；最大 2/3 屏幕
 
 ui-leading-trailing-padding-6983 = 前导/尾随填充
 
-ui-tessera-examples-on-this-page-use-the-native-search-bar-and-docked-search-bar-compone = 本页上的 Tessera 示例使用本机 search_bar 和 docked_search_bar 组件。包含的样式在结果上方保留一个填充的容器；分开的风格是基线治疗。
+ui-tessera-examples-on-this-page-use-the-native-search-bar-and-docked-search-bar-compone = 本页示例使用 Tessera 原生的 search_bar 和 docked_search_bar 组件。带容器样式在结果上方保留实心容器，分离式采用基线样式。

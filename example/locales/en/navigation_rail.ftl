@@ -100,19 +100,11 @@ ui-56-32dp-16dp-radius = 56 × 32dp, 16dp radius
 
 ui-active-indicator-color = Active indicator color
 
-ui-secondary-container-e8def8 = Secondary container #E8DEF8
-
 ui-active-icon-color = Active icon color
-
-ui-on-secondary-container-4a4458 = On secondary container #4A4458
 
 ui-active-label-text-color = Active label text color
 
-ui-secondary-625b71 = Secondary #625B71
-
 ui-inactive-icon-color = Inactive icon color
-
-ui-on-surface-variant-49454f = On surface variant #49454F
 
 ui-inactive-label-text-color = Inactive label text color
 

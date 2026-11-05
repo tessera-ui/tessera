@@ -376,7 +376,7 @@ fn specimen_item(
                             .modifier(watch(geometry, "max-badge"))
                             .children(move || {
                                 badge_with_content().content(move || {
-                                    text().content(I18N.text("999+"));
+                                    text().content("999+");
                                 });
                             });
                     });
@@ -396,7 +396,7 @@ fn specimen_item(
                             .modifier(watch(geometry, "large-badge"))
                             .children(move || {
                                 badge_with_content().content(move || {
-                                    text().content(I18N.text("3"));
+                                    text().content("3");
                                 });
                             });
                     });
@@ -1235,7 +1235,7 @@ fn mock_header(
                     )
                     .children(move || {
                         text()
-                            .content(I18N.text("M"))
+                            .content("M")
                             .style(type_style(16.0, 24.0))
                             .color(scheme.on_tertiary);
                     });
@@ -1448,9 +1448,7 @@ fn mock_item(
                         .modifier(tagged(sink, "large-badge"))
                         .children(move || {
                             badge_with_content().content(move || {
-                                text()
-                                    .content(I18N.text("3"))
-                                    .modifier(tagged(sink, "badge-label"));
+                                text().content("3").modifier(tagged(sink, "badge-label"));
                             });
                         });
                 });
@@ -1582,7 +1580,7 @@ fn mock_item(
                     )
                     .children(move || {
                         text()
-                            .content(I18N.text("1"))
+                            .content("1")
                             .style(type_style(11.0, 16.0))
                             .color(Color::WHITE);
                     });
@@ -1852,7 +1850,7 @@ fn app_content(kind: usize) {
                 )
                 .children(move || {
                     text()
-                        .content(I18N.text("8:30"))
+                        .content("8:30")
                         .style(style.clone())
                         .color(scheme.on_primary_container);
                 });

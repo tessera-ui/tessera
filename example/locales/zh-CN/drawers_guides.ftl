@@ -10,23 +10,23 @@ ui-avoid-using-two-navigation-components-on-the-same-screen = 避免在同一屏
 
 ui-standard-navigation-drawer-with-destinations-in-mail-app = 邮件应用程序中带有目的地的标准导航抽屉
 
-ui-modal-navigation-drawer-with-destinations-and-scrim = 带目的地和稀松布的模态导航抽屉
+ui-modal-navigation-drawer-with-destinations-and-scrim = 带目的地和遮罩的模态导航抽屉
 
 ui-standard-navigation-drawer-next-to-app-content = 应用程序内容旁边的标准导航抽屉
 
 ui-standard-navigation-drawer-providing-access-to-drawer-destinations-next-to-app-content = 标准导航抽屉提供对应用程序内容旁边的抽屉目的地的访问
 
-ui-modal-navigation-drawer-with-1-active-destination-and-scrim = 模态导航抽屉，带有 1 个活动目的地和稀松布
+ui-modal-navigation-drawer-with-1-active-destination-and-scrim = 模态导航抽屉，带有 1 个活动目的地和遮罩
 
-ui-modal-navigation-drawer-using-a-scrim-to-block-interaction-with-the-rest-of-an-app-s-conte = 模态导航抽屉使用稀松布来阻止与应用程序内容的其余部分的交互
+ui-modal-navigation-drawer-using-a-scrim-to-block-interaction-with-the-rest-of-an-app-s-conte = 模态导航抽屉使用遮罩来阻止与应用程序内容的其余部分的交互
 
 ui-navigation-menu-icon-in-a-navigation-rail = 导航栏上的导航菜单图标
 
 ui-a-modal-drawer-opened-by-an-action-such-as-clicking-a-navigation-menu-icon-1 = 通过单击导航菜单图标等操作打开的模态抽屉 (1)
 
-ui-dismissing-a-modal-drawer-by-tapping-the-scrim-or-swiping = 通过点击稀松布或滑动来关闭模态抽屉
+ui-dismissing-a-modal-drawer-by-tapping-the-scrim-or-swiping = 通过点击遮罩或滑动来关闭模态抽屉
 
-ui-1-dismiss-by-tapping-the-scrim-2-dismiss-by-swiping-the-drawer = 1. 轻按稀松布即可关闭
+ui-1-dismiss-by-tapping-the-scrim-2-dismiss-by-swiping-the-drawer = 1. 轻按遮罩即可关闭
     2. 滑动抽屉即可关闭
 
 ui-modal-navigation-drawer-opening-from-the-left-side-of-the-screen = 从屏幕左侧打开模态导航抽屉
@@ -77,9 +77,9 @@ ui-navigation-drawer-subhead-section-labels = 导航抽屉副标题部分标签
 
 ui-related-destinations-can-be-grouped-using-short-subhead-section-labels-in-the-navigation-d = 可以使用导航抽屉中的短副标题部分标签对相关目的地进行分组
 
-ui-modal-navigation-drawer-with-scrim-placed-behind = 模态导航抽屉，后面有稀松布
+ui-modal-navigation-drawer-with-scrim-placed-behind = 模态导航抽屉，后面有遮罩
 
-ui-scrim-applied-behind-a-modal-navigation-drawer = 稀松布应用于模态导航抽屉后面
+ui-scrim-applied-behind-a-modal-navigation-drawer = 遮罩应用于模态导航抽屉后面
 
 ui-standard-navigation-drawers-change-size-to-suit-the-device-s-screen = 标准导航抽屉会更改大小以适应设备的屏幕
 
@@ -115,15 +115,15 @@ ui-focus-lands-on-first-navigation-item = 焦点落在第一个导航项上
 
 ui-selecting-a-focused-navigation-drawer-destination-with-space-or-enter = 使用 Space 或 Enter 选择焦点导航抽屉目的地
 
-ui-selecting-the-scrim-to-close-the-navigation-drawer = 选择稀松布以关闭导航抽屉
+ui-selecting-the-scrim-to-close-the-navigation-drawer = 选择遮罩以关闭导航抽屉
 
-ui-select-the-scrim-to-close-the-navigation-drawer = 选择稀松布以关闭导航抽屉
+ui-select-the-scrim-to-close-the-navigation-drawer = 选择遮罩以关闭导航抽屉
 
 ui-navigation-drawer-with-a-filled-selected-icon = 带有填充选定图标的导航抽屉
 
 ui-use-a-filled-icon-for-the-selected-navigation-destination-to-differentiate-from-the-other = 对所选导航目的地使用实心图标以区别于其他目的地
 
-ui-navigation-drawer-with-an-outlined-selected-icon = 带有轮廓选定图标的导航抽屉
+ui-navigation-drawer-with-an-outlined-selected-icon = 带有描边选定图标的导航抽屉
 
 ui-avoid-keeping-the-icon-style-for-the-selected-navigation-destination-the-same-as-unselecte = 避免使选定导航目的地的图标样式与未选定目的地的图标相同。这消除了指示哪个目的地处于活动状态的重要视觉指示器。
 
@@ -185,7 +185,7 @@ ui-standard-drawers-can-be-permanently-visible-best-for-frequently-switching-des
 
 ui-in-medium-and-compact-breakpoints-use-modal-drawers-instead = 在中型和紧凑型断点中，请改用模态抽屉。
 
-ui-modal-navigation-drawers-use-a-scrim-to-block-interaction-with-the-rest-of-an-app-s-conten = 模态导航抽屉使用稀松布来阻止与应用程序其余内容的交互，并且不会影响屏幕的布局网格。
+ui-modal-navigation-drawers-use-a-scrim-to-block-interaction-with-the-rest-of-an-app-s-conten = 模态导航抽屉使用遮罩来阻止与应用程序其余内容的交互，并且不会影响屏幕的布局网格。
 
 ui-modal-navigation-drawers-can-be-used-in-any-breakpoint-but-are-primarily-used-in-compact-a = 模态导航抽屉可用于任何断点，但主要用于空间有限或优先用于应用内容的紧凑型和中等尺寸。
 
@@ -197,13 +197,13 @@ ui-modal-drawers-can-be-dismissed-by = 模态抽屉可以通过以下方式关�
 
 ui-selecting-a-drawer-item = 选择抽屉里的物品
 
-ui-tapping-the-scrim = 轻敲稀松布
+ui-tapping-the-scrim = 轻敲遮罩
 
 ui-swiping-toward-the-drawer-s-anchoring-edge-for-example-swiping-right-to-left-for-a-left-al = 向抽屉的锚定边缘滑动（例如，从右向左滑动以获得左对齐的导航抽屉）
 
-ui-modal-drawers-can-be-dismissed-by-tapping-the-scrim-or-swiping-the-drawer-toward-its-ancho = 可以通过点击稀松布或将抽屉滑向其锚定屏幕边缘来关闭模态抽屉。
+ui-modal-drawers-can-be-dismissed-by-tapping-the-scrim-or-swiping-the-drawer-toward-its-ancho = 可以通过点击遮罩或将抽屉滑向其锚定屏幕边缘来关闭模态抽屉。
 
-ui-navigation-drawers-are-essentially-a-list-contained-within-a-side-sheet-they-can-also-incl = 抽屉式导航本质上是侧页中包含的列表。它们还可以包括标题、副标题和分隔符来组织更长的列表。
+ui-navigation-drawers-are-essentially-a-list-contained-within-a-side-sheet-they-can-also-incl = 抽屉式导航本质上是侧边面板中包含的列表。它们还可以包括标题、副标题和分隔符来组织更长的列表。
 
 ui-navigation-drawers-can-include-headers-subheads-and-dividers-to-organize-longer-lists = 抽屉式导航可以包含标题、副标题和分隔线以组织较长的列表
 
@@ -215,7 +215,7 @@ ui-sheet = 板材
 
 ui-section-label-optional = 部分标签（可选）
 
-ui-a-sheet-holds-all-navigation-drawer-elements-side-sheets-are-used-as-the-container-for-sta = 一张表包含所有导航抽屉元素。侧板用作标准和模态导航抽屉的容器。
+ui-a-sheet-holds-all-navigation-drawer-elements-side-sheets-are-used-as-the-container-for-sta = 一张表包含所有导航抽屉元素。侧边面板用作标准和模态导航抽屉的容器。
 
 ui-navigation-drawers-that-open-from-the-side-are-always-placed-on-the-start-edge-of-the-scre = 从侧面打开的导航抽屉始终放置在屏幕的起始边缘，对于从左到右 (LTR) 的语言，位于左侧；对于从右到左 (RTL) 的语言，位于右侧。
 
@@ -227,15 +227,15 @@ ui-label-text-and-icons = 标签文本和图标
 
 ui-destinations-in-a-navigation-drawer-take-the-form-of-actionable-list-items-each-item-descr = 导航抽屉中的目的地采用可操作列表项的形式。每个项目都使用标签文本和可选图标来描述其目的地。
 
-ui-label-text-should-be-clear-and-short-enough-that-it-isn-t-cut-off-by-the-sheet = 标签文本应清晰且足够短，以免被纸张切断。
+ui-label-text-should-be-clear-and-short-enough-that-it-isn-t-cut-off-by-the-sheet = 标签文本应清晰且足够短，以免被面板切断。
 
 ui-icons-can-supplement-labels-as-indicators-of-a-destination-when-used-they-should-always-be = 图标可以补充标签作为目的地的指示符。使用时，它们应始终放在文本之前。其他应用程序组件和内容应引用这些图标。
 
 ui-short-subhead-section-labels-can-help-group-related-destinations-in-the-navigation-drawer = 短副标题部分标签可以帮助在导航抽屉中对相关目的地进行分组。
 
-ui-scrim-modal-only = 稀松布（仅莫代尔）
+ui-scrim-modal-only = 遮罩（仅模态模式）
 
-ui-modal-navigation-drawers-use-a-scrim-to-block-interaction-with-the-rest-of-the-app-the-scr = 模态导航抽屉使用稀松布来阻止与应用程序其余部分的交互。稀松布直接放置在抽屉板后面，可以轻敲或单击以关闭抽屉。
+ui-modal-navigation-drawers-use-a-scrim-to-block-interaction-with-the-rest-of-the-app-the-scr = 模态导航抽屉使用遮罩来阻止与应用程序其余部分的交互。遮罩直接放置在抽屉板后面，可以轻敲或单击以关闭抽屉。
 
 ui-a-product-s-navigation-component-should-change-to-suit-the-breakpoint-and-form-factor-of-t = 产品的导航组件应该改变以适应屏幕的断点和外形尺寸。
 
@@ -285,7 +285,7 @@ ui-when-a-navigation-item-is-tapped-the-active-indicator-appears-in-place-provid
 
 ui-a-touch-ripple-passes-through-the-indicator = 触摸波纹穿过指示器
 
-ui-the-icon-switches-from-outlined-to-filled = 图标从轮廓切换为填充
+ui-the-icon-switches-from-outlined-to-filled = 图标从描边切换为填充
 
 ui-the-icon-changes-color-becoming-darker = 图标颜色改变，变暗
 
@@ -297,9 +297,9 @@ ui-the-icon-changes-color-becoming-darker-in-light-theme-and-lighter-in-dark-the
 
 ui-initial-focus-lands-directly-on-the-first-navigation-item-since-that-is-the-first-interact = 初始焦点直接落在第一个导航项上，因为这是组件的第一个交互元素。
 
-ui-the-modal-navigation-drawer-can-be-dismissed-by-selecting-the-scrim-that-covers-the-rest-o = 可以通过选择覆盖屏幕其余部分的稀松布来关闭模态导航抽屉。
+ui-the-modal-navigation-drawer-can-be-dismissed-by-selecting-the-scrim-that-covers-the-rest-o = 可以通过选择覆盖屏幕其余部分的遮罩来关闭模态导航抽屉。
 
-ui-icons-are-the-primary-focus-of-the-navigation-and-such-give-the-dominant-cue-of-its-state = 图标是导航的主要焦点，它们给出了其状态的主要提示。对选定的目的地使用实心图标，以区别于未选定目的地的轮廓图标。
+ui-icons-are-the-primary-focus-of-the-navigation-and-such-give-the-dominant-cue-of-its-state = 图标是导航的主要焦点，它们给出了其状态的主要提示。对选定的目的地使用实心图标，以区别于未选定目的地的描边图标。
 
 ui-focus-lands-on-the-first-navigation-destination = 焦点落在第一个导航目的地
 
@@ -313,7 +313,7 @@ ui-the-accessibility-label-for-a-navigation-item-is-typically-the-same-as-the-de
 
 ui-if-the-ui-text-is-correctly-linked-assistive-tech-such-as-a-screenreader-will-read-the-ui = 如果 UI 文本链接正确，辅助技术（例如屏幕阅读器）将读取 UI 文本，然后读取组件的角色。
 
-ui-for-android-views-mdc-android-a-more-descriptive-accessibility-label-is-not-available-to-b = 对于 Android 视图 (MDC-Android)，无法设置更具描述性的辅助功能标签，并且未公布角色。
+ui-for-android-views-mdc-android-a-more-descriptive-accessibility-label-is-not-available-to-b = 对于 Android Views (MDC-Android)，无法设置更具描述性的辅助功能标签，并且未公布角色。
 
 ui-when-the-visible-ui-text-is-ambiguous-accessibility-labels-need-to-be-more-descriptive-for = 当可见的 UI 文本不明确时，辅助功能标签需要更具描述性。例如，明显标记为“最近”的导航目的地将受益于其可访问性标签中的附加信息，以阐明目的地的意图。
 

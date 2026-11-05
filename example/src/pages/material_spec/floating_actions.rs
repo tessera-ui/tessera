@@ -38,18 +38,18 @@ const SIZES: [FloatingActionButtonSize; 4] = [
 ];
 
 pub(super) const TONES: [&str; 6] = [
-    "ui-primary-container",
-    "ui-secondary-container",
-    "ui-tertiary-container",
-    "ui-primary",
-    "ui-secondary",
-    "ui-tertiary",
+    "Primary container",
+    "Secondary container",
+    "Tertiary container",
+    "Primary",
+    "Secondary",
+    "Tertiary",
 ];
 
 fn size_name(size: FloatingActionButtonSize) -> &'static str {
     match size {
         FloatingActionButtonSize::Small => "ui-small",
-        FloatingActionButtonSize::Standard => "ui-fab",
+        FloatingActionButtonSize::Standard => "FAB",
         FloatingActionButtonSize::Medium => "ui-medium",
         FloatingActionButtonSize::Large => "ui-large",
     }
@@ -331,27 +331,27 @@ fn resources() {
             ],
             vec![
                 "ui-implementation".into(),
-                "ui-flutter".into(),
+                "Flutter".into(),
                 "ui-available".into(),
             ],
             vec![
                 "ui-implementation".into(),
-                "ui-jetpack-compose".into(),
+                "Jetpack Compose".into(),
                 "ui-available".into(),
             ],
             vec![
                 "ui-implementation".into(),
-                "ui-android-views-mdc-android".into(),
+                "Android Views (MDC-Android)".into(),
                 "ui-available".into(),
             ],
             vec![
                 "ui-implementation".into(),
-                "ui-web".into(),
+                "Web".into(),
                 "ui-available".into(),
             ],
             vec![
                 "ui-implementation".into(),
-                "ui-web-expressive".into(),
+                "Web: Expressive".into(),
                 "ui-unavailable".into(),
             ],
         ],
@@ -404,11 +404,7 @@ fn differences() {
     );
     gap(Dp(24.0));
     spec_table(
-        vec![
-            "ui-attribute".into(),
-            "M2".into(),
-            "ui-m3-expressive".into(),
-        ],
+        vec!["ui-attribute".into(), "M2".into(), "M3 Expressive".into()],
         vec![
             vec![
                 "ui-size".into(),
@@ -450,14 +446,10 @@ fn variants() {
     caption("ui-1-small-fab-2-fab-3-medium-fab-4-large-fab");
     gap(Dp(32.0));
     spec_table(
-        vec!["ui-variant".into(), "M3".into(), "ui-m3-expressive".into()],
+        vec!["ui-variant".into(), "M3".into(), "M3 Expressive".into()],
         vec![
             vec!["ui-small-fab".into(), "--".into(), "ui-available".into()],
-            vec![
-                "ui-fab".into(),
-                "ui-available".into(),
-                "ui-available".into(),
-            ],
+            vec!["FAB".into(), "ui-available".into(), "ui-available".into()],
             vec!["ui-medium-fab".into(), "--".into(), "ui-available".into()],
             vec!["ui-large-fab".into(), "--".into(), "ui-available".into()],
             vec![
@@ -509,11 +501,11 @@ fn configurations() {
             vec!["ui-size".into(), "ui-small-fab-medium-large".into()],
             vec![
                 "ui-container-tones".into(),
-                "ui-primary-container-secondary-container-tertiary-container".into(),
+                "Primary container · secondary container · tertiary container".into(),
             ],
             vec![
                 "ui-accent-tones".into(),
-                "ui-primary-secondary-tertiary".into(),
+                "Primary · secondary · tertiary".into(),
             ],
         ],
     );
@@ -530,19 +522,19 @@ fn tokens() {
         vec![
             vec![
                 "md.comp.fab.primary-container.color".into(),
-                "ui-primary-container".into(),
+                "Primary container".into(),
             ],
             vec![
                 "md.comp.fab.primary-container.icon.color".into(),
-                "ui-on-primary-container".into(),
+                "On primary container".into(),
             ],
             vec![
                 "md.comp.fab.secondary-container.color".into(),
-                "ui-secondary-container".into(),
+                "Secondary container".into(),
             ],
             vec![
                 "md.comp.fab.tertiary-container.color".into(),
-                "ui-tertiary-container".into(),
+                "Tertiary container".into(),
             ],
             vec![
                 "md.comp.fab.container.height".into(),
@@ -630,7 +622,7 @@ fn colors() {
                                     });
                                 gap(Dp(16.0));
                                 text()
-                                    .content(I18N.text("ui-1-primary-container-2-secondary-container-3-tertiary-container-4-primary-5-secondary-6-ter"))
+                                    .content("1  Primary container    2  Secondary container    3  Tertiary container    4  Primary    5  Secondary    6  Tertiary")
                                     .style(type_style(14.0, 20.0));
                             });
                     });
@@ -700,7 +692,7 @@ fn measurements() {
         vec![
             "ui-attribute".into(),
             "ui-small".into(),
-            "ui-fab".into(),
+            "FAB".into(),
             "ui-medium".into(),
             "ui-large".into(),
         ],
@@ -780,11 +772,11 @@ fn baseline_tokens() {
         vec![
             vec![
                 "md.comp.fab.surface-container.color".into(),
-                "ui-surface-container-high".into(),
+                "Surface container high".into(),
             ],
             vec![
                 "md.comp.fab.surface-container.icon.color".into(),
-                "ui-primary".into(),
+                "Primary".into(),
             ],
             vec!["md.comp.fab.container.height".into(), "56dp".into()],
             vec![
@@ -849,7 +841,7 @@ fn actions() {
         vec!["ui-component".into(), "ui-use-when".into()],
         vec![
             vec![
-                "ui-fab".into(),
+                "FAB".into(),
                 "ui-one-primary-action-with-a-universally-understood-icon".into(),
             ],
             vec![

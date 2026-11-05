@@ -10,9 +10,9 @@ ui-keep-the-group-between-two-and-five-segments = 将组保持在两到五个部
 
 ui-segments-are-for-selection-not-for-navigation = 分段用于选择，而不是用于导航。
 
-ui-segmented-buttons-are-no-longer-recommended-in-the-material-3-expressive-update-products-t = 在 Material 3 表现力更新中不再推荐使用分段按钮。采用表现风格的产品应使用连接的按钮组，这样可以通过更新的视觉设计保留大部分相同的功能。
+ui-segmented-buttons-are-no-longer-recommended-in-the-material-3-expressive-update-products-t = 在 Material 3 Expressive更新中不再推荐使用分段按钮。采用Expressive的产品应使用连接的按钮组，这样可以通过更新的视觉设计保留大部分相同的功能。
 
-ui-color-segmented-buttons-use-the-secondary-container-role-for-selected-segments-and-support = 颜色：分段按钮对选定的分段使用辅助容器角色并支持动态颜色。形状：段使用具有共享轮廓的完全圆形末端，而不是单独的矩形。选择：复选标记和容器填充替换 M2 下划线。
+ui-color-segmented-buttons-use-the-secondary-container-role-for-selected-segments-and-support = 颜色：选中分段使用 Secondary Container，并支持动态配色。形状：各分段共享描边，整体两端为圆角，而非独立矩形。选中状态使用勾选标记和容器填充，替代 M2 的下划线。
 
 ui-tokens = 设计令牌
 
@@ -102,7 +102,7 @@ ui-three-or-four-ordered-options = 三个或四个订购选项
 
 ui-more-than-five-sort-options = 超过五种排序选项
 
-ui-tabs-a-navigation-bar-or-a-rail = 选项卡、导航栏或导轨
+ui-tabs-a-navigation-bar-or-a-rail = 选项卡、导航栏或导航侧栏
 
 ui-segments-as-primary-navigation = 分段作为主要导航
 
@@ -149,8 +149,6 @@ ui-decorative-when-the-label-is-present = 当标签存在时具有装饰性
 ui-value-segmented-buttons = { $v0 } 分段按钮
 
 ui-value-selection-value = { $v0 } 选择： { $v1 }
-
-ui-label-large-14dp-20dp = 标签大 · 14dp / 20dp
 
 ui-minimum-maximum-segments = 最小/最大分段
 

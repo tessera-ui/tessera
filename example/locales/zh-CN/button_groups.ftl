@@ -130,7 +130,7 @@ ui-sketch = 素描
 
 ui-write = 写
 
-ui-standard-container = 标准集装箱
+ui-standard-container = 标准容器
 
 ui-label-4 = 标签4
 
@@ -162,9 +162,9 @@ ui-mute = 静音
 
 ui-large-icon-buttons = 大图标按钮
 
-ui-button-groups-have-no-color-properties-they-can-use-the-default-button-or-toggle-button-co = 按钮组没有颜色属性。他们可以使用默认按钮或切换按钮颜色样式，例如填充、色调和轮廓。避免使用标准图标按钮或文本按钮，因为它们没有容器处理。
+ui-button-groups-have-no-color-properties-they-can-use-the-default-button-or-toggle-button-co = 按钮组没有颜色属性。他们可以使用默认按钮或切换按钮颜色样式，例如填充、色调和描边。避免使用标准图标按钮或文本按钮，因为它们没有容器处理。
 
-ui-elevated-style-not-recommended = 不推荐高架款式
+ui-elevated-style-not-recommended = 不推荐阴影样式
 
 ui-standard-color-sample = 标准色样
 

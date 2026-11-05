@@ -1742,14 +1742,14 @@ fn color_roles(vibrant: bool) {
     gap(Dp(16.0));
     legend(if vibrant {
         vec![
-            "ui-primary-container".into(),
+            "Primary container".into(),
             "ui-filled-button-primary-on-primary".into(),
             "ui-toggle-tonal-button-surface-container-on-surface".into(),
             "ui-standard-button-on-primary-container".into(),
         ]
     } else {
         vec![
-            "ui-surface-container".into(),
+            "Surface container".into(),
             "ui-filled-button-primary-on-primary".into(),
             "ui-toggle-tonal-button-secondary-container-on-secondary-container".into(),
             "ui-standard-button-on-surface-variant".into(),
@@ -2318,7 +2318,7 @@ fn availability() {
             "ui-available",
         ),
         ("", "ui-flutter-bottom-app-bar", "ui-available"),
-        ("", "ui-web", "ui-unavailable"),
+        ("", "Web", "ui-unavailable"),
     ];
     let mut cells = Vec::new();
     for (index, (kind, resource, status)) in rows.into_iter().enumerate() {
@@ -2414,7 +2414,7 @@ fn spec_variants() {
     caption("ui-bottom-app-bar-not-recommended");
     gap(Dp(32.0));
     spec_table(
-        vec!["ui-variant".into(), "M3".into(), "ui-m3-expressive".into()],
+        vec!["ui-variant".into(), "M3".into(), "M3 Expressive".into()],
         vec![
             vec![
                 "ui-docked-toolbar".into(),
@@ -2464,7 +2464,7 @@ fn spec_configurations() {
             "ui-category".into(),
             "ui-configuration".into(),
             "M3".into(),
-            "ui-m3-expressive".into(),
+            "M3 Expressive".into(),
         ],
         vec![
             table_cell("ui-color", 1, 0, 2),
@@ -2506,50 +2506,47 @@ enum TokenSet {
 fn token_rows(set: TokenSet) -> Vec<Vec<String>> {
     let rows: &[(&str, &str)] = match set {
         TokenSet::Standard => &[
-            (
-                "ui-toolbar-standard-container-color",
-                "ui-surface-container",
-            ),
+            ("ui-toolbar-standard-container-color", "Surface container"),
             (
                 "ui-toolbar-standard-button-container-color",
-                "ui-surface-container",
+                "Surface container",
             ),
             (
                 "ui-toolbar-standard-selected-button-container-color",
-                "ui-secondary-container",
+                "Secondary container",
             ),
-            ("ui-toolbar-standard-icon-color", "ui-on-surface-variant"),
+            ("ui-toolbar-standard-icon-color", "On surface variant"),
             (
                 "ui-toolbar-standard-selected-icon-color",
-                "ui-on-secondary-container",
+                "On secondary container",
             ),
-            ("ui-toolbar-standard-label-color", "ui-on-surface-variant"),
+            ("ui-toolbar-standard-label-color", "On surface variant"),
             (
                 "ui-toolbar-standard-selected-label-color",
-                "ui-on-secondary-container",
+                "On secondary container",
             ),
             ("ui-toolbar-standard-container-shape", "ui-full"),
-            ("ui-toolbar-standard-disabled-icon-color", "ui-on-surface"),
+            ("ui-toolbar-standard-disabled-icon-color", "On surface"),
             ("ui-toolbar-standard-disabled-icon-opacity", "0.38"),
         ],
         TokenSet::Vibrant => &[
-            ("ui-toolbar-vibrant-container-color", "ui-primary-container"),
+            ("ui-toolbar-vibrant-container-color", "Primary container"),
             (
                 "ui-toolbar-vibrant-button-container-color",
-                "ui-primary-container",
+                "Primary container",
             ),
             (
                 "ui-toolbar-vibrant-selected-button-container-color",
-                "ui-surface-container",
+                "Surface container",
             ),
-            ("ui-toolbar-vibrant-icon-color", "ui-on-primary-container"),
-            ("ui-toolbar-vibrant-selected-icon-color", "ui-on-surface"),
-            ("ui-toolbar-vibrant-label-color", "ui-on-primary-container"),
-            ("ui-toolbar-vibrant-selected-label-color", "ui-on-surface"),
+            ("ui-toolbar-vibrant-icon-color", "On primary container"),
+            ("ui-toolbar-vibrant-selected-icon-color", "On surface"),
+            ("ui-toolbar-vibrant-label-color", "On primary container"),
+            ("ui-toolbar-vibrant-selected-label-color", "On surface"),
             ("ui-toolbar-vibrant-container-shape", "ui-full"),
         ],
         TokenSet::Docked => &[
-            ("ui-docked-toolbar-container-color", "ui-surface-container"),
+            ("ui-docked-toolbar-container-color", "Surface container"),
             ("ui-docked-toolbar-container-height", "64dp"),
             ("ui-docked-toolbar-leading-padding", "16dp"),
             ("ui-docked-toolbar-trailing-padding", "16dp"),
@@ -2558,8 +2555,8 @@ fn token_rows(set: TokenSet) -> Vec<Vec<String>> {
             ("ui-docked-toolbar-container-shape", "ui-none-rectangle"),
         ],
         TokenSet::Floating => &[
-            ("ui-floating-toolbar-standard-color", "ui-surface-container"),
-            ("ui-floating-toolbar-vibrant-color", "ui-primary-container"),
+            ("ui-floating-toolbar-standard-color", "Surface container"),
+            ("ui-floating-toolbar-vibrant-color", "Primary container"),
             ("ui-floating-toolbar-container-height-horizontal", "64dp"),
             ("ui-floating-toolbar-container-width-vertical", "64dp"),
             ("ui-floating-toolbar-leading-space", "8dp"),
@@ -2586,19 +2583,19 @@ fn token_rows(set: TokenSet) -> Vec<Vec<String>> {
             ),
             (
                 "ui-toolbar-floating-fab-standard-container-color",
-                "ui-secondary-container",
+                "Secondary container",
             ),
             (
                 "ui-toolbar-floating-fab-standard-icon-color",
-                "ui-on-secondary-container",
+                "On secondary container",
             ),
             (
                 "ui-toolbar-floating-fab-vibrant-container-color",
-                "ui-tertiary-container",
+                "Tertiary container",
             ),
             (
                 "ui-toolbar-floating-fab-vibrant-icon-color",
-                "ui-on-tertiary-container",
+                "On tertiary container",
             ),
             (
                 "ui-toolbar-floating-fab-container-size-expanded",
@@ -2798,7 +2795,7 @@ fn baseline_specs() {
         vec![
             vec![
                 "ui-bottom-app-bar-container-color".into(),
-                "ui-surface-container".into(),
+                "Surface container".into(),
             ],
             vec!["ui-bottom-app-bar-container-height".into(), "80dp".into()],
             vec![
@@ -2808,7 +2805,7 @@ fn baseline_specs() {
             vec!["ui-bottom-app-bar-icon-button-target".into(), "48dp".into()],
             vec![
                 "ui-bottom-app-bar-icon-color".into(),
-                "ui-on-surface-variant".into(),
+                "On surface variant".into(),
             ],
             vec!["ui-bottom-app-bar-fab-size".into(), "56dp".into()],
         ],

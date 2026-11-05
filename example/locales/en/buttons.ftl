@@ -48,11 +48,7 @@ ui-change-the-configuration-and-activate-the-button-focus-it-with-tab-and-activa
 
 ui-select-a-color-style-to-inspect-its-container-content-border-elevation-typography-and-shap = Select a color style to inspect its container, content, border, elevation, typography, and shape roles. Values resolve from the active Material theme, so the same roles map to different color values in light and dark schemes.
 
-ui-surface-container-low = Surface container low
-
 ui-icon-and-label = Icon and label
-
-ui-primary = Primary
 
 ui-border = Border
 
@@ -62,15 +58,7 @@ ui-elevation = Elevation
 
 ui-1dp-enabled-0dp-disabled = 1dp enabled · 0dp disabled
 
-ui-on-primary = On primary
-
-ui-secondary-container = Secondary container
-
-ui-on-secondary-container = On secondary container
-
 ui-transparent = Transparent
-
-ui-outline-variant-1dp = Outline variant · 1dp
 
 ui-label-type = Label type
 
@@ -114,25 +102,13 @@ ui-filled-container = Filled container
 
 ui-filled-icon-label = Filled icon & label
 
-ui-surface-container = Surface container
-
 ui-tonal-container = Tonal container
 
 ui-tonal-icon-label = Tonal icon & label
 
-ui-secondary = Secondary
-
-ui-on-secondary = On secondary
-
 ui-outlined-container = Outlined container
 
 ui-outlined-icon-label = Outlined icon & label
-
-ui-outline-variant-outline = Outline variant (outline)
-
-ui-inverse-surface = Inverse surface
-
-ui-inverse-on-surface = Inverse on surface
 
 ui-text-icon-label = Text icon & label
 
@@ -575,8 +551,6 @@ ui-style-value = Style: { $v0 }
 ui-size-value = Size: { $v0 }
 
 ui-activations-value-value = Activations: { $v0 } · { $v1 }
-
-ui-label-large-14sp-20sp = Label large · 14sp / 20sp
 
 ui-value-value-value-value-value = { $v0 } { $v1 } { $v2 } { $v3 } { $v4 }
 

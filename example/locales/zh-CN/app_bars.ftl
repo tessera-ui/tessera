@@ -14,7 +14,7 @@ ui-baseline-app-bars = 基线应用栏
 
 ui-availability-resources = 可用性和资源
 
-ui-m3-expressive-update = M3 表达更新
+ui-m3-expressive-update = M3 Expressive 更新
 
 ui-differences-from-m2 = 与M2的区别
 
@@ -104,11 +104,7 @@ ui-transparent-app-bar = 透明应用栏
 
 ui-m2-top-app-bar = M2顶部应用栏
 
-ui-material-2 = 材料2
-
 ui-m3-app-bar = M3应用栏
-
-ui-material-3 = 材料3
 
 ui-labeled-app-bar = 带标签的应用栏
 
@@ -164,21 +160,7 @@ ui-available = 可用
 
 ui-implementation = 实施
 
-ui-flutter = 颤动
-
-ui-jetpack-compose = Jetpack 组合
-
-ui-jetpack-compose-expressive = Jetpack Compose：富有表现力
-
-ui-android-views-mdc-android = Android 视图 (MDC-Android)
-
-ui-android-views-mdc-android-expressive = Android 视图 (MDC-Android)：富有表现力
-
-ui-web = 网络
-
 ui-unavailable = 不可用
-
-ui-web-expressive = 网络：富有表现力
 
 ui-may-2025 = 2025年5月
 
@@ -212,11 +194,11 @@ ui-added-features-to-small-app-bar = 向小应用栏添加了功能：
 
 ui-center-aligned-text-option = 居中对齐文本选项
 
-ui-expressive-variant = 表达变体
+ui-expressive-variant = Expressive 变体
 
 ui-4-total-app-bar-configurations-search-app-bar-small-medium-flexible-large-flexible = 4 种总应用栏配置：搜索应用栏、小、中灵活、大灵活。
 
-ui-expressive-overview = 富有表现力的概述
+ui-expressive-overview = Expressive 概览
 
 ui-color-new-color-mappings-and-compatibility-with-dynamic-color = 颜色：新的颜色映射以及与动态颜色的兼容性
 
@@ -300,7 +282,7 @@ ui-the-leading-element-of-a-search-app-bar-can-be-used-for-a-product-s-logo-to-b
 
 ui-the-leading-element-can-be-a-product-logo = 主导元素可以是产品徽标
 
-ui-search-tessera = 搜索Tessera
+ui-search-tessera = 搜索 Tessera
 
 ui-don-t-use-more-than-two-trailing-icon-buttons-with-an-avatar-if-more-actions-are-needed-co = 不要在头像上使用两个以上的尾随图标按钮。如果需要更多操作，请考虑使用工具栏。
 
@@ -318,11 +300,11 @@ ui-on-a-larger-window-the-search-field-stays-centered-between-leading-and-traili
 
 ui-alternate-color-options = 替代颜色选项
 
-ui-by-default-search-containers-in-app-bars-use-the-surface-container-color-to-distinguish-it = 默认情况下，应用程序栏中的搜索容器使用表面容器颜色来将其与应用程序背景区分开。如果背景较暗，请在搜索栏上使用较浅的容器颜色，例如表面明亮。
+ui-by-default-search-containers-in-app-bars-use-the-surface-container-color-to-distinguish-it = 应用栏中的搜索框默认使用 Surface Container，与应用背景区分。背景较暗时，可使用更亮的 Surface Bright。
 
 ui-when-choosing-alternate-colors-make-sure-the-search-text-and-container-have-at-least-3-1-c = 选择替代颜色时，请确保搜索文本和容器的对比度至少为 3:1，以提高可读性。
 
-ui-search-app-bars-can-use-different-colors-like-surface-bright-for-improved-contrast-with-su = 搜索应用栏可以使用不同的颜色（例如表面亮色），以提高与周围元素的对比度
+ui-search-app-bars-can-use-different-colors-like-surface-bright-for-improved-contrast-with-su = 搜索应用栏可使用 Surface Bright 等颜色，提高与周围元素的对比度
 
 ui-search-mail = 搜索邮件
 
@@ -362,7 +344,7 @@ ui-headline-typography-small-uses-title-large-medium-flexible-uses-headline-medi
 
 ui-subtitles-are-aligned-with-their-headline-their-typography-style-depends-on-the-app-bar-si = 字幕与标题保持一致。它们的排版风格取决于应用栏的大小。
 
-ui-subtitle-typography-small-uses-label-medium-medium-flexible-uses-label-large-and-large-fle = 字幕排版：小号使用标签中号，中号灵活使用标签大号，大号灵活使用标题中号
+ui-subtitle-typography-small-uses-label-medium-medium-flexible-uses-label-large-and-large-fle = 副标题字体样式：小号使用 Label Medium，中号可伸缩应用栏使用 Label Large，大号可伸缩应用栏使用 Title Medium
 
 ui-trailing-icon-buttons = 尾随图标按钮
 
@@ -370,7 +352,7 @@ ui-trailing-icon-buttons-are-aligned-to-the-trailing-edge-of-the-app-bar-place-m
 
 ui-avoid-using-these-buttons-to-open-a-menu-with-more-actions-if-more-actions-are-needed-plac = 避免使用这些按钮打开包含更多操作的菜单。如果需要更多操作，请将它们放在工具栏中。如果将图标按钮颜色样式更改为填充或色调，则仅使用一个图标按钮。
 
-ui-use-filled-icons-when-possible-for-the-best-visibility-outlined-icons-can-also-be-used-par = 尽可能使用填充图标以获得最佳可见性。也可以使用轮廓图标，特别是对于未选择的切换按钮。
+ui-use-filled-icons-when-possible-for-the-best-visibility-outlined-icons-can-also-be-used-par = 尽可能使用填充图标以获得最佳可见性。也可以使用描边图标，特别是对于未选择的切换按钮。
 
 ui-adaptive-design-allows-an-interface-to-respond-or-change-based-on-context-such-as-the-user = 自适应设计允许界面根据上下文（例如用户、设备和使用情况）做出响应或更改。
 
@@ -446,11 +428,11 @@ ui-accessible-app-bar = 无障碍应用栏
 
 ui-on-search-app-bars-use-the-default-color-roles-when-possible = 在搜索应用栏上，尽可能使用默认颜色角色：
 
-ui-search-container-surface-container = 搜索集装箱： 水面集装箱
+ui-search-container-surface-container = 搜索框容器：Surface Container
 
-ui-search-label-on-surface-variant = 搜索标签：表面变体
+ui-search-label-on-surface-variant = 搜索标签：On Surface Variant
 
-ui-on-darker-backgrounds-search-bar-containers-can-use-the-surface-bright-role-to-maintain-st = 在较暗的背景上，搜索栏容器可以使用表面亮色角色来保持强烈的视觉对比度。如果映射到其他颜色角色，请确保文本和容器具有 3:1 对比度以确保可读性。
+ui-on-darker-backgrounds-search-bar-containers-can-use-the-surface-bright-role-to-maintain-st = 深色背景上的搜索框可使用 Surface Bright。使用其他颜色角色时，应确保文字与容器的对比度达到 3:1。
 
 ui-make-sure-search-bars-and-their-labels-have-at-least-3-1-contrast-use-the-default-colors-w = 确保搜索栏及其标签的对比度至少为 3:1。尽可能使用默认颜色。
 
@@ -494,13 +476,11 @@ ui-recently-saved = 最近保存
 
 ui-search-selected = 搜索已选择
 
-ui-tessera-brand = Tessera品牌
+ui-tessera-brand = Tessera 标志
 
 ui-search-app-bar-account = 搜索应用栏帐户
 
 ui-account-selected = 已选择账户
-
-ui-body-large = 体大
 
 ui-search-library = 搜索库
 
@@ -534,10 +514,6 @@ ui-baseline-reference-drawings-a-64dp-top-row-with-the-headline-in-a-fixed-heigh
 
 ui-baseline-app-bar = 基线应用栏
 
-ui-headline-medium = 标题媒体
-
-ui-headline-small = 小标题
-
 ui-baseline-variants = 基线变体
 
 ui-the-baseline-m3-medium-and-large-app-bars-are-no-longer-recommended-in-m3-expressive-and-s = M3 Expressive 中不再推荐基线 M3 中型和大型应用程序栏，应替换为中型灵活和大型灵活应用程序栏，它们在视觉上相似，但具有多行支持、高度较短，并且可以包含多种元素，例如图像。
@@ -547,8 +523,6 @@ ui-baseline = 基线
 ui-medium = 中等
 
 ui-large = 大号
-
-ui-m3-expressive = M3 表达
 
 ui-merged-into-small-use-centered-text-configuration = 合并为小。使用居中文本配置。
 
@@ -576,29 +550,19 @@ ui-configured-app-bar = 配置的应用栏
 
 ui-app-bar-container-color = 应用栏容器颜色
 
-ui-fef7ff-surface = #FEF7FF（表面）
-
 ui-search-container-color = 搜索容器颜色
 
-ui-f3edf7-surface-container = #F3EDF7（表面容器）
-
 ui-search-label-color = 搜索标签颜色
-
-ui-49454f-on-surface-variant = #49454F（表面变体）
 
 ui-app-bar-container-color-on-scroll = 滚动时应用栏容器颜色
 
 ui-search-container-color-on-scroll = 滚动搜索容器颜色
-
-ui-e6e0e9-surface-container-highest = #E6E0E9（Surface 容器最高）
 
 ui-app-bar-container-elevation = 应用栏容器高度
 
 ui-app-bar-container-elevation-on-scroll = 滚动时应用栏容器高度
 
 ui-app-bar-title-text = 应用栏标题文本
-
-ui-1d1b20-on-surface = #1D1B20（表面）
 
 ui-app-bar-subtitle-text = 应用栏副标题文本
 
@@ -628,11 +592,11 @@ ui-app-bar-small-container-height = 应用栏小容器高度
 
 ui-app-bar-small-title-font = 应用栏小标题字体
 
-ui-roboto-22pt-line-height-28pt-weight-400-tracking-0pt = Roboto 22pt，行高 28pt，粗细 400，跟踪 0pt
+ui-roboto-22pt-line-height-28pt-weight-400-tracking-0pt = Roboto 22pt，行高 28pt，字重 400，字距 0pt
 
 ui-app-bar-small-subtitle-font = 应用栏小字幕字体
 
-ui-roboto-12pt-line-height-16pt-weight-500-tracking-0-5pt = Roboto 12pt，行高 16pt，粗细 500，跟踪 0.5pt
+ui-roboto-12pt-line-height-16pt-weight-500-tracking-0-5pt = Roboto 12pt，行高 16pt，字重 500，字距 0.5pt
 
 ui-app-bar-small-icon-button-size = 应用栏小图标按钮大小
 
@@ -644,7 +608,7 @@ ui-circular = 圆形
 
 ui-search-title-font = 搜索标题字体
 
-ui-roboto-16pt-line-height-24pt-weight-400-tracking-0-5pt = Roboto 16pt，行高 24pt，粗细 400，跟踪 0.5pt
+ui-roboto-16pt-line-height-24pt-weight-400-tracking-0-5pt = Roboto 16pt，行高 24pt，字重 400，字距 0.5pt
 
 ui-app-bar-medium-flexible-container-height = 应用栏中等灵活容器高度
 
@@ -652,11 +616,11 @@ ui-app-bar-medium-flexible-container-height-with-subtitle = 应用栏中等灵�
 
 ui-app-bar-medium-title-font = 应用栏中等标题字体
 
-ui-roboto-28pt-line-height-36pt-weight-400-tracking-0pt = Roboto 28pt，行高 36pt，粗细 400，跟踪 0pt
+ui-roboto-28pt-line-height-36pt-weight-400-tracking-0pt = Roboto 28pt，行高 36pt，字重 400，字距 0pt
 
 ui-app-bar-medium-subtitle-font = 应用栏中等字幕字体
 
-ui-roboto-14pt-line-height-20pt-weight-500-tracking-0-1pt = Roboto 14pt，行高 20pt，粗细 500，跟踪 0.1pt
+ui-roboto-14pt-line-height-20pt-weight-500-tracking-0-1pt = Roboto 14pt，行高 20pt，字重 500，字距 0.1pt
 
 ui-app-bar-large-flexible-container-height = 应用栏大型灵活容器高度
 
@@ -664,15 +628,13 @@ ui-app-bar-large-flexible-container-height-with-subtitle = 应用栏大型灵活
 
 ui-app-bar-large-title-font = 应用栏大标题字体
 
-ui-roboto-36pt-line-height-44pt-weight-400-tracking-0pt = Roboto 36pt，行高 44pt，粗细 400，跟踪 0pt
+ui-roboto-36pt-line-height-44pt-weight-400-tracking-0pt = Roboto 36pt，行高 44pt，字重 400，字距 0pt
 
 ui-app-bar-large-subtitle-font = 应用栏大字幕字体
 
-ui-roboto-16pt-line-height-24pt-weight-500-tracking-0-15pt = Roboto 16pt，行高 24pt，粗细 500，跟踪 0.15pt
+ui-roboto-16pt-line-height-24pt-weight-500-tracking-0-15pt = Roboto 16pt，行高 24pt，字重 500，字距 0.15pt
 
 ui-search-bar-container-color = 搜索栏容器颜色
-
-ui-ece6f0-surface-container-high = #ECE6F0（表面容器高）
 
 ui-search-bar-container-elevation = 搜索栏容器高度
 
@@ -698,13 +660,13 @@ ui-search-bar-contained-motion = 搜索栏包含运动
 
 ui-damping-0-9-stiffness-1400 = 阻尼0.9，刚度1400
 
-ui-search-bar-contained-leading-space = 搜索栏包含前导空格
+ui-search-bar-contained-leading-space = 搜索栏包含起始间距
 
-ui-search-bar-contained-trailing-space = 搜索栏包含尾随空格
+ui-search-bar-contained-trailing-space = 搜索栏包含末尾间距
 
-ui-search-bar-contained-no-actions-leading-space = 搜索栏不包含前导空格的操作
+ui-search-bar-contained-no-actions-leading-space = 搜索栏不包含起始间距的操作
 
-ui-search-bar-contained-no-actions-trailing-space = 搜索栏不包含任何操作尾随空格
+ui-search-bar-contained-no-actions-trailing-space = 搜索栏不包含任何操作末尾间距
 
 ui-select-a-token-set-to-view-in-the-table-s-menu-app-bar-token-sets-are-organized-into-a-com = 选择要在表菜单中查看的标记集。应用栏令牌集被组织为通用令牌集和特定于大小的令牌。显示默认灯光方案的值。
 
@@ -722,9 +684,9 @@ ui-value = 价值
 
 ui-search-component-tokens-specs = 搜索组件标记和规格
 
-ui-the-default-search-component-tokens-are-used-in-the-search-app-bar-inside-an-app-bar-the-s = 默认搜索组件标记用于搜索应用程序栏中。在应用程序栏中，搜索容器使用表面容器而不是默认的独立搜索栏。
+ui-the-default-search-component-tokens-are-used-in-the-search-app-bar-inside-an-app-bar-the-s = 搜索应用栏使用默认的搜索组件令牌；其中的搜索框容器使用 Surface Container，而非独立搜索栏的默认容器色。
 
-ui-search-bar-enabled-and-contained-expressive = 搜索 - 栏，启用并包含（富有表现力）
+ui-search-bar-enabled-and-contained-expressive = 搜索 - 栏，启用并包含（Expressive）
 
 ui-app-bars-can-be-customized-to-include = 可以自定义应用栏以包括：
 
@@ -766,31 +728,31 @@ ui-large-flexible-with-subtitle = 大灵活带字幕
 
 ui-color-values-are-implemented-through-design-tokens-for-design-this-means-working-with-colo = 颜色值是通过设计令牌实现的。对于设计来说，这意味着使用与标记相对应的颜色值。为了实现，颜色值将是引用值的标记。
 
-ui-all-app-bars-share-the-same-color-roles-on-scroll-the-container-changes-color-to-surface-c = 所有应用栏共享相同的颜色角色。滚动时，容器的颜色会更改为表面容器。
+ui-all-app-bars-share-the-same-color-roles-on-scroll-the-container-changes-color-to-surface-c = 所有应用栏使用相同的颜色角色。滚动时，容器颜色变为 Surface Container。
 
 ui-app-bar-color-roles-used-for-light-and-dark-themes = 用于浅色和深色主题的应用栏颜色角色：
 
-ui-container-surface = 容器：表面
+ui-container-surface = 容器：Surface
 
-ui-leading-icon-on-surface = 前导图标：表面上
+ui-leading-icon-on-surface = 前导图标：On Surface
 
-ui-trailing-icons-on-surface-variant = 尾随图标：表面变体
+ui-trailing-icons-on-surface-variant = 尾部图标：On Surface Variant
 
-ui-headline-on-surface = 标题：表面上
+ui-headline-on-surface = 标题：On Surface
 
-ui-subtitle-on-surface-variant = 副标题：表面变体
+ui-subtitle-on-surface-variant = 副标题：On Surface Variant
 
-ui-container-on-scroll-surface-container = 滚动容器：表面容器
+ui-container-on-scroll-surface-container = 滚动时的容器：Surface Container
 
 ui-search-app-bar-color-roles-used-for-light-and-dark-themes = 搜索用于浅色和深色主题的应用栏颜色角色：
 
-ui-leading-icon-on-surface-variant = 领先图标：表面变体
+ui-leading-icon-on-surface-variant = 前导图标：On Surface Variant
 
-ui-trailing-icon-on-surface-variant = 尾随图标：表面变体
+ui-trailing-icon-on-surface-variant = 尾部图标：On Surface Variant
 
-ui-hinted-search-text-on-surface-variant = 提示搜索文本：表面变体
+ui-hinted-search-text-on-surface-variant = 搜索提示文本：On Surface Variant
 
-ui-search-container-on-scroll-surface-container-highest = 滚动搜索容器：表面容器最高
+ui-search-container-on-scroll-surface-container-highest = 滚动时的搜索框容器：Surface Container Highest
 
 ui-scroll-states = 滚动状态
 
@@ -811,12 +773,6 @@ ui-product = 产品展示
 ui-scroll-state-menu = 滚动状态菜单
 
 ui-scroll-state-account = 滚动状态帐户
-
-ui-title-large = 标题大
-
-ui-headline-medium-579 = 头条媒体
-
-ui-display-small = 显示小
 
 ui-scroll-state-back = 向后滚动状态
 
@@ -864,7 +820,7 @@ ui-app-bar-medium-container-height = 应用栏中等容器高度
 
 ui-app-bar-medium-title-font-603 = 应用栏中等标题字体
 
-ui-roboto-24pt-line-height-32pt-weight-400-tracking-0pt = Roboto 24pt，行高 32pt，粗细 400，跟踪 0pt
+ui-roboto-24pt-line-height-32pt-weight-400-tracking-0pt = Roboto 24pt，行高 32pt，字重 400，字距 0pt
 
 ui-app-bar-medium-icon-button-size = 应用栏中等图标按钮大小
 
@@ -882,19 +838,13 @@ ui-app-bar-large-subtitle-font-611 = 应用栏大字幕字体
 
 ui-medium-top-app-bar-color-roles-used-for-light-and-dark-schemes = 用于浅色和深色方案的中顶部应用栏颜色角色：
 
-ui-surface = 表面
-
-ui-on-surface = 表面上
-
-ui-on-surface-variant = 表面变体
-
 ui-medium-and-large-app-bars-share-the-same-layout-a-64dp-top-row-for-the-leading-button-and = 中型和大型应用栏共享相同的布局：64dp 的顶行用于前导按钮和尾随图标，其下方是固定高度的标题区域。
 
 ui-medium-app-bar = 中等应用栏
 
 ui-large-app-bar = 大型应用栏
 
-ui-container-height = 集装箱高度
+ui-container-height = 容器高度
 
 ui-top-padding = 顶部填充
 
@@ -906,9 +856,7 @@ ui-headline-bottom-padding = 标题底部内边距
 
 ui-headline-type-style = 标题类型样式
 
-ui-headline-small-625 = 标题小
-
-ui-1-container-2-leading-button-3-trailing-elements-4-headline-5-subtitle = 1 集装箱
+ui-1-container-2-leading-button-3-trailing-elements-4-headline-5-subtitle = 1 容器
     2 前导按钮
     3 尾随元素
     4 标题
@@ -916,15 +864,11 @@ ui-1-container-2-leading-button-3-trailing-elements-4-headline-5-subtitle = 1 �
 
 ui-search-app-bar-padding-and-size-measurements = 搜索应用栏内边距和尺寸测量
 
-ui-1-container-2-leading-icon-button-3-hinted-search-text-4-trailing-icon-or-avatar-5-search = 1 集装箱
+ui-1-container-2-leading-icon-button-3-hinted-search-text-4-trailing-icon-or-avatar-5-search = 1 容器
     2 前导图标按钮
     3 提示搜索文本
     4 尾随图标或头像
     5 搜索容器
-
-ui-title-large-629 = 标题大
-
-ui-display-small-630 = 显示小
 
 ui-figure-back = 图背
 
@@ -1014,4 +958,4 @@ ui-anatomy-7072 = 解剖学
 
 ui-title-subtitle = { $title }，{ $subtitle }
 
-ui-tessera-examples-use-the-native-top-app-bar-component-for-the-small-medium-flexible-a = Tessera 示例将本机 top_app_bar 组件用于小型、中型灵活和大型灵活变体，并使用应用程序栏中的本机搜索栏作为搜索变体。
+ui-tessera-examples-use-the-native-top-app-bar-component-for-the-small-medium-flexible-a = Tessera 示例将原生 top_app_bar 组件用于小型、中型灵活和大型灵活变体，并使用应用程序栏中的原生搜索栏作为搜索变体。

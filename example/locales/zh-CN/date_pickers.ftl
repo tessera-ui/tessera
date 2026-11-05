@@ -20,7 +20,7 @@ ui-modal-date-input-configurations = 模态日期输入配置
 
 ui-element-states = 元素状态
 
-ui-modal = 莫代尔
+ui-modal = 模态
 
 ui-date-range = 日期范围
 
@@ -33,8 +33,6 @@ ui-dialog-changes-are-a-draft-ok-applies-them-to-this-example-cancel-escape-or-d
 ui-cancelled = 取消
 
 ui-modal-container = 模态容器
-
-ui-surface-container-high = 水面集装箱高
 
 ui-selected-date = 选定日期
 
@@ -56,7 +54,7 @@ ui-selected-date-indicator = 所选日期指示器
 
 ui-calendar-columns = 日历栏
 
-ui-material-provides-design-and-implementation-resources-for-date-selection-availability-belo = Material 为日期选择提供设计和实施资源。下面的可用性描述了材料库；这些实例使用 Tessera。
+ui-material-provides-design-and-implementation-resources-for-date-selection-availability-belo = Material 为日期选择提供设计和实施资源。下面的可用性描述了Material 库；这些实例使用 Tessera。
 
 ui-m3-uses-larger-titles-and-labels-with-more-spacing-for-48dp-touch-targets-new-dynamic-colo = M3 使用更大的标题和标签，为 48dp 触摸目标提供更大的间距、新的动态颜色映射，并且无模式阴影。以前的桌面选择器现在是停靠的日期选择器；以前的移动选择器和输入现在是模态日期选择器和模态日期输入。这些名称描述的是行为，而不是设备类型。
 
@@ -72,7 +70,7 @@ ui-the-calendar-action-returns-to-visual-selection-a-labeled-input-accepts-the-d
 
 ui-full-screen-date-picker = 全屏日期选择器
 
-ui-a-close-affordance-and-save-action-frame-the-range-calendar-on-compact-windows = 紧密的可供性和保存操作在紧凑的窗口上构建了范围日历。
+ui-a-close-affordance-and-save-action-frame-the-range-calendar-on-compact-windows = 紧凑窗口中的日期范围日历提供关闭入口和保存操作。
 
 ui-use-an-anchored-calendar-alongside-direct-date-entry = 使用锚定日历和直接日期输入。
 
@@ -130,7 +128,7 @@ ui-optional-clear-button = 可选的清除按钮
 
 ui-omit-a-clear-action-when-the-task-does-not-need-one-keeping-keyboard-traversal-concise = 当任务不需要清除操作时，请省略清除操作，以保持键盘遍历简洁。
 
-ui-affordance-for-keyboard-shortcuts = 键盘快捷键的可供性
+ui-affordance-for-keyboard-shortcuts = 键盘快捷键入口
 
 ui-communicate-available-navigation-shortcuts-in-contextual-hints-and-accessible-descriptions = 在上下文提示和可访问的描述中传达可用的导航快捷方式。
 
@@ -165,10 +163,6 @@ ui-choose-the-focused-date = 选择重点日期
 ui-escape = 逃亡
 
 ui-dismiss-the-modal-without-saving-its-draft = 关闭模态而不保存其草稿
-
-ui-material-3-design-kit-figma = Material 3 设计套件 (Figma)
-
-ui-material-web = 材料网
 
 ui-date-pickers-can-display-past-present-and-future-dates = 日期选择器可以显示过去、现在和未来的日期。
 
@@ -215,8 +209,6 @@ ui-modal-date-range-picker-color-roles = 模态日期范围选择器颜色角色
 ui-modal-date-picker-year-color-roles = 模态日期选择器年份颜色角色
 
 ui-modal-date-picker-color-roles = 模态日期选择器颜色角色
-
-ui-surface-variant = 表面变体
 
 ui-toggle-event-date-calendar = 切换活动日期日历
 
@@ -341,10 +333,6 @@ ui-reopen-modal-configuration-value = 重新打开模态配置{ $v0 }
 ui-configuration-value-date = 配置 { $v0 } 日期
 
 ui-toggle-configuration-value-calendar = 切换配置 { $v0 } 日历
-
-ui-primary-on-primary = 小学/小学
-
-ui-secondary-container-on-secondary-container = 辅助容器/辅助容器上
 
 ui-headline-unselected-date = 标题/未选择的日期
 

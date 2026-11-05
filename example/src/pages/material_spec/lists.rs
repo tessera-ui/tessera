@@ -373,13 +373,13 @@ fn tokens() {
     spec_table(
         vec!["ui-element".into(), "ui-token-value".into()],
         vec![
-            vec!["ui-container".into(), "ui-surface".into()],
-            vec!["ui-label".into(), "ui-on-surface".into()],
+            vec!["ui-container".into(), "Surface".into()],
+            vec!["ui-label".into(), "On surface".into()],
             vec![
                 "ui-overline-supporting-trailing-content".into(),
-                "ui-on-surface-variant".into(),
+                "On surface variant".into(),
             ],
-            vec!["ui-divider".into(), "ui-outline-variant".into()],
+            vec!["ui-divider".into(), "Outline variant".into()],
             vec!["ui-inner-outer-corners".into(), "4 / 16dp".into()],
             vec!["ui-selected-corners".into(), "16dp".into()],
             vec!["ui-leading-icon".into(), "20dp".into()],
@@ -685,7 +685,7 @@ fn list_anatomy_diagram() {
                         })
                         .trailing(move || {
                             text()
-                                .content(I18N.text("100+"))
+                                .content("100+")
                                 .style(type_style(14.0, 20.0))
                                 .modifier(watch(geometry, "trailing-text"));
                         });
@@ -721,9 +721,7 @@ fn list_anatomy_diagram() {
                                         ),
                                 )
                                 .children(move || {
-                                    text()
-                                        .content(I18N.text("A"))
-                                        .color(scheme.on_primary_container);
+                                    text().content("A").color(scheme.on_primary_container);
                                 });
                         })
                         .trailing(move || {

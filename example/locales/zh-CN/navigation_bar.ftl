@@ -14,7 +14,7 @@ ui-the-m3-navigation-bar-keeps-the-same-structure-as-the-baseline-a-container-wi
 
 ui-active-indicator-56-32dp-in-the-native-component-m3-reference-64-32dp-16dp-radius = 原生组件中的活动指示器 56 × 32dp（M3 参考：64 × 32dp，16dp 半径）
 
-ui-selected-icon-switches-from-outlined-to-filled = 选定的图标从轮廓切换为填充
+ui-selected-icon-switches-from-outlined-to-filled = 选定的图标从描边切换为填充
 
 ui-labels-can-always-show-or-appear-only-for-the-selected-destination = 标签可以始终显示，或仅针对选定的目的地显示
 
@@ -54,8 +54,6 @@ ui-active-icon = 活动图标
 
 ui-active-label = 活性标签
 
-ui-label-medium = 标签介质
-
 ui-hover-8-focus-10-press-10 = 悬停 8% · 聚焦 10% · 按下 10%
 
 ui-inactive-icon = 不活动图标
@@ -64,7 +62,7 @@ ui-inactive-label = 无效标签
 
 ui-the-active-indicator-sits-behind-the-selected-icon-labels-describe-each-destination = 活动指示器位于所选图标后面；标签描述每个目的地
 
-ui-navigation-bar-colors-come-from-the-surface-container-role-the-secondary-container-indicat = 导航栏颜色来自表面容器角色、辅助容器指示器和表面变体非活动内容。
+ui-navigation-bar-colors-come-from-the-surface-container-role-the-secondary-container-indicat = 导航栏使用 Surface Container 作为容器色、Secondary Container 作为选中指示器颜色，未选中内容使用 On Surface Variant。
 
 ui-destinations-show-an-active-or-inactive-state-the-selected-destination-gains-the-indicator = 目的地显示活动或非活动状态；选定的目的地将获得指示器、填充图标及其活动颜色。将鼠标悬停、聚焦并按下添加标准状态层。
 
@@ -72,7 +70,7 @@ ui-active-and-inactive-destinations-hover-focus-and-press-add-state-layers = 活
 
 ui-the-native-component-does-not-expose-a-per-destination-disabled-state-hide-a-destination-o = 本机组件不会公开每个目标的禁用状态；当目标必须不可用时，隐藏目标或使用禁用的主机。
 
-ui-bar-container = 酒吧集装箱
+ui-bar-container = 栏容器
 
 ui-56-32dp-native-64-32dp-reference = 56 × 32dp 原生 · 64 × 32dp 参考
 
@@ -108,9 +106,9 @@ ui-a-navigation-bar-contains-an-active-indicator-icons-and-labels-for-each-desti
 
 ui-the-indicator-highlights-the-active-destination-while-other-destinations-stay-inactive = 该指示器突出显示活动目的地，而其他目的地保持不活动状态
 
-ui-use-the-surface-container-color-for-the-bar-so-it-separates-from-the-page-and-rely-on-the = 使用栏的表面容器颜色，使其与页面分开，并依靠辅助容器指示器加上填充的图标来传达选择。
+ui-use-the-surface-container-color-for-the-bar-so-it-separates-from-the-page-and-rely-on-the = 导航栏使用 Surface Container 与页面背景区分，并通过 Secondary Container 指示器和实心图标表达选中状态。
 
-ui-the-active-destination-uses-the-secondary-container-indicator-and-on-secondary-container-i = 活动目标使用辅助容器指示器和辅助容器图标
+ui-the-active-destination-uses-the-secondary-container-indicator-and-on-secondary-container-i = 选中目标的指示器使用 Secondary Container，图标使用 On Secondary Container
 
 ui-on-wider-windows-the-icon-can-move-beside-the-label-the-native-component-switches-automati = 在较宽的窗口上，图标可以移动到标签旁边。原生组件以600dp自动切换，图标位置也可以明确设置。
 
@@ -164,4 +162,4 @@ ui-value-navigation-bar-example = { $v0 } 导航栏示例
 
 ui-selected-destination = { $caption }目的地：{ $destination }
 
-ui-tessera-examples-on-this-page-use-the-native-navigation-bar-and-navigation-bar-item-c = 本页上的 Tessera 示例使用本机 navigation_bar 和 navigation_bar_item 组件，具有三到五个目的地、标签行为和徽章。
+ui-tessera-examples-on-this-page-use-the-native-navigation-bar-and-navigation-bar-item-c = 本页上的 Tessera 示例使用原生 navigation_bar 和 navigation_bar_item 组件，具有三到五个目的地、标签行为和徽章。

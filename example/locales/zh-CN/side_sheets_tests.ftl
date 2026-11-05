@@ -1,3 +1,3 @@
-ui-side-sheet-figure-back = 侧页图背面
+ui-side-sheet-figure-back = 侧边面板图背面
 
-ui-side-sheet-figure-close = 侧页图关闭
+ui-side-sheet-figure-close = 侧边面板图关闭

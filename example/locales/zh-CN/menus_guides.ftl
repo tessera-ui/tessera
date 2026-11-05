@@ -1,6 +1,6 @@
 ui-active-main-menu-reveals-submenu = 活动（主菜单显示子菜单）
 
-ui-on-surface-opacity-0-08 = 表面 - 不透明度：0.08
+ui-on-surface-opacity-0-08 = On Surface，不透明度 0.08
 
 ui-below-the-element = 元素下方
 
@@ -24,7 +24,7 @@ ui-list-item-trailing-text = 列表项尾随文本
 
 ui-baseline-menu-color-roles-used-for-light-and-dark-themes = 用于浅色和深色主题的基线菜单颜色角色：
 
-ui-a-baseline-menu-has-square-corners-as-compared-to-a-vertical-menu-s-round-corners-and-expr = 与垂直菜单的圆角和富有表现力的样式相比，基线菜单具有方角
+ui-a-baseline-menu-has-square-corners-as-compared-to-a-vertical-menu-s-round-corners-and-expr = 与垂直菜单的圆角和Expressive样式相比，基线菜单具有方角
 
 ui-activated = 已激活
 
@@ -34,7 +34,7 @@ ui-undo = 撤消
 
 ui-redo = 重做
 
-ui-the-baseline-menu-variant-is-available-and-continues-to-work-in-existing-products-however = 基线菜单变体可用并继续在现有产品中使用。不过，建议新设计使用 M3 富有表现力的垂直菜单。
+ui-the-baseline-menu-variant-is-available-and-continues-to-work-in-existing-products-however = 基线菜单变体可用并继续在现有产品中使用。不过，建议新设计使用 M3 Expressive垂直菜单。
 
 ui-token-group = 设计令牌组
 
@@ -42,17 +42,13 @@ ui-extra-small-4dp = 超小，4dp
 
 ui-list-item-height = 列表项高度
 
-ui-24dp-on-surface-variant = 24dp，表面版本
-
 ui-hover-state-layer = 悬停状态层
 
-ui-on-surface-opacity-0-08-3932 = 表面不透明度0.08
+ui-on-surface-opacity-0-08-3932 = On Surface，不透明度 0.08
 
-ui-on-surface-opacity-0-10 = 表面不透明度0.10
+ui-on-surface-opacity-0-10 = On Surface，不透明度 0.10
 
 ui-focus-indicator = 焦点指示器
-
-ui-secondary-3dp = 二级，3dp
 
 ui-default-menu-items = 默认菜单项
 

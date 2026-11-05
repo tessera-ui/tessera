@@ -108,17 +108,17 @@ fn availability() {
             ],
             vec![
                 "ui-implementation".into(),
-                "ui-jetpack-compose-expressive".into(),
+                "Jetpack Compose: Expressive".into(),
                 "ui-available".into(),
             ],
             vec![
                 "ui-implementation".into(),
-                "ui-android-views-mdc-android-expressive".into(),
+                "Android Views (MDC-Android): Expressive".into(),
                 "ui-unavailable".into(),
             ],
             vec![
                 "ui-implementation".into(),
-                "ui-web-expressive".into(),
+                "Web: Expressive".into(),
                 "ui-unavailable".into(),
             ],
         ],
@@ -423,7 +423,7 @@ pub(super) fn variants() {
     }
     gap(Dp(80.0));
     spec_table(
-        vec!["ui-variant".into(), "M3".into(), "ui-m3-expressive".into()],
+        vec!["ui-variant".into(), "M3".into(), "M3 Expressive".into()],
         vec![
             vec![
                 "ui-standard".into(),
@@ -847,15 +847,15 @@ pub(super) fn colors() {
     prose("ui-slider-color-roles-used-for-light-and-dark-schemes");
     gap(Dp(16.0));
     for (index, label) in [
-        "ui-inverse-surface",
-        "ui-inverse-on-surface",
-        "ui-primary",
-        "ui-on-primary",
-        "ui-primary",
-        "ui-secondary-container",
-        "ui-on-secondary-container",
-        "ui-on-secondary-container",
-        "ui-on-primary",
+        "Inverse surface",
+        "Inverse on surface",
+        "Primary",
+        "On primary",
+        "Primary",
+        "Secondary container",
+        "On secondary container",
+        "On secondary container",
+        "On primary",
     ]
     .into_iter()
     .enumerate()
@@ -1283,7 +1283,7 @@ pub(super) fn measurements() {
     );
     gap(Dp(64.0));
     text()
-        .content(I18N.text("ui-material-design-3"))
+        .content("Material Design 3")
         .style(type_style(28.0, 36.0))
         .color(INK);
     text()
@@ -1701,7 +1701,7 @@ fn slider_size_figure() {
     );
     gap(Dp(16.0));
     text()
-        .content(I18N.text("1  XS     2  S     3  M     4  L     5  XL"))
+        .content("1  XS     2  S     3  M     4  L     5  XL")
         .style(type_style(16.0, 24.0));
 }
 

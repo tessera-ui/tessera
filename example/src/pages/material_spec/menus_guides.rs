@@ -47,15 +47,15 @@ const BASELINE_NAMES: [[&str; 4]; 4] = [
     ["b-row-4", "b-lead-4", "b-label-4", "b-trail-4"],
 ];
 const BASELINE_ROLES: [&str; 9] = [
-    "ui-on-surface-variant",
-    "ui-on-surface",
+    "On surface variant",
+    "On surface",
     "ui-on-surface-opacity-0-08",
-    "ui-surface-container",
-    "ui-on-surface-variant",
-    "ui-on-surface-variant",
-    "ui-on-surface-variant",
-    "ui-surface-container-highest",
-    "ui-outline-variant",
+    "Surface container",
+    "On surface variant",
+    "On surface variant",
+    "On surface variant",
+    "Surface container highest",
+    "Outline variant",
 ];
 const PLACEMENTS: [&str; 6] = [
     "ui-below-the-element",
@@ -568,7 +568,7 @@ fn baseline_sample(geometry: Option<State<Geometry>>) {
                 .geometry_optional(geometry)
                 .slot(0);
             baseline_row("ui-item-2".into(), 2, 0, content, muted, Color::TRANSPARENT)
-                .trailing_text(I18N.text("⌘C"))
+                .trailing_text("⌘C".to_owned())
                 .geometry_optional(geometry)
                 .slot(1);
             baseline_row("ui-item-3".into(), 3, 5, content, muted, selected)
@@ -877,7 +877,7 @@ pub(super) fn baseline_variant() {
     );
     gap(Dp(24.0));
     spec_table(
-        vec!["ui-variant".into(), "M3".into(), "ui-m3-expressive".into()],
+        vec!["ui-variant".into(), "M3".into(), "M3 Expressive".into()],
         vec![
             vec![
                 "ui-vertical-menus".into(),
@@ -1020,17 +1020,17 @@ pub(super) fn baseline_section() {
         vec!["ui-token-group".into(), "ui-value".into()],
         vec![
             vec!["ui-container-shape".into(), "ui-extra-small-4dp".into()],
-            vec!["ui-container-color".into(), "ui-surface-container".into()],
+            vec!["ui-container-color".into(), "Surface container".into()],
             vec!["ui-container-elevation".into(), "ui-level-2-3dp".into()],
             vec!["ui-list-item-height".into(), "48dp".into()],
-            vec!["ui-label-text".into(), "ui-label-large".into()],
+            vec!["ui-label-text".into(), "Label large".into()],
             vec![
                 "ui-leading-trailing-icon".into(),
-                "ui-24dp-on-surface-variant".into(),
+                "24dp, On surface variant".into(),
             ],
             vec![
                 "ui-selected-container".into(),
-                "ui-surface-container-highest".into(),
+                "Surface container highest".into(),
             ],
             vec![
                 "ui-hover-state-layer".into(),
@@ -1040,7 +1040,7 @@ pub(super) fn baseline_section() {
                 "ui-focus-pressed-state-layer".into(),
                 "ui-on-surface-opacity-0-10".into(),
             ],
-            vec!["ui-focus-indicator".into(), "ui-secondary-3dp".into()],
+            vec!["ui-focus-indicator".into(), "Secondary, 3dp".into()],
         ],
     );
     gap(Dp(32.0));
@@ -2046,25 +2046,25 @@ pub(super) fn resources() {
         vec!["ui-type".into(), "ui-resource".into(), "ui-status".into()],
         [
             ("ui-design", "ui-design-kit-figma", "ui-available"),
-            ("ui-implementation", "ui-flutter", "ui-available"),
-            ("ui-implementation", "ui-jetpack-compose", "ui-available"),
+            ("ui-implementation", "Flutter", "ui-available"),
+            ("ui-implementation", "Jetpack Compose", "ui-available"),
             (
                 "ui-implementation",
-                "ui-jetpack-compose-expressive",
+                "Jetpack Compose: Expressive",
                 "ui-available",
             ),
             (
                 "ui-implementation",
-                "ui-android-views-mdc-android",
+                "Android Views (MDC-Android)",
                 "ui-available",
             ),
             (
                 "ui-implementation",
-                "ui-android-views-mdc-android-expressive",
+                "Android Views (MDC-Android): Expressive",
                 "ui-unavailable",
             ),
-            ("ui-implementation", "ui-web", "ui-available"),
-            ("ui-implementation", "ui-web-expressive", "ui-unavailable"),
+            ("ui-implementation", "Web", "ui-available"),
+            ("ui-implementation", "Web: Expressive", "ui-unavailable"),
         ]
         .into_iter()
         .map(|(kind, resource, status)| vec![kind.into(), resource.into(), status.into()])

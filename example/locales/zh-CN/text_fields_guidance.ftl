@@ -33,7 +33,7 @@ ui-enter-an-email-address-in-the-format-name-example-com = 输入格式为 name@
 
 ui-make-sure-the-container-outline-has-a-minimum-contrast-of-3-1-to-the-background = 确保容器轮廓与背景的对比度至少为 3:1
 
-ui-don-t-choose-colors-that-won-t-pass-material-s-minimum-contrast-of-3-1 = 不要选择无法通过材质最低对比度 3:1 的颜色
+ui-don-t-choose-colors-that-won-t-pass-material-s-minimum-contrast-of-3-1 = 不要选择无法通过Material 最低对比度 3:1 的颜色
 
 ui-single-line-field = 单行字段
 

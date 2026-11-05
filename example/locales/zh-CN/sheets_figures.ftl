@@ -20,7 +20,7 @@ ui-oct-28 = 10 月 28 日
 
 ui-oct-12 = 10 月 12 日
 
-ui-cdc-health-literacy = 疾病预防控制中心健康素养
+ui-cdc-health-literacy = CDC 健康素养
 
 ui-sep-26 = 9月26日
 
@@ -65,8 +65,8 @@ ui-daniel-maas = 丹尼尔·马斯
 
 ui-latest-in-the-area = 该地区最新动态
 
-ui-bottom-sheet-marker-value = 底部纸张标记 { $v0 }
+ui-bottom-sheet-marker-value = 底部面板标记 { $v0 }
 
 ui-bottom-sheet-legend-value = 底部面板图例 { $v0 }
 
-ui-bottom-sheet-variant-value = 底板变体 { $v0 }
+ui-bottom-sheet-variant-value = 底部面板变体 { $v0 }

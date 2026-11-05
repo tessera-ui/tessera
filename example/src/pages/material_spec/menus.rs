@@ -742,7 +742,7 @@ fn configurations() {
     guides::legend(strings(&["ui-standard", "ui-grouped"]));
     gap(Dp(24.0));
     spec_table(
-        strings(&["ui-category", "ui-configuration", "M3", "ui-m3-expressive"]),
+        strings(&["ui-category", "ui-configuration", "M3", "M3 Expressive"]),
         vec![
             strings(&["ui-color", "ui-standard", "ui-available", "ui-available"]),
             strings(&["ui-color", "ui-vibrant", "--", "ui-available"]),
@@ -862,7 +862,7 @@ fn configuration(grouped: bool, style: MenuColorStyle) {
                         menu_item()
                             .label(I18N.text("ui-item-2"))
                             .leading_icon(filled::CONTENT_COPY_SVG)
-                            .trailing_text(I18N.text("⌘C"))
+                            .trailing_text("⌘C".to_owned())
                             .selected(selected.get() == 1)
                             .selection_mode(MenuItemSelectionMode::Radio)
                             .on_click(move || selected.set(1));
@@ -1132,7 +1132,7 @@ fn menu_figure(anatomy: bool, measurements: bool, style: MenuColorStyle) {
                                         .label(I18N.text("ui-item-4"))
                                         .supporting_text(I18N.text("ui-supporting-text"))
                                         .leading_icon(filled::CLOUD_SVG)
-                                        .trailing_text(I18N.text("⌘C"))
+                                        .trailing_text("⌘C".to_owned())
                                         .on_click(move || selected.set(4));
                                 });
                         });
@@ -1352,30 +1352,30 @@ const COLOR_ROWS: [&str; 5] = [
 fn menu_color_roles(style: MenuColorStyle) -> [&'static str; 11] {
     if style == MenuColorStyle::Standard {
         [
-            "ui-on-surface-variant",
-            "ui-on-surface",
+            "On surface variant",
+            "On surface",
             "ui-on-surface-state-layer",
-            "ui-surface-container-low",
-            "ui-on-surface-variant",
-            "ui-on-surface-variant",
+            "Surface container low",
+            "On surface variant",
+            "On surface variant",
             "ui-tertiary-container-selected",
             "ui-on-tertiary-container-selected",
-            "ui-on-surface-variant",
-            "ui-on-surface-variant",
+            "On surface variant",
+            "On surface variant",
             "ui-on-tertiary-container-selected",
         ]
     } else {
         [
-            "ui-on-tertiary-container",
-            "ui-on-tertiary-container",
+            "On tertiary container",
+            "On tertiary container",
             "ui-on-tertiary-container-state-layer",
-            "ui-tertiary-container",
-            "ui-on-tertiary-container",
-            "ui-on-tertiary-container",
+            "Tertiary container",
+            "On tertiary container",
+            "On tertiary container",
             "ui-tertiary-selected",
             "ui-on-tertiary-selected",
-            "ui-on-tertiary-container",
-            "ui-on-tertiary-container",
+            "On tertiary container",
+            "On tertiary container",
             "ui-on-tertiary-selected",
         ]
     }
@@ -1440,7 +1440,7 @@ fn menu_color_figure(style: MenuColorStyle, dark: bool) {
                                             }
                                             1 => {
                                                 item.leading_icon(filled::CONTENT_COPY_SVG)
-                                                    .trailing_text(I18N.text("⌘C"));
+                                                    .trailing_text("⌘C".to_owned());
                                             }
                                             2 => {
                                                 item.leading_icon(filled::EDIT_SVG)

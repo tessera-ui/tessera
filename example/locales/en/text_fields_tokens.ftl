@@ -12,13 +12,9 @@ ui-input-text-color = Input text color
 
 ui-input-text-type = Input text type
 
-ui-body-large-6012 = Body large
-
 ui-supporting-text-color = Supporting text color
 
 ui-supporting-text-type = Supporting text type
-
-ui-body-small = Body small
 
 ui-leading-and-trailing-icon-color = Leading and trailing icon color
 
@@ -33,8 +29,6 @@ ui-on-surface-38-opacity = On surface, 38% opacity
 ui-on-surface-8-opacity = On surface, 8% opacity
 
 ui-hovered-active-indicator-color = Hovered active indicator color
-
-ui-on-error-container = On error container
 
 ui-extra-small-4dp-6024 = Extra small (4dp)
 

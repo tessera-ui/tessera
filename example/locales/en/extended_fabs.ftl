@@ -34,8 +34,6 @@ ui-m2-extended-fabs-used-a-fixed-48dp-height-a-single-primary-color-and-label-la
 
 ui-m3-expressive-the-container-grew-into-three-sizes-the-label-type-moved-to-title-medium-for = M3 Expressive: the container grew into three sizes, the label type moved to title medium for the small size, and the icon size follows the container height.
 
-ui-label-large = Label large
-
 ui-single-accent = Single accent
 
 ui-primary-secondary-and-tertiary-containers-or-accents = Primary, secondary, and tertiary containers or accents
@@ -78,13 +76,7 @@ ui-expand-label = Expand label
 
 ui-extended-fab-tokens-are-organized-by-size-and-color-values-below-follow-the-native-compone = Extended FAB tokens are organized by size and color. Values below follow the native component defaults used on this page.
 
-ui-primary-container = Primary container
-
-ui-on-primary-container = On primary container
-
 ui-56dp-small-80dp-medium-96dp-large = 56dp small · 80dp medium · 96dp large
-
-ui-title-medium-title-large-headline-small = Title medium · title large · headline small
 
 ui-level-3-level-4-when-hovered = Level 3 · level 4 when hovered
 
@@ -101,8 +93,6 @@ ui-3-label-text = 3  Label text
 ui-the-label-states-the-action-the-icon-supports-recognition-without-repeating-the-label = The label states the action; the icon supports recognition without repeating the label.
 
 ui-container-tones-map-to-the-primary-secondary-and-tertiary-color-roles-either-as-containers = Container tones map to the primary, secondary, and tertiary color roles, either as containers or as solid accents. Each tone pairs with its matching on-color for the icon and label.
-
-ui-1-primary-container-2-secondary-container-3-tertiary-container-4-primary-5-secondary-6-ter = 1  Primary container    2  Secondary container    3  Tertiary container    4  Primary    5  Secondary    6  Tertiary
 
 ui-states-communicate-elevation-and-interaction-an-enabled-extended-fab-rests-at-level-3-rise = States communicate elevation and interaction. An enabled extended FAB rests at level 3, rises to level 4 on hover, and keeps level 3 while focused or pressed while the state layer darkens. A disabled extended FAB keeps its shape but stops accepting input.
 
@@ -123,8 +113,6 @@ ui-leading-space = Leading space
 ui-icon-to-label = Icon to label
 
 ui-trailing-space = Trailing space
-
-ui-title-medium = Title medium
 
 ui-corners = Corners
 
@@ -233,7 +221,5 @@ ui-don-t-compose-edit-pencil-icon-button-the-icon-description-duplicates-the-act
 ui-when-the-label-collapses-keep-the-same-accessible-name-provide-a-visible-label-on-request = When the label collapses, keep the same accessible name. Provide a visible label on request rather than replacing the name with an icon description.
 
 ui-value-activations-value-format-161 = { $v0 } · activations: { $v1 }
-
-ui-title-medium-title-large-headline-small-6940 = Title medium / title large / headline small
 
 ui-tessera-examples-on-this-page-use-the-native-extended-floating-action-button-componen = Tessera examples on this page use the native extended_floating_action_button component. Small, medium, and large sizes, six color tones, optional icons, and label expansion are implemented, together with elevation and state-layer feedback.

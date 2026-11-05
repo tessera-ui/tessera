@@ -1,10 +1,10 @@
 ui-icon-buttons-represent-common-actions-with-a-recognizable-icon-use-them-when-the-action-is = 图标按钮用可识别的图标表示常见操作。当操作很容易理解而无需持久的文本标签时，请使用它们。
 
 ui-choose-a-default-button-for-an-action-and-a-toggle-button-for-a-persistent-selection-use-f = • 为操作选择默认按钮，为持久选择选择切换按钮。
-    • 使用填充色、色调色、轮廓色或标准颜色来建立层次结构。
+    • 使用填充色、色调色、描边色或标准颜色来建立层次结构。
     • 有五种尺寸、两种形状和三种宽度可供选择。
     • 在网络上，显示有关悬停和键盘焦点的简洁工具提示。
-    • 切换图标可以从未选择时的轮廓更改为选择时的填充。
+    • 切换图标可以从未选择时的描边更改为选择时的填充。
     • 为每个操作指定一个有意义且易于理解的名称和至少 48 × 48dp 的目标。
 
 ui-available-here = 可以在这里找到
@@ -13,7 +13,7 @@ ui-native-icon-button = 本机图标按钮
 
 ui-default-and-toggle-actions-sizing-shapes-and-color-styles = 默认和切换操作、大小、形状和颜色样式
 
-ui-material-icon-assets = 材质图标资产
+ui-material-icon-assets = Material 图标资源
 
 ui-bundled-icons-used-by-the-live-examples = 现场示例使用的捆绑图标
 
@@ -21,11 +21,11 @@ ui-theme-and-accessibility = 主题和可访问性
 
 ui-theme-colors-accessible-names-keyboard-focus-and-selection = 主题颜色、可访问的名称、键盘焦点和选择
 
-ui-may-2025-material-3-expressive = 2025 年 5 月：材料 3 表现力
+ui-may-2025-material-3-expressive = 2025 年 5 月：Material 3 Expressive
 
 ui-material-3-expressive-expands-icon-buttons-with-five-sizes-narrow-and-wide-proportions-and = Material 3 Expressive 扩展了图标按钮，具有五种尺寸、窄宽比例、圆形和方形形状。按下并选择一个按钮可以改变其形状，除了颜色之外还可以添加反馈。
 
-ui-expressive-choices = 富有表现力的选择
+ui-expressive-choices = Expressive选择
 
 ui-extra-small-small-medium-large-and-extra-large = 特小号、小号、中号、大号和特大号
 
@@ -33,9 +33,9 @@ ui-round-and-square-with-pressed-and-selected-shape-feedback = 圆形和方形�
 
 ui-narrow-default-and-wide = 窄、默认和宽
 
-ui-filled-tonal-outlined-and-standard = 填充、色调、轮廓和标准
+ui-filled-tonal-outlined-and-standard = 填充、色调、描边和标准
 
-ui-material-2-commonly-presents-an-icon-action-without-a-persistent-container-material-3-expr = Material 2 通常呈现一个没有持久容器的图标操作。 Material 3 Expressive 保留了标准样式，并添加了更多通过容器、尺寸和形状来强调动作的方法。下面的示例使用本地对照来比较这些治疗方法。
+ui-material-2-commonly-presents-an-icon-action-without-a-persistent-container-material-3-expr = Material 2 的图标操作通常不显示常驻容器。Material 3 Expressive 保留标准样式，并通过容器、尺寸和形状提供更多强调方式。以下示例使用局部对照展示这些样式。
 
 ui-use-icon-buttons-for-familiar-frequently-used-actions-such-as-favoriting-archiving-or-mark = 使用图标按钮执行熟悉、常用的操作，例如收藏、存档或将消息标记为已读。保持最有用的命令可见，并将辅助操作放在溢出菜单中。当图标本身不明确时，首选文本按钮。
 
@@ -43,7 +43,7 @@ ui-the-heart-retains-its-selected-state-archive-moves-this-message-out-of-the-in
 
 ui-an-icon-button-contains-an-icon-an-optional-visible-container-and-a-larger-interactive-tar = 图标按钮包含一个图标、一个可选的可见容器和一个更大的交互式目标。容器的形状和颜色传达重点；可访问的名称描述的是动作而不是图片。
 
-ui-use-filled-icon-buttons-for-strong-emphasis-tonal-buttons-for-a-softer-container-outlined = 使用填充图标按钮进行强烈强调，使用色调按钮进行较柔和的容器，使用轮廓按钮进行可见边界，使用标准按钮进行最不强调。将颜色与周围表面相匹配，并使图标在每个启用状态下都可区分。
+ui-use-filled-icon-buttons-for-strong-emphasis-tonal-buttons-for-a-softer-container-outlined = 使用填充图标按钮进行强烈强调，使用色调按钮进行较柔和的容器，使用描边按钮进行可见边界，使用标准按钮进行最不强调。将颜色与周围表面相匹配，并使图标在每个启用状态下都可区分。
 
 ui-choose-a-size-that-matches-the-importance-and-context-of-the-action-small-controls-suit-de = 选择与操作的重要性和背景相匹配的大小。小控件适合密集的界面；较大的尺寸强调关键操作或与较大的内容并排。即使可见的超小型或小型容器较小，也至少保留 48 × 48dp 的交互式目标。
 
@@ -81,11 +81,9 @@ ui-enabled-icon-buttons-need-at-least-3-1-contrast-between-the-icon-and-its-adja
 
 ui-the-examples-use-the-same-white-surface-and-a-live-favorite-action-the-dark-icon-is-above = 这些示例使用相同的白色表面和现场最喜欢的动作。深色图标在3:1以上；浅灰色图标故意低于 3:1，仅作为反例显示。文本标签仍然可读。
 
-ui-material-3-expressive = 材料 3 表现力
+ui-material-2-treatment = Material 2处理
 
-ui-material-2-treatment = 材料2处理
-
-ui-toggle-expressive-edit-action = Toggle 表达编辑操作
+ui-toggle-expressive-edit-action = 切换 Expressive 编辑操作
 
 ui-activate-standard-edit-action = 激活标准编辑操作
 

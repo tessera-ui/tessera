@@ -12,15 +12,15 @@ ui-expand-all = 全部展开
 
 ui-token-values-shown-for-default-light = 显示默认、浅色的令牌值
 
-ui-values-are-the-published-token-values-shape-elevation-and-type-style-tokens-are-published = 值是已发布的设计令牌值。形状、标高和类型样式标记仅作为预览发布。映射列中的条目是推断出来的，不是已发布的标记值。
+ui-values-are-the-published-token-values-shape-elevation-and-type-style-tokens-are-published = 值是已发布的设计令牌值。形状、阴影高度和类型样式标记仅作为预览发布。映射列中的条目是推断出来的，不是已发布的标记值。
 
 ui-mapping-inferred = 映射（推断）
 
 ui-dialog-container-color = 对话框容器颜色
 
-ui-surface-container-high-inferred-role = 表面容器高（推断作用）
+ui-surface-container-high-inferred-role = Surface Container High（推定角色）
 
-ui-dialog-container-elevation = 对话框容器标高
+ui-dialog-container-elevation = 对话框容器阴影高度
 
 ui-preview-only = 仅预览
 
@@ -28,7 +28,7 @@ ui-level-3-6dp-inferred = 3级，6dp（推断）
 
 ui-dialog-container-surface-tint-layer-color-deprecated = 对话框容器表面着色层颜色（已弃用）
 
-ui-primary-inferred-role = 主要（推断角色）
+ui-primary-inferred-role = Primary（推定角色）
 
 ui-dialog-container-shape = 对话框容器形状
 
@@ -40,13 +40,13 @@ ui-dialog-action-label-text-line-height = 对话框操作标签文本行高度
 
 ui-dialog-action-label-text-size = 对话框操作标签文本大小
 
-ui-dialog-action-label-text-weight = 对话框操作标签文本粗细
+ui-dialog-action-label-text-weight = 对话框操作标签文本字重
 
-ui-dialog-action-label-text-tracking = 对话框操作标签文本跟踪
+ui-dialog-action-label-text-tracking = 对话框操作标签文本字距
 
 ui-label-text-type-style = 标签文字类型样式
 
-ui-label-large-inferred = 标签大（推断）
+ui-label-large-inferred = Label Large（推定）
 
 ui-dialog-action-label-text-color = 对话框操作标签文本颜色
 
@@ -54,7 +54,7 @@ ui-dialog-icon-size = 对话框图标大小
 
 ui-dialog-icon-color = 对话框图标颜色
 
-ui-secondary-inferred-role = 次要（推断角色）
+ui-secondary-inferred-role = Secondary（推定角色）
 
 ui-dialog-subhead-font-deprecated = 对话框副标题字体（已弃用）
 
@@ -64,15 +64,15 @@ ui-dialog-subhead-size-deprecated = 对话框副标题大小（已弃用）
 
 ui-dialog-subhead-weight-deprecated = 对话框副标题权重（已弃用）
 
-ui-dialog-subhead-tracking-deprecated = 对话框副标题跟踪（已弃用）
+ui-dialog-subhead-tracking-deprecated = 对话框副标题字距（已弃用）
 
 ui-subhead-type-style-deprecated = 副标题类型样式（已弃用）
 
-ui-headline-small-inferred = 小标题（推断）
+ui-headline-small-inferred = Headline Small（推定）
 
 ui-dialog-subhead-color-deprecated = 对话框副标题颜色（已弃用）
 
-ui-on-surface-inferred-role = 表面上（推断角色）
+ui-on-surface-inferred-role = On Surface（推定角色）
 
 ui-dialog-headline-font = 对话框标题字体
 
@@ -82,7 +82,7 @@ ui-dialog-headline-size = 对话框标题大小
 
 ui-dialog-headline-weight = 对话框标题权重
 
-ui-dialog-headline-tracking = 对话框标题跟踪
+ui-dialog-headline-tracking = 对话框标题字距
 
 ui-dialog-headline-color = 对话框标题颜色
 
@@ -98,17 +98,17 @@ ui-dialog-supporting-text-line-height = 支持文本行高的对话框
 
 ui-dialog-supporting-text-size = 支持文本大小的对话框
 
-ui-dialog-supporting-text-weight = 支持文本粗细的对话框
+ui-dialog-supporting-text-weight = 支持文本字重的对话框
 
-ui-dialog-supporting-text-tracking = 支持文本跟踪的对话框
+ui-dialog-supporting-text-tracking = 支持文本字距的对话框
 
 ui-supporting-text-type-style = 支持文本类型样式
 
-ui-body-medium-inferred = 身体中等（推断）
+ui-body-medium-inferred = Body Medium（推定）
 
 ui-dialog-supporting-text-color = 支持文本颜色的对话框
 
-ui-on-surface-variant-inferred-role = 表面变异（推断作用）
+ui-on-surface-variant-inferred-role = On Surface Variant（推定角色）
 
 ui-dialog-action-hover-label-text-color = 对话框操作悬停标签文本颜色
 
@@ -132,13 +132,13 @@ ui-dialog-action-pressed-state-layer-opacity = 对话框操作按下状态层不
 
 ui-full-screen-dialog-on-scroll-container-color = 全屏对话框滚动容器颜色
 
-ui-surface-container-inferred-role = 表面容器（推断角色）
+ui-surface-container-inferred-role = Surface Container（推定角色）
 
 ui-full-screen-dialog-container-color = 全屏对话框容器颜色
 
-ui-surface-inferred-role = 表面（推断作用）
+ui-surface-inferred-role = Surface（推定角色）
 
-ui-full-screen-dialog-container-elevation = 全屏对话框容器标高
+ui-full-screen-dialog-container-elevation = 全屏对话框容器阴影高度
 
 ui-level-0-0dp-inferred = 级别 0，0dp（推断）
 
@@ -150,11 +150,11 @@ ui-full-screen-dialog-header-container-height = 全屏对话框标题容器高�
 
 ui-full-screen-dialog-header-container-color = 全屏对话框标题容器颜色
 
-ui-full-screen-dialog-header-container-elevation = 全屏对话框标题容器标高
+ui-full-screen-dialog-header-container-elevation = 全屏对话框标题容器阴影高度
 
 ui-full-screen-dialog-header-container-surface-tint-layer-color-deprecated = 全屏对话框标题容器表面色调层颜色（已弃用）
 
-ui-full-screen-dialog-header-on-scroll-container-elevation = 滚动容器标高上的全屏对话框标题
+ui-full-screen-dialog-header-on-scroll-container-elevation = 滚动容器阴影高度上的全屏对话框标题
 
 ui-level-2-3dp-inferred = 2 级，3dp（推断）
 
@@ -172,9 +172,9 @@ ui-full-screen-dialog-header-action-label-text-line-height = 全屏对话框标�
 
 ui-full-screen-dialog-header-action-label-text-size = 全屏对话框标题操作标签文本大小
 
-ui-full-screen-dialog-header-action-label-text-weight = 全屏对话框标题操作标签文本粗细
+ui-full-screen-dialog-header-action-label-text-weight = 全屏对话框标题操作标签文本字重
 
-ui-full-screen-dialog-header-action-label-text-tracking = 全屏对话框标题操作标签文本跟踪
+ui-full-screen-dialog-header-action-label-text-tracking = 全屏对话框标题操作标签文本字距
 
 ui-full-screen-dialog-header-action-label-text-type = 全屏对话框标题操作标签文本类型
 
@@ -186,9 +186,9 @@ ui-full-screen-dialog-action-bar-label-text-line-height-deprecated = 全屏对�
 
 ui-full-screen-dialog-action-bar-label-text-size-deprecated = 全屏对话框操作栏标签文本大小（已弃用）
 
-ui-full-screen-dialog-action-bar-label-text-weight-deprecated = 全屏对话框操作栏标签文本粗细（已弃用）
+ui-full-screen-dialog-action-bar-label-text-weight-deprecated = 全屏对话框操作栏标签文本字重（已弃用）
 
-ui-full-screen-dialog-action-bar-label-text-tracking-deprecated = 全屏对话框操作栏标签文本跟踪（已弃用）
+ui-full-screen-dialog-action-bar-label-text-tracking-deprecated = 全屏对话框操作栏标签文本字距（已弃用）
 
 ui-full-screen-dialog-action-bar-label-text-type-deprecated = 全屏对话框操作栏标签文本类型（已弃用）
 
@@ -208,15 +208,15 @@ ui-full-screen-dialog-header-headline-size = 全屏对话框标题标题大小
 
 ui-full-screen-dialog-header-headline-weight = 全屏对话框标题标题权重
 
-ui-full-screen-dialog-header-headline-tracking = 全屏对话框标题标题跟踪
+ui-full-screen-dialog-header-headline-tracking = 全屏对话框标题标题字距
 
 ui-header-type-style = 标题类型样式
 
-ui-title-large-inferred = 标题大（推断）
+ui-title-large-inferred = Title Large（推定）
 
 ui-full-screen-dialog-divider-color-deprecated = 全屏对话框分隔线颜色（已弃用）
 
-ui-surface-variant-inferred-role = 表面变体（推断作用）
+ui-surface-variant-inferred-role = Surface Variant（推定角色）
 
 ui-full-screen-dialog-divider-height-deprecated = 全屏对话框分隔线高度（已弃用）
 

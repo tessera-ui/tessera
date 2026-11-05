@@ -82,8 +82,6 @@ ui-action-optional = Action (optional)
 
 ui-snackbar-container-color = Snackbar container color
 
-ui-inverse-surface-322f35 = Inverse surface · #322F35
-
 ui-snackbar-container-shadow-color = Snackbar container shadow color
 
 ui-shadow-000000 = Shadow · #000000
@@ -104,8 +102,6 @@ ui-snackbar-label-text = Snackbar label text
 
 ui-snackbar-label-text-color = Snackbar label text color
 
-ui-inverse-primary-d0bcff = Inverse primary · #D0BCFF
-
 ui-snackbar-label-text-font = Snackbar label text font
 
 ui-snackbar-label-text-line-height = Snackbar label text line height
@@ -118,13 +114,9 @@ ui-snackbar-label-text-weight = Snackbar label text weight
 
 ui-snackbar-icon-color = Snackbar icon color
 
-ui-inverse-on-surface-f5eff7 = Inverse on surface · #F5EFF7
-
 ui-snackbar-icon-size = Snackbar icon size
 
 ui-snackbar-supporting-text = Snackbar supporting text
-
-ui-body-medium = Body medium
 
 ui-snackbar-supporting-text-color = Snackbar supporting text color
 
@@ -159,8 +151,6 @@ ui-light-snackbar-color-roles = Light snackbar color roles
 ui-dark-snackbar-color-roles = Dark snackbar color roles
 
 ui-snackbar-color-roles-used-for-light-and-dark-schemes = Snackbar color roles used for light and dark schemes:
-
-ui-inverse-primary = Inverse primary
 
 ui-snackbar-measurements = Snackbar measurements
 

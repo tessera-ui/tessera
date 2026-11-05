@@ -169,7 +169,7 @@ ui-plain-and-rich-tooltip-variants = 简单和丰富的工具提示变体
 
 ui-plain-tooltip-6538 = 普通工具提示
 
-ui-material-2-and-material-3-tooltip-comparison = 材质 2 和材质 3 工具提示比较
+ui-material-2-and-material-3-tooltip-comparison = Material 2 和Material 3 工具提示比较
 
 ui-m2-rich-tooltips-have-slightly-rounded-corners = M2：丰富的工具提示具有略微圆角
 
@@ -231,7 +231,7 @@ ui-subhead-type = 副标题类型
 
 ui-action-type = 动作类型
 
-ui-container-corner-size = 集装箱角尺寸
+ui-container-corner-size = 容器角尺寸
 
 ui-level-2-3dp-6571 = 2 级·3dp
 
@@ -308,12 +308,6 @@ ui-placement-preview-value = 放置预览 { $v0 }
 ui-corner-tooltip-value = 角点工具提示 { $v0 }
 
 ui-subhead-supporting-text-color = 副标题/支持文字颜色
-
-ui-title-small-14sp-20sp = 标题小 · 14sp / 20sp
-
-ui-body-medium-14sp-20sp = 身体中等 · 14sp / 20sp
-
-ui-body-small-12sp-16sp = 机身小 · 12sp / 16sp
 
 ui-rich = 丰富
 

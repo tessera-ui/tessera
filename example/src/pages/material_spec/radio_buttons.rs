@@ -261,7 +261,7 @@ fn ringtone() {
                         )
                         .children(move || {
                             text()
-                                .content(I18N.text("9:30"))
+                                .content("9:30")
                                 .style(type_style(14.0 * scale, 20.0 * scale))
                                 .modifier(Modifier::new().weight(1.0));
                             icon().vector(filled::WIFI_SVG).size(Dp(16.0 * scale));
@@ -350,28 +350,28 @@ fn tokens() {
         vec![
             vec![
                 "ui-icon".into(),
-                "ui-primary".into(),
-                "ui-on-surface-variant".into(),
+                "Primary".into(),
+                "On surface variant".into(),
             ],
             vec![
                 "ui-disabled-icon".into(),
-                "ui-on-surface-38".into(),
-                "ui-on-surface-38".into(),
+                "On surface · 38%".into(),
+                "On surface · 38%".into(),
             ],
             vec![
                 "ui-hovered-state-layer".into(),
-                "ui-primary-8".into(),
-                "ui-on-surface-8".into(),
+                "Primary · 8%".into(),
+                "On surface · 8%".into(),
             ],
             vec![
                 "ui-focused-pressed-state-layer".into(),
-                "ui-primary-10".into(),
-                "ui-on-surface-10".into(),
+                "Primary · 10%".into(),
+                "On surface · 10%".into(),
             ],
             vec![
                 "ui-adjacent-label".into(),
-                "ui-on-surface".into(),
-                "ui-on-surface".into(),
+                "On surface".into(),
+                "On surface".into(),
             ],
         ],
     );

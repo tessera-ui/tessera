@@ -233,7 +233,7 @@ fn specimens() {
                     ..Default::default()
                 }))
                 .content(move || {
-                    text().content(I18N.text("7"));
+                    text().content("7");
                 });
             badge_with_content()
                 .modifier(Modifier::new().semantics(SemanticsArgs {
@@ -242,7 +242,7 @@ fn specimens() {
                     ..Default::default()
                 }))
                 .content(move || {
-                    text().content(I18N.text("999+"));
+                    text().content("999+");
                 });
         });
 }
@@ -254,14 +254,14 @@ fn tokens() {
     spec_table(
         vec!["ui-token".into(), "ui-value".into()],
         vec![
-            vec!["ui-badge-color".into(), "ui-error".into()],
+            vec!["ui-badge-color".into(), "Error".into()],
             vec!["ui-badge-shape".into(), "ui-full".into()],
             vec!["ui-badge-size".into(), "6dp".into()],
-            vec!["ui-large-badge-color".into(), "ui-error".into()],
+            vec!["ui-large-badge-color".into(), "Error".into()],
             vec!["ui-large-badge-shape".into(), "ui-full".into()],
             vec!["ui-large-badge-size".into(), "16dp".into()],
-            vec!["ui-large-badge-label-color".into(), "ui-on-error".into()],
-            vec!["ui-large-badge-label-font".into(), "ui-roboto".into()],
+            vec!["ui-large-badge-label-color".into(), "On error".into()],
+            vec!["ui-large-badge-label-font".into(), "Roboto".into()],
             vec!["ui-large-badge-label-line-height".into(), "16pt".into()],
             vec!["ui-large-badge-label-size".into(), "11pt".into()],
             vec!["ui-large-badge-label-tracking".into(), "0.5pt".into()],
@@ -327,13 +327,13 @@ fn colors() {
         vec![
             vec![
                 "ui-navigation-bar".into(),
-                "ui-error".into(),
+                "Error".into(),
                 "ui-on-error-when-active".into(),
             ],
             vec![
                 "ui-navigation-rail".into(),
-                "ui-error".into(),
-                "ui-on-error".into(),
+                "Error".into(),
+                "On error".into(),
             ],
         ],
     );
@@ -456,7 +456,7 @@ fn badge_figure(small: bool, measurements: bool) {
                         badge_with_content()
                             .modifier(watch(geometry, "badge"))
                             .content(move || {
-                                text().content(I18N.text("3"));
+                                text().content("3");
                             });
                     }
                 });
@@ -629,22 +629,22 @@ fn overview_article() {
             ],
             vec![
                 "ui-implementation".into(),
-                "ui-flutter".into(),
+                "Flutter".into(),
                 "ui-available".into(),
             ],
             vec![
                 "ui-implementation".into(),
-                "ui-jetpack-compose".into(),
+                "Jetpack Compose".into(),
                 "ui-available".into(),
             ],
             vec![
                 "ui-implementation".into(),
-                "ui-android-views-mdc-android".into(),
+                "Android Views (MDC-Android)".into(),
                 "ui-available".into(),
             ],
             vec![
                 "ui-implementation".into(),
-                "ui-web".into(),
+                "Web".into(),
                 "ui-unavailable".into(),
             ],
         ],

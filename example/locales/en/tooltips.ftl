@@ -309,12 +309,6 @@ ui-corner-tooltip-value = Corner tooltip { $v0 }
 
 ui-subhead-supporting-text-color = Subhead / supporting text color
 
-ui-title-small-14sp-20sp = Title small · 14sp / 20sp
-
-ui-body-medium-14sp-20sp = Body medium · 14sp / 20sp
-
-ui-body-small-12sp-16sp = Body small · 12sp / 16sp
-
 ui-rich = Rich
 
 ui-plain = Plain

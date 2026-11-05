@@ -1,5 +1,3 @@
-ui-fab = FAB
-
 ui-baseline-tokens-specs = Baseline tokens & specs
 
 ui-behaviors = Behaviors

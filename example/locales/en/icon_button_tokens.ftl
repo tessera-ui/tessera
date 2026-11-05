@@ -84,17 +84,11 @@ ui-selected-icon-color = Selected icon color
 
 ui-disabled-icon-color = Disabled icon color
 
-ui-on-surface-38 = On surface · 38%
-
 ui-disabled-container-color = Disabled container color
-
-ui-on-surface-10 = On surface · 10%
 
 ui-selected-outline-color = Selected outline color
 
 ui-disabled-outline-color = Disabled outline color
-
-ui-outline-variant-38 = Outline variant · 38%
 
 ui-token-preview-favorite = Token preview favorite
 

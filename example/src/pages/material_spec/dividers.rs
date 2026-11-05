@@ -263,7 +263,7 @@ fn bullets(items: Vec<String>) {
     for item in items {
         row().children(move || {
             text()
-                .content(I18N.text("•"))
+                .content("•")
                 .style(type_style(16.0, 24.0))
                 .modifier(Modifier::new().width(Dp(20.0)));
             text()
@@ -534,7 +534,7 @@ fn header(#[prop(into)] title: String, search: Option<bool>) {
         )
         .children(move || {
             text()
-                .content(I18N.text("9:30"))
+                .content("9:30")
                 .style(type_style(11.0, 16.0))
                 .modifier(Modifier::new().padding(Padding::new(
                     Dp(20.0),
@@ -891,7 +891,7 @@ fn tokens() {
         vec!["ui-token".into(), "ui-value".into()],
         vec![
             vec!["ui-divider-thickness".into(), "1dp".into()],
-            vec!["ui-divider-color".into(), "ui-outline-variant".into()],
+            vec!["ui-divider-color".into(), "Outline variant".into()],
         ],
     );
 }
@@ -989,7 +989,7 @@ fn colors() {
     gap(Dp(16.0));
     caption("ui-divider-color-roles-used-for-light-and-dark-schemes");
     gap(Dp(12.0));
-    legend(1, "ui-outline-variant");
+    legend(1, "Outline variant");
 }
 
 #[tessera]
@@ -1015,7 +1015,7 @@ fn measure_figure() {
                                 ))
                                 .children(move || {
                                     text()
-                                        .content(I18N.text("1"))
+                                        .content("1")
                                         .style(type_style(12.0, 16.0))
                                         .color(INK);
                                     spacer().modifier(Modifier::new().width(Dp(5.0)));
@@ -1133,20 +1133,16 @@ fn resources() {
             ],
             vec![
                 "ui-implementation".into(),
-                "ui-flutter".into(),
+                "Flutter".into(),
                 "ui-available".into(),
             ],
+            vec!["".into(), "Jetpack Compose".into(), "ui-available".into()],
             vec![
                 "".into(),
-                "ui-jetpack-compose".into(),
+                "Android Views (MDC-Android)".into(),
                 "ui-available".into(),
             ],
-            vec![
-                "".into(),
-                "ui-android-views-mdc-android".into(),
-                "ui-available".into(),
-            ],
-            vec!["".into(), "ui-web".into(), "ui-available".into()],
+            vec!["".into(), "Web".into(), "ui-available".into()],
         ],
     );
 }

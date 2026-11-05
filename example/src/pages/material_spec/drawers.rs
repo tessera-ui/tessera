@@ -465,22 +465,22 @@ fn availability() {
             ],
             vec![
                 "ui-implementation".into(),
-                "ui-flutter".into(),
+                "Flutter".into(),
                 "ui-available".into(),
             ],
             vec![
                 "ui-implementation".into(),
-                "ui-jetpack-compose".into(),
+                "Jetpack Compose".into(),
                 "ui-available".into(),
             ],
             vec![
                 "ui-implementation".into(),
-                "ui-android-views-mdc-android".into(),
+                "Android Views (MDC-Android)".into(),
                 "ui-available".into(),
             ],
             vec![
                 "ui-implementation".into(),
-                "ui-web".into(),
+                "Web".into(),
                 "ui-unavailable".into(),
             ],
         ],
@@ -517,7 +517,7 @@ fn bullets(items: Vec<String>) {
     for item in items {
         row().children(move || {
             text()
-                .content(I18N.text("•"))
+                .content("•")
                 .style(type_style(16.0, 24.0))
                 .modifier(Modifier::new().width(Dp(24.0)));
             text()
@@ -934,7 +934,7 @@ fn drawer_destinations(
         let badge_style = theme.typography.label_large;
         let badge_slot = if index == 0 {
             Some(RenderSlot::new(move || {
-                text().content(I18N.text("24")).style(badge_style).modifier(
+                text().content("24").style(badge_style).modifier(
                     geometry
                         .map(|geometry| watch(geometry, "badge"))
                         .unwrap_or_default(),
@@ -1645,7 +1645,7 @@ fn legend() {
         (3, "ui-label-text".into()),
         (4, "ui-active-indicator".into()),
         (5, "ui-badge-label-text".into()),
-        (6, "ui-scrim".into()),
+        (6, "Scrim".into()),
         (7, "ui-icon".into()),
     ]);
 }
@@ -1772,7 +1772,7 @@ fn state_panel(number: usize, label: String, state: InteractionVisualState, x: f
                             } else {
                                 navigation_drawer_item().label(I18N.text(destination)).selected(index == 0)
                                     .icon(move || { icon().vector(match index {0=>filled::INBOX_SVG,1=>outlined::SEND_SVG,_=>outlined::DELETE_SVG}).size(Dp(24.0)); })
-                                    .badge(move || { if index == 0 { text().content(I18N.text("24")).style(theme.typography.label_large); } });
+                                    .badge(move || { if index == 0 { text().content("24").style(theme.typography.label_large); } });
                             }
                         }
                     });
@@ -1843,15 +1843,15 @@ fn colors() {
     prose("ui-navigation-drawer-color-roles-used-for-light-and-dark-schemes");
     gap(Dp(16.0));
     legend_entries(vec![
-        (1, "ui-surface-container-low".into()),
-        (2, "ui-on-surface-variant".into()),
-        (3, "ui-on-secondary-container".into()),
-        (4, "ui-on-secondary-container".into()),
-        (5, "ui-secondary-container".into()),
-        (6, "ui-on-secondary-container".into()),
-        (7, "ui-on-surface-variant".into()),
-        (8, "ui-on-surface-variant".into()),
-        (9, "ui-scrim".into()),
+        (1, "Surface container low".into()),
+        (2, "On surface variant".into()),
+        (3, "On secondary container".into()),
+        (4, "On secondary container".into()),
+        (5, "Secondary container".into()),
+        (6, "On secondary container".into()),
+        (7, "On surface variant".into()),
+        (8, "On surface variant".into()),
+        (9, "Scrim".into()),
     ]);
     gap(Dp(24.0));
     prose("ui-for-divider-color-roles-go-to-divider-specs");

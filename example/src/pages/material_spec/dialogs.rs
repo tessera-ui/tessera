@@ -499,7 +499,7 @@ fn guide_marker() {
         )
         .children(move || {
             text()
-                .content(I18N.text("1"))
+                .content("1")
                 .style(type_style(12.0, 16.0))
                 .color(scheme.surface);
         });
@@ -1082,22 +1082,22 @@ fn availability() {
             ],
             vec![
                 "ui-implementation".into(),
-                "ui-flutter".into(),
+                "Flutter".into(),
                 "ui-available".into(),
             ],
             vec![
                 "ui-implementation".into(),
-                "ui-jetpack-compose".into(),
+                "Jetpack Compose".into(),
                 "ui-available".into(),
             ],
             vec![
                 "ui-implementation".into(),
-                "ui-android-views-mdc-android".into(),
+                "Android Views (MDC-Android)".into(),
                 "ui-available".into(),
             ],
             vec![
                 "ui-implementation".into(),
-                "ui-web".into(),
+                "Web".into(),
                 "ui-available".into(),
             ],
         ],
@@ -1213,7 +1213,7 @@ fn anatomy_section() {
             "ui-supporting-text",
             "ui-divider-optional",
             "ui-buttons-label-text",
-            "ui-scrim",
+            "Scrim",
         ]
         .map(String::from)
         .to_vec(),
@@ -1779,7 +1779,7 @@ fn basic_specs() {
                     "ui-supporting-text",
                     "ui-divider-optional",
                     "ui-button-label-text",
-                    "ui-scrim",
+                    "Scrim",
                 ]
                 .map(String::from)
                 .to_vec(),
@@ -2508,7 +2508,7 @@ fn dialog_phone_frame(x: f64, y: f64, height: f64, scale: f64, child: RenderSlot
 fn dialog_phone_status(scale: f64) {
     let scheme = use_context::<MaterialTheme>().unwrap().get().color_scheme;
     text()
-        .content(I18N.text("9:30"))
+        .content("9:30")
         .style(dialog_type_style(14.0, 20.0, scale))
         .color(scheme.on_surface)
         .modifier(Modifier::new().offset(Dp(24.0 * scale), Dp(23.0 * scale)));
@@ -2723,7 +2723,7 @@ dialog_canvas(1024.0, 486.0, RenderSlot::new(move || {
             }));
         if !notice.with(String::is_empty) {gap(Dp(12.0)); prose(notice.get());}
         gap(Dp(24.0));
-        for (index, role) in ["ui-surface-container-high", "ui-secondary", "ui-on-surface", "ui-on-surface-variant", "ui-primary", "ui-scrim"].into_iter().enumerate() {
+        for (index, role) in ["Surface container high", "Secondary", "On surface", "On surface variant", "Primary", "Scrim"].into_iter().enumerate() {
             prose(I18N.format("ui-value-value", [("v0", (index + 1).into()), ("v1", I18N.text(&role).into())]));
             gap(Dp(12.0));
         }
@@ -2751,23 +2751,16 @@ fn basic_color_annotation_content(values: BTreeMap<&'static str, Rect>, scale: f
     for (number, role, x, y, tx, ty) in [
         (
             1,
-            "ui-surface-container-high",
+            "Surface container high",
             270.0,
             159.0,
             container.x + 12.0 * scale,
             container.y + 61.0 * scale,
         ),
-        (
-            2,
-            "ui-secondary",
-            499.0,
-            42.0,
-            icon.x + icon.w / 2.0,
-            icon.y,
-        ),
+        (2, "Secondary", 499.0, 42.0, icon.x + icon.w / 2.0, icon.y),
         (
             3,
-            "ui-on-surface",
+            "On surface",
             727.0,
             179.0,
             headline.x + headline.w,
@@ -2775,7 +2768,7 @@ fn basic_color_annotation_content(values: BTreeMap<&'static str, Rect>, scale: f
         ),
         (
             4,
-            "ui-on-surface-variant",
+            "On surface variant",
             727.0,
             238.0,
             body.x + body.w,
@@ -2783,13 +2776,13 @@ fn basic_color_annotation_content(values: BTreeMap<&'static str, Rect>, scale: f
         ),
         (
             5,
-            "ui-primary",
+            "Primary",
             727.0,
             315.0,
             actions.x + actions.w,
             actions.y + actions.h / 2.0,
         ),
-        (6, "ui-scrim", 497.0, 407.0, 509.0 * scale, 423.0 * scale),
+        (6, "Scrim", 497.0, 407.0, 509.0 * scale, 423.0 * scale),
     ] {
         let x = x * scale;
         let y = y * scale;
@@ -3188,7 +3181,7 @@ fn full_spec_annotation_content(values: BTreeMap<&'static str, Rect>, mode: usiz
             vec![
                 (
                     1,
-                    "ui-surface-container-high",
+                    "Surface container high",
                     236.0,
                     339.0,
                     container.x + 6.0 * scale,
@@ -3196,7 +3189,7 @@ fn full_spec_annotation_content(values: BTreeMap<&'static str, Rect>, mode: usiz
                 ),
                 (
                     2,
-                    "ui-on-surface",
+                    "On surface",
                     236.0,
                     174.0,
                     close.x,
@@ -3204,7 +3197,7 @@ fn full_spec_annotation_content(values: BTreeMap<&'static str, Rect>, mode: usiz
                 ),
                 (
                     3,
-                    "ui-on-surface",
+                    "On surface",
                     418.0,
                     33.0,
                     headline.x + 68.0 * scale,
@@ -3212,7 +3205,7 @@ fn full_spec_annotation_content(values: BTreeMap<&'static str, Rect>, mode: usiz
                 ),
                 (
                     4,
-                    "ui-primary",
+                    "Primary",
                     658.0,
                     33.0,
                     confirm.x + confirm.w / 2.0,
@@ -3220,7 +3213,7 @@ fn full_spec_annotation_content(values: BTreeMap<&'static str, Rect>, mode: usiz
                 ),
                 (
                     5,
-                    "ui-on-surface-variant",
+                    "On surface variant",
                     765.0,
                     419.0,
                     700.0 * scale,
@@ -3296,7 +3289,7 @@ fn full_specs() {
         caption("ui-full-screen-dialog-color-roles-used-for-light-and-dark-themes");
         gap(Dp(12.0));
         legend(
-            ["ui-surface-container-high", "ui-on-surface", "ui-on-surface", "ui-primary", "ui-on-surface-variant"]
+            ["Surface container high", "On surface", "On surface", "Primary", "On surface variant"]
                 .map(String::from)
                 .to_vec(),
         );

@@ -12,13 +12,13 @@ ui-buttons-prompt-most-actions-in-a-ui = 按钮用于触发界面中的大部分
 
 ui-baseline-tokens = 基础设计令牌
 
-ui-elevated-button = 高位按钮
+ui-elevated-button = 阴影按钮
 
 ui-filled-button = 填充按钮
 
 ui-filled-tonal-button = 填充色调按钮
 
-ui-outlined-button = 概述按钮
+ui-outlined-button = 描边按钮
 
 ui-text-button = 文本按钮
 
@@ -38,7 +38,7 @@ ui-round-default = 圆形（默认）
 
 ui-square = 广场
 
-ui-elevated-filled-default-tonal-outlined-text = 提升、填充（默认）、色调、轮廓、文本
+ui-elevated-filled-default-tonal-outlined-text = 提升、填充（默认）、色调、描边、文本
 
 ui-not-recommended-use-16dp = 不推荐。使用 16dp
 
@@ -46,31 +46,19 @@ ui-live-configuration = 实时配置
 
 ui-change-the-configuration-and-activate-the-button-focus-it-with-tab-and-activate-it-with-sp = 更改配置并激活按钮。使用 Tab 聚焦并使用 Space 或 Enter 激活它以检查键盘和辅助技术行为。
 
-ui-select-a-color-style-to-inspect-its-container-content-border-elevation-typography-and-shap = 选择一种颜色样式以检查其容器、内容、边框、立面、版式和形状角色。值从活动材质主题解析，因此相同的角色会映射到浅色和深色方案中的不同颜色值。
-
-ui-surface-container-low = 表面容器低
+ui-select-a-color-style-to-inspect-its-container-content-border-elevation-typography-and-shap = 选择颜色样式，查看其容器、内容、边框、阴影高度、字体和形状角色。颜色值由当前 Material 主题提供，同一角色在浅色与深色主题下可对应不同的颜色。
 
 ui-icon-and-label = 图标和标签
-
-ui-primary = 小学
 
 ui-border = 边框
 
 ui-none = 无
 
-ui-elevation = 海拔
+ui-elevation = 阴影高度
 
 ui-1dp-enabled-0dp-disabled = 1dp 启用 · 0dp 禁用
 
-ui-on-primary = 在小学
-
-ui-secondary-container = 二级容器
-
-ui-on-secondary-container = 在辅助容器上
-
 ui-transparent = 透明
-
-ui-outline-variant-1dp = 轮廓变体 · 1dp
 
 ui-label-type = 标签类型
 
@@ -92,47 +80,35 @@ ui-3-toggle-selected = 3. 切换选择
 
 ui-color-values-are-implemented-through-design-tokens-for-designers-this-means-working-with-c = 颜色值是通过设计令牌实现的。对于设计师来说，这意味着使用与标记相对应的颜色值。在实现中，颜色值将是引用值的标记。
 
-ui-there-are-five-built-in-button-color-styles-elevated-filled-tonal-outlined-and-text = 有五种内置按钮颜色样式：升高、填充、色调、轮廓和文本
+ui-there-are-five-built-in-button-color-styles-elevated-filled-tonal-outlined-and-text = 有五种内置按钮颜色样式：升高、填充、色调、描边和文本
 
 ui-the-default-and-toggle-buttons-use-different-colors = 默认按钮和切换按钮使用不同的颜色
 
 ui-toggle-buttons-don-t-use-the-text-style = 切换按钮不使用文本样式
 
-ui-note-these-color-roles-were-chosen-to-create-design-coherence-and-familiarity-other-color = 注意：选择这些颜色角色是为了创造设计的连贯性和熟悉度。只要容器和文本的对比度为 3:1，就可以使用其他颜色角色。例如，高等教育和高等教育。
+ui-note-these-color-roles-were-chosen-to-create-design-coherence-and-familiarity-other-color = 这些颜色角色用于保持视觉一致性。也可使用其他角色，例如 Tertiary 和 On Tertiary，但容器与文字的对比度须达到 3:1。
 
-ui-a-elevated-b-filled-c-tonal-d-outlined-e-text = A. 升高、B. 填充、C. 色调、D. 轮廓、E. 文本
+ui-a-elevated-b-filled-c-tonal-d-outlined-e-text = A. 升高、B. 填充、C. 色调、D. 描边、E. 文本
 
 ui-toggle-unselected = 切换：未选择
 
 ui-toggle-selected = 切换：已选择
 
-ui-elevated-container = 高架集装箱
+ui-elevated-container = 带阴影的容器
 
-ui-elevated-icon-label = 提升的图标和标签
+ui-elevated-icon-label = 带阴影样式的图标和标签
 
 ui-filled-container = 装满的容器
 
 ui-filled-icon-label = 填充图标和标签
 
-ui-surface-container = 水面集装箱
-
 ui-tonal-container = 色调容器
 
 ui-tonal-icon-label = 色调图标和标签
 
-ui-secondary = 中学
+ui-outlined-container = 描边容器
 
-ui-on-secondary = 在中学
-
-ui-outlined-container = 轮廓容器
-
-ui-outlined-icon-label = 概述的图标和标签
-
-ui-outline-variant-outline = 轮廓变体（轮廓）
-
-ui-inverse-surface = 反面
-
-ui-inverse-on-surface = 曲面上的反转
+ui-outlined-icon-label = 描边的图标和标签
 
 ui-text-icon-label = 文本图标和标签
 
@@ -140,9 +116,9 @@ ui-states-are-visual-representations-used-to-communicate-the-status-of-a-compone
 
 ui-text-button-style-states = 文本按钮样式状态
 
-ui-the-elevated-button-style-has-an-elevation-of-1-by-default-and-0-when-disabled = 提升按钮样式的高度默认为 1，禁用时为 0。
+ui-the-elevated-button-style-has-an-elevation-of-1-by-default-and-0-when-disabled = 阴影按钮样式的高度默认为 1，禁用时为 0。
 
-ui-the-outlined-button-s-container-fill-is-invisible-at-rest-but-the-opacity-and-state-layers = 轮廓按钮的容器填充在静止时不可见，但在禁用、悬停、聚焦或按下时，不透明度和状态层的行为与其他按钮样式相同。
+ui-the-outlined-button-s-container-fill-is-invisible-at-rest-but-the-opacity-and-state-layers = 描边按钮的容器填充在静止时不可见，但在禁用、悬停、聚焦或按下时，不透明度和状态层的行为与其他按钮样式相同。
 
 ui-the-text-button-s-container-is-invisible-at-rest-but-the-opacity-and-state-layers-behave-t = 文本按钮的容器在静止时不可见，但在禁用、悬停、聚焦或按下时，不透明度和状态层的行为与其他按钮样式相同。没有切换文本按钮。
 
@@ -226,7 +202,7 @@ ui-two-variants-default-and-toggle = 两种变体：默认和切换
 
 ui-can-contain-an-optional-leading-icon = 可以包含可选的前导图标
 
-ui-five-color-options-elevated-filled-tonal-outlined-and-text = 五种颜色选项：升高、填充、色调、轮廓和文本
+ui-five-color-options-elevated-filled-tonal-outlined-and-text = 五种颜色选项：升高、填充、色调、描边和文本
 
 ui-five-size-recommendations-extra-small-small-medium-large-and-extra-large = 五种尺码建议：特小号、小号、中号、大号和特大号
 
@@ -240,7 +216,7 @@ ui-variants-and-naming-921 = 变体和命名：
 
 ui-default-and-toggle-selection = 默认和切换（选择）
 
-ui-color-styles-are-now-configurations-elevated-filled-tonal-outlined-text = 颜色样式现在是配置（提升、填充、色调、轮廓、文本）
+ui-color-styles-are-now-configurations-elevated-filled-tonal-outlined-text = 颜色样式现在是配置（提升、填充、色调、描边、文本）
 
 ui-round-and-square = 圆形和方形
 
@@ -318,7 +294,7 @@ ui-share-details = 分享详情
 
 ui-toggle-buttons-should-be-used-for-binary-selections-such-as-save-or-favorite-when-toggle-b = 切换按钮应用于二元选择，例如“保存”或“收藏夹”。当按下切换按钮时，它们可以更改颜色、形状和标签。
 
-ui-toggle-buttons-should-use-an-outlined-icon-when-unselected-and-a-filled-version-of-the-ico = 切换按钮在未选择时应使用轮廓图标，在选择时应使用填充版本的图标。如果不存在填充版本，请增加重量。
+ui-toggle-buttons-should-use-an-outlined-icon-when-unselected-and-a-filled-version-of-the-ico = 切换按钮在未选择时应使用描边图标，在选择时应使用填充版本的图标。如果不存在填充版本，请增加重量。
 
 ui-by-default-toggle-buttons-change-from-round-to-square-when-selected = 默认情况下，切换按钮在选择时会从圆形变为方形。
 
@@ -334,7 +310,7 @@ ui-filled-toggle = 填充切换
 
 ui-tonal-toggle = 色调切换
 
-ui-outlined-toggle = 概述切换
+ui-outlined-toggle = 描边切换
 
 ui-label-text-is-the-most-important-element-of-a-button-it-describes-the-action-that-will-occ = 标签文本是按钮最重要的元素。它描述了有人点击按钮时将发生的操作。它应该非常简短，最好是 1-3 个单词。
 
@@ -348,11 +324,11 @@ ui-use-sentence-case-for-button-label-text-capitalizing-the-first-word-and-prope
 
 ui-don-t-wrap-text-for-maximum-legibility-label-text-should-remain-on-a-single-line = 不要对文本进行换行。为了获得最大的易读性，标签文本应保留在一行上。
 
-ui-buttons-with-the-outlined-and-text-color-style-depend-on-the-colors-to-be-recognizable-fro = 具有轮廓和文本颜色样式的按钮取决于可从其他文本和元素中识别的颜色。将这些按钮放在视觉上相似的元素（例如碎片或大文本）旁边时要小心。
+ui-buttons-with-the-outlined-and-text-color-style-depend-on-the-colors-to-be-recognizable-fro = 具有描边和文本颜色样式的按钮取决于可从其他文本和元素中识别的颜色。将这些按钮放在视觉上相似的元素（例如碎片或大文本）旁边时要小心。
 
 ui-caution = 谨慎
 
-ui-the-outlined-button-style-is-very-similar-to-chips-consider-using-a-filled-or-tonal-button = 按钮的轮廓样式与信息标签非常相似。考虑使用填充按钮或色调按钮。
+ui-the-outlined-button-style-is-very-similar-to-chips-consider-using-a-filled-or-tonal-button = 按钮的描边样式与信息标签非常相似。考虑使用填充按钮或色调按钮。
 
 ui-button-containers-hold-the-label-text-and-optional-icon-buttons-with-the-text-color-style = 按钮容器包含标签文本和可选图标。具有文本颜色样式的按钮仅在悬停、聚焦或按下时才具有可见容器。
 
@@ -382,13 +358,13 @@ ui-don-t-vertically-align-an-icon-and-text-in-the-center-of-a-button = 不要将
 
 ui-don-t-use-two-icons-in-the-same-button = 不要在同一个按钮中使用两个图标
 
-ui-the-elevated-button-style-is-the-same-as-the-tonal-button-but-with-a-shadow = 升高的按钮样式与色调按钮相同，但带有阴影。
+ui-the-elevated-button-style-is-the-same-as-the-tonal-button-but-with-a-shadow = 阴影按钮样式与色调按钮相同，但带有阴影。
 
 ui-to-avoid-overusing-shadows-use-the-elevated-style-only-when-absolutely-necessary-such-as-w = 为了避免过度使用阴影，请仅在绝对必要时使用升高的样式，例如当按钮需要与视觉上突出的背景进行视觉分离时。
 
 ui-add-to-cart = 添加到购物车
 
-ui-elevated-buttons-provide-separation-from-a-visually-prominent-background = 升高的按钮可与视觉上突出的背景分开
+ui-elevated-buttons-provide-separation-from-a-visually-prominent-background = 阴影按钮可与视觉上突出的背景分开
 
 ui-buttons-at-higher-elevations-typically-have-more-emphasis-in-a-design-and-should-be-used-s = 较高高度的按钮通常在设计中更受重视，因此应谨慎使用。对于高度强调，请考虑填充样式。
 
@@ -402,27 +378,27 @@ ui-filled-buttons-have-high-visual-impact-when-used-for-important-actions = 填�
 
 ui-since-they-have-such-strong-emphasis-the-filled-style-should-be-used-sparingly-ideally-for = 由于它们具有如此强烈的强调，因此应谨慎使用填充样式，最好仅用于页面上的一个操作。
 
-ui-in-some-cases-filled-buttons-can-use-tertiary-colors = 在某些情况下，填充按钮可以使用第三色。
+ui-in-some-cases-filled-buttons-can-use-tertiary-colors = 某些场景下，实心按钮可以使用 Tertiary 配色。
 
-ui-the-tonal-button-style-is-useful-in-contexts-where-a-lower-priority-button-requires-slight = 色调按钮样式在低优先级按钮需要比大纲给出的重点稍多的上下文中非常有用，例如入门流程中的“下一步”。色调按钮使用辅助颜色映射。
+ui-the-tonal-button-style-is-useful-in-contexts-where-a-lower-priority-button-requires-slight = 次要操作需要比描边按钮更强的强调时，可使用色调按钮，例如引导流程中的“下一步”。色调按钮采用 Secondary 配色。
 
 ui-next = 下一步
 
 ui-the-tonal-style-has-less-emphasis-than-filled-or-emphasis = 色调风格的强调程度低于填充或强调程度
 
-ui-the-outlined-style-is-ideal-for-medium-emphasis-buttons-which-contain-actions-that-are-imp = 轮廓样式非常适合中强调按钮，其中包含重要的操作，但不是产品中的主要操作。
+ui-the-outlined-style-is-ideal-for-medium-emphasis-buttons-which-contain-actions-that-are-imp = 描边样式非常适合中强调按钮，其中包含重要的操作，但不是产品中的主要操作。
 
-ui-outlined-buttons-pair-well-with-filled-buttons-to-indicate-alternative-secondary-actions = 轮廓按钮与填充按钮完美搭配，以指示替代的次要操作。
+ui-outlined-buttons-pair-well-with-filled-buttons-to-indicate-alternative-secondary-actions = 描边按钮与填充按钮完美搭配，以指示替代的次要操作。
 
-ui-outlined-buttons-contain-less-important-supporting-actions = 概述的按钮包含不太重要的支持操作
+ui-outlined-buttons-contain-less-important-supporting-actions = 描边的按钮包含不太重要的支持操作
 
-ui-outlined-buttons-display-a-stroke-around-the-button-container-and-have-no-fill-by-default = 轮廓按钮在按钮容器周围显示描边，并且默认情况下没有填充。
+ui-outlined-buttons-display-a-stroke-around-the-button-container-and-have-no-fill-by-default = 描边按钮在按钮容器周围显示描边，并且默认情况下没有填充。
 
 ui-they-should-be-placed-on-simple-backgrounds-not-visually-prominent-backgrounds-such-as-ima = 它们应该放置在简单的背景上，而不是视觉上突出的背景，例如图像或视频。
 
-ui-outlined-buttons-can-be-used-on-backgrounds-with-a-color-gradient = 轮廓按钮可用于具有颜色渐变的背景
+ui-outlined-buttons-can-be-used-on-backgrounds-with-a-color-gradient = 描边按钮可用于具有颜色渐变的背景
 
-ui-use-caution-when-placing-outlined-buttons-on-top-of-images-customizing-the-button-to-have = 将轮廓按钮放置在图像顶部时请小心。自定义按钮以具有对比容器填充有助于确保标签文本的易读性。或者，使用填充按钮。
+ui-use-caution-when-placing-outlined-buttons-on-top-of-images-customizing-the-button-to-have = 将描边按钮放置在图像顶部时请小心。自定义按钮以具有对比容器填充有助于确保标签文本的易读性。或者，使用填充按钮。
 
 ui-the-text-button-style-should-be-used-for-the-lowest-priority-actions-especially-when-prese = 文本按钮样式应用于优先级最低的操作，尤其是在显示多个选项时。
 
@@ -432,7 +408,7 @@ ui-don-t-underline-the-text-button-use-hyperlinked-body-text-instead-to-emphasiz
 
 ui-use-text-buttons-for-the-lowest-priority-actions = 使用文本按钮执行最低优先级的操作
 
-ui-text-buttons-are-often-placed-within-components-such-as-cards-dialogs-and-snackbars-since = 文本按钮通常放置在卡片、对话框和快捷栏等组件内。由于文本按钮在默认状态下没有可见容器，因此它们不会分散附近内容的注意力。
+ui-text-buttons-are-often-placed-within-components-such-as-cards-dialogs-and-snackbars-since = 文本按钮通常放置在卡片、对话框和消息条等组件内。由于文本按钮在默认状态下没有可见容器，因此它们不会分散附近内容的注意力。
 
 ui-however-since-there-s-no-container-the-label-text-color-must-always-be-recognizable-from-n = 但是，由于没有容器，因此标签文本颜色必须始终可以从非按钮文本和元素中识别。
 
@@ -480,7 +456,7 @@ ui-perform-action = 执行动作
 
 ui-enabled-buttons-need-a-3-1-contrast-ratio-with-the-background-to-meet-accessibility-best-p = 启用的按钮需要与背景的对比度为 3:1，以满足可访问性最佳实践。
 
-ui-this-is-measured-from-the-container-for-elevated-filled-and-tonal-button-styles-and-the-la = 这是根据升高、填充和色调按钮样式的容器以及轮廓和文本按钮样式的标签文本来测量的。
+ui-this-is-measured-from-the-container-for-elevated-filled-and-tonal-button-styles-and-the-la = 这是根据升高、填充和色调按钮样式的容器以及描边和文本按钮样式的标签文本来测量的。
 
 ui-higher-contrast-helps-differentiate-elements = 更高的对比度有助于区分元素
 
@@ -496,7 +472,7 @@ ui-use-the-modified-motion-curve-if-rapid-click-or-pointer-interactions-are-expe
 
 ui-above-three-to-one = 以上三比一
 
-ui-above-3-1-primary-container-on-surface = 高于 3:1 — 表面上的主要容器
+ui-above-3-1-primary-container-on-surface = 高于 3:1：Primary Container 与 Surface
 
 ui-below-three-to-one = 以下三比一
 
@@ -566,7 +542,7 @@ ui-value-color-tokens = { $v0 } 颜色标记
 
 ui-value-button-states = { $v0 } 按钮状态
 
-ui-filled-value-tonal-value-outlined-value = 填充：{ $v0 } · 色调：{ $v1 } · 轮廓：{ $v2 }
+ui-filled-value-tonal-value-outlined-value = 填充：{ $v0 } · 色调：{ $v1 } · 描边：{ $v2 }
 
 ui-press-repeatedly-to-check-the-shape-and-state-animations-activations-value = 重复按可检查形状和状态动画。激活：{ $v0 }
 
@@ -575,8 +551,6 @@ ui-style-value = 风格：{ $v0 }
 ui-size-value = 尺寸：{ $v0 }
 
 ui-activations-value-value = 激活： { $v0 } · { $v1 }
-
-ui-label-large-14sp-20sp = 标签大 · 14sp / 20sp
 
 ui-value-value-value-value-value = { $v0 } { $v1 } { $v2 } { $v3 } { $v4 }
 

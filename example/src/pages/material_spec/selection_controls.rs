@@ -395,32 +395,32 @@ fn tokens(is_switch: bool) {
             [
                 "ui-selected-track",
                 "md.comp.switch.selected.track.color",
-                "ui-primary",
+                "Primary",
             ],
             [
                 "ui-unselected-track",
                 "md.comp.switch.unselected.track.color",
-                "ui-surface-container-highest",
+                "Surface container highest",
             ],
             [
                 "ui-selected-handle",
                 "md.comp.switch.selected.handle.color",
-                "ui-on-primary",
+                "On primary",
             ],
             [
                 "ui-unselected-handle",
                 "md.comp.switch.unselected.handle.color",
-                "ui-outline",
+                "Outline",
             ],
             [
                 "ui-selected-icon",
                 "md.comp.switch.selected.icon.color",
-                "ui-on-primary-container",
+                "On primary container",
             ],
             [
                 "ui-unselected-icon",
                 "md.comp.switch.unselected.icon.color",
-                "ui-surface-container-highest",
+                "Surface container highest",
             ],
         ]
     } else {
@@ -428,22 +428,22 @@ fn tokens(is_switch: bool) {
             [
                 "ui-selected-container",
                 "md.comp.checkbox.selected.container.color",
-                "ui-primary",
+                "Primary",
             ],
             [
                 "ui-selected-icon",
                 "md.comp.checkbox.selected.icon.color",
-                "ui-on-primary",
+                "On primary",
             ],
             [
                 "ui-unselected-outline",
                 "md.comp.checkbox.unselected.outline.color",
-                "ui-on-surface-variant",
+                "On surface variant",
             ],
             [
                 "ui-state-layer",
                 "md.comp.checkbox.state-layer.color",
-                "ui-on-surface",
+                "On surface",
             ],
         ]
     };

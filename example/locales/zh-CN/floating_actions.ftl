@@ -1,5 +1,3 @@
-ui-fab = FAB
-
 ui-baseline-tokens-specs = 基准设计令牌和规格
 
 ui-behaviors = 行为
@@ -16,19 +14,19 @@ ui-fabs-persist-on-the-screen-when-content-is-scrolling = 当内容滚动时，F
 
 ui-small-fab-medium-fab-large-fab = 小型·FAB·中型FAB·大型FAB
 
-ui-may-2025-the-fab-family-gained-small-medium-and-large-sizes-and-the-surface-color-styles-a = 2025年5月：FAB家族获得小、中、大尺寸，不再推荐表面颜色款式。使用带有清晰图标的主要容器色调。
+ui-may-2025-the-fab-family-gained-small-medium-and-large-sizes-and-the-surface-color-styles-a = 2025 年 5 月：FAB 新增小、中、大尺寸，不再推荐 Surface 配色。请使用 Primary Container，并搭配清晰易懂的图标。
 
 ui-small-40dp-fab-56dp-medium-80dp-and-large-96dp = 小 (40dp)、FAB (56dp)、中 (80dp) 和大 (96dp)
 
-ui-primary-container-is-the-default-secondary-and-tertiary-tones-are-available = 主容器是默认容器；二级和三级音调可供选择
+ui-primary-container-is-the-default-secondary-and-tertiary-tones-are-available = 默认使用 Primary Container，也可使用 Secondary 和 Tertiary 配色
 
-ui-surface-color-styles-remain-available-but-are-no-longer-recommended = 表面颜色样式仍然可用，但不再推荐
+ui-surface-color-styles-remain-available-but-are-no-longer-recommended = Surface 配色样式仍可使用，但不再推荐
 
 ui-add = 添加
 
-ui-the-56dp-fab-with-a-primary-container-remains-the-recommended-default = 带有主容器的 56dp FAB 仍然是建议的默认值。
+ui-the-56dp-fab-with-a-primary-container-remains-the-recommended-default = 采用 Primary Container 的 56dp FAB 仍是推荐的默认配置。
 
-ui-m2-the-fab-used-a-fixed-56dp-container-a-single-accent-color-and-elevation-6-m3-introduced = M2：FAB 使用固定的 56dp 容器、单一强调色和标高 6。M3 引入了颜色角色、与交互相关的标高级别以及遵循图标颜色的状态层。
+ui-m2-the-fab-used-a-fixed-56dp-container-a-single-accent-color-and-elevation-6-m3-introduced = M2：FAB 使用固定的 56dp 容器、单一强调色和阴影高度 6。M3 引入了颜色角色、与交互相关的阴影高度级别以及遵循图标颜色的状态层。
 
 ui-m3-expressive-the-family-grew-to-four-sizes-the-icon-scales-with-the-container-and-the-cor = M3 Expressive：系列增加到四种尺寸，图标随容器缩放，角半径跟随尺寸而不是保持固定。
 
@@ -36,7 +34,7 @@ ui-corner-radius = 圆角半径
 
 ui-accent-fill = 强调填充
 
-ui-primary-secondary-or-tertiary-container = 一级、二级或三级容器
+ui-primary-secondary-or-tertiary-container = Primary Container、Secondary Container 或 Tertiary Container
 
 ui-the-fab-family-has-four-sizes-that-share-one-anatomy-the-56dp-fab-is-the-default-small-sui = FAB 系列有四种尺寸，但具有相同的结构。 56dp FAB 是默认值；小套装布局密集，大尺寸则让动作更具存在感。
 
@@ -46,9 +44,9 @@ ui-small-fab = 小型FAB
 
 ui-medium-fab = 中型FAB
 
-ui-large-fab = 大型晶圆厂
+ui-large-fab = 大号 FAB
 
-ui-surface-fab-baseline = 表面 FAB（基线）
+ui-surface-fab-baseline = Surface FAB（基线样式）
 
 ui-choose-a-size-and-a-container-tone-the-icon-scales-with-the-size-and-the-container-keeps-t = 选择尺寸和容器色调。图标随大小缩放，容器在不同色调下保持相同的边角处理。
 
@@ -76,9 +74,9 @@ ui-2-icon = 2 图标
 
 ui-one-container-one-icon-one-action = 一个容器，一个图标，一个操作。
 
-ui-container-tones-map-to-the-primary-secondary-and-tertiary-color-roles-either-as-containers-3175 = 容器色调映射到主要、次要和第三颜色角色，作为容器或作为纯色强调。每个色调都与图标的匹配颜色配对。
+ui-container-tones-map-to-the-primary-secondary-and-tertiary-color-roles-either-as-containers-3175 = 容器配色对应 Primary、Secondary 和 Tertiary 颜色角色，可采用容器色或纯色强调。图标使用对应的 On 色。
 
-ui-surface-color-styles-are-still-available-but-no-longer-recommended-prefer-a-container-tone = 表面颜色样式仍然可用，但不再推荐；更喜欢容器语气，因此该动作读起来是主要的。
+ui-surface-color-styles-are-still-available-but-no-longer-recommended-prefer-a-container-tone = Surface 配色仍可使用，但不再推荐。优先采用容器配色，以突出主要操作。
 
 ui-states-communicate-elevation-and-interaction-a-fab-rests-at-level-3-rises-to-level-4-on-ho = 国家传达高度和互动。 FAB 停留在第 3 级，悬停时升至第 4 级，在聚焦或按下时保持第 3 级，并随着交互的增加而锐化其状态层。
 
@@ -92,13 +90,13 @@ ui-container-sizes-of-the-small-regular-medium-and-large-fabs = 小型、常规�
 
 ui-icon-to-container = 图标到容器
 
-ui-baseline-fab-token-sets-are-still-published-but-the-surface-color-styles-are-no-longer-rec = 基线 FAB 令牌集仍然发布，但在表达更新中不再推荐表面颜色样式。首选此页面上显示的主容器映射。
+ui-baseline-fab-token-sets-are-still-published-but-the-surface-color-styles-are-no-longer-rec = 基线 FAB 令牌仍然可用，但 Expressive 更新不再推荐 Surface 配色。建议采用本页展示的 Primary Container 配色。
 
 ui-baseline-value = 基线值
 
 ui-16dp-corners = 16dp 角
 
-ui-both-baseline-and-expressive-mappings-keep-the-same-interaction-model-elevation-level-3-at = 基线和表达映射都保持相同的交互模型：静止时的海拔高度为 3，悬停时的海拔高度为 4，以及与图标颜色匹配的状态图层。
+ui-both-baseline-and-expressive-mappings-keep-the-same-interaction-model-elevation-level-3-at = 基线和Expressive 映射都保持相同的交互模型：静止时的阴影高度为 3，悬停时的阴影高度为 4，以及与图标颜色匹配的状态图层。
 
 ui-use-one-fab-for-the-most-common-or-important-action-on-a-screen-keep-the-icon-clear-and-un = 使用一个 FAB 来执行屏幕上最常见或最重要的操作。保持图标清晰易懂，并避免在操作可见时覆盖人们需要的内容。
 
@@ -128,7 +126,7 @@ ui-two-to-six-related-actions-belong-to-one-trigger = 两到六个相关操作�
 
 ui-the-fab-is-a-single-container-with-a-centered-icon-keep-the-icon-simple-and-recognizable-a = FAB 是一个带有居中图标的单个容器。保持图标简单且易于识别，并将可访问的标签放在容器上而不是图标上。
 
-ui-default-to-the-primary-container-tone-secondary-and-tertiary-tones-separate-a-floating-act = 默认为主要容器音。二级和三级色调将浮动动作与其他原色元素分开，而纯​​重音则增强了其重点。
+ui-default-to-the-primary-container-tone-secondary-and-tertiary-tones-separate-a-floating-act = 默认使用 Primary Container。Secondary 和 Tertiary 可将 FAB 与其他 Primary 元素区分开；纯色强调样式则能提高其视觉权重。
 
 ui-place-a-fab-at-the-bottom-end-of-the-screen-above-the-bottom-navigation-bar-or-any-bottom = 将 FAB 放置在屏幕底部、底部导航栏或任何底部面板上方。与屏幕边缘和其他浮动元素保持 16dp 的边距。
 
@@ -166,7 +164,7 @@ ui-a-fab-is-a-single-focus-stop-focus-is-drawn-as-a-ring-around-the-container-an
 
 ui-press-tab-to-reach-the-action-the-container-receives-focus-once = 按 Tab 键即可到达操作；容器获得焦点一次。
 
-ui-keep-the-fab-clear-of-navigation-bars-sheets-and-snackbars-it-should-stay-in-the-same-corn = 让 FAB 远离导航栏、面板和快捷栏。它应该位于屏幕上的同一个角落，这样人们无需搜索即可找到它。
+ui-keep-the-fab-clear-of-navigation-bars-sheets-and-snackbars-it-should-stay-in-the-same-corn = 让 FAB 远离导航栏、面板和消息条。它应该位于屏幕上的同一个角落，这样人们无需搜索即可找到它。
 
 ui-navigate-to-the-fab = 导航至 FAB
 
@@ -182,4 +180,4 @@ ui-don-t-plus-icon-describing-the-glyph-does-not-explain-the-action = 不要：�
 
 ui-keep-the-same-label-when-the-fab-hides-and-returns-and-provide-a-tooltip-only-as-a-visual = 当 FAB 隐藏和返回时保持相同的标签，并仅提供工具提示作为视觉提示 - 可访问的名称保留在容器上。
 
-ui-tessera-examples-on-this-page-use-the-native-floating-action-button-component-four-si = 本页上的 Tessera 示例使用本机 floating_action_button 组件。实现了四种尺寸、六种色调、高度和状态层反馈，以及命名操作的可访问性标签。
+ui-tessera-examples-on-this-page-use-the-native-floating-action-button-component-four-si = 本页上的 Tessera 示例使用原生 floating_action_button 组件。实现了四种尺寸、六种色调、高度和状态层反馈，以及命名操作的可访问性标签。

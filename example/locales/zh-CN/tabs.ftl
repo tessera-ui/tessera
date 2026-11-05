@@ -152,7 +152,7 @@ ui-scrolling-content = 滚动内容
 
 ui-when-the-screen-scrolls-tabs-can-stay-fixed-to-the-top-of-the-screen-or-scroll-offscreen-a = 当屏幕滚动时，选项卡可以固定在屏幕顶部，或者滚动到屏幕外并在用户向上滚动时重新出现。附加到应用程序栏或其他组件的选项卡作为一个单元随之移动。
 
-ui-tabs-can-be-used-to-create-elevation = 选项卡可用于创建标高
+ui-tabs-can-be-used-to-create-elevation = 选项卡可用于创建阴影高度
 
 ui-scroll-the-list-the-app-bar-and-tabs-collapse-together-and-scrolling-back-up-brings-them-b = 滚动列表：应用栏和选项卡折叠在一起，向上滚动会将它们带回来
 
@@ -232,7 +232,7 @@ ui-primary-tabs-color = 主要选项卡颜色
 
 ui-secondary-tabs-color = 辅助选项卡颜色
 
-ui-color-values-are-implemented-through-design-tokens = 颜色值是通过设计令牌实现的。
+ui-color-values-are-implemented-through-design-tokens = 颜色值由设计令牌提供。浅色和深色主题下，底部应用栏均使用 Surface Container。
 
 ui-primary-tabs-states = 主要选项卡状态
 
@@ -248,11 +248,9 @@ ui-icon-and-label-container-height = 图标和标签容器高度
 
 ui-label-text-font = 标签文字字体
 
-ui-title-small = 标题小
-
 ui-label-text-size = 标签文字大小
 
-ui-label-text-weight = 标签文字粗细
+ui-label-text-weight = 标签文字字重
 
 ui-label-text-line-height = 标签文本行高
 

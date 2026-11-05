@@ -1082,7 +1082,7 @@ pub(super) fn anatomy_legend(modal: bool) -> Vec<(usize, String)> {
             "ui-close-icon-button",
             "ui-divider-optional",
             "ui-action-buttons-optional",
-            "ui-scrim",
+            "Scrim",
         ]
     } else {
         &[
@@ -1135,17 +1135,17 @@ pub(super) fn color_roles(modal: bool) {
 pub(super) fn color_legend(modal: bool) -> Vec<(usize, String)> {
     let roles: [&str; 4] = if modal {
         [
-            "ui-on-surface-variant",
-            "ui-on-surface-variant",
-            "ui-surface-container-low",
-            "ui-on-surface-variant",
+            "On surface variant",
+            "On surface variant",
+            "Surface container low",
+            "On surface variant",
         ]
     } else {
         [
-            "ui-outline-variant",
-            "ui-on-surface-variant",
-            "ui-surface",
-            "ui-on-surface-variant",
+            "Outline variant",
+            "On surface variant",
+            "Surface",
+            "On surface variant",
         ]
     };
     roles

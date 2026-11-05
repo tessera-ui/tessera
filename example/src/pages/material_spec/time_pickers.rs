@@ -491,21 +491,21 @@ fn tokens() {
     spec_table(
         vec!["ui-element".into(), "ui-token-value".into()],
         vec![
-            vec!["ui-container".into(), "ui-surface-container-high".into()],
+            vec!["ui-container".into(), "Surface container high".into()],
             vec![
                 "ui-selected-time-field".into(),
-                "ui-primary-container-on-primary-container".into(),
+                "Primary container / on primary container".into(),
             ],
             vec![
                 "ui-unselected-time-field-clock-dial".into(),
-                "ui-surface-container-highest-on-surface".into(),
+                "Surface container highest / on surface".into(),
             ],
             vec![
                 "ui-selected-period".into(),
-                "ui-tertiary-container-on-tertiary-container".into(),
+                "Tertiary container / on tertiary container".into(),
             ],
-            vec!["ui-dial-selector".into(), "ui-primary-on-primary".into()],
-            vec!["ui-period-outline".into(), "ui-outline".into()],
+            vec!["ui-dial-selector".into(), "Primary / on primary".into()],
+            vec!["ui-period-outline".into(), "Outline".into()],
         ],
     );
 }
@@ -523,29 +523,29 @@ fn colors() {
 
 fn time_color_labels(input: bool) -> Vec<&'static str> {
     let mut labels = vec![
-        "ui-on-surface-variant",
-        "ui-on-surface",
-        "ui-surface-container-highest",
-        "ui-on-surface",
-        "ui-tertiary-container",
-        "ui-on-tertiary-container",
-        "ui-surface-container-high",
-        "ui-outline",
-        "ui-on-surface",
-        "ui-primary",
-        "ui-on-surface-variant",
+        "On surface variant",
+        "On surface",
+        "Surface container highest",
+        "On surface",
+        "Tertiary container",
+        "On tertiary container",
+        "Surface container high",
+        "Outline",
+        "On surface",
+        "Primary",
+        "On surface variant",
     ];
     if input {
-        labels.extend(["ui-on-primary-container", "ui-primary-container"]);
+        labels.extend(["On primary container", "Primary container"]);
     } else {
-        labels[10] = "ui-on-primary";
+        labels[10] = "On primary";
         labels.extend([
-            "ui-primary",
-            "ui-on-surface-variant",
-            "ui-on-surface",
-            "ui-surface-container-highest",
-            "ui-on-primary-container",
-            "ui-primary-container",
+            "Primary",
+            "On surface variant",
+            "On surface",
+            "Surface container highest",
+            "On primary container",
+            "Primary container",
         ]);
     }
     labels
@@ -944,27 +944,27 @@ fn time_resources() {
         vec![
             vec![
                 "ui-design".into(),
-                "ui-material-3-design-kit-figma".into(),
+                "Material 3 Design Kit (Figma)".into(),
                 "ui-available".into(),
             ],
             vec![
                 "ui-implementation".into(),
-                "ui-flutter".into(),
+                "Flutter".into(),
                 "ui-available".into(),
             ],
             vec![
                 "ui-implementation".into(),
-                "ui-jetpack-compose".into(),
+                "Jetpack Compose".into(),
                 "ui-available".into(),
             ],
             vec![
                 "ui-implementation".into(),
-                "ui-android-views-mdc-android".into(),
+                "Android Views (MDC-Android)".into(),
                 "ui-available".into(),
             ],
             vec![
                 "ui-implementation".into(),
-                "ui-material-web".into(),
+                "Material Web".into(),
                 "ui-unavailable".into(),
             ],
         ],
@@ -987,12 +987,12 @@ fn time_m2_difference() {
             vec![
                 "ui-selected-time-field".into(),
                 "ui-accent-emphasis".into(),
-                "ui-primary-container-on-primary-container".into(),
+                "Primary container / on primary container".into(),
             ],
             vec![
                 "ui-selected-period".into(),
                 "ui-accent-emphasis".into(),
-                "ui-tertiary-container-on-tertiary-container".into(),
+                "Tertiary container / on tertiary container".into(),
             ],
             vec![
                 "ui-color-system".into(),

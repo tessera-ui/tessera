@@ -373,17 +373,17 @@ fn availability() {
             ],
             vec![
                 "ui-implementation".into(),
-                "ui-jetpack-compose-expressive".into(),
+                "Jetpack Compose: Expressive".into(),
                 "ui-available".into(),
             ],
             vec![
                 "ui-implementation".into(),
-                "ui-android-views-mdc-android-expressive".into(),
+                "Android Views (MDC-Android): Expressive".into(),
                 "ui-unavailable".into(),
             ],
             vec![
                 "ui-implementation".into(),
-                "ui-web-expressive".into(),
+                "Web: Expressive".into(),
                 "ui-unavailable".into(),
             ],
         ],
@@ -467,7 +467,7 @@ fn variants() {
     caption("ui-there-s-one-variant-of-fab-menu");
     gap(Dp(32.0));
     spec_table(
-        vec!["ui-variant".into(), "M3".into(), "ui-m3-expressive".into()],
+        vec!["ui-variant".into(), "M3".into(), "M3 Expressive".into()],
         vec![vec![
             "ui-fab-menu".into(),
             "--".into(),
@@ -506,7 +506,7 @@ fn configurations() {
             "ui-category".into(),
             "ui-configuration".into(),
             "M3".into(),
-            "ui-m3-expressive".into(),
+            "M3 Expressive".into(),
         ],
         vec![vec![
             "ui-color".into(),
@@ -559,22 +559,22 @@ fn tokens() {
             vec![
                 "ui-close-button-color".into(),
                 "md.comp.fab-menu.close-button.container.color".into(),
-                "ui-primary-secondary-tertiary".into(),
+                "Primary · secondary · tertiary".into(),
             ],
             vec![
                 "ui-close-button-icon".into(),
                 "md.comp.fab-menu.close-button.icon.color".into(),
-                "ui-on-primary-on-secondary-on-tertiary".into(),
+                "On primary · on secondary · on tertiary".into(),
             ],
             vec![
                 "ui-item-container".into(),
                 "md.comp.fab-menu.menu-item.container.color".into(),
-                "ui-primary-container-secondary-container-tertiary-container".into(),
+                "Primary container · secondary container · tertiary container".into(),
             ],
             vec![
                 "ui-item-label".into(),
                 "md.comp.fab-menu.menu-item.label.text.color".into(),
-                "ui-on-primary-container-on-secondary-container-on-tertiary-container".into(),
+                "On primary container · on secondary container · on tertiary container".into(),
             ],
             vec![
                 "ui-item-shape".into(),
@@ -700,7 +700,7 @@ fn colors() {
     gap(Dp(24.0));
     panel(RenderSlot::new(|| {
         menu_demo(
-            "ui-primary",
+            "Primary",
             FloatingActionButtonMenuColor::Primary,
             false,
             true,
@@ -724,64 +724,60 @@ fn colors() {
         vec!["ui-set".into(), "ui-element".into(), "ui-color-role".into()],
         vec![
             vec![
-                "ui-primary".into(),
+                "Primary".into(),
                 "ui-item-container".into(),
-                "ui-primary-container".into(),
+                "Primary container".into(),
             ],
             vec![
-                "ui-primary".into(),
+                "Primary".into(),
                 "ui-item-label-and-icon".into(),
-                "ui-on-primary-container".into(),
+                "On primary container".into(),
             ],
+            vec!["Primary".into(), "ui-close-button".into(), "Primary".into()],
             vec![
-                "ui-primary".into(),
-                "ui-close-button".into(),
-                "ui-primary".into(),
-            ],
-            vec![
-                "ui-primary".into(),
+                "Primary".into(),
                 "ui-close-icon".into(),
-                "ui-on-primary".into(),
+                "On primary".into(),
             ],
             vec![
-                "ui-secondary".into(),
+                "Secondary".into(),
                 "ui-item-container".into(),
-                "ui-secondary-container".into(),
+                "Secondary container".into(),
             ],
             vec![
-                "ui-secondary".into(),
+                "Secondary".into(),
                 "ui-item-label-and-icon".into(),
-                "ui-on-secondary-container".into(),
+                "On secondary container".into(),
             ],
             vec![
-                "ui-secondary".into(),
+                "Secondary".into(),
                 "ui-close-button".into(),
-                "ui-secondary".into(),
+                "Secondary".into(),
             ],
             vec![
-                "ui-secondary".into(),
+                "Secondary".into(),
                 "ui-close-icon".into(),
-                "ui-on-secondary".into(),
+                "On secondary".into(),
             ],
             vec![
-                "ui-tertiary".into(),
+                "Tertiary".into(),
                 "ui-item-container".into(),
-                "ui-tertiary-container".into(),
+                "Tertiary container".into(),
             ],
             vec![
-                "ui-tertiary".into(),
+                "Tertiary".into(),
                 "ui-item-label-and-icon".into(),
-                "ui-on-tertiary-container".into(),
+                "On tertiary container".into(),
             ],
             vec![
-                "ui-tertiary".into(),
+                "Tertiary".into(),
                 "ui-close-button".into(),
-                "ui-tertiary".into(),
+                "Tertiary".into(),
             ],
             vec![
-                "ui-tertiary".into(),
+                "Tertiary".into(),
                 "ui-close-icon".into(),
-                "ui-on-tertiary".into(),
+                "On tertiary".into(),
             ],
         ],
     );

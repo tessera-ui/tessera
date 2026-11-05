@@ -356,22 +356,22 @@ fn availability() {
             ],
             vec![
                 "ui-implementation".into(),
-                "ui-flutter".into(),
+                "Flutter".into(),
                 "ui-available".into(),
             ],
             vec![
                 "ui-implementation".into(),
-                "ui-jetpack-compose".into(),
+                "Jetpack Compose".into(),
                 "ui-available".into(),
             ],
             vec![
                 "ui-implementation".into(),
-                "ui-android-views-mdc-android".into(),
+                "Android Views (MDC-Android)".into(),
                 "ui-available".into(),
             ],
             vec![
                 "ui-implementation".into(),
-                "ui-web".into(),
+                "Web".into(),
                 "ui-unavailable".into(),
             ],
         ],
@@ -568,17 +568,17 @@ fn tokens() {
             vec![
                 "ui-track".into(),
                 "md.comp.linear-progress-indicator.track.color".into(),
-                "ui-secondary-container".into(),
+                "Secondary container".into(),
             ],
             vec![
                 "ui-active-indicator".into(),
                 "md.comp.linear-progress-indicator.active-indicator.color".into(),
-                "ui-primary".into(),
+                "Primary".into(),
             ],
             vec![
                 "ui-stop-indicator".into(),
                 "md.comp.linear-progress-indicator.stop-indicator.color".into(),
-                "ui-primary".into(),
+                "Primary".into(),
             ],
             vec![
                 "ui-track-thickness".into(),
@@ -598,12 +598,12 @@ fn tokens() {
             vec![
                 "ui-circular-track".into(),
                 "md.comp.circular-progress-indicator.track.color".into(),
-                "ui-secondary-container".into(),
+                "Secondary container".into(),
             ],
             vec![
                 "ui-circular-active".into(),
                 "md.comp.circular-progress-indicator.active-indicator.color".into(),
-                "ui-primary".into(),
+                "Primary".into(),
             ],
             vec![
                 "ui-circular-size-thickness".into(),
@@ -705,12 +705,12 @@ fn colors() {
     spec_table(
         vec!["ui-element".into(), "ui-color-role".into()],
         vec![
-            vec!["ui-active-indicator".into(), "ui-primary".into()],
-            vec!["ui-track".into(), "ui-secondary-container".into()],
-            vec!["ui-stop-indicator".into(), "ui-primary".into()],
+            vec!["ui-active-indicator".into(), "Primary".into()],
+            vec!["ui-track".into(), "Secondary container".into()],
+            vec!["ui-stop-indicator".into(), "Primary".into()],
             vec![
                 "ui-track-on-a-surface-container".into(),
-                "ui-surface-container-highest".into(),
+                "Surface container highest".into(),
             ],
         ],
     );
@@ -754,15 +754,15 @@ fn baseline_tokens() {
         vec![
             vec![
                 "md.comp.linear-progress-indicator.track.color".into(),
-                "ui-secondary-container".into(),
+                "Secondary container".into(),
             ],
             vec![
                 "md.comp.linear-progress-indicator.active-indicator.color".into(),
-                "ui-primary".into(),
+                "Primary".into(),
             ],
             vec![
                 "md.comp.linear-progress-indicator.stop-indicator.color".into(),
-                "ui-primary".into(),
+                "Primary".into(),
             ],
             vec![
                 "md.comp.linear-progress-indicator.track.thickness".into(),
@@ -770,11 +770,11 @@ fn baseline_tokens() {
             ],
             vec![
                 "md.comp.circular-progress-indicator.track.color".into(),
-                "ui-secondary-container".into(),
+                "Secondary container".into(),
             ],
             vec![
                 "md.comp.circular-progress-indicator.active-indicator.color".into(),
-                "ui-primary".into(),
+                "Primary".into(),
             ],
             vec![
                 "md.comp.circular-progress-indicator.size".into(),
