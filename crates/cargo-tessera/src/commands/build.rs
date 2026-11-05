@@ -1,11 +1,22 @@
-use std::{path::Path, process::Command};
+use std::{
+    io::BufReader,
+    path::{Path, PathBuf},
+    process::{Command, Stdio},
+};
 
 use anyhow::{Context, Result, bail};
+use cargo_metadata::{Message, MetadataCommand};
 use tessera_build::AssetBackend;
 
 use crate::{call_guard, output};
 
-use super::{build_tessera_ui_features, configure_tessera_ui_features};
+use super::{
+    assets::{
+        collect_platform_asset_candidates, collect_resolved_packages,
+        collect_used_platform_asset_paths, sync_assets,
+    },
+    build_tessera_ui_features, configure_tessera_ui_features,
+};
 
 pub fn execute(
     release: bool,
@@ -14,108 +25,91 @@ pub fn execute(
     profiling_output: Option<&Path>,
     debug_dirty_overlay: bool,
     asset_backend_override: Option<AssetBackend>,
-) -> Result<()> {
-    let feature_overrides = build_tessera_ui_features(profiling_output, None, debug_dirty_overlay);
+) -> Result<Vec<PathBuf>> {
+    let android = target.is_some_and(|target| target.contains("android"));
+    if profiling_output.is_some() && android {
+        bail!("--profiling-output is not supported for Android targets");
+    }
+    let backend = asset_backend_override.unwrap_or(if android {
+        AssetBackend::Platform
+    } else {
+        AssetBackend::Embed
+    });
+    let features = build_tessera_ui_features(profiling_output, None, debug_dirty_overlay);
     call_guard::run(call_guard::CheckOptions {
         features: call_guard::FeatureSelection::Selected {
-            features: &feature_overrides,
+            features: &features,
             no_default_features: false,
         },
         release,
         ..call_guard::CheckOptions::new(package, target)
     })?;
-
-    if profiling_output.is_some() && target_is_android(target) {
-        bail!("--profiling-output is not supported for Android targets");
-    }
-
-    let mut details = Vec::new();
+    output::status("Building", package.unwrap_or("project"));
+    output::status("Assets", format!("backend `{}`", backend.as_str()));
+    let mut command = Command::new("cargo");
+    command.args(["build", "--message-format=json-render-diagnostics"]);
     if release {
-        details.push("release".to_string());
+        command.arg("--release");
     }
     if let Some(target) = target {
-        details.push(format!("target {target}"));
+        command.args(["--target", target]);
     }
     if let Some(package) = package {
-        details.push(format!("package {package}"));
+        command.args(["-p", package]);
     }
-    if let Some(path) = profiling_output {
-        details.push(format!("profiling {}", path.display()));
+    configure_tessera_ui_features(&mut command, &features, profiling_output, None);
+    command
+        .env("TESSERA_ASSET_BACKEND", backend.as_str())
+        .stdout(Stdio::piped());
+    let mut child = command.spawn().context("Failed to run cargo build")?;
+    let mut artifacts = Vec::new();
+    for message in Message::parse_stream(BufReader::new(
+        child.stdout.take().context("Missing Cargo output")?,
+    )) {
+        match message? {
+            Message::CompilerArtifact(artifact) if artifact.target.is_bin() => {
+                if artifact.executable.is_some() {
+                    artifacts.push(artifact);
+                }
+            }
+            Message::TextLine(line) => println!("{line}"),
+            _ => {}
+        }
     }
-    if debug_dirty_overlay {
-        details.push("debug dirty overlay".to_string());
-    }
-    let message = if details.is_empty() {
-        "project".to_string()
-    } else {
-        format!("project ({})", details.join(", "))
-    };
-    output::status("Building", message);
-    let asset_backend = resolve_asset_backend(target, asset_backend_override)?;
-    output::status("Assets", format!("backend `{}`", asset_backend.as_str()));
-
-    let mut cmd = Command::new("cargo");
-    cmd.arg("build");
-
-    if release {
-        cmd.arg("--release");
-    }
-
-    if let Some(target) = target {
-        cmd.arg("--target").arg(target);
-    }
-
-    if let Some(package) = package {
-        cmd.arg("-p").arg(package);
-    }
-    configure_tessera_ui_features(&mut cmd, &feature_overrides, profiling_output, None);
-    cmd.env("TESSERA_ASSET_BACKEND", asset_backend.as_str());
-
-    let status = cmd.status().context("Failed to run cargo build")?;
-
-    if !status.success() {
+    if !child.wait()?.success() {
         bail!("Build failed");
     }
-
-    if release {
-        let binary_path = if let Some(target) = target {
-            format!("target/{}/release/", target)
-        } else {
-            "target/release/".to_string()
-        };
-        output::status("Binary", binary_path);
-    }
-
-    Ok(())
-}
-
-fn target_is_android(target: Option<&str>) -> bool {
-    target.map(is_platform_backend_target).unwrap_or(false)
-}
-
-fn resolve_asset_backend(
-    target: Option<&str>,
-    asset_backend_override: Option<AssetBackend>,
-) -> Result<AssetBackend> {
-    let supports_platform = target.map(is_platform_backend_target).unwrap_or(false);
-
-    if let Some(backend) = asset_backend_override {
-        if backend == AssetBackend::Platform && !supports_platform {
-            bail!(
-                "Requested platform asset backend is not supported for target `{}`",
-                target.unwrap_or("host-default")
-            );
+    if backend == AssetBackend::Platform
+        && !android
+        && !target.is_some_and(|target| target.contains("wasm"))
+    {
+        let metadata = MetadataCommand::new().no_deps().exec()?;
+        for artifact in &artifacts {
+            let binary = artifact
+                .executable
+                .as_ref()
+                .context("Missing executable")?
+                .as_std_path();
+            let project = metadata
+                .packages
+                .iter()
+                .find(|package| package.id == artifact.package_id)
+                .context("Built package is absent from Cargo metadata")?
+                .manifest_path
+                .parent()
+                .context("Missing package directory")?
+                .to_path_buf()
+                .into_std_path_buf();
+            let packages = collect_resolved_packages(Path::new("."), Some(&project))?;
+            let root = binary.with_extension("resources").join("tessera");
+            let assets = collect_platform_asset_candidates(&packages, &root)?;
+            let used = collect_used_platform_asset_paths(&[binary.to_path_buf()], &assets)?;
+            let (_, bytes) = sync_assets(&root, &assets, Some(&used))?;
+            output::status("Assets", format!("{bytes} bytes in {}", root.display()));
         }
-        return Ok(backend);
     }
-
-    if supports_platform {
-        Ok(AssetBackend::Platform)
-    } else {
-        Ok(AssetBackend::Embed)
-    }
-}
-
-fn is_platform_backend_target(target: &str) -> bool {
-    target.to_ascii_lowercase().contains("android")
+    Ok(artifacts
+        .into_iter()
+        .filter_map(|artifact| artifact.executable.map(|path| path.into_std_path_buf()))
+        .collect())
 }

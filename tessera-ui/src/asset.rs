@@ -16,6 +16,8 @@ use crate::runtime_resource;
 
 #[cfg(target_os = "android")]
 mod android;
+#[cfg(not(any(target_os = "android", target_family = "wasm")))]
+mod native;
 #[cfg(target_family = "wasm")]
 mod web;
 
@@ -199,7 +201,9 @@ impl Asset {
                 #[cfg(target_os = "android")]
                 let result = android::read(self.path);
                 #[cfg(not(target_os = "android"))]
-                let result = std::fs::read(self.path).map(Arc::from);
+                let result = native::path(self.path)
+                    .and_then(std::fs::read)
+                    .map(Arc::from);
                 let result = result.and_then(decode);
                 dispatcher.dispatch(move || finish(result));
             }));
@@ -251,9 +255,18 @@ mod tests {
     #[cfg(not(any(target_family = "wasm", target_os = "android")))]
     #[test]
     fn platform_resources_deliver_results_on_the_owning_ui_thread() {
-        let file = tempfile::NamedTempFile::new().unwrap();
+        let executable = std::env::current_exe().unwrap();
+        let file = tempfile::NamedTempFile::new_in(executable.parent().unwrap()).unwrap();
         std::fs::write(file.path(), b"background bytes").unwrap();
-        let path = Box::leak(file.path().to_str().unwrap().to_owned().into_boxed_str());
+        let path = Box::leak(
+            file.path()
+                .file_name()
+                .unwrap()
+                .to_str()
+                .unwrap()
+                .to_owned()
+                .into_boxed_str(),
+        );
         crate::RuntimeSession::new().run(|| {
             let resource = Asset::platform(path).load();
             let (finished, wait) = std::sync::mpsc::channel();

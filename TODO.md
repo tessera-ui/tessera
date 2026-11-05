@@ -15,15 +15,16 @@
 - [x] Asset management system
   - [x] Embedded backend (available for all targets)
   - [x] On-demand loading and shared resource lifetimes
-  - [ ] Platform-specific backends
+  - [x] Platform-specific backends
     - [x] Android
     - [x] Web (HTTP)
-    - [ ] Windows
-    - [ ] macOS
-    - [ ] Linux
-    - [ ] iOS
+    - [x] Windows
+    - [x] macOS
+    - [x] Linux
+    - [x] iOS
   - [x] Tree-shaking for assets
   - [ ] Unicode font subsets
+- [ ] WindowInsets padding/size helpers
 - [x] lazy_column
 - [x] lazy_row
 - [x] [Material Design components](https://m3.material.io/components)

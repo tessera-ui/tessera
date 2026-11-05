@@ -606,7 +606,7 @@ fn resolve_asset_backend(asset_backend_override: Option<AssetBackend>) -> Result
     if let Some(backend) = asset_backend_override {
         if backend == AssetBackend::Platform {
             return Err(anyhow!(
-                "Requested platform asset backend is not supported for `cargo tessera dev`; use `cargo tessera android dev` for platform assets"
+                "Requested platform asset backend is not supported for `cargo tessera dev`; use `cargo tessera build --asset-backend platform` or `cargo tessera android dev` for platform assets"
             ));
         }
         return Ok(backend);
