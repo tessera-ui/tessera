@@ -6,7 +6,7 @@
 - [ ] Platform-specific plugin system & Package Support
   - [x] Desktop Plugins
   - [x] Android Plugins
-  - [ ] iOS Plugins
+  - [x] iOS Plugins
   - [x] Android Package Support
   - [x] Windows Package Support
   - [ ] iOS Package Support

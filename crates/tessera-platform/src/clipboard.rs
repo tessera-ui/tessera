@@ -8,7 +8,7 @@ use tessera_ui::{Plugin, PluginContext, PluginResult, try_with_plugin_mut};
 #[cfg(target_family = "wasm")]
 mod web;
 
-#[cfg(not(target_family = "wasm"))]
+#[cfg(not(any(target_family = "wasm", target_os = "ios")))]
 use tracing::warn;
 
 #[cfg(target_os = "android")]
@@ -78,14 +78,14 @@ impl Plugin for ClipboardPlugin {
 
 /// Clipboard handle backed by platform-specific implementations.
 pub struct Clipboard {
-    #[cfg(all(not(target_os = "android"), not(target_family = "wasm")))]
+    #[cfg(not(any(target_os = "android", target_os = "ios", target_family = "wasm")))]
     manager: arboard::Clipboard,
     #[cfg(target_os = "android")]
     android_app: AndroidApp,
 }
 
 impl Clipboard {
-    #[cfg(all(not(target_os = "android"), not(target_family = "wasm")))]
+    #[cfg(not(any(target_os = "android", target_os = "ios", target_family = "wasm")))]
     fn new(_context: &PluginContext) -> Option<Self> {
         match arboard::Clipboard::new() {
             Ok(manager) => Some(Self { manager }),
@@ -103,14 +103,22 @@ impl Clipboard {
         })
     }
 
-    #[cfg(target_family = "wasm")]
+    #[cfg(any(target_family = "wasm", target_os = "ios"))]
     fn new(_context: &PluginContext) -> Option<Self> {
         Some(Self {})
     }
 
     /// Sets clipboard text, replacing previous content.
     pub fn set_text(&mut self, text: &str) {
-        #[cfg(all(not(target_os = "android"), not(target_family = "wasm")))]
+        #[cfg(target_os = "ios")]
+        if objc2::MainThreadMarker::new().is_some() {
+            // SAFETY: Pasteboard properties are accessed serially on the UI thread.
+            unsafe {
+                objc2_ui_kit::UIPasteboard::generalPasteboard()
+                    .setString(Some(&objc2_foundation::NSString::from_str(text)));
+            }
+        }
+        #[cfg(not(any(target_os = "android", target_os = "ios", target_family = "wasm")))]
         {
             let _ = self.manager.set_text(text.to_string());
         }
@@ -131,7 +139,14 @@ impl Clipboard {
     ///
     /// Browser paste text is delivered through clipboard input events instead.
     pub fn get_text(&mut self) -> Option<String> {
-        #[cfg(all(not(target_os = "android"), not(target_family = "wasm")))]
+        #[cfg(target_os = "ios")]
+        {
+            objc2::MainThreadMarker::new()?;
+            // SAFETY: Pasteboard properties are accessed serially on the UI thread.
+            return unsafe { objc2_ui_kit::UIPasteboard::generalPasteboard().string() }
+                .map(|text| text.to_string());
+        }
+        #[cfg(not(any(target_os = "android", target_os = "ios", target_family = "wasm")))]
         {
             self.manager.get_text().ok()
         }
@@ -164,7 +179,15 @@ impl Clipboard {
 
     /// Clears clipboard contents.
     pub fn clear(&mut self) {
-        #[cfg(all(not(target_os = "android"), not(target_family = "wasm")))]
+        #[cfg(target_os = "ios")]
+        if objc2::MainThreadMarker::new().is_some() {
+            // SAFETY: Pasteboard properties are accessed serially on the UI thread.
+            unsafe {
+                objc2_ui_kit::UIPasteboard::generalPasteboard()
+                    .setItems(&objc2_foundation::NSArray::new());
+            }
+        }
+        #[cfg(not(any(target_os = "android", target_os = "ios", target_family = "wasm")))]
         {
             let _ = self.manager.clear();
         }

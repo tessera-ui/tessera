@@ -132,7 +132,11 @@ pub(crate) fn app(
                                 });
                         });
                     }
-                    #[cfg(not(target_arch = "wasm32"))]
+                    #[cfg(not(any(
+                        target_family = "wasm",
+                        target_os = "android",
+                        target_os = "ios"
+                    )))]
                     _app_bar
                         .title_area_modifier(Modifier::new().window_drag_region())
                         .window_control_minimize()

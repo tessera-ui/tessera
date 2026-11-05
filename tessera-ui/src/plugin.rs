@@ -187,6 +187,19 @@ impl PluginContext {
         self.desktop.window_handle()
     }
 
+    /// Returns the active UIKit view when called on the main thread.
+    #[cfg(target_os = "ios")]
+    pub fn ui_view(&self) -> Option<objc2::rc::Retained<objc2_ui_kit::UIView>> {
+        use winit::raw_window_handle::{HasWindowHandle, RawWindowHandle};
+
+        objc2::MainThreadMarker::new()?;
+        let RawWindowHandle::UiKit(handle) = self.window().window_handle().ok()?.as_raw() else {
+            return None;
+        };
+        // SAFETY: Winit owns this live view and the main-thread check precedes access.
+        unsafe { objc2::rc::Retained::retain(handle.ui_view.as_ptr().cast()) }
+    }
+
     /// Returns the Android application handle when running on Android.
     #[cfg(target_os = "android")]
     pub fn android_app(&self) -> &AndroidApp {

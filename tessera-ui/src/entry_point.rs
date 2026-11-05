@@ -82,8 +82,19 @@ impl EntryPoint {
     }
 
     /// Runs the entry point on desktop platforms.
-    #[cfg(all(not(target_os = "android"), not(target_family = "wasm")))]
+    #[cfg(not(any(target_os = "android", target_os = "ios", target_family = "wasm")))]
     pub fn run_desktop(self) -> Result<(), winit::error::EventLoopError> {
+        self.run_native()
+    }
+
+    /// Runs the entry point on iOS from the application's main thread.
+    #[cfg(target_os = "ios")]
+    pub fn run_ios(self) -> Result<(), winit::error::EventLoopError> {
+        self.run_native()
+    }
+
+    #[cfg(all(not(target_os = "android"), not(target_family = "wasm")))]
+    fn run_native(self) -> Result<(), winit::error::EventLoopError> {
         let _session = self.session.enter();
         #[cfg(feature = "headless")]
         if crate::headless::headless_mode_requested() {
