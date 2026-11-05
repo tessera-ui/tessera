@@ -15,8 +15,7 @@ content insets, icon spacing, and outline thickness. `leading_icon(...)` and
 `trailing_icon(...)` size their icons automatically. Use `content_padding(...)`
 for per-edge insets or `padding(...)` for a uniform override. Explicit modifiers
 continue to bound the container; disabling a clickable button preserves its
-minimum touch target and geometry. The Basic Components page demonstrates the
-five sizes and visual variants.
+minimum touch target and geometry.
 
 Use `.round()` or `.square()` for size-aware resting corners and pressed shape
 motion. `.selected(value)` creates a controlled toggle button; update its state

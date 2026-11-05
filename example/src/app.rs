@@ -22,7 +22,6 @@ use tessera_ui::{
 };
 
 use crate::pages::{
-    animation::AnimationPageDestination, basic_components::BasicComponentsPageDestination,
     custom_shader::CustomShaderPageDestination, glass_components::GlassComponentsPageDestination,
     home::HomePageDestination, material_components::MaterialComponentsPageDestination,
 };
@@ -118,15 +117,6 @@ pub(crate) fn app(
                                             spacer().modifier(Modifier::new().height(Dp(8.0)));
 
                                             nav_item(
-                                                "Basic Components",
-                                                BasicComponentsPageDestination {},
-                                                nav_controller,
-                                                side_sheet_controller,
-                                            );
-
-                                            spacer().modifier(Modifier::new().height(Dp(8.0)));
-
-                                            nav_item(
                                                 "Material Components",
                                                 MaterialComponentsPageDestination {
                                                     selected: Some(selected),
@@ -150,15 +140,6 @@ pub(crate) fn app(
                                             nav_item(
                                                 "Custom Shader",
                                                 CustomShaderPageDestination {},
-                                                nav_controller,
-                                                side_sheet_controller,
-                                            );
-
-                                            spacer().modifier(Modifier::new().height(Dp(8.0)));
-
-                                            nav_item(
-                                                "Animation",
-                                                AnimationPageDestination {},
                                                 nav_controller,
                                                 side_sheet_controller,
                                             );
