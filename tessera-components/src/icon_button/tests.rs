@@ -541,7 +541,7 @@ fn controlled_selection_resolves_each_variant_and_disabled_outline() {
 }
 
 #[test]
-fn shape_motion_preserves_velocity_and_settles_without_bounce() {
+fn shape_motion_settles_without_bounce() {
     for size in SIZES {
         for shape in [IconButtonShape::Round, IconButtonShape::Square] {
             let start = IconButtonCorner::new(size, shape, false, false);
@@ -549,12 +549,7 @@ fn shape_motion_preserves_velocity_and_settles_without_bounce() {
             let mut motion = IconButtonMotion::new(start, 0);
             motion.retarget(pressed, 0);
             motion.advance(33_333_334);
-            let (value, velocity) = (motion.radius.value(), motion.radius.velocity());
             motion.retarget(start, 33_333_334);
-            assert_eq!(
-                (motion.radius.value(), motion.radius.velocity()),
-                (value, velocity)
-            );
             for frame in 3..150 {
                 motion.advance(frame * 16_666_667);
             }

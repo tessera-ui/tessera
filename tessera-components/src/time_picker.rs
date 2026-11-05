@@ -279,16 +279,13 @@ struct TimePickerSnapshot {
 /// # use tessera_ui::tessera;
 /// # #[tessera]
 /// # fn component() {
-/// use tessera_components::time_picker::{TimePickerLayout, TimePickerState, time_picker};
+/// use tessera_components::time_picker::{TimePickerLayout, time_picker};
 /// # use tessera_components::theme::{MaterialTheme, material_theme};
 ///
 /// # material_theme()
 /// #     .theme(|| MaterialTheme::default())
 /// #     .child(|| {
 /// time_picker().layout(TimePickerLayout::Horizontal);
-///
-/// let state = TimePickerState::default();
-/// assert!(state.hour() <= 23);
 /// # });
 /// # }
 /// # tessera_ui::testing::layout_test(component).run();

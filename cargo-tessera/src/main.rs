@@ -553,7 +553,7 @@ fn run() -> Result<()> {
             TesseraCommands::New { name, template } => {
                 let name = match name {
                     Some(n) => n,
-                    None => commands::new::prompt_project_name()?,
+                    None => commands::prompt_name("Project", "my-tessera-app")?,
                 };
                 let template = match template {
                     Some(t) => t,
@@ -565,7 +565,7 @@ fn run() -> Result<()> {
                 PluginCommands::New { name, template } => {
                     let name = match name {
                         Some(n) => n,
-                        None => plugin::prompt_plugin_name()?,
+                        None => commands::prompt_name("Plugin", "tessera-plugin")?,
                     };
                     let template = match template {
                         Some(t) => t,

@@ -1600,11 +1600,7 @@ fn apply_scrollable_focus_reveal_modifier(
             return false;
         }
 
-        controller.with_mut(|c| {
-            c.cancel_inertia();
-            c.velocity_tracker = None;
-            c.set_scroll_position(constrained_position);
-        });
+        controller.with_mut(|c| c.set_scroll_position(constrained_position));
         true
     }))
 }

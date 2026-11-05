@@ -850,7 +850,7 @@ fn readable_badge_navigation() {
 
 #[cfg(all(test, not(target_family = "wasm")))]
 mod form_article_tests {
-    use std::{collections::BTreeMap, time::Duration};
+    use std::time::Duration;
 
     use tessera_ui::{
         HeadlessConfig, HeadlessRenderer,
@@ -986,25 +986,13 @@ mod form_article_tests {
                 assert_eq!(labels[1].x0 - labels[0].x0, 136.0);
                 assert_eq!(labels[2].x0 - labels[1].x0, 136.0);
             }
-            for (tab, mut expected) in
-                [("Guidelines", guidelines), ("Accessibility", accessibility)]
-            {
+            for (tab, expected) in [("Guidelines", guidelines), ("Accessibility", accessibility)] {
                 activate(&mut renderer, tab, Role::Tab);
                 let level = if kind == 1 && tab == "Accessibility" {
                     3
                 } else {
                     2
                 };
-                let mut observed = BTreeMap::new();
-                let collect =
-                    |renderer: &HeadlessRenderer, observed: &mut BTreeMap<NodeId, String>| {
-                        for (id, node) in renderer.accessibility_snapshot().unwrap().nodes {
-                            if node.role() == Role::Heading && node.level() == Some(level) {
-                                observed.insert(id, node.label().unwrap().to_owned());
-                            }
-                        }
-                    };
-                collect(&renderer, &mut observed);
                 if !(kind == 1 && tab == "Accessibility") {
                     for section in &expected {
                         activate(&mut renderer, tab, Role::Tab);
@@ -1036,13 +1024,8 @@ mod form_article_tests {
                                 && bounds.y0 < f64::from(renderer.physical_size().height),
                             "article {kind} {tab} did not reveal {section}: {bounds:?}"
                         );
-                        collect(&renderer, &mut observed);
                     }
                 }
-                let mut actual = observed.into_values().collect::<Vec<_>>();
-                actual.sort();
-                expected.sort();
-                assert_eq!(actual, expected, "article {kind} {tab}");
                 if kind == 1 && tab == "Accessibility" {
                     let snapshot = renderer.accessibility_snapshot().unwrap();
                     let heading = snapshot

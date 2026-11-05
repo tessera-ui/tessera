@@ -681,23 +681,6 @@ fn labeling() {
     gap(Dp(12.0));
     guides::caption("The menu item's accessibility label aligns with the UI text");
     gap(Dp(24.0));
-    spec_table(
-        strings(&[
-            "Element",
-            "A11y label",
-            "Role (Web)",
-            "Role (Android Views)",
-            "Role (Jetpack Compose)",
-        ]),
-        vec![strings(&[
-            "Menu item text",
-            "Preview",
-            "Menu item",
-            "Generic actionable element",
-            "Generic actionable element",
-        ])],
-    );
-    gap(Dp(24.0));
     prose(
         "For menu items with text and an icon, the icon's accessibility label should be marked as decorative to avoid redundant verbalizations.",
     );
@@ -1423,43 +1406,26 @@ fn menu_color_figure(style: MenuColorStyle, dark: bool) {
                                 boxed()
                                     .modifier(watch(geometry, COLOR_ROWS[index]).fill_max_width())
                                     .children(move || {
-                                        if index == 0 {
-                                            menu_item()
-                                                .label(format!("Item {}", index + 1))
-                                                .selection_mode(MenuItemSelectionMode::Radio)
-                                                .selected(selected.get() == index)
-                                                .color_style(style)
-                                                .close_on_click(false)
-                                                .leading_icon(filled::VISIBILITY_SVG)
-                                                .on_click(move || selected.set(index));
-                                        } else if index == 1 {
-                                            menu_item()
-                                                .label(format!("Item {}", index + 1))
-                                                .selection_mode(MenuItemSelectionMode::Radio)
-                                                .selected(selected.get() == index)
-                                                .color_style(style)
-                                                .close_on_click(false)
-                                                .leading_icon(filled::CONTENT_COPY_SVG)
-                                                .trailing_text("⌘C")
-                                                .on_click(move || selected.set(index));
-                                        } else if index == 2 {
-                                            menu_item()
-                                                .label(format!("Item {}", index + 1))
-                                                .selection_mode(MenuItemSelectionMode::Radio)
-                                                .selected(selected.get() == index)
-                                                .color_style(style)
-                                                .close_on_click(false)
-                                                .leading_icon(filled::EDIT_SVG)
-                                                .trailing_icon(filled::ARROW_RIGHT_SVG)
-                                                .on_click(move || selected.set(index));
-                                        } else {
-                                            menu_item()
-                                                .label(format!("Item {}", index + 1))
-                                                .selection_mode(MenuItemSelectionMode::Radio)
-                                                .selected(selected.get() == index)
-                                                .color_style(style)
-                                                .close_on_click(false)
-                                                .on_click(move || selected.set(index));
+                                        let item = menu_item()
+                                            .label(format!("Item {}", index + 1))
+                                            .selection_mode(MenuItemSelectionMode::Radio)
+                                            .selected(selected.get() == index)
+                                            .color_style(style)
+                                            .close_on_click(false)
+                                            .on_click(move || selected.set(index));
+                                        match index {
+                                            0 => {
+                                                item.leading_icon(filled::VISIBILITY_SVG);
+                                            }
+                                            1 => {
+                                                item.leading_icon(filled::CONTENT_COPY_SVG)
+                                                    .trailing_text("⌘C");
+                                            }
+                                            2 => {
+                                                item.leading_icon(filled::EDIT_SVG)
+                                                    .trailing_icon(filled::ARROW_RIGHT_SVG);
+                                            }
+                                            _ => {}
                                         }
                                     });
                             }

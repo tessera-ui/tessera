@@ -4,7 +4,7 @@
 //!
 //! Use to add gaps between components or to create flexible, expanding regions.
 use tessera_ui::{
-    ComputedData, Constraint, LayoutResult, MeasurementError, Modifier,
+    ComputedData, LayoutResult, MeasurementError, Modifier,
     layout::{MeasureScope, layout},
     tessera,
 };
@@ -14,12 +14,8 @@ struct SpacerLayout;
 
 impl tessera_ui::LayoutModifierNode for SpacerLayout {
     fn measure(&self, input: &mut MeasureScope<'_>) -> Result<LayoutResult, MeasurementError> {
-        let constraint = Constraint::new(
-            input.parent_constraint().width(),
-            input.parent_constraint().height(),
-        );
         Ok(LayoutResult::new(ComputedData::min_from_constraint(
-            &constraint,
+            input.parent_constraint().as_ref(),
         )))
     }
 }

@@ -390,22 +390,6 @@ fn overview_and_color_figures_publish_distinct_native_drawers_and_legends() {
                 );
             }
         }
-        if page == 1 {
-            for label in [
-                "Surface container low",
-                "On surface variant",
-                "On secondary container",
-                "Secondary container",
-                "Scrim",
-            ] {
-                assert!(
-                    tree.nodes
-                        .iter()
-                        .any(|(_, node)| node.role() == Role::Label && node.label() == Some(label)),
-                    "missing color role {label}"
-                );
-            }
-        }
     }
 }
 

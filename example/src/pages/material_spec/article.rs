@@ -145,8 +145,6 @@ pub(super) fn article(
             .style(BACKGROUND.into())
             .modifier(Modifier::new().fill_max_size())
             .child(move || {
-                let pages = pages.clone();
-                let route = route.clone();
                 lazy_sections::viewport(data, selected, scroll, width)
                     .pages_optional(pages.clone())
                     .route_optional(route.clone());
@@ -458,7 +456,7 @@ fn article_tab_row(
         content_density.set(density);
         contents.set([Dp(160.0); 4]);
     }
-    let available = ["Overview", "Specs", "Guidelines", "Accessibility"].map(|label| {
+    let available = ARTICLE_TAB_TITLES.map(|label| {
         label == "Specs"
             || pages
                 .as_ref()

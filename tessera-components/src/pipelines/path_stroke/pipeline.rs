@@ -3,6 +3,8 @@ use tessera_ui::{
     wgpu,
 };
 
+use crate::pipelines::instanced::quad_pipeline;
+
 use super::command::PathStrokeCommand;
 
 #[repr(C)]
@@ -65,34 +67,17 @@ impl PathStrokePipeline {
             bind_group_layouts: &[Some(&layout)],
             immediate_size: 0,
         });
-        let pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
-            label: Some("Path Stroke Pipeline"),
-            layout: Some(&pipeline_layout),
-            vertex: wgpu::VertexState {
-                module: &shader,
-                entry_point: Some("vs_main"),
-                buffers: &[],
-                compilation_options: Default::default(),
-            },
-            primitive: wgpu::PrimitiveState::default(),
-            depth_stencil: tessera_ui::ui_stencil_state(),
-            multisample: wgpu::MultisampleState {
-                count: sample_count,
-                ..Default::default()
-            },
-            fragment: Some(wgpu::FragmentState {
-                module: &shader,
-                entry_point: Some("fs_main"),
-                compilation_options: Default::default(),
-                targets: &[Some(wgpu::ColorTargetState {
-                    format: config.format,
-                    blend: Some(wgpu::BlendState::ALPHA_BLENDING),
-                    write_mask: wgpu::ColorWrites::ALL,
-                })],
-            }),
-            multiview_mask: None,
+        let pipeline = quad_pipeline(
+            device,
+            &pipeline_layout,
+            &shader,
+            config.format,
+            sample_count,
             cache,
-        });
+            "Path Stroke Pipeline",
+            None,
+            &[],
+        );
         Self {
             pipeline,
             layout,

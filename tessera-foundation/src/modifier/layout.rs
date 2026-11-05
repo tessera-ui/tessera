@@ -125,13 +125,6 @@ impl Padding {
     }
 }
 
-pub(crate) fn shrink_dimension(dimension: AxisConstraint, before: Px, after: Px) -> AxisConstraint {
-    let subtract = before + after;
-    let min = (dimension.min - subtract).max(Px::ZERO);
-    let max = dimension.max.map(|value| (value - subtract).max(Px::ZERO));
-    AxisConstraint::new(min, max)
-}
-
 fn resolve_axis_constraint(
     parent: AxisConstraint,
     override_axis: Option<AxisConstraint>,
@@ -160,23 +153,11 @@ fn resolve_axis_constraint(
     }
 }
 
-/// Clamps a requested axis interval into the incoming parent interval.
-///
-/// Mirrors Compose's `Constraints.constrain`: a declared size is reduced when
-/// it exceeds the parent's bounds and raised when it falls short of them, so it
-/// never escapes the constraints supplied by the parent.
 fn constrain_axis_to_parent(axis: AxisConstraint, parent: AxisConstraint) -> AxisConstraint {
-    let min = match parent.max {
-        Some(parent_max) => axis.min.max(parent.min).min(parent_max),
-        None => axis.min.max(parent.min),
-    };
-    let max = match (axis.max, parent.max) {
-        (Some(axis_max), Some(parent_max)) => Some(axis_max.max(parent.min).min(parent_max)),
-        (Some(axis_max), None) => Some(axis_max.max(parent.min)),
-        (None, Some(parent_max)) => Some(parent_max),
-        (None, None) => None,
-    };
-    AxisConstraint::new(min, max)
+    AxisConstraint::new(
+        parent.clamp(axis.min),
+        axis.max.map(|max| parent.clamp(max)).or(parent.max),
+    )
 }
 
 #[derive(Clone, Copy, PartialEq)]
@@ -195,13 +176,10 @@ impl LayoutModifierNode for PaddingModifierNode {
         let right_px: Px = self.padding.right.into();
         let bottom_px: Px = self.padding.bottom.into();
 
-        let parent_constraint = Constraint::new(
-            input.layout_input.parent_constraint().width(),
-            input.layout_input.parent_constraint().height(),
-        );
+        let parent_constraint = input.layout_input.parent_constraint();
         let constraint = Constraint::new(
-            shrink_dimension(parent_constraint.width, left_px, right_px),
-            shrink_dimension(parent_constraint.height, top_px, bottom_px),
+            parent_constraint.width() - (left_px + right_px),
+            parent_constraint.height() - (top_px + bottom_px),
         );
         let child_size = child.measure(&constraint)?;
         child.place(PxPosition::new(left_px, top_px));

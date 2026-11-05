@@ -212,10 +212,7 @@ impl tessera_ui::LayoutModifierNode for SwitchLayout {
     }
 
     fn placement_eq(&self, other: &Self) -> bool {
-        self.track_width == other.track_width
-            && self.track_height == other.track_height
-            && self.thumb_diameter == other.thumb_diameter
-            && self.thumb_offset == other.thumb_offset
+        self.measure_eq(other) && self.thumb_offset == other.thumb_offset
     }
 
     fn place_children(

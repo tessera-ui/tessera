@@ -10,7 +10,7 @@ use tessera_components::{
     column::column,
     icon::icon,
     icon_button::icon_button,
-    material_icons::{filled, outlined},
+    material_icons::filled,
     modifier::{ModifierExt as _, SemanticsArgs},
     navigation_rail::{modal_navigation_rail, navigation_rail, navigation_rail_item},
     row::row,
@@ -30,7 +30,7 @@ use super::{
     ACCENT,
     article::{ArticlePage, SpecSection, article},
     gap,
-    navigation::{NAMES, navigation_color_roles},
+    navigation::{NAMES, destination_icon, navigation_color_roles},
     panel, spec_table, srgb, subheading, type_style,
 };
 
@@ -320,29 +320,6 @@ fn legend_list(items: Vec<String>) {
             legend(index + 1, item.clone());
         }
     });
-}
-
-#[tessera]
-fn destination_icon(index: usize, selected: bool) {
-    icon()
-        .painter(if selected {
-            [
-                filled::HOME_SVG,
-                filled::MAIL_SVG,
-                filled::BOOKMARK_SVG,
-                filled::PLAY_ARROW_SVG,
-                filled::SETTINGS_SVG,
-            ][index]
-        } else {
-            [
-                outlined::HOME_SVG,
-                outlined::MAIL_SVG,
-                outlined::BOOKMARK_BORDER_SVG,
-                outlined::PLAY_ARROW_SVG,
-                outlined::SETTINGS_SVG,
-            ][index]
-        })
-        .size(Dp(24.0));
 }
 
 fn format_rail_status(label: &str, selected: usize) -> String {

@@ -74,11 +74,6 @@ impl Default for CheckmarkCommand {
 }
 
 impl DrawCommand for CheckmarkCommand {
-    fn sample_region(&self) -> Option<tessera_ui::SampleRegion> {
-        // No specific barrier requirements for checkmark commands
-        None
-    }
-
     fn apply_opacity(&mut self, opacity: f32) {
         self.color = self
             .color

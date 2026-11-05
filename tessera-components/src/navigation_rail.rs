@@ -19,7 +19,7 @@ use tessera_ui::{
 
 use crate::{
     alignment::{CrossAxisAlignment, MainAxisAlignment},
-    animation,
+    animation::{self, SelectionAnimation},
     badge::BadgeDefaults,
     column::column,
     modal_focus::{ModalFocusState, modal_focus_modifier},
@@ -27,6 +27,7 @@ use crate::{
         InteractionState, ModifierExt, Padding, PointerEventContext, SelectableArgs, SemanticsArgs,
         with_keyboard_input,
     },
+    navigation_bar::interpolate_color,
     overlay_semantics::{dialog_semantics, overlay_background},
     ripple_state::{RippleSpec, RippleState},
     row::row,
@@ -57,15 +58,6 @@ const INDICATOR_TOP_TO_LABEL_PADDING: Dp = Dp(4.0);
 const START_ICON_TO_LABEL_PADDING: Dp = Dp(8.0);
 const TOP_ICON_INDICATOR_VERTICAL_PADDING: Dp = Dp(4.0);
 const START_ICON_INDICATOR_HORIZONTAL_PADDING: Dp = Dp(16.0);
-
-fn interpolate_color(from: Color, to: Color, progress: f32) -> Color {
-    Color {
-        r: from.r + (to.r - from.r) * progress,
-        g: from.g + (to.g - from.g) * progress,
-        b: from.b + (to.b - from.b) * progress,
-        a: from.a + (to.a - from.a) * progress,
-    }
-}
 
 fn lerp_dp(from: Dp, to: Dp, progress: f32) -> Dp {
     let t = f64::from(progress.clamp(0.0, 1.0));
@@ -717,7 +709,7 @@ pub fn navigation_rail_item(
 
     // Each item owns its own selection animation, keyed by call position, so
     // there is no shared index registry that could drift across rebuilds.
-    let animation = remember(|| NavigationRailItemAnimation::new(selected));
+    let animation = remember(|| SelectionAnimation::new(selected));
     let frame_nanos = current_frame_nanos();
     animation.with_mut(|state| state.set_selected(selected));
     let selection_fraction = animation.with_mut(|state| {
@@ -940,7 +932,6 @@ fn navigation_rail_content(
 /// fn navigation() {
 ///     let open = remember(|| false);
 ///     let selected = remember(|| 0usize);
-///     assert!(!open.get());
 ///     material_theme().child(move || {
 ///         modal_navigation_rail()
 ///             .is_open(open.get())
@@ -1112,63 +1103,6 @@ impl tessera_ui::LayoutModifierNode for ModalNavigationRailLayout {
     }
 }
 
-/// Per-item selection animation for a navigation rail destination.
-#[derive(Clone, PartialEq)]
-struct NavigationRailItemAnimation {
-    selected: bool,
-    progress: f32,
-    start_progress: f32,
-    last_change_frame_nanos: Option<u64>,
-}
-
-impl NavigationRailItemAnimation {
-    fn new(selected: bool) -> Self {
-        let progress = if selected { 1.0 } else { 0.0 };
-        Self {
-            selected,
-            progress,
-            start_progress: progress,
-            last_change_frame_nanos: None,
-        }
-    }
-
-    fn set_selected(&mut self, selected: bool) {
-        if self.selected != selected {
-            self.selected = selected;
-            self.start_progress = self.progress;
-            self.last_change_frame_nanos = Some(current_frame_nanos());
-        }
-    }
-
-    fn update(&mut self, frame_nanos: u64) {
-        if let Some(start_frame_nanos) = self.last_change_frame_nanos {
-            let elapsed_nanos = frame_nanos.saturating_sub(start_frame_nanos);
-            let animation_nanos = ANIMATION_DURATION.as_nanos().min(u64::MAX as u128) as u64;
-            let fraction = if animation_nanos == 0 {
-                1.0
-            } else {
-                (elapsed_nanos as f32 / animation_nanos as f32).min(1.0)
-            };
-            let target = if self.selected { 1.0 } else { 0.0 };
-            let eased = animation::easing(fraction);
-            self.progress = self.start_progress + (target - self.start_progress) * eased;
-            if fraction >= 1.0 {
-                self.last_change_frame_nanos = None;
-                self.progress = target;
-                self.start_progress = target;
-            }
-        }
-    }
-
-    fn progress(&self) -> f32 {
-        self.progress
-    }
-
-    fn is_animating(&self) -> bool {
-        self.last_change_frame_nanos.is_some()
-    }
-}
-
 /// Expansion animation state for the navigation rail container.
 #[derive(Clone, PartialEq, Default)]
 struct NavigationRailExpansion {
@@ -1283,9 +1217,6 @@ mod tests {
         );
         let _ = tessera_ui::testing::pump_layout_test_session(&mut session, 0);
 
-        // Collapsed rail items stack vertically at the 64dp minimum height with
-        // 4dp spacing after a 44dp top padding, so the middle item center is
-        // near y = 144.
         let now = tessera_ui::time::Instant::now();
         let cursor = Some(PxPosition::new(Px::new(48), Px::new(144)));
 

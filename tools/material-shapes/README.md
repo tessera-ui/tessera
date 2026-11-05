@@ -45,20 +45,14 @@ and eight ending coordinates as 32-bit floats, in anchor/control/control/anchor
 order. The header occupies 104 bytes; each pair occupies 64 bytes.
 
 The drawing scale includes the 38/48 active-size ratio and the rotation-safe
-bounds factor. Runtime shape interpolation, rotation, and tessellation run on
-the GPU. Instance buffers are reused across frames and separately retained for
-each draw batch to preserve queued writes.
+bounds factor.
 
 See [the asset notice](../../tessera-components/assets/material_loading_shapes.NOTICE)
 and [Apache 2.0 license](../../tessera-components/assets/material_loading_shapes.LICENSE).
 
 ## Circular wave regression reference
 
-`GenerateCircularWaveReference.java` uses the same pinned dependencies to generate
-an independent test fixture for the runtime Rust circle-to-star morph. It covers
-5, 6, 9, 12, and 24 vertices at amplitudes 0, 0.25, 0.5, 0.75, and 1. The runtime
-constructs geometry for the requested size and wavelength; it does not use this
-fixture as a lookup table.
+`GenerateCircularWaveReference.java` uses the same pinned dependencies.
 
 ```sh
 java -cp "/external/dependencies/*" tools/material-shapes/GenerateCircularWaveReference.java tessera-components/assets/circular_wave_reference.bin
@@ -67,9 +61,7 @@ java -cp "/external/dependencies/*" tools/material-shapes/GenerateCircularWaveRe
 The little-endian file starts with `MCW1` and a 32-bit case count. Each case
 contains a 32-bit vertex count, the circle outline, and five morph outlines.
 Each outline has a 32-bit cubic count followed by eight floats per cubic in
-anchor/control/control/anchor order. Tests compare both directions of the
-sampled outline distance and the starting point, allowing different equivalent
-cubic subdivisions. The normalized outline error must remain below 0.00015.
+anchor/control/control/anchor order.
 
 The fixture's SHA-256 is
 `2f3f39249b5ca45deaa4683f46c29411f21a8e592d3a047a63418918418881c3`.

@@ -190,7 +190,7 @@ fn token_menu(
 fn token_table(index: usize, group: String) {
     let mut sections = Vec::new();
     for token in TOKEN_SETS[index] {
-        if (group.is_empty() || token.group == group) && !sections.contains(&token.section) {
+        if token.group == group && !sections.contains(&token.section) {
             sections.push(token.section);
         }
     }
@@ -200,7 +200,7 @@ fn token_table(index: usize, group: String) {
         }
         let rows = TOKEN_SETS[index]
             .iter()
-            .filter(|token| (group.is_empty() || token.group == group) && token.section == section)
+            .filter(|token| token.group == group && token.section == section)
             .map(|token| vec![token.name.to_owned(), token.value.to_owned()])
             .collect();
         spec_table(vec!["Token".into(), "Value".into()], rows);

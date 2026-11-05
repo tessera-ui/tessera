@@ -403,8 +403,6 @@ fn handle_drag_gestures(
     }
 }
 
-/// Place bottom sheet if present. Extracted to reduce complexity of the parent
-/// function.
 fn place_bottom_sheet_if_present(
     input: &mut MeasureScope<'_>,
     result: &mut LayoutResult,

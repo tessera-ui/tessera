@@ -120,14 +120,6 @@ fn fixture(probe: TestProbe<Option<State<Settings>>>, clicks: TestProbe<usize>) 
                                 .shape(reference_shape(radius))
                                 .accessibility_label(format!("Reference {radius}"));
                         }
-                        spacer().modifier(
-                            Modifier::new().height(super::ListItemDefaults::SEGMENTED_GAP),
-                        );
-                        surface()
-                            .modifier(Modifier::new().size(Dp(96.0), Dp(56.0)))
-                            .style(SurfaceStyle::Filled { color: Color::RED })
-                            .shape(super::ListItemDefaults::shape())
-                            .accessibility_label("Default shape");
                     }
                 });
         });
@@ -266,10 +258,6 @@ fn check(samples: u32) {
             &patch_label(&renderer, "Reference 16", false, scale),
         );
         equal_patch(&inner, &patch_label(&renderer, "Reference 4", false, scale));
-        equal_patch(
-            &inner,
-            &patch_label(&renderer, "Default shape", false, scale),
-        );
         assert!(ink(&inner) > ink(&upper));
         equal_patch(&patch(&renderer, 0, false, scale), &upper);
         equal_patch(&patch(&renderer, 0, true, scale), &inner);

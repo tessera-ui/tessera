@@ -231,14 +231,7 @@ impl CardDefaults {
 
     /// Default elevation values for outlined cards.
     pub fn outlined_card_elevation() -> CardElevation {
-        CardElevation {
-            default_elevation: Dp(0.0),
-            pressed_elevation: Dp(0.0),
-            focused_elevation: Dp(0.0),
-            hovered_elevation: Dp(1.0),
-            dragged_elevation: Dp(3.0),
-            disabled_elevation: Dp(0.0),
-        }
+        Self::card_elevation()
     }
 
     /// Default colors for filled cards.
@@ -302,20 +295,6 @@ impl CardDefaults {
     }
 }
 
-#[derive(Clone)]
-struct CardResolvedArgs {
-    modifier: Modifier,
-    variant: CardVariant,
-    enabled: bool,
-    on_click: Option<Callback>,
-    interaction_state: Option<State<InteractionState>>,
-    shape: Option<Shape>,
-    colors: Option<CardColors>,
-    elevation: Option<CardElevation>,
-    border: Option<CardBorder>,
-    content: Option<RenderSlot>,
-}
-
 /// # card
 ///
 /// Renders a Material card container, optionally clickable and with animated
@@ -372,19 +351,10 @@ pub fn card(
     #[prop(into)] accessibility_label: Option<String>,
     content: Option<RenderSlot>,
 ) {
-    let args = CardResolvedArgs {
-        modifier: modifier.unwrap_or_default(),
-        variant: variant.unwrap_or_default(),
-        enabled: enabled.unwrap_or(true),
-        on_click,
-        interaction_state,
-        shape,
-        colors,
-        elevation,
-        border,
-        content,
-    };
-    let content = args.content.unwrap_or_else(RenderSlot::empty);
+    let modifier = modifier.unwrap_or_default();
+    let variant = variant.unwrap_or_default();
+    let enabled = enabled.unwrap_or(true);
+    let content = content.unwrap_or_else(RenderSlot::empty);
 
     let theme = use_context::<MaterialTheme>()
         .expect("MaterialTheme must be provided")
@@ -393,27 +363,27 @@ pub fn card(
         .map(|c| c.get().current)
         .unwrap_or(ContentColor::default().current);
 
-    let shape = args.shape.unwrap_or_else(|| match args.variant {
+    let shape = shape.unwrap_or_else(|| match variant {
         CardVariant::Filled => CardDefaults::shape(&theme),
         CardVariant::Elevated => CardDefaults::elevated_shape(&theme),
         CardVariant::Outlined => CardDefaults::outlined_shape(&theme),
     });
 
-    let colors = args.colors.unwrap_or_else(|| match args.variant {
+    let colors = colors.unwrap_or_else(|| match variant {
         CardVariant::Filled => CardDefaults::card_colors(&theme, content_color),
         CardVariant::Elevated => CardDefaults::elevated_card_colors(&theme, content_color),
         CardVariant::Outlined => CardDefaults::outlined_card_colors(&theme, content_color),
     });
 
-    let elevation = args.elevation.unwrap_or_else(|| match args.variant {
+    let elevation = elevation.unwrap_or_else(|| match variant {
         CardVariant::Filled => CardDefaults::card_elevation(),
         CardVariant::Elevated => CardDefaults::elevated_card_elevation(),
         CardVariant::Outlined => CardDefaults::outlined_card_elevation(),
     });
 
-    let clickable = args.on_click.is_some();
+    let clickable = on_click.is_some();
     let interaction_state = if clickable {
-        Some(if let Some(state) = args.interaction_state {
+        Some(if let Some(state) = interaction_state {
             state
         } else {
             remember(InteractionState::new)
@@ -421,18 +391,16 @@ pub fn card(
     } else {
         None
     };
-    if !args.enabled
-        && let Some(state) = interaction_state
-    {
+    if !enabled && let Some(state) = interaction_state {
         if state.with(|state| *state != InteractionState::default()) {
             state.set(InteractionState::default());
         }
     }
-    let border = match args.border {
+    let border = match border {
         Some(border) => Some(border),
-        None if matches!(args.variant, CardVariant::Outlined) => {
-            let mut border = CardDefaults::outlined_card_border(&theme, args.enabled);
-            if args.enabled
+        None if matches!(variant, CardVariant::Outlined) => {
+            let mut border = CardDefaults::outlined_card_border(&theme, enabled);
+            if enabled
                 && interaction_state.is_some_and(|state| {
                     state.with(|state| {
                         state.is_focused() && !state.is_pressed() && !state.is_dragged()
@@ -448,7 +416,6 @@ pub fn card(
 
     let elevation_spring = remember(|| CardElevationSpring::new(elevation.default_elevation()));
 
-    let enabled = args.enabled;
     let target = elevation.target(enabled, interaction_state);
     let should_update_spring = elevation_spring.with(|spring| {
         let mut next = spring.clone();
@@ -489,8 +456,8 @@ pub fn card(
         elevation.default_elevation()
     };
 
-    let container_color = colors.container_color(args.enabled);
-    let content_color = colors.content_color(args.enabled);
+    let container_color = colors.container_color(enabled);
+    let content_color = colors.content_color(enabled);
     let style = match border {
         Some(border) => SurfaceStyle::FilledOutlined {
             fill_color: container_color,
@@ -502,21 +469,19 @@ pub fn card(
         },
     };
 
-    let has_on_click = args.on_click.is_some();
-
     surface()
         .shape(shape)
         .clip_content(true)
-        .modifier(args.modifier)
+        .modifier(modifier)
         .content_color(content_color)
         .elevation(shadow_elevation)
-        .enabled(args.enabled)
+        .enabled(enabled)
         .style(style)
         .interaction_state_optional(interaction_state)
-        .on_click_optional(args.on_click)
-        .accessibility_role_optional(has_on_click.then_some(Role::Button))
+        .on_click_optional(on_click)
+        .accessibility_role_optional(clickable.then_some(Role::Button))
         .accessibility_label_optional(accessibility_label)
-        .accessibility_focusable_optional(has_on_click.then_some(args.enabled))
+        .accessibility_focusable_optional(clickable.then_some(enabled))
         .child_shared(content);
 }
 

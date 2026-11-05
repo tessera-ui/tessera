@@ -35,13 +35,6 @@ scales. A parent transformation composes with a child's transformation once.
 Measured layout sizes remain integer `PxSize` values; fractional window sizes
 must not be written back into local measurement or native control geometry.
 
-Placement modifiers transform parent-local positions. Prepared geometry keeps
-the resulting transformation at each ordered input action. Input delivery
-reuses those prepared values instead of running placement modifiers again.
-Cached layouts and subtree replay preserve the same transformation metadata.
-Geometry journals update affected descendants and frame consumers when an
-ancestor transformation changes.
-
 Rounded shape masks transform their fractional origins, extents, and radii
 together. Pointer shape checks use that same geometry. Integer scissors round
 outwards after the transformation.
@@ -95,17 +88,3 @@ another observer already watched the unchanged node. Existing observers run
 only when their own observed value changes. A local-size consumer, such as an
 outline or a sheet drag extent, must use local dimensions rather than a window
 rectangle's dimensions.
-
-## Verification
-
-The runtime regression at scale `0.625` and origin `(10.25, 20.5)` checks a
-`240 × 56` local child occupying exactly `150 × 35` window pixels, actual
-inverse-mapped input, and remaining scroll delivery to an ancestor. Existing
-observer coverage checks first attachment, reattachment, unchanged frames,
-and independent size versus transformation changes.
-
-Native GPU coverage must also exercise real outlined text fields and time
-pickers, including editing, focus, clipping, and accessibility. Identity-scale
-checks protect existing layout and rendering behavior. Performance checks
-should observe measurement and geometry work at the production runtime
-boundary rather than assert wall-clock timing.

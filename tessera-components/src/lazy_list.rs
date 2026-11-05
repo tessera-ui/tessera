@@ -16,8 +16,10 @@ use tessera_ui::{
 
 use crate::{
     alignment::CrossAxisAlignment,
-    layout_flex::cross_axis_child_constraint,
-    lazy_shared::{LazyItemsSlot, MeasuredMain, ZeroLayout, clamp_reported_main, hash_key},
+    layout_flex::{cross_axis_child_constraint, px_mul},
+    lazy_shared::{
+        FenwickTree, LazyItemsSlot, MeasuredMain, ZeroLayout, clamp_reported_main, hash_key,
+    },
     scrollable::{ScrollBarBehavior, ScrollableController, scrollable, synchronize_scroll_density},
 };
 
@@ -506,20 +508,18 @@ macro_rules! impl_lazy_list_builder {
                 self.props.append("content", move |props| {
                     let slot = {
                         let builder = builder.into();
-                        Some(LazySlot::Items(LazyItemsSlot {
+                        LazySlot::Items(LazyItemsSlot {
                             count,
                             builder,
                             key_provider: Some(CallbackWith::new(move |index| {
                                 hash_key(key_provider(index))
                             })),
-                        }))
+                        })
                     };
-                    if let Some(slot) = slot {
-                        props
-                            .content
-                            .get_or_insert_with(LazyListContent::default)
-                            .push(slot);
-                    }
+                    props
+                        .content
+                        .get_or_insert_with(LazyListContent::default)
+                        .push(slot);
                 });
                 Self { props: self.props }
             }
@@ -530,18 +530,16 @@ macro_rules! impl_lazy_list_builder {
                 F: Fn() -> Output + Send + Sync + 'static,
             {
                 self.props.append("content", move |props| {
-                    let slot = Some(LazySlot::sticky(
+                    let slot = LazySlot::sticky(
                         RenderSlotWith::new(move |_| {
                             builder();
                         }),
                         None,
-                    ));
-                    if let Some(slot) = slot {
-                        props
-                            .content
-                            .get_or_insert_with(LazyListContent::default)
-                            .push(slot);
-                    }
+                    );
+                    props
+                        .content
+                        .get_or_insert_with(LazyListContent::default)
+                        .push(slot);
                 });
                 Self { props: self.props }
             }
@@ -554,18 +552,16 @@ macro_rules! impl_lazy_list_builder {
             {
                 let key = hash_key(key);
                 self.props.append("content", move |props| {
-                    let slot = Some(LazySlot::sticky(
+                    let slot = LazySlot::sticky(
                         RenderSlotWith::new(move |_| {
                             builder();
                         }),
                         Some(key),
-                    ));
-                    if let Some(slot) = slot {
-                        props
-                            .content
-                            .get_or_insert_with(LazyListContent::default)
-                            .push(slot);
-                    }
+                    );
+                    props
+                        .content
+                        .get_or_insert_with(LazyListContent::default)
+                        .push(slot);
                 });
                 Self { props: self.props }
             }
@@ -583,14 +579,12 @@ macro_rules! impl_lazy_list_builder {
                 self.props.append("content", move |props| {
                     let slot = {
                         let builder = builder.into();
-                        Some(LazySlot::Sticky(LazyStickySlot { builder, key_hash }))
+                        LazySlot::Sticky(LazyStickySlot { builder, key_hash })
                     };
-                    if let Some(slot) = slot {
-                        props
-                            .content
-                            .get_or_insert_with(LazyListContent::default)
-                            .push(slot);
-                    }
+                    props
+                        .content
+                        .get_or_insert_with(LazyListContent::default)
+                        .push(slot);
                 });
                 Self { props: self.props }
             }
@@ -919,7 +913,7 @@ fn lazy_list_view(
         });
 }
 
-#[derive(Clone)]
+#[derive(Clone, PartialEq)]
 struct LazyListLayout {
     axis: LazyListAxis,
     cross_axis_alignment: CrossAxisAlignment,
@@ -935,25 +929,6 @@ struct LazyListLayout {
     scroll_offset: Px,
     controller: State<LazyListController>,
     scroll_controller: State<ScrollableController>,
-}
-
-impl PartialEq for LazyListLayout {
-    fn eq(&self, other: &Self) -> bool {
-        self.axis == other.axis
-            && self.cross_axis_alignment == other.cross_axis_alignment
-            && self.item_spacing == other.item_spacing
-            && self.estimated_item_main == other.estimated_item_main
-            && self.max_viewport_main == other.max_viewport_main
-            && self.padding_main == other.padding_main
-            && self.padding_cross == other.padding_cross
-            && self.viewport_limit == other.viewport_limit
-            && self.visible_item_indices == other.visible_item_indices
-            && self.composed_item_indices == other.composed_item_indices
-            && self.sticky_indices == other.sticky_indices
-            && self.scroll_offset == other.scroll_offset
-            && self.controller == other.controller
-            && self.scroll_controller == other.scroll_controller
-    }
 }
 
 impl tessera_ui::LayoutModifierNode for LazyListLayout {
@@ -1161,18 +1136,7 @@ impl tessera_ui::LayoutModifierNode for LazyListLayout {
     }
 
     fn placement_eq(&self, other: &Self) -> bool {
-        self.axis == other.axis
-            && self.cross_axis_alignment == other.cross_axis_alignment
-            && self.item_spacing == other.item_spacing
-            && self.estimated_item_main == other.estimated_item_main
-            && self.max_viewport_main == other.max_viewport_main
-            && self.padding_main == other.padding_main
-            && self.padding_cross == other.padding_cross
-            && self.viewport_limit == other.viewport_limit
-            && self.visible_item_indices == other.visible_item_indices
-            && self.composed_item_indices == other.composed_item_indices
-            && self.sticky_indices == other.sticky_indices
-            && self.scroll_offset == other.scroll_offset
+        self.measure_eq(other) && self.scroll_offset == other.scroll_offset
     }
 
     fn place_children(
@@ -1831,60 +1795,6 @@ impl LazyListCache {
         }
         low.saturating_sub(1)
             .min(self.total_items.saturating_sub(1))
-    }
-}
-
-#[derive(Default, Clone, PartialEq)]
-struct FenwickTree {
-    data: Vec<i64>,
-}
-
-impl FenwickTree {
-    fn resize(&mut self, len: usize) {
-        self.data.clear();
-        self.data.resize(len + 1, 0);
-    }
-
-    fn update(&mut self, index: usize, delta: Px) {
-        if self.data.is_empty() {
-            return;
-        }
-        let mut i = index + 1;
-        let delta_i64 = delta.0 as i64;
-        while i < self.data.len() {
-            self.data[i] = self.data[i].saturating_add(delta_i64);
-            i += i & (!i + 1);
-        }
-    }
-
-    fn prefix_sum(&self, count: usize) -> Px {
-        if self.data.is_empty() {
-            return Px::ZERO;
-        }
-        let mut idx = count;
-        let mut sum = 0i64;
-        while idx > 0 {
-            sum = sum.saturating_add(self.data[idx]);
-            idx &= idx - 1;
-        }
-        px_from_i64(sum)
-    }
-}
-
-fn px_mul(px: Px, times: usize) -> Px {
-    if times == 0 {
-        return Px::ZERO;
-    }
-    px_from_i64(px.0 as i64 * times as i64)
-}
-
-fn px_from_i64(value: i64) -> Px {
-    if value > i64::from(i32::MAX) {
-        Px(i32::MAX)
-    } else if value < i64::from(i32::MIN) {
-        Px(i32::MIN)
-    } else {
-        Px(value as i32)
     }
 }
 

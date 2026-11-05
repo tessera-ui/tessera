@@ -235,14 +235,10 @@ impl tessera_ui::LayoutModifierNode for ExtendedFabLayout {
 ///
 /// ```
 /// use tessera_components::{
-///     extended_floating_action_button::{
-///         ExtendedFloatingActionButtonSize, extended_floating_action_button,
-///     },
+///     extended_floating_action_button::extended_floating_action_button,
 ///     material_icons::filled,
 /// };
-/// use tessera_ui::{Dp, remember, tessera};
-///
-/// assert_eq!(ExtendedFloatingActionButtonSize::Medium.height(), Dp(80.0));
+/// use tessera_ui::{remember, tessera};
 ///
 /// #[tessera]
 /// fn compose_action() {

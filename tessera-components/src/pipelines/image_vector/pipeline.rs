@@ -3,7 +3,7 @@ use std::{collections::HashMap, num::NonZeroU64};
 use encase::{ShaderType, UniformBuffer};
 use glam::{Vec2, Vec4};
 use tessera_ui::{
-    Color, PxSize,
+    DrawGeometry, PxSize,
     renderer::drawer::pipeline::{DrawContext, DrawablePipeline, FrameContext},
     wgpu,
 };
@@ -518,20 +518,11 @@ impl DrawablePipeline<ImageVectorCommand> for ImageVectorPipeline {
                 continue;
             };
             let key = AtlasKey::new(&command.data, width, height);
-            let (uv_origin, uv_scale, page_index) = match self.cache.get(&key) {
-                Some(entry) => (entry.uv_origin, entry.uv_scale, entry.page_index),
-                None => continue,
+            let Some(entry) = self.cache.get(&key) else {
+                continue;
             };
-
-            let uniforms = compute_sample_uniforms(SampleUniformParams {
-                geometry: *geometry,
-                tint: command.tint,
-                tint_mode: command.tint_mode,
-                rotation: command.rotation,
-                uv_origin,
-                uv_scale,
-                target_size: context.target_size,
-            });
+            let uniforms = compute_sample_uniforms(command, *geometry, entry, context.target_size);
+            let page_index = entry.page_index;
             let mut buffer = UniformBuffer::new(Vec::new());
             buffer
                 .write(&uniforms)
@@ -628,28 +619,12 @@ fn raster_uniforms() -> ImageVectorUniforms {
     }
 }
 
-#[derive(Clone, PartialEq, Copy)]
-struct SampleUniformParams {
-    geometry: tessera_ui::DrawGeometry,
-    tint: Color,
-    tint_mode: VectorTintMode,
-    rotation: f32,
-    uv_origin: [f32; 2],
-    uv_scale: [f32; 2],
+fn compute_sample_uniforms(
+    command: &ImageVectorCommand,
+    geometry: DrawGeometry,
+    entry: &AtlasCacheEntry,
     target_size: PxSize,
-}
-
-fn compute_sample_uniforms(params: SampleUniformParams) -> AtlasSampleUniforms {
-    let SampleUniformParams {
-        geometry,
-        tint,
-        tint_mode,
-        rotation,
-        uv_origin,
-        uv_scale,
-        target_size,
-    } = params;
-
+) -> AtlasSampleUniforms {
     let start_pos = geometry.window_origin();
     let [width, height] = geometry.window_size();
     let left = (start_pos.x / target_size.width.to_f32()) * 2.0 - 1.0;
@@ -660,18 +635,23 @@ fn compute_sample_uniforms(params: SampleUniformParams) -> AtlasSampleUniforms {
     AtlasSampleUniforms {
         origin: Vec2::new(left, top),
         scale: Vec2::new(right - left, bottom - top),
-        uv_origin: Vec2::from_array(uv_origin),
-        uv_scale: Vec2::from_array(uv_scale),
-        tint: Vec4::new(tint.r, tint.g, tint.b, tint.a),
-        tint_mode: match tint_mode {
+        uv_origin: Vec2::from_array(entry.uv_origin),
+        uv_scale: Vec2::from_array(entry.uv_scale),
+        tint: Vec4::new(
+            command.tint.r,
+            command.tint.g,
+            command.tint.b,
+            command.tint.a,
+        ),
+        tint_mode: match command.tint_mode {
             VectorTintMode::Multiply => 0,
             VectorTintMode::Solid => 1,
         },
-        rotation: rotation.to_radians(),
+        rotation: command.rotation.to_radians(),
     }
 }
 
-fn physical_dimensions(geometry: tessera_ui::DrawGeometry) -> Option<(u32, u32)> {
+fn physical_dimensions(geometry: DrawGeometry) -> Option<(u32, u32)> {
     let [width, height] = geometry.window_size();
     if width <= 0.0 || height <= 0.0 || width > u32::MAX as f32 || height > u32::MAX as f32 {
         None

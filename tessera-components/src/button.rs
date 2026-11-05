@@ -21,10 +21,7 @@ use crate::{
     modifier::{InteractionState, InteractionVisualState, ModifierExt, Padding},
     shape_def::{RoundedCorner, Shape},
     surface::{RipplePresentation, SurfaceStyle, surface},
-    theme::{
-        ContentColor, MaterialAlpha, MaterialColorScheme, MaterialTheme, TextStyle,
-        content_color_for,
-    },
+    theme::{MaterialAlpha, MaterialColorScheme, MaterialTheme, TextStyle, content_color_for},
 };
 
 /// Visual variants of the Material Design 3 [`button`].
@@ -301,7 +298,7 @@ struct ButtonResolvedArgs {
     enabled: bool,
     modifier: Modifier,
     color: Color,
-    content_color: Option<Color>,
+    content_color: Color,
     shape: Shape,
     padding: Padding,
     on_click: Option<Callback>,
@@ -368,8 +365,6 @@ struct ButtonResolvedArgs {
 ///
 /// ```
 /// # use tessera_ui::tessera;
-/// use tessera_components::button::ButtonSize;
-/// assert_eq!(ButtonSize::Medium.height(), tessera_ui::Dp(56.0));
 /// # #[tessera]
 /// # fn component() {
 /// use tessera_components::{button::button, text::text};
@@ -598,7 +593,7 @@ pub fn button(
         enabled,
         modifier: modifier.unwrap_or_default(),
         color: container_color,
-        content_color: Some(content_color),
+        content_color,
         shape: shape.unwrap_or_else(|| motion.with(ButtonMotion::shape)),
         padding: content_padding
             .or_else(|| padding.map(Padding::all))
@@ -705,10 +700,6 @@ pub fn button(
                 );
             });
     });
-    let inherited_content_color = use_context::<ContentColor>()
-        .map(|c| c.get().current)
-        .unwrap_or(ContentColor::default().current);
-
     let container_color = if button_args.enabled {
         button_args.color
     } else {
@@ -716,9 +707,7 @@ pub fn button(
     };
 
     let content_color = if button_args.enabled {
-        button_args.content_color.unwrap_or_else(|| {
-            content_color_for(button_args.color, &scheme).unwrap_or(inherited_content_color)
-        })
+        button_args.content_color
     } else {
         button_args.disabled_content_color
     };
@@ -928,8 +917,13 @@ mod tests {
     };
 
     use crate::{
-        column::column, icon::icon, material_icons::filled, modifier::SemanticsArgs,
-        spacer::spacer, text::text, theme::material_theme,
+        column::column,
+        icon::icon,
+        material_icons::filled,
+        modifier::SemanticsArgs,
+        spacer::spacer,
+        text::text,
+        theme::{ContentColor, material_theme},
     };
 
     use super::*;

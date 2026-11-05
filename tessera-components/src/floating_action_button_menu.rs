@@ -201,16 +201,10 @@ impl Default for PanelBounds {
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, PartialEq)]
 struct MenuLayout {
     alignment: FloatingActionButtonMenuAlignment,
     bounds: State<PanelBounds>,
-}
-
-impl PartialEq for MenuLayout {
-    fn eq(&self, other: &Self) -> bool {
-        self.alignment == other.alignment && self.bounds == other.bounds
-    }
 }
 
 impl tessera_ui::LayoutModifierNode for MenuLayout {

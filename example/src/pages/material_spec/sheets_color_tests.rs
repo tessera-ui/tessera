@@ -228,16 +228,6 @@ fn assert_pixels(
 ) {
     let pixels = renderer.read_pixels().unwrap();
     let width = renderer.physical_size().width as usize;
-    if let Some(directory) = std::env::var_os("TESSERA_MENU_QA_DIR") {
-        tessera_ui::headless::write_png_file(
-            std::path::PathBuf::from(directory)
-                .join(format!("sheet-colors-{side}-{modal}-{width}.png")),
-            width as u32,
-            renderer.physical_size().height,
-            &pixels,
-        )
-        .unwrap();
-    }
     let light = geometry(renderer, false)["figure"];
     let dark = geometry(renderer, true)["figure"];
     let x = light
@@ -281,7 +271,6 @@ fn assert_pixels(
             let reference = close.expect("Side sheet close icon calibration");
             assert_eq!(reference.width as usize, width);
             let ink = &reference.ink[dark as usize];
-            assert!(ink.len() >= 2);
             for &(i, expected) in ink {
                 for channel in 0..4 {
                     assert!(

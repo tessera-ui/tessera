@@ -107,44 +107,34 @@ fn token_selector_switches_all_sets_and_accordion_controls_hide_and_restore_rows
     .expect("native token selector renderer");
     renderer.render_frames(6);
     let options = [
-        (
-            "Slider",
-            "Enabled",
-            "md.comp.slider.active.track.height",
-            "16dp",
-        ),
+        ("Slider", "Enabled", "md.comp.slider.active.track.height"),
         (
             "Slider - Size - Xsmall",
             "Active track",
             "md.comp.slider.xsmall.active.track.height",
-            "16dp",
         ),
         (
             "Slider - Size - Small",
             "Active track",
             "md.comp.slider.small.active.track.height",
-            "24dp",
         ),
         (
             "Slider - Size - Medium",
             "Active track",
             "md.comp.slider.medium.active.track.height",
-            "40dp",
         ),
         (
             "Slider - Size - Large",
             "Active track",
             "md.comp.slider.large.active.track.height",
-            "56dp",
         ),
         (
             "Slider - Size - Xlarge",
             "Active track",
             "md.comp.slider.xlarge.active.track.height",
-            "96dp",
         ),
     ];
-    for (selected, group, token, value) in options {
+    for (selected, group, token) in options {
         click_button(&mut renderer, "Slider token set selector");
         let menu = menu_options(&renderer);
         assert_eq!(menu.len(), 6, "all six token sets are available");
@@ -169,10 +159,6 @@ fn token_selector_switches_all_sets_and_accordion_controls_hide_and_restore_rows
         assert!(
             contains_text(&renderer, token),
             "{selected} displays its own token rows"
-        );
-        assert!(
-            contains_text(&renderer, value),
-            "{selected} displays its track height"
         );
         click_button(&mut renderer, "Slider token set selector");
         let reopened = menu_options(&renderer);

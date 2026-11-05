@@ -240,45 +240,15 @@ impl tessera_ui::DrawModifierNode for CircularProgressLayout {
             ProgressArcCap::Round
         };
 
-        let start_base = 270.0;
         let gap_sweep =
             circular_gap_sweep_degrees(self.diameter, self.stroke_width, self.gap_size, is_butt);
-
-        let mut metadata = input.metadata_mut();
-
-        if let Some(progress) = self.progress {
+        let (start, sweep) = if let Some(progress) = self.progress {
             let progress = if progress.is_nan() {
                 0.0
             } else {
                 progress.clamp(0.0, 1.0)
             };
-            let sweep = progress * 360.0;
-            let gap = sweep.min(gap_sweep);
-            let track_start = start_base + sweep + gap;
-            let track_sweep = 360.0 - sweep - gap * 2.0;
-
-            if self.track_color.a > 0.0 && track_sweep > 0.0 {
-                metadata
-                    .fragment_mut()
-                    .push_draw_command(ProgressArcCommand {
-                        color: self.track_color,
-                        stroke_width_px: stroke_px.to_f32(),
-                        start_angle_degrees: track_start,
-                        sweep_angle_degrees: track_sweep,
-                        cap,
-                    });
-            }
-            if self.color.a > 0.0 && sweep > 0.0 {
-                metadata
-                    .fragment_mut()
-                    .push_draw_command(ProgressArcCommand {
-                        color: self.color,
-                        stroke_width_px: stroke_px.to_f32(),
-                        start_angle_degrees: start_base,
-                        sweep_angle_degrees: sweep,
-                        cap,
-                    });
-            }
+            (270.0, progress * 360.0)
         } else {
             let elapsed_ms = self
                 .frame_tick
@@ -286,40 +256,35 @@ impl tessera_ui::DrawModifierNode for CircularProgressLayout {
                 .saturating_sub(self.animation_start_nanos) as f32
                 / 1_000_000.0;
             let cycle_ms = elapsed_ms % 6000.0;
-
-            let global_rotation = (cycle_ms / 6000.0) * 1080.0;
-            let additional_rotation = circular_additional_rotation_degrees(cycle_ms);
-            let rotation = global_rotation + additional_rotation;
-
-            let progress = circular_indeterminate_progress(cycle_ms);
-            let sweep = progress * 360.0;
-            let gap = sweep.min(gap_sweep);
-
-            let track_start = rotation + sweep + gap;
-            let track_sweep = 360.0 - sweep - gap * 2.0;
-
-            if self.track_color.a > 0.0 && track_sweep > 0.0 {
-                metadata
-                    .fragment_mut()
-                    .push_draw_command(ProgressArcCommand {
-                        color: self.track_color,
-                        stroke_width_px: stroke_px.to_f32(),
-                        start_angle_degrees: track_start,
-                        sweep_angle_degrees: track_sweep,
-                        cap,
-                    });
-            }
-            if self.color.a > 0.0 && sweep > 0.0 {
-                metadata
-                    .fragment_mut()
-                    .push_draw_command(ProgressArcCommand {
-                        color: self.color,
-                        stroke_width_px: stroke_px.to_f32(),
-                        start_angle_degrees: rotation,
-                        sweep_angle_degrees: sweep,
-                        cap,
-                    });
-            }
+            let rotation =
+                (cycle_ms / 6000.0) * 1080.0 + circular_additional_rotation_degrees(cycle_ms);
+            (rotation, circular_indeterminate_progress(cycle_ms) * 360.0)
+        };
+        let gap = sweep.min(gap_sweep);
+        let track_start = start + sweep + gap;
+        let track_sweep = 360.0 - sweep - gap * 2.0;
+        let mut metadata = input.metadata_mut();
+        if self.track_color.a > 0.0 && track_sweep > 0.0 {
+            metadata
+                .fragment_mut()
+                .push_draw_command(ProgressArcCommand {
+                    color: self.track_color,
+                    stroke_width_px: stroke_px.to_f32(),
+                    start_angle_degrees: track_start,
+                    sweep_angle_degrees: track_sweep,
+                    cap,
+                });
+        }
+        if self.color.a > 0.0 && sweep > 0.0 {
+            metadata
+                .fragment_mut()
+                .push_draw_command(ProgressArcCommand {
+                    color: self.color,
+                    stroke_width_px: stroke_px.to_f32(),
+                    start_angle_degrees: start,
+                    sweep_angle_degrees: sweep,
+                    cap,
+                });
         }
         content.draw(input);
     }

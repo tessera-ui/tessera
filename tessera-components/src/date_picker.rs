@@ -375,16 +375,7 @@ impl DatePickerState {
     pub fn set_year_range(&mut self, year_range: RangeInclusive<i32>) {
         self.year_range = normalize_year_range(year_range);
         self.displayed_month = clamp_month_to_range(self.displayed_month, &self.year_range);
-        if let Some(date) = self.selected_date
-            && !is_date_selectable(
-                date,
-                &self.year_range,
-                self.is_selectable_date.as_ref(),
-                self.is_selectable_year.as_ref(),
-            )
-        {
-            self.selected_date = None;
-        }
+        self.clear_unselectable_date();
     }
 
     /// Updates the date predicate.
@@ -448,7 +439,7 @@ impl Default for DatePickerState {
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, PartialEq)]
 struct DatePickerSnapshot {
     selected_date: Option<CalendarDate>,
     displayed_month: YearMonth,
@@ -456,17 +447,6 @@ struct DatePickerSnapshot {
     is_selectable_date: Option<CallbackWith<CalendarDate, bool>>,
     is_selectable_year: Option<CallbackWith<i32, bool>>,
     display_mode: DatePickerDisplayMode,
-}
-
-impl PartialEq for DatePickerSnapshot {
-    fn eq(&self, other: &Self) -> bool {
-        self.selected_date == other.selected_date
-            && self.displayed_month == other.displayed_month
-            && self.year_range == other.year_range
-            && self.is_selectable_date == other.is_selectable_date
-            && self.is_selectable_year == other.is_selectable_year
-            && self.display_mode == other.display_mode
-    }
 }
 
 #[derive(Clone, PartialEq)]

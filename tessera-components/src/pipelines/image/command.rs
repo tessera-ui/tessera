@@ -14,9 +14,7 @@ use tessera_ui::DrawCommand;
 /// - `height`: Image height in pixels.
 ///
 /// Prefer [`ImageData::from_rgba`] to construct image content. Cloning shares
-/// pixel storage; hashing and comparisons between shared clones take constant
-/// time. Independently allocated images compare by dimensions and pixel
-/// content.
+/// pixel storage; independently allocated images compare by dimensions and pixels.
 #[derive(Debug, Clone)]
 pub struct ImageData {
     /// Raw RGBA pixel buffer.
@@ -25,12 +23,11 @@ pub struct ImageData {
     pub width: u32,
     /// Image height in pixels.
     pub height: u32,
-    /// Content hash of `data`, computed once at construction.
     content_hash: u64,
 }
 
 impl ImageData {
-    /// Builds image data from an RGBA buffer and caches a content hash.
+    /// Builds image data from an RGBA buffer.
     pub fn from_rgba(data: impl Into<Arc<Vec<u8>>>, width: u32, height: u32) -> Self {
         let data = data.into();
         let content_hash = content_hash(data.as_ref());
@@ -57,36 +54,12 @@ impl Hash for ImageData {
     }
 }
 
-#[derive(Debug, PartialEq)]
-pub(crate) enum ImageComparison {
-    DifferentMetadata,
-    SharedPixels,
-    ComparedPixels(bool),
-}
-
-impl ImageData {
-    pub(crate) fn comparison(&self, other: &Self) -> ImageComparison {
-        if self.width != other.width
-            || self.height != other.height
-            || self.content_hash != other.content_hash
-        {
-            return ImageComparison::DifferentMetadata;
-        }
-        if Arc::ptr_eq(&self.data, &other.data) {
-            ImageComparison::SharedPixels
-        } else {
-            ImageComparison::ComparedPixels(self.data.as_ref() == other.data.as_ref())
-        }
-    }
-}
-
 impl PartialEq for ImageData {
     fn eq(&self, other: &Self) -> bool {
-        match self.comparison(other) {
-            ImageComparison::DifferentMetadata => false,
-            ImageComparison::SharedPixels => true,
-            ImageComparison::ComparedPixels(equal) => equal,
-        }
+        self.width == other.width
+            && self.height == other.height
+            && self.content_hash == other.content_hash
+            && (Arc::ptr_eq(&self.data, &other.data) || self.data == other.data)
     }
 }
 
@@ -102,11 +75,6 @@ pub struct ImageCommand {
 }
 
 impl DrawCommand for ImageCommand {
-    fn sample_region(&self) -> Option<tessera_ui::SampleRegion> {
-        // This command does not require any specific barriers.
-        None
-    }
-
     fn apply_opacity(&mut self, opacity: f32) {
         self.opacity = (self.opacity * opacity).clamp(0.0, 1.0);
     }
@@ -116,28 +84,16 @@ impl DrawCommand for ImageCommand {
 mod tests {
     use std::sync::Arc;
 
-    use super::{ImageComparison, ImageData};
+    use super::ImageData;
 
     #[test]
     fn independently_allocated_images_compare_pixels_even_when_hashes_collide() {
         let first = ImageData::from_rgba(vec![255, 0, 0, 255], 1, 1);
         let equal = ImageData::from_rgba(vec![255, 0, 0, 255], 1, 1);
         assert_eq!(first, equal);
-        assert_eq!(
-            first.comparison(&equal),
-            ImageComparison::ComparedPixels(true)
-        );
-        assert_eq!(
-            first.comparison(&first.clone()),
-            ImageComparison::SharedPixels
-        );
         let mut collision = ImageData::from_rgba(vec![0, 0, 255, 255], 1, 1);
         collision.content_hash = first.content_hash;
         assert_ne!(first, collision);
-        assert_eq!(
-            first.comparison(&collision),
-            ImageComparison::ComparedPixels(false)
-        );
     }
 
     #[test]

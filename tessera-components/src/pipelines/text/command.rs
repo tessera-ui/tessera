@@ -12,11 +12,6 @@ pub struct TextCommand {
 }
 
 impl DrawCommand for TextCommand {
-    fn sample_region(&self) -> Option<tessera_ui::SampleRegion> {
-        // No specific barrier requirements for text commands
-        None
-    }
-
     fn apply_opacity(&mut self, opacity: f32) {
         self.data.apply_opacity(opacity);
     }

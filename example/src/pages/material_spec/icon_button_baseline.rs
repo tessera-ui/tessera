@@ -7,7 +7,7 @@
 use tessera_components::{
     button::button,
     flow_row::flow_row,
-    icon_button::{IconButtonSize, IconButtonVariant, icon_button},
+    icon_button::{IconButtonVariant, icon_button},
     material_icons::filled,
     text::text,
 };
@@ -64,7 +64,6 @@ pub(super) fn figure() {
     };
     icon_button()
         .variant(variant.get())
-        .size(IconButtonSize::Small)
         .icon(filled::EDIT_SVG)
         .accessibility_label("Baseline icon button preview")
         .accessibility_description(format!("Activations: {}", actions.get()))

@@ -292,7 +292,7 @@ pub fn image(#[prop(skip_setter)] painter: Option<Painter>, modifier: Option<Mod
         .draw(policy);
 }
 
-fn clamp_f32_to_px(value: f32) -> Px {
+pub(crate) fn clamp_f32_to_px(value: f32) -> Px {
     let clamped = value.max(0.0).min(i32::MAX as f32);
     Px(clamped.round() as i32)
 }

@@ -96,7 +96,14 @@ impl FluidGlassSdfGenerator {
     fn new(device: &wgpu::Device, pipeline_cache: Option<&wgpu::PipelineCache>) -> Self {
         let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
             label: Some("Fluid Glass SDF Cache Shader"),
-            source: wgpu::ShaderSource::Wgsl(include_str!("sdf_cache.wgsl").into()),
+            source: wgpu::ShaderSource::Wgsl(
+                concat!(
+                    include_str!("sdf_common.wgsl"),
+                    "\n",
+                    include_str!("sdf_cache.wgsl")
+                )
+                .into(),
+            ),
         });
 
         let bind_group_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
@@ -273,7 +280,6 @@ pub(crate) struct FluidGlassPipeline {
     pipeline: wgpu::RenderPipeline,
     bind_group_layout: wgpu::BindGroupLayout,
     sampler: wgpu::Sampler,
-    sdf_sampler: wgpu::Sampler,
     sdf_generator: FluidGlassSdfGenerator,
     sdf_cache: LruCache<FluidGlassSdfCacheKey, FluidGlassSdfCacheEntry>,
     /// Tracks SDF usage frequency to avoid caching transient SDFs
@@ -284,10 +290,7 @@ pub(crate) struct FluidGlassPipeline {
 }
 
 impl FluidGlassPipeline {
-    /// Construct a new FluidGlassPipeline.
-    /// This constructor delegates sampler, bind group layout and pipeline
-    /// construction to small helpers to keep the top-level function short
-    /// and easier to reason about.
+    /// Builds the fluid glass pipeline.
     pub fn new(
         gpu: &wgpu::Device,
         pipeline_cache: Option<&wgpu::PipelineCache>,
@@ -296,11 +299,17 @@ impl FluidGlassPipeline {
     ) -> Self {
         let shader = gpu.create_shader_module(wgpu::ShaderModuleDescriptor {
             label: Some("Fluid Glass Shader"),
-            source: wgpu::ShaderSource::Wgsl(include_str!("glass.wgsl").into()),
+            source: wgpu::ShaderSource::Wgsl(
+                concat!(
+                    include_str!("sdf_common.wgsl"),
+                    "\n",
+                    include_str!("glass.wgsl")
+                )
+                .into(),
+            ),
         });
 
         let sampler = Self::create_sampler(gpu);
-        let sdf_sampler = Self::create_sampler(gpu);
         let bind_group_layout = Self::create_bind_group_layout(gpu);
         let pipeline = Self::create_render_pipeline(
             gpu,
@@ -335,7 +344,6 @@ impl FluidGlassPipeline {
             pipeline,
             bind_group_layout,
             sampler,
-            sdf_sampler,
             sdf_generator,
             sdf_cache,
             sdf_heat_tracker: HashMap::new(),
@@ -745,7 +753,7 @@ impl FluidGlassPipeline {
                 },
                 wgpu::BindGroupEntry {
                     binding: 4,
-                    resource: wgpu::BindingResource::Sampler(&self.sdf_sampler),
+                    resource: wgpu::BindingResource::Sampler(&self.sampler),
                 },
             ],
             label: Some("fluid_glass_bind_group"),

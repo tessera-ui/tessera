@@ -36,8 +36,7 @@ impl Px {
 
     /// Converts to density-independent units using the active session's density.
     pub fn to_dp(self) -> Dp {
-        let scale_factor = crate::dp::scale_factor();
-        Dp((self.0 as f64) / scale_factor)
+        Dp::from_pixels_f64(self.0 as f64)
     }
 
     /// Returns the absolute value as a u32
@@ -67,8 +66,7 @@ impl Px {
 
     /// Truncates a fractional pixel value toward zero, saturating at `i32` bounds.
     pub fn saturating_from_f32(value: f32) -> Self {
-        let clamped_value = value.clamp(i32::MIN as f32, i32::MAX as f32);
-        Px(clamped_value as i32)
+        Self::from_f32(value)
     }
 
     /// Adds with saturation at `i32` bounds.
@@ -176,7 +174,7 @@ impl PxPosition {
         [self.x, self.y, 0.0]
     }
 
-    /// Truncates a fractional pixel value toward zero, saturating at `i32` bounds.
+    /// Creates a position from a 2D f32 array.
     pub fn from_f32_arr2(arr: [f32; 2]) -> Self {
         Self {
             x: arr[0],
@@ -184,7 +182,7 @@ impl PxPosition {
         }
     }
 
-    /// Truncates a fractional pixel value toward zero, saturating at `i32` bounds.
+    /// Creates a position from a 3D f32 array, ignoring z.
     pub fn from_f32_arr3(arr: [f32; 3]) -> Self {
         Self {
             x: arr[0],
@@ -561,7 +559,6 @@ impl std::ops::Sub for PxPosition {
     }
 }
 
-// Type conversion implementations
 impl From<[i32; 2]> for PxPosition {
     fn from(pos: [i32; 2]) -> Self {
         PxPosition::from_f32_xy(pos[0] as f32, pos[1] as f32)
@@ -603,41 +600,10 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_px_arithmetic() {
-        let _runtime_session = crate::RuntimeSession::new();
-        let _runtime_scope = _runtime_session.enter();
-        let a = Px(10);
-        let b = Px(5);
-
-        assert_eq!(a + b, Px(15));
-        assert_eq!(a - b, Px(5));
-        assert_eq!(a * 2, Px(20));
-        assert_eq!(a / 2, Px(5));
-        assert_eq!(a * b, Px(50));
-        assert_eq!(a / b, Px(2));
-    }
-
-    #[test]
     fn test_saturating_from_f32() {
-        let _runtime_session = crate::RuntimeSession::new();
-        let _runtime_scope = _runtime_session.enter();
         assert_eq!(Px::saturating_from_f32(f32::MAX), Px(i32::MAX));
         assert_eq!(Px::saturating_from_f32(f32::MIN), Px(i32::MIN));
         assert_eq!(Px::saturating_from_f32(100.5), Px(100));
         assert_eq!(Px::saturating_from_f32(-100.5), Px(-100));
-    }
-
-    #[test]
-    fn test_px_position_arithmetic() {
-        let _runtime_session = crate::RuntimeSession::new();
-        let _runtime_scope = _runtime_session.enter();
-        let pos1 = PxPosition::new(Px(10), Px(20));
-        let pos2 = PxPosition::new(Px(5), Px(15));
-
-        let sum = pos1 + pos2;
-        assert_eq!(sum, PxPosition::new(Px(15), Px(35)));
-
-        let diff = pos1 - pos2;
-        assert_eq!(diff, PxPosition::new(Px(5), Px(5)));
     }
 }

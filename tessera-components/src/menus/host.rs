@@ -20,7 +20,7 @@ use super::{
     MenuProviderConfig, is_click_outside_menu, menu_provider_content,
 };
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, PartialEq)]
 pub(super) struct MenuHost {
     pub root: State<MenuController>,
     entries: State<Vec<State<MenuPopupRequest>>>,
@@ -30,19 +30,6 @@ pub(super) struct MenuHost {
     pub(super) origin: State<tessera_ui::LayoutCoordinates>,
     bounds: State<Option<MenuBounds>>,
     on_dismiss: Option<Callback>,
-}
-
-impl PartialEq for MenuHost {
-    fn eq(&self, other: &Self) -> bool {
-        self.root == other.root
-            && self.entries == other.entries
-            && self.restore_root == other.restore_root
-            && self.root_scope == other.root_scope
-            && self.restore_parent == other.restore_parent
-            && self.origin == other.origin
-            && self.bounds == other.bounds
-            && self.on_dismiss == other.on_dismiss
-    }
 }
 
 impl MenuHost {
@@ -257,7 +244,7 @@ impl PointerInputModifierNode for MenuHierarchyPointer {
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, PartialEq)]
 pub(super) struct MenuPopupRequest {
     pub host: MenuHost,
     pub parent: State<MenuController>,
@@ -270,22 +257,6 @@ pub(super) struct MenuPopupRequest {
     pub color_style: MenuColorStyle,
     pub enabled: bool,
     pub bounds: State<Option<MenuBounds>>,
-}
-
-impl PartialEq for MenuPopupRequest {
-    fn eq(&self, other: &Self) -> bool {
-        self.host == other.host
-            && self.parent == other.parent
-            && self.controller == other.controller
-            && self.anchor == other.anchor
-            && self.scope == other.scope
-            && self.fallback == other.fallback
-            && self.content == other.content
-            && self.placement == other.placement
-            && self.color_style == other.color_style
-            && self.enabled == other.enabled
-            && self.bounds == other.bounds
-    }
 }
 
 impl MenuPopupRequest {

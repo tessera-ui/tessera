@@ -219,13 +219,11 @@ pub fn glass_switch(
         modifier = modifier.toggleable_with(toggle_args);
     }
 
-    // Precompute pixel sizes to avoid repeated conversions
     let width_px = width.to_px();
     let height_px = height.to_px();
     let thumb_dp = Dp(height.0 - (thumb_padding.0 * 2.0));
     let thumb_px = thumb_dp.to_px();
 
-    // Track tint color interpolation based on progress
     if controller.with(|c| c.is_animating()) {
         receive_frame_nanos(move |frame_nanos| {
             let is_animating = controller.with_mut(|controller| {

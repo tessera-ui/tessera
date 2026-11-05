@@ -78,10 +78,7 @@ impl SearchBarDefaults {
 
     /// Default colors for search bars.
     pub fn colors() -> SearchBarColors {
-        SearchBarColors {
-            container_color: Color::new(0.9, 0.9, 0.9, 1.0),
-            divider_color: Color::new(0.5, 0.5, 0.5, 1.0),
-        }
+        SearchBarColors::default()
     }
 }
 

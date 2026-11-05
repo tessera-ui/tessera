@@ -11,8 +11,6 @@ use tessera_components::{
     button::button,
     column::column,
     flow_row::flow_row,
-    icon::icon,
-    material_icons::{filled, outlined},
     modifier::{ModifierExt as _, Padding, SemanticsArgs},
     navigation_bar::{NavigationBarLabelBehavior, navigation_bar, navigation_bar_item},
     row::row,
@@ -29,7 +27,7 @@ use super::{
     ACCENT, INK,
     article::{ArticlePage, SpecSection, article},
     gap,
-    navigation::NAMES,
+    navigation::{NAMES, destination_icon},
     panel, spec_table, type_style,
 };
 
@@ -243,29 +241,6 @@ fn do_dont(#[prop(into)] good: String, #[prop(into)] bad: String) {
 }
 
 #[tessera]
-fn destination_icon(index: usize, selected: bool) {
-    icon()
-        .painter(if selected {
-            [
-                filled::HOME_SVG,
-                filled::MAIL_SVG,
-                filled::BOOKMARK_SVG,
-                filled::PLAY_ARROW_SVG,
-                filled::SETTINGS_SVG,
-            ][index]
-        } else {
-            [
-                outlined::HOME_SVG,
-                outlined::MAIL_SVG,
-                outlined::BOOKMARK_BORDER_SVG,
-                outlined::PLAY_ARROW_SVG,
-                outlined::SETTINGS_SVG,
-            ][index]
-        })
-        .size(Dp(24.0));
-}
-
-#[tessera]
 fn bar_demo(
     #[prop(into)] label: String,
     count: usize,
@@ -284,59 +259,39 @@ fn bar_demo(
         .children(move || {
             navigation_bar().content(move |icon_position| {
                 for (index, name) in NAMES.into_iter().take(count).enumerate() {
-                    if index == 1 {
-                        if badge_count > 0 {
-                            navigation_bar_item()
-                                .icon_position(icon_position)
-                                .label(name)
-                                .label_behavior(label_behavior)
-                                .selected(selected.get() == index)
-                                .on_click(move || selected.set(index))
-                                .icon(move || {
-                                    let badge_text = badge_count.to_string();
-                                    badged_box()
-                                        .modifier(Modifier::new().size(Dp(32.0), Dp(32.0)))
-                                        .badge(move || {
-                                            let badge_text = badge_text.clone();
-                                            badge_with_content()
-                                                .container_color(
-                                                    use_context::<MaterialTheme>()
-                                                        .unwrap()
-                                                        .get()
-                                                        .color_scheme
-                                                        .error,
-                                                )
-                                                .modifier(Modifier::new())
-                                                .content(move || {
-                                                    text().content(badge_text.clone());
-                                                });
-                                        })
-                                        .content(move || {
-                                            destination_icon(index, selected.get() == index);
-                                        });
-                                });
-                        } else {
-                            navigation_bar_item()
-                                .icon_position(icon_position)
-                                .label(name)
-                                .label_behavior(label_behavior)
-                                .selected(selected.get() == index)
-                                .on_click(move || selected.set(index))
-                                .icon(move || {
-                                    destination_icon(index, selected.get() == index);
-                                });
-                        }
-                    } else {
-                        navigation_bar_item()
-                            .icon_position(icon_position)
-                            .label(name)
-                            .label_behavior(label_behavior)
-                            .selected(selected.get() == index)
-                            .on_click(move || selected.set(index))
-                            .icon(move || {
+                    navigation_bar_item()
+                        .icon_position(icon_position)
+                        .label(name)
+                        .label_behavior(label_behavior)
+                        .selected(selected.get() == index)
+                        .on_click(move || selected.set(index))
+                        .icon(move || {
+                            if index == 1 && badge_count > 0 {
+                                let badge_text = badge_count.to_string();
+                                badged_box()
+                                    .modifier(Modifier::new().size(Dp(32.0), Dp(32.0)))
+                                    .badge(move || {
+                                        let badge_text = badge_text.clone();
+                                        badge_with_content()
+                                            .container_color(
+                                                use_context::<MaterialTheme>()
+                                                    .unwrap()
+                                                    .get()
+                                                    .color_scheme
+                                                    .error,
+                                            )
+                                            .modifier(Modifier::new())
+                                            .content(move || {
+                                                text().content(badge_text.clone());
+                                            });
+                                    })
+                                    .content(move || {
+                                        destination_icon(index, selected.get() == index);
+                                    });
+                            } else {
                                 destination_icon(index, selected.get() == index);
-                            });
-                    }
+                            }
+                        });
                 }
             });
             gap(Dp(16.0));

@@ -103,9 +103,8 @@ custom semantics literals should include `..Default::default()`.
 `loading_indicator` provides the Expressive seven-shape animation and a
 determinate circle-to-burst morph through `.progress(value)`. Use `.contained(true)`
 for a themed background, and `.paused(true)` to pause infinite animation and stop
-frame requests. Its default size is 48dp. Shape geometry is shared, and animation
-updates reuse GPU instance buffers. Shapes, colors, size, and progress semantics
-work on native and WebAssembly targets.
+frame requests. Its default size is 48dp. Shapes, colors, size, and progress
+semantics work on native and WebAssembly targets.
 
 `wavy_progress::linear_wavy_progress_indicator()` shows ongoing work, or known
 completion with `.progress(value)`. Its default container is 240×10dp with 4dp

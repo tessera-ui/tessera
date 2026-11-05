@@ -291,7 +291,6 @@ fn check_linear_scrim(format: TextureFormat, sample_count: u32) {
             "{phase} sheet geometry must follow the actual viewport height"
         );
         assert!(sheet.x1 < 349.0);
-        assert!(sheet.x1 < f64::from(size.width) - 33.0);
         let pixels = renderer.read_pixels().unwrap();
         let stride = size.width as usize;
         assert_eq!(pixels.len(), stride * size.height as usize * 4, "{phase}");

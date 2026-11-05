@@ -8,7 +8,10 @@ use tessera_ui::{
     wgpu::{self, include_wgsl},
 };
 
-use crate::pipelines::SharedQuad;
+use crate::pipelines::{
+    SharedQuad,
+    instanced::{QUAD_VERTICES, quad_pipeline, storage_layout},
+};
 
 use super::command::{ProgressArcCap, ProgressArcCommand};
 
@@ -48,19 +51,7 @@ impl ProgressArcPipeline {
     ) -> Self {
         let shader = gpu.create_shader_module(include_wgsl!("progress_arc.wgsl"));
 
-        let bind_group_layout = gpu.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-            entries: &[wgpu::BindGroupLayoutEntry {
-                binding: 0,
-                visibility: wgpu::ShaderStages::VERTEX | wgpu::ShaderStages::FRAGMENT,
-                ty: wgpu::BindingType::Buffer {
-                    ty: wgpu::BufferBindingType::Storage { read_only: true },
-                    has_dynamic_offset: false,
-                    min_binding_size: None,
-                },
-                count: None,
-            }],
-            label: Some("progress_arc_bind_group_layout"),
-        });
+        let bind_group_layout = storage_layout(gpu, "progress_arc_bind_group_layout");
 
         let pipeline_layout = gpu.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
             label: Some("Progress Arc Pipeline Layout"),
@@ -68,47 +59,17 @@ impl ProgressArcPipeline {
             immediate_size: 0,
         });
 
-        let pipeline = gpu.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
-            label: Some("Progress Arc Pipeline"),
-            layout: Some(&pipeline_layout),
-            vertex: wgpu::VertexState {
-                module: &shader,
-                entry_point: Some("vs_main"),
-                buffers: &[Some(wgpu::VertexBufferLayout {
-                    array_stride: std::mem::size_of::<[f32; 2]>() as wgpu::BufferAddress,
-                    step_mode: wgpu::VertexStepMode::Vertex,
-                    attributes: &wgpu::vertex_attr_array![0 => Float32x2],
-                })],
-                compilation_options: Default::default(),
-            },
-            primitive: wgpu::PrimitiveState {
-                topology: wgpu::PrimitiveTopology::TriangleList,
-                strip_index_format: None,
-                front_face: wgpu::FrontFace::Ccw,
-                cull_mode: Some(wgpu::Face::Back),
-                unclipped_depth: false,
-                polygon_mode: wgpu::PolygonMode::Fill,
-                conservative: false,
-            },
-            depth_stencil: tessera_ui::ui_stencil_state(),
-            multisample: wgpu::MultisampleState {
-                count: sample_count,
-                mask: !0,
-                alpha_to_coverage_enabled: false,
-            },
-            fragment: Some(wgpu::FragmentState {
-                module: &shader,
-                entry_point: Some("fs_main"),
-                compilation_options: Default::default(),
-                targets: &[Some(wgpu::ColorTargetState {
-                    format: config.format,
-                    blend: Some(wgpu::BlendState::ALPHA_BLENDING),
-                    write_mask: wgpu::ColorWrites::ALL,
-                })],
-            }),
-            multiview_mask: None,
-            cache: pipeline_cache,
-        });
+        let pipeline = quad_pipeline(
+            gpu,
+            &pipeline_layout,
+            &shader,
+            config.format,
+            sample_count,
+            pipeline_cache,
+            "Progress Arc Pipeline",
+            Some(wgpu::Face::Back),
+            QUAD_VERTICES,
+        );
 
         let shared_quad = SharedQuad::get(gpu);
 
@@ -155,10 +116,6 @@ impl DrawablePipeline<ProgressArcCommand> for ProgressArcPipeline {
         }
 
         let instances = build_instances(context.commands, context.target_size);
-        if instances.is_empty() {
-            return;
-        }
-
         let uniform_buffer = context.device.create_buffer(&wgpu::BufferDescriptor {
             label: Some("Progress Arc Storage Buffer"),
             size: 16 + ArcUniform::SHADER_SIZE.get() * instances.len() as u64,

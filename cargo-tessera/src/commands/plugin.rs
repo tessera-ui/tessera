@@ -3,7 +3,7 @@ use std::{fs, path::Path, time::Instant};
 use anyhow::{Context, Result};
 use handlebars::Handlebars;
 use include_dir::{Dir, include_dir};
-use inquire::{Select as ChoicePrompt, Text, error::CustomUserError, validator::Validation};
+use inquire::Select as ChoicePrompt;
 use serde_json::json;
 
 use crate::{
@@ -12,53 +12,6 @@ use crate::{
 };
 
 static TEMPLATES: Dir = include_dir!("$CARGO_MANIFEST_DIR/templates/plugin");
-
-pub fn prompt_plugin_name() -> Result<String> {
-    let validator = |input: &str| -> Result<Validation, CustomUserError> {
-        let trimmed = input.trim();
-
-        if trimmed.is_empty() {
-            return Ok(Validation::Invalid(
-                "Plugin name cannot be empty".to_string().into(),
-            ));
-        }
-
-        if !trimmed
-            .chars()
-            .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '-' || c == '_')
-        {
-            return Ok(Validation::Invalid(
-                "Only lowercase letters, digits, '-' and '_' are allowed".into(),
-            ));
-        }
-
-        if !trimmed
-            .chars()
-            .next()
-            .is_some_and(|c| c.is_ascii_lowercase())
-        {
-            return Ok(Validation::Invalid(
-                "Plugin name must start with a lowercase letter".into(),
-            ));
-        }
-
-        if Path::new(trimmed).exists() {
-            return Ok(Validation::Invalid(
-                format!("Directory '{trimmed}' already exists").into(),
-            ));
-        }
-
-        Ok(Validation::Valid)
-    };
-
-    let name = Text::new("Plugin name")
-        .with_help_message("lowercase, numbers, '-' or '_', must start with a letter")
-        .with_placeholder("tessera-plugin")
-        .with_validator(validator)
-        .prompt()?;
-
-    Ok(name.trim().to_string())
-}
 
 pub fn select_template_interactive() -> Result<String> {
     let templates: Vec<String> = TEMPLATES

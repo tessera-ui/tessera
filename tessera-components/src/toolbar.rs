@@ -143,7 +143,6 @@ impl tessera_ui::LayoutModifierNode for FloatingToolbarLayout {
 /// #[tessera]
 /// fn editor_actions() {
 ///     let expanded = remember(|| true);
-///     assert!(expanded.get());
 ///     floating_toolbar().expanded(expanded.get()).content(|| {
 ///         text().content("Editing actions");
 ///     });
@@ -282,7 +281,6 @@ impl tessera_ui::LayoutModifierNode for DockedToolbarLayout {
 /// #[tessera]
 /// fn editing_actions() {
 ///     let saved = remember(|| false);
-///     assert!(!saved.get());
 ///     docked_toolbar().content(move || {
 ///         text().content(if saved.get() { "Saved" } else { "Editing" });
 ///     });

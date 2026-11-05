@@ -260,14 +260,13 @@ impl tessera_ui::LayoutModifierNode for ScaffoldLayout {
 /// use tessera_components::scaffold::scaffold;
 /// use tessera_components::text::text;
 /// use tessera_components::theme::{MaterialTheme, material_theme};
-/// use tessera_ui::{remember, tessera};
+/// use tessera_ui::tessera;
 ///
 /// #[tessera]
 /// fn demo() {
 ///     material_theme()
 ///         .theme(|| MaterialTheme::default())
 ///         .child(|| {
-///             let counter = remember(|| 1u32);
 ///             scaffold()
 ///                 .top_bar(|| {
 ///                     top_app_bar().title("Inbox");
@@ -275,7 +274,6 @@ impl tessera_ui::LayoutModifierNode for ScaffoldLayout {
 ///                 .content(|| {
 ///                     text().content("Hello scaffold");
 ///                 });
-///             assert_eq!(counter.get(), 1);
 ///         });
 /// }
 /// ```

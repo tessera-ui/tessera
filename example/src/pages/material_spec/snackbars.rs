@@ -126,7 +126,7 @@ pub(super) fn snackbars_spec(route: Option<crate::pages::material_spec::article:
             },
         ],
     )
-    .route_optional(route.clone())
+    .route_optional(route)
     .intro(anatomy)
     .page_heading_levels(std::collections::BTreeMap::from([("Accessibility", 3)]))
     .pages(vec![
@@ -505,7 +505,7 @@ fn phone_spec(scene: u8) -> Phone {
             }),
             ..list
         },
-        ARCHIVED | UNDO => Phone {
+        ARCHIVED | UNDO | TEXT_ONE => Phone {
             bars: one(bar(above_nav, "Email archived", Some("Undo"))),
             ..list
         },
@@ -568,10 +568,6 @@ fn phone_spec(scene: u8) -> Phone {
             nav: false,
             bars: one(bar(PHONE_H - 60.0, "Saved in Vacation album", None)),
             ..photos
-        },
-        TEXT_ONE => Phone {
-            bars: one(bar(above_nav, "Email archived", Some("Undo"))),
-            ..list
         },
         TEXT_TWO => Phone {
             bars: one(bar(
@@ -1541,7 +1537,6 @@ fn figure_annotations(geometry: State<Geometry>, kind: u8, dark: bool) {
         }
         let numbers: [(usize, u8); 4] = match kind {
             ANATOMY => [(1, b'c'), (2, b'x'), (3, b'a'), (4, b't')],
-            GUIDE => [(1, b'c'), (2, b't'), (3, b'a'), (4, b'x')],
             _ => [(1, b'c'), (2, b't'), (3, b'a'), (4, b'x')],
         };
         for (number, part) in numbers {
@@ -2004,34 +1999,24 @@ fn queued() {
                             let message = data.message().to_owned();
                             let action_label = data.action_label().map(str::to_owned);
                             let on_new_line = stacked.get();
+                            let action_data = data.clone();
+                            let snackbar = snackbar()
+                                .modifier(Modifier::new().fill_max_width())
+                                .message(message)
+                                .action_label_optional(action_label)
+                                .action_on_new_line(on_new_line)
+                                .on_action(move || {
+                                    action_data.perform_action();
+                                    result.set("Action performed".to_owned());
+                                });
                             if data.with_dismiss_action() {
-                                let action_data = data.clone();
                                 let dismiss_data = data.clone();
-                                snackbar()
-                                    .modifier(Modifier::new().fill_max_width())
-                                    .message(message)
-                                    .action_label_optional(action_label)
-                                    .action_on_new_line(on_new_line)
-                                    .on_action(move || {
-                                        action_data.perform_action();
-                                        result.set("Action performed".to_owned());
-                                    })
+                                snackbar
                                     .with_dismiss_action(true)
                                     .dismiss_action_label("Dismiss queued snackbar")
                                     .on_dismiss(move || {
                                         dismiss_data.dismiss();
                                         result.set("Dismissed".to_owned());
-                                    });
-                            } else {
-                                let action_data = data.clone();
-                                snackbar()
-                                    .modifier(Modifier::new().fill_max_width())
-                                    .message(message)
-                                    .action_label_optional(action_label)
-                                    .action_on_new_line(on_new_line)
-                                    .on_action(move || {
-                                        action_data.perform_action();
-                                        result.set("Action performed".to_owned());
                                     });
                             }
                         });

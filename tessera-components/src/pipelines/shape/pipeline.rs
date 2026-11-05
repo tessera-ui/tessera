@@ -38,7 +38,6 @@ struct ShapeCacheEntry {
     _texture: wgpu::Texture,
     _view: wgpu::TextureView,
     texture_bind_group: wgpu::BindGroup,
-    padding: Vec2,
 }
 
 /// Uniforms for shape rendering pipeline.

@@ -2268,17 +2268,6 @@ mod tests {
             "exceeding the byte budget evicts the oldest unused texture"
         );
         assert!(renderer.read_pixels().expect("image after cache eviction") == repeated);
-        if let Some(directory) = std::env::var_os("TESSERA_CAROUSEL_QA_DIR") {
-            let directory = std::path::PathBuf::from(directory);
-            std::fs::create_dir_all(&directory).expect("carousel QA directory");
-            tessera_ui::headless::write_png_file(
-                directory.join(format!("carousel-content-msaa{samples}.png")),
-                500,
-                300,
-                &initial,
-            )
-            .expect("carousel QA image");
-        }
     }
 
     #[test]

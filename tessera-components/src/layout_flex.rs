@@ -41,36 +41,7 @@ pub(crate) fn main_axis_offsets(
     child_count: usize,
 ) -> (f32, f32) {
     let available_space = (container.0 - children_total.0).max(0) as f32;
-    match alignment {
-        MainAxisAlignment::Start => (0.0, 0.0),
-        MainAxisAlignment::Center => (available_space / 2.0, 0.0),
-        MainAxisAlignment::End => (available_space, 0.0),
-        MainAxisAlignment::SpaceEvenly => {
-            if child_count > 0 {
-                let spacing = available_space / (child_count as f32 + 1.0);
-                (spacing, spacing)
-            } else {
-                (0.0, 0.0)
-            }
-        }
-        MainAxisAlignment::SpaceBetween => {
-            if child_count > 1 {
-                (0.0, available_space / (child_count as f32 - 1.0))
-            } else if child_count == 1 {
-                (available_space / 2.0, 0.0)
-            } else {
-                (0.0, 0.0)
-            }
-        }
-        MainAxisAlignment::SpaceAround => {
-            if child_count > 0 {
-                let spacing = available_space / (child_count as f32);
-                (spacing / 2.0, spacing)
-            } else {
-                (0.0, 0.0)
-            }
-        }
-    }
+    alignment_offsets(available_space, child_count, alignment)
 }
 
 /// Returns the cross-axis offset for one child.
@@ -91,3 +62,57 @@ mod tests;
 
 #[cfg(test)]
 mod drawing_tests;
+
+pub(crate) fn px_mul(px: Px, times: usize) -> Px {
+    if times == 0 {
+        return Px::ZERO;
+    }
+    px_from_i64(px.0 as i64 * times as i64)
+}
+
+pub(crate) fn px_from_i64(value: i64) -> Px {
+    if value > i64::from(i32::MAX) {
+        Px(i32::MAX)
+    } else if value < i64::from(i32::MIN) {
+        Px(i32::MIN)
+    } else {
+        Px(value as i32)
+    }
+}
+
+pub(crate) fn alignment_offsets(
+    available_space: f32,
+    count: usize,
+    alignment: MainAxisAlignment,
+) -> (f32, f32) {
+    match alignment {
+        MainAxisAlignment::Start => (0.0, 0.0),
+        MainAxisAlignment::Center => (available_space / 2.0, 0.0),
+        MainAxisAlignment::End => (available_space, 0.0),
+        MainAxisAlignment::SpaceEvenly => {
+            if count > 0 {
+                let s = available_space / (count as f32 + 1.0);
+                (s, s)
+            } else {
+                (0.0, 0.0)
+            }
+        }
+        MainAxisAlignment::SpaceBetween => {
+            if count > 1 {
+                (0.0, available_space / (count as f32 - 1.0))
+            } else if count == 1 {
+                (available_space / 2.0, 0.0)
+            } else {
+                (0.0, 0.0)
+            }
+        }
+        MainAxisAlignment::SpaceAround => {
+            if count > 0 {
+                let s = available_space / (count as f32);
+                (s / 2.0, s)
+            } else {
+                (0.0, 0.0)
+            }
+        }
+    }
+}

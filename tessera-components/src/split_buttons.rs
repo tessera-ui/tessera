@@ -403,12 +403,6 @@ impl SplitTrailingButtonBuilder {
 /// };
 /// use tessera_ui::{remember, tessera};
 ///
-/// let mut menu = MenuController::new();
-/// menu.open();
-/// assert!(menu.is_open());
-/// menu.close();
-/// assert!(!menu.is_open());
-///
 /// #[tessera]
 /// fn component() {
 ///     let menu = remember(MenuController::new);
@@ -563,12 +557,6 @@ pub fn split_leading_button(
 ///     split_buttons::split_trailing_button, theme::material_theme,
 /// };
 /// use tessera_ui::{remember, tessera};
-///
-/// let mut menu = MenuController::new();
-/// menu.toggle();
-/// assert!(menu.is_open());
-/// menu.toggle();
-/// assert!(!menu.is_open());
 ///
 /// #[tessera]
 /// fn component() {
@@ -747,8 +735,8 @@ impl tessera_ui::LayoutModifierNode for SplitButton {
         let trailing_size = trailing.measure(input, &trailing_constraint)?.size();
         let content_width = leading_size.width + trailing_size.width + spacing;
         let content_height = leading_size.height.max(trailing_size.height);
-        let final_width = resolve_dimension(layout_constraint.width, content_width);
-        let final_height = resolve_dimension(layout_constraint.height, content_height);
+        let final_width = layout_constraint.width.clamp(content_width);
+        let final_height = layout_constraint.height.clamp(content_height);
 
         result.place_child(
             leading,
@@ -767,10 +755,6 @@ impl tessera_ui::LayoutModifierNode for SplitButton {
             height: final_height,
         }))
     }
-}
-
-fn resolve_dimension(constraint: AxisConstraint, content: Px) -> Px {
-    constraint.clamp(content)
 }
 
 fn center_offset(child: Px, container: Px) -> Px {

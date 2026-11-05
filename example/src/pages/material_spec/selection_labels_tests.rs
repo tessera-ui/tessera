@@ -49,19 +49,6 @@ fn click(renderer: &mut HeadlessRenderer, x: f32, y: f32) {
     renderer.render_frames(60);
 }
 
-fn save_pixels(renderer: &HeadlessRenderer, name: &str) {
-    if let Some(directory) = std::env::var_os("TESSERA_MENU_QA_DIR") {
-        let size = renderer.physical_size();
-        tessera_ui::headless::write_png_file(
-            std::path::PathBuf::from(directory).join(name),
-            size.width,
-            size.height,
-            &renderer.read_pixels().unwrap(),
-        )
-        .unwrap();
-    }
-}
-
 #[test]
 #[ignore = "requires a native GPU adapter for adjacent label illustrations"]
 fn adjacent_labels_activate_their_native_control_and_preserve_canonical_scaled_geometry() {
@@ -129,14 +116,6 @@ fn adjacent_labels_activate_their_native_control_and_preserve_canonical_scaled_g
         );
         assert_eq!(node(&renderer, first, role).toggled(), Some(Toggled::True));
         assert_eq!(node(&renderer, last, role).toggled(), Some(Toggled::False));
-        save_pixels(
-            &renderer,
-            if is_switch {
-                "switch-labels-canonical-676.png"
-            } else {
-                "checkbox-labels-canonical-676.png"
-            },
-        );
         click(&mut renderer, label_point.0, label_point.1);
         assert_eq!(node(&renderer, first, role).toggled(), Some(Toggled::False));
         assert_eq!(node(&renderer, peer, role).toggled(), Some(Toggled::True));
@@ -175,13 +154,5 @@ fn adjacent_labels_activate_their_native_control_and_preserve_canonical_scaled_g
         );
         assert_eq!(node(&renderer, first, role).toggled(), Some(Toggled::True));
         assert_eq!(node(&renderer, peer, role).toggled(), Some(Toggled::False));
-        save_pixels(
-            &renderer,
-            if is_switch {
-                "switch-labels-narrow-338.png"
-            } else {
-                "checkbox-labels-narrow-338.png"
-            },
-        );
     }
 }

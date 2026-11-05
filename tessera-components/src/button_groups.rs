@@ -139,13 +139,7 @@ impl ButtonGroupsLayout {
                 bottom_left: corner,
             }
         };
-        let container_height = match size {
-            ButtonGroupsSize::ExtraSmall => Dp(32.0),
-            ButtonGroupsSize::Small => Dp(40.0),
-            ButtonGroupsSize::Medium => Dp(56.0),
-            ButtonGroupsSize::Large => Dp(96.0),
-            ButtonGroupsSize::ExtraLarge => Dp(136.0),
-        };
+        let container_height = ButtonSize::from(size).height();
         let between_space = match style {
             ButtonGroupsStyle::Standard => match size {
                 ButtonGroupsSize::ExtraSmall => Dp(18.0),

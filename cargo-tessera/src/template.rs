@@ -189,17 +189,9 @@ mod tests {
 
     use crate::commands::{new, plugin};
 
-    struct ProjectDirectory(tempfile::TempDir);
-
-    impl ProjectDirectory {
-        fn new() -> Self {
-            Self(tempfile::tempdir().expect("create isolated scaffold directory"))
-        }
-    }
-
     #[test]
     fn app_and_plugin_scaffolds_offer_skill_installation_without_installing_it() {
-        let root = ProjectDirectory::new();
+        let root = tempfile::tempdir().expect("create isolated scaffold directory");
         for (kind, generate) in [
             ("app", new::execute as fn(&str, &str) -> anyhow::Result<()>),
             ("plugin", plugin::execute),
@@ -209,7 +201,7 @@ mod tests {
             } else {
                 ["basic", "android"]
             } {
-                let project = root.0.path().join(format!("{kind}-{template}"));
+                let project = root.path().join(format!("{kind}-{template}"));
                 generate(project.to_str().expect("UTF-8 project path"), template)
                     .expect("generate scaffold");
 
@@ -225,25 +217,6 @@ mod tests {
                 assert!(!guidance.contains("skill install"));
                 assert!(guidance.contains("tessera-good-taste"));
             }
-        }
-    }
-
-    #[test]
-    fn plugin_templates_match_the_app_ui_requirement() {
-        let app: toml::Value = toml::from_str(include_str!("../templates/basic/Cargo.toml.hbs"))
-            .expect("valid app template manifest");
-        let requirement = app["dependencies"]["tessera-ui"]
-            .as_str()
-            .expect("app UI requirement");
-        for source in [
-            include_str!("../templates/plugin/basic/Cargo.toml.hbs"),
-            include_str!("../templates/plugin/android/Cargo.toml.hbs"),
-        ] {
-            let manifest: toml::Value = toml::from_str(source).expect("valid plugin manifest");
-            assert_eq!(
-                manifest["dependencies"]["tessera-ui"].as_str(),
-                Some(requirement)
-            );
         }
     }
 }

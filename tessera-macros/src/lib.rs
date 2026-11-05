@@ -18,13 +18,10 @@ use syn::{
     PathArguments, Token, Type, parse::Parse, parse_macro_input, parse_quote, visit_mut::VisitMut,
 };
 
-/// Helper: parse crate path from attribute TokenStream
 fn parse_crate_path(attr: proc_macro::TokenStream) -> syn::Result<syn::Path> {
     if attr.is_empty() {
-        // Default to `tessera_ui` if no path is provided
         Ok(syn::parse_quote!(::tessera_ui))
     } else {
-        // Parse the provided path, e.g., `crate` or `tessera_ui`
         let tokens: proc_macro2::TokenStream = attr.clone().into();
         syn::parse(attr).map_err(|_| {
             syn::Error::new_spanned(tokens, "expected a crate path like `crate` or `tessera_ui`")
@@ -346,7 +343,6 @@ impl Parse for ShardMacroArgs {
     }
 }
 
-/// Helper: tokens to register a component node
 fn register_node_tokens(crate_path: &syn::Path, fn_name: &syn::Ident) -> proc_macro2::TokenStream {
     quote! {
         #crate_path::__private::register_component_node(
@@ -409,7 +405,6 @@ fn strict_prop_signature(sig: &syn::Signature) -> Result<ComponentPropSignature,
     Ok(ComponentPropSignature::Params(fields))
 }
 
-/// Helper: tokens to attach replay metadata to the current component node.
 fn replay_register_tokens(
     crate_path: &syn::Path,
     runner_name: &syn::Ident,
@@ -426,7 +421,6 @@ fn replay_register_tokens(
     }
 }
 
-/// Helper: compile-time assertion that component props implement `Prop`.
 fn prop_assert_tokens(crate_path: &syn::Path, prop_type: &syn::Type) -> proc_macro2::TokenStream {
     quote! {
         {
@@ -797,8 +791,6 @@ fn generate_builder_methods(
     Ok(methods)
 }
 
-/// Helper: tokens to compute a stable component type id based on module path +
-/// function name.
 fn component_type_id_tokens(
     fn_name: &syn::Ident,
     prop_type: &syn::Type,
@@ -816,7 +808,6 @@ fn component_type_id_tokens(
 }
 
 struct ControlFlowInstrumenter {
-    /// counter to generate unique IDs in the current function
     counter: u64,
 }
 
@@ -825,22 +816,13 @@ impl ControlFlowInstrumenter {
         Self { counter: 1 }
     }
 
-    /// Next compile-time group id. Each function counts independently, starting
-    /// at 1.
     fn next_group_id(&mut self) -> u64 {
         let id = self.counter;
         self.counter += 1;
         id
     }
 
-    /// Wrap an expression in a GroupGuard block
-    ///
-    /// Before transform: expr
-    /// After transform: { let _group_guard =
-    /// ::tessera_ui::__private::GroupGuard::new(#id); expr }
     fn wrap_expr_in_group(&mut self, expr: &mut Expr) {
-        // Recursively visit sub-expressions (depth-first) to ensure nested
-        // structures are wrapped
         self.visit_expr_mut(expr);
         let group_id = self.next_group_id();
         // Use fully-qualified path ::tessera_ui to avoid relying on a crate
@@ -855,9 +837,7 @@ impl ControlFlowInstrumenter {
         *expr = new_expr;
     }
 
-    /// Wrap a block in a GroupGuard block
     fn wrap_block_in_group(&mut self, block: &mut Block) {
-        // Recursively instrument nested expressions before wrapping the block
         self.visit_block_mut(block);
 
         let group_id = self.next_group_id();
@@ -873,7 +853,6 @@ impl ControlFlowInstrumenter {
         *block = new_block;
     }
 
-    /// Wrap a block in a path-only group block.
     fn wrap_block_in_path_group(&mut self, block: &mut Block) {
         self.visit_block_mut(block);
 
@@ -962,7 +941,6 @@ pub fn tessera(attr: TokenStream, item: TokenStream) -> TokenStream {
         Err(err) => return err.to_compile_error().into(),
     };
 
-    // Parse the input function that will be transformed into a component
     let mut input_fn = parse_macro_input!(item as ItemFn);
     if let Some(conflicting_attr) = input_fn
         .attrs
@@ -1010,7 +988,6 @@ pub fn tessera(attr: TokenStream, item: TokenStream) -> TokenStream {
         Err(err) => return err.to_compile_error().into(),
     };
 
-    // Instrument control flow with per-function constant group ids.
     let mut instrumenter = ControlFlowInstrumenter::new();
     instrumenter.visit_block_mut(&mut input_fn.block);
     let fn_block = &input_fn.block;
@@ -1020,7 +997,6 @@ pub fn tessera(attr: TokenStream, item: TokenStream) -> TokenStream {
     let where_clause = &generics.where_clause;
     let (impl_generics, ty_generics, _) = generics.split_for_impl();
 
-    // Prepare token fragments using helpers to keep function small and readable
     let register_tokens = register_node_tokens(&crate_path, fn_name);
     let fields = match &prop_signature {
         ComponentPropSignature::Unit => &[][..],

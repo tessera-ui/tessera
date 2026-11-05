@@ -17,7 +17,7 @@ use tessera_components::{
     text::text,
     theme::{MaterialTheme, material_theme},
 };
-use tessera_ui::{Color, Dp, Modifier, RenderSlot, remember, tessera, use_context};
+use tessera_ui::{Dp, Modifier, RenderSlot, remember, tessera, use_context};
 
 use super::{
     ACCENT, INK,
@@ -178,15 +178,11 @@ fn spinner(
     progress: Option<f32>,
     contained: Option<bool>,
     paused: Option<bool>,
-    indicator_color: Option<Color>,
-    container_color: Option<Color>,
 ) {
     loading_indicator()
         .progress_optional(progress)
         .contained(contained.unwrap_or(false))
         .paused(paused.unwrap_or(false))
-        .indicator_color_optional(indicator_color)
-        .container_color_optional(container_color)
         .accessibility_label(label);
 }
 

@@ -143,27 +143,13 @@ fn with_context_read_dependency_tracker_mut<R>(
     CONTEXT_GLOBALS.with(|globals| f(&mut globals.read_dependency_tracker.borrow_mut()))
 }
 
+#[derive(Default)]
 struct ContextGlobals {
     slot_table: RefCell<SlotTable>,
     snapshot_tracker: RefCell<ContextSnapshotTracker>,
     read_dependency_tracker: RefCell<ContextReadDependencyTracker>,
 }
 
-impl ContextGlobals {
-    fn new() -> Self {
-        Self {
-            slot_table: RefCell::new(SlotTable::default()),
-            snapshot_tracker: RefCell::new(ContextSnapshotTracker::default()),
-            read_dependency_tracker: RefCell::new(ContextReadDependencyTracker::default()),
-        }
-    }
-}
-
-impl Default for ContextGlobals {
-    fn default() -> Self {
-        Self::new()
-    }
-}
 const CONTEXT_GLOBALS: crate::session::SessionLocal<ContextGlobals> =
     crate::session::SessionLocal::new();
 

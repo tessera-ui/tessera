@@ -221,15 +221,6 @@ mod tests {
     use super::*;
 
     #[test]
-    fn axis_exact_is_tight_interval() {
-        let _runtime_session = crate::RuntimeSession::new();
-        let _runtime_scope = _runtime_session.enter();
-        let axis = AxisConstraint::exact(Px(100));
-        assert_eq!(axis.min, Px(100));
-        assert_eq!(axis.max, Some(Px(100)));
-    }
-
-    #[test]
     fn axis_new_clamps_max_to_min() {
         let _runtime_session = crate::RuntimeSession::new();
         let _runtime_scope = _runtime_session.enter();

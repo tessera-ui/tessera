@@ -5,6 +5,8 @@ use tessera_build::AssetBackend;
 
 use crate::{call_guard, output};
 
+use super::{build_tessera_ui_features, configure_tessera_ui_features};
+
 pub fn execute(
     release: bool,
     target: Option<&str>,
@@ -13,7 +15,7 @@ pub fn execute(
     debug_dirty_overlay: bool,
     asset_backend_override: Option<AssetBackend>,
 ) -> Result<()> {
-    let feature_overrides = build_tessera_ui_features(profiling_output, debug_dirty_overlay);
+    let feature_overrides = build_tessera_ui_features(profiling_output, None, debug_dirty_overlay);
     call_guard::run(call_guard::CheckOptions {
         features: call_guard::FeatureSelection::Selected {
             features: &feature_overrides,
@@ -66,7 +68,7 @@ pub fn execute(
     if let Some(package) = package {
         cmd.arg("-p").arg(package);
     }
-    configure_tessera_ui_features(&mut cmd, &feature_overrides, profiling_output);
+    configure_tessera_ui_features(&mut cmd, &feature_overrides, profiling_output, None);
     cmd.env("TESSERA_ASSET_BACKEND", asset_backend.as_str());
 
     let status = cmd.status().context("Failed to run cargo build")?;
@@ -85,33 +87,6 @@ pub fn execute(
     }
 
     Ok(())
-}
-
-fn build_tessera_ui_features(
-    profiling_output: Option<&Path>,
-    debug_dirty_overlay: bool,
-) -> Vec<String> {
-    let mut features = Vec::new();
-    if profiling_output.is_some() {
-        features.push("tessera-ui/profiling".to_string());
-    }
-    if debug_dirty_overlay {
-        features.push("tessera-ui/debug-dirty-overlay".to_string());
-    }
-    features
-}
-
-fn configure_tessera_ui_features(
-    cmd: &mut Command,
-    features: &[String],
-    profiling_output: Option<&Path>,
-) {
-    if !features.is_empty() {
-        cmd.arg("--features").arg(features.join(","));
-    }
-    if let Some(output_path) = profiling_output {
-        cmd.env("TESSERA_PROFILING_OUTPUT", output_path);
-    }
 }
 
 fn target_is_android(target: Option<&str>) -> bool {

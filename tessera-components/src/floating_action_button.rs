@@ -211,25 +211,6 @@ impl FloatingActionButtonDefaults {
     }
 }
 
-#[derive(Clone)]
-struct FloatingActionButtonResolvedArgs {
-    size: FloatingActionButtonSize,
-    modifier: Modifier,
-    enabled: bool,
-    container_color: Color,
-    content_color: Option<Color>,
-    shape: Option<Shape>,
-    elevation: FloatingActionButtonElevation,
-    on_click: Option<Callback>,
-    disabled_container_color: Color,
-    disabled_content_color: Color,
-    interaction_state: Option<State<InteractionState>>,
-    ripple_color: Option<Color>,
-    accessibility_label: Option<String>,
-    accessibility_description: Option<String>,
-    content: Option<RenderSlot>,
-}
-
 /// # floating_action_button
 ///
 /// Render a floating action button for primary actions and quick access tasks.
@@ -305,66 +286,52 @@ pub fn floating_action_button(
     let theme = use_context::<MaterialTheme>()
         .expect("MaterialTheme must be provided")
         .get();
-    let args = FloatingActionButtonResolvedArgs {
-        size: size.unwrap_or_default(),
-        modifier: modifier.unwrap_or_default(),
-        enabled: enabled.unwrap_or(true),
-        container_color: container_color
-            .unwrap_or_else(|| FloatingActionButtonDefaults::container_color(&theme.color_scheme)),
-        content_color,
-        shape,
-        elevation: elevation.unwrap_or_else(FloatingActionButtonDefaults::elevation),
-        on_click,
-        disabled_container_color: disabled_container_color.unwrap_or_else(|| {
-            FloatingActionButtonDefaults::disabled_container_color(&theme.color_scheme)
-        }),
-        disabled_content_color: disabled_content_color.unwrap_or_else(|| {
-            FloatingActionButtonDefaults::disabled_content_color(&theme.color_scheme)
-        }),
-        interaction_state,
-        ripple_color,
-        accessibility_label,
-        accessibility_description,
-        content,
-    };
-    let content = args.content;
-    let shape = args
-        .shape
-        .unwrap_or_else(|| shape_from_size(args.size, &theme.shapes));
+    let size = size.unwrap_or_default();
+    let modifier = modifier.unwrap_or_default();
+    let enabled = enabled.unwrap_or(true);
+    let container_color = container_color
+        .unwrap_or_else(|| FloatingActionButtonDefaults::container_color(&theme.color_scheme));
+    let elevation = elevation.unwrap_or_else(FloatingActionButtonDefaults::elevation);
+    let disabled_container_color = disabled_container_color.unwrap_or_else(|| {
+        FloatingActionButtonDefaults::disabled_container_color(&theme.color_scheme)
+    });
+    let disabled_content_color = disabled_content_color.unwrap_or_else(|| {
+        FloatingActionButtonDefaults::disabled_content_color(&theme.color_scheme)
+    });
+    let shape = shape.unwrap_or_else(|| shape_from_size(size, &theme.shapes));
     let typography = theme.typography;
     let scheme = theme.color_scheme;
     let inherited_content_color = use_context::<ContentColor>()
         .map(|c| c.get().current)
         .unwrap_or_else(|| ContentColor::default().current);
-    let size = FloatingActionButtonDefaults::container_size(args.size);
+    let size = FloatingActionButtonDefaults::container_size(size);
 
-    let container_color = if args.enabled {
-        args.container_color
+    let container_color = if enabled {
+        container_color
     } else {
-        args.disabled_container_color
+        disabled_container_color
     };
 
-    let content_color = if args.enabled {
-        args.content_color.unwrap_or_else(|| {
-            content_color_for(args.container_color, &scheme).unwrap_or(inherited_content_color)
+    let content_color = if enabled {
+        content_color.unwrap_or_else(|| {
+            content_color_for(container_color, &scheme).unwrap_or(inherited_content_color)
         })
     } else {
-        args.disabled_content_color
+        disabled_content_color
     };
 
-    let ripple_color = args.ripple_color.unwrap_or(content_color);
-    let elevation = args.elevation;
-    let interactive = args.enabled && args.on_click.is_some();
+    let ripple_color = ripple_color.unwrap_or(content_color);
+    let interactive = enabled && on_click.is_some();
     let interaction_state = if interactive {
-        Some(match args.interaction_state {
+        Some(match interaction_state {
             Some(value) => value,
             None => remember(InteractionState::new),
         })
     } else {
-        args.interaction_state
+        interaction_state
     };
 
-    let target_elevation = elevation.shadow_elevation(args.enabled, interaction_state);
+    let target_elevation = elevation.shadow_elevation(enabled, interaction_state);
     let frame = current_frame_nanos();
     let elevation_motion = remember(|| ElevationMotion::new(target_elevation, frame));
     if elevation_motion.with(|motion| motion.motion.target()) != target_elevation.0 as f32 {
@@ -387,23 +354,23 @@ pub fn floating_action_button(
     let tonal_elevation = elevation.tonal_elevation();
 
     surface()
-        .modifier(args.modifier.default_min_size(size, size))
+        .modifier(modifier.default_min_size(size, size))
         .style(SurfaceStyle::Filled {
             color: container_color,
         })
         .shape(shape)
         .content_alignment(Alignment::Center)
         .content_color(content_color)
-        .enabled(args.enabled)
+        .enabled(enabled)
         .ripple_color(ripple_color)
         .elevation(shadow_elevation)
         .tonal_elevation(tonal_elevation)
         .accessibility_role(Role::Button)
-        .accessibility_focusable(args.enabled)
+        .accessibility_focusable(enabled)
         .interaction_state_optional(interaction_state)
-        .on_click_optional(args.on_click)
-        .accessibility_label_optional(args.accessibility_label)
-        .accessibility_description_optional(args.accessibility_description)
+        .on_click_optional(on_click)
+        .accessibility_label_optional(accessibility_label)
+        .accessibility_description_optional(accessibility_description)
         .child({
             move || {
                 provide_context(

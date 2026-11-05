@@ -163,9 +163,7 @@ impl RadioButtonController {
         if self.selected {
             return false;
         }
-        self.selected = true;
-        self.start_progress = self.progress;
-        self.last_change_frame_nanos = Some(current_frame_nanos());
+        self.set_selected(true);
         true
     }
 
@@ -173,11 +171,7 @@ impl RadioButtonController {
         if let Some(start_frame_nanos) = self.last_change_frame_nanos {
             let elapsed_nanos = frame_nanos.saturating_sub(start_frame_nanos);
             let animation_nanos = RADIO_ANIMATION_DURATION.as_nanos().min(u64::MAX as u128) as u64;
-            let fraction = if animation_nanos == 0 {
-                1.0
-            } else {
-                (elapsed_nanos as f32 / animation_nanos as f32).min(1.0)
-            };
+            let fraction = (elapsed_nanos as f32 / animation_nanos as f32).min(1.0);
             let target = if self.selected { 1.0 } else { 0.0 };
             self.progress = self.start_progress + (target - self.start_progress) * fraction;
             if fraction >= 1.0 {
@@ -507,15 +501,7 @@ fn radio_button_inner(
         disabled_unselected_color
     };
 
-    let base_state_layer_color = if enabled {
-        ring_color
-    } else if is_selected {
-        disabled_selected_color
-    } else {
-        disabled_unselected_color
-    };
-
-    let ripple_color = base_state_layer_color;
+    let ripple_color = ring_color;
 
     let target_dot_color = if enabled {
         selected_color

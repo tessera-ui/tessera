@@ -14,7 +14,7 @@ use tessera_ui::{
 
 use crate::{
     alignment::{CrossAxisAlignment, MainAxisAlignment},
-    layout_flex::cross_axis_child_constraint,
+    layout_flex::{classify_children, cross_axis_child_constraint},
 };
 
 struct PlaceChildrenArgs<'a, T> {
@@ -86,13 +86,6 @@ impl tessera_ui::LayoutModifierNode for RowLayout {
         let mut result = LayoutResult::default();
         let children = input.children();
         let child_weights = collect_child_weights(input, &children);
-        let n = child_weights.len();
-        assert_eq!(
-            children.len(),
-            n,
-            "Mismatch between children defined in scope and runtime children count"
-        );
-
         let row_parent_constraint = *input.parent_constraint().as_ref();
 
         let has_weighted_children = child_weights.iter().any(|&weight| weight > 0.0);
@@ -186,14 +179,6 @@ fn measure_weighted_row(
     child_weights: &[f32],
     row_parent_constraint: &Constraint,
 ) -> Result<LayoutResult, MeasurementError> {
-    // Prepare buffers and metadata for measurement:
-    // - `children_sizes` stores each child's measurement result (width,
-    //   height).
-    // - `max_child_height` tracks the maximum height among children to compute
-    //   the row's final height.
-    // - `available_width_for_children` is the total width available to allocate
-    //   to children under the current constraint (present only for
-    //   Fill/Fixed/Wrap(max)).
     let mut children_sizes = vec![None; child_weights.len()];
     let mut max_child_height = Px(0);
     let available_width_for_children = row_parent_constraint
@@ -201,8 +186,6 @@ fn measure_weighted_row(
         .resolve_max()
         .expect("Row width Fill expected with finite max constraint");
 
-    // Classify children into weighted and unweighted and compute the total
-    // weight.
     let (weighted_indices, unweighted_indices, total_weight) = classify_children(child_weights);
 
     let total_width_of_unweighted_children = measure_unweighted_children(
@@ -313,10 +296,6 @@ fn measure_unweighted_row(
         height: final_row_height,
     };
     Ok(result.clone())
-}
-
-fn classify_children(child_weights: &[f32]) -> (Vec<usize>, Vec<usize>, f32) {
-    crate::layout_flex::classify_children(child_weights)
 }
 
 fn measure_unweighted_children(

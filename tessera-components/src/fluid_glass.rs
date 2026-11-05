@@ -82,37 +82,27 @@ fn default_glass_border() -> Option<GlassBorder> {
     })
 }
 
-// Helper: pointer blocking logic extracted to reduce complexity of
-// `fluid_glass`.
-fn handle_block_input(input: &mut tessera_ui::PointerInput) {
-    let size = input.computed_data;
-    let cursor_pos_option = input.cursor_position_rel;
-    let is_cursor_in = cursor_pos_option
-        .map(|pos| is_position_inside_bounds(size, pos))
-        .unwrap_or(false);
-
-    if is_cursor_in {
-        // Consume all input events to prevent interaction with underlying
-        // components
-        input.block_all();
-    }
-}
-
-struct FluidGlassBlockInputPointerModifierNode {
-    block_input: bool,
-}
+struct FluidGlassBlockInputPointerModifierNode;
 
 impl PointerInputModifierNode for FluidGlassBlockInputPointerModifierNode {
     fn on_pointer_input(&self, mut input: PointerInput<'_>) {
-        if self.block_input {
-            handle_block_input(&mut input);
+        let size = input.computed_data;
+        let cursor_pos_option = input.cursor_position_rel;
+        let is_cursor_in = cursor_pos_option
+            .map(|pos| is_position_inside_bounds(size, pos))
+            .unwrap_or(false);
+
+        if is_cursor_in {
+            // Consume all input events to prevent interaction with underlying
+            // components
+            input.block_all();
         }
     }
 }
 
 fn apply_fluid_glass_block_input_modifier(base: Modifier, block_input: bool) -> Modifier {
     if block_input {
-        base.push_pointer_input(FluidGlassBlockInputPointerModifierNode { block_input: true })
+        base.push_pointer_input(FluidGlassBlockInputPointerModifierNode)
     } else {
         base
     }

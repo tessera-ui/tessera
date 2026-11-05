@@ -12,7 +12,7 @@ use tessera_ui::{
 };
 
 use crate::{
-    image::{ImageLoadError, TryIntoImageData},
+    image::{ImageLoadError, TryIntoImageData, clamp_f32_to_px},
     image_vector::{ImageVectorLoadError, TintMode, TryIntoImageVectorData},
     painter::{Painter, PainterLoadError, TryIntoPainter},
     pipelines::{
@@ -286,16 +286,11 @@ pub fn icon(
 fn intrinsic_dimensions(content: &Painter) -> (Px, Px) {
     match content {
         Painter::Vector(data) => (
-            px_from_f32(data.viewport_width),
-            px_from_f32(data.viewport_height),
+            clamp_f32_to_px(data.viewport_width),
+            clamp_f32_to_px(data.viewport_height),
         ),
         Painter::Raster(data) => (clamp_u32_to_px(data.width), clamp_u32_to_px(data.height)),
     }
-}
-
-fn px_from_f32(value: f32) -> Px {
-    let clamped = value.max(0.0).min(i32::MAX as f32);
-    Px(clamped.round() as i32)
 }
 
 fn clamp_u32_to_px(value: u32) -> Px {

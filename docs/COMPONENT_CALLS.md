@@ -132,32 +132,5 @@ Shared variants accept RenderSlot handles. Key providers and action callbacks
 use ordinary Rust contexts. The CLI resolves the actual receiver type before
 recognizing a built-in content method.
 
-## Runtime and replay
-
-Entries reserve the existing stable logic identity from the declaration's
-parent, group, key, and occurrence. A separate unique call token validates
-configuration lifetime. Execution restores the captured tree parent, context,
-group path, and key before invoking the existing component runner. Pending
-storage is released before running configuration code, component bodies, or
-destructors that can reenter the runtime.
-
-Plain setters update the stored owned props directly. Closure setters defer
-functor creation until execution, using a stable namespace for each declaration
-and property. This keeps callback and slot identities independent of setter
-order and configuration groups. Their resources belong to the declaring
-component, so replaying a configured child cannot sweep caller-owned functors.
-Root-entry props belong to the root build scope.
-
-Final props feed the existing equality, subtree reuse, runner, and replay
-snapshot machinery. State and slot dependencies retain their original owners;
-forward invalidations finish before layout, while writes to boundaries already
-executed in that build retain the existing deferred invalidation behavior.
-Node completion maintains the existing layout adjacency and structural journals.
-The scheduler does not introduce an additional layout or drawing phase.
-
-Generated `*Builder` types now contain configuration tokens rather than pending
-execution ownership. Component execution is explicit in the runtime. Guards
-still restore build context and clean up resources on normal return or unwind.
-
 The build closure passed to `key` runs as a controlled Tessera fragment.
 Key-provider callbacks and initializer factories remain ordinary Rust closures.

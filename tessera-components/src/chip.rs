@@ -254,13 +254,17 @@ impl ChipDefaults {
             ChipStyle::Flat => Color::TRANSPARENT,
         };
 
+        let container = match style {
+            ChipStyle::Elevated => scheme.surface_container_low,
+            ChipStyle::Flat => Color::TRANSPARENT,
+        };
         match variant {
-            ChipVariant::Assist => {
-                let container = match style {
-                    ChipStyle::Elevated => scheme.surface_container_low,
-                    ChipStyle::Flat => Color::TRANSPARENT,
+            ChipVariant::Assist | ChipVariant::Suggestion => {
+                let label = if variant == ChipVariant::Assist {
+                    scheme.on_surface
+                } else {
+                    scheme.on_surface_variant
                 };
-                let label = scheme.on_surface;
                 let icon = scheme.primary;
                 ChipColors {
                     container_color: container,
@@ -281,44 +285,18 @@ impl ChipDefaults {
                     disabled_selected_trailing_icon_color: disabled_content,
                 }
             }
-            ChipVariant::Suggestion => {
-                let container = match style {
-                    ChipStyle::Elevated => scheme.surface_container_low,
-                    ChipStyle::Flat => Color::TRANSPARENT,
-                };
-                let label = scheme.on_surface_variant;
-                let icon = scheme.primary;
-                ChipColors {
-                    container_color: container,
-                    label_color: label,
-                    leading_icon_color: icon,
-                    trailing_icon_color: icon,
-                    disabled_container_color: disabled_container,
-                    disabled_label_color: disabled_content,
-                    disabled_leading_icon_color: disabled_content,
-                    disabled_trailing_icon_color: disabled_content,
-                    selected_container_color: container,
-                    selected_label_color: label,
-                    selected_leading_icon_color: icon,
-                    selected_trailing_icon_color: icon,
-                    disabled_selected_container_color: disabled_container,
-                    disabled_selected_label_color: disabled_content,
-                    disabled_selected_leading_icon_color: disabled_content,
-                    disabled_selected_trailing_icon_color: disabled_content,
-                }
-            }
-            ChipVariant::Filter => {
-                let container = match style {
-                    ChipStyle::Elevated => scheme.surface_container_low,
-                    ChipStyle::Flat => Color::TRANSPARENT,
-                };
+            ChipVariant::Filter | ChipVariant::Input => {
                 let disabled_selected_container = scheme
                     .on_surface
                     .with_alpha(MaterialAlpha::DISABLED_CONTAINER);
                 ChipColors {
                     container_color: container,
                     label_color: scheme.on_surface_variant,
-                    leading_icon_color: scheme.primary,
+                    leading_icon_color: if variant == ChipVariant::Filter {
+                        scheme.primary
+                    } else {
+                        scheme.on_surface_variant
+                    },
                     trailing_icon_color: scheme.on_surface_variant,
                     disabled_container_color: disabled_container,
                     disabled_label_color: disabled_content,
@@ -326,34 +304,11 @@ impl ChipDefaults {
                     disabled_trailing_icon_color: disabled_content,
                     selected_container_color: scheme.secondary_container,
                     selected_label_color: scheme.on_secondary_container,
-                    selected_leading_icon_color: scheme.on_secondary_container,
-                    selected_trailing_icon_color: scheme.on_secondary_container,
-                    disabled_selected_container_color: disabled_selected_container,
-                    disabled_selected_label_color: disabled_content,
-                    disabled_selected_leading_icon_color: disabled_content,
-                    disabled_selected_trailing_icon_color: disabled_content,
-                }
-            }
-            ChipVariant::Input => {
-                let container = match style {
-                    ChipStyle::Elevated => scheme.surface_container_low,
-                    ChipStyle::Flat => Color::TRANSPARENT,
-                };
-                let disabled_selected_container = scheme
-                    .on_surface
-                    .with_alpha(MaterialAlpha::DISABLED_CONTAINER);
-                ChipColors {
-                    container_color: container,
-                    label_color: scheme.on_surface_variant,
-                    leading_icon_color: scheme.on_surface_variant,
-                    trailing_icon_color: scheme.on_surface_variant,
-                    disabled_container_color: disabled_container,
-                    disabled_label_color: disabled_content,
-                    disabled_leading_icon_color: disabled_content,
-                    disabled_trailing_icon_color: disabled_content,
-                    selected_container_color: scheme.secondary_container,
-                    selected_label_color: scheme.on_secondary_container,
-                    selected_leading_icon_color: scheme.primary,
+                    selected_leading_icon_color: if variant == ChipVariant::Filter {
+                        scheme.on_secondary_container
+                    } else {
+                        scheme.primary
+                    },
                     selected_trailing_icon_color: scheme.on_secondary_container,
                     disabled_selected_container_color: disabled_selected_container,
                     disabled_selected_label_color: disabled_content,
@@ -852,10 +807,6 @@ pub fn chip(
                                                 chip_avatar().painter(avatar).alpha(avatar_alpha);
                                             } else if let Some(icon_content) = leading_icon.clone()
                                             {
-                                                if item_count > 0 {
-                                                    spacer()
-                                                        .modifier(Modifier::new().width(spacing));
-                                                }
                                                 item_count += 1;
                                                 icon()
                                                     .painter(icon_content.clone())

@@ -133,11 +133,13 @@ impl BatchResources {
 
 fn build_instances(
     commands: &[(&ShapeCommand, tessera_ui::DrawGeometry)],
+    indices: &[usize],
     target_size: PxSize,
 ) -> Vec<ShapeUniforms> {
-    commands
+    indices
         .iter()
-        .map(|(command, geometry)| {
+        .map(|&index| {
+            let (command, geometry) = commands[index];
             let mut uniforms =
                 rect_to_uniforms(command, geometry.local_size, geometry.window_origin());
             let [width, height] = geometry.window_size();
@@ -165,11 +167,7 @@ impl ShapePipeline {
             return;
         }
 
-        let subset: Vec<_> = indices.iter().map(|&i| commands[i]).collect();
-        let instances = build_instances(&subset, target_size);
-        if instances.is_empty() {
-            return;
-        }
+        let instances = build_instances(commands, indices, target_size);
 
         let uniforms = ShapeInstances { instances };
 
@@ -197,7 +195,6 @@ impl ShapePipeline {
         target_size: PxSize,
         render_pass: &mut wgpu::RenderPass<'_>,
         texture_bind_group: &wgpu::BindGroup,
-        padding: Vec2,
         instances: &[(PxPosition, PxSize)],
     ) {
         if instances.is_empty() {
@@ -208,13 +205,13 @@ impl ShapePipeline {
             .iter()
             .map(|(position, size)| CachedRectUniform {
                 position: Vec4::new(
-                    position.x - padding.x,
-                    position.y - padding.y,
-                    size.width.raw() as f32 + padding.x * 2.0,
-                    size.height.raw() as f32 + padding.y * 2.0,
+                    position.x,
+                    position.y,
+                    size.width.raw() as f32,
+                    size.height.raw() as f32,
                 ),
                 screen_size: Vec2::new(target_size.width.to_f32(), target_size.height.to_f32()),
-                padding,
+                padding: Vec2::ZERO,
             })
             .collect();
 
@@ -251,13 +248,11 @@ impl ShapePipeline {
             return;
         };
         let texture_bind_group = entry.texture_bind_group.clone();
-        let padding = entry.padding;
         self.draw_cached_run(
             gpu,
             target_size,
             render_pass,
             &texture_bind_group,
-            padding,
             &instances,
         );
     }

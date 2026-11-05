@@ -53,19 +53,6 @@ fn click(renderer: &mut HeadlessRenderer, label: &str) {
     renderer.render_frames(60);
 }
 
-fn save_pixels(renderer: &HeadlessRenderer, name: &str) {
-    if let Some(directory) = std::env::var_os("TESSERA_MENU_QA_DIR") {
-        let size = renderer.physical_size();
-        tessera_ui::headless::write_png_file(
-            std::path::PathBuf::from(directory).join(name),
-            size.width,
-            size.height,
-            &renderer.read_pixels().unwrap(),
-        )
-        .unwrap();
-    }
-}
-
 #[test]
 #[ignore = "requires a native GPU adapter for switch anatomy and configurations"]
 fn switch_figures_preserve_native_parts_numbered_markers_and_independent_scaled_toggles() {
@@ -152,14 +139,6 @@ fn switch_figures_preserve_native_parts_numbered_markers_and_independent_scaled_
             (bounds.x0, bounds.y0, bounds.width(), bounds.height()),
             expected
         );
-        save_pixels(
-            &renderer,
-            if configuration {
-                "switch-configurations-canonical-676.png"
-            } else {
-                "switch-anatomy-canonical-1024.png"
-            },
-        );
         click(&mut renderer, first);
         assert_eq!(
             node(&renderer, first, Role::Switch).toggled(),
@@ -200,14 +179,6 @@ fn switch_figures_preserve_native_parts_numbered_markers_and_independent_scaled_
         assert_eq!(
             node(&renderer, peer, Role::Switch).toggled(),
             Some(Toggled::True)
-        );
-        save_pixels(
-            &renderer,
-            if configuration {
-                "switch-configurations-narrow-338.png"
-            } else {
-                "switch-anatomy-narrow-512.png"
-            },
         );
     }
 }

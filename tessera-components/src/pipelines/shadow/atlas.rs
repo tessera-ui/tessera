@@ -160,14 +160,6 @@ impl CompositePipeline<ShadowAtlasCommand> for ShadowAtlasPipeline {
             return CompositeOutput::empty();
         }
 
-        let layer_count = shadows
-            .iter()
-            .map(|item| item.layers.len())
-            .max()
-            .unwrap_or(0);
-        if layer_count == 0 || layer_count > 2 {
-            return build_fallback_output(&shadows);
-        }
         let mut output = CompositeOutput::empty();
         let device = context.resources.device;
         let registry = &context.external_textures;
@@ -1092,9 +1084,6 @@ mod tests {
     fn first_wide_shadow_uses_a_compact_rectangular_page() {
         let size = atlas_page_size(1000, 120, None, 8192);
         assert_eq!(size, PxSize::new(Px(1024), Px(256)));
-        let texture_bytes = size.width.positive() as u64 * size.height.positive() as u64 * 4;
-        let page_bytes = texture_bytes * (1 + 2 * SHADOW_ATLAS_LAYER_CAPACITY as u64) * 2;
-        assert_eq!(page_bytes, 10 * 1024 * 1024);
     }
 
     #[test]

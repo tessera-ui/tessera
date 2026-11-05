@@ -11,6 +11,8 @@ use std::{
 
 use tessera_ui::{CallbackWith, Px, RenderSlotWith};
 
+use crate::layout_flex::px_from_i64;
+
 pub(crate) fn hash_key(key: impl Hash) -> u64 {
     let mut hasher = DefaultHasher::new();
     key.hash(&mut hasher);
@@ -270,5 +272,42 @@ impl tessera_ui::LayoutModifierNode for ZeroLayout {
         Ok(tessera_ui::LayoutResult::new(
             tessera_ui::ComputedData::ZERO,
         ))
+    }
+}
+
+#[derive(Default, Clone, PartialEq)]
+pub(crate) struct FenwickTree {
+    data: Vec<i64>,
+}
+
+impl FenwickTree {
+    pub(crate) fn resize(&mut self, len: usize) {
+        self.data.clear();
+        self.data.resize(len + 1, 0);
+    }
+
+    pub(crate) fn update(&mut self, index: usize, delta: Px) {
+        if self.data.is_empty() {
+            return;
+        }
+        let mut i = index + 1;
+        let delta_i64 = delta.0 as i64;
+        while i < self.data.len() {
+            self.data[i] = self.data[i].saturating_add(delta_i64);
+            i += i & (!i + 1);
+        }
+    }
+
+    pub(crate) fn prefix_sum(&self, count: usize) -> Px {
+        if self.data.is_empty() {
+            return Px::ZERO;
+        }
+        let mut idx = count;
+        let mut sum = 0i64;
+        while idx > 0 {
+            sum = sum.saturating_add(self.data[idx]);
+            idx &= idx - 1;
+        }
+        px_from_i64(sum)
     }
 }

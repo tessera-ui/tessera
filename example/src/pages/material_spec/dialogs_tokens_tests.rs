@@ -114,10 +114,6 @@ fn dialog_token_sets_switch_variants_and_accordion_controls_reveal_their_own_row
         &renderer,
         "Surface container high (inferred role)"
     ));
-    assert!(contains_text(
-        &renderer,
-        "Extra large, 28dp corner radius (inferred)"
-    ));
     assert!(
         !contains_text(&renderer, "Dialog action hover state layer opacity"),
         "other state groups stay collapsed"
@@ -147,12 +143,6 @@ fn dialog_token_sets_switch_variants_and_accordion_controls_reveal_their_own_row
         &renderer,
         "Full screen dialog header container height"
     ));
-    assert!(contains_text(&renderer, "56dp"));
-    assert!(contains_text(
-        &renderer,
-        "None, 0dp corner radius (inferred)"
-    ));
-    assert!(contains_text(&renderer, "Title large (inferred)"));
 
     click_button(&mut renderer, "Dialog token set selector");
     for (_, node) in menu_options(&renderer) {

@@ -78,7 +78,7 @@ fn fixture(probe: tessera_ui::testing::TestProbe<Option<State<Settings>>>) {
         });
 }
 
-fn rect(renderer: &HeadlessRenderer, key: &str) -> [i64; 4] {
+pub(super) fn rect(renderer: &HeadlessRenderer, key: &str) -> [i64; 4] {
     let snapshot = renderer.inspect_components();
     let node = snapshot
         .find_tag(key)

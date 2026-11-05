@@ -1,8 +1,7 @@
 use std::sync::Arc;
 
 use encase::{ShaderSize, StorageBuffer};
-use glam::Vec2;
-use tessera_ui::{Color, PxPosition, PxSize, wgpu};
+use tessera_ui::{PxPosition, PxSize, wgpu};
 
 use super::{
     super::command::{RippleProps, ShapeCommand, rect_to_uniforms},
@@ -50,27 +49,13 @@ pub(super) struct ShapeCacheKey {
     pub(super) height: u32,
 }
 
-fn f32_to_bits(value: f32) -> u32 {
-    value.to_bits()
-}
-
-fn color_to_bits(color: Color) -> [u32; 4] {
-    let arr = color.to_array();
-    [
-        f32_to_bits(arr[0]),
-        f32_to_bits(arr[1]),
-        f32_to_bits(arr[2]),
-        f32_to_bits(arr[3]),
-    ]
-}
-
 fn ripple_to_key(ripple: &RippleProps) -> RippleKey {
     RippleKey {
-        center: [f32_to_bits(ripple.center[0]), f32_to_bits(ripple.center[1])],
+        center: ripple.center.map(f32::to_bits),
         bounded: ripple.bounded,
-        radius: f32_to_bits(ripple.radius),
-        alpha: f32_to_bits(ripple.alpha),
-        color: color_to_bits(ripple.color),
+        radius: f32::to_bits(ripple.radius),
+        alpha: f32::to_bits(ripple.alpha),
+        color: ripple.color.to_array().map(f32::to_bits),
     }
 }
 
@@ -90,10 +75,10 @@ impl ShapeCacheKey {
                 corner_g2,
             } => Some(Self {
                 variant: ShapeCacheVariant::Rect,
-                primary_color: color_to_bits(*color),
+                primary_color: color.to_array().map(f32::to_bits),
                 border_color: None,
-                corner_radii: corner_radii.map(f32_to_bits),
-                corner_g2: corner_g2.map(f32_to_bits),
+                corner_radii: corner_radii.map(f32::to_bits),
+                corner_g2: corner_g2.map(f32::to_bits),
                 border_width: 0,
                 ripple: None,
                 width,
@@ -106,11 +91,11 @@ impl ShapeCacheKey {
                 border_width,
             } => Some(Self {
                 variant: ShapeCacheVariant::OutlinedRect,
-                primary_color: color_to_bits(*color),
+                primary_color: color.to_array().map(f32::to_bits),
                 border_color: None,
-                corner_radii: corner_radii.map(f32_to_bits),
-                corner_g2: corner_g2.map(f32_to_bits),
-                border_width: f32_to_bits(*border_width),
+                corner_radii: corner_radii.map(f32::to_bits),
+                corner_g2: corner_g2.map(f32::to_bits),
+                border_width: f32::to_bits(*border_width),
                 ripple: None,
                 width,
                 height,
@@ -123,20 +108,20 @@ impl ShapeCacheKey {
                 border_width,
             } => Some(Self {
                 variant: ShapeCacheVariant::FilledOutlinedRect,
-                primary_color: color_to_bits(*color),
-                border_color: Some(color_to_bits(*border_color)),
-                corner_radii: corner_radii.map(f32_to_bits),
-                corner_g2: corner_g2.map(f32_to_bits),
-                border_width: f32_to_bits(*border_width),
+                primary_color: color.to_array().map(f32::to_bits),
+                border_color: Some(border_color.to_array().map(f32::to_bits)),
+                corner_radii: corner_radii.map(f32::to_bits),
+                corner_g2: corner_g2.map(f32::to_bits),
+                border_width: f32::to_bits(*border_width),
                 ripple: None,
                 width,
                 height,
             }),
             ShapeCommand::Ellipse { color } => Some(Self {
                 variant: ShapeCacheVariant::Ellipse,
-                primary_color: color_to_bits(*color),
+                primary_color: color.to_array().map(f32::to_bits),
                 border_color: None,
-                corner_radii: [f32_to_bits(-1.0); 4],
+                corner_radii: [f32::to_bits(-1.0); 4],
                 corner_g2: [0; 4],
                 border_width: 0,
                 ripple: None,
@@ -148,11 +133,11 @@ impl ShapeCacheKey {
                 border_width,
             } => Some(Self {
                 variant: ShapeCacheVariant::OutlinedEllipse,
-                primary_color: color_to_bits(*color),
+                primary_color: color.to_array().map(f32::to_bits),
                 border_color: None,
-                corner_radii: [f32_to_bits(-1.0); 4],
+                corner_radii: [f32::to_bits(-1.0); 4],
                 corner_g2: [0; 4],
-                border_width: f32_to_bits(*border_width),
+                border_width: f32::to_bits(*border_width),
                 ripple: None,
                 width,
                 height,
@@ -163,11 +148,11 @@ impl ShapeCacheKey {
                 border_width,
             } => Some(Self {
                 variant: ShapeCacheVariant::FilledOutlinedEllipse,
-                primary_color: color_to_bits(*color),
-                border_color: Some(color_to_bits(*border_color)),
-                corner_radii: [f32_to_bits(-1.0); 4],
+                primary_color: color.to_array().map(f32::to_bits),
+                border_color: Some(border_color.to_array().map(f32::to_bits)),
+                corner_radii: [f32::to_bits(-1.0); 4],
                 corner_g2: [0; 4],
-                border_width: f32_to_bits(*border_width),
+                border_width: f32::to_bits(*border_width),
                 ripple: None,
                 width,
                 height,
@@ -179,10 +164,10 @@ impl ShapeCacheKey {
                 ripple,
             } => Some(Self {
                 variant: ShapeCacheVariant::RippleRect,
-                primary_color: color_to_bits(*color),
+                primary_color: color.to_array().map(f32::to_bits),
                 border_color: None,
-                corner_radii: corner_radii.map(f32_to_bits),
-                corner_g2: corner_g2.map(f32_to_bits),
+                corner_radii: corner_radii.map(f32::to_bits),
+                corner_g2: corner_g2.map(f32::to_bits),
                 border_width: 0,
                 ripple: Some(ripple_to_key(ripple)),
                 width,
@@ -196,11 +181,11 @@ impl ShapeCacheKey {
                 ripple,
             } => Some(Self {
                 variant: ShapeCacheVariant::RippleOutlinedRect,
-                primary_color: color_to_bits(*color),
+                primary_color: color.to_array().map(f32::to_bits),
                 border_color: None,
-                corner_radii: corner_radii.map(f32_to_bits),
-                corner_g2: corner_g2.map(f32_to_bits),
-                border_width: f32_to_bits(*border_width),
+                corner_radii: corner_radii.map(f32::to_bits),
+                corner_g2: corner_g2.map(f32::to_bits),
+                border_width: f32::to_bits(*border_width),
                 ripple: Some(ripple_to_key(ripple)),
                 width,
                 height,
@@ -214,11 +199,11 @@ impl ShapeCacheKey {
                 ripple,
             } => Some(Self {
                 variant: ShapeCacheVariant::RippleFilledOutlinedRect,
-                primary_color: color_to_bits(*color),
-                border_color: Some(color_to_bits(*border_color)),
-                corner_radii: corner_radii.map(f32_to_bits),
-                corner_g2: corner_g2.map(f32_to_bits),
-                border_width: f32_to_bits(*border_width),
+                primary_color: color.to_array().map(f32::to_bits),
+                border_color: Some(border_color.to_array().map(f32::to_bits)),
+                corner_radii: corner_radii.map(f32::to_bits),
+                corner_g2: corner_g2.map(f32::to_bits),
+                border_width: f32::to_bits(*border_width),
                 ripple: Some(ripple_to_key(ripple)),
                 width,
                 height,
@@ -449,7 +434,6 @@ impl ShapePipeline {
             _texture: cache_texture,
             _view: cache_view,
             texture_bind_group,
-            padding: Vec2::ZERO,
         }
     }
 }

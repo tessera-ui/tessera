@@ -163,10 +163,6 @@ impl DrawablePipeline<ShadowMaskCommand> for ShadowMaskPipeline {
         }
 
         let instances = Self::build_instances(context.commands, context.target_size);
-        if instances.is_empty() {
-            return;
-        }
-
         let storage_buffer = context.device.create_buffer(&wgpu::BufferDescriptor {
             label: Some("Shadow Mask Storage Buffer"),
             size: 16 + ShapeUniforms::SHADER_SIZE.get() * instances.len() as u64,

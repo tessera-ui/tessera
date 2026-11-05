@@ -19,13 +19,14 @@ use tessera_components::{
     spacer::spacer,
     surface::surface,
     text::text,
-    theme::{MaterialColorScheme, MaterialTheme, material_theme},
+    theme::{MaterialTheme, material_theme},
 };
-use tessera_ui::{Color, Dp, Modifier, RenderSlot, remember, tessera, use_context};
+use tessera_ui::{Dp, Modifier, RenderSlot, remember, tessera, use_context};
 
 use super::{
     ACCENT, INK,
     article::{ArticlePage, SpecSection, article},
+    floating_actions::{TONES, tone_colors},
     gap, panel, spec_table, subheading, type_style,
 };
 
@@ -35,31 +36,11 @@ const SIZES: [ExtendedFloatingActionButtonSize; 3] = [
     ExtendedFloatingActionButtonSize::Large,
 ];
 
-const TONES: [&str; 6] = [
-    "Primary container",
-    "Secondary container",
-    "Tertiary container",
-    "Primary",
-    "Secondary",
-    "Tertiary",
-];
-
 fn size_name(size: ExtendedFloatingActionButtonSize) -> &'static str {
     match size {
         ExtendedFloatingActionButtonSize::Small => "Small",
         ExtendedFloatingActionButtonSize::Medium => "Medium",
         ExtendedFloatingActionButtonSize::Large => "Large",
-    }
-}
-
-fn tone_colors(scheme: &MaterialColorScheme, tone: usize) -> (Color, Color) {
-    match tone {
-        0 => (scheme.primary_container, scheme.on_primary_container),
-        1 => (scheme.secondary_container, scheme.on_secondary_container),
-        2 => (scheme.tertiary_container, scheme.on_tertiary_container),
-        3 => (scheme.primary, scheme.on_primary),
-        4 => (scheme.secondary, scheme.on_secondary),
-        _ => (scheme.tertiary, scheme.on_tertiary),
     }
 }
 
@@ -231,7 +212,6 @@ fn fab(
     #[prop(into)] label: String,
     size: Option<ExtendedFloatingActionButtonSize>,
     tone: Option<usize>,
-    expanded: Option<bool>,
     enabled: Option<bool>,
     counted: Option<bool>,
     with_icon: Option<bool>,
@@ -239,7 +219,6 @@ fn fab(
     let scheme = use_context::<MaterialTheme>().unwrap().get().color_scheme;
     let (container, content) = tone_colors(&scheme, tone.unwrap_or(0));
     let activations = remember(|| 0_u32);
-    let spoken = label.clone();
     column().children(move || {
         extended_floating_action_button(label.clone())
             .size(size.unwrap_or(ExtendedFloatingActionButtonSize::Small))
@@ -248,11 +227,9 @@ fn fab(
             } else {
                 None
             })
-            .expanded(expanded.unwrap_or(true))
             .enabled(enabled.unwrap_or(true))
             .container_color(container)
             .content_color(content)
-            .accessibility_label(spoken.clone())
             .on_click(move || activations.set(activations.get() + 1));
         if counted.unwrap_or(false) {
             gap(Dp(16.0));
@@ -359,7 +336,7 @@ fn expressive() {
     );
     gap(Dp(32.0));
     panel(RenderSlot::new(|| {
-        fab("Compose").size(ExtendedFloatingActionButtonSize::Small);
+        fab("Compose");
     }));
     caption("The small extended FAB is the recommended size in the expressive update.");
 }
@@ -463,9 +440,7 @@ fn configurations() {
                     .line_spacing(Dp(24.0))
                     .children(|| {
                         for (tone, name) in TONES.into_iter().enumerate() {
-                            fab(name)
-                                .size(ExtendedFloatingActionButtonSize::Small)
-                                .tone(tone);
+                            fab(name).tone(tone);
                         }
                     });
                 gap(Dp(40.0));
@@ -475,13 +450,11 @@ fn configurations() {
                     .content("With leading icon")
                     .style(type_style(14.0, 20.0));
                 gap(Dp(16.0));
-                fab("Compose").size(ExtendedFloatingActionButtonSize::Small);
+                fab("Compose");
                 gap(Dp(24.0));
                 text().content("Without icon").style(type_style(14.0, 20.0));
                 gap(Dp(16.0));
-                fab("Compose")
-                    .size(ExtendedFloatingActionButtonSize::Small)
-                    .with_icon(false);
+                fab("Compose").with_icon(false);
             });
     }));
     gap(Dp(32.0));
@@ -500,7 +473,7 @@ fn collapsible(#[prop(into)] label: String) {
     let expanded = remember(|| true);
     let activations = remember(|| 0_u32);
     panel(RenderSlot::new(move || {
-        let spoken = label.clone();
+        let label = label.clone();
         column()
             .modifier(Modifier::new().fill_max_width())
             .children(move || {
@@ -517,13 +490,12 @@ fn collapsible(#[prop(into)] label: String) {
                         });
                     });
                 gap(Dp(32.0));
-                extended_floating_action_button(spoken.clone())
+                extended_floating_action_button(label.clone())
                     .size(ExtendedFloatingActionButtonSize::Small)
                     .icon(filled::EDIT_SVG)
                     .expanded(expanded.get())
                     .container_color(scheme.primary_container)
                     .content_color(scheme.on_primary_container)
-                    .accessibility_label(spoken.clone())
                     .on_click(move || activations.set(activations.get() + 1));
                 gap(Dp(16.0));
                 text()
@@ -614,7 +586,7 @@ fn anatomy() {
     gap(Dp(24.0));
     panel(RenderSlot::new(|| {
         column().children(|| {
-            fab("Compose").size(ExtendedFloatingActionButtonSize::Small);
+            fab("Compose");
             gap(Dp(32.0));
             for line in ["1  Container", "2  Icon (optional)", "3  Label text"] {
                 text()
@@ -657,7 +629,7 @@ fn colors() {
                                     .line_spacing(Dp(24.0))
                                     .children(move || {
                                         for (tone, name) in TONES.into_iter().enumerate() {
-                                            fab(name).size(ExtendedFloatingActionButtonSize::Small)
+                                            fab(name)
                                                 .tone(tone);
                                         }
                                     });
@@ -685,11 +657,11 @@ fn states() {
                 row()
                     .modifier(Modifier::new().fill_max_width())
                     .children(|| {
-                        fab("Enabled").size(ExtendedFloatingActionButtonSize::Small);
+                        fab("Enabled");
                         spacer().modifier(Modifier::new().width(Dp(32.0)));
-                        fab("Disabled").size(ExtendedFloatingActionButtonSize::Small).enabled(false);
+                        fab("Disabled").enabled(false);
                         spacer().modifier(Modifier::new().width(Dp(32.0)));
-                        fab("Elevated").size(ExtendedFloatingActionButtonSize::Small).tone(3);
+                        fab("Elevated").tone(3);
                     });
                 gap(Dp(32.0));
                 text()
@@ -812,7 +784,7 @@ fn baseline() {
     );
     gap(Dp(24.0));
     panel(RenderSlot::new(|| {
-        fab("Label").size(ExtendedFloatingActionButtonSize::Small);
+        fab("Label");
     }));
     gap(Dp(16.0));
     caption("1  Extended FAB (baseline) is superseded by the small extended FAB shown here.");
@@ -849,13 +821,13 @@ fn usage() {
         column()
             .modifier(Modifier::new().fill_max_width())
             .children(|| {
-                fab("Compose").size(ExtendedFloatingActionButtonSize::Small);
+                fab("Compose");
                 gap(Dp(16.0));
                 text()
                     .content("Do: keep the label short and specific to the action.")
                     .style(type_style(14.0, 20.0));
                 gap(Dp(32.0));
-                fab("Create a new message").size(ExtendedFloatingActionButtonSize::Small);
+                fab("Create a new message");
                 gap(Dp(16.0));
                 text()
                     .content("Don't: repeat the whole task description; the floating action stays concise.")
@@ -893,9 +865,7 @@ fn guidelines_color() {
             .line_spacing(Dp(24.0))
             .children(|| {
                 for tone in [0_usize, 1, 2, 3] {
-                    fab(TONES[tone])
-                        .size(ExtendedFloatingActionButtonSize::Small)
-                        .tone(tone);
+                    fab(TONES[tone]).tone(tone);
                 }
             });
     }));
@@ -936,10 +906,8 @@ fn placement() {
                             extended_floating_action_button("Compose")
                                 .size(ExtendedFloatingActionButtonSize::Small)
                                 .icon(filled::EDIT_SVG)
-                                .expanded(true)
                                 .container_color(scheme.primary_container)
                                 .content_color(scheme.on_primary_container)
-                                .accessibility_label("Compose")
                                 .on_click(|| {});
                         });
                 });
@@ -960,7 +928,7 @@ fn responsive_layout() {
             .children(|| {
                 subheading("Compact".into());
                 gap(Dp(16.0));
-                fab("Compose").size(ExtendedFloatingActionButtonSize::Small);
+                fab("Compose");
                 gap(Dp(32.0));
                 subheading("Expanded".into());
                 gap(Dp(16.0));
@@ -996,9 +964,7 @@ fn use_cases() {
     ]);
     gap(Dp(24.0));
     panel(RenderSlot::new(|| {
-        fab("Compose")
-            .size(ExtendedFloatingActionButtonSize::Small)
-            .counted(true);
+        fab("Compose").counted(true);
     }));
     gap(Dp(16.0));
     caption(
@@ -1020,7 +986,6 @@ fn interaction_style() {
                 extended_floating_action_button("Compose")
                     .size(ExtendedFloatingActionButtonSize::Small)
                     .icon(filled::EDIT_SVG)
-                    .expanded(true)
                     .container_color(scheme.primary_container)
                     .content_color(scheme.on_primary_container)
                     .accessibility_label("Above three to one: Compose")
@@ -1029,7 +994,6 @@ fn interaction_style() {
                 extended_floating_action_button("Compose")
                     .size(ExtendedFloatingActionButtonSize::Small)
                     .icon(filled::EDIT_SVG)
-                    .expanded(true)
                     .container_color(scheme.surface_container)
                     .content_color(scheme.outline)
                     .accessibility_label("Below three to one: Compose")
@@ -1051,7 +1015,7 @@ fn initial_focus() {
     );
     gap(Dp(24.0));
     panel(RenderSlot::new(|| {
-        fab("Compose").size(ExtendedFloatingActionButtonSize::Small);
+        fab("Compose");
     }));
     gap(Dp(16.0));
     caption("Press Tab to reach the action; the whole container receives focus once.");
@@ -1072,9 +1036,7 @@ fn keyboard_navigation() {
     );
     gap(Dp(24.0));
     panel(RenderSlot::new(|| {
-        fab("Compose")
-            .size(ExtendedFloatingActionButtonSize::Small)
-            .counted(true);
+        fab("Compose").counted(true);
     }));
 }
 
@@ -1088,13 +1050,13 @@ fn labeling() {
         column()
             .modifier(Modifier::new().fill_max_width())
             .children(|| {
-                fab("Compose").size(ExtendedFloatingActionButtonSize::Small);
+                fab("Compose");
                 gap(Dp(16.0));
                 text()
                     .content("Do: one label, one announcement — “Compose, button”.")
                     .style(type_style(14.0, 20.0));
                 gap(Dp(32.0));
-                fab("Compose").size(ExtendedFloatingActionButtonSize::Small).tone(1);
+                fab("Compose").tone(1);
                 gap(Dp(16.0));
                 text()
                     .content("Don't: “Compose, edit pencil icon, button” — the icon description duplicates the action.")

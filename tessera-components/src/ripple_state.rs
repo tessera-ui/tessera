@@ -74,11 +74,7 @@ impl RippleAnimationState {
         let duration_nanos = RippleState::ANIMATION_DURATION
             .as_nanos()
             .min(u64::MAX as u128) as u64;
-        let progress = if duration_nanos == 0 {
-            1.0
-        } else {
-            (elapsed_nanos as f32 / duration_nanos as f32).clamp(0.0, 1.0)
-        };
+        let progress = (elapsed_nanos as f32 / duration_nanos as f32).clamp(0.0, 1.0);
         if progress >= 1.0 {
             return None;
         }
@@ -106,20 +102,6 @@ fn ease_out_cubic(t: f32) -> f32 {
 /// Manage ripple animations and hover state for interactive UI components.
 /// Use with `remember` to create persistent state across frames.
 ///
-/// ## Parameters
-///
-/// - This type has no constructor parameters; create it with
-///   [`RippleState::new()`].
-///
-/// ## Examples
-///
-/// ```
-/// use tessera_components::interaction_state::InteractionState;
-/// let mut s = InteractionState::new();
-/// assert!(!s.is_hovered());
-/// s.set_hovered(true);
-/// assert!(s.is_hovered());
-/// ```
 pub struct RippleState {
     animation: Option<RippleAnimationState>,
     is_hovered: bool,

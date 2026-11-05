@@ -330,10 +330,10 @@ impl ListItemDefaults {
 ///
 /// ```
 /// use tessera_components::{
-///     list_item::{ListItemDefaults, ListItemSelectionMode, list_item},
+///     list_item::{ListItemSelectionMode, list_item},
 ///     text::text,
 /// };
-/// use tessera_ui::{Dp, remember, tessera};
+/// use tessera_ui::{remember, tessera};
 /// # use tessera_components::theme::{MaterialTheme, material_theme};
 ///
 /// #[tessera]
@@ -355,7 +355,6 @@ impl ListItemDefaults {
 /// }
 ///
 /// # tessera_ui::testing::layout_test(demo).run();
-/// assert_eq!(ListItemDefaults::min_height(false, true), Dp(72.0));
 /// ```
 #[tessera]
 pub fn list_item(

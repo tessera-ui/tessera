@@ -125,7 +125,7 @@ pub struct TapResult {
 }
 
 /// Stateful tap gesture recognizer.
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Copy, Debug, PartialEq, Default)]
 pub struct TapRecognizer {
     settings: TapSettings,
     active_pointer: Option<PointerId>,
@@ -138,9 +138,7 @@ impl TapRecognizer {
     pub fn new(settings: TapSettings) -> Self {
         Self {
             settings,
-            active_pointer: None,
-            track: PressTrack::default(),
-            canceled: false,
+            ..Self::default()
         }
     }
 
@@ -267,12 +265,6 @@ impl TapRecognizer {
     }
 }
 
-impl Default for TapRecognizer {
-    fn default() -> Self {
-        Self::new(TapSettings::default())
-    }
-}
-
 /// Configuration for drag gesture recognition.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct DragSettings {
@@ -319,7 +311,7 @@ pub struct DragResult {
 }
 
 /// Stateful drag gesture recognizer.
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Copy, Debug, PartialEq, Default)]
 pub struct DragRecognizer {
     delta_remainder: PxPosition,
     settings: DragSettings,
@@ -332,28 +324,17 @@ impl DragRecognizer {
     /// Creates a drag recognizer with custom settings.
     pub fn new(settings: DragSettings) -> Self {
         Self {
-            delta_remainder: PxPosition::ZERO,
             settings,
-            active_pointer: None,
-            track: PressTrack::default(),
-            dragging: false,
+            ..Self::default()
         }
     }
 
     /// Updates the recognizer with the current pointer pass and events.
     ///
-    /// # Position source
-    ///
-    /// Positions come only from the events themselves
-    /// (`CursorEventContent::Moved`); the caller neither needs to nor can
-    /// provide a coordinate space.
-    ///
     /// # Slop origin
     ///
-    /// The press event carries no position, so the slop origin is the **first
-    /// movement sample** observed after the press. Displacement that happens
-    /// entirely within the press frame is therefore not counted toward
-    /// `slop_px`, bounding the error by the pointer movement of that one frame.
+    /// The recorded press position anchors slop and movement. A press without
+    /// a recorded position uses the first movement sample as its origin.
     ///
     /// # `within_bounds`
     ///
@@ -477,12 +458,6 @@ impl DragRecognizer {
     }
 }
 
-impl Default for DragRecognizer {
-    fn default() -> Self {
-        Self::new(DragSettings::default())
-    }
-}
-
 /// Configuration for long-press gesture recognition.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct LongPressSettings {
@@ -514,7 +489,7 @@ pub struct LongPressResult {
 }
 
 /// Stateful long-press gesture recognizer.
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Copy, Debug, PartialEq, Default)]
 pub struct LongPressRecognizer {
     settings: LongPressSettings,
     active_pointer: Option<PointerId>,
@@ -531,30 +506,16 @@ impl LongPressRecognizer {
     pub fn new(settings: LongPressSettings) -> Self {
         Self {
             settings,
-            active_pointer: None,
-            track: PressTrack::default(),
-            press_time: None,
-            canceled: false,
-            triggered: false,
-            frame_press_start: None,
-            within_bounds: false,
+            ..Self::default()
         }
     }
 
     /// Updates the recognizer with the current pointer pass and events.
     ///
-    /// # Position source
-    ///
-    /// Positions come only from the events themselves
-    /// (`CursorEventContent::Moved`); the caller neither needs to nor can
-    /// provide a coordinate space.
-    ///
     /// # Slop origin
     ///
-    /// The press event carries no position, so the slop origin is the **first
-    /// movement sample** observed after the press. Displacement that happens
-    /// entirely within the press frame is therefore not counted toward
-    /// `slop_px`, bounding the error by the pointer movement of that one frame.
+    /// The recorded press position anchors slop and movement. A press without
+    /// a recorded position uses the first movement sample as its origin.
     ///
     /// # `within_bounds`
     ///
@@ -775,12 +736,6 @@ impl LongPressRecognizer {
     }
 }
 
-impl Default for LongPressRecognizer {
-    fn default() -> Self {
-        Self::new(LongPressSettings::default())
-    }
-}
-
 /// Configuration for scroll gesture aggregation.
 #[derive(Clone, Copy, Debug, PartialEq, Default)]
 pub struct ScrollSettings {
@@ -789,7 +744,7 @@ pub struct ScrollSettings {
 }
 
 /// Aggregated scroll recognition output.
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, Default, PartialEq)]
 pub struct ScrollResult {
     /// Number of scroll events observed in this update.
     pub event_count: usize,
@@ -801,18 +756,6 @@ pub struct ScrollResult {
     pub source: Option<ScrollEventSource>,
     /// Delta unit of the first observed scroll event.
     pub unit: Option<ScrollDeltaUnit>,
-}
-
-impl Default for ScrollResult {
-    fn default() -> Self {
-        Self {
-            event_count: 0,
-            delta_x: 0.0,
-            delta_y: 0.0,
-            source: None,
-            unit: None,
-        }
-    }
 }
 
 impl ScrollResult {
@@ -833,7 +776,7 @@ pub struct ScrollChangeContext {
 }
 
 /// Stateful scroll event recognizer and aggregator.
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Copy, Debug, PartialEq, Default)]
 pub struct ScrollRecognizer {
     settings: ScrollSettings,
 }
@@ -953,12 +896,6 @@ mod cancellation_tests {
         assert!(long_press.active_pointer.is_none());
     }
 }
-impl Default for ScrollRecognizer {
-    fn default() -> Self {
-        Self::new(ScrollSettings::default())
-    }
-}
-
 #[cfg(test)]
 mod slop_tests {
     use super::*;

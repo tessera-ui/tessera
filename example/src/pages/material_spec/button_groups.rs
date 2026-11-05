@@ -28,6 +28,7 @@ use tessera_ui::{CallbackWith, Color, Dp, Modifier, RenderSlot, remember, tesser
 use super::{
     INK,
     article::{ArticlePage, SpecSection, article},
+    buttons::{badge, bullets, caption, marked, prose},
     gap, panel, spec_table, subheading, type_style,
 };
 
@@ -181,7 +182,7 @@ pub(super) fn button_groups_spec(
             },
         ],
     )
-    .route_optional(route.clone())
+    .route_optional(route)
     .pages(vec![
         ArticlePage {
             title: "Overview",
@@ -244,65 +245,6 @@ pub(super) fn button_groups_spec(
     ]);
 }
 
-#[tessera]
-fn prose(#[prop(into)] value: String) {
-    text().content(value).style(type_style(16.0, 24.0));
-}
-
-#[tessera]
-fn caption(#[prop(into)] value: String) {
-    let scheme = use_context::<MaterialTheme>().unwrap().get().color_scheme;
-    gap(Dp(16.0));
-    text()
-        .content(value)
-        .color(scheme.on_surface_variant)
-        .style(type_style(14.0, 20.0));
-}
-
-#[tessera]
-fn bullets(items: Vec<String>) {
-    let scheme = use_context::<MaterialTheme>().unwrap().get().color_scheme;
-    column()
-        .modifier(Modifier::new().fill_max_width())
-        .children(move || {
-            for item in items.clone() {
-                row()
-                    .cross_axis_alignment(CrossAxisAlignment::Center)
-                    .modifier(
-                        Modifier::new()
-                            .fill_max_width()
-                            .padding_symmetric(Dp::ZERO, Dp(4.0)),
-                    )
-                    .children(move || {
-                        spacer().modifier(
-                            Modifier::new()
-                                .size(Dp(8.0), Dp(8.0))
-                                .background_with_shape(scheme.on_surface_variant, Shape::Ellipse),
-                        );
-                        spacer().modifier(Modifier::new().width(Dp(16.0)));
-                        text().content(item.clone()).style(type_style(16.0, 24.0));
-                    });
-            }
-        });
-}
-
-#[tessera]
-fn badge(number: usize) {
-    boxed()
-        .alignment(Alignment::Center)
-        .modifier(
-            Modifier::new()
-                .size(Dp(24.0), Dp(24.0))
-                .background_with_shape(INK, Shape::Ellipse),
-        )
-        .children(move || {
-            text()
-                .content(number.to_string())
-                .style(type_style(12.0, 16.0))
-                .color(Color::WHITE);
-        });
-}
-
 /// Numbered caption list under a figure, matching the figure markers.
 #[tessera]
 fn legend(items: Vec<String>) {
@@ -323,16 +265,6 @@ fn legend(items: Vec<String>) {
 }
 
 /// A figure row with a leading numbered marker.
-#[tessera]
-fn marked(number: usize, content: RenderSlot) {
-    row()
-        .cross_axis_alignment(CrossAxisAlignment::Center)
-        .children(move || {
-            badge(number);
-            spacer().modifier(Modifier::new().width(Dp(24.0)));
-            content.render();
-        });
-}
 
 #[tessera]
 fn guidance(#[prop(into)] mark: String, #[prop(into)] note: String, color: Color) {

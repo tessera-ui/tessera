@@ -1,7 +1,4 @@
 //! Graphics rendering pipeline management.
-//!
-//! This module provides the drawing infrastructure for the unified command
-//! system, handling graphics pipeline registration and command dispatch.
 
 pub mod command;
 pub mod pipeline;
@@ -12,33 +9,19 @@ pub use command::DrawCommand;
 pub use pipeline::{DrawablePipeline, ErasedDrawContext, PipelineRegistry};
 
 /// Drawer manages graphics pipelines and processes draw commands.
-///
-/// The Drawer acts as the central coordinator for all graphics rendering
-/// operations, maintaining a registry of pipelines and dispatching draw
-/// commands to the appropriate pipeline implementations.
+#[derive(Default)]
 pub struct Drawer {
     /// Registry containing all registered graphics pipelines
     pub pipeline_registry: PipelineRegistry,
 }
 
-impl Default for Drawer {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
 impl Drawer {
     /// Create a new drawer
     pub fn new() -> Self {
-        Self {
-            pipeline_registry: PipelineRegistry::new(),
-        }
+        Self::default()
     }
 
     /// Initialize all pipelines at the beginning of each render pass.
-    ///
-    /// This method calls the `begin_pass` method on all registered pipelines,
-    /// allowing them to set up per-pass state such as uniform buffers.
     pub fn begin_pass(
         &mut self,
         gpu: &wgpu::Device,
@@ -59,9 +42,6 @@ impl Drawer {
     }
 
     /// Finalize all pipelines at the end of each render pass.
-    ///
-    /// This method calls the `end_pass` method on all registered pipelines,
-    /// allowing them to perform cleanup or final operations.
     pub fn end_pass(
         &mut self,
         gpu: &wgpu::Device,
@@ -82,10 +62,6 @@ impl Drawer {
     }
 
     /// Submit a draw command to the appropriate pipeline for rendering.
-    ///
-    /// This method dispatches the command to the correct pipeline based on its
-    /// type, providing all necessary context including GPU resources,
-    /// render pass, and positioning information.
     ///
     /// # Arguments
     ///

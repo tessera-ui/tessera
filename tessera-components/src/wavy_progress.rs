@@ -129,11 +129,10 @@ fn circular_indeterminate(elapsed: u64) -> (f32, f32) {
 /// ```
 /// use tessera_components::{
 ///     theme::material_theme,
-///     wavy_progress::{WavyProgressIndicatorDefaults, circular_wavy_progress_indicator},
+///     wavy_progress::circular_wavy_progress_indicator,
 /// };
 /// use tessera_ui::tessera;
 ///
-/// assert_eq!(WavyProgressIndicatorDefaults::CIRCULAR_SIZE.0, 48.0);
 /// #[tessera]
 /// fn content() {
 ///     material_theme().child(|| {

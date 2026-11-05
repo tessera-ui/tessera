@@ -2,9 +2,7 @@
 
 /// Thread-safety bound for abstractions that own GPU resources.
 ///
-/// Native targets require `Send + Sync + 'static`. On wasm, `wgpu`'s backend
-/// keeps its handles in `Rc`, so they are neither `Send` nor `Sync`; the bound
-/// degrades to `'static` there, where the runtime is single-threaded anyway.
+/// Native targets require `Send + Sync + 'static`; wasm requires only `'static`.
 #[cfg(not(target_family = "wasm"))]
 pub trait SendSync: Send + Sync + 'static {}
 #[cfg(not(target_family = "wasm"))]
@@ -12,27 +10,13 @@ impl<T: Send + Sync + 'static> SendSync for T {}
 
 /// Thread-safety bound for abstractions that own GPU resources.
 ///
-/// See the native definition for details.
+/// Requires only `'static` on wasm targets.
 #[cfg(target_family = "wasm")]
 pub trait SendSync: 'static {}
 #[cfg(target_family = "wasm")]
 impl<T: 'static> SendSync for T {}
-/// Sets the name of the current thread for debugging and profiling purposes.
-///
-/// This function provides a cross-platform way to set thread names, which is
-/// invaluable for debugging multi-threaded applications. Thread names appear
-/// in debuggers, profilers, and system monitoring tools.
-///
-/// # Arguments
-///
-/// - `name`: The name to assign to the current thread. Should be descriptive
-///   and follow platform-specific length limitations.
-///
-/// # Platform Behavior
-///
-/// - **Unix-like systems**: Uses `pthread_setname_np()` to set the thread name
-/// - **Windows**: Uses `SetThreadDescription()` API
-/// - **Other platforms**: No operation is performed
+/// Sets the current thread's name for debugging and profiling on Unix and Windows.
+/// Names must follow platform-specific length limits. Other platforms do nothing.
 pub fn set_thread_name(name: &str) {
     #[cfg(target_family = "unix")]
     set_thread_name_unix(name);
@@ -42,21 +26,17 @@ pub fn set_thread_name(name: &str) {
 
     #[cfg(not(any(target_family = "unix", target_os = "windows")))]
     {
-        // No-op for unsupported platforms
-        let _ = name; // Suppress unused variable warning
+        let _ = name;
     }
 }
 
-// Sets the thread name on Unix-like systems using pthread APIs.
 #[cfg(target_family = "unix")]
 fn set_thread_name_unix(name: &str) {
     use std::ffi::CString;
 
-    // Convert to C string, panicking if null bytes are present
     let cname = CString::new(name).expect("thread name contains null bytes");
 
     unsafe {
-        // Set the name for the current thread
         #[cfg(target_vendor = "apple")]
         libc::pthread_setname_np(cname.as_ptr());
         #[cfg(not(target_vendor = "apple"))]
@@ -64,13 +44,11 @@ fn set_thread_name_unix(name: &str) {
     }
 }
 
-// Sets the thread name on Windows using the Win32 API.
 #[cfg(target_os = "windows")]
 fn set_thread_name_windows(name: &str) {
     use std::ffi::OsStr;
     use std::os::windows::ffi::OsStrExt;
 
-    // Convert to UTF-16 with null terminator
     let name_wide: Vec<u16> = OsStr::new(name)
         .encode_wide()
         .chain(std::iter::once(0))
@@ -82,7 +60,6 @@ fn set_thread_name_windows(name: &str) {
             core::PCWSTR,
         };
 
-        // Set the thread description, ignoring any errors
         let _ = SetThreadDescription(GetCurrentThread(), PCWSTR(name_wide.as_ptr()));
     }
 }

@@ -244,7 +244,6 @@ impl PullRefreshController {
 ///         .child(|| {
 ///             let controller = remember(PullRefreshController::new);
 ///             pull_refresh_indicator().controller(controller);
-///             assert_eq!(controller.with(|s| s.progress()), 0.0);
 ///         });
 /// }
 /// ```
@@ -386,7 +385,6 @@ pub fn pull_refresh_indicator(
 ///                             });
 ///                         });
 ///                 });
-///             assert!(!refresh_controller.with(|s| s.refreshing()));
 ///         });
 /// }
 ///

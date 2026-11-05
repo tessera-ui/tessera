@@ -150,17 +150,6 @@ fn measurement_diagrams_preserve_native_sizes_expanded_targets_and_clicks_after_
                 before.description(),
                 "expanded target failed: scene={scene}, width={width}, bounds={bounds:?}, point={position:?}"
             );
-            if let Ok(directory) = std::env::var("TESSERA_ICON_MEASUREMENT_OUTPUT") {
-                let path = std::path::Path::new(&directory)
-                    .join(format!("measurements-{scene}-{width}.png"));
-                tessera_ui::headless::write_png_file(
-                    &path,
-                    width,
-                    1400,
-                    &renderer.read_pixels().unwrap(),
-                )
-                .unwrap();
-            }
         }
     }
 }

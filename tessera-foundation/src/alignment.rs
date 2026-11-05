@@ -2,14 +2,13 @@
 //!
 //! ## Usage
 //!
-//! Describe how containers position children along main, cross, or layered
-//! axes.
+//! Describe how containers position children along main, cross, or layered axes.
 
-/// Specifies how children are placed along the main axis in layout
-/// containers.
-#[derive(Debug, Clone, Copy, PartialEq)]
+/// Specifies how children are placed along the main axis in layout containers.
+#[derive(Debug, Default, Clone, Copy, PartialEq)]
 pub enum MainAxisAlignment {
     /// Place children at the start (left or top).
+    #[default]
     Start,
     /// Center children along the main axis.
     Center,
@@ -23,25 +22,11 @@ pub enum MainAxisAlignment {
     SpaceAround,
 }
 
-impl Default for MainAxisAlignment {
-    /// Returns [`MainAxisAlignment::Start`] as the default value.
-    ///
-    /// # Example
-    ///
-    /// ```
-    /// use tessera_foundation::alignment::MainAxisAlignment;
-    /// assert_eq!(MainAxisAlignment::default(), MainAxisAlignment::Start);
-    /// ```
-    fn default() -> Self {
-        Self::Start
-    }
-}
-
-/// Specifies how children are aligned along the cross axis in layout
-/// containers.
-#[derive(Debug, Clone, Copy, PartialEq)]
+/// Specifies how children are aligned along the cross axis in layout containers.
+#[derive(Debug, Default, Clone, Copy, PartialEq)]
 pub enum CrossAxisAlignment {
     /// Align children to the start (left or top).
+    #[default]
     Start,
     /// Center children along the cross axis.
     Center,
@@ -51,17 +36,11 @@ pub enum CrossAxisAlignment {
     Stretch,
 }
 
-impl Default for CrossAxisAlignment {
-    /// Returns [`CrossAxisAlignment::Start`] as the default value.
-    fn default() -> Self {
-        Self::Start
-    }
-}
-
 /// Specifies the alignment of a child within its parent container.
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Default, Clone, Copy, PartialEq)]
 pub enum Alignment {
     /// Top-left corner.
+    #[default]
     TopStart,
     /// Top edge, centered horizontally.
     TopCenter,
@@ -79,18 +58,4 @@ pub enum Alignment {
     BottomCenter,
     /// Bottom-right corner.
     BottomEnd,
-}
-
-impl Default for Alignment {
-    /// Returns [`Alignment::TopStart`] as the default value.
-    ///
-    /// # Example
-    ///
-    /// ```
-    /// use tessera_foundation::alignment::Alignment;
-    /// assert_eq!(Alignment::default(), Alignment::TopStart);
-    /// ```
-    fn default() -> Self {
-        Self::TopStart
-    }
 }

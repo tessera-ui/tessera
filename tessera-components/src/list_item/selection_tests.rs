@@ -7,7 +7,7 @@
 use tessera_ui::{
     Dp, FocusDirection, FocusManager, HeadlessConfig, HeadlessRenderer, MOUSE_POINTER_ID, Modifier,
     PressKeyEventType, PxPosition, State,
-    accesskit::{Action, ActionRequest, Node, NodeId, Toggled, TreeId},
+    accesskit::{Action, ActionRequest, Node, NodeId, Role, Toggled, TreeId},
     remember, tessera,
     testing::TestProbe,
 };
@@ -117,10 +117,15 @@ fn tap(renderer: &mut HeadlessRenderer, index: usize) {
 }
 
 fn verify(renderer: &HeadlessRenderer, settings: &Settings, ids: &[NodeId; 3]) {
+    let role = match settings.mode {
+        ListItemSelectionMode::Action => Role::ListItem,
+        ListItemSelectionMode::Single => Role::RadioButton,
+        ListItemSelectionMode::Multiple => Role::CheckBox,
+    };
     for (index, id) in ids.iter().enumerate() {
         let (actual_id, node) = node(renderer, &format!("Selection {}", index + 1));
         assert_eq!(actual_id, *id);
-        assert_eq!(node.role(), settings.mode.role());
+        assert_eq!(node.role(), role);
         assert_eq!(node.tooltip(), Some("Choice tooltip"));
         assert_eq!(node.is_disabled(), !settings.enabled);
         assert_eq!(node.supports_action(Action::Click), settings.enabled);
@@ -148,7 +153,7 @@ fn verify(renderer: &HeadlessRenderer, settings: &Settings, ids: &[NodeId; 3]) {
     let read_only = node(renderer, "Read-only selection").1;
     assert!(!read_only.supports_action(Action::Click));
     assert!(!read_only.supports_action(Action::Focus));
-    assert_eq!(read_only.role(), settings.mode.role());
+    assert_eq!(read_only.role(), role);
 }
 
 fn check(samples: u32) {

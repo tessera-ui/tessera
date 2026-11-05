@@ -4,6 +4,8 @@ use tessera_ui::{
     wgpu::{self, include_wgsl},
 };
 
+use crate::pipelines::instanced::{InstancePages, storage_quad_pipeline};
+
 use super::command::CheckmarkCommand;
 
 #[repr(C)]
@@ -15,21 +17,10 @@ struct Instance {
     padding_screen: [f32; 4],
 }
 
-struct Page {
-    buffer: tessera_ui::TrackedBuffer,
-    bind_group: wgpu::BindGroup,
-    capacity: usize,
-}
-
 /// Pipeline for animated selection strokes.
 pub struct CheckmarkPipeline {
     pipeline: wgpu::RenderPipeline,
-    layout: wgpu::BindGroupLayout,
-    pages: Vec<Page>,
-    page: usize,
-    offset: usize,
-    max_instances: usize,
-    staging: Vec<Instance>,
+    instances: InstancePages<Instance>,
 }
 
 impl CheckmarkPipeline {
@@ -40,134 +31,36 @@ impl CheckmarkPipeline {
         config: &wgpu::SurfaceConfiguration,
         sample_count: u32,
     ) -> Self {
-        let layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-            label: Some("Checkmark Instances"),
-            entries: &[wgpu::BindGroupLayoutEntry {
-                binding: 0,
-                visibility: wgpu::ShaderStages::VERTEX | wgpu::ShaderStages::FRAGMENT,
-                ty: wgpu::BindingType::Buffer {
-                    ty: wgpu::BufferBindingType::Storage { read_only: true },
-                    has_dynamic_offset: false,
-                    min_binding_size: None,
-                },
-                count: None,
-            }],
-        });
-        let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
-            label: Some("Checkmark Pipeline Layout"),
-            bind_group_layouts: &[Some(&layout)],
-            immediate_size: 0,
-        });
-        let shader = device.create_shader_module(include_wgsl!("checkmark.wgsl"));
-        let pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
-            label: Some("Checkmark Pipeline"),
-            layout: Some(&pipeline_layout),
-            vertex: wgpu::VertexState {
-                module: &shader,
-                entry_point: Some("vs_main"),
-                buffers: &[],
-                compilation_options: Default::default(),
-            },
-            fragment: Some(wgpu::FragmentState {
-                module: &shader,
-                entry_point: Some("fs_main"),
-                targets: &[Some(wgpu::ColorTargetState {
-                    format: config.format,
-                    blend: Some(wgpu::BlendState::ALPHA_BLENDING),
-                    write_mask: wgpu::ColorWrites::ALL,
-                })],
-                compilation_options: Default::default(),
-            }),
-            primitive: wgpu::PrimitiveState {
-                topology: wgpu::PrimitiveTopology::TriangleList,
-                front_face: wgpu::FrontFace::Ccw,
-                cull_mode: Some(wgpu::Face::Back),
-                ..Default::default()
-            },
-            depth_stencil: tessera_ui::ui_stencil_state(),
-            multisample: wgpu::MultisampleState {
-                count: sample_count,
-                ..Default::default()
-            },
-            multiview_mask: None,
+        let (layout, pipeline) = storage_quad_pipeline(
+            device,
+            include_wgsl!("checkmark.wgsl"),
+            config.format,
+            sample_count,
             cache,
-        });
-        let limits = device.limits();
-        let max_bytes = limits
-            .max_buffer_size
-            .min(u64::from(limits.max_storage_buffer_binding_size));
+            "Checkmark Pipeline",
+        );
         Self {
             pipeline,
-            layout,
-            pages: Vec::new(),
-            page: 0,
-            offset: 0,
-            max_instances: (max_bytes / size_of::<Instance>() as u64).min(u64::from(u32::MAX))
-                as usize,
-            staging: Vec::new(),
-        }
-    }
-
-    fn reserve(&mut self, device: &tessera_ui::GraphicsDevice, count: usize) {
-        if self
-            .pages
-            .get(self.page)
-            .is_some_and(|page| self.offset > 0 && self.offset + count > page.capacity)
-        {
-            self.page += 1;
-            self.offset = 0;
-        }
-        if self
-            .pages
-            .get(self.page)
-            .is_some_and(|page| page.capacity >= count)
-        {
-            return;
-        }
-        let capacity = count.max(1024).next_power_of_two().min(self.max_instances);
-        let buffer = device.create_buffer(
-            "checkmark_instances",
-            &wgpu::BufferDescriptor {
-                label: Some("Checkmark Instance Page"),
-                size: (capacity * size_of::<Instance>()) as u64,
-                usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
-                mapped_at_creation: false,
-            },
-        );
-        let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
-            label: Some("Checkmark Instance Page"),
-            layout: &self.layout,
-            entries: &[wgpu::BindGroupEntry {
-                binding: 0,
-                resource: buffer.as_entire_binding(),
-            }],
-        });
-        let page = Page {
-            buffer,
-            bind_group,
-            capacity,
-        };
-
-        if self.page < self.pages.len() {
-            self.pages[self.page] = page;
-        } else {
-            self.pages.push(page);
+            instances: InstancePages::new(
+                device,
+                layout,
+                "checkmark_instances",
+                "Checkmark Instance Page",
+            ),
         }
     }
 }
 
 impl DrawablePipeline<CheckmarkCommand> for CheckmarkPipeline {
     fn begin_frame(&mut self, _: &FrameContext<'_>) {
-        self.page = 0;
-        self.offset = 0;
+        self.instances.begin_frame();
     }
 
     fn draw(&mut self, context: &mut DrawContext<CheckmarkCommand>) {
-        for commands in context.commands.chunks(self.max_instances) {
-            self.reserve(context.graphics, commands.len());
-            self.staging.clear();
-            self.staging
-                .extend(commands.iter().map(|(command, geometry)| {
+        for commands in context.commands.chunks(self.instances.max_instances) {
+            let (bind_group, instances) = self.instances.write(
+                context.graphics,
+                commands.iter().map(|(command, geometry)| {
                     let position = geometry.window_origin();
                     let [width, height] = geometry.window_size();
                     let scale = geometry.local_to_window.scale();
@@ -187,22 +80,11 @@ impl DrawablePipeline<CheckmarkCommand> for CheckmarkPipeline {
                             context.target_size.height.to_f32(),
                         ],
                     }
-                }));
-            let page = &self.pages[self.page];
-            // Later batches and scene passes must not overwrite earlier draws
-            // before this frame is submitted.
-            context.graphics.write_buffer(
-                &page.buffer,
-                (self.offset * size_of::<Instance>()) as u64,
-                bytemuck::cast_slice(&self.staging),
+                }),
             );
             context.render_pass.set_pipeline(&self.pipeline);
-            context.render_pass.set_bind_group(0, &page.bind_group, &[]);
-            context.render_pass.draw(
-                0..6,
-                self.offset as u32..(self.offset + commands.len()) as u32,
-            );
-            self.offset += commands.len();
+            context.render_pass.set_bind_group(0, bind_group, &[]);
+            context.render_pass.draw(0..6, instances);
         }
     }
 }

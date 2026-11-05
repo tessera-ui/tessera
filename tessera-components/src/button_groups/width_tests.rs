@@ -136,7 +136,6 @@ fn check_widths(renderer: &HeadlessRenderer, widths: [f64; 3], scale: f64, gap: 
         );
         x += width + gap;
     }
-    assert_eq!(x - gap, widths.iter().sum::<f64>() + 2.0 * gap);
 }
 
 fn check_press_widths(samples: u32) {
@@ -166,16 +165,10 @@ fn check_press_widths(samples: u32) {
                 renderer
                     .work()
                     .count("group_item", tessera_ui::WorkPhase::Build),
-                0
+                0,
+                "an idle group must retain its items"
             );
         }
-        assert_eq!(
-            renderer
-                .work()
-                .count("group_item", tessera_ui::WorkPhase::Build),
-            0,
-            "an idle group must retain its items"
-        );
         let settings = settings_observed.get().unwrap();
         let base = [100.0 * scale; 3];
         let gap = 12.0 * scale;
@@ -203,16 +196,10 @@ fn check_press_widths(samples: u32) {
                 renderer
                     .work()
                     .count("group_item", tessera_ui::WorkPhase::Build),
-                0
+                0,
+                "a settled held press must stop rebuilding"
             );
         }
-        assert_eq!(
-            renderer
-                .work()
-                .count("group_item", tessera_ui::WorkPhase::Build),
-            0,
-            "a settled held press must stop rebuilding"
-        );
         renderer.pointer_release(MOUSE_POINTER_ID, point, PressKeyEventType::Left);
         renderer.render_frames(60);
         check_widths(&renderer, base, scale, gap);
@@ -225,16 +212,10 @@ fn check_press_widths(samples: u32) {
                 renderer
                     .work()
                     .count("group_item", tessera_ui::WorkPhase::Build),
-                0
+                0,
+                "release must stop the animation driver"
             );
         }
-        assert_eq!(
-            renderer
-                .work()
-                .count("group_item", tessera_ui::WorkPhase::Build),
-            0,
-            "release must stop the animation driver"
-        );
 
         let first = center(nodes(&renderer, 0).1.bounds().unwrap());
         renderer.pointer_move(MOUSE_POINTER_ID, first);

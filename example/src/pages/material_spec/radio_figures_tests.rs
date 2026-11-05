@@ -6,6 +6,7 @@
 
 use std::time::Duration;
 
+use tessera_components::theme::material_theme;
 use tessera_ui::{
     HeadlessConfig, HeadlessRenderer, MOUSE_POINTER_ID, PressKeyEventType, PxPosition,
     accesskit::{Node, NodeId, Role, Toggled},

@@ -71,7 +71,6 @@ enum Glyph {
     Document,
     Checked,
     Unchecked,
-    Files,
     Mail,
     Video,
     Drive,
@@ -95,7 +94,6 @@ fn glyph(kind: Glyph, x: f64, y: f64, size: f64, tint: Color) {
             Glyph::Document => builder.vector(filled::DESCRIPTION_SVG),
             Glyph::Checked => builder.vector(filled::CHECK_BOX_SVG),
             Glyph::Unchecked => builder.vector(filled::CHECK_BOX_OUTLINE_BLANK_SVG),
-            Glyph::Files => builder.vector(filled::FOLDER_SVG),
             Glyph::Mail => builder.vector(filled::MAIL_SVG),
             Glyph::Video => builder.vector(filled::VIDEOCAM_SVG),
             Glyph::Drive => builder.vector(filled::ADD_TO_DRIVE_SVG),
@@ -776,7 +774,7 @@ pub(super) fn share_figure() {
                                 centered(name, center, 162.0, 12.0, scheme.on_surface);
                             }
                             for (name, center, kind, color) in [
-                                ("Files", 54.0, Glyph::Files, srgb(66, 133, 244)),
+                                ("Files", 54.0, Glyph::Folder, srgb(66, 133, 244)),
                                 ("Gmail", 140.0, Glyph::Mail, srgb(234, 67, 53)),
                                 ("Meet", 226.0, Glyph::Video, srgb(52, 168, 83)),
                                 ("Drive", 312.0, Glyph::Drive, srgb(251, 188, 4)),

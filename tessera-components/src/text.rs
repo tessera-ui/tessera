@@ -165,7 +165,7 @@ struct CachedText {
 
 impl PartialEq for TextLayout {
     fn eq(&self, other: &Self) -> bool {
-        self.text == other.text && self.color == other.color && self.style == other.style
+        tessera_ui::LayoutModifierNode::measure_eq(self, other) && self.color == other.color
     }
 }
 

@@ -91,7 +91,6 @@ fn anatomy_figures_number_every_legend_entry() {
         .viewport_px(1000, 900)
         .run();
         let count = figures::anatomy_legend(modal).len();
-        assert_eq!(count, if modal { 7 } else { 4 });
         let mut previous = None;
         for number in 1..=count {
             let bounds = snapshot

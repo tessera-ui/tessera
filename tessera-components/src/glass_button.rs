@@ -12,25 +12,6 @@ use crate::{
     shape_def::{RoundedCorner, Shape},
 };
 
-#[derive(Clone)]
-struct GlassButtonResolvedArgs {
-    modifier: Modifier,
-    on_click: Option<Callback>,
-    padding: Dp,
-    tint_color: Color,
-    shape: Shape,
-    blur_radius: Dp,
-    noise_amount: f32,
-    noise_scale: f32,
-    time: f32,
-    contrast: Option<f32>,
-    border: Option<GlassBorder>,
-    accessibility_label: Option<String>,
-    accessibility_description: Option<String>,
-    accessibility_focusable: bool,
-    child: Option<RenderSlot>,
-}
-
 impl GlassButtonBuilder {
     /// Applies the primary glass button preset.
     pub fn primary(&self) -> Self {
@@ -120,51 +101,40 @@ pub fn glass_button(
     accessibility_focusable: Option<bool>,
     child: Option<RenderSlot>,
 ) {
-    let button_args = GlassButtonResolvedArgs {
-        modifier: modifier.unwrap_or_default(),
-        on_click,
-        padding: padding.unwrap_or(Dp(12.0)),
-        tint_color: tint_color.unwrap_or(Color::new(0.5, 0.5, 0.5, 0.1)),
-        shape: shape.unwrap_or(Shape::RoundedRectangle {
-            top_left: RoundedCorner::manual(Dp(25.0), 3.0),
-            top_right: RoundedCorner::manual(Dp(25.0), 3.0),
-            bottom_right: RoundedCorner::manual(Dp(25.0), 3.0),
-            bottom_left: RoundedCorner::manual(Dp(25.0), 3.0),
-        }),
-        blur_radius: blur_radius.unwrap_or(Dp(0.0)),
-        noise_amount: noise_amount.unwrap_or(0.0),
-        noise_scale: noise_scale.unwrap_or(1.0),
-        time: time.unwrap_or(0.0),
-        contrast,
-        border,
-        accessibility_label,
-        accessibility_description,
-        accessibility_focusable: accessibility_focusable.unwrap_or(false),
-        child,
-    };
-
-    let child = button_args.child.unwrap_or_else(RenderSlot::empty);
-    let outer_modifier = button_args
-        .modifier
-        .clone()
-        .default_min_size(ButtonDefaults::MIN_WIDTH, ButtonDefaults::MIN_HEIGHT);
+    let modifier = modifier.unwrap_or_default();
+    let padding = padding.unwrap_or(Dp(12.0));
+    let tint_color = tint_color.unwrap_or(Color::new(0.5, 0.5, 0.5, 0.1));
+    let shape = shape.unwrap_or(Shape::RoundedRectangle {
+        top_left: RoundedCorner::manual(Dp(25.0), 3.0),
+        top_right: RoundedCorner::manual(Dp(25.0), 3.0),
+        bottom_right: RoundedCorner::manual(Dp(25.0), 3.0),
+        bottom_left: RoundedCorner::manual(Dp(25.0), 3.0),
+    });
+    let blur_radius = blur_radius.unwrap_or(Dp(0.0));
+    let noise_amount = noise_amount.unwrap_or(0.0);
+    let noise_scale = noise_scale.unwrap_or(1.0);
+    let time = time.unwrap_or(0.0);
+    let accessibility_focusable = accessibility_focusable.unwrap_or(false);
+    let child = child.unwrap_or_else(RenderSlot::empty);
+    let outer_modifier =
+        modifier.default_min_size(ButtonDefaults::MIN_WIDTH, ButtonDefaults::MIN_HEIGHT);
 
     layout().modifier(outer_modifier).child(move || {
         fluid_glass()
             .modifier(Modifier::new())
-            .tint_color(button_args.tint_color)
-            .shape(button_args.shape)
-            .blur_radius(button_args.blur_radius)
-            .noise_amount(button_args.noise_amount)
-            .noise_scale(button_args.noise_scale)
-            .time(button_args.time)
-            .padding(button_args.padding)
-            .contrast_optional(button_args.contrast)
-            .on_click_optional(button_args.on_click)
-            .border_optional(button_args.border)
-            .accessibility_label_optional(button_args.accessibility_label.clone())
-            .accessibility_description_optional(button_args.accessibility_description.clone())
-            .accessibility_focusable_optional(button_args.accessibility_focusable.then_some(true))
+            .tint_color(tint_color)
+            .shape(shape)
+            .blur_radius(blur_radius)
+            .noise_amount(noise_amount)
+            .noise_scale(noise_scale)
+            .time(time)
+            .padding(padding)
+            .contrast_optional(contrast)
+            .on_click_optional(on_click)
+            .border_optional(border)
+            .accessibility_label_optional(accessibility_label.clone())
+            .accessibility_description_optional(accessibility_description.clone())
+            .accessibility_focusable_optional(accessibility_focusable.then_some(true))
             .child_shared(child);
     });
 }

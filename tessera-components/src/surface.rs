@@ -452,7 +452,6 @@ fn build_rounded_rectangle_command(
 }
 
 fn build_ellipse_command(
-    _args: &SurfaceResolvedArgs,
     style: &SurfaceStyle,
     ripple_props: RippleProps,
     use_ripple: bool,
@@ -521,17 +520,8 @@ fn build_shape_command(
             corner_g2,
             use_ripple,
         ),
-        ResolvedShape::Ellipse => build_ellipse_command(args, style, ripple_props, use_ripple),
+        ResolvedShape::Ellipse => build_ellipse_command(style, ripple_props, use_ripple),
     }
-}
-
-fn make_surface_drawable(
-    args: &SurfaceResolvedArgs,
-    style: &SurfaceStyle,
-    ripple_props: RippleProps,
-    size: PxSize,
-) -> ShapeCommand {
-    build_shape_command(args, style, ripple_props, size)
 }
 
 fn try_build_simple_rect_command(
@@ -774,7 +764,7 @@ fn record_surface_style(
         metadata.fragment_mut().push_draw_command(simple);
     } else {
         let drawable =
-            make_surface_drawable(args, style, ripple, PxSize::new(size.width, size.height));
+            build_shape_command(args, style, ripple, PxSize::new(size.width, size.height));
         metadata.fragment_mut().push_draw_command(drawable);
     }
 }

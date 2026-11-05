@@ -4,9 +4,7 @@
 //!
 //! Build shadow mask and composite commands for layered surface shadows.
 
-use tessera_ui::{
-    Color, DrawCommand, DrawRegion, PaddingRect, PxPosition, PxRect, PxSize, SampleRegion,
-};
+use tessera_ui::{Color, DrawCommand, PxPosition, PxRect, PxSize};
 
 use crate::shape_def::ResolvedShape;
 
@@ -30,14 +28,6 @@ impl ShadowMaskCommand {
 }
 
 impl DrawCommand for ShadowMaskCommand {
-    fn sample_region(&self) -> Option<SampleRegion> {
-        None
-    }
-
-    fn draw_region(&self) -> DrawRegion {
-        DrawRegion::PaddedLocal(PaddingRect::ZERO)
-    }
-
     fn apply_opacity(&mut self, opacity: f32) {
         self.color = self
             .color
@@ -61,14 +51,6 @@ pub struct ShadowCompositeCommand {
 }
 
 impl DrawCommand for ShadowCompositeCommand {
-    fn sample_region(&self) -> Option<SampleRegion> {
-        None
-    }
-
-    fn draw_region(&self) -> DrawRegion {
-        DrawRegion::PaddedLocal(PaddingRect::ZERO)
-    }
-
     fn apply_opacity(&mut self, opacity: f32) {
         self.color = self
             .color

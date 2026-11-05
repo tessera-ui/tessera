@@ -12,7 +12,10 @@ use tessera_ui::{
 
 use crate::{
     alignment::{CrossAxisAlignment, MainAxisAlignment},
-    layout_flex::cross_axis_child_constraint,
+    layout_flex::{
+        alignment_offsets as calculate_alignment_offsets, cross_axis_child_constraint,
+        cross_axis_offset as calculate_cross_axis_offset, px_mul,
+    },
 };
 
 /// # flow_row
@@ -199,9 +202,8 @@ impl tessera_ui::LayoutModifierNode for FlowRowLayout {
         let (content_width, content_height) =
             compute_row_content_size(&line_metrics, self.line_spacing);
 
-        let final_width = resolve_dimension(flow_constraint.width, content_width, "FlowRow width");
-        let final_height =
-            resolve_dimension(flow_constraint.height, content_height, "FlowRow height");
+        let final_width = flow_constraint.width.clamp(content_width);
+        let final_height = flow_constraint.height.clamp(content_height);
 
         place_flow_row(
             &mut result,
@@ -494,78 +496,8 @@ fn place_flow_row(
     }
 }
 
-fn calculate_alignment_offsets(
-    available_space: f32,
-    count: usize,
-    alignment: MainAxisAlignment,
-) -> (f32, f32) {
-    match alignment {
-        MainAxisAlignment::Start => (0.0, 0.0),
-        MainAxisAlignment::Center => (available_space / 2.0, 0.0),
-        MainAxisAlignment::End => (available_space, 0.0),
-        MainAxisAlignment::SpaceEvenly => {
-            if count > 0 {
-                let s = available_space / (count as f32 + 1.0);
-                (s, s)
-            } else {
-                (0.0, 0.0)
-            }
-        }
-        MainAxisAlignment::SpaceBetween => {
-            if count > 1 {
-                (0.0, available_space / (count as f32 - 1.0))
-            } else if count == 1 {
-                (available_space / 2.0, 0.0)
-            } else {
-                (0.0, 0.0)
-            }
-        }
-        MainAxisAlignment::SpaceAround => {
-            if count > 0 {
-                let s = available_space / (count as f32);
-                (s / 2.0, s)
-            } else {
-                (0.0, 0.0)
-            }
-        }
-    }
-}
-
-fn calculate_cross_axis_offset(
-    child_cross: Px,
-    line_cross: Px,
-    alignment: CrossAxisAlignment,
-) -> f32 {
-    match alignment {
-        CrossAxisAlignment::Start | CrossAxisAlignment::Stretch => 0.0,
-        CrossAxisAlignment::Center => (line_cross.0 - child_cross.0).max(0) as f32 / 2.0,
-        CrossAxisAlignment::End => (line_cross.0 - child_cross.0).max(0) as f32,
-    }
-}
-
-fn resolve_dimension(axis: AxisConstraint, content: Px, _context: &str) -> Px {
-    axis.clamp(content)
-}
-
 fn sanitize_spacing(px: Px) -> Px {
     if px < Px::ZERO { Px::ZERO } else { px }
-}
-
-fn px_mul(px: Px, times: usize) -> Px {
-    if times == 0 {
-        return Px::ZERO;
-    }
-    px_from_i64(px.0 as i64 * times as i64)
-}
-
-fn px_from_i64(value: i64) -> Px {
-    if value > i64::from(i32::MAX) {
-        Px(i32::MAX)
-    } else if value < i64::from(i32::MIN) {
-        Px(i32::MIN)
-    } else {
-        Px(value as i32)
-    }
 }
 
 #[cfg(test)]

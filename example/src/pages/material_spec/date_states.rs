@@ -190,8 +190,6 @@ fn state_cell(dark: bool, column: usize, row: usize) {
                 date_picker_day(CalendarDate::new(2025, 8, 17).unwrap())
                     .selected(selected.get())
                     .is_today(row == 1)
-                    .in_range(row == 3)
-                    .range_position_optional((row == 3).then_some(CalendarRangePosition::Middle))
                     .enabled(enabled)
                     .presentation_state_optional(presentation)
                     .label_formatter(|_| "00".into())

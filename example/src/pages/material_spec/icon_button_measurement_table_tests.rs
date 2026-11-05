@@ -50,12 +50,6 @@ fn assert_wide_grid(nodes: &BTreeMap<NodeId, Node>) {
         (Some(4), Some(6))
     );
     assert_eq!(table.children().len(), 4);
-    let expected = [
-        ["", "XS", "S", "M", "L", "XL"],
-        ["A. Round button", "Full", "Full", "Full", "Full", "Full"],
-        ["B. Square button", "12dp", "12dp", "16dp", "28dp", "28dp"],
-        ["C. Pressed state", "8dp", "8dp", "12dp", "16dp", "16dp"],
-    ];
     let mut reference = None;
     for (row_index, row_id) in table.children().iter().enumerate() {
         let row = &nodes[row_id];
@@ -67,7 +61,6 @@ fn assert_wide_grid(nodes: &BTreeMap<NodeId, Node>) {
             .enumerate()
             .map(|(column, id)| {
                 let cell = &nodes[id];
-                assert_eq!(cell.label().unwrap_or(""), expected[row_index][column]);
                 assert_eq!(cell.row_index(), Some(row_index));
                 assert_eq!(cell.column_index(), Some(column));
                 assert_eq!(

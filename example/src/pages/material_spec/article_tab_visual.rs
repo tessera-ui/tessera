@@ -204,17 +204,14 @@ pub(super) fn vector(
 }
 
 pub(super) fn focus_modifier(modifier: Modifier, visible: bool, hovered: bool) -> Modifier {
-    if !visible {
-        return modifier.padding_symmetric(Dp(24.0), Dp::ZERO);
-    }
-    if hovered {
+    let modifier = if !visible {
         modifier
-            .border_with_shape(Dp(2.0), Color::WHITE, Shape::CAPSULE)
-            .padding_symmetric(Dp(24.0), Dp::ZERO)
+    } else if hovered {
+        modifier.border_with_shape(Dp(2.0), Color::WHITE, Shape::CAPSULE)
     } else {
         modifier
             .border_with_shape(Dp(2.0), srgb(28, 27, 29), Shape::CAPSULE)
             .border_with_shape(Dp(4.0), Color::WHITE, Shape::CAPSULE)
-            .padding_symmetric(Dp(24.0), Dp::ZERO)
-    }
+    };
+    modifier.padding_symmetric(Dp(24.0), Dp::ZERO)
 }

@@ -33,8 +33,7 @@ use layout::{
     range_slider_layout, resolve_component_width, slider_layout_with_handle_width,
 };
 use render::{
-    active_segment, centered_stops, centered_tracks, inactive_segment, range_stops, range_tracks,
-    slider_handle, slider_tick, stop_indicator,
+    active_segment, inactive_segment, slider_handle, slider_tick, split_tracks, stop_indicator,
 };
 
 pub use indicator::{
@@ -351,79 +350,6 @@ fn apply_slider_pointer_modifier(
             clamped_value,
         })
         .push_pointer_input(SliderPointerModifierNode {
-            controller,
-            args,
-            tap_recognizer,
-            drag_recognizer,
-        })
-}
-
-struct CenteredSliderPointerModifierNode {
-    controller: State<SliderController>,
-    args: SliderConfig,
-    tap_recognizer: State<TapRecognizer>,
-    drag_recognizer: State<DragRecognizer>,
-}
-
-impl PointerInputModifierNode for CenteredSliderPointerModifierNode {
-    fn on_pointer_input(&self, mut input: PointerInput<'_>) {
-        let visual = self
-            .controller
-            .with(|controller| controller.visual_state(&self.args));
-        let base_handle_width = self.args.thumb_diameter.to_px();
-        let pressed_handle_width = Px((base_handle_width.0 / 2).max(1));
-        let handle_width = if visual.is_dragged() || visual.is_pressed() || visual.is_focused() {
-            pressed_handle_width
-        } else {
-            base_handle_width
-        };
-        let resolved_layout = CenteredSliderLayout {
-            base: slider_layout_with_handle_width(
-                &self.args,
-                self.args.axis.main_length(input.computed_data),
-                handle_width,
-            ),
-        };
-        handle_slider_state(
-            &mut input,
-            self.tap_recognizer,
-            self.drag_recognizer,
-            self.controller,
-            &self.args,
-            &resolved_layout.base,
-        );
-    }
-}
-
-fn apply_centered_slider_pointer_modifier(
-    base: Modifier,
-    controller: State<SliderController>,
-    args: SliderConfig,
-    tap_recognizer: State<TapRecognizer>,
-    drag_recognizer: State<DragRecognizer>,
-    clamped_value: f32,
-    keyboard_value: State<f32>,
-    space_held: State<bool>,
-) -> Modifier {
-    let modifier = if !args.disabled {
-        base.hover_cursor_icon(tessera_ui::winit::window::CursorIcon::Pointer)
-    } else {
-        base
-    };
-    modifier
-        .push_keyboard_input(SliderKeyboardModifierNode {
-            axis: args.axis,
-            model: SliderKeyboardModel::Single(keyboard_value),
-            steps: args.steps,
-            disabled: args.disabled,
-            space_held,
-            on_change: args.on_change,
-        })
-        .push_semantics(SliderSemanticsModifierNode {
-            args: args.clone(),
-            clamped_value,
-        })
-        .push_pointer_input(CenteredSliderPointerModifierNode {
             controller,
             args,
             tap_recognizer,
@@ -1945,7 +1871,7 @@ fn centered_slider_content(
     } else {
         base_handle_width
     };
-    let modifier = apply_centered_slider_pointer_modifier(
+    let modifier = apply_slider_pointer_modifier(
         args.modifier.clone().then(
             FocusTargetModifier {
                 requester: controller.with(|c| c.focus),
@@ -2014,7 +1940,7 @@ fn centered_slider_content(
                 .unwrap_or_else(|| MaterialTheme::default().color_scheme);
             let colors = slider_colors(&args, &scheme);
 
-            centered_tracks().layout(centered_layout).colors(colors);
+            split_tracks().layout(centered_layout.base).colors(colors);
             if args.steps > 0 {
                 let active_start = clamped_value.min(0.5);
                 let active_end = clamped_value.max(0.5);
@@ -2031,7 +1957,10 @@ fn centered_slider_content(
                 }
             }
             if centered_layout.base.show_stop_indicator {
-                centered_stops().layout(centered_layout).colors(colors);
+                stop_indicator()
+                    .layout(centered_layout.base)
+                    .colors(colors)
+                    .count(2);
             }
             slider_handle()
                 .layout(centered_layout.base)
@@ -2531,7 +2460,7 @@ fn range_slider_content(
                 .unwrap_or_else(|| MaterialTheme::default().color_scheme);
             let colors = range_slider_colors(&args, &scheme);
 
-            range_tracks().layout(range_layout).colors(colors);
+            split_tracks().layout(range_layout.base).colors(colors);
             if args.steps > 0 {
                 for fraction in tick_fractions(args.steps) {
                     let is_active = fraction >= start && fraction <= end;
@@ -2546,7 +2475,10 @@ fn range_slider_content(
                 }
             }
             if range_layout.base.show_stop_indicator {
-                range_stops().layout(range_layout).colors(colors);
+                stop_indicator()
+                    .layout(range_layout.base)
+                    .colors(colors)
+                    .count(2);
             }
 
             let start_thumb_args = RangeSliderThumbProps {

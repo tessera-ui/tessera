@@ -18,7 +18,7 @@ use tessera_build::{AssetBackend, load_tessera_config_from_dir, resolve_assets_d
 
 use crate::{call_guard, output};
 
-use super::find_package_dir;
+use super::{build_tessera_ui_features, configure_tessera_ui_features, find_package_dir};
 
 pub fn execute(
     verbose: bool,
@@ -588,38 +588,6 @@ fn read_output(mut stream: impl OutputPipe, reporter: Reporter, stopped: Receive
     }
     if !pending.is_empty() {
         reporter.log(String::from_utf8_lossy(&pending));
-    }
-}
-
-fn build_tessera_ui_features(
-    profiling_output: Option<&Path>,
-    profiling_ipc: Option<&str>,
-    debug_dirty_overlay: bool,
-) -> Vec<String> {
-    let mut features = Vec::new();
-    if profiling_output.is_some() || profiling_ipc.is_some() {
-        features.push("tessera-ui/profiling".to_string());
-    }
-    if debug_dirty_overlay {
-        features.push("tessera-ui/debug-dirty-overlay".to_string());
-    }
-    features
-}
-
-fn configure_tessera_ui_features(
-    cmd: &mut Command,
-    features: &[String],
-    profiling_output: Option<&Path>,
-    profiling_ipc: Option<&str>,
-) {
-    if !features.is_empty() {
-        cmd.arg("--features").arg(features.join(","));
-    }
-    if let Some(output_path) = profiling_output {
-        cmd.env("TESSERA_PROFILING_OUTPUT", output_path);
-    }
-    if let Some(name) = profiling_ipc {
-        cmd.env("TESSERA_PROFILING_IPC", name);
     }
 }
 

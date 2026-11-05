@@ -4,17 +4,12 @@
 //!
 //! Use to create layered UIs, overlays, or composite controls.
 use tessera_ui::{
-    AxisConstraint, ComputedData, LayoutResult, MeasurementError, Modifier, Px, PxPosition,
-    RenderSlot,
+    ComputedData, LayoutResult, MeasurementError, Modifier, Px, PxPosition, RenderSlot,
     layout::{MeasureScope, PlacementResult, PlacementScope, layout},
     tessera,
 };
 
 use crate::alignment::Alignment;
-
-fn resolve_final_dimension(axis: AxisConstraint, largest_child: Px) -> Px {
-    axis.clamp(largest_child)
-}
 
 fn center_axis(container: Px, child: Px) -> f32 {
     (container.0 - child.0) as f32 / 2.0
@@ -160,8 +155,8 @@ impl tessera_ui::LayoutModifierNode for BoxedLayout {
             children_sizes[i] = Some(child_result);
         }
 
-        let final_width = resolve_final_dimension(parent_constraint.width, max_child_width);
-        let final_height = resolve_final_dimension(parent_constraint.height, max_child_height);
+        let final_width = parent_constraint.width.clamp(max_child_width);
+        let final_height = parent_constraint.height.clamp(max_child_height);
 
         for (i, child_size_opt) in children_sizes.iter().enumerate() {
             if let Some(child_size) = child_size_opt {
@@ -231,22 +226,7 @@ mod tests {
     }
 
     #[tessera]
-    fn fixed_test_box(tag: Option<String>, width: Option<i32>, height: Option<i32>) {
-        let tag = tag.unwrap_or_default();
-        let width = width.unwrap_or_default();
-        let height = height.unwrap_or_default();
-
-        layout()
-            .policy(FixedTestLayout { width, height })
-            .draw(NoopDrawModifier)
-            .modifier(Modifier::new().semantics(SemanticsArgs {
-                test_tag: Some(tag),
-                ..Default::default()
-            }));
-    }
-
-    #[tessera]
-    fn forwarded_modifier_test_box(
+    fn fixed_test_box(
         modifier: Option<Modifier>,
         tag: Option<String>,
         width: Option<i32>,
@@ -325,7 +305,7 @@ mod tests {
                 Some(AxisConstraint::exact(Px::new(80))),
             ))
             .children(|| {
-                forwarded_modifier_test_box()
+                fixed_test_box()
                     .modifier(Modifier::new().align(Alignment::Center))
                     .tag("boxed_forwarded".to_string())
                     .width(20)

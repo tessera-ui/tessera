@@ -143,6 +143,7 @@ impl CircularWaveDraw {
             geometry.requires_morph = requires_morph;
             let morph = geometry.morph.as_ref().unwrap();
             let size = Vec2::new(width, height);
+            let track = path(morph.track.clone(), morph.track_center, size, stroke);
             let active = if requires_morph {
                 let mut curves: Vec<_> = morph
                     .pairs
@@ -159,9 +160,8 @@ impl CircularWaveDraw {
             } else if self.amplitude == 1.0 {
                 path(morph.active.clone(), morph.active_center, size, stroke)
             } else {
-                path(morph.track.clone(), morph.track_center, size, stroke)
+                track.clone()
             };
-            let track = path(morph.track.clone(), morph.track_center, size, stroke);
             geometry.active = active;
             geometry.track = track;
             geometry.key = Some(key);

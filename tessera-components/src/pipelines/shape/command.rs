@@ -1,5 +1,5 @@
 use glam::{Vec2, Vec4};
-use tessera_ui::{Color, DrawCommand, DrawRegion, PaddingRect, PxPosition, PxSize};
+use tessera_ui::{Color, DrawCommand, PxPosition, PxSize};
 
 use super::pipeline::ShapeUniforms;
 
@@ -121,11 +121,6 @@ pub enum ShapeCommand {
 }
 
 impl DrawCommand for ShapeCommand {
-    fn sample_region(&self) -> Option<tessera_ui::SampleRegion> {
-        // No specific barrier requirements for shape commands
-        None
-    }
-
     fn apply_opacity(&mut self, opacity: f32) {
         fn scale_color(color: &mut Color, factor: f32) {
             *color = color.with_alpha(color.a * factor);
@@ -133,27 +128,22 @@ impl DrawCommand for ShapeCommand {
 
         let factor = opacity.clamp(0.0, 1.0);
         match self {
-            ShapeCommand::Rect { color, .. } | ShapeCommand::ScaledRect { color, .. } => {
-                scale_color(color, factor);
-            }
-            ShapeCommand::OutlinedRect { color, .. } => {
-                scale_color(color, factor);
-            }
-            ShapeCommand::RippleRect { color, ripple, .. } => {
-                scale_color(color, factor);
-                ripple.alpha *= factor;
-            }
-            ShapeCommand::RippleOutlinedRect { color, ripple, .. } => {
+            Self::Rect { color, .. }
+            | Self::ScaledRect { color, .. }
+            | Self::OutlinedRect { color, .. }
+            | Self::Ellipse { color }
+            | Self::OutlinedEllipse { color, .. } => scale_color(color, factor),
+            Self::RippleRect { color, ripple, .. }
+            | Self::RippleOutlinedRect { color, ripple, .. } => {
                 scale_color(color, factor);
                 ripple.alpha *= factor;
             }
-            ShapeCommand::Ellipse { color } => {
-                scale_color(color, factor);
+            Self::FilledOutlinedRect {
+                color,
+                border_color,
+                ..
             }
-            ShapeCommand::OutlinedEllipse { color, .. } => {
-                scale_color(color, factor);
-            }
-            ShapeCommand::FilledOutlinedRect {
+            | Self::FilledOutlinedEllipse {
                 color,
                 border_color,
                 ..
@@ -161,7 +151,7 @@ impl DrawCommand for ShapeCommand {
                 scale_color(color, factor);
                 scale_color(border_color, factor);
             }
-            ShapeCommand::RippleFilledOutlinedRect {
+            Self::RippleFilledOutlinedRect {
                 color,
                 border_color,
                 ripple,
@@ -171,19 +161,7 @@ impl DrawCommand for ShapeCommand {
                 scale_color(border_color, factor);
                 ripple.alpha *= factor;
             }
-            ShapeCommand::FilledOutlinedEllipse {
-                color,
-                border_color,
-                ..
-            } => {
-                scale_color(color, factor);
-                scale_color(border_color, factor);
-            }
         }
-    }
-
-    fn draw_region(&self) -> DrawRegion {
-        DrawRegion::PaddedLocal(PaddingRect::ZERO)
     }
 }
 

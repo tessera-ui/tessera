@@ -4,10 +4,6 @@
 //!
 //! Attach pointer/keyboard handling with accessibility and ripple feedback to
 //! subtrees.
-//!
-//! Pointer and keyboard handlers in this module focus on interaction state and
-//! gesture flow. Accessibility is attached through semantics modifier nodes,
-//! and hover cursors use dedicated cursor modifiers.
 
 use tessera_foundation::{
     gesture::{LongPressRecognizer, TapRecognizer},
@@ -124,24 +120,8 @@ fn reset_disabled_interaction_state(state: State<InteractionState>) {
     }
 }
 
-enum TapRecognizerHandle {
-    State(State<TapRecognizer>),
-}
-
-impl TapRecognizerHandle {
-    fn new(state: Option<State<TapRecognizer>>) -> Self {
-        Self::State(state.expect("materialized tap recognizer"))
-    }
-
-    fn with_mut<R>(&self, f: impl FnOnce(&mut TapRecognizer) -> R) -> R {
-        match self {
-            Self::State(state) => state.with_mut(f),
-        }
-    }
-}
-
 struct ClickablePointerModifierNode {
-    tap_recognizer: TapRecognizerHandle,
+    tap_recognizer: State<TapRecognizer>,
     long_press_recognizer: Option<State<LongPressRecognizer>>,
     on_click: Callback,
     on_long_click: Option<Callback>,
@@ -372,10 +352,30 @@ impl SemanticsModifierNode for ClickableSemanticsModifierNode {
     }
 }
 
-struct ToggleablePointerModifierNode {
-    tap_recognizer: TapRecognizerHandle,
-    value: bool,
-    on_value_change: CallbackWith<bool, ()>,
+#[derive(Clone, Copy)]
+enum Activation {
+    Toggle {
+        value: bool,
+        on_value_change: CallbackWith<bool, ()>,
+    },
+    Click(Callback),
+}
+
+impl Activation {
+    fn activate(self) {
+        match self {
+            Self::Toggle {
+                value,
+                on_value_change,
+            } => on_value_change.call(!value),
+            Self::Click(on_click) => on_click.call(),
+        }
+    }
+}
+
+struct ActivationPointerModifierNode {
+    tap_recognizer: State<TapRecognizer>,
+    activation: Activation,
     enabled: bool,
     interaction_state: Option<State<InteractionState>>,
     on_press: Option<PressCallback>,
@@ -383,7 +383,7 @@ struct ToggleablePointerModifierNode {
     focus_requester: FocusRequester,
 }
 
-impl PointerInputModifierNode for ToggleablePointerModifierNode {
+impl PointerInputModifierNode for ActivationPointerModifierNode {
     fn on_pointer_input(&self, input: PointerInput<'_>) {
         let within_bounds = input
             .cursor_position_rel
@@ -451,7 +451,7 @@ impl PointerInputModifierNode for ToggleablePointerModifierNode {
         }
 
         if tap_result.tapped {
-            self.on_value_change.call(!self.value);
+            self.activation.activate();
         }
 
         if !within_bounds {
@@ -467,14 +467,13 @@ impl PointerInputModifierNode for ToggleablePointerModifierNode {
     }
 }
 
-struct ToggleableKeyboardModifierNode {
-    value: bool,
-    on_value_change: CallbackWith<bool, ()>,
+struct ActivationKeyboardModifierNode {
+    activation: Activation,
     enabled: bool,
     focus_requester: FocusRequester,
 }
 
-impl KeyboardInputModifierNode for ToggleableKeyboardModifierNode {
+impl KeyboardInputModifierNode for ActivationKeyboardModifierNode {
     fn on_keyboard_input(&self, mut input: KeyboardInput<'_>) {
         if !self.enabled
             || !has_keyboard_activation_event(input.keyboard_events, input.key_modifiers)
@@ -483,7 +482,7 @@ impl KeyboardInputModifierNode for ToggleableKeyboardModifierNode {
         }
 
         self.focus_requester.request_focus();
-        self.on_value_change.call(!self.value);
+        self.activation.activate();
         input.block_keyboard();
     }
 }
@@ -564,120 +563,6 @@ impl SemanticsModifierNode for ToggleableSemanticsModifierNode {
     }
 }
 
-struct SelectablePointerModifierNode {
-    tap_recognizer: TapRecognizerHandle,
-    on_click: Callback,
-    enabled: bool,
-    interaction_state: Option<State<InteractionState>>,
-    on_press: Option<PressCallback>,
-    on_release: Option<PressCallback>,
-    focus_requester: FocusRequester,
-}
-
-impl PointerInputModifierNode for SelectablePointerModifierNode {
-    fn on_pointer_input(&self, input: PointerInput<'_>) {
-        let within_bounds = input
-            .cursor_position_rel
-            .map(|pos| {
-                is_position_in_rect(
-                    pos,
-                    PxPosition::ZERO,
-                    input.computed_data.width,
-                    input.computed_data.height,
-                )
-            })
-            .unwrap_or(false);
-
-        let tap_result = self.tap_recognizer.with_mut(|recognizer| {
-            recognizer.update_exclusive(
-                input.pass,
-                input.pointer_changes.as_mut_slice(),
-                within_bounds,
-            )
-        });
-
-        let Some(interaction_state) = self.interaction_state else {
-            return;
-        };
-
-        if self.enabled {
-            let hover_changed = interaction_state.with(|state| state.is_hovered() != within_bounds);
-            if hover_changed {
-                interaction_state.with_mut(|state| state.set_hovered(within_bounds));
-            }
-        } else {
-            let should_reset = interaction_state
-                .with(|state| state.is_pressed() || state.is_hovered() || state.is_focused());
-            if should_reset {
-                interaction_state.with_mut(|state| {
-                    state.release();
-                    state.set_hovered(false);
-                    state.set_focused(false);
-                });
-            }
-            return;
-        }
-
-        let context = pointer_context(input.cursor_position_rel, input.computed_data);
-
-        if tap_result.pressed {
-            self.focus_requester.request_focus();
-            if let Some(on_press) = self.on_press.as_ref() {
-                on_press.call(context);
-            }
-            let press_changed = interaction_state.with(|state| !state.is_pressed());
-            if press_changed {
-                interaction_state.with_mut(|state| state.set_pressed(true));
-            }
-        }
-
-        if tap_result.released {
-            let was_pressed = interaction_state.with(|state| state.is_pressed());
-            if was_pressed {
-                interaction_state.with_mut(|state| state.release());
-            }
-            if let Some(on_release) = self.on_release.as_ref() {
-                on_release.call(context);
-            }
-        }
-
-        if tap_result.tapped {
-            self.on_click.call();
-        }
-
-        if !within_bounds {
-            let should_reset =
-                interaction_state.with(|state| state.is_pressed() || state.is_hovered());
-            if should_reset {
-                interaction_state.with_mut(|state| {
-                    state.release();
-                    state.set_hovered(false);
-                });
-            }
-        }
-    }
-}
-
-struct SelectableKeyboardModifierNode {
-    on_click: Callback,
-    enabled: bool,
-    focus_requester: FocusRequester,
-}
-
-impl KeyboardInputModifierNode for SelectableKeyboardModifierNode {
-    fn on_keyboard_input(&self, mut input: KeyboardInput<'_>) {
-        if !self.enabled
-            || !has_keyboard_activation_event(input.keyboard_events, input.key_modifiers)
-        {
-            return;
-        }
-
-        self.focus_requester.request_focus();
-        self.on_click.call();
-        input.block_keyboard();
-    }
-}
-
 struct SelectableSemanticsModifierNode {
     selected: bool,
     on_click: Callback,
@@ -730,7 +615,7 @@ impl SemanticsModifierNode for SelectableSemanticsModifierNode {
 
 #[cfg(not(any(target_family = "wasm", target_os = "android", target_os = "ios")))]
 struct WindowDragRegionPointerModifierNode {
-    tap_recognizer: TapRecognizerHandle,
+    tap_recognizer: State<TapRecognizer>,
 }
 
 #[cfg(not(any(target_family = "wasm", target_os = "android", target_os = "ios")))]
@@ -814,7 +699,7 @@ fn apply_combined_clickable_resolved(
         tap_recognizer,
         long_press_recognizer,
     } = args;
-    let tap_recognizer = TapRecognizerHandle::new(tap_recognizer);
+    let tap_recognizer = tap_recognizer.expect("materialized tap recognizer");
     let focus_requester = focus_requester.unwrap_or_else(FocusRequester::new);
     let participates_in_focus =
         enabled && (role.is_some() || label.is_some() || description.is_some());
@@ -884,7 +769,11 @@ fn apply_toggleable_resolved(base: Modifier, args: ToggleableArgs) -> Modifier {
         focus_requester,
         tap_recognizer,
     } = args;
-    let tap_recognizer = TapRecognizerHandle::new(tap_recognizer);
+    let tap_recognizer = tap_recognizer.expect("materialized tap recognizer");
+    let activation = Activation::Toggle {
+        value,
+        on_value_change,
+    };
     let focus_requester = focus_requester.unwrap_or_else(FocusRequester::new);
 
     let mut modifier = base;
@@ -912,16 +801,14 @@ fn apply_toggleable_resolved(base: Modifier, args: ToggleableArgs) -> Modifier {
             description: description.clone(),
             focus_requester,
         })
-        .push_keyboard_input(ToggleableKeyboardModifierNode {
-            value,
-            on_value_change,
+        .push_keyboard_input(ActivationKeyboardModifierNode {
+            activation,
             enabled,
             focus_requester,
         })
-        .push_pointer_input(ToggleablePointerModifierNode {
+        .push_pointer_input(ActivationPointerModifierNode {
             tap_recognizer,
-            value,
-            on_value_change,
+            activation,
             enabled,
             interaction_state,
             on_press,
@@ -944,7 +831,8 @@ fn apply_selectable_resolved(base: Modifier, args: SelectableArgs) -> Modifier {
         focus_requester,
         tap_recognizer,
     } = args;
-    let tap_recognizer = TapRecognizerHandle::new(tap_recognizer);
+    let tap_recognizer = tap_recognizer.expect("materialized tap recognizer");
+    let activation = Activation::Click(on_click);
     let focus_requester = focus_requester.unwrap_or_else(FocusRequester::new);
 
     let mut modifier = base;
@@ -972,14 +860,14 @@ fn apply_selectable_resolved(base: Modifier, args: SelectableArgs) -> Modifier {
             description: description.clone(),
             focus_requester,
         })
-        .push_keyboard_input(SelectableKeyboardModifierNode {
-            on_click,
+        .push_keyboard_input(ActivationKeyboardModifierNode {
+            activation,
             enabled,
             focus_requester,
         })
-        .push_pointer_input(SelectablePointerModifierNode {
+        .push_pointer_input(ActivationPointerModifierNode {
             tap_recognizer,
-            on_click,
+            activation,
             enabled,
             interaction_state,
             on_press,
@@ -1089,7 +977,7 @@ struct WindowDragBuild;
 #[cfg(not(any(target_family = "wasm", target_os = "android", target_os = "ios")))]
 impl BuildModifierNode for WindowDragBuild {
     fn materialize(&self, context: &mut ModifierBuildContext) -> Option<Modifier> {
-        let tap_recognizer = TapRecognizerHandle::new(Some(context.state(TapRecognizer::default)));
+        let tap_recognizer = context.state(TapRecognizer::default);
         Some(
             Modifier::new()
                 .push_pointer_input(WindowDragRegionPointerModifierNode { tap_recognizer }),

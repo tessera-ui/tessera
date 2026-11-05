@@ -211,22 +211,15 @@ impl<T: DrawCommand + 'static, P: DrawablePipeline<T> + 'static> ErasedDrawableP
 }
 
 /// Registered drawing pipelines, selected by command type.
+#[derive(Default)]
 pub struct PipelineRegistry {
     pub(crate) pipelines: HashMap<TypeId, Box<dyn ErasedDrawablePipeline>>,
-}
-
-impl Default for PipelineRegistry {
-    fn default() -> Self {
-        Self::new()
-    }
 }
 
 impl PipelineRegistry {
     /// Creates an empty pipeline registry.
     pub fn new() -> Self {
-        Self {
-            pipelines: HashMap::new(),
-        }
+        Self::default()
     }
 
     /// Registers a pipeline for its command type, replacing any prior registration.

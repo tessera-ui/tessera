@@ -15,6 +15,7 @@ pub trait TesseraPackage {
 }
 
 /// Collects modules and registers plugins for an application entry.
+#[derive(Default)]
 pub struct EntryRegistry {
     modules: Vec<Box<dyn RenderModule>>,
 }
@@ -22,9 +23,7 @@ pub struct EntryRegistry {
 impl EntryRegistry {
     /// Creates a new registry for entry-time registration.
     pub fn new() -> Self {
-        Self {
-            modules: Vec::new(),
-        }
+        Self::default()
     }
 
     /// Adds a render module to the entry registry.
@@ -50,11 +49,5 @@ impl EntryRegistry {
     /// Finalizes the registry into a module list for the renderer.
     pub fn finish(self) -> Vec<Box<dyn RenderModule>> {
         self.modules
-    }
-}
-
-impl Default for EntryRegistry {
-    fn default() -> Self {
-        Self::new()
     }
 }

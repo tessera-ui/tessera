@@ -75,8 +75,8 @@ page demonstrates all five sizes with working menus and four styles.
 
 `loading_indicator` 提供 Expressive 七形状循环动画，也可通过 `.progress(value)`
 显示从圆形到柔和爆发形状的确定进度。`.contained(true)` 启用主题底色，
-`.paused(true)` 暂停循环动画并停止帧请求。默认尺寸为 48dp；几何数据共享，
-动画复用 GPU 实例缓冲区。原生和 WebAssembly 均支持形状、颜色、尺寸和进度语义。
+`.paused(true)` 暂停循环动画并停止帧请求。默认尺寸为 48dp。
+原生和 WebAssembly 均支持形状、颜色、尺寸和进度语义。
 
 `slider`、`centered_slider` 和 `range_slider` 的两个手柄均支持方向键、
 Home/End、PageUp/PageDown。连续滑块按 1% 调整，离散滑块按配置刻度调整。

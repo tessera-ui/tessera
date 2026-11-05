@@ -66,10 +66,6 @@ const PLACEMENTS: [&str; 6] = [
 const LEADER: &str = "#49454f";
 const MEASURE: &str = "#ee7da4";
 
-fn blend(base: Color, layer: Color, alpha: f32) -> Color {
-    base.blend_over(layer, alpha)
-}
-
 fn mid(rect: annotations::Rect) -> f64 {
     rect.y + rect.h / 2.0
 }
@@ -284,8 +280,8 @@ fn state_menu(state: usize, baseline: bool, selected: bool) {
                 }
             } else {
                 match state {
-                    2 => blend(base, layer, 0.08),
-                    3 | 4 => blend(base, layer, 0.10),
+                    2 => base.blend_over(layer, 0.08),
+                    3 | 4 => base.blend_over(layer, 0.10),
                     _ => base,
                 }
             };
@@ -348,7 +344,7 @@ fn active_menus() {
                     state_item(
                         format!("Item {}", index + 1),
                         if index == 1 {
-                            blend(Color::TRANSPARENT, on_surface, 0.10)
+                            Color::TRANSPARENT.blend_over(on_surface, 0.10)
                         } else {
                             Color::TRANSPARENT
                         },
@@ -369,7 +365,7 @@ fn active_menus() {
                         state_item(
                             format!("Item {}", index + 1),
                             if index == 1 {
-                                blend(Color::TRANSPARENT, on_surface, 0.08)
+                                Color::TRANSPARENT.blend_over(on_surface, 0.08)
                             } else {
                                 Color::TRANSPARENT
                             },
@@ -555,7 +551,7 @@ fn baseline_sample(geometry: Option<State<Geometry>>) {
     let scheme = use_context::<MaterialTheme>().unwrap().get().color_scheme;
     let content = scheme.on_surface;
     let muted = scheme.on_surface_variant;
-    let hover = blend(Color::TRANSPARENT, scheme.on_surface, 0.08);
+    let hover = Color::TRANSPARENT.blend_over(scheme.on_surface, 0.08);
     let selected = scheme.surface_container_highest;
     let container = scheme.surface_container;
     column()
@@ -875,7 +871,7 @@ fn trigger_tile(kind: usize) {
     let scheme = use_context::<MaterialTheme>().unwrap().get().color_scheme;
     let accent = scheme.secondary_container;
     let on_accent = scheme.on_secondary_container;
-    let highlight = blend(Color::TRANSPARENT, scheme.primary, 0.24);
+    let highlight = Color::TRANSPARENT.blend_over(scheme.primary, 0.24);
     let tone = scheme.on_surface_variant;
     let field = scheme.surface_container_highest;
     let line = scheme.primary;
@@ -1131,7 +1127,7 @@ fn baseline_measure_menu(geometry: State<Geometry>) {
     let scheme = use_context::<MaterialTheme>().unwrap().get().color_scheme;
     let content = scheme.on_surface;
     let muted = scheme.on_surface_variant;
-    let hover = blend(Color::TRANSPARENT, scheme.on_surface, 0.08);
+    let hover = Color::TRANSPARENT.blend_over(scheme.on_surface, 0.08);
     let container = scheme.surface_container;
     column()
         .modifier(
@@ -1264,7 +1260,7 @@ fn baseline_measure_annotations(values: Geometry) {
 #[tessera]
 pub(super) fn submenu_pair(#[prop(into)] parent: String, options: Vec<String>, selected: usize) {
     let scheme = use_context::<MaterialTheme>().unwrap().get().color_scheme;
-    let hover = blend(Color::TRANSPARENT, scheme.on_surface, 0.10);
+    let hover = Color::TRANSPARENT.blend_over(scheme.on_surface, 0.10);
     let vibrant = scheme.tertiary;
     let on_vibrant = scheme.on_tertiary;
     row().children(move || {
@@ -1330,7 +1326,7 @@ pub(super) fn line_spacing_figure() {
 #[tessera]
 pub(super) fn opening_figure() {
     let scheme = use_context::<MaterialTheme>().unwrap().get().color_scheme;
-    let highlight = blend(Color::TRANSPARENT, scheme.primary, 0.24);
+    let highlight = Color::TRANSPARENT.blend_over(scheme.primary, 0.24);
     panel(RenderSlot::new(move || {
         column().children(move || {
             row().children(move || {

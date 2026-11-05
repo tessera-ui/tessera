@@ -148,22 +148,6 @@ fn move_focus(renderer: &mut HeadlessRenderer, direction: FocusDirection, label:
     assert_eq!(focused(renderer).as_deref(), Some(label));
 }
 
-fn save(renderer: &mut HeadlessRenderer, name: &str, samples: u32) {
-    if let Some(directory) = std::env::var_os("TESSERA_TABS_QA_DIR") {
-        let directory = std::path::PathBuf::from(directory);
-        std::fs::create_dir_all(&directory).expect("QA directory");
-        let size = renderer.physical_size();
-        let pixels = renderer.read_pixels().expect("pixels");
-        tessera_ui::headless::write_png_file(
-            directory.join(format!("{name}-msaa{samples}.png")),
-            size.width,
-            size.height,
-            &pixels,
-        )
-        .expect("QA image");
-    }
-}
-
 fn red_pixels_on_row(pixels: &[u8], width: u32, y: u32, x0: u32, x1: u32) -> usize {
     (x0..x1)
         .filter(|x| {
@@ -284,7 +268,6 @@ fn check_tabs(samples: u32) {
     }
     assert_eq!(edge, group.x1);
     check_indicator(&mut renderer, "Flights", 4, true);
-    save(&mut renderer, "primary", samples);
     let initial = renderer.read_pixels().expect("initial pixels");
     let before = control(&renderer, "Before tabs", Role::Button).0;
     action(&mut renderer, before, Action::Focus);
@@ -332,7 +315,6 @@ fn check_tabs(samples: u32) {
         }),
         "secondary active labels use on-surface rather than primary"
     );
-    save(&mut renderer, "secondary-icons", samples);
     config.with_mut(|config| config.middle_enabled = false);
     renderer.render_frames(12);
     let node = control(&renderer, "Hotels", Role::Tab).1;
@@ -356,7 +338,6 @@ fn check_tabs(samples: u32) {
         .1
         .bounds()
         .expect("revealed tab");
-    save(&mut renderer, "scrollable-focus", samples);
     assert!(
         bounds.x0 >= 0.0 && bounds.x1 <= 451.0,
         "bounds={bounds:?}, focus={:?}, controller={:?}",
@@ -373,7 +354,6 @@ fn check_tabs(samples: u32) {
         ))
     );
     assert_eq!(selected.get(), 1);
-    save(&mut renderer, "scrollable-focus", samples);
     config.with_mut(|config| config.count = 3);
     renderer.render_frames(20);
     assert_eq!(focused(&renderer).as_deref(), Some("Hotels"));
@@ -389,7 +369,6 @@ fn check_tabs(samples: u32) {
     assert!(bounds.x1 - bounds.x0 >= 72.0);
     assert!(bounds.x0 >= 0.0 && bounds.x1 <= 180.0);
     assert_eq!(selected.get(), 1);
-    save(&mut renderer, "narrow", samples);
     config.with_mut(|config| config.controlled = true);
     renderer.render_frames(12);
     let flights = control(&renderer, "Flights", Role::Tab).0;

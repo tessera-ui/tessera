@@ -100,7 +100,7 @@ pub(super) fn carousel_spec(route: Option<crate::pages::material_spec::article::
         sections,
     )
     .modal_controller_optional(modal_controller)
-    .route_optional(route.clone())
+    .route_optional(route)
     .intro(|| {
         layout_figure(CarouselVariant::MultiBrowse, false);
     })

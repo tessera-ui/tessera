@@ -107,7 +107,7 @@ pub(super) fn buttons_spec(route: Option<crate::pages::material_spec::article::A
             },
         ],
     )
-    .route_optional(route.clone())
+    .route_optional(route)
     .pages(vec![
         ArticlePage {
             title: "Overview",
@@ -1086,12 +1086,12 @@ fn size_name(size: ButtonSize) -> &'static str {
 }
 
 #[tessera]
-fn prose(#[prop(into)] value: String) {
+pub(super) fn prose(#[prop(into)] value: String) {
     text().content(value).style(type_style(16.0, 24.0));
 }
 
 #[tessera]
-fn caption(#[prop(into)] value: String) {
+pub(super) fn caption(#[prop(into)] value: String) {
     let scheme = use_context::<MaterialTheme>().unwrap().get().color_scheme;
     gap(Dp(16.0));
     text()
@@ -1101,7 +1101,7 @@ fn caption(#[prop(into)] value: String) {
 }
 
 #[tessera]
-fn bullets(items: Vec<String>) {
+pub(super) fn bullets(items: Vec<String>) {
     let scheme = use_context::<MaterialTheme>().unwrap().get().color_scheme;
     column()
         .modifier(Modifier::new().fill_max_width())
@@ -1128,7 +1128,7 @@ fn bullets(items: Vec<String>) {
 }
 
 #[tessera]
-fn badge(number: usize) {
+pub(super) fn badge(number: usize) {
     boxed()
         .alignment(Alignment::Center)
         .modifier(
@@ -1165,7 +1165,7 @@ fn legend(items: Vec<&'static str>) {
 
 /// A figure row with a leading numbered marker.
 #[tessera]
-fn marked(number: usize, content: RenderSlot) {
+pub(super) fn marked(number: usize, content: RenderSlot) {
     row()
         .cross_axis_alignment(CrossAxisAlignment::Center)
         .children(move || {

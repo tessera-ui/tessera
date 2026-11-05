@@ -438,19 +438,6 @@ mod tests {
         assert_eq!(pixel(&sampled, 11, 11), [255, 255, 255, 255]);
         assert_eq!(pixel(&sampled, 130, 30), [255, 255, 255, 255]);
         assert_ne!(pixel(&sampled, 95, 30), [255, 255, 255, 255]);
-        if let Some(directory) = std::env::var_os("TESSERA_SHAPE_QA_DIR") {
-            let directory = std::path::PathBuf::from(directory);
-            std::fs::create_dir_all(&directory).expect("shape QA directory");
-            for (name, pixels) in [("nested", &first), ("sampled", &sampled)] {
-                tessera_ui::headless::write_png_file(
-                    directory.join(format!("shape-clip-{name}-msaa{samples}.png")),
-                    200,
-                    220,
-                    pixels,
-                )
-                .expect("shape QA image");
-            }
-        }
         observed.get().stage.expect("stage").set(2);
         renderer.render_frames(6);
         assert_eq!(

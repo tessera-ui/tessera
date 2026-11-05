@@ -142,9 +142,6 @@ fn unmodified_dark_theme_surface_and_native_rail_preserve_chromatic_channels() {
     let pixels = renderer.read_pixels().unwrap();
     let patch = rgba(&pixels, 256, 48, 48);
     let native = rgba(&pixels, 256, 160, 520);
-    eprintln!(
-        "unmodified Material 2025 dark surface patch RGBA={patch:?}, native rail RGBA={native:?}"
-    );
     assert_eq!(patch, [15, 13, 18, 255], "unmodified surface patch");
     assert_eq!(native, [15, 13, 18, 255], "unmodified native rail surface");
 }
@@ -153,25 +150,6 @@ fn unmodified_dark_theme_surface_and_native_rail_preserve_chromatic_channels() {
 #[ignore = "requires a native GPU adapter"]
 fn color_references_keep_independent_theme_backgrounds_containers_and_native_selection() {
     let mut renderer = renderer(color_reference_fixture, 1024, 1320);
-    let initial_nodes = renderer.accessibility_snapshot().unwrap().nodes;
-    let initial_pixels = renderer.read_pixels().unwrap();
-    for mode in ["Light", "Dark"] {
-        let rail = group(&initial_nodes, &format!("{mode} expanded reference rail"));
-        let destination = initial_nodes
-            .iter()
-            .find(|(_, node)| node.role() == Role::Tab && contains(rail, node))
-            .map(|(_, node)| node.bounds());
-        let sample = rgba(
-            &initial_pixels,
-            1024,
-            (rail.x0 + rail.width() * 0.5) as usize,
-            (rail.y1 - 20.0) as usize,
-        );
-        eprintln!(
-            "initial frame={} {mode} expanded native destination={destination:?}, container sample={sample:?}",
-            renderer.frame_index()
-        );
-    }
     let nodes = settled_reference_nodes(&mut renderer);
     let pixels = renderer.read_pixels().unwrap();
     let mut targets = Vec::new();
@@ -186,7 +164,6 @@ fn color_references_keep_independent_theme_backgrounds_containers_and_native_sel
             "{mode} reference spans the full width"
         );
         let actual = rgba(&pixels, 1024, half.x0 as usize + 12, half.y0 as usize + 100);
-        eprintln!("{mode} reference background RGBA={actual:?}, expected={background:?}");
         assert_eq!(actual, background, "{mode} reference uses its own surface");
         for (variant, width) in [("collapsed", 96.0), ("expanded", 220.0)] {
             let rail = group(&nodes, &format!("{mode} {variant} reference rail"));
@@ -198,9 +175,6 @@ fn color_references_keep_independent_theme_backgrounds_containers_and_native_sel
                 (rail.x0 + rail.width() * 0.5) as usize,
                 (rail.y1 - 20.0) as usize,
             );
-            eprintln!(
-                "{mode} {variant} reference container RGBA={actual:?}, expected={container:?}"
-            );
             let mut destinations: Vec<_> = nodes
                 .iter()
                 .filter(|(_, node)| node.role() == Role::Tab && contains(rail, node))
@@ -210,14 +184,6 @@ fn color_references_keep_independent_theme_backgrounds_containers_and_native_sel
                 a.y0.total_cmp(&b.y0)
             });
             assert_eq!(destinations.len(), 4);
-            eprintln!(
-                "settled frame={} {mode} {variant} group={rail:?}, native destinations={:?}",
-                renderer.frame_index(),
-                destinations
-                    .iter()
-                    .map(|(_, node)| node.bounds())
-                    .collect::<Vec<_>>()
-            );
             assert_eq!(
                 actual, container,
                 "{mode} {variant} optional surface container"

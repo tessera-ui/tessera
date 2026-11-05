@@ -134,8 +134,6 @@ impl From<TextStyle> for ShapingStyleKey {
 ///         row: 1,
 ///         ..Default::default()
 ///     };
-///     assert_eq!(heading.row, 0);
-///     assert_eq!(value.row, 1);
 ///     text_table(vec![heading, value]).columns(1);
 /// }
 /// # tessera_ui::testing::layout_test(comparison).run();

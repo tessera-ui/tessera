@@ -79,7 +79,7 @@ pub(super) fn tabs_spec(route: Option<crate::pages::material_spec::article::Arti
             },
         ],
     )
-    .route_optional(route.clone())
+    .route_optional(route)
     .pages(vec![
         ArticlePage {
             title: "Overview",
@@ -264,17 +264,16 @@ fn do_dont(
             .modifier(Modifier::new().fill_max_width())
             .children(move || {
                 let (good, bad) = (good.clone(), bad.clone());
-                let (good_figure, bad_figure) = (good_figure.clone(), bad_figure.clone());
                 column()
                     .modifier(Modifier::new().weight(1.0))
                     .children(move || {
-                        guidance_card(true, good.clone(), good_figure.clone());
+                        guidance_card(true, good.clone(), good_figure);
                     });
                 spacer().modifier(Modifier::new().width(Dp(24.0)));
                 column()
                     .modifier(Modifier::new().weight(1.0))
                     .children(move || {
-                        guidance_card(false, bad.clone(), bad_figure.clone());
+                        guidance_card(false, bad.clone(), bad_figure);
                     });
             });
     } else {
@@ -885,19 +884,15 @@ fn sample(#[prop(into)] label: String, primary: bool, controls: Option<bool>) {
                                 .title(move || {
                                     badge_title(name, icons.get() && primary, index);
                                 });
-                        } else if icons.get() && primary {
-                            tab(tab_row)
-                                .label(name)
-                                .icon(destination_asset(index))
-                                .enabled(available)
-                                .accessibility_label(name.to_string())
-                                .on_click(move || count.set(count.get() + 1));
                         } else {
-                            tab(tab_row)
+                            let tab = tab(tab_row)
                                 .label(name)
                                 .enabled(available)
                                 .accessibility_label(name.to_string())
                                 .on_click(move || count.set(count.get() + 1));
+                            if icons.get() && primary {
+                                tab.icon(destination_asset(index));
+                            }
                         }
                     }
                 });
@@ -1045,11 +1040,9 @@ fn themed_panel(dark: bool, content: RenderSlot) {
     material_theme()
         .theme(move || MaterialTheme::from_seed(ACCENT, dark))
         .child(move || {
-            let content = content.clone();
             surface()
                 .modifier(Modifier::new().fill_max_width())
                 .child(move || {
-                    let content = content.clone();
                     column()
                         .modifier(Modifier::new().fill_max_width().padding_all(Dp(24.0)))
                         .children(move || {
@@ -1059,7 +1052,7 @@ fn themed_panel(dark: bool, content: RenderSlot) {
                             gap(Dp(16.0));
                             column()
                                 .modifier(Modifier::new().fill_max_width())
-                                .children_shared(content.clone());
+                                .children_shared(content);
                         });
                 });
         });
@@ -2057,7 +2050,6 @@ fn guidance_card(good: bool, #[prop(into)] note: String, figure: RenderSlot) {
     column()
         .modifier(Modifier::new().fill_max_width())
         .children(move || {
-            let figure = figure.clone();
             column()
                 .modifier(
                     Modifier::new()
@@ -2065,7 +2057,6 @@ fn guidance_card(good: bool, #[prop(into)] note: String, figure: RenderSlot) {
                         .clip_shape(Shape::rounded_rectangle(Dp(16.0))),
                 )
                 .children(move || {
-                    let figure = figure.clone();
                     boxed()
                         .alignment(Alignment::Center)
                         .modifier(
@@ -2078,7 +2069,7 @@ fn guidance_card(good: bool, #[prop(into)] note: String, figure: RenderSlot) {
                         .children(move || {
                             column()
                                 .modifier(Modifier::new().fill_max_width())
-                                .children_shared(figure.clone());
+                                .children_shared(figure);
                         });
                     row()
                         .cross_axis_alignment(CrossAxisAlignment::Center)

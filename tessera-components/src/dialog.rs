@@ -451,8 +451,6 @@ fn dialog_provider_render(
     let main_content = main_content.unwrap_or_else(RenderSlot::empty);
     let dialog_open_state = remember(|| false);
 
-    // If the dialog is open, render the modal overlay.
-    // Sample state once to avoid repeated locks and improve readability.
     let (is_open, visibility) = controller.with(|c| c.snapshot());
     let mut just_opened = false;
     dialog_open_state.with_mut(|was_open| {

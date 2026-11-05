@@ -243,7 +243,6 @@ fn overview_icon(index: usize) {
         .variant(style)
         .size(size)
         .width(width)
-        .shape_style(IconButtonShape::Round)
         .selected_optional(if index == 1 || index == 2 {
             Some(selected.get())
         } else {
@@ -716,9 +715,6 @@ fn icon_state_item(
     let label = remember(|| label);
     let control = icon_button()
         .variant(style)
-        .size(IconButtonSize::Small)
-        .width(IconButtonWidth::Uniform)
-        .shape_style(IconButtonShape::Round)
         .modifier(Modifier::new().size(Dp(40.0 * scale), Dp(40.0 * scale)))
         .selected_optional(if toggle { Some(selected.get()) } else { None })
         .enabled(state != 1)

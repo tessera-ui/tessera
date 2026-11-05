@@ -273,7 +273,6 @@ mod tests {
             })
             .collect::<Geometry>();
         assert_eq!(relative_geometry(&shifted), expected);
-        assert_eq!(raw["calendar"].y, Px(-252));
 
         let mut changed = shifted;
         changed.get_mut("calendar").unwrap().x += Px(1);

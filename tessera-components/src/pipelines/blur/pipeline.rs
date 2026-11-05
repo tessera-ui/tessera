@@ -14,15 +14,6 @@ const MAX_SAMPLES: usize = 16;
 const WEIGHT_CACHE_CAPACITY: usize = 64;
 const WEIGHT_QUANTIZATION: f32 = 100.0;
 
-/// Compute optimized Gaussian blur weights and offsets using hardware bilinear
-/// interpolation. This reduces the number of texture samples by leveraging the
-/// GPU's built-in linear filtering.
-///
-/// Returns (weights, offsets, sample_count) where:
-/// - weights[0] is the center weight
-/// - weights[i] (i > 0) is the weight for both +offset[i] and -offset[i]
-/// - offsets[i] is the pixel offset from center
-/// - sample_count is the actual number of samples needed
 fn compute_optimized_blur_params(radius: f32) -> WeightCacheEntry {
     if radius <= 0.0 {
         let mut weights = [0.0f32; MAX_SAMPLES];
@@ -38,10 +29,8 @@ fn compute_optimized_blur_params(radius: f32) -> WeightCacheEntry {
     let sigma = (radius / 3.0).max(0.1);
     let two_sigma_sq = 2.0 * sigma * sigma;
 
-    // Compute discrete Gaussian weights for integer pixel offsets
     let int_radius = radius.ceil() as i32;
 
-    // Compute raw Gaussian weights (not normalized yet)
     let mut raw_weights = SmallVec::<[f32; 64]>::with_capacity((int_radius + 1) as usize);
     raw_weights.resize((int_radius + 1) as usize, 0.0);
     for i in 0..=int_radius {
@@ -49,16 +38,12 @@ fn compute_optimized_blur_params(radius: f32) -> WeightCacheEntry {
         raw_weights[i as usize] = (-x * x / two_sigma_sq).exp();
     }
 
-    // Now apply bilinear optimization by combining adjacent samples
     let mut weights = SmallVec::<[f32; MAX_SAMPLES]>::with_capacity(MAX_SAMPLES);
     let mut offsets = SmallVec::<[f32; MAX_SAMPLES]>::with_capacity(MAX_SAMPLES);
 
-    // Center sample (index 0, not duplicated in shader)
     weights.push(raw_weights[0]);
     offsets.push(0.0);
 
-    // Combine pairs of adjacent samples using bilinear interpolation
-    // For each pair (i, i+1), compute the optimal sampling position
     let mut i = 1;
     while i <= int_radius && weights.len() < MAX_SAMPLES {
         let w1 = raw_weights[i as usize];
@@ -81,7 +66,6 @@ fn compute_optimized_blur_params(radius: f32) -> WeightCacheEntry {
             weights.push(combined_weight);
             offsets.push(offset);
 
-            // Skip next position since we combined it
             i += 2;
         } else {
             i += 1;
@@ -96,7 +80,6 @@ fn compute_optimized_blur_params(radius: f32) -> WeightCacheEntry {
         *w /= total_weight;
     }
 
-    // Pad to MAX_SAMPLES
     let sample_count = weights.len() as u32;
 
     let mut weights_array = [0.0f32; MAX_SAMPLES];
@@ -139,16 +122,7 @@ struct WeightsAndOffsets {
 }
 
 #[derive(PartialEq, ShaderType)]
-struct DownsampleUniforms {
-    area_x: u32,
-    area_y: u32,
-    area_width: u32,
-    area_height: u32,
-    scale: u32,
-}
-
-#[derive(PartialEq, ShaderType)]
-struct UpsampleUniforms {
+struct ResampleUniforms {
     area_x: u32,
     area_y: u32,
     area_width: u32,
@@ -161,9 +135,8 @@ pub struct BlurPipeline {
     downsample_pipeline: wgpu::ComputePipeline,
     blur_pipeline: wgpu::ComputePipeline,
     upsample_pipeline: wgpu::ComputePipeline,
-    downsample_bind_group_layout: wgpu::BindGroupLayout,
+    resample_bind_group_layout: wgpu::BindGroupLayout,
     blur_bind_group_layout: wgpu::BindGroupLayout,
-    upsample_bind_group_layout: wgpu::BindGroupLayout,
     downsample_sampler: wgpu::Sampler,
     texture_pool: HashMap<(u32, u32), Vec<wgpu::Texture>>,
     weight_cache: LruCache<u32, WeightCacheEntry>,
@@ -196,10 +169,9 @@ impl BlurPipeline {
             ..Default::default()
         });
 
-        let downsample_bind_group_layout =
+        let resample_bind_group_layout =
             device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
                 entries: &[
-                    // 0: Uniforms
                     wgpu::BindGroupLayoutEntry {
                         binding: 0,
                         visibility: wgpu::ShaderStages::COMPUTE,
@@ -210,7 +182,6 @@ impl BlurPipeline {
                         },
                         count: None,
                     },
-                    // 1: Source Texture (Sampled)
                     wgpu::BindGroupLayoutEntry {
                         binding: 1,
                         visibility: wgpu::ShaderStages::COMPUTE,
@@ -221,7 +192,6 @@ impl BlurPipeline {
                         },
                         count: None,
                     },
-                    // 2: Destination Texture (Storage)
                     wgpu::BindGroupLayoutEntry {
                         binding: 2,
                         visibility: wgpu::ShaderStages::COMPUTE,
@@ -232,7 +202,6 @@ impl BlurPipeline {
                         },
                         count: None,
                     },
-                    // 3: Linear sampler for hardware filtering
                     wgpu::BindGroupLayoutEntry {
                         binding: 3,
                         visibility: wgpu::ShaderStages::COMPUTE,
@@ -240,13 +209,12 @@ impl BlurPipeline {
                         count: None,
                     },
                 ],
-                label: Some("blur_downsample_bind_group_layout"),
+                label: Some("blur_resample_bind_group_layout"),
             });
 
         let blur_bind_group_layout =
             device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
                 entries: &[
-                    // 0: Uniforms
                     wgpu::BindGroupLayoutEntry {
                         binding: 0,
                         visibility: wgpu::ShaderStages::COMPUTE,
@@ -257,7 +225,6 @@ impl BlurPipeline {
                         },
                         count: None,
                     },
-                    // 1: Source Texture (Sampled)
                     wgpu::BindGroupLayoutEntry {
                         binding: 1,
                         visibility: wgpu::ShaderStages::COMPUTE,
@@ -268,7 +235,6 @@ impl BlurPipeline {
                         },
                         count: None,
                     },
-                    // 2: Destination Texture (Storage)
                     wgpu::BindGroupLayoutEntry {
                         binding: 2,
                         visibility: wgpu::ShaderStages::COMPUTE,
@@ -279,14 +245,12 @@ impl BlurPipeline {
                         },
                         count: None,
                     },
-                    // 3: Linear sampler for hardware bilinear filtering
                     wgpu::BindGroupLayoutEntry {
                         binding: 3,
                         visibility: wgpu::ShaderStages::COMPUTE,
                         ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
                         count: None,
                     },
-                    // 4: Pre-computed weights and offsets
                     wgpu::BindGroupLayoutEntry {
                         binding: 4,
                         visibility: wgpu::ShaderStages::COMPUTE,
@@ -301,57 +265,10 @@ impl BlurPipeline {
                 label: Some("blur_pass_bind_group_layout"),
             });
 
-        let upsample_bind_group_layout =
-            device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-                entries: &[
-                    // 0: Uniforms
-                    wgpu::BindGroupLayoutEntry {
-                        binding: 0,
-                        visibility: wgpu::ShaderStages::COMPUTE,
-                        ty: wgpu::BindingType::Buffer {
-                            ty: wgpu::BufferBindingType::Uniform,
-                            has_dynamic_offset: false,
-                            min_binding_size: None,
-                        },
-                        count: None,
-                    },
-                    // 1: Source Texture (Sampled)
-                    wgpu::BindGroupLayoutEntry {
-                        binding: 1,
-                        visibility: wgpu::ShaderStages::COMPUTE,
-                        ty: wgpu::BindingType::Texture {
-                            sample_type: wgpu::TextureSampleType::Float { filterable: true },
-                            view_dimension: wgpu::TextureViewDimension::D2,
-                            multisampled: false,
-                        },
-                        count: None,
-                    },
-                    // 2: Destination Texture (Storage)
-                    wgpu::BindGroupLayoutEntry {
-                        binding: 2,
-                        visibility: wgpu::ShaderStages::COMPUTE,
-                        ty: wgpu::BindingType::StorageTexture {
-                            access: wgpu::StorageTextureAccess::WriteOnly,
-                            format: wgpu::TextureFormat::Rgba8Unorm,
-                            view_dimension: wgpu::TextureViewDimension::D2,
-                        },
-                        count: None,
-                    },
-                    // 3: Linear sampler for filtering
-                    wgpu::BindGroupLayoutEntry {
-                        binding: 3,
-                        visibility: wgpu::ShaderStages::COMPUTE,
-                        ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
-                        count: None,
-                    },
-                ],
-                label: Some("blur_upsample_bind_group_layout"),
-            });
-
-        let downsample_pipeline_layout =
+        let resample_pipeline_layout =
             device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
-                label: Some("Blur Downsample Pipeline Layout"),
-                bind_group_layouts: &[Some(&downsample_bind_group_layout)],
+                label: Some("Blur Resample Pipeline Layout"),
+                bind_group_layouts: &[Some(&resample_bind_group_layout)],
                 immediate_size: 0,
             });
         let blur_pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
@@ -359,17 +276,10 @@ impl BlurPipeline {
             bind_group_layouts: &[Some(&blur_bind_group_layout)],
             immediate_size: 0,
         });
-        let upsample_pipeline_layout =
-            device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
-                label: Some("Blur Upsample Pipeline Layout"),
-                bind_group_layouts: &[Some(&upsample_bind_group_layout)],
-                immediate_size: 0,
-            });
-
         let downsample_pipeline =
             device.create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
                 label: Some("Blur Downsample Pipeline"),
-                layout: Some(&downsample_pipeline_layout),
+                layout: Some(&resample_pipeline_layout),
                 module: &downsample_shader,
                 entry_point: Some("main"),
                 compilation_options: Default::default(),
@@ -385,7 +295,7 @@ impl BlurPipeline {
         });
         let upsample_pipeline = device.create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
             label: Some("Blur Upsample Pipeline"),
-            layout: Some(&upsample_pipeline_layout),
+            layout: Some(&resample_pipeline_layout),
             module: &upsample_shader,
             entry_point: Some("main"),
             compilation_options: Default::default(),
@@ -396,9 +306,8 @@ impl BlurPipeline {
             downsample_pipeline,
             blur_pipeline,
             upsample_pipeline,
-            downsample_bind_group_layout,
+            resample_bind_group_layout,
             blur_bind_group_layout,
-            upsample_bind_group_layout,
             downsample_sampler,
             texture_pool: HashMap::new(),
             weight_cache: LruCache::new(
@@ -501,10 +410,6 @@ impl ComputablePipeline<DualBlurCommand> for BlurPipeline {
             let down_width = area_width.div_ceil(scale);
             let down_height = area_height.div_ceil(scale);
 
-            if down_width == 0 || down_height == 0 {
-                continue;
-            }
-
             let downsample_texture = self.acquire_texture(context.device, down_width, down_height);
             let downsample_view =
                 downsample_texture.create_view(&wgpu::TextureViewDescriptor::default());
@@ -512,29 +417,28 @@ impl ComputablePipeline<DualBlurCommand> for BlurPipeline {
             let blur_texture = self.acquire_texture(context.device, down_width, down_height);
             let blur_view = blur_texture.create_view(&wgpu::TextureViewDescriptor::default());
 
-            // Downsample pass
-            let downsample_uniforms = DownsampleUniforms {
+            let resample_uniforms = ResampleUniforms {
                 area_x,
                 area_y,
                 area_width,
                 area_height,
                 scale,
             };
-            let downsample_uniform_buffer = Self::create_uniform_buffer(
+            let resample_uniform_buffer = Self::create_uniform_buffer(
                 context.device,
                 context.queue,
-                "Blur Downsample Uniform Buffer",
-                &downsample_uniforms,
+                "Blur Resample Uniform Buffer",
+                &resample_uniforms,
             );
             let downsample_bind_group =
                 context
                     .device
                     .create_bind_group(&wgpu::BindGroupDescriptor {
-                        layout: &self.downsample_bind_group_layout,
+                        layout: &self.resample_bind_group_layout,
                         entries: &[
                             wgpu::BindGroupEntry {
                                 binding: 0,
-                                resource: downsample_uniform_buffer.as_entire_binding(),
+                                resource: resample_uniform_buffer.as_entire_binding(),
                             },
                             wgpu::BindGroupEntry {
                                 binding: 1,
@@ -557,24 +461,17 @@ impl ComputablePipeline<DualBlurCommand> for BlurPipeline {
                 .set_bind_group(0, &downsample_bind_group, &[]);
             let downsample_workgroups_x = down_width.div_ceil(8);
             let downsample_workgroups_y = down_height.div_ceil(8);
-            if downsample_workgroups_x == 0 || downsample_workgroups_y == 0 {
-                self.release_texture(downsample_texture, down_width, down_height);
-                self.release_texture(blur_texture, down_width, down_height);
-                continue;
-            }
             context.compute_pass.dispatch_workgroups(
                 downsample_workgroups_x,
                 downsample_workgroups_y,
                 1,
             );
 
-            // Directional blur pass
             let mut read_view = downsample_view.clone();
             let mut write_view = blur_view.clone();
             for pass in &item.command.passes {
                 let effective_radius = (pass.radius * coordinate_scale / scale as f32).max(0.0);
 
-                // Fetch cached optimized blur parameters
                 let weight_entry = self.weights_for_radius(effective_radius);
 
                 let blur_uniforms = BlurUniforms {
@@ -655,29 +552,15 @@ impl ComputablePipeline<DualBlurCommand> for BlurPipeline {
                 std::mem::swap(&mut read_view, &mut write_view);
             }
 
-            // Upsample pass
-            let upsample_uniforms = UpsampleUniforms {
-                area_x,
-                area_y,
-                area_width,
-                area_height,
-                scale,
-            };
-            let upsample_uniform_buffer = Self::create_uniform_buffer(
-                context.device,
-                context.queue,
-                "Blur Upsample Uniform Buffer",
-                &upsample_uniforms,
-            );
             let upsample_bind_group =
                 context
                     .device
                     .create_bind_group(&wgpu::BindGroupDescriptor {
-                        layout: &self.upsample_bind_group_layout,
+                        layout: &self.resample_bind_group_layout,
                         entries: &[
                             wgpu::BindGroupEntry {
                                 binding: 0,
-                                resource: upsample_uniform_buffer.as_entire_binding(),
+                                resource: resample_uniform_buffer.as_entire_binding(),
                             },
                             wgpu::BindGroupEntry {
                                 binding: 1,
@@ -700,11 +583,6 @@ impl ComputablePipeline<DualBlurCommand> for BlurPipeline {
                 .set_bind_group(0, &upsample_bind_group, &[]);
             let upsample_workgroups_x = area_width.div_ceil(8);
             let upsample_workgroups_y = area_height.div_ceil(8);
-            if upsample_workgroups_x == 0 || upsample_workgroups_y == 0 {
-                self.release_texture(downsample_texture, down_width, down_height);
-                self.release_texture(blur_texture, down_width, down_height);
-                continue;
-            }
             context.compute_pass.dispatch_workgroups(
                 upsample_workgroups_x,
                 upsample_workgroups_y,

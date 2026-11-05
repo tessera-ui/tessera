@@ -122,10 +122,6 @@ fn observe_bounds(name: &'static str, observations: Arc<DiagnosticBounds>) -> Mo
 }
 
 /// Renders isolated, opaque color patches and an unmodified collapsed rail.
-///
-/// This opt-in root replaces the catalog only in a diagnostic WebAssembly
-/// build. A 600 by 800 CSS-pixel viewport provides space for every patch; the
-/// white root follows the actual viewport rather than imposing a window size.
 #[tessera]
 pub(crate) fn diagnostic_app(
     #[prop(skip_eq)] bounds: Arc<DiagnosticBounds>,
@@ -206,33 +202,25 @@ pub(crate) fn diagnostic_app(
 
 /// Returns the last observed component bounds in window pixels as JSON.
 ///
-/// Each rectangle is `[x, y, width, height]`. The viewport entry observes the
-/// diagnostic root, not an operating-system window. `rail_wrapper` observes
-/// the explicit host box because `navigation_rail` has no modifier parameter;
-/// it does not claim to observe the rail's internal surface. `rail_home_icon`
-/// observes the spacer rendered in the real destination's icon slot, not the
-/// destination's full interaction target. Other patch entries observe the
-/// modifiers passed to their actual box or surface components. Values are
-/// geometry observations, not pixel samples or an indication of GPU completion.
+/// Each rectangle is `[x, y, width, height]`. Values are geometry observations,
+/// not pixel samples or an indication of GPU completion.
 /// Gray patches use linear channels of 1/255 and 2/255, not sRGB byte values.
 fn bounds_json(observations: &DiagnosticBounds) -> String {
-    {
-        let observations = observations.0.lock().unwrap();
-        let mut json = String::from(
-            r#"{"units":"window_px","rect_encoding":"x,y,width,height","rail_boundary":"wrapper, not internal surface","bounds":{"#,
-        );
-        for (index, (name, bounds)) in observations.iter().enumerate() {
-            if index != 0 {
-                json.push(',');
-            }
-            json.push_str(&format!(
-                "\"{name}\":[{},{},{},{}]",
-                bounds[0], bounds[1], bounds[2], bounds[3]
-            ));
+    let observations = observations.0.lock().unwrap();
+    let mut json = String::from(
+        r#"{"units":"window_px","rect_encoding":"x,y,width,height","rail_boundary":"wrapper, not internal surface","bounds":{"#,
+    );
+    for (index, (name, bounds)) in observations.iter().enumerate() {
+        if index != 0 {
+            json.push(',');
         }
-        json.push_str("}}");
-        json
+        json.push_str(&format!(
+            "\"{name}\":[{},{},{},{}]",
+            bounds[0], bounds[1], bounds[2], bounds[3]
+        ));
     }
+    json.push_str("}}");
+    json
 }
 
 /// Returns raw linear-sRGB theme roles as a JSON string.

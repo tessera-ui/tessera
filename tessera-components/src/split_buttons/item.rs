@@ -156,18 +156,13 @@ pub(super) fn split_button_item(
     let checked = !leading && expanded.unwrap_or(false);
     let (fraction, radius) = if shape.is_some() {
         (0.0, 0.0)
-    } else if pressed {
+    } else if pressed || (!checked && (hovered || focused)) {
         (
             0.0,
             SplitButtonDefaults::active_inner_corner_size(size).0 as f32,
         )
     } else if checked {
         (0.5, 0.0)
-    } else if hovered || focused {
-        (
-            0.0,
-            SplitButtonDefaults::active_inner_corner_size(size).0 as f32,
-        )
     } else {
         (0.0, SplitButtonDefaults::inner_corner_size(size).0 as f32)
     };

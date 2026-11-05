@@ -690,7 +690,6 @@ pub fn tab_label(
     if live.with(|value| value != &current) {
         live.set(current);
     }
-    // Determine container height based on content type
     let small_height = TabsDefaults::MIN_TAB_HEIGHT;
     let large_height = TabsDefaults::LARGE_TAB_HEIGHT;
     let container_height = if has_icon && has_text {
@@ -699,7 +698,6 @@ pub fn tab_label(
         small_height
     };
 
-    // Use boxed to center the content within the tab
     let modifier = Modifier::new()
         .constrain(
             Some(AxisConstraint::NONE),
@@ -1238,7 +1236,7 @@ impl tessera_ui::DrawModifierNode for TabsLayout {
 ///     tabs::{tab, tabs},
 ///     text::text,
 /// };
-/// use tessera_ui::{LayoutResult, remember, tessera};
+/// use tessera_ui::{remember, tessera};
 /// # use tessera_components::theme::{MaterialTheme, material_theme};
 ///
 /// #[tessera]

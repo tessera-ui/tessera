@@ -402,18 +402,13 @@ pub fn parse_command(
     parsed_command_parts
 }
 
-// Returns a vector of all the relevant xdg desktop application entries
-// Check out:
-// https://specifications.freedesktop.org/basedir-spec/basedir-spec-latest.html
-// https://wiki.archlinux.org/index.php/XDG_Base_Directory
-// That explains the default values and the relevant variables.
 pub fn get_xdg_data_dirs() -> Vec<PathBuf> {
     let mut result = Vec::new();
 
     if let Ok(home) = crate::util::home_dir() {
         let xdg_data_home = env::var("XDG_DATA_HOME")
             .map(PathBuf::from)
-            .unwrap_or_else(|_| home.join(".local/share")); // The default
+            .unwrap_or_else(|_| home.join(".local/share"));
         result.push(xdg_data_home);
     }
 
@@ -421,7 +416,6 @@ pub fn get_xdg_data_dirs() -> Vec<PathBuf> {
         let entries = var.split(':').map(PathBuf::from);
         result.extend(entries);
     } else {
-        // These are the default ones we'll use in case the var is not set
         result.push(PathBuf::from("/usr/local/share"));
         result.push(PathBuf::from("/usr/share"));
     };

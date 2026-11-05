@@ -20,18 +20,6 @@ use crate::{
     theme::{ContentColor, MaterialTheme, TextStyle, content_color_for},
 };
 
-fn resolve_dimension(axis: AxisConstraint, measure: Px) -> Px {
-    axis.clamp(measure)
-}
-
-fn dimension_max(axis: AxisConstraint) -> Option<Px> {
-    axis.resolve_max()
-}
-
-fn relax_min_constraint(axis: AxisConstraint) -> AxisConstraint {
-    axis.without_min()
-}
-
 fn badge_pixels(value: Dp) -> Px {
     Px::from_f32(value.to_pixels_f32().round())
 }
@@ -51,8 +39,8 @@ impl tessera_ui::LayoutModifierNode for BadgedBoxLayout {
 
         let parent_constraint = *input.parent_constraint().as_ref();
         let badge_constraint = Constraint::new(
-            relax_min_constraint(parent_constraint.width),
-            relax_min_constraint(parent_constraint.height),
+            parent_constraint.width.without_min(),
+            parent_constraint.height.without_min(),
         );
 
         let anchor = children[0];
@@ -117,8 +105,8 @@ impl tessera_ui::LayoutModifierNode for BadgeLayout {
                 .intersect(input.parent_constraint().height()),
         );
 
-        let width = resolve_dimension(effective.width, size_px);
-        let height = resolve_dimension(effective.height, size_px);
+        let width = effective.width.clamp(size_px);
+        let height = effective.height.clamp(size_px);
 
         Ok(LayoutResult::new(ComputedData { width, height }))
     }
@@ -130,28 +118,7 @@ impl tessera_ui::DrawModifierNode for BadgeLayout {
         ctx: &mut tessera_ui::DrawModifierContext<'_, '_>,
         content: &mut dyn tessera_ui::DrawModifierContent,
     ) {
-        let input = &mut *ctx.render_input;
-        let mut metadata = input.metadata_mut();
-        let size = metadata
-            .computed_data()
-            .expect("badge must have computed size before record");
-
-        let ResolvedShape::Rounded {
-            corner_radii,
-            corner_g2,
-        } = BadgeDefaults::SHAPE.resolve_for_size(PxSize::new(size.width, size.height))
-        else {
-            unreachable!("badge shape must resolve to a rounded rectangle");
-        };
-
-        metadata
-            .fragment_mut()
-            .push_draw_command(ShapeCommand::Rect {
-                color: self.container_color,
-                corner_radii,
-                corner_g2,
-            });
-        content.draw(input);
+        draw_badge(ctx, content, self.container_color);
     }
 }
 
@@ -191,9 +158,11 @@ impl tessera_ui::LayoutModifierNode for BadgeWithContentLayout {
                 .intersect(input.parent_constraint().height()),
         );
 
-        let max_width =
-            dimension_max(effective.width).map(|v| (v - self.padding_px * 2).max(Px(0)));
-        let max_height = dimension_max(effective.height);
+        let max_width = effective
+            .width
+            .resolve_max()
+            .map(|v| (v - self.padding_px * 2).max(Px(0)));
+        let max_height = effective.height.resolve_max();
 
         let child_constraint = Constraint::new(
             AxisConstraint::new(Px::ZERO, max_width),
@@ -206,8 +175,8 @@ impl tessera_ui::LayoutModifierNode for BadgeWithContentLayout {
         let measured_width = (row_data.width + self.padding_px * 2).max(min_size_px);
         let measured_height = row_data.height.max(min_size_px);
 
-        let width = resolve_dimension(effective.width, measured_width);
-        let height = resolve_dimension(effective.height, measured_height);
+        let width = effective.width.clamp(measured_width);
+        let height = effective.height.clamp(measured_height);
 
         let x = (width - row_data.width).max(Px(0)) / 2;
         let y = (height - row_data.height).max(Px(0)) / 2;
@@ -223,29 +192,37 @@ impl tessera_ui::DrawModifierNode for BadgeWithContentLayout {
         ctx: &mut tessera_ui::DrawModifierContext<'_, '_>,
         content: &mut dyn tessera_ui::DrawModifierContent,
     ) {
-        let input = &mut *ctx.render_input;
-        let mut metadata = input.metadata_mut();
-        let size = metadata
-            .computed_data()
-            .expect("badge_with_content must have computed size before record");
+        draw_badge(ctx, content, self.container_color);
+    }
+}
 
-        let ResolvedShape::Rounded {
+fn draw_badge(
+    ctx: &mut tessera_ui::DrawModifierContext<'_, '_>,
+    content: &mut dyn tessera_ui::DrawModifierContent,
+    color: Color,
+) {
+    let input = &mut *ctx.render_input;
+    let mut metadata = input.metadata_mut();
+    let size = metadata
+        .computed_data()
+        .expect("badge must have computed size before record");
+
+    let ResolvedShape::Rounded {
+        corner_radii,
+        corner_g2,
+    } = BadgeDefaults::SHAPE.resolve_for_size(PxSize::new(size.width, size.height))
+    else {
+        unreachable!("badge shape must resolve to a rounded rectangle");
+    };
+
+    metadata
+        .fragment_mut()
+        .push_draw_command(ShapeCommand::Rect {
+            color,
             corner_radii,
             corner_g2,
-        } = BadgeDefaults::SHAPE.resolve_for_size(PxSize::new(size.width, size.height))
-        else {
-            unreachable!("badge shape must resolve to a rounded rectangle");
-        };
-
-        metadata
-            .fragment_mut()
-            .push_draw_command(ShapeCommand::Rect {
-                color: self.container_color,
-                corner_radii,
-                corner_g2,
-            });
-        content.draw(input);
-    }
+        });
+    content.draw(input);
 }
 
 /// Default values for [`badge`], [`badge_with_content`], and [`badged_box`].
@@ -295,9 +272,9 @@ impl BadgeDefaults {
 /// ## Examples
 ///
 /// ```rust
-/// use tessera_components::badge::BadgeDefaults;
-/// use tessera_ui::Dp;
-/// assert_eq!(BadgeDefaults::OFFSET, Dp(6.0));
+/// tessera_ui::testing::layout_test(|| {
+///     tessera_components::badge::badged_box();
+/// }).run();
 /// ```
 #[tessera]
 pub fn badged_box(

@@ -237,21 +237,6 @@ fn pixel(renderer: &HeadlessRenderer, x: u32, y: u32) -> [u8; 4] {
         .unwrap()
 }
 
-fn save(renderer: &HeadlessRenderer, samples: u32) {
-    if let Some(directory) = std::env::var_os("TESSERA_CARD_QA_DIR") {
-        let directory = std::path::PathBuf::from(directory);
-        std::fs::create_dir_all(&directory).expect("QA directory");
-        let size = renderer.physical_size();
-        tessera_ui::headless::write_png_file(
-            directory.join(format!("card-msaa{samples}.png")),
-            size.width,
-            size.height,
-            &renderer.read_pixels().expect("pixels"),
-        )
-        .expect("QA image");
-    }
-}
-
 fn check_cards(samples: u32) {
     let probe = tessera_ui::testing::TestProbe::default();
     let observed = probe.clone();
@@ -438,7 +423,6 @@ fn check_cards(samples: u32) {
         shadow[0] < 255 && shadow[0] == shadow[1] && shadow[1] == shadow[2],
         "shadow={shadow:?}"
     );
-    save(&renderer, samples);
     renderer.pointer_move(MOUSE_POINTER_ID, PxPosition::from_f32_xy(500.0, 500.0));
     config.with_mut(|config| {
         config.dark = true;

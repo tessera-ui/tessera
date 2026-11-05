@@ -540,22 +540,20 @@ mod tests {
             let selected = remember(|| initial_component);
             let drawer =
                 remember(|| tessera_components::side_sheet::SideSheetController::new(false));
-            {
-                column()
-                    .modifier(Modifier::new().fill_max_size())
-                    .children(move || {
-                        tessera_components::app_bar::top_app_bar()
-                            .title("Material Design 3")
-                            .navigation_icon(move || {
-                                crate::app::navigation_button(selected, drawer, true);
-                            });
-                        boxed()
-                            .modifier(Modifier::new().fill_max_width().weight(1.0))
-                            .children(move || {
-                                component_pages().selected(selected);
-                            });
-                    });
-            }
+            column()
+                .modifier(Modifier::new().fill_max_size())
+                .children(move || {
+                    tessera_components::app_bar::top_app_bar()
+                        .title("Material Design 3")
+                        .navigation_icon(move || {
+                            crate::app::navigation_button(selected, drawer, true);
+                        });
+                    boxed()
+                        .modifier(Modifier::new().fill_max_width().weight(1.0))
+                        .children(move || {
+                            component_pages().selected(selected);
+                        });
+                });
         });
     }
 
@@ -1563,7 +1561,6 @@ mod tests {
                         all_id,
                         "returning must restore the original carousel action identity"
                     );
-                    control(&renderer, "Show all carousel items");
                 }
                 10 => {
                     let access = renderer
@@ -2049,7 +2046,6 @@ mod tests {
         );
     }
 
-    /// Asserts row-major packing of every category and returns each row height.
     fn assert_directory_packing(renderer: &HeadlessRenderer, columns: usize) -> Vec<f64> {
         let nodes = renderer.accessibility_snapshot().unwrap().nodes;
         let gap = f64::from(tessera_ui::Px::from(Dp(8.0)).0);

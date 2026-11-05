@@ -110,7 +110,6 @@ pub(super) fn chips_spec(route: Option<crate::pages::material_spec::article::Art
                             ChipStyle::Flat,
                             false,
                             true,
-                            true,
                             format!("{} example", name(variant)),
                         );
                     }
@@ -311,7 +310,6 @@ fn overview() {
                                 ChipStyle::Flat,
                                 variant == ChipVariant::Filter,
                                 true,
-                                variant != ChipVariant::Suggestion,
                                 format!("{} chip", name(variant)),
                             );
                         }
@@ -819,39 +817,28 @@ fn chip_diagram(variant: ChipVariant, measurements: bool) {
                         .child(|| {
                             text().content("Restore input chip");
                         });
-                } else if variant == ChipVariant::Input {
-                    chip()
-                        .input(format!("{} chip", name(variant)))
-                        .modifier(watch(geometry, "chip"))
-                        .shape_style(ChipShapeStyle::Standard)
-                        .selected(selected.get())
-                        .on_click(move || selected.set(!selected.get()))
-                        .leading_icon(filled::IMAGE_SVG)
-                        .on_remove(move || removed.set(true));
-                } else if variant == ChipVariant::Filter {
-                    chip()
-                        .filter(format!("{} chip", name(variant)))
-                        .modifier(watch(geometry, "chip"))
-                        .shape_style(ChipShapeStyle::Standard)
-                        .selected(selected.get())
-                        .on_click(move || selected.set(!selected.get()))
-                        .leading_icon(filled::ADD_SVG)
-                        .trailing_icon(filled::ARROW_DROP_DOWN_SVG);
-                } else if variant == ChipVariant::Assist {
-                    chip()
-                        .assist(format!("{} chip", name(variant)))
-                        .modifier(watch(geometry, "chip"))
-                        .shape_style(ChipShapeStyle::Standard)
-                        .selected(selected.get())
-                        .on_click(move || selected.set(!selected.get()))
-                        .leading_icon(filled::ADD_SVG);
                 } else {
-                    chip()
-                        .suggestion(format!("{} chip", name(variant)))
+                    let chip = chip()
+                        .variant(variant)
+                        .label(format!("{} chip", name(variant)))
                         .modifier(watch(geometry, "chip"))
                         .shape_style(ChipShapeStyle::Standard)
                         .selected(selected.get())
                         .on_click(move || selected.set(!selected.get()));
+                    match variant {
+                        ChipVariant::Input => {
+                            chip.leading_icon(filled::IMAGE_SVG)
+                                .on_remove(move || removed.set(true));
+                        }
+                        ChipVariant::Filter => {
+                            chip.leading_icon(filled::ADD_SVG)
+                                .trailing_icon(filled::ARROW_DROP_DOWN_SVG);
+                        }
+                        ChipVariant::Assist => {
+                            chip.leading_icon(filled::ADD_SVG);
+                        }
+                        ChipVariant::Suggestion => {}
+                    }
                 }
             });
             content.render();
@@ -1045,19 +1032,13 @@ fn filter_example() {
 #[tessera]
 fn filter_choice(index: usize, selection: State<[bool; 3]>) {
     let selected = selection.get()[index];
+    let chip = chip()
+        .filter(["Unread", "Favorites", "Attachments"][index])
+        .shape_style(ChipShapeStyle::Standard)
+        .selected(selected)
+        .on_click(move || selection.with_mut(|value| value[index] = !value[index]));
     if selected {
-        chip()
-            .filter(["Unread", "Favorites", "Attachments"][index])
-            .shape_style(ChipShapeStyle::Standard)
-            .selected(true)
-            .on_click(move || selection.with_mut(|value| value[index] = !value[index]))
-            .leading_icon(filled::CHECK_SVG);
-    } else {
-        chip()
-            .filter(["Unread", "Favorites", "Attachments"][index])
-            .shape_style(ChipShapeStyle::Standard)
-            .selected(false)
-            .on_click(move || selection.with_mut(|value| value[index] = !value[index]));
+        chip.leading_icon(filled::CHECK_SVG);
     }
 }
 
@@ -1087,21 +1068,6 @@ fn filter_guidelines() {
         "Use nouns that describe the category to include in results",
         "Avoid negative phrases like Exclude images",
     );
-}
-
-#[tessera]
-fn input_recipient(#[prop(into)] label: String) {
-    let visible = remember(|| true);
-    let selected = remember(|| false);
-    if visible.get() {
-        chip()
-            .input(label.clone())
-            .shape_style(ChipShapeStyle::Standard)
-            .leading_icon(filled::PERSON_SVG)
-            .selected(selected.get())
-            .on_click(move || selected.set(!selected.get()))
-            .on_remove(move || visible.set(false));
-    }
 }
 
 #[tessera]
@@ -1386,7 +1352,6 @@ fn examples(variant: ChipVariant, enabled: bool) {
                     style,
                     false,
                     enabled,
-                    true,
                     format!("{} {style:?}", name(variant)),
                 );
             }
@@ -1396,7 +1361,6 @@ fn examples(variant: ChipVariant, enabled: bool) {
                     ChipStyle::Flat,
                     true,
                     enabled,
-                    true,
                     format!("{} selected", name(variant)),
                 );
             }
@@ -1409,48 +1373,32 @@ fn sample(
     style: ChipStyle,
     initial: bool,
     enabled: bool,
-    with_icon: bool,
     #[prop(into)] label: String,
 ) {
     let selected = remember(|| initial);
     let actions = remember(|| 0_u32);
     let toggles = selectable(variant);
     column().children(move || {
-        if with_icon && variant != ChipVariant::Suggestion {
-            chip()
-                .variant(variant)
-                .style(style)
-                .shape_style(ChipShapeStyle::Standard)
-                .label(label.clone())
-                .accessibility_label(label.clone())
-                .enabled(enabled)
-                .selected(selected.get())
-                .on_click(move || {
-                    actions.set(actions.get() + 1);
-                    if toggles {
-                        selected.set(!selected.get());
-                    }
-                })
-                .leading_icon(if selected.get() && toggles {
-                    filled::CHECK_SVG
-                } else {
-                    filled::ADD_SVG
-                });
-        } else {
-            chip()
-                .variant(variant)
-                .style(style)
-                .shape_style(ChipShapeStyle::Standard)
-                .label(label.clone())
-                .accessibility_label(label.clone())
-                .enabled(enabled)
-                .selected(selected.get())
-                .on_click(move || {
-                    actions.set(actions.get() + 1);
-                    if toggles {
-                        selected.set(!selected.get());
-                    }
-                });
+        let chip = chip()
+            .variant(variant)
+            .style(style)
+            .shape_style(ChipShapeStyle::Standard)
+            .label(label.clone())
+            .accessibility_label(label.clone())
+            .enabled(enabled)
+            .selected(selected.get())
+            .on_click(move || {
+                actions.set(actions.get() + 1);
+                if toggles {
+                    selected.set(!selected.get());
+                }
+            });
+        if variant != ChipVariant::Suggestion {
+            chip.leading_icon(if selected.get() && toggles {
+                filled::CHECK_SVG
+            } else {
+                filled::ADD_SVG
+            });
         }
         if !toggles {
             gap(Dp(8.0));

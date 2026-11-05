@@ -764,11 +764,9 @@ pub fn tooltip_provider(
         remember(TooltipController::new)
     };
     let variant = variant.unwrap_or_default();
-    let persistent = persistent.unwrap_or(
-        variant == TooltipVariant::Rich && (action_label.is_some() || actions.is_some()),
-    );
     let interactive =
         variant == TooltipVariant::Rich && (action_label.is_some() || actions.is_some());
+    let persistent = persistent.unwrap_or(interactive);
     let anchor = remember(|| tessera_ui::FloatRect::ZERO);
     if controller.with(|controller| {
         controller.anchor != Some(anchor)

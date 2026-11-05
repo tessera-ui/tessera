@@ -3,15 +3,9 @@ use serde::Serialize;
 use serde_json::value::{Map, Value as Json};
 
 /// Map of template variable names and values.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Default)]
 #[repr(transparent)]
 pub struct JsonMap(pub(crate) Map<String, Json>);
-
-impl Default for JsonMap {
-    fn default() -> Self {
-        Self(Map::new())
-    }
-}
 
 impl JsonMap {
     pub fn insert(&mut self, name: &str, value: impl Serialize) {

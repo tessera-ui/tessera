@@ -80,7 +80,7 @@ pub(super) fn cards_spec(route: Option<crate::pages::material_spec::article::Art
                 content: RenderSlot::new(measurements),
             },
         ],
-    ).route_optional(route.clone()).pages(vec![
+    ).route_optional(route).pages(vec![
         ArticlePage {title:"Overview",intro:Some(RenderSlot::new(|| {prose("Cards contain related elements about a single subject. They can hold images, headlines, supporting text, buttons and lists, and their layout adapts to their contents.");gap(Dp(24.0));card_variants();})),sections:vec![
             SpecSection {title:"Differences from M2",content:RenderSlot::new(|| {prose("Cards use dynamic color mappings and lower resting elevation. Choose elevated, filled or outlined containment according to the visual emphasis needed.");gap(Dp(24.0));card_variants();})},
         ]},

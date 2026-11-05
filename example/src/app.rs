@@ -70,55 +70,30 @@ pub(crate) fn app(
             }
             scaffold()
                 .top_bar(move || {
-                    #[cfg(not(target_arch = "wasm32"))]
-                    {
-                        top_app_bar()
-                            .title(
-                                if nav_controller
-                                    .with(|c| c.current_is::<MaterialComponentsPageDestination>())
-                                {
-                                    "Material Design 3"
-                                } else {
-                                    "Examples"
-                                },
-                            )
-                            .title_area_modifier(Modifier::new().window_drag_region())
-                            .navigation_icon(move || {
-                                navigation_button(
-                                    selected,
-                                    side_sheet_controller,
-                                    nav_controller.with(|c| {
-                                        c.current_is::<MaterialComponentsPageDestination>()
-                                    }),
-                                );
-                            })
-                            .window_control_minimize()
-                            .window_control_toggle_maximize()
-                            .window_control_close();
-                    }
-
-                    #[cfg(target_arch = "wasm32")]
-                    {
-                        top_app_bar()
-                            .navigation_icon(move || {
-                                navigation_button(
-                                    selected,
-                                    side_sheet_controller,
-                                    nav_controller.with(|c| {
-                                        c.current_is::<MaterialComponentsPageDestination>()
-                                    }),
-                                );
-                            })
-                            .title(
-                                if nav_controller
-                                    .with(|c| c.current_is::<MaterialComponentsPageDestination>())
-                                {
-                                    "Material Design 3"
-                                } else {
-                                    "Examples"
-                                },
+                    let _app_bar = top_app_bar()
+                        .title(
+                            if nav_controller
+                                .with(|c| c.current_is::<MaterialComponentsPageDestination>())
+                            {
+                                "Material Design 3"
+                            } else {
+                                "Examples"
+                            },
+                        )
+                        .navigation_icon(move || {
+                            navigation_button(
+                                selected,
+                                side_sheet_controller,
+                                nav_controller
+                                    .with(|c| c.current_is::<MaterialComponentsPageDestination>()),
                             );
-                    }
+                        });
+                    #[cfg(not(target_arch = "wasm32"))]
+                    _app_bar
+                        .title_area_modifier(Modifier::new().window_drag_region())
+                        .window_control_minimize()
+                        .window_control_toggle_maximize()
+                        .window_control_close();
                 })
                 .content(move || {
                     surface()

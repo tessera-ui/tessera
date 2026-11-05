@@ -24,7 +24,7 @@ use crate::{
     theme::{MaterialTheme, material_theme},
 };
 
-use super::{ChipDefaults, ChipStyle, ChipVariant, chip};
+use super::{ChipDefaults, ChipStyle, ChipVariant, chip, tests::rect};
 
 #[derive(Clone, Copy, PartialEq)]
 struct Settings {
@@ -114,14 +114,6 @@ fn fixture(probe: tessera_ui::testing::TestProbe<Option<State<Settings>>>) {
         });
 }
 
-fn rect(renderer: &HeadlessRenderer, key: &str) -> [i64; 4] {
-    let snapshot = renderer.inspect_components();
-    let node = snapshot
-        .find_tag(key)
-        .unwrap_or_else(|| snapshot.labeled(key));
-    let bounds = node.bounds().expect("placed test target");
-    [bounds.x, bounds.y, bounds.width, bounds.height].map(|value| value as i64)
-}
 fn shadow(renderer: &HeadlessRenderer, key: &str) -> Vec<u8> {
     let [x, y, width, _] = rect(renderer, key);
     let pixels = renderer.read_pixels().unwrap();

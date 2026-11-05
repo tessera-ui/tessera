@@ -78,12 +78,9 @@ pub(super) fn checkbox_spec(route: Option<crate::pages::material_spec::article::
         RenderSlot::new(|| {
             settings(false);
         }),
-        RenderSlot::new(|| {
-            settings(false);
-        }),
         RenderSlot::new(checkbox_anatomy),
     )
-    .route_optional(route.clone());
+    .route_optional(route);
 }
 
 #[tessera]
@@ -117,18 +114,15 @@ pub(super) fn switch_spec(route: Option<crate::pages::material_spec::article::Ar
             },
             SpecSection {
                 title: "Configurations",
-                content: RenderSlot::new(configurations),
+                content: RenderSlot::new(switch_figures::configurations),
             },
         ],
         RenderSlot::new(|| {
             settings(true);
         }),
-        RenderSlot::new(|| {
-            settings(true);
-        }),
         RenderSlot::new(switch_figures::anatomy),
     )
-    .route_optional(route.clone());
+    .route_optional(route);
 }
 
 #[tessera]
@@ -605,11 +599,6 @@ fn measurements(is_switch: bool) {
 
 #[path = "switch_figures.rs"]
 mod switch_figures;
-
-#[tessera]
-fn configurations() {
-    switch_figures::configurations();
-}
 
 #[path = "selection_labels.rs"]
 mod selection_labels;

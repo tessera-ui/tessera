@@ -73,10 +73,6 @@ impl Animatable {
     ///
     /// Spring velocity is left untouched.
     pub(crate) fn set_target(&mut self, target: f32) {
-        if (self.target - target).abs() <= f32::EPSILON {
-            self.target = target;
-            return;
-        }
         self.target = target;
     }
 
@@ -188,5 +184,60 @@ mod tests {
         assert_eq!(anim.value(), anim.target());
         assert!(anim.velocity().abs() < 1.0e-3);
         assert!(anim.is_idle());
+    }
+}
+
+#[derive(Clone, PartialEq)]
+pub(crate) struct SelectionAnimation {
+    selected: bool,
+    progress: f32,
+    start_progress: f32,
+    last_change_frame_nanos: Option<u64>,
+}
+
+impl SelectionAnimation {
+    pub(crate) fn new(selected: bool) -> Self {
+        let progress = if selected { 1.0 } else { 0.0 };
+        Self {
+            selected,
+            progress,
+            start_progress: progress,
+            last_change_frame_nanos: None,
+        }
+    }
+
+    pub(crate) fn set_selected(&mut self, selected: bool) {
+        if self.selected != selected {
+            self.selected = selected;
+            self.start_progress = self.progress;
+            self.last_change_frame_nanos = Some(tessera_ui::current_frame_nanos());
+        }
+    }
+
+    fn target(&self) -> f32 {
+        if self.selected { 1.0 } else { 0.0 }
+    }
+
+    pub(crate) fn update(&mut self, frame_nanos: u64) {
+        if let Some(start_frame_nanos) = self.last_change_frame_nanos {
+            let elapsed_nanos = frame_nanos.saturating_sub(start_frame_nanos);
+            let fraction = (elapsed_nanos as f32 / 300_000_000.0).min(1.0);
+            let eased = easing(fraction);
+            let target = self.target();
+            self.progress = self.start_progress + (target - self.start_progress) * eased;
+            if fraction >= 1.0 {
+                self.last_change_frame_nanos = None;
+                self.progress = target;
+                self.start_progress = target;
+            }
+        }
+    }
+
+    pub(crate) fn progress(&self) -> f32 {
+        self.progress
+    }
+
+    pub(crate) fn is_animating(&self) -> bool {
+        self.last_change_frame_nanos.is_some()
     }
 }

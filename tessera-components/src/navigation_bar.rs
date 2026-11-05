@@ -3,8 +3,6 @@
 //! ## Usage
 //!
 //! Use for bottom navigation between a small set of top-level destinations.
-use std::time::Duration;
-
 use tessera_foundation::gesture::TapRecognizer;
 use tessera_ui::{
     AxisConstraint, Callback, Color, ComputedData, Constraint, Dp, FocusRequester,
@@ -18,7 +16,7 @@ use tessera_ui::{
 };
 
 use crate::{
-    animation,
+    animation::SelectionAnimation,
     modifier::{InteractionState, ModifierExt, PointerEventContext, SelectableArgs},
     ripple_state::{RippleSpec, RippleState},
     shape_def::Shape,
@@ -27,14 +25,13 @@ use crate::{
     theme::{ContentColor, MaterialTheme},
 };
 
-const ANIMATION_DURATION: Duration = Duration::from_millis(300);
 const CONTAINER_HEIGHT: Dp = Dp(64.0);
 const INDICATOR_WIDTH: Dp = Dp(56.0);
 const INDICATOR_HEIGHT: Dp = Dp(32.0);
 const INDICATOR_TO_LABEL_PADDING: Dp = Dp(4.0);
 const INDICATOR_VERTICAL_PADDING: Dp = Dp(4.0);
 
-fn interpolate_color(from: Color, to: Color, progress: f32) -> Color {
+pub(crate) fn interpolate_color(from: Color, to: Color, progress: f32) -> Color {
     Color {
         r: from.r + (to.r - from.r) * progress,
         g: from.g + (to.g - from.g) * progress,
@@ -479,7 +476,6 @@ fn navigation_bar_item_view(
 struct NavigationBarItemDefinition {
     label: String,
     icon: Option<RenderSlot>,
-    on_click: Callback,
     accessibility_description: Option<String>,
     label_behavior: NavigationBarLabelBehavior,
     icon_position: NavigationBarIconPosition,
@@ -543,7 +539,7 @@ pub fn navigation_bar_item(
     // Each item owns its own selection animation. State is keyed by the item's
     // call position, so it stays stable across rebuilds without any shared
     // index registry.
-    let animation = remember(|| NavigationBarItemAnimation::new(selected));
+    let animation = remember(|| SelectionAnimation::new(selected));
     let frame_nanos = current_frame_nanos();
     animation.with_mut(|state| state.set_selected(selected));
     let selection_fraction = animation.with_mut(|state| {
@@ -570,7 +566,6 @@ pub fn navigation_bar_item(
             let item = NavigationBarItemDefinition {
                 label: label.clone(),
                 icon,
-                on_click,
                 accessibility_description: accessibility_description.clone(),
                 label_behavior,
                 icon_position,
@@ -722,70 +717,6 @@ impl tessera_ui::LayoutModifierNode for NavigationBarLayout {
             result.place_child(child, PxPosition::new(padding + start, Px::ZERO));
         }
         Ok(result.with_size(ComputedData { width, height }))
-    }
-}
-
-/// Per-item selection animation for a navigation bar destination.
-///
-/// Each item owns one of these; there is no shared index registry, so the
-/// animation is keyed purely by the item's own call position.
-#[derive(Clone, PartialEq)]
-struct NavigationBarItemAnimation {
-    selected: bool,
-    progress: f32,
-    start_progress: f32,
-    last_change_frame_nanos: Option<u64>,
-}
-
-impl NavigationBarItemAnimation {
-    fn new(selected: bool) -> Self {
-        let progress = if selected { 1.0 } else { 0.0 };
-        Self {
-            selected,
-            progress,
-            start_progress: progress,
-            last_change_frame_nanos: None,
-        }
-    }
-
-    fn set_selected(&mut self, selected: bool) {
-        if self.selected != selected {
-            self.selected = selected;
-            self.start_progress = self.progress;
-            self.last_change_frame_nanos = Some(current_frame_nanos());
-        }
-    }
-
-    fn target(&self) -> f32 {
-        if self.selected { 1.0 } else { 0.0 }
-    }
-
-    fn update(&mut self, frame_nanos: u64) {
-        if let Some(start_frame_nanos) = self.last_change_frame_nanos {
-            let elapsed_nanos = frame_nanos.saturating_sub(start_frame_nanos);
-            let animation_nanos = ANIMATION_DURATION.as_nanos().min(u64::MAX as u128) as u64;
-            let fraction = if animation_nanos == 0 {
-                1.0
-            } else {
-                (elapsed_nanos as f32 / animation_nanos as f32).min(1.0)
-            };
-            let eased = animation::easing(fraction);
-            let target = self.target();
-            self.progress = self.start_progress + (target - self.start_progress) * eased;
-            if fraction >= 1.0 {
-                self.last_change_frame_nanos = None;
-                self.progress = target;
-                self.start_progress = target;
-            }
-        }
-    }
-
-    fn progress(&self) -> f32 {
-        self.progress
-    }
-
-    fn is_animating(&self) -> bool {
-        self.last_change_frame_nanos.is_some()
     }
 }
 

@@ -14,6 +14,19 @@ pub(crate) enum Spec {
     Removal,
 }
 
+impl Spec {
+    fn spring(self) -> (f64, f64) {
+        match self {
+            Self::Spatial => (380.0, 0.8),
+            Self::FastSpatial => (800.0, 0.6),
+            Self::ButtonGroupPress => (1400.0, 0.9),
+            Self::Effects => (1600.0, 1.0),
+            Self::FastEffects => (3800.0, 1.0),
+            Self::Removal => unreachable!(),
+        }
+    }
+}
+
 #[derive(Clone, Copy, PartialEq)]
 pub(crate) struct Scalar {
     pub value: f64,
@@ -77,23 +90,9 @@ impl Scalar {
             return 100;
         }
         let displacement = self.origin - self.target;
-        let omega = match self.spec {
-            Spec::Spatial => 380.0_f64.sqrt(),
-            Spec::FastSpatial => 800.0_f64.sqrt(),
-            Spec::ButtonGroupPress => 1400.0_f64.sqrt(),
-            Spec::Effects => 40.0,
-            Spec::FastEffects => 3800.0_f64.sqrt(),
-            Spec::Removal => unreachable!(),
-        };
-        let seconds = if matches!(
-            self.spec,
-            Spec::Spatial | Spec::FastSpatial | Spec::ButtonGroupPress
-        ) {
-            let damping: f64 = match self.spec {
-                Spec::FastSpatial => 0.6,
-                Spec::ButtonGroupPress => 0.9,
-                _ => 0.8,
-            };
+        let (stiffness, damping) = self.spec.spring();
+        let omega = stiffness.sqrt();
+        let seconds = if damping != 1.0 {
             let decay = omega * damping;
             let frequency = omega * (1.0 - damping * damping).sqrt();
             let coefficient = (self.origin_velocity + decay * displacement) / frequency;
@@ -150,14 +149,7 @@ impl Scalar {
         if self.spec == Spec::Removal {
             return;
         }
-        let (stiffness, damping): (f64, f64) = match self.spec {
-            Spec::Spatial => (380.0, 0.8),
-            Spec::FastSpatial => (800.0, 0.6),
-            Spec::ButtonGroupPress => (1400.0, 0.9),
-            Spec::Effects => (1600.0, 1.0),
-            Spec::FastEffects => (3800.0, 1.0),
-            Spec::Removal => unreachable!(),
-        };
+        let (stiffness, damping) = self.spec.spring();
         let seconds = (elapsed / 1_000_000) as f64 / 1000.0;
         let omega = stiffness.sqrt();
         let displacement = self.origin - self.target;

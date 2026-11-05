@@ -35,7 +35,7 @@ const SIZES: [FloatingActionButtonSize; 4] = [
     FloatingActionButtonSize::Large,
 ];
 
-const TONES: [&str; 6] = [
+pub(super) const TONES: [&str; 6] = [
     "Primary container",
     "Secondary container",
     "Tertiary container",
@@ -71,7 +71,7 @@ fn size_icon(size: FloatingActionButtonSize) -> f64 {
     }
 }
 
-fn tone_colors(scheme: &MaterialColorScheme, tone: usize) -> (Color, Color) {
+pub(super) fn tone_colors(scheme: &MaterialColorScheme, tone: usize) -> (Color, Color) {
     match tone {
         0 => (scheme.primary_container, scheme.on_primary_container),
         1 => (scheme.secondary_container, scheme.on_secondary_container),
@@ -265,7 +265,6 @@ fn fab(
     let size = size.unwrap_or(FloatingActionButtonSize::Standard);
     let (container, content) = tone_colors(&scheme, tone.unwrap_or(0));
     let activations = remember(|| 0_u32);
-    let spoken = label.clone();
     let icon_size = size_icon(size);
     column().children(move || {
         floating_action_button()
@@ -274,7 +273,7 @@ fn fab(
             .content_color(content)
             .ripple_color(content)
             .enabled(enabled.unwrap_or(true))
-            .accessibility_label(spoken.clone())
+            .accessibility_label(label.clone())
             .on_click(move || activations.set(activations.get() + 1))
             .content(move || {
                 icon().painter(filled::ADD_SVG).size(Dp(icon_size));
@@ -379,7 +378,7 @@ fn expressive() {
     );
     gap(Dp(32.0));
     panel(RenderSlot::new(|| {
-        fab("Add").size(FloatingActionButtonSize::Standard);
+        fab("Add");
     }));
     caption("The 56dp FAB with a primary container remains the recommended default.");
 }
@@ -476,9 +475,7 @@ fn configurations() {
                     .line_spacing(Dp(24.0))
                     .children(|| {
                         for (tone, name) in TONES.into_iter().enumerate() {
-                            fab(name)
-                                .size(FloatingActionButtonSize::Standard)
-                                .tone(tone);
+                            fab(name).tone(tone);
                         }
                     });
             });
@@ -565,7 +562,7 @@ fn anatomy() {
     gap(Dp(24.0));
     panel(RenderSlot::new(|| {
         column().children(|| {
-            fab("Add").size(FloatingActionButtonSize::Standard);
+            fab("Add");
             gap(Dp(32.0));
             for line in ["1  Container", "2  Icon"] {
                 text()
@@ -606,7 +603,7 @@ fn colors() {
                                     .line_spacing(Dp(24.0))
                                     .children(move || {
                                         for (tone, name) in TONES.into_iter().enumerate() {
-                                            fab(name).size(FloatingActionButtonSize::Standard).tone(tone);
+                                            fab(name).tone(tone);
                                         }
                                     });
                                 gap(Dp(16.0));
@@ -636,11 +633,11 @@ fn states() {
                 row()
                     .modifier(Modifier::new().fill_max_width())
                     .children(|| {
-                        fab("Enabled").size(FloatingActionButtonSize::Standard);
+                        fab("Enabled");
                         spacer().modifier(Modifier::new().width(Dp(32.0)));
-                        fab("Disabled").size(FloatingActionButtonSize::Standard).enabled(false);
+                        fab("Disabled").enabled(false);
                         spacer().modifier(Modifier::new().width(Dp(32.0)));
-                        fab("Accent").size(FloatingActionButtonSize::Standard).tone(3);
+                        fab("Accent").tone(3);
                     });
                 gap(Dp(32.0));
                 text()
@@ -773,7 +770,7 @@ fn usage() {
         column()
             .modifier(Modifier::new().fill_max_width())
             .children(|| {
-                fab("Add").size(FloatingActionButtonSize::Standard);
+                fab("Add");
                 gap(Dp(16.0));
                 text()
                     .content("Do: one FAB with a familiar icon for the primary action.")
@@ -782,9 +779,9 @@ fn usage() {
                 row()
                     .modifier(Modifier::new().fill_max_width())
                     .children(|| {
-                        fab("Add").size(FloatingActionButtonSize::Standard);
+                        fab("Add");
                         spacer().modifier(Modifier::new().width(Dp(24.0)));
-                        fab("Edit").size(FloatingActionButtonSize::Standard).tone(2);
+                        fab("Edit").tone(2);
                     });
                 gap(Dp(16.0));
                 text()
@@ -848,9 +845,7 @@ fn guidelines_color() {
             .line_spacing(Dp(24.0))
             .children(|| {
                 for tone in [0_usize, 1, 2, 3] {
-                    fab(TONES[tone])
-                        .size(FloatingActionButtonSize::Standard)
-                        .tone(tone);
+                    fab(TONES[tone]).tone(tone);
                 }
             });
     }));
@@ -917,7 +912,7 @@ fn adaptive() {
             .children(|| {
                 subheading("Compact".into());
                 gap(Dp(16.0));
-                fab("Add").size(FloatingActionButtonSize::Standard);
+                fab("Add");
                 gap(Dp(32.0));
                 subheading("Expanded".into());
                 gap(Dp(16.0));
@@ -953,9 +948,7 @@ fn behaviors() {
                     });
                 gap(Dp(32.0));
                 if visible.get() {
-                    fab("Add")
-                        .size(FloatingActionButtonSize::Standard)
-                        .counted(true);
+                    fab("Add").counted(true);
                 } else {
                     text()
                         .content("FAB hidden while scrolling")
@@ -979,9 +972,7 @@ fn use_cases() {
     ]);
     gap(Dp(24.0));
     panel(RenderSlot::new(|| {
-        fab("Add")
-            .size(FloatingActionButtonSize::Standard)
-            .counted(true);
+        fab("Add").counted(true);
     }));
     gap(Dp(16.0));
     caption(
@@ -1034,7 +1025,7 @@ fn focus() {
     );
     gap(Dp(24.0));
     panel(RenderSlot::new(|| {
-        fab("Add").size(FloatingActionButtonSize::Standard);
+        fab("Add");
     }));
     gap(Dp(16.0));
     caption("Press Tab to reach the action; the container receives focus once.");
@@ -1064,9 +1055,7 @@ fn keyboard_navigation() {
     );
     gap(Dp(24.0));
     panel(RenderSlot::new(|| {
-        fab("Add")
-            .size(FloatingActionButtonSize::Standard)
-            .counted(true);
+        fab("Add").counted(true);
     }));
 }
 
@@ -1080,13 +1069,13 @@ fn labeling() {
         column()
             .modifier(Modifier::new().fill_max_width())
             .children(|| {
-                fab("Add").size(FloatingActionButtonSize::Standard);
+                fab("Add");
                 gap(Dp(16.0));
                 text()
                     .content("Do: “Add, button” — the label names the action.")
                     .style(type_style(14.0, 20.0));
                 gap(Dp(32.0));
-                fab("Add").size(FloatingActionButtonSize::Standard).tone(1);
+                fab("Add").tone(1);
                 gap(Dp(16.0));
                 text()
                     .content(

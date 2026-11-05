@@ -9,7 +9,7 @@ struct VertexOutput {
 
 struct Uniforms {
     rect: vec4<f32>,
-    mouse: vec2<f32>,
+    _mouse_padding: vec2<f32>,
     time: f32,
     opacity: f32,
     screen_size: vec2<f32>,
@@ -281,7 +281,6 @@ fn reflectivity_for_kind(kind: i32) -> f32 {
 fn scene_intersect(ray_origin: vec3<f32>, ray_direction: vec3<f32>) -> Hit {
     var hit = miss_hit();
 
-    // Front sphere
     let center_a = vec3<f32>(0.0, 1.0, 5.85);
     let t_a = intersect_sphere(ray_origin, ray_direction, center_a, 1.0);
     if t_a > 0.0 && t_a < hit.t {
@@ -296,7 +295,6 @@ fn scene_intersect(ray_origin: vec3<f32>, ray_direction: vec3<f32>) -> Hit {
         );
     }
 
-    // Back-left cone
     let cone_apex = vec3<f32>(-1.70, 2.05, 7.60);
     let cone_height = 2.00;
     let cone_radius = 0.95;
@@ -313,7 +311,6 @@ fn scene_intersect(ray_origin: vec3<f32>, ray_direction: vec3<f32>) -> Hit {
         );
     }
 
-    // Back-right cube
     let cube_center = vec3<f32>(1.80, 0.95, 7.55);
     let cube_half = vec3<f32>(0.90, 0.90, 0.90);
     let t_cube = intersect_box(ray_origin, ray_direction, cube_center, cube_half);

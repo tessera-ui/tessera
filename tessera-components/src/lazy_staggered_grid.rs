@@ -16,8 +16,8 @@ use tessera_ui::{
 
 use crate::{
     alignment::{CrossAxisAlignment, MainAxisAlignment},
-    layout_flex::cross_axis_child_constraint,
-    lazy_grid::GridCells,
+    layout_flex::{cross_axis_child_constraint, px_mul},
+    lazy_grid::{GridCells, GridSlots, compute_cell_offset, resolve_grid_slots},
     lazy_shared::{
         LazyItemsPlan as LazySlotPlan, LazyItemsSlot as LazySlot, MeasuredMain, ZeroLayout,
         clamp_reported_main, hash_key,
@@ -167,27 +167,30 @@ pub fn lazy_vertical_staggered_grid(
         None => remember(LazyStaggeredGridController::new),
     };
     let scroll_controller = remember(ScrollableController::default);
-    lazy_vertical_staggered_grid_slots(LazyStaggeredGridSlotsArgs {
-        modifier: modifier.unwrap_or_default(),
-        scroll_smoothing,
-        scrollbar_behavior,
-        scrollbar_track_color,
-        scrollbar_thumb_color,
-        scrollbar_thumb_hover_color,
-        scrollbar_layout,
-        grid_cells: columns,
-        main_axis_spacing,
-        cross_axis_spacing,
-        cross_axis_alignment,
-        item_alignment,
-        overscan,
-        estimated_item_size,
-        content_padding,
-        max_viewport_main,
-        controller,
-        scroll_controller,
-        slots: content.slots,
-    });
+    lazy_staggered_grid_slots(
+        LazyStaggeredGridSlotsArgs {
+            modifier: modifier.unwrap_or_default(),
+            scroll_smoothing,
+            scrollbar_behavior,
+            scrollbar_track_color,
+            scrollbar_thumb_color,
+            scrollbar_thumb_hover_color,
+            scrollbar_layout,
+            grid_cells: columns,
+            main_axis_spacing,
+            cross_axis_spacing,
+            cross_axis_alignment,
+            item_alignment,
+            overscan,
+            estimated_item_size,
+            content_padding,
+            max_viewport_main,
+            controller,
+            scroll_controller,
+            slots: content.slots,
+        },
+        StaggeredGridAxis::Vertical,
+    );
 }
 
 #[derive(Clone, PartialEq)]
@@ -214,7 +217,7 @@ struct LazyStaggeredGridSlotsArgs {
 }
 
 #[tessera]
-fn lazy_vertical_staggered_grid_slots(args: LazyStaggeredGridSlotsArgs) {
+fn lazy_staggered_grid_slots(args: LazyStaggeredGridSlotsArgs, axis: StaggeredGridAxis) {
     let scroll_controller = args.scroll_controller;
     let main_axis_spacing = sanitize_spacing(Px::from(args.main_axis_spacing));
     let cross_axis_spacing = sanitize_spacing(Px::from(args.cross_axis_spacing));
@@ -223,8 +226,8 @@ fn lazy_vertical_staggered_grid_slots(args: LazyStaggeredGridSlotsArgs) {
     let padding_cross = sanitize_spacing(Px::from(args.content_padding));
     scrollable()
         .modifier(args.modifier)
-        .vertical(true)
-        .horizontal(false)
+        .vertical(axis == StaggeredGridAxis::Vertical)
+        .horizontal(axis == StaggeredGridAxis::Horizontal)
         .apply_child_offset(false)
         .scroll_smoothing(args.scroll_smoothing)
         .scrollbar_behavior(args.scrollbar_behavior)
@@ -235,7 +238,7 @@ fn lazy_vertical_staggered_grid_slots(args: LazyStaggeredGridSlotsArgs) {
         .scrollbar_thumb_hover_color_optional(args.scrollbar_thumb_hover_color)
         .child(move || {
             lazy_staggered_grid_view()
-                .axis(StaggeredGridAxis::Vertical)
+                .axis(axis)
                 .grid_cells(args.grid_cells.clone())
                 .main_axis_spacing(main_axis_spacing)
                 .cross_axis_spacing(cross_axis_spacing)
@@ -354,66 +357,30 @@ pub fn lazy_horizontal_staggered_grid(
         None => remember(LazyStaggeredGridController::new),
     };
     let scroll_controller = remember(ScrollableController::default);
-    lazy_horizontal_staggered_grid_slots(LazyStaggeredGridSlotsArgs {
-        modifier: modifier.unwrap_or_default(),
-        scroll_smoothing,
-        scrollbar_behavior,
-        scrollbar_track_color,
-        scrollbar_thumb_color,
-        scrollbar_thumb_hover_color,
-        scrollbar_layout,
-        grid_cells: rows,
-        main_axis_spacing,
-        cross_axis_spacing,
-        cross_axis_alignment,
-        item_alignment,
-        overscan,
-        estimated_item_size,
-        content_padding,
-        max_viewport_main,
-        controller,
-        scroll_controller,
-        slots: content.slots,
-    });
-}
-
-#[tessera]
-fn lazy_horizontal_staggered_grid_slots(args: LazyStaggeredGridSlotsArgs) {
-    let scroll_controller = args.scroll_controller;
-    let main_axis_spacing = sanitize_spacing(Px::from(args.main_axis_spacing));
-    let cross_axis_spacing = sanitize_spacing(Px::from(args.cross_axis_spacing));
-    let estimated_item_main = ensure_positive_px(Px::from(args.estimated_item_size));
-    let padding_main = sanitize_spacing(Px::from(args.content_padding));
-    let padding_cross = sanitize_spacing(Px::from(args.content_padding));
-    scrollable()
-        .modifier(args.modifier)
-        .vertical(false)
-        .horizontal(true)
-        .apply_child_offset(false)
-        .scroll_smoothing(args.scroll_smoothing)
-        .scrollbar_behavior(args.scrollbar_behavior)
-        .scrollbar_layout(args.scrollbar_layout)
-        .controller(scroll_controller)
-        .scrollbar_track_color_optional(args.scrollbar_track_color)
-        .scrollbar_thumb_color_optional(args.scrollbar_thumb_color)
-        .scrollbar_thumb_hover_color_optional(args.scrollbar_thumb_hover_color)
-        .child(move || {
-            lazy_staggered_grid_view()
-                .axis(StaggeredGridAxis::Horizontal)
-                .grid_cells(args.grid_cells.clone())
-                .main_axis_spacing(main_axis_spacing)
-                .cross_axis_spacing(cross_axis_spacing)
-                .cross_axis_alignment(args.cross_axis_alignment)
-                .item_alignment(args.item_alignment)
-                .estimated_item_main(estimated_item_main)
-                .overscan(args.overscan)
-                .padding_main(padding_main)
-                .padding_cross(padding_cross)
-                .slots(args.slots.clone())
-                .controller(args.controller)
-                .scroll_controller(scroll_controller)
-                .max_viewport_main_optional(args.max_viewport_main);
-        });
+    lazy_staggered_grid_slots(
+        LazyStaggeredGridSlotsArgs {
+            modifier: modifier.unwrap_or_default(),
+            scroll_smoothing,
+            scrollbar_behavior,
+            scrollbar_track_color,
+            scrollbar_thumb_color,
+            scrollbar_thumb_hover_color,
+            scrollbar_layout,
+            grid_cells: rows,
+            main_axis_spacing,
+            cross_axis_spacing,
+            cross_axis_alignment,
+            item_alignment,
+            overscan,
+            estimated_item_size,
+            content_padding,
+            max_viewport_main,
+            controller,
+            scroll_controller,
+            slots: content.slots,
+        },
+        StaggeredGridAxis::Horizontal,
+    );
 }
 
 crate::lazy_shared::impl_lazy_builder!(LazyVerticalStaggeredGridBuilder, LazyStaggeredGridContent);
@@ -454,18 +421,7 @@ struct LazyStaggeredGridLayout {
 
 impl PartialEq for LazyStaggeredGridLayout {
     fn eq(&self, other: &Self) -> bool {
-        self.axis == other.axis
-            && self.item_alignment == other.item_alignment
-            && self.estimated_item_main == other.estimated_item_main
-            && self.main_spacing == other.main_spacing
-            && self.max_viewport_main == other.max_viewport_main
-            && self.padding_main == other.padding_main
-            && self.padding_cross == other.padding_cross
-            && self.viewport_limit == other.viewport_limit
-            && self.total_count == other.total_count
-            && self.slots == other.slots
-            && self.visible_items == other.visible_items
-            && self.scroll_offset == other.scroll_offset
+        tessera_ui::LayoutModifierNode::placement_eq(self, other)
     }
 }
 
@@ -580,12 +536,9 @@ impl tessera_ui::LayoutModifierNode for LazyStaggeredGridLayout {
                 axis: self.axis,
                 item_alignment: self.item_alignment,
                 cache: &c.cache,
-                total_count: self.total_count,
                 slots: &self.slots,
                 padding_main: self.padding_main,
                 padding_cross: self.padding_cross,
-                estimated_item_main: self.estimated_item_main,
-                main_spacing: self.main_spacing,
                 visible_items: &self.visible_items,
                 child_sizes: &child_sizes,
                 scroll_offset: self.scroll_offset,
@@ -821,14 +774,6 @@ fn compute_visible_range(
     start..end
 }
 
-fn compute_cell_offset(cell_cross: Px, child_cross: Px, alignment: CrossAxisAlignment) -> Px {
-    match alignment {
-        CrossAxisAlignment::Start | CrossAxisAlignment::Stretch => Px::ZERO,
-        CrossAxisAlignment::Center => (cell_cross - child_cross).max(Px::ZERO) / 2,
-        CrossAxisAlignment::End => (cell_cross - child_cross).max(Px::ZERO),
-    }
-}
-
 #[derive(Clone, Copy)]
 enum FocusScrollDirection {
     Forward,
@@ -935,132 +880,6 @@ impl StaggeredGridAxis {
     }
 }
 
-#[derive(Clone, PartialEq, Eq)]
-struct GridSlots {
-    sizes: Vec<Px>,
-    positions: Vec<Px>,
-    cross_size: Px,
-}
-
-impl GridSlots {
-    fn len(&self) -> usize {
-        self.sizes.len()
-    }
-}
-
-fn resolve_grid_slots(
-    available_cross: Px,
-    grid_cells: &StaggeredGridCells,
-    spacing: Px,
-    alignment: MainAxisAlignment,
-) -> GridSlots {
-    let spacing = sanitize_spacing(spacing);
-    let sizes = match grid_cells {
-        GridCells::Fixed(count) => {
-            let count = (*count).max(1);
-            calculate_cells_cross_axis_size(available_cross, count, spacing)
-        }
-        GridCells::Adaptive(min_size) => {
-            let min_px = ensure_positive_px(Px::from(*min_size));
-            let spacing = sanitize_spacing(spacing);
-            let available_i32 = available_cross.0.max(0);
-            let min_i32 = min_px.0.max(1);
-            let spacing_i32 = spacing.0.max(0);
-            let count = ((available_i32 + spacing_i32) / (min_i32 + spacing_i32)).max(1) as usize;
-            calculate_cells_cross_axis_size(available_cross, count, spacing)
-        }
-        GridCells::FixedSize(size) => {
-            let cell_size = ensure_positive_px(Px::from(*size));
-            let spacing = sanitize_spacing(spacing);
-            let available_i32 = available_cross.0.max(0);
-            let cell_i32 = cell_size.0.max(1);
-            let spacing_i32 = spacing.0.max(0);
-            if cell_i32 + spacing_i32 < available_i32 + spacing_i32 {
-                let count =
-                    ((available_i32 + spacing_i32) / (cell_i32 + spacing_i32)).max(1) as usize;
-                vec![cell_size; count]
-            } else {
-                vec![available_cross.max(Px::ZERO)]
-            }
-        }
-    };
-
-    if sizes.is_empty() {
-        return GridSlots {
-            sizes: Vec::new(),
-            positions: Vec::new(),
-            cross_size: Px::ZERO,
-        };
-    }
-
-    let total_sizes = sizes.iter().copied().fold(Px::ZERO, |acc, size| acc + size);
-    let base_spacing = if sizes.len() > 1 {
-        px_mul(spacing, sizes.len().saturating_sub(1))
-    } else {
-        Px::ZERO
-    };
-    let content_size = total_sizes + base_spacing;
-    let available_space = (available_cross - content_size).max(Px::ZERO);
-    let (start_cross, extra_spacing) =
-        calculate_alignment_offsets(available_space, sizes.len(), alignment);
-    let gap = spacing + extra_spacing;
-
-    let mut positions = Vec::with_capacity(sizes.len());
-    let mut cursor = start_cross;
-    for (pos, size) in sizes.iter().enumerate() {
-        positions.push(cursor);
-        cursor += *size;
-        if pos + 1 < sizes.len() {
-            cursor += gap;
-        }
-    }
-
-    let cross_size =
-        positions.last().copied().unwrap_or(Px::ZERO) + sizes.last().copied().unwrap_or(Px::ZERO);
-
-    GridSlots {
-        sizes,
-        positions,
-        cross_size,
-    }
-}
-
-fn calculate_alignment_offsets(
-    available_space: Px,
-    count: usize,
-    alignment: MainAxisAlignment,
-) -> (Px, Px) {
-    match alignment {
-        MainAxisAlignment::Start => (Px::ZERO, Px::ZERO),
-        MainAxisAlignment::Center => (available_space / 2, Px::ZERO),
-        MainAxisAlignment::End => (available_space, Px::ZERO),
-        MainAxisAlignment::SpaceEvenly => {
-            if count > 0 {
-                let s = available_space / (count as i32 + 1);
-                (s, s)
-            } else {
-                (Px::ZERO, Px::ZERO)
-            }
-        }
-        MainAxisAlignment::SpaceBetween => {
-            if count > 1 {
-                (Px::ZERO, available_space / (count as i32 - 1))
-            } else if count == 1 {
-                (available_space / 2, Px::ZERO)
-            } else {
-                (Px::ZERO, Px::ZERO)
-            }
-        }
-        MainAxisAlignment::SpaceAround => {
-            if count > 0 {
-                let s = available_space / (count as i32);
-                (s / 2, s)
-            } else {
-                (Px::ZERO, Px::ZERO)
-            }
-        }
-    }
-}
 fn visible_items(plan: &LazySlotPlan, range: Range<usize>) -> Vec<VisibleStaggeredItem> {
     let mut result = Vec::new();
     for index in range {
@@ -1398,37 +1217,6 @@ fn shortest_lane_index(lane_ends: &[Vec<Px>]) -> usize {
     index
 }
 
-fn calculate_cells_cross_axis_size(available: Px, slot_count: usize, spacing: Px) -> Vec<Px> {
-    let slot_count = slot_count.max(1);
-    let spacing_total = px_mul(spacing, slot_count.saturating_sub(1));
-    let available_without_spacing = (available - spacing_total).max(Px::ZERO);
-    let base = available_without_spacing.0 / slot_count as i32;
-    let remainder = available_without_spacing.0 % slot_count as i32;
-    (0..slot_count)
-        .map(|index| {
-            let extra = if (index as i32) < remainder { 1 } else { 0 };
-            Px(base + extra)
-        })
-        .collect()
-}
-
-fn px_mul(px: Px, times: usize) -> Px {
-    if times == 0 {
-        return Px::ZERO;
-    }
-    px_from_i64(px.0 as i64 * times as i64)
-}
-
-fn px_from_i64(value: i64) -> Px {
-    if value > i64::from(i32::MAX) {
-        Px(i32::MAX)
-    } else if value < i64::from(i32::MIN) {
-        Px(i32::MIN)
-    } else {
-        Px(value as i32)
-    }
-}
-
 fn ensure_positive_px(px: Px) -> Px {
     if px <= Px::ZERO { Px(1) } else { px }
 }
@@ -1441,15 +1229,9 @@ struct ComputeStaggeredLayoutPositionsArgs<'a> {
     axis: StaggeredGridAxis,
     item_alignment: CrossAxisAlignment,
     cache: &'a StaggeredGridCache,
-    #[allow(dead_code)]
-    total_count: usize,
     slots: &'a GridSlots,
     padding_main: Px,
     padding_cross: Px,
-    #[allow(dead_code)]
-    estimated_item_main: Px,
-    #[allow(dead_code)]
-    main_spacing: Px,
     visible_items: &'a [VisibleStaggeredLayoutItem],
     child_sizes: &'a [ComputedData],
     scroll_offset: Px,
@@ -1462,12 +1244,9 @@ fn compute_staggered_layout_positions(
         axis,
         item_alignment,
         cache,
-        total_count: _,
         slots,
         padding_main,
         padding_cross,
-        estimated_item_main: _,
-        main_spacing: _,
         visible_items,
         child_sizes,
         scroll_offset,

@@ -127,17 +127,23 @@ pub(super) fn slider_handle(
 }
 
 #[tessera]
-pub(super) fn stop_indicator(layout: Option<SliderLayout>, colors: Option<SliderColors>) {
+pub(super) fn stop_indicator(
+    layout: Option<SliderLayout>,
+    colors: Option<SliderColors>,
+    count: Option<usize>,
+) {
     let layout = layout.expect("stop_indicator requires layout");
     let colors = colors.expect("stop_indicator requires colors");
-    surface()
-        .modifier(Modifier::new().constrain(
-            Some(AxisConstraint::exact(layout.stop_indicator_diameter)),
-            Some(AxisConstraint::exact(layout.stop_indicator_diameter)),
-        ))
-        .style(colors.inactive_tick.into())
-        .shape(Shape::Ellipse)
-        .child(|| {});
+    for _ in 0..count.unwrap_or(1) {
+        surface()
+            .modifier(Modifier::new().constrain(
+                Some(AxisConstraint::exact(layout.stop_indicator_diameter)),
+                Some(AxisConstraint::exact(layout.stop_indicator_diameter)),
+            ))
+            .style(colors.inactive_tick.into())
+            .shape(Shape::Ellipse)
+            .child(|| {});
+    }
 }
 
 #[tessera]
@@ -155,129 +161,35 @@ pub(super) fn slider_tick(diameter: Option<Px>, color: Option<Color>) {
 }
 
 #[tessera]
-pub(super) fn centered_tracks(
-    layout: Option<crate::slider::layout::CenteredSliderLayout>,
-    colors: Option<SliderColors>,
-) {
-    let layout = layout.expect("centered_tracks requires layout");
-    let colors = colors.expect("centered_tracks requires colors");
-    surface()
-        .modifier(layout.base.axis.track_modifier(layout.base.track_height))
-        .style(colors.inactive_track.into())
-        .shape(layout.base.axis.shape(Shape::RoundedRectangle {
-            top_left: RoundedCorner::manual(layout.base.track_corner_radius, 3.0),
-            bottom_left: RoundedCorner::manual(layout.base.track_corner_radius, 3.0),
-            top_right: RoundedCorner::manual(layout.base.inner_corner_radius, 3.0),
-            bottom_right: RoundedCorner::manual(layout.base.inner_corner_radius, 3.0),
-        }))
-        .child(|| {});
-    surface()
-        .modifier(layout.base.axis.track_modifier(layout.base.track_height))
-        .style(colors.active_track.into())
-        .shape(layout.base.axis.shape(Shape::RoundedRectangle {
-            top_left: RoundedCorner::manual(layout.base.inner_corner_radius, 3.0),
-            bottom_left: RoundedCorner::manual(layout.base.inner_corner_radius, 3.0),
-            top_right: RoundedCorner::manual(layout.base.inner_corner_radius, 3.0),
-            bottom_right: RoundedCorner::manual(layout.base.inner_corner_radius, 3.0),
-        }))
-        .child(|| {});
-    surface()
-        .modifier(layout.base.axis.track_modifier(layout.base.track_height))
-        .style(colors.inactive_track.into())
-        .shape(layout.base.axis.shape(Shape::RoundedRectangle {
-            top_left: RoundedCorner::manual(layout.base.inner_corner_radius, 3.0),
-            bottom_left: RoundedCorner::manual(layout.base.inner_corner_radius, 3.0),
-            top_right: RoundedCorner::manual(layout.base.track_corner_radius, 3.0),
-            bottom_right: RoundedCorner::manual(layout.base.track_corner_radius, 3.0),
-        }))
-        .child(|| {});
-}
-
-#[tessera]
-pub(super) fn centered_stops(
-    layout: Option<crate::slider::layout::CenteredSliderLayout>,
-    colors: Option<SliderColors>,
-) {
-    let layout = layout.expect("centered_stops requires layout");
-    let colors = colors.expect("centered_stops requires colors");
-    surface()
-        .modifier(Modifier::new().constrain(
-            Some(AxisConstraint::exact(layout.base.stop_indicator_diameter)),
-            Some(AxisConstraint::exact(layout.base.stop_indicator_diameter)),
-        ))
-        .style(colors.inactive_tick.into())
-        .shape(Shape::Ellipse)
-        .child(|| {});
-    surface()
-        .modifier(Modifier::new().constrain(
-            Some(AxisConstraint::exact(layout.base.stop_indicator_diameter)),
-            Some(AxisConstraint::exact(layout.base.stop_indicator_diameter)),
-        ))
-        .style(colors.inactive_tick.into())
-        .shape(Shape::Ellipse)
-        .child(|| {});
-}
-
-#[tessera]
-pub(super) fn range_stops(
-    layout: Option<crate::slider::layout::RangeSliderLayout>,
-    colors: Option<SliderColors>,
-) {
-    let layout = layout.expect("range_stops requires layout");
-    let colors = colors.expect("range_stops requires colors");
-    surface()
-        .modifier(Modifier::new().constrain(
-            Some(AxisConstraint::exact(layout.base.stop_indicator_diameter)),
-            Some(AxisConstraint::exact(layout.base.stop_indicator_diameter)),
-        ))
-        .style(colors.inactive_tick.into())
-        .shape(Shape::Ellipse)
-        .child(|| {});
-    surface()
-        .modifier(Modifier::new().constrain(
-            Some(AxisConstraint::exact(layout.base.stop_indicator_diameter)),
-            Some(AxisConstraint::exact(layout.base.stop_indicator_diameter)),
-        ))
-        .style(colors.inactive_tick.into())
-        .shape(Shape::Ellipse)
-        .child(|| {});
-}
-
-#[tessera]
-pub(super) fn range_tracks(
-    layout: Option<crate::slider::layout::RangeSliderLayout>,
-    colors: Option<SliderColors>,
-) {
-    let layout = layout.expect("range_tracks requires layout");
-    let colors = colors.expect("range_tracks requires colors");
-    surface()
-        .modifier(layout.base.axis.track_modifier(layout.base.track_height))
-        .style(colors.inactive_track.into())
-        .shape(layout.base.axis.shape(Shape::RoundedRectangle {
-            top_left: RoundedCorner::manual(layout.base.track_corner_radius, 3.0),
-            bottom_left: RoundedCorner::manual(layout.base.track_corner_radius, 3.0),
-            top_right: RoundedCorner::manual(layout.base.inner_corner_radius, 3.0),
-            bottom_right: RoundedCorner::manual(layout.base.inner_corner_radius, 3.0),
-        }))
-        .child(|| {});
-    surface()
-        .modifier(layout.base.axis.track_modifier(layout.base.track_height))
-        .style(colors.active_track.into())
-        .shape(layout.base.axis.shape(Shape::RoundedRectangle {
-            top_left: RoundedCorner::manual(layout.base.inner_corner_radius, 3.0),
-            bottom_left: RoundedCorner::manual(layout.base.inner_corner_radius, 3.0),
-            top_right: RoundedCorner::manual(layout.base.inner_corner_radius, 3.0),
-            bottom_right: RoundedCorner::manual(layout.base.inner_corner_radius, 3.0),
-        }))
-        .child(|| {});
-    surface()
-        .modifier(layout.base.axis.track_modifier(layout.base.track_height))
-        .style(colors.inactive_track.into())
-        .shape(layout.base.axis.shape(Shape::RoundedRectangle {
-            top_left: RoundedCorner::manual(layout.base.inner_corner_radius, 3.0),
-            bottom_left: RoundedCorner::manual(layout.base.inner_corner_radius, 3.0),
-            top_right: RoundedCorner::manual(layout.base.track_corner_radius, 3.0),
-            bottom_right: RoundedCorner::manual(layout.base.track_corner_radius, 3.0),
-        }))
-        .child(|| {});
+pub(super) fn split_tracks(layout: Option<SliderLayout>, colors: Option<SliderColors>) {
+    let layout = layout.expect("split_tracks requires layout");
+    let colors = colors.expect("split_tracks requires colors");
+    for (color, left, right) in [
+        (
+            colors.inactive_track,
+            layout.track_corner_radius,
+            layout.inner_corner_radius,
+        ),
+        (
+            colors.active_track,
+            layout.inner_corner_radius,
+            layout.inner_corner_radius,
+        ),
+        (
+            colors.inactive_track,
+            layout.inner_corner_radius,
+            layout.track_corner_radius,
+        ),
+    ] {
+        surface()
+            .modifier(layout.axis.track_modifier(layout.track_height))
+            .style(color.into())
+            .shape(layout.axis.shape(Shape::RoundedRectangle {
+                top_left: RoundedCorner::manual(left, 3.0),
+                bottom_left: RoundedCorner::manual(left, 3.0),
+                top_right: RoundedCorner::manual(right, 3.0),
+                bottom_right: RoundedCorner::manual(right, 3.0),
+            }))
+            .child(|| {});
+    }
 }

@@ -250,11 +250,6 @@ fn tooltip_color_pairs_keep_native_popups_and_annotations_in_both_themes() {
             &pixels[(y * 1024 + x) * 4..][..3]
         };
         assert_ne!(center(popups[0]), center(popups[1]));
-        eprintln!(
-            "tooltip rich={rich} popup colors light={:?} dark={:?}",
-            center(popups[0]),
-            center(popups[1])
-        );
         for dark in [false, true] {
             let half = semantic_node(
                 &renderer,
@@ -310,12 +305,6 @@ fn tooltip_color_pairs_keep_native_popups_and_annotations_in_both_themes() {
             assert!(
                 near(actual, expected_popup),
                 "rich={rich} dark={dark} popup palette: {actual:?}, expected {expected_popup:?}"
-            );
-            eprintln!(
-                "tooltip rich={rich} dark={dark} grid={:?} off={:?} next={:?}",
-                at(42, 42),
-                at(46, 46),
-                at(50, 42)
             );
         }
     }
@@ -439,19 +428,6 @@ fn tooltip_configurations_keep_five_native_cards_static_after_pointer_clicks() {
     }
 }
 
-fn save_reference_pixels(renderer: &HeadlessRenderer, name: &str) {
-    if let Some(directory) = std::env::var_os("TESSERA_TOOLTIP_QA_DIR") {
-        let size = renderer.physical_size();
-        tessera_ui::headless::write_png_file(
-            std::path::PathBuf::from(directory).join(name),
-            size.width,
-            size.height,
-            &renderer.read_pixels().unwrap(),
-        )
-        .unwrap();
-    }
-}
-
 #[test]
 #[ignore = "requires a native GPU adapter"]
 fn tooltip_measurements_scale_native_content_and_keep_rulers_inside_the_canvas() {
@@ -459,10 +435,6 @@ fn tooltip_measurements_scale_native_content_and_keep_rulers_inside_the_canvas()
         for rich in [false, true] {
             let mut renderer = reference_renderer(Scene::Figure(rich, true), width);
             settle_color_pair_geometry(&mut renderer);
-            save_reference_pixels(
-                &renderer,
-                &format!("tooltip-measurements-{rich}-{width}.png"),
-            );
             let tree = renderer.accessibility_snapshot().unwrap();
             let canvas = semantic_node(
                 &renderer,
@@ -550,7 +522,6 @@ fn tooltip_measurements_scale_native_content_and_keep_rulers_inside_the_canvas()
                 drop(renderer);
                 let mut anatomy = reference_renderer(Scene::Figure(rich, false), width);
                 settle_color_pair_geometry(&mut anatomy);
-                save_reference_pixels(&anatomy, &format!("tooltip-anatomy-{width}.png"));
                 let plain = anatomy.read_pixels().unwrap();
                 assert!(
                     i16::from(measured[offset]) - i16::from(measured[offset + 1])
@@ -567,7 +538,6 @@ fn tooltip_measurements_scale_native_content_and_keep_rulers_inside_the_canvas()
 fn tooltip_overview_keeps_both_variants_on_one_canvas_and_the_material_comparison() {
     let mut renderer = reference_renderer(Scene::Overview, 1024);
     settle_color_pair_geometry(&mut renderer);
-    save_reference_pixels(&renderer, "tooltip-overview-1024.png");
     let canvas = semantic_node(&renderer, "Plain and rich tooltip variants", Role::Group)
         .1
         .bounds()
@@ -786,7 +756,6 @@ fn persistent_live_tooltips_leave_the_trigger_visible_after_flow_wrapping() {
                     .is_some_and(|label| label.starts_with("Favorite:")
                         || label.contains("tooltip actions:")))
         );
-        save_reference_pixels(&renderer, &format!("tooltip-live-dismissed-{width}.png"));
     }
 }
 
@@ -854,7 +823,6 @@ fn corner_tooltips_flip_inside_their_device_frames_and_stay_next_to_the_trigger(
                 "width {width}: {alignment} popup {popup:?}, trigger {trigger:?}, gap {gap}"
             );
         }
-        save_reference_pixels(&renderer, &format!("tooltip-device-placement-{width}.png"));
     }
 }
 
@@ -877,7 +845,6 @@ fn guideline_anatomy_uses_its_own_numbers_and_optional_rich_elements() {
         .unwrap();
     assert!(container.y1 < popup.y0);
     assert!(supporting.y0 > popup.y1);
-    save_reference_pixels(&renderer, "tooltip-guidelines-plain-anatomy.png");
     drop(renderer);
     let mut renderer = reference_renderer(Scene::Anatomy(true), 1024);
     settle_color_pair_geometry(&mut renderer);
@@ -894,7 +861,6 @@ fn guideline_anatomy_uses_its_own_numbers_and_optional_rich_elements() {
         .unwrap();
     assert!(marker.x1 < action.x0);
     assert!(((marker.y0 + marker.y1) - (action.y0 + action.y1)).abs() <= 1.0);
-    save_reference_pixels(&renderer, "tooltip-guidelines-rich-anatomy.png");
 }
 
 #[test]
@@ -918,7 +884,6 @@ fn writing_examples_keep_plain_tooltips_content_sized_and_publish_advice_bars() 
         "Avoid wrapping text to multiple lines or including many pieces of information",
         Role::Label,
     );
-    save_reference_pixels(&renderer, "tooltip-wording-plain.png");
     drop(renderer);
     let mut renderer = reference_renderer(Scene::Wording(true), 640);
     renderer.render_frames(4);
@@ -934,7 +899,6 @@ fn writing_examples_keep_plain_tooltips_content_sized_and_publish_advice_bars() 
     );
     semantic_node(&renderer, "Do", Role::Label);
     semantic_node(&renderer, "Don't", Role::Label);
-    save_reference_pixels(&renderer, "tooltip-wording-rich.png");
 }
 
 #[test]
@@ -955,7 +919,6 @@ fn plain_placement_reference_measures_four_dp_from_the_actual_icon_target() {
         "popup {popup:?}, actual icon target {target:?}"
     );
     semantic_node(&renderer, "Dimension 4", Role::Note);
-    save_reference_pixels(&renderer, "tooltip-plain-placement.png");
 }
 
 #[test]
@@ -1035,5 +998,4 @@ fn keyboard_table_keeps_headers_cells_and_centered_header_text() {
         let text_center = f64::from(text.x.to_f32()) + f64::from(text.width.to_f32()) / 2.0;
         assert!(((cell.x0 + cell.x1) / 2.0 - text_center).abs() <= 0.5);
     }
-    save_reference_pixels(&renderer, "tooltip-keyboard-table.png");
 }

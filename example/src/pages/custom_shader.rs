@@ -116,9 +116,9 @@ fn raymarch_canvas(modifier: Modifier, time_scale_state: State<f32>) {
     let (camera_forward, camera_right, camera_up) =
         camera_basis_look_at(camera_position, CAMERA_TARGET);
 
-    let policy = Raymarch {
+    let policy = RaymarchCommand {
         time_seconds,
-        mouse: [0.0, 0.0],
+        opacity: 1.0,
         camera_position,
         camera_forward,
         camera_right,
@@ -156,7 +156,6 @@ impl RenderModule for CustomShaderModule {
 #[derive(Clone, Copy, Debug, PartialEq)]
 struct RaymarchCommand {
     time_seconds: f32,
-    mouse: [f32; 2],
     camera_position: [f32; 3],
     camera_forward: [f32; 3],
     camera_right: [f32; 3],
@@ -170,35 +169,14 @@ impl DrawCommand for RaymarchCommand {
     }
 }
 
-#[derive(Clone, Copy, Debug, PartialEq)]
-struct Raymarch {
-    time_seconds: f32,
-    mouse: [f32; 2],
-    camera_position: [f32; 3],
-    camera_forward: [f32; 3],
-    camera_right: [f32; 3],
-    camera_up: [f32; 3],
-}
-
-impl tessera_ui::DrawModifierNode for Raymarch {
+impl tessera_ui::DrawModifierNode for RaymarchCommand {
     fn draw(
         &self,
         ctx: &mut tessera_ui::DrawModifierContext<'_, '_>,
         content: &mut dyn tessera_ui::DrawModifierContent,
     ) {
         let input = &mut *ctx.render_input;
-        input
-            .metadata_mut()
-            .fragment_mut()
-            .push_draw_command(RaymarchCommand {
-                time_seconds: self.time_seconds,
-                mouse: self.mouse,
-                camera_position: self.camera_position,
-                camera_forward: self.camera_forward,
-                camera_right: self.camera_right,
-                camera_up: self.camera_up,
-                opacity: 1.0,
-            });
+        input.metadata_mut().fragment_mut().push_draw_command(*self);
         content.draw(input);
     }
 }
@@ -308,8 +286,8 @@ impl RaymarchPipeline {
             position.y,
             width,
             height,
-            command.mouse[0],
-            command.mouse[1],
+            0.0,
+            0.0,
             command.time_seconds,
             command.opacity,
             target_size.width.to_f32(),

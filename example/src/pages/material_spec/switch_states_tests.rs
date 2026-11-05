@@ -20,19 +20,6 @@ fn fixture() {
     });
 }
 
-fn save_pixels(renderer: &HeadlessRenderer, name: &str) {
-    if let Some(directory) = std::env::var_os("TESSERA_MENU_QA_DIR") {
-        let size = renderer.physical_size();
-        tessera_ui::headless::write_png_file(
-            std::path::PathBuf::from(directory).join(name),
-            size.width,
-            size.height,
-            &renderer.read_pixels().unwrap(),
-        )
-        .unwrap();
-    }
-}
-
 fn node(renderer: &HeadlessRenderer, label: &str) -> Node {
     renderer
         .accessibility_snapshot()
@@ -71,7 +58,6 @@ fn switch_states_keep_twenty_independent_native_controls_and_scaled_pointer_targ
     )
     .unwrap();
     renderer.render_frames(8);
-    save_pixels(&renderer, "switch-states-canonical-1024.png");
     let tree = renderer.accessibility_snapshot().unwrap();
     assert_eq!(
         tree.nodes
@@ -144,7 +130,6 @@ fn switch_states_keep_twenty_independent_native_controls_and_scaled_pointer_targ
     );
     renderer.resize(512, 760);
     renderer.render_frames(8);
-    save_pixels(&renderer, "switch-states-narrow-512.png");
     let narrow = node(&renderer, "Light Enabled selected switch state")
         .bounds()
         .unwrap();

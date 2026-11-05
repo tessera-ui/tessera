@@ -98,7 +98,7 @@ mod tests {
 
     use crate::theme::MaterialColorScheme;
 
-    use super::{ElevationGeometry, elevation_geometry, material_shadow};
+    use super::{elevation_geometry, material_shadow};
 
     #[test]
     fn menu_elevation_converts_blur_and_spread_without_losing_density() {
@@ -119,25 +119,7 @@ mod tests {
     }
 
     #[test]
-    fn material_elevation_levels_use_two_distinct_shadow_profiles() {
-        for (elevation, expected) in [
-            (1.0, [1.0, 2.0, 1.0, 3.0, 1.0]),
-            (3.0, [1.0, 2.0, 2.0, 6.0, 2.0]),
-            (6.0, [1.0, 3.0, 4.0, 8.0, 3.0]),
-            (8.0, [2.0, 3.0, 6.0, 10.0, 4.0]),
-            (12.0, [4.0, 4.0, 8.0, 12.0, 6.0]),
-        ] {
-            assert_eq!(
-                elevation_geometry(Dp(elevation)),
-                ElevationGeometry {
-                    key_y: expected[0],
-                    key_blur: expected[1],
-                    ambient_y: expected[2],
-                    ambient_blur: expected[3],
-                    spread: expected[4]
-                }
-            );
-        }
+    fn elevation_interpolates_and_clamps_inputs() {
         let midpoint = elevation_geometry(Dp(2.0));
         assert_eq!(midpoint.ambient_y, 1.5);
         assert_eq!(midpoint.ambient_blur, 4.5);

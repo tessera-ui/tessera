@@ -8,25 +8,16 @@ pub type ComputeResource = wgpu::Buffer;
 pub type ComputeResourceRef = usize;
 
 /// Manages reusable GPU buffers for compute workloads.
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub struct ComputeResourceManager {
     idx: usize,
     resources: HashMap<usize, ComputeResource>,
 }
 
-impl Default for ComputeResourceManager {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
 impl ComputeResourceManager {
     /// Creates an empty compute resource manager.
     pub fn new() -> Self {
-        Self {
-            idx: 0,
-            resources: HashMap::new(),
-        }
+        Self::default()
     }
 
     /// Clear all resources.

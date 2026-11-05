@@ -236,7 +236,7 @@ fn rail_header(
 }
 
 #[tessera]
-fn destination_icon(index: usize, selected: bool) {
+pub(super) fn destination_icon(index: usize, selected: bool) {
     icon()
         .painter(if selected {
             [

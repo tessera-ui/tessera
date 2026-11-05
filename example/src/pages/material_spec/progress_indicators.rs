@@ -96,7 +96,7 @@ pub(super) fn progress_indicators_spec(
                 },
                 SpecSection {
                     title: "Anatomy",
-                    content: RenderSlot::new(guideline_anatomy),
+                    content: RenderSlot::new(anatomy),
                 },
                 SpecSection {
                     title: "Placement",
@@ -581,11 +581,6 @@ fn anatomy() {
     prose("Linear: 1  Track    2  Active indicator    3  Stop indicator");
     gap(Dp(8.0));
     prose("Circular: 1  Track    2  Active indicator");
-}
-
-#[tessera]
-fn guideline_anatomy() {
-    anatomy();
 }
 
 #[tessera]

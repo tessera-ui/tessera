@@ -245,7 +245,7 @@ impl SegmentedButtonDefaults {
 ///     SegmentedButtonDefaults, segmented_button, single_choice_segmented_button_row,
 /// };
 /// use tessera_components::theme::{MaterialTheme, material_theme};
-/// use tessera_ui::{LayoutResult, provide_context, remember, tessera};
+/// use tessera_ui::{remember, tessera};
 ///
 /// #[tessera]
 /// fn demo() {
@@ -273,8 +273,6 @@ impl SegmentedButtonDefaults {
 ///                     ))
 ///                     .on_click(|| {});
 ///             });
-///             selected.with_mut(|value| *value = 1);
-///             assert_eq!(selected.get(), 1);
 ///         });
 /// }
 ///
@@ -504,8 +502,6 @@ pub fn segmented_button(
 ///                     ))
 ///                     .on_click(|| {});
 ///             });
-///             selected.with_mut(|value| *value = 0);
-///             assert_eq!(selected.get(), 0);
 ///         });
 /// }
 ///
@@ -598,8 +594,6 @@ pub fn single_choice_segmented_button_row(
 ///                     ))
 ///                     .on_click(|| {});
 ///             });
-///             selected.with_mut(|value| value[1] = true);
-///             assert!(selected.get()[1]);
 ///         });
 /// }
 ///

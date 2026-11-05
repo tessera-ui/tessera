@@ -192,7 +192,7 @@ fn sheet_article(
             },
         ],
     )
-    .route_optional(route.clone())
+    .route_optional(route)
     .pages(vec![
         ArticlePage {
             title: "Overview",

@@ -25,7 +25,6 @@ use super::{
 pub(super) enum Kind {
     #[default]
     Checkbox,
-    Radio,
     Switch,
 }
 
@@ -110,28 +109,6 @@ fn guidelines(kind: Kind) -> Vec<Chapter> {
                 figure: Figure::Children,
             },
         ],
-        Kind::Radio => vec![
-            Chapter {
-                title: "Usage",
-                text: "Use radio buttons to expose a short list of mutually exclusive options. Prefer a menu when space is limited. Avoid nested radio choices.",
-                figure: Figure::Example,
-            },
-            Chapter {
-                title: "Anatomy",
-                text: "Pair every selected or unselected icon with a clear, adjacent label.",
-                figure: Figure::Anatomy,
-            },
-            Chapter {
-                title: "Placement",
-                text: "Stack choices vertically and provide a suitable initial selection.",
-                figure: Figure::Example,
-            },
-            Chapter {
-                title: "Behavior",
-                text: "Selecting an icon or its label chooses that option and clears the previous choice. Apply the result immediately unless a surrounding form requires confirmation.",
-                figure: Figure::Example,
-            },
-        ],
         Kind::Switch => vec![
             Chapter {
                 title: "Usage",
@@ -170,9 +147,6 @@ fn accessibility(kind: Kind) -> Vec<Chapter> {
                 Kind::Checkbox => {
                     "Both the label and checkbox select the option. Child selections remain independent; a partially selected parent reports a mixed state."
                 }
-                Kind::Radio => {
-                    "An icon and its label select the same option. Selecting another option clears the previous one; activating the selected option does not clear the group."
-                }
                 Kind::Switch => {
                     "Touch and pointer feedback communicate that the handle is interactive. Keep the current on or off value easy to distinguish."
                 }
@@ -187,14 +161,18 @@ fn accessibility(kind: Kind) -> Vec<Chapter> {
     if kind == Kind::Checkbox {
         chapters.push(Chapter {title:"Avoid applying density by default",text:"Keep default targets at least 48 by 48dp. A denser presentation should be an explicit preference that remains easy to reverse.",figure:Figure::None});
     } else {
-        chapters.push(Chapter {title:"Initial focus",text:if kind==Kind::Radio { "Tab enters at the selected radio. If nothing is selected, forward traversal starts at the first option and reverse traversal starts at the last." } else { "Focus lands on the switch handle. Space or Enter changes its value." },figure:Figure::None});
+        chapters.push(Chapter {
+            title: "Initial focus",
+            text: "Focus lands on the switch handle. Space or Enter changes its value.",
+            figure: Figure::None,
+        });
     }
     chapters.push(Chapter {
         title: "Keyboard navigation",
         text: "Use the controls below to try keyboard navigation.",
         figure: Figure::Keyboard,
     });
-    chapters.push(Chapter {title:"Labeling elements",text:if kind==Kind::Radio { "Name the group after its category, and name each option after its adjacent label." } else { "Use a concise label that describes the setting. An accessible name should clarify ambiguous visible wording." },figure:Figure::Example});
+    chapters.push(Chapter {title:"Labeling elements",text:"Use a concise label that describes the setting. An accessible name should clarify ambiguous visible wording.",figure:Figure::Example});
     chapters
 }
 
@@ -203,14 +181,12 @@ pub(super) fn selection_article(
     kind: Kind,
     sections: Vec<SpecSection>,
     example: RenderSlot,
-    overview_example: RenderSlot,
     anatomy: RenderSlot,
 
     route: Option<crate::pages::material_spec::article::ArticleRoute>,
 ) {
     let title = match kind {
         Kind::Checkbox => "Checkbox",
-        Kind::Radio => "Radio button",
         Kind::Switch => "Switch",
     };
     let description = super::media::page_media(title)
@@ -235,7 +211,7 @@ pub(super) fn selection_article(
         });
     }
     let mut page = article(title, description, sections)
-        .route_optional(route.clone())
+        .route_optional(route)
         .hero_shared(example);
     if kind == Kind::Switch {
         page = page.intro_shared(anatomy);
@@ -244,11 +220,10 @@ pub(super) fn selection_article(
         ArticlePage {title:"Overview",intro:Some(RenderSlot::new(move || {
             paragraph(match kind {
                 Kind::Checkbox=>"Choose multiple related options. Use concise labels and make selected, unselected and mixed states easy to scan.",
-                Kind::Radio=>"Choose one option from a visible set. Give each option a concise label and make the current selection prominent.",
                 Kind::Switch=>"Turn an independent setting on or off. Its effect is immediate, and the handle makes the current value clear.",
             });
             gap(Dp(32.0)); anatomy.render();
-            gap(Dp(32.0)); overview_example.render();
+            gap(Dp(32.0)); example.render();
         })),sections:vec![]},
         ArticlePage {title:"Guidelines",intro:None,sections:guide},
         ArticlePage {title:"Accessibility",intro:None,sections:access},
@@ -282,11 +257,7 @@ fn chapter_content(kind: Kind, chapter: Chapter, example: RenderSlot, anatomy: R
             Figure::Anatomy=>anatomy.render(),
             Figure::Children=>{ super::selection_controls::checkbox_group(); },
             Figure::Keyboard=>{
-                if kind==Kind::Radio {
-                    spec_table(vec!["Keys".into(),"Action".into()],vec![vec!["Tab / Shift + Tab".into(),"Enter or leave the radio group".into()],vec!["Arrow keys".into(),"Focus and select the next or previous option; wrap at the ends".into()],vec!["Space".into(),"Select the focused option".into()]]);
-                } else {
-                    spec_table(vec!["Keys".into(),"Action".into()],vec![vec!["Tab / Shift + Tab".into(),"Move focus between enabled controls".into()],vec!["Space / Enter".into(),"Toggle the focused control".into()]]);
-                }
+                spec_table(vec!["Keys".into(),"Action".into()],vec![vec!["Tab / Shift + Tab".into(),"Move focus between enabled controls".into()],vec!["Space / Enter".into(),"Toggle the focused control".into()]]);
                 gap(Dp(32.0)); example.render();
             },
         }

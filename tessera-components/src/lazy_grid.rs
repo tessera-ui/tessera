@@ -16,10 +16,10 @@ use tessera_ui::{
 
 use crate::{
     alignment::{CrossAxisAlignment, MainAxisAlignment},
-    layout_flex::cross_axis_child_constraint,
+    layout_flex::{cross_axis_child_constraint, px_mul},
     lazy_shared::{
-        LazyItemsPlan as LazySlotPlan, LazyItemsSlot as LazySlot, MeasuredMain, ZeroLayout,
-        clamp_reported_main, hash_key,
+        FenwickTree, LazyItemsPlan as LazySlotPlan, LazyItemsSlot as LazySlot, MeasuredMain,
+        ZeroLayout, clamp_reported_main, hash_key,
     },
     scrollable::{
         ScrollBarBehavior, ScrollBarLayout, ScrollableController, scrollable,
@@ -465,27 +465,30 @@ pub fn lazy_vertical_grid(
         None => remember(LazyGridController::new),
     };
     let scroll_controller = remember(ScrollableController::default);
-    lazy_vertical_grid_slots(LazyGridSlotsArgs {
-        modifier: modifier.unwrap_or_default(),
-        scroll_smoothing,
-        scrollbar_behavior,
-        scrollbar_track_color,
-        scrollbar_thumb_color,
-        scrollbar_thumb_hover_color,
-        scrollbar_layout,
-        grid_cells: columns,
-        main_axis_spacing,
-        cross_axis_spacing,
-        cross_axis_alignment,
-        item_alignment,
-        overscan,
-        estimated_item_size,
-        content_padding,
-        max_viewport_main,
-        controller,
-        scroll_controller,
-        slots: content.slots,
-    });
+    lazy_grid_slots(
+        LazyGridSlotsArgs {
+            modifier: modifier.unwrap_or_default(),
+            scroll_smoothing,
+            scrollbar_behavior,
+            scrollbar_track_color,
+            scrollbar_thumb_color,
+            scrollbar_thumb_hover_color,
+            scrollbar_layout,
+            grid_cells: columns,
+            main_axis_spacing,
+            cross_axis_spacing,
+            cross_axis_alignment,
+            item_alignment,
+            overscan,
+            estimated_item_size,
+            content_padding,
+            max_viewport_main,
+            controller,
+            scroll_controller,
+            slots: content.slots,
+        },
+        LazyGridAxis::Vertical,
+    );
 }
 
 #[derive(Clone, PartialEq)]
@@ -512,7 +515,7 @@ struct LazyGridSlotsArgs {
 }
 
 #[tessera]
-fn lazy_vertical_grid_slots(args: LazyGridSlotsArgs) {
+fn lazy_grid_slots(args: LazyGridSlotsArgs, axis: LazyGridAxis) {
     let scroll_controller = args.scroll_controller;
     let main_axis_spacing = sanitize_spacing(Px::from(args.main_axis_spacing));
     let cross_axis_spacing = sanitize_spacing(Px::from(args.cross_axis_spacing));
@@ -521,8 +524,8 @@ fn lazy_vertical_grid_slots(args: LazyGridSlotsArgs) {
     let padding_cross = sanitize_spacing(Px::from(args.content_padding));
     scrollable()
         .modifier(args.modifier)
-        .vertical(true)
-        .horizontal(false)
+        .vertical(axis == LazyGridAxis::Vertical)
+        .horizontal(axis == LazyGridAxis::Horizontal)
         .apply_child_offset(false)
         .scroll_smoothing(args.scroll_smoothing)
         .scrollbar_behavior(args.scrollbar_behavior)
@@ -533,7 +536,7 @@ fn lazy_vertical_grid_slots(args: LazyGridSlotsArgs) {
         .scrollbar_thumb_hover_color_optional(args.scrollbar_thumb_hover_color)
         .child(move || {
             lazy_grid_view()
-                .axis(LazyGridAxis::Vertical)
+                .axis(axis)
                 .grid_cells(args.grid_cells.clone())
                 .main_axis_spacing(main_axis_spacing)
                 .cross_axis_spacing(cross_axis_spacing)
@@ -652,66 +655,30 @@ pub fn lazy_horizontal_grid(
         None => remember(LazyGridController::new),
     };
     let scroll_controller = remember(ScrollableController::default);
-    lazy_horizontal_grid_slots(LazyGridSlotsArgs {
-        modifier: modifier.unwrap_or_default(),
-        scroll_smoothing,
-        scrollbar_behavior,
-        scrollbar_track_color,
-        scrollbar_thumb_color,
-        scrollbar_thumb_hover_color,
-        scrollbar_layout,
-        grid_cells: rows,
-        main_axis_spacing,
-        cross_axis_spacing,
-        cross_axis_alignment,
-        item_alignment,
-        overscan,
-        estimated_item_size,
-        content_padding,
-        max_viewport_main,
-        controller,
-        scroll_controller,
-        slots: content.slots,
-    });
-}
-
-#[tessera]
-fn lazy_horizontal_grid_slots(args: LazyGridSlotsArgs) {
-    let scroll_controller = args.scroll_controller;
-    let main_axis_spacing = sanitize_spacing(Px::from(args.main_axis_spacing));
-    let cross_axis_spacing = sanitize_spacing(Px::from(args.cross_axis_spacing));
-    let estimated_line_main = ensure_positive_px(Px::from(args.estimated_item_size));
-    let padding_main = sanitize_spacing(Px::from(args.content_padding));
-    let padding_cross = sanitize_spacing(Px::from(args.content_padding));
-    scrollable()
-        .modifier(args.modifier)
-        .vertical(false)
-        .horizontal(true)
-        .apply_child_offset(false)
-        .scroll_smoothing(args.scroll_smoothing)
-        .scrollbar_behavior(args.scrollbar_behavior)
-        .scrollbar_layout(args.scrollbar_layout)
-        .controller(scroll_controller)
-        .scrollbar_track_color_optional(args.scrollbar_track_color)
-        .scrollbar_thumb_color_optional(args.scrollbar_thumb_color)
-        .scrollbar_thumb_hover_color_optional(args.scrollbar_thumb_hover_color)
-        .child(move || {
-            lazy_grid_view()
-                .axis(LazyGridAxis::Horizontal)
-                .grid_cells(args.grid_cells.clone())
-                .main_axis_spacing(main_axis_spacing)
-                .cross_axis_spacing(cross_axis_spacing)
-                .cross_axis_alignment(args.cross_axis_alignment)
-                .item_alignment(args.item_alignment)
-                .estimated_line_main(estimated_line_main)
-                .overscan(args.overscan)
-                .padding_main(padding_main)
-                .padding_cross(padding_cross)
-                .slots(args.slots.clone())
-                .controller(args.controller)
-                .scroll_controller(scroll_controller)
-                .max_viewport_main_optional(args.max_viewport_main);
-        });
+    lazy_grid_slots(
+        LazyGridSlotsArgs {
+            modifier: modifier.unwrap_or_default(),
+            scroll_smoothing,
+            scrollbar_behavior,
+            scrollbar_track_color,
+            scrollbar_thumb_color,
+            scrollbar_thumb_hover_color,
+            scrollbar_layout,
+            grid_cells: rows,
+            main_axis_spacing,
+            cross_axis_spacing,
+            cross_axis_alignment,
+            item_alignment,
+            overscan,
+            estimated_item_size,
+            content_padding,
+            max_viewport_main,
+            controller,
+            scroll_controller,
+            slots: content.slots,
+        },
+        LazyGridAxis::Horizontal,
+    );
 }
 
 crate::lazy_shared::impl_lazy_builder!(LazyVerticalGridBuilder, LazyGridContent);
@@ -948,7 +915,11 @@ fn compute_visible_items(
     }
 }
 
-fn compute_cell_offset(cell_cross: Px, child_cross: Px, alignment: CrossAxisAlignment) -> Px {
+pub(crate) fn compute_cell_offset(
+    cell_cross: Px,
+    child_cross: Px,
+    alignment: CrossAxisAlignment,
+) -> Px {
     match alignment {
         CrossAxisAlignment::Start | CrossAxisAlignment::Stretch => Px::ZERO,
         CrossAxisAlignment::Center => (cell_cross - child_cross).max(Px::ZERO) / 2,
@@ -1062,19 +1033,19 @@ impl LazyGridAxis {
     }
 }
 #[derive(Clone, PartialEq, Eq)]
-struct GridSlots {
-    sizes: Vec<Px>,
-    positions: Vec<Px>,
-    cross_size: Px,
+pub(crate) struct GridSlots {
+    pub(crate) sizes: Vec<Px>,
+    pub(crate) positions: Vec<Px>,
+    pub(crate) cross_size: Px,
 }
 
 impl GridSlots {
-    fn len(&self) -> usize {
+    pub(crate) fn len(&self) -> usize {
         self.sizes.len()
     }
 }
 
-fn resolve_grid_slots(
+pub(crate) fn resolve_grid_slots(
     available_cross: Px,
     grid_cells: &GridCells,
     spacing: Px,
@@ -1363,43 +1334,6 @@ impl LazyGridCache {
     }
 }
 
-#[derive(Default, Clone, PartialEq)]
-struct FenwickTree {
-    data: Vec<i64>,
-}
-
-impl FenwickTree {
-    fn resize(&mut self, len: usize) {
-        self.data.clear();
-        self.data.resize(len + 1, 0);
-    }
-
-    fn update(&mut self, index: usize, delta: Px) {
-        if self.data.is_empty() {
-            return;
-        }
-        let mut i = index + 1;
-        let delta_i64 = delta.0 as i64;
-        while i < self.data.len() {
-            self.data[i] = self.data[i].saturating_add(delta_i64);
-            i += i & (!i + 1);
-        }
-    }
-
-    fn prefix_sum(&self, count: usize) -> Px {
-        if self.data.is_empty() {
-            return Px::ZERO;
-        }
-        let mut idx = count;
-        let mut sum = 0i64;
-        while idx > 0 {
-            sum = sum.saturating_add(self.data[idx]);
-            idx &= idx - 1;
-        }
-        px_from_i64(sum)
-    }
-}
-
 fn line_count(item_count: usize, slots_per_line: usize) -> usize {
     if item_count == 0 || slots_per_line == 0 {
         0
@@ -1420,23 +1354,6 @@ fn calculate_cells_cross_axis_size(available: Px, slot_count: usize, spacing: Px
             Px(base + extra)
         })
         .collect()
-}
-
-fn px_mul(px: Px, times: usize) -> Px {
-    if times == 0 {
-        return Px::ZERO;
-    }
-    px_from_i64(px.0 as i64 * times as i64)
-}
-
-fn px_from_i64(value: i64) -> Px {
-    if value > i64::from(i32::MAX) {
-        Px(i32::MAX)
-    } else if value < i64::from(i32::MIN) {
-        Px(i32::MIN)
-    } else {
-        Px(value as i32)
-    }
 }
 
 fn ensure_positive_px(px: Px) -> Px {

@@ -8,9 +8,7 @@ use tessera_components::{
     boxed::boxed,
     column::column,
     flow_row::flow_row,
-    icon_button::{
-        IconButtonShape, IconButtonSize, IconButtonVariant, IconButtonWidth, icon_button,
-    },
+    icon_button::{IconButtonSize, IconButtonVariant, IconButtonWidth, icon_button},
     material_icons::filled,
     menus::{MenuController, MenuPlacement, menu_item, menu_provider},
     modifier::{ModifierExt as _, SemanticsArgs},
@@ -288,7 +286,6 @@ fn demo(size: IconButtonSize, width: IconButtonWidth, play: bool, label: String)
         .size(size)
         .width(width)
         .variant(IconButtonVariant::FilledTonal)
-        .shape_style(IconButtonShape::Round)
         .shape(if selected.get() {
             Shape::rounded_rectangle(size.square_radius())
         } else {

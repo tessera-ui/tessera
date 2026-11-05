@@ -270,10 +270,6 @@ fn resolve_track_outline_color(
     off.lerp(&on, progress)
 }
 
-fn resolve_source_checked(checked_prop: Option<bool>, visual_checked: bool) -> bool {
-    checked_prop.unwrap_or(visual_checked)
-}
-
 fn update_state_for_frame(state: State<FluidSwitchState>, frame_nanos: u64) -> bool {
     state.with_mut(|state| {
         state.update(frame_nanos);
@@ -395,7 +391,7 @@ fn fluid_switch_content(
 
     let mut modifier = modifier.unwrap_or_default();
     let visual_checked = state.with(|state| state.is_checked());
-    let source_checked = resolve_source_checked(checked_prop, visual_checked);
+    let source_checked = checked_prop.unwrap_or(visual_checked);
     let travel_progress = state.with(|state| state.travel_progress());
     let eased_progress = animation::easing(travel_progress);
     let expansion_progress = state.with(|state| state.expansion_progress());

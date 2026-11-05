@@ -2,7 +2,7 @@
 //!
 //! ## Usage
 //!
-//! Draw animated loading shapes using shared geometry and reusable GPU buffers.
+//! Draw animated loading shapes.
 
 pub(crate) mod command;
 pub(crate) mod geometry;

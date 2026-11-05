@@ -1486,10 +1486,7 @@ pub(super) fn content_figure() {
         "2 side sheets with different content displayed side by side",
     )
     .child(|| {
-        let settings = Mock {
-            close: true,
-            ..Mock::standard(320.0).body(Body::Settings, "Settings")
-        };
+        let settings = Mock::standard(320.0).body(Body::Settings, "Settings");
         let info = Mock::standard(320.0).body(Body::Info, "Info");
         sheet_panel(
             Mock {

@@ -312,7 +312,7 @@ impl SnackbarHostState {
 
         let elapsed_nanos = frame_nanos.saturating_sub(started_frame_nanos);
         let timeout_nanos = timeout.as_nanos().min(u64::MAX as u128) as u64;
-        elapsed_nanos >= timeout_nanos && self.current.as_ref().map(|r| r.id) == Some(current.id)
+        elapsed_nanos >= timeout_nanos
     }
 
     fn should_poll(&self, frame_nanos: u64) -> bool {

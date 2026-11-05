@@ -25,6 +25,7 @@ pub(crate) mod text;
 mod composite;
 mod compute;
 mod draw;
+mod instanced;
 
 /// Register all draw and compute pipelines required by this crate.
 pub fn register_pipelines(context: &mut tessera_ui::PipelineContext<'_>) {

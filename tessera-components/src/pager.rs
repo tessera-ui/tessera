@@ -16,8 +16,10 @@ use tessera_ui::{
 };
 
 use crate::{
-    alignment::CrossAxisAlignment, layout_flex::cross_axis_child_constraint,
-    modifier::ModifierExt as _, pos_misc::is_position_inside_bounds,
+    alignment::CrossAxisAlignment,
+    layout_flex::{cross_axis_child_constraint, px_mul},
+    modifier::ModifierExt as _,
+    pos_misc::is_position_inside_bounds,
 };
 
 const DEFAULT_SNAP_THRESHOLD: f32 = 0.5;
@@ -483,14 +485,7 @@ struct PagerLayout {
 
 impl PartialEq for PagerLayout {
     fn eq(&self, other: &Self) -> bool {
-        self.axis == other.axis
-            && self.cross_axis_alignment == other.cross_axis_alignment
-            && self.page_size == other.page_size
-            && self.page_spacing == other.page_spacing
-            && self.content_padding == other.content_padding
-            && self.page_count == other.page_count
-            && self.visible_pages == other.visible_pages
-            && self.scroll_offset == other.scroll_offset
+        tessera_ui::LayoutModifierNode::placement_eq(self, other)
     }
 }
 
@@ -589,14 +584,7 @@ impl tessera_ui::LayoutModifierNode for PagerLayout {
     }
 
     fn placement_eq(&self, other: &Self) -> bool {
-        self.axis == other.axis
-            && self.cross_axis_alignment == other.cross_axis_alignment
-            && self.page_size == other.page_size
-            && self.page_spacing == other.page_spacing
-            && self.content_padding == other.content_padding
-            && self.page_count == other.page_count
-            && self.visible_pages == other.visible_pages
-            && self.scroll_offset == other.scroll_offset
+        self.measure_eq(other) && self.scroll_offset == other.scroll_offset
     }
 
     fn place_children(
@@ -711,23 +699,6 @@ fn compute_cross_offset(container: Px, child: Px, alignment: CrossAxisAlignment)
 
 fn sanitize_spacing(px: Px) -> Px {
     if px < Px::ZERO { Px::ZERO } else { px }
-}
-
-fn px_mul(px: Px, times: usize) -> Px {
-    if times == 0 {
-        return Px::ZERO;
-    }
-    px_from_i64(px.0 as i64 * times as i64)
-}
-
-fn px_from_i64(value: i64) -> Px {
-    if value > i64::from(i32::MAX) {
-        Px(i32::MAX)
-    } else if value < i64::from(i32::MIN) {
-        Px(i32::MIN)
-    } else {
-        Px(value as i32)
-    }
 }
 
 struct PagerKeyboardModifierNode {
@@ -879,21 +850,17 @@ fn apply_pager_input_modifiers(
 /// ```
 /// use tessera_components::pager::horizontal_pager;
 /// use tessera_components::text::text;
-/// use tessera_ui::{LayoutResult, remember, tessera};
+/// use tessera_ui::tessera;
 /// # use tessera_components::theme::{MaterialTheme, material_theme};
 ///
 /// #[tessera]
 /// fn demo() {
-///     let start_page = remember(|| 0usize);
-///     start_page.with_mut(|value| *value = 2);
-///     assert_eq!(start_page.get(), 2);
-///
 ///     material_theme()
 ///         .theme(|| MaterialTheme::default())
 ///         .child(move || {
 ///             horizontal_pager()
 ///                 .page_count(4)
-///                 .initial_page(start_page.get())
+///                 .initial_page(2)
 ///                 .page_content(|page| {
 ///                     text().content(format!("Page {page}"));
 ///                 });
@@ -999,15 +966,11 @@ pub fn horizontal_pager(
 /// ```
 /// use tessera_components::pager::vertical_pager;
 /// use tessera_components::text::text;
-/// use tessera_ui::{remember, tessera};
+/// use tessera_ui::tessera;
 /// # use tessera_components::theme::{MaterialTheme, material_theme};
 ///
 /// #[tessera]
 /// fn demo() {
-///     let start_page = remember(|| 1usize);
-///     start_page.with_mut(|value| *value = 0);
-///     assert_eq!(start_page.get(), 0);
-///
 ///     material_theme()
 ///         .theme(|| MaterialTheme::default())
 ///         .child(move || {

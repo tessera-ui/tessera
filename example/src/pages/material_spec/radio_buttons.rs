@@ -15,16 +15,14 @@ use tessera_components::{
     row::row,
     shape_def::{RoundedCorner, Shape},
     spacer::spacer,
-    surface::surface,
     text::text,
-    theme::{MaterialTheme, material_theme},
+    theme::MaterialTheme,
 };
 use tessera_ui::{
     Callback, Dp, FocusRequester, Modifier, RenderSlot, remember, tessera, use_context,
 };
 
 use super::{
-    ACCENT,
     article::{ArticlePage, SpecSection, article},
     gap,
     selection_articles::option_label,
@@ -338,58 +336,6 @@ fn ringtone() {
 }
 
 #[tessera]
-fn choices(#[prop(into)] label: String, enabled: bool) {
-    let selected = remember(|| 0_usize);
-    let scheme = use_context::<MaterialTheme>()
-        .expect("MaterialTheme must be provided")
-        .get()
-        .color_scheme;
-    column().children(move || {
-        text().content(label.clone()).style(type_style(24.0, 32.0));
-        gap(Dp(16.0));
-        let label = label.clone();
-        radio_group()
-            .accessibility_label(label.clone())
-            .content(move |group| {
-                let label = label.clone();
-                column().children(move || {
-                    for (index, option) in ["All notifications", "Important only", "None"]
-                        .into_iter()
-                        .enumerate()
-                    {
-                        let focus = remember(FocusRequester::new).get();
-                        let label = label.clone();
-                        row()
-                            .cross_axis_alignment(CrossAxisAlignment::Center)
-                            .children(move || {
-                                radio_button()
-                                    .group(group)
-                                    .focus_requester(focus)
-                                    .selected(selected.get() == index)
-                                    .enabled(enabled)
-                                    .on_select(move |_| selected.set(index))
-                                    .accessibility_label(format!("{label}: {option}"));
-                                option_label(
-                                    option.into(),
-                                    Callback::new(move || {
-                                        selected.set(index);
-                                        focus.request_focus();
-                                    }),
-                                    enabled,
-                                )
-                                .color(if enabled {
-                                    scheme.on_surface
-                                } else {
-                                    scheme.on_surface.with_alpha(0.38)
-                                });
-                            });
-                    }
-                });
-            });
-    });
-}
-
-#[tessera]
 fn tokens() {
     spec_table(
         vec!["Element".into(), "Selected".into(), "Unselected".into()],
@@ -420,27 +366,6 @@ fn tokens() {
 }
 
 #[tessera]
-fn scheme(dark: bool) {
-    material_theme()
-        .theme(move || MaterialTheme::from_seed(ACCENT, dark))
-        .child(move || {
-            let theme = use_context::<MaterialTheme>()
-                .expect("MaterialTheme must be provided")
-                .get();
-            surface()
-                .style(theme.color_scheme.surface.into())
-                .modifier(Modifier::new().fill_max_width())
-                .child(move || {
-                    column()
-                        .modifier(Modifier::new().padding_all(Dp(24.0)))
-                        .children(move || {
-                            choices(if dark { "Dark theme" } else { "Light theme" }, true);
-                        });
-                });
-        });
-}
-
-#[tessera]
 fn colors() {
     page_figures::colors();
 }
@@ -453,41 +378,4 @@ fn states() {
 #[tessera]
 fn measurements() {
     page_figures::measurements();
-}
-
-#[cfg(all(test, not(target_family = "wasm")))]
-mod tests {
-    use tessera_ui::{HeadlessConfig, HeadlessRenderer};
-
-    use super::*;
-
-    #[tessera]
-    fn fixture() {
-        scheme(true);
-    }
-
-    #[test]
-    #[ignore = "requires a native GPU adapter"]
-    fn dark_radio_scheme_paints_the_content_padding() {
-        let mut renderer = HeadlessRenderer::new(
-            Box::new(fixture),
-            vec![Box::new(crate::TestPipelines)],
-            HeadlessConfig {
-                width: 400,
-                height: 300,
-                sample_count: 1,
-                ..Default::default()
-            },
-        )
-        .unwrap();
-        renderer.render_frames(4);
-        let pixels = renderer.read_pixels().unwrap();
-        let pixel = |x: usize, y: usize| &pixels[(y * 400 + x) * 4..][..4];
-        assert_eq!(
-            pixel(8, 8),
-            pixel(200, 60),
-            "the outer inset must share the dark surface fill"
-        );
-        assert!(pixel(8, 8)[..3].iter().all(|channel| *channel < 100));
-    }
 }

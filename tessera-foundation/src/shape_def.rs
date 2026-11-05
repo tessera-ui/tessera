@@ -128,12 +128,7 @@ pub enum Shape {
 impl Default for Shape {
     /// Returns a rectangle with zero corner radius.
     fn default() -> Self {
-        Shape::RoundedRectangle {
-            top_left: RoundedCorner::manual(Dp(0.0), 3.0),
-            top_right: RoundedCorner::manual(Dp(0.0), 3.0),
-            bottom_right: RoundedCorner::manual(Dp(0.0), 3.0),
-            bottom_left: RoundedCorner::manual(Dp(0.0), 3.0),
-        }
+        Self::RECTANGLE
     }
 }
 

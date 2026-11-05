@@ -516,7 +516,7 @@ pub(super) fn action_article(
         }
     }
     let article = article(title, description, sections)
-        .route_optional(route.clone())
+        .route_optional(route)
         .pages(vec![
             ArticlePage {
                 title: "Overview",

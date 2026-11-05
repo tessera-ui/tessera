@@ -56,7 +56,6 @@ pub enum NavigationDrawerStyle {
 /// #[tessera]
 /// fn navigation() {
 ///     let selected = remember(|| 0usize);
-///     assert_eq!(selected.get(), 0);
 ///     navigation_drawer().content(move || {
 ///         navigation_drawer_item()
 ///             .label("Inbox")
@@ -137,7 +136,6 @@ pub fn navigation_drawer(
 /// #[tessera]
 /// fn destination() {
 ///     let selected = remember(|| false);
-///     assert!(!selected.get());
 ///     navigation_drawer_item()
 ///         .label("Saved")
 ///         .selected(selected.get())

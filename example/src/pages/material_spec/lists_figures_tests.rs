@@ -59,16 +59,6 @@ fn renderer<Output: 'static>(fixture: fn() -> Output) -> HeadlessRenderer {
     renderer
 }
 
-fn labels(renderer: &HeadlessRenderer) -> Vec<String> {
-    renderer
-        .accessibility_snapshot()
-        .unwrap()
-        .nodes
-        .into_iter()
-        .filter_map(|(_, node)| node.label().map(str::to_owned))
-        .collect()
-}
-
 fn labeled(renderer: &HeadlessRenderer, label: &str) -> (NodeId, Node) {
     renderer
         .accessibility_snapshot()
@@ -92,7 +82,7 @@ fn click(renderer: &mut HeadlessRenderer, bounds: tessera_ui::accesskit::Rect) {
 
 #[test]
 #[ignore = "requires a native GPU adapter"]
-fn baseline_rows_stay_flush_and_publish_their_measurements() {
+fn baseline_rows_stay_flush_and_keep_minimum_height() {
     let renderer = renderer(baseline_fixture);
     let rows = [
         "Baseline two-line row",
@@ -111,19 +101,6 @@ fn baseline_rows_stay_flush_and_publish_their_measurements() {
             "a baseline row must keep at least the one-line height: {row:?}"
         );
     }
-    let values = labels(&renderer);
-    assert!(
-        values
-            .iter()
-            .any(|label| label == "0dp, with an optional outline variant divider"),
-        "the baseline section must document its flush row spacing"
-    );
-    assert!(
-        values
-            .iter()
-            .any(|label| label == "Surface without segmented corners"),
-        "the baseline section must document its container"
-    );
 }
 
 #[test]

@@ -156,9 +156,6 @@ impl tessera_ui::DrawModifierNode for LoadingDraw {
 /// use tessera_components::loading_indicator::loading_indicator;
 /// use tessera_ui::{remember, tessera};
 ///
-/// let completion = 0.5_f32;
-/// assert!((0.0..=1.0).contains(&completion));
-///
 /// #[tessera]
 /// fn pending_content() {
 ///     let completion = remember(|| 0.5_f32);

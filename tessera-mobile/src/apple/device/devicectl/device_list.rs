@@ -191,134 +191,29 @@ pub fn device_list<'a>(env: &Env) -> Result<BTreeSet<Device<'a>>, DeviceListErro
 #[cfg(test)]
 mod tests {
     #[test]
-    fn can_deserialize_device_list() {
-        let json = serde_json::json!({
-            "result" : {
-                "devices" : [
-                    {
-                        "capabilities" : [
-                        {
-                            "featureIdentifier" : "com.apple.coredevice.feature.tags",
-                            "name" : "Modify Tags"
-                        }
-                        ],
-                        "connectionProperties" : {
-                        "isMobileDeviceOnly" : false,
-                        "pairingState" : "unpaired",
-                        "potentialHostnames" : [
-
-                        ],
-                        "tunnelState" : "connected"
-                        },
-                        "deviceProperties" : {
-                            "name": "Tauri iPhone",
-                            "bootState" : "booted",
-                            "ddiServicesAvailable" : false
-                        },
-                        "hardwareProperties" : {
-                            "udid": "781BF0DD-XXXXXXXXXXXXXXX",
-                            "platform": "iOS",
-                            "productType": "iOS",
-                            "cpuType": {
-                                "name": "arm64"
-                            },
-                        },
-                        "identifier" : "781BF0DD-XXXXXXXXXXXXXXX",
-                        "tags" : [],
-                    "visibilityClass" : "default"
-                    }
-                ]
+    fn filters_invalid_device_properties() {
+        let device = serde_json::json!({
+            "connectionProperties": {
+                "pairingState": "unpaired",
+                "tunnelState": "connected"
             },
+            "deviceProperties": { "name": "Tauri iPhone" },
+            "hardwareProperties": {
+                "udid": "781BF0DD-XXXXXXXXXXXXXXX",
+                "platform": "iOS",
+                "productType": "iOS",
+                "cpuType": { "name": "arm64" }
+            }
         });
+        let mut invalid_hardware = device.clone();
+        invalid_hardware["hardwareProperties"] = serde_json::json!({});
+        let mut missing_name = device.clone();
+        missing_name["deviceProperties"] = serde_json::json!({});
 
-        let list = super::parse_device_list(serde_json::to_string(&json).unwrap())
-            .expect("can deserialize");
-        assert_eq!(list.len(), 1);
-    }
-
-    #[test]
-    fn can_deserialize_empty_hardware_properties() {
-        let json = serde_json::json!({
-            "result" : {
-                "devices" : [
-                    {
-                        "capabilities" : [
-                        {
-                            "featureIdentifier" : "com.apple.coredevice.feature.tags",
-                            "name" : "Modify Tags"
-                        }
-                        ],
-                        "connectionProperties" : {
-                        "isMobileDeviceOnly" : false,
-                        "pairingState" : "unpaired",
-                        "potentialHostnames" : [
-
-                        ],
-                        "tunnelState" : "connected"
-                        },
-                        "deviceProperties" : {
-                            "name": "Tauri iPhone",
-                            "bootState" : "booted",
-                            "ddiServicesAvailable" : false
-                        },
-                        "hardwareProperties" : {
-
-                        },
-                        "identifier" : "781BF0DD-XXXXXXXXXXXXXXX",
-                        "tags" : [],
-                    "visibilityClass" : "default"
-                    }
-                ]
-            },
-        });
-
-        let list = super::parse_device_list(serde_json::to_string(&json).unwrap())
-            .expect("can deserialize");
-        assert!(list.is_empty());
-    }
-
-    #[test]
-    fn filters_empty_device_name() {
-        let json = serde_json::json!({
-            "result" : {
-                "devices" : [
-                    {
-                        "capabilities" : [
-                        {
-                            "featureIdentifier" : "com.apple.coredevice.feature.tags",
-                            "name" : "Modify Tags"
-                        }
-                        ],
-                        "connectionProperties" : {
-                        "isMobileDeviceOnly" : false,
-                        "pairingState" : "unpaired",
-                        "potentialHostnames" : [
-
-                        ],
-                        "tunnelState" : "connected"
-                        },
-                        "deviceProperties" : {
-                            "bootState" : "booted",
-                            "ddiServicesAvailable" : false
-                        },
-                        "hardwareProperties" : {
-                            "udid": "781BF0DD-XXXXXXXXXXXXXXX",
-                            "platform": "iOS",
-                            "productType": "iOS",
-                            "cpuType": {
-                                "name": "arm64"
-                            },
-                        },
-                        "identifier" : "781BF0DD-XXXXXXXXXXXXXXX",
-                        "tags" : [],
-                    "visibilityClass" : "default"
-                    }
-                ]
-            },
-        });
-
-        let list = super::parse_device_list(serde_json::to_string(&json).unwrap())
-            .expect("can deserialize");
-        assert!(list.is_empty());
+        for (device, expected_count) in [(device, 1), (invalid_hardware, 0), (missing_name, 0)] {
+            let json = serde_json::json!({ "result": { "devices": [device] } });
+            let list = super::parse_device_list(json.to_string()).expect("can deserialize");
+            assert_eq!(list.len(), expected_count);
+        }
     }
 }
