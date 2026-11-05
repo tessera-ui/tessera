@@ -1,6 +1,6 @@
 # TODO List
 
-- [ ] Better IME support on Android
+- [x] Cross-platform IME support
 - [x] Performance improvement
 - [x] Switch to Semver for versioning
 - [ ] Platform-specific plugin system & Package Support
@@ -23,7 +23,7 @@
   - [x] Tree-shaking for assets
 - [x] lazy_column
 - [x] lazy_row
-- [ ] [material design components](https://m3.material.io/components)
+- [ ] [Material Design components](https://m3.material.io/components)
   - [ ] WindowInsets padding/size helpers
   - [x] FlowRow/FlowColumn
   - [x] Pull-to-refresh
@@ -35,22 +35,26 @@
   - [x] FloatingActionButton
   - [x] Chip
   - [x] ListItem
-  - [x] NavigationRail
+  - [x] NavigationBar/NavigationRail
   - [x] Snackbar/SnackbarHost
   - [ ] ExposedDropdownMenu
   - [x] Date/Time pickers/dialogs
   - [x] Segmented buttons
   - [x] Split buttons
-  - [ ] FAB menu
-  - [ ] Extanded FABs
-  - [ ] Loading indicators (A replacement for indeterminate circular progress indicators when no progress value is needed)
+  - [x] FAB menu
+  - [x] Extended FABs
+  - [x] Loading indicators
   - [x] Side sheets
   - [x] Search
-  - [ ] Tooltips
+  - [x] Tooltips
 - [ ] Documentation of pluggable graphics rendering pipelines
 - [x] CLI tool (`cargo-tessera`):
   - [x] Project scaffolding (`cargo tessera new`)
   - [x] Development server (`cargo tessera dev`)
   - [x] Build automation (`cargo tessera build`)
+  - [x] Web builds (`cargo tessera web build`)
+  - [x] Color checking, lints, and automatic fixes (`cargo tessera check` / `fix`)
+  - [x] Headless sessions (`cargo tessera headless`)
+  - [x] Agent skill installation (`cargo tessera skill`)
   - [x] Documentation of cargo-tessera commands
   - [x] Performance profiling tools integration
