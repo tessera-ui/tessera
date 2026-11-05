@@ -26,8 +26,7 @@
   - [ ] Unicode font subsets
 - [x] lazy_column
 - [x] lazy_row
-- [ ] [Material Design components](https://m3.material.io/components)
-  - [ ] WindowInsets padding/size helpers
+- [x] [Material Design components](https://m3.material.io/components)
   - [x] FlowRow/FlowColumn
   - [x] Pull-to-refresh
   - [x] Lazy vertical/horizontal grids
@@ -40,7 +39,6 @@
   - [x] ListItem
   - [x] NavigationBar/NavigationRail
   - [x] Snackbar/SnackbarHost
-  - [ ] ExposedDropdownMenu
   - [x] Date/Time pickers/dialogs
   - [x] Segmented buttons
   - [x] Split buttons
