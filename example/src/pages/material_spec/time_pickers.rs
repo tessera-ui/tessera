@@ -1,9 +1,3 @@
-//! Interactive time picker specifications.
-//!
-//! ## Usage
-//!
-//! Select times with clock or keyboard controls in either hour format.
-
 use tessera_components::{
     alignment::{Alignment, CrossAxisAlignment},
     boxed::boxed,

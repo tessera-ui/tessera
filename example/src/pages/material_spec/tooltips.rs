@@ -1,9 +1,3 @@
-//! Plain and rich tooltip specification examples.
-//!
-//! ## Usage
-//!
-//! Explain actions with contextual help and optional follow-up actions.
-
 use std::collections::BTreeMap;
 
 use tessera_components::{

@@ -1,9 +1,3 @@
-//! Keyboard navigation for specification article sections.
-//!
-//! ## Usage
-//!
-//! Move focus within article section tabs and activate a section explicitly.
-
 use tessera_components::{
     interaction_state::InteractionState,
     modifier::{ClickableArgs, ModifierExt as _, SemanticsArgs},

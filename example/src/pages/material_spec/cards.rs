@@ -1,9 +1,3 @@
-//! Interactive card specifications by container style.
-//!
-//! ## Usage
-//!
-//! Compare related-content containers, emphasis and live interaction feedback.
-
 use tessera_components::{
     alignment::{Alignment, MainAxisAlignment},
     boxed::boxed,

@@ -1,9 +1,3 @@
-//! Live slider illustrations for specification reading.
-//!
-//! ## Usage
-//!
-//! Adjust slider variants and compare their sizes, colors and enabled states.
-
 use tessera_components::{
     alignment::{Alignment, CrossAxisAlignment},
     boxed::boxed,

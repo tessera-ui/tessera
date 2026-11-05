@@ -1,9 +1,3 @@
-//! Interactive Expressive icon button specifications.
-//!
-//! ## Usage
-//!
-//! Compare compact actions, toggle selection, proportions and shape feedback.
-
 use tessera_components::{
     alignment::Alignment,
     boxed::boxed,

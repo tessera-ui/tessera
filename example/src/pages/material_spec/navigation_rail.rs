@@ -1,9 +1,3 @@
-//! Navigation rail specifications for primary destinations.
-//!
-//! ## Usage
-//!
-//! Compare collapsed and expanded rails, selection and rail composition.
-
 use tessera_components::{
     alignment::{Alignment, CrossAxisAlignment, MainAxisAlignment},
     boxed::boxed,

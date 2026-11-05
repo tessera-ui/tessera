@@ -1,9 +1,3 @@
-//! Badge specifications in real navigation destinations.
-//!
-//! ## Usage
-//!
-//! Show new activity and unread counts without adding separate actions.
-
 use tessera_components::{
     alignment::{Alignment, CrossAxisAlignment, MainAxisAlignment},
     badge::{badge, badge_with_content, badged_box},

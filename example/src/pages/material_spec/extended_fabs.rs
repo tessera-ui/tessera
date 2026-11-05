@@ -1,9 +1,3 @@
-//! Extended floating action button specifications.
-//!
-//! ## Usage
-//!
-//! Compare extended FAB sizes, tones, label expansion and interaction states.
-
 use tessera_components::{
     boxed::boxed,
     button::button,

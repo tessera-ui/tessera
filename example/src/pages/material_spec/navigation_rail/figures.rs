@@ -1,9 +1,3 @@
-//! Navigation rail reference figures for anatomy, color, states and guidance.
-//!
-//! ## Usage
-//!
-//! Illustrate rail specifications and usage guidance beside live native rails.
-
 use tessera_components::{
     alignment::{Alignment, CrossAxisAlignment, MainAxisAlignment},
     badge::{badge, badge_with_content},

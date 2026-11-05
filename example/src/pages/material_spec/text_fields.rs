@@ -1,9 +1,3 @@
-//! Filled and outlined text field specification examples.
-//!
-//! ## Usage
-//!
-//! Edit short inputs and compare labels, icons, validation and supporting text.
-
 use std::fmt::Write as _;
 
 use tessera_components::{

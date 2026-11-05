@@ -1,9 +1,3 @@
-//! Floating action button menu specifications and related actions.
-//!
-//! ## Usage
-//!
-//! Explore creation actions, color sets, states and keyboard access.
-
 use tessera_components::{
     alignment::{Alignment, CrossAxisAlignment},
     boxed::boxed,
