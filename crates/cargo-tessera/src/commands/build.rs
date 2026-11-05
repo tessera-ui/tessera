@@ -66,6 +66,12 @@ pub fn execute(
         command.args(["--bin", binary]);
     }
     configure_tessera_ui_features(&mut command, &features, profiling_output, None);
+    if target.is_some_and(|target| target.contains("-apple-ios")) {
+        command.env(
+            "IPHONEOS_DEPLOYMENT_TARGET",
+            super::ios::deployment_target(),
+        );
+    }
     command
         .env("TESSERA_ASSET_BACKEND", backend.as_str())
         .stdout(Stdio::piped());

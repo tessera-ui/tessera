@@ -6,7 +6,7 @@ use tessera_build::AssetBackend;
 
 use commands::{
     android::{self, AndroidFormat},
-    plugin, web,
+    ios, plugin, web,
 };
 
 mod call_guard;
@@ -140,6 +140,11 @@ enum TesseraCommands {
         #[command(subcommand)]
         command: AndroidCommands,
     },
+    /// iOS application builds and packaging
+    Ios {
+        #[command(subcommand)]
+        command: IosCommands,
+    },
     /// Web-specific initialization and development commands
     Web {
         #[command(subcommand)]
@@ -150,6 +155,11 @@ enum TesseraCommands {
         #[command(subcommand)]
         command: PluginCommands,
     },
+}
+
+#[derive(Subcommand)]
+enum IosCommands {
+    Build(ios::BuildOptions),
 }
 
 #[derive(Args)]
@@ -758,6 +768,9 @@ fn run() -> Result<()> {
                         asset_backend: build_args.asset_backend.map(AssetBackendArg::to_backend),
                     })?;
                 }
+            },
+            TesseraCommands::Ios { command } => match command {
+                IosCommands::Build(options) => ios::build(options)?,
             },
             TesseraCommands::Web { command } => match command {
                 WebCommands::Init { package } => {

@@ -190,6 +190,32 @@ log GPU duration per render-graph pass and the final output blit. Draw stages
 include any background capture needed by sampled effects; compute stages include
 their input preservation and dispatches.
 
+### Build for iOS
+
+On macOS with Xcode installed:
+
+```sh
+cargo tessera ios build -p my-app
+cargo tessera ios build -p my-app --release --device \
+  --signing-identity "Apple Development: ..." \
+  --provisioning-profile app.mobileprovision
+```
+
+The default target is the host's iOS Simulator. Device builds produce an IPA;
+installation requires a matching certificate, provisioning profile, and entitlements.
+Set application names and identifiers in `[package.metadata.packager]`.
+Optional `[package.metadata.tessera.ios]` paths are relative to the package:
+
+```toml
+[package.metadata.tessera.ios]
+info-plist = "ios/Info.plist"
+asset-catalog = "ios/Assets.xcassets"
+entitlements = "ios/app.entitlements"
+resources = "ios/resources"
+```
+
+Set `IPHONEOS_DEPLOYMENT_TARGET` to override the default iOS 15 minimum.
+
 ### Build for Android (experimental)
 
 Make sure Android SDK/NDK are installed and `adb` is available in your PATH.

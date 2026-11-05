@@ -1,14 +1,11 @@
 use std::process::Command;
 
 use anyhow::{Context, Result, bail, ensure};
-use cargo_metadata::MetadataCommand;
-use heck::ToLowerCamelCase;
 use serde_json::json;
-use tessera_build::AssetBackend;
 
 use crate::output;
 
-use super::build;
+use super::application::Application;
 
 pub fn execute(
     release: bool,
@@ -26,81 +23,27 @@ pub fn execute(
             .success(),
         "Install cargo-packager with `cargo install cargo-packager --locked`"
     );
-    let metadata = MetadataCommand::new().no_deps().exec()?;
-    let package = if let Some(name) = package {
-        metadata
-            .packages
-            .iter()
-            .find(|package| package.name.as_str() == name)
-    } else {
-        metadata.root_package()
-    }
-    .context("Select an application package with --package")?;
-    let mut config = json!({
-        "productName": package.name.as_str(), "version": package.version.to_string(),
-        "identifier": format!("com.tessera.{}", package.name.replace('_', "-")),
-        "description": package.description, "authors": package.authors, "homepage": package.homepage,
-    });
-    if let Some(custom) = package
-        .metadata
-        .get("packager")
-        .and_then(|value| value.as_object())
-    {
-        config
-            .as_object_mut()
-            .context("Invalid package configuration")?
-            .extend(
-                custom
-                    .iter()
-                    .map(|(key, value)| (key.to_lower_camel_case(), value.clone())),
-            );
-    }
+    let mut app = Application::new(package, binary)?;
+    let config = &mut app.config;
     let configured_target: Option<String> = config
         .get("targetTriple")
         .map(|value| serde_json::from_value(value.clone()))
         .transpose()?
         .flatten();
     let target = target.or(configured_target.as_deref());
-    let bins = package
-        .targets
-        .iter()
-        .filter(|target| target.is_bin())
-        .collect::<Vec<_>>();
-    let name = binary
-        .or(package.default_run.as_deref())
-        .or_else(|| (bins.len() == 1).then(|| bins[0].name.as_str()))
-        .context("Select an application executable with --bin")?;
-    ensure!(
-        bins.iter().any(|target| target.name == name),
-        "Unknown executable `{name}`"
-    );
     if target.is_some_and(|target| {
         target.contains("android") || target.contains("ios") || target.contains("wasm")
     }) {
         bail!("Use the Android, iOS or Web build command for this target");
     }
-    let binaries = build::execute(
-        release,
-        target,
-        Some(package.name.as_str()),
-        Some(name),
-        None,
-        false,
-        Some(AssetBackend::Platform),
-    )?;
-    let executable = binaries
-        .iter()
-        .find(|path| path.file_stem().is_some_and(|stem| stem == name))
-        .context("Cargo did not produce the selected executable")?;
-    let out = metadata
-        .target_directory
-        .join("packages")
-        .join(package.name.as_str());
-    config["binaries"] = json!([{ "path": name, "main": true }]);
+    let executable = app.build(release, target)?;
+    let out = app.output_dir();
+    let config = &mut app.config;
+    config["binaries"] = json!([{ "path": app.binary, "main": true }]);
     config["binariesDir"] = json!(executable.parent());
     config["outDir"] = json!(out);
     let inferred_target = executable
-        .strip_prefix(metadata.target_directory.as_std_path())
+        .strip_prefix(app.target_dir.as_path())
         .ok()
         .and_then(|path| {
             let mut parts = path.components();
@@ -130,7 +73,7 @@ pub fn execute(
         .arg("--config")
         .arg(serde_json::to_string(&config)?)
         .current_dir(
-            package
+            app.package
                 .manifest_path
                 .parent()
                 .context("Missing package directory")?,
@@ -138,8 +81,8 @@ pub fn execute(
     if !formats.is_empty() {
         command.arg("--formats").arg(formats.join(","));
     }
-    output::status("Packaging", package.name.as_str());
+    output::status("Packaging", app.package.name.as_str());
     ensure!(command.status()?.success(), "Application packaging failed");
-    output::status("Finished", out.as_str());
+    output::status("Finished", out.display().to_string());
     Ok(())
 }

@@ -813,6 +813,7 @@ dependencies = [
  "libc",
  "notify",
  "owo-colors",
+ "plist",
  "ra_ap_base_db",
  "ra_ap_cfg",
  "ra_ap_hir",

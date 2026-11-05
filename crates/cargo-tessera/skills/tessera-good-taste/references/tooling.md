@@ -9,6 +9,7 @@
 | Develop on desktop | `cargo tessera dev -p my-app` |
 | Build a native release | `cargo tessera build -p my-app --release` |
 | Package a desktop app | `cargo tessera package -p my-app --release` (requires cargo-packager) |
+| Package for iOS | `cargo tessera ios build -p my-app --release` (macOS with Xcode; `--device` for IPA) |
 | Develop on web | `cargo tessera web dev` |
 | Build a web release | `cargo tessera web build --release` (requires Binaryen) |
 | Initialize Android | `cargo tessera android init` |
