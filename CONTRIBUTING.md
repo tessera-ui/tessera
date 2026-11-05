@@ -12,7 +12,7 @@ Thank you for your interest in `tessera`! We welcome all forms of contributions,
 If you need to contribute code to `tessera`, in addition to the latest nightly Rust, it is highly recommended to install the following tools:
 
 - [`xbuild`](https://github.com/rust-mobile/xbuild): We use it to build and test the Android version. In the future, it may also be used for iOS compatibility.
-- [`rust-script`](https://rust-script.org/#installation): We use it to run [some rust scripts](./scripts). It is helpful for development.
+- [`rust-script`](https://rust-script.org/#installation): We use it to run [some rust scripts](scripts). It is helpful for development.
 
 ## Code Contribution Guidelines
 
@@ -170,7 +170,7 @@ Please note that Android support is still experimental and you might encounter i
 
 ## License
 
-We assume that your contributions follow the project's dual-license terms. This project is dual-licensed under the [MIT License](./LICENSE-MIT) or the [Apache License 2.0](./LICENSE-APACHE). You can choose either license.
+We assume that your contributions follow the project's dual-license terms. This project is dual-licensed under the [MIT License](LICENSE-MIT) or the [Apache License 2.0](LICENSE-APACHE). You can choose either license.
 
 By submitting contributions to this project, you agree that your contributions will be released under the same license terms as the project, i.e., MIT OR Apache-2.0 dual license. This means:
 

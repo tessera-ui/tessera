@@ -2483,7 +2483,7 @@ pub fn select(_: TokenStream, _: TokenStream) -> TokenStream {
                 } else {
                     ""
                 };
-            let tessera_components_path = workspace_root().join("tessera-components");
+            let tessera_components_path = workspace_root().join("crates/tessera-components");
             let widgets_dependency = if source.contains("use fixture_widgets::") {
                 for name in ["widgets", "unrelated"] {
                     fs::create_dir_all(root.join(name).join("src")).expect("dependency sources");
@@ -2540,8 +2540,9 @@ pub fn select(_: TokenStream, _: TokenStream) -> TokenStream {
 
     fn workspace_root() -> PathBuf {
         Path::new(env!("CARGO_MANIFEST_DIR"))
-            .parent()
-            .expect("cargo-tessera should live in the workspace root")
+            .ancestors()
+            .nth(2)
+            .expect("cargo-tessera should live under crates/")
             .to_path_buf()
     }
 

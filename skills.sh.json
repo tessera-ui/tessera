@@ -1,4 +1,4 @@
 {
   "$schema": "https://skills.sh/schemas/skills.sh.schema.json",
-  "paths": ["./cargo-tessera/skills"]
+  "paths": ["./crates/cargo-tessera/skills"]
 }

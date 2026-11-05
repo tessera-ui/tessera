@@ -8,7 +8,7 @@ import tempfile
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-MANIFEST = ROOT / "tessera-winit/tests/apple-ime/Cargo.toml"
+MANIFEST = ROOT / "crates/tessera-winit/tests/apple-ime/Cargo.toml"
 os.environ["CARGO_TARGET_DIR"] = str(ROOT / "target")
 
 

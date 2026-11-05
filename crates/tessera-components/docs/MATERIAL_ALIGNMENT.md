@@ -2690,7 +2690,7 @@ native Sheets context scenarios also passed with real playback, track selection,
 filter changes, and reopening. These
 results do not establish complete article or browser parity. Native uniform
 subtree scaling is being verified separately; its coordinate contract is
-documented in [Local layout coordinates](../../docs/LOCAL_COORDINATES.md).
+documented in [Local layout coordinates](../../../docs/LOCAL_COORDINATES.md).
 
 Native fractional-scale GPU coverage now passes at both one and four samples.
 An actual 240 × 56 outlined field occupies 150 × 35 window pixels at scale

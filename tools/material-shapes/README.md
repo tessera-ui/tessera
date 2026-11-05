@@ -25,7 +25,7 @@ Use JDK 21 and place these dependencies in a directory outside the repository:
 From the repository root, replace both `/external/...` paths and run:
 
 ```sh
-java -cp "/external/dependencies/*" tools/material-shapes/GenerateLoadingShapes.java tessera-components/assets/material_loading_shapes.bin /external/qa/loading-shapes-reference.svg
+java -cp "/external/dependencies/*" tools/material-shapes/GenerateLoadingShapes.java crates/tessera-components/assets/material_loading_shapes.bin /external/qa/loading-shapes-reference.svg
 ```
 
 The SVG shows each sequence at progress zero, one half, and one, without display
@@ -47,15 +47,15 @@ order. The header occupies 104 bytes; each pair occupies 64 bytes.
 The drawing scale includes the 38/48 active-size ratio and the rotation-safe
 bounds factor.
 
-See [the asset notice](../../tessera-components/assets/material_loading_shapes.NOTICE)
-and [Apache 2.0 license](../../tessera-components/assets/material_loading_shapes.LICENSE).
+See [the asset notice](../../crates/tessera-components/assets/material_loading_shapes.NOTICE)
+and [Apache 2.0 license](../../crates/tessera-components/assets/material_loading_shapes.LICENSE).
 
 ## Circular wave regression reference
 
 `GenerateCircularWaveReference.java` uses the same pinned dependencies.
 
 ```sh
-java -cp "/external/dependencies/*" tools/material-shapes/GenerateCircularWaveReference.java tessera-components/assets/circular_wave_reference.bin
+java -cp "/external/dependencies/*" tools/material-shapes/GenerateCircularWaveReference.java crates/tessera-components/assets/circular_wave_reference.bin
 ```
 
 The little-endian file starts with `MCW1` and a 32-bit case count. Each case
@@ -68,4 +68,4 @@ The fixture's SHA-256 is
 Regeneration with the pinned dependencies must reproduce it byte for byte.
 
 The Rust port's attribution is in
-[shapes.NOTICE](../../tessera-components/src/wavy_progress/shapes.NOTICE).
+[shapes.NOTICE](../../crates/tessera-components/src/wavy_progress/shapes.NOTICE).

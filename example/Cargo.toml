@@ -20,16 +20,16 @@ path = "src/main.rs"
 md3-diagnostics = []
 
 [dependencies]
-tessera-shard = { path = "../tessera-shard" }
+tessera-shard = { path = "../crates/tessera-shard" }
 tessera-ui = { path = "../tessera-ui", features = ["headless"] }
-tessera-components = { path = "../tessera-components" }
-tessera-platform = { path = "../tessera-platform" }
+tessera-components = { path = "../crates/tessera-components" }
+tessera-platform = { path = "../crates/tessera-platform" }
 
 [target.'cfg(target_family = "wasm")'.dependencies]
 wasm-bindgen = "0.2.105"
 
 [build-dependencies]
-tessera-build = { path = "../tessera-build" }
+tessera-build = { path = "../crates/tessera-build" }
 
 [dev-dependencies]
 tessera-ui = { path = "../tessera-ui", features = ["testing"] }

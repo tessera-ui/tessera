@@ -41,7 +41,7 @@ handle has no effect on the declaration. Setters reject committed and stale
 handles. Zero-parameter and parameterized components share this model.
 
 Slots remain deferred content that their parent controls. See
-[component calls](../docs/COMPONENT_CALLS.md) for execution and lifetime details.
+[component calls](../../docs/COMPONENT_CALLS.md) for execution and lifetime details.
 
 ## Examples
 

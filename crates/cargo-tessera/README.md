@@ -66,7 +66,7 @@ this repository:
 npx skills add tessera-ui/tessera --skill tessera-good-taste
 ```
 
-The repository's `skills.sh.json` exposes `cargo-tessera/skills/` as a skill
+The repository's `skills.sh.json` exposes `crates/cargo-tessera/skills/` as a skill
 container. `SKILL.md` routes tasks to focused references, which are read as needed.
 
 ### Start development server
@@ -231,4 +231,4 @@ cargo tessera profiling analyze-android \
 
 ## License
 
-Licensed under either of [MIT](../LICENSE) or [Apache-2.0](../LICENSE) at your option.
+Licensed under either of [MIT](../../LICENSE) or [Apache-2.0](../../LICENSE) at your option.

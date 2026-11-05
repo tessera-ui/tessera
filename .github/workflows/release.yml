@@ -31,6 +31,9 @@ jobs:
           PACKAGE_NAME=${{ steps.extract_info.outputs.package_name }}
           VERSION=${{ steps.extract_info.outputs.version }}
           CHANGELOG_PATH="$PACKAGE_NAME/CHANGELOG.md"
+          if [ ! -f "$CHANGELOG_PATH" ]; then
+            CHANGELOG_PATH="crates/$CHANGELOG_PATH"
+          fi
 
           # Extract content between the new version's header and the next header.
           # The sed command finds the line with the version, and prints everything until the next line that starts with '## '.

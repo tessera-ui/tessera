@@ -3,7 +3,7 @@
 This document defines how You should assist in the Tessera project to ensure code and documentation are consistent with project architecture, style, and best practices.
 
 Before changing Tessera code, read and apply the
-[Tessera skill](cargo-tessera/skills/tessera-good-taste/SKILL.md). It defines the application
+[Tessera skill](crates/cargo-tessera/skills/tessera-good-taste/SKILL.md). It defines the application
 programming contract; the guidelines below also govern framework implementation.
 
 ---

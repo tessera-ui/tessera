@@ -3,17 +3,17 @@ resolver = "3"
 members = [
     "example",
     "tessera-ui",
-    "tessera-foundation",
-    "tessera-platform",
-    "tessera-components",
-    "tessera-build",
-    "tessera-macros",
-    "tessera-shard",
-    "cargo-tessera",
-    "tessera-mobile",
-    "tessera-glyphon",
+    "crates/tessera-foundation",
+    "crates/tessera-platform",
+    "crates/tessera-components",
+    "crates/tessera-build",
+    "crates/tessera-macros",
+    "crates/tessera-shard",
+    "crates/cargo-tessera",
+    "crates/tessera-mobile",
+    "crates/tessera-glyphon",
 ]
-exclude = ["tessera-android-activity", "tessera-accesskit", "tessera-cosmic-text", "tessera-winit"]
+exclude = ["crates/tessera-android-activity", "crates/tessera-accesskit", "crates/tessera-cosmic-text", "crates/tessera-winit"]
 
 [workspace.package]
 license = "MIT OR Apache-2.0"
