@@ -3,13 +3,13 @@
 - [x] Cross-platform IME support
 - [x] Performance improvement
 - [x] Switch to Semver for versioning
-- [ ] Platform-specific plugin system & Package Support
+- [x] Platform-specific plugin system & Package Support
   - [x] Desktop Plugins
   - [x] Android Plugins
   - [x] iOS Plugins
   - [x] Android Package Support
   - [x] Windows Package Support
-  - [ ] iOS Package Support
+  - [x] iOS Package Support
   - [x] macOS Package Support
   - [x] Linux Package Support
 - [x] Asset management system
