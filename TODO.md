@@ -50,7 +50,7 @@
   - [x] Side sheets
   - [x] Search
   - [x] Tooltips
-- [ ] Documentation of pluggable graphics rendering pipelines
+- [x] Documentation of pluggable graphics rendering pipelines
 - [x] CLI tool (`cargo-tessera`):
   - [x] Project scaffolding (`cargo tessera new`)
   - [x] Development server (`cargo tessera dev`)
