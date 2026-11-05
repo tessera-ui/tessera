@@ -83,4 +83,4 @@ tempfile = "3.27"
 
 [target.'cfg(target_os = "ios")'.dependencies]
 objc2 = { version = "0.6.3", default-features = false }
-objc2-ui-kit = { version = "0.3.2", default-features = false, features = ["UIView", "UIResponder", "UIKeyboardLayoutGuide", "UILayoutGuide", "UITrackingLayoutGuide", "objc2-core-foundation"] }
+objc2-ui-kit = { version = "0.3.2", default-features = false, features = ["UIGeometry", "UIView", "UIResponder", "UIKeyboardLayoutGuide", "UILayoutGuide", "UITrackingLayoutGuide", "objc2-core-foundation"] }

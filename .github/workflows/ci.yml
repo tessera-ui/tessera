@@ -44,6 +44,8 @@ jobs:
       - name: Verify Apple IME and build example
         if: runner.os == 'macOS'
         run: |
+          rustup target add aarch64-apple-ios-sim
+          cargo check -p tessera-ui --target aarch64-apple-ios-sim
           python3 scripts/test-apple-ime.py
           cargo tessera build -p example
 
