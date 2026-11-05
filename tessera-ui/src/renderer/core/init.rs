@@ -102,6 +102,9 @@ impl RenderCore {
         required_limits.max_uniform_buffer_binding_size = required_limits
             .max_uniform_buffer_binding_size
             .min(adapter.limits().max_uniform_buffer_binding_size);
+        required_limits.max_inter_stage_shader_variables = required_limits
+            .max_inter_stage_shader_variables
+            .min(adapter.limits().max_inter_stage_shader_variables);
         let base_features = wgpu::Features::CLEAR_TEXTURE;
         #[cfg(all(
             feature = "profiling",
