@@ -1,9 +1,3 @@
-//! Expressive app bar specification examples.
-//!
-//! ## Usage
-//!
-//! Compare screen titles, navigation actions and scrolling app bars.
-
 use tessera_components::{
     alignment::{Alignment, CrossAxisAlignment},
     app_bar::{
@@ -19,7 +13,6 @@ use tessera_components::{
     icon_button::{IconButtonColorStyle, icon_button},
     material_icons::{Asset, filled},
     modifier::{ModifierExt as _, Padding, SemanticsArgs},
-    painter::try_painter_asset,
     row::row,
     scaffold::scaffold,
     scrollable::ScrollableController,
@@ -31,7 +24,7 @@ use tessera_components::{
 };
 use tessera_ui::{
     Color, Dp, LayoutCoordinates, Modifier, RenderSlot, State, accesskit::Role,
-    modifier::FocusModifierExt as _, remember, remember_with_key, tessera, use_context,
+    modifier::FocusModifierExt as _, remember, tessera, use_context,
 };
 
 use crate::res::I18N;
@@ -161,7 +154,7 @@ fn verdict_band(good: bool) {
                 .cross_axis_alignment(CrossAxisAlignment::Center)
                 .children(move || {
                     icon()
-                        .vector(if good {
+                        .painter(if good {
                             filled::CHECK_CIRCLE_SVG
                         } else {
                             filled::CANCEL_SVG
@@ -1736,9 +1729,6 @@ fn brand() {
     } else {
         crate::res::LOGO_PNG
     };
-    let painter = remember_with_key(asset, move || {
-        try_painter_asset(asset).expect("bundled brand image")
-    });
     boxed()
         .modifier(Modifier::new().semantics(SemanticsArgs {
             role: Some(Role::Image),
@@ -1746,7 +1736,7 @@ fn brand() {
             ..Default::default()
         }))
         .children(move || {
-            icon().painter(painter.get()).size(Dp(32.0));
+            icon().painter(asset).size(Dp(32.0));
         });
 }
 
@@ -1913,10 +1903,10 @@ fn search_sample(
                                         312.0 + (available - 312.0) * 0.5
                                     };
                                     let leading_icon = RenderSlot::new(|| {
-                                        icon().vector(filled::SEARCH_SVG).size(Dp(24.0));
+                                        icon().painter(filled::SEARCH_SVG).size(Dp(24.0));
                                     });
                                     let trailing_icon = RenderSlot::new(|| {
-                                        icon().vector(filled::MIC_SVG).size(Dp(24.0));
+                                        icon().painter(filled::MIC_SVG).size(Dp(24.0));
                                     });
                                     search_bar()
                                         .modifier(

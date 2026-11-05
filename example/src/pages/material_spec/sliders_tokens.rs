@@ -1,9 +1,3 @@
-//! Slider token sets and design configuration comparisons.
-//!
-//! ## Usage
-//!
-//! Inspect dimensions and color roles across slider sizes.
-
 use tessera_components::{
     alignment::CrossAxisAlignment,
     boxed::boxed,
@@ -125,7 +119,7 @@ fn token_menu(
                                             text().content(I18N.text(SET_NAMES[selected.get()]));
                                             boxed().modifier(Modifier::new().width(Dp(8.0)));
                                             icon()
-                                                .vector(filled::ARROW_DROP_DOWN_SVG)
+                                                .painter(filled::ARROW_DROP_DOWN_SVG)
                                                 .size(Dp(18.0));
                                         });
                                 });

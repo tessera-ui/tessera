@@ -1,9 +1,3 @@
-//! Native radio-button article figures and accessible choice scenarios.
-//!
-//! ## Usage
-//!
-//! Compare selection controls and explore radio groups in forms and settings.
-
 use tessera_components::{
     alignment::{Alignment, CrossAxisAlignment},
     boxed::boxed,
@@ -30,7 +24,7 @@ use tessera_ui::{
 use crate::res::I18N;
 
 use super::super::{
-    ACCENT, gap, media, selection_articles::option_label, spec_table, subheading, type_style,
+    ACCENT, gap, selection_articles::option_label, spec_table, subheading, type_style,
 };
 
 #[tessera]
@@ -321,7 +315,7 @@ pub(super) fn checkout(initial: Option<usize>, clear: bool) {
                                 .background(scheme.surface_container),
                         )
                         .children(move || {
-                            icon().vector(filled::ARROW_BACK_SVG).size(Dp(24.0));
+                            icon().painter(filled::ARROW_BACK_SVG).size(Dp(24.0));
                             spacer().modifier(Modifier::new().width(Dp(16.0)));
                             text()
                                 .content(I18N.text("ui-checkout"))
@@ -456,7 +450,7 @@ pub(super) fn language() {
                         ),
                 )
                 .children(move || {
-                    icon().vector(filled::LANGUAGE_SVG).size(Dp(24.0));
+                    icon().painter(filled::LANGUAGE_SVG).size(Dp(24.0));
                     gap(Dp(12.0));
                     text()
                         .content(I18N.text("ui-choose-your-language"))
@@ -949,7 +943,6 @@ pub(super) fn measurements() {
 
 #[tessera]
 fn stage(width: f64, height: f64, content: RenderSlot) {
-    media::load_fonts();
     let measured = remember(move || Dp(width));
     let scheme = use_context::<MaterialTheme>().unwrap().get().color_scheme;
     boxed()

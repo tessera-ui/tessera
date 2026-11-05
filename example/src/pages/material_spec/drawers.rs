@@ -1,9 +1,3 @@
-//! Navigation drawer specifications and destination figures.
-//!
-//! ## Usage
-//!
-//! Inspect drawer destinations, geometry and the Expressive recommendation.
-
 use std::collections::BTreeMap;
 
 use tessera_components::{
@@ -571,7 +565,7 @@ fn small_rail() {
                 .selected(index == 0)
                 .icon(move || {
                     icon()
-                        .vector(match index {
+                        .painter(match index {
                             0 => filled::INBOX_SVG,
                             1 => outlined::SEND_SVG,
                             _ => outlined::FAVORITE_BORDER_SVG,
@@ -790,7 +784,7 @@ fn recommendation(window_size_classes: Option<bool>, on_recommended: Option<Call
                 }),
         )
         .children(move || {
-            icon().vector(outlined::STAR_BORDER_SVG).size(Dp(24.0)).tint(ink);
+            icon().painter(outlined::STAR_BORDER_SVG).size(Dp(24.0)).tint(ink);
             spacer().modifier(Modifier::new().width(Dp(16.0)));
             column()
                 .modifier(Modifier::new().weight(1.0))
@@ -985,7 +979,7 @@ fn drawer_destinations(
                     )
                 };
                 boxed().modifier(modifier).children(move || {
-                    icon().vector(asset).size(Dp(24.0));
+                    icon().painter(asset).size(Dp(24.0));
                 });
             });
     }
@@ -1047,7 +1041,7 @@ fn drawer_destinations(
             boxed()
                 .modifier(observe(geometry, "label_icon"))
                 .children(move || {
-                    icon().vector(asset).size(Dp(24.0));
+                    icon().painter(asset).size(Dp(24.0));
                 });
         })
         .on_click(move || {
@@ -1075,7 +1069,7 @@ fn drawer_destinations(
                 .label(I18N.text(label))
                 .selected(false)
                 .icon(move || {
-                    icon().vector(asset).size(Dp(24.0));
+                    icon().painter(asset).size(Dp(24.0));
                 });
         }
     }
@@ -1695,7 +1689,7 @@ fn differences_figure() {
                                                 row().modifier(Modifier::new().fill_max_size().padding_symmetric(Dp(16.0), Dp::ZERO))
                                                     .cross_axis_alignment(tessera_components::alignment::CrossAxisAlignment::Center)
                                                     .children(move || {
-                                                        icon().vector(match index { 0=>filled::MAIL_SVG,1=>filled::SEND_SVG,2=>filled::FAVORITE_SVG,_=>filled::ARCHIVE_SVG }).size(Dp(24.0)).tint(if index == 0 { srgb(98, 0, 238) } else { srgb(97, 97, 97) });
+                                                        icon().painter(match index { 0=>filled::MAIL_SVG,1=>filled::SEND_SVG,2=>filled::FAVORITE_SVG,_=>filled::ARCHIVE_SVG }).size(Dp(24.0)).tint(if index == 0 { srgb(98, 0, 238) } else { srgb(97, 97, 97) });
                                                         spacer().modifier(Modifier::new().width(Dp(24.0)));
                                                         text().content(I18N.text(label)).style(theme.typography.label_large).color(if index == 0 { srgb(98, 0, 238) } else { srgb(33, 33, 33) });
                                                     });
@@ -1764,14 +1758,14 @@ fn state_panel(number: usize, label: String, state: InteractionVisualState, x: f
                                         row().cross_axis_alignment(tessera_components::alignment::CrossAxisAlignment::Center)
                                             .modifier(Modifier::new().fill_max_size().padding_symmetric(Dp(16.0),Dp::ZERO))
                                             .children(move || {
-                                                icon().vector(outlined::FAVORITE_BORDER_SVG).size(Dp(24.0));
+                                                icon().painter(outlined::FAVORITE_BORDER_SVG).size(Dp(24.0));
                                                 spacer().modifier(Modifier::new().width(Dp(12.0)));
                                                 text().content(I18N.text("ui-favorites")).style(theme.typography.label_large);
                                             });
                                     });
                             } else {
                                 navigation_drawer_item().label(I18N.text(destination)).selected(index == 0)
-                                    .icon(move || { icon().vector(match index {0=>filled::INBOX_SVG,1=>outlined::SEND_SVG,_=>outlined::DELETE_SVG}).size(Dp(24.0)); })
+                                    .icon(move || { icon().painter(match index {0=>filled::INBOX_SVG,1=>outlined::SEND_SVG,_=>outlined::DELETE_SVG}).size(Dp(24.0)); })
                                     .badge(move || { if index == 0 { text().content("24").style(theme.typography.label_large); } });
                             }
                         }

@@ -1,9 +1,3 @@
-//! Expressive menu specifications and contextual actions.
-//!
-//! ## Usage
-//!
-//! Inspect menu groups, selection and keyboard interaction.
-
 use tessera_components::{
     alignment::{Alignment, CrossAxisAlignment, MainAxisAlignment},
     badge::badge_with_content,
@@ -800,7 +794,7 @@ fn configuration(grouped: bool, style: MenuColorStyle) {
                                         )
                                         .children(move || {
                                             icon()
-                                                .vector(filled::EDIT_SVG)
+                                                .painter(filled::EDIT_SVG)
                                                 .size(Dp(20.0))
                                                 .tint(scheme.on_secondary_container);
                                             boxed().modifier(Modifier::new().width(Dp(8.0)));
@@ -824,7 +818,7 @@ fn configuration(grouped: bool, style: MenuColorStyle) {
                                 )
                                 .children(move || {
                                     icon()
-                                        .vector(filled::ARROW_DROP_DOWN_SVG)
+                                        .painter(filled::ARROW_DROP_DOWN_SVG)
                                         .rotation(180.0)
                                         .size(Dp(22.0))
                                         .tint(scheme.on_secondary_container);
@@ -843,7 +837,7 @@ fn configuration(grouped: bool, style: MenuColorStyle) {
                             )
                             .children(move || {
                                 icon()
-                                    .vector(filled::MORE_VERT_SVG)
+                                    .painter(filled::MORE_VERT_SVG)
                                     .tint(scheme.on_secondary_container);
                             });
                     }

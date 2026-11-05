@@ -1,9 +1,3 @@
-//! Geometry annotations for live component figures.
-//!
-//! ## Usage
-//!
-//! Inspect anatomy and spacing around live components.
-
 use std::collections::BTreeMap;
 
 use tessera_components::{
@@ -194,7 +188,7 @@ pub(super) fn lines(width: Dp, height: Dp, svg: String) {
     })
     .get();
     image()
-        .vector(vector)
+        .painter(vector)
         .modifier(Modifier::new().size(width, height));
 }
 

@@ -14,13 +14,16 @@
   - [ ] Linux Package Support
 - [x] Asset management system
   - [x] Embedded backend (available for all targets)
+  - [x] On-demand loading and shared resource lifetimes
   - [ ] Platform-specific backends
     - [x] Android
+    - [x] Web (HTTP)
     - [ ] Windows
     - [ ] macOS
     - [ ] Linux
     - [ ] iOS
   - [x] Tree-shaking for assets
+  - [ ] Unicode font subsets
 - [x] lazy_column
 - [x] lazy_row
 - [ ] [Material Design components](https://m3.material.io/components)

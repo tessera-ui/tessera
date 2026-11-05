@@ -1,10 +1,3 @@
-//! Interactive Expressive list specifications.
-//!
-//! ## Usage
-//!
-//! Compare content rows, independent actions, selection modes and grouped
-//! shapes.
-
 use tessera_components::{
     alignment::Alignment,
     boxed::boxed,
@@ -570,14 +563,14 @@ fn baseline() {
                     .supporting_text(I18N.text("ui-supporting-text"))
                     .accessibility_label(I18N.text("ui-baseline-two-line-row"))
                     .leading(|| {
-                        icon().vector(filled::FOLDER_SVG);
+                        icon().painter(filled::FOLDER_SVG);
                     });
                 horizontal_divider();
                 list_item()
                     .headline(I18N.text("ui-label-text"))
                     .accessibility_label(I18N.text("ui-baseline-one-line-row"))
                     .leading(|| {
-                        icon().vector(filled::FOLDER_SVG);
+                        icon().painter(filled::FOLDER_SVG);
                     });
                 horizontal_divider();
                 list_item()
@@ -585,7 +578,7 @@ fn baseline() {
                     .supporting_text(I18N.text("ui-supporting-text-that-wraps-onto-another-line"))
                     .accessibility_label(I18N.text("ui-baseline-three-line-row"))
                     .leading(|| {
-                        icon().vector(filled::FOLDER_SVG);
+                        icon().painter(filled::FOLDER_SVG);
                     });
             });
     }));
@@ -624,12 +617,12 @@ fn prose(#[prop(into)] value: String) {
 fn list_reading_examples() {
     panel(RenderSlot::new(move || {
         column().modifier(Modifier::new().fill_max_width()).children(move || {
-        list_item().headline(I18N.text("ui-label-text")).leading(|| {icon().vector(filled::FOLDER_SVG);});
+        list_item().headline(I18N.text("ui-label-text")).leading(|| {icon().painter(filled::FOLDER_SVG);});
         gap(Dp(8.0));
-        list_item().headline(I18N.text("ui-label-text")).supporting_text(I18N.text("ui-supporting-text")).leading(|| {icon().vector(filled::FOLDER_SVG);});
+        list_item().headline(I18N.text("ui-label-text")).supporting_text(I18N.text("ui-supporting-text")).leading(|| {icon().painter(filled::FOLDER_SVG);});
         gap(Dp(8.0));
         list_item().headline(I18N.text("ui-label-text")).supporting_text(I18N.text("ui-supporting-text-that-wraps-naturally-onto-another-line-when-the-available-width-is-compact"))
-            .leading(|| {icon().vector(filled::FOLDER_SVG);});
+            .leading(|| {icon().painter(filled::FOLDER_SVG);});
     });
     }));
 }
@@ -666,7 +659,7 @@ fn list_anatomy_diagram() {
                                 )
                                 .children(move || {
                                     icon()
-                                        .vector(filled::CATEGORY_SVG)
+                                        .painter(filled::CATEGORY_SVG)
                                         .size(Dp(40.0))
                                         .tint(scheme.outline_variant);
                                 });
@@ -695,7 +688,7 @@ fn list_anatomy_diagram() {
                         .min_height(Dp(64.0))
                         .leading(move || {
                             boxed().modifier(watch(geometry, "icon")).children(|| {
-                                icon().vector(filled::PERSON_OUTLINE_SVG).size(Dp(20.0));
+                                icon().painter(filled::PERSON_OUTLINE_SVG).size(Dp(20.0));
                             });
                         })
                         .supporting_content(move || {
@@ -728,7 +721,7 @@ fn list_anatomy_diagram() {
                             boxed()
                                 .modifier(watch(geometry, "trailing-icon"))
                                 .children(|| {
-                                    icon().vector(filled::ARROW_RIGHT_SVG).size(Dp(20.0));
+                                    icon().painter(filled::ARROW_RIGHT_SVG).size(Dp(20.0));
                                 });
                         });
                     horizontal_divider().modifier(watch(geometry, "divider"));

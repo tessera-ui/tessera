@@ -40,13 +40,6 @@ pub enum ImageVectorLoadError {
         #[source]
         source: std::io::Error,
     },
-    /// Failed to read bytes from an asset handle.
-    #[error("failed to read SVG bytes from asset: {source}")]
-    AssetRead {
-        /// Underlying IO error.
-        #[source]
-        source: std::io::Error,
-    },
     /// SVG parsing failed.
     #[error("failed to parse SVG: {0}")]
     Parse(#[from] usvg::Error),

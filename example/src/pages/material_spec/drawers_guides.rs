@@ -1,10 +1,3 @@
-//! Navigation drawer guideline and accessibility illustrations.
-//!
-//! ## Usage
-//!
-//! Compare recommended and discouraged drawer layouts with their published
-//! guidance.
-
 use tessera_components::{
     alignment::{Alignment, CrossAxisAlignment},
     boxed::boxed,
@@ -412,7 +405,7 @@ fn advice(tone: u8) {
         )
         .cross_axis_alignment(CrossAxisAlignment::Center)
         .children(move || {
-            icon().vector(asset).size(Dp(18.0)).tint(ink);
+            icon().painter(asset).size(Dp(18.0)).tint(ink);
             spacer().modifier(Modifier::new().width(Dp(8.0)));
             text()
                 .content(I18N.text(label))
@@ -589,7 +582,7 @@ fn guide_scene(kind: u8, selected: State<usize>) {
                                 .label(I18N.text(label))
                                 .selected(index == 0)
                                 .icon(move || {
-                                    icon().vector(asset).size(Dp(24.0));
+                                    icon().painter(asset).size(Dp(24.0));
                                 });
                         }
                     });
@@ -622,7 +615,7 @@ fn guide_scene(kind: u8, selected: State<usize>) {
                             .alignment(Alignment::Center)
                             .modifier(Modifier::new().size(Dp(80.0), Dp(56.0)))
                             .children(|| {
-                                icon().vector(outlined::MENU_SVG).size(Dp(24.0));
+                                icon().painter(outlined::MENU_SVG).size(Dp(24.0));
                             });
                         small_rail();
                     });
@@ -811,7 +804,7 @@ fn custom_drawer(variant: u8, selected: State<usize>) {
                 subhead_row("ui-personal-folders-2672");
                 for label in ["ui-friends", "ui-volunteering", "ui-work"] {
                     navigation_drawer_item().label(I18N.text(label)).icon(|| {
-                        icon().vector(outlined::FOLDER_SVG).size(Dp(24.0));
+                        icon().painter(outlined::FOLDER_SVG).size(Dp(24.0));
                     });
                 }
             }
@@ -875,7 +868,7 @@ fn drawer_item(variant: u8, index: usize, selected: State<usize>) {
             .badge_optional(badge)
             .on_click(move || selected.set(index))
             .icon(move || {
-                icon().vector(asset).size(Dp(24.0));
+                icon().painter(asset).size(Dp(24.0));
             });
     } else {
         navigation_drawer_item()
@@ -910,7 +903,7 @@ fn plain_item(two_lines: bool) {
         .cross_axis_alignment(CrossAxisAlignment::Center)
         .children(move || {
             icon()
-                .vector(outlined::NOTIFICATIONS_SVG)
+                .painter(outlined::NOTIFICATIONS_SVG)
                 .size(Dp(24.0))
                 .tint(color);
             spacer().modifier(Modifier::new().width(Dp(12.0)));
@@ -968,7 +961,7 @@ fn a11y_item(photos: bool, index: usize, selected: usize, outlined_selected: boo
         .selected(selected == index)
         .badge_optional(badge)
         .icon(move || {
-            icon().vector(asset).size(Dp(24.0));
+            icon().painter(asset).size(Dp(24.0));
         });
 }
 

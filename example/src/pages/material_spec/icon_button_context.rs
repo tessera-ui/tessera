@@ -1,9 +1,3 @@
-//! Contextual icon button placement and accessibility diagrams.
-//!
-//! ## Usage
-//!
-//! Explore actions in app bars, restaurant cards and floating toolbars.
-
 use tessera_components::{
     alignment::{Alignment, CrossAxisAlignment},
     boxed::boxed,
@@ -12,7 +6,7 @@ use tessera_components::{
     floating_action_button::floating_action_button,
     icon::icon,
     icon_button::{IconButtonWidth, icon_button},
-    image::{ImageData, TryIntoImageData as _, image},
+    image::image,
     material_icons::{Asset, filled, outlined},
     modifier::{ModifierExt as _, SemanticsArgs},
     row::row,
@@ -27,11 +21,11 @@ use tessera_ui::{
     modifier::FocusModifierExt as _, remember, scaled_box, tessera, use_context,
 };
 
-use crate::res::I18N;
+use crate::res::{I18N, material_spec as assets};
 
 use super::super::{
     annotations::{SpaceGeometry, space_geometry, watch_observed},
-    gap, media, srgb, subheading, type_style,
+    gap, srgb, subheading, type_style,
 };
 
 #[tessera]
@@ -169,7 +163,6 @@ pub(super) fn context_row(prose: RenderSlot, figure: RenderSlot) {
 
 #[tessera]
 fn canvas(height: f64, geometry: State<SpaceGeometry>, child: RenderSlot) {
-    media::load_fonts();
     let width = remember(|| Dp(676.0));
     let scale = (width.get().0 / 676.0) as f32;
     let scheme = use_context::<MaterialTheme>().unwrap().get().color_scheme;
@@ -291,20 +284,13 @@ fn device(x: f64, y: f64, height: f64) {
         });
 }
 
-fn photo_data(source: usize) -> ImageData {
-    let bytes: &[u8] = match source {
-        0 => include_bytes!("../../../assets/material_spec/icon-context-appbar.png"),
-        1 => include_bytes!("../../../assets/material_spec/icon-context-label.png"),
-        _ => include_bytes!("../../../assets/material_spec/icon-context-density.png"),
-    };
-    bytes
-        .try_into_image_data()
-        .expect("icon button context photograph")
-}
-
 #[tessera]
 fn photo_region(source: usize, x: f64, y: f64, width: f64, height: f64) {
-    let data = tessera_ui::remember_with_key(source, move || photo_data(source)).get();
+    let asset = match source {
+        0 => assets::ICON_CONTEXT_APPBAR_PNG,
+        1 => assets::ICON_CONTEXT_LABEL_PNG,
+        _ => assets::ICON_CONTEXT_DENSITY_PNG,
+    };
     let source_height = [400.0, 258.0, 300.0][source];
     boxed()
         .modifier(
@@ -323,7 +309,7 @@ fn photo_region(source: usize, x: f64, y: f64, width: f64, height: f64) {
                 }),
         )
         .children(move || {
-            image().raster(data.clone()).modifier(
+            image().painter(asset).modifier(
                 Modifier::new()
                     .offset(Dp(-x), Dp(-y))
                     .required_size(Dp(676.0), Dp(source_height)),
@@ -352,7 +338,7 @@ fn app_bar_figure() {
                 boxed()
                     .modifier(Modifier::new().offset(Dp(474.0 + index as f64 * 16.0), Dp(116.0)))
                     .children(move || {
-                        icon().vector(vector).size(Dp(16.0));
+                        icon().painter(vector).size(Dp(16.0));
                     });
             }
             placed_action("ui-back-to-restaurants", 0, 136.0, 155.0);
@@ -364,7 +350,7 @@ fn app_bar_figure() {
                 .children(|| {
                     for index in 0..5 {
                         icon()
-                            .vector(if index < 4 {
+                            .painter(if index < 4 {
                                 filled::STAR_SVG
                             } else {
                                 filled::STAR_BORDER_SVG
@@ -440,7 +426,7 @@ fn toolbar_figure() {
                 )
                 .on_click(move || undo.set(undo.get() + 1))
                 .content(|| {
-                    icon().vector(filled::UNDO_SVG);
+                    icon().painter(filled::UNDO_SVG);
                 });
         }),
     );

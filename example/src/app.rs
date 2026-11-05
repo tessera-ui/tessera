@@ -328,10 +328,10 @@ pub(crate) fn navigation_button(
                     }
                 });
             icon()
-                .vector(filled::MENU_OPEN_SVG)
+                .painter(filled::MENU_OPEN_SVG)
                 .tint(color.with_alpha(1.0 - fade.with(|fade| fade.value)));
             icon()
-                .vector(filled::ARROW_BACK_SVG)
+                .painter(filled::ARROW_BACK_SVG)
                 .tint(color.with_alpha(fade.with(|fade| fade.value)));
         });
 }

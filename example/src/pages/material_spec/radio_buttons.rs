@@ -1,9 +1,3 @@
-//! Interactive radio button specifications.
-//!
-//! ## Usage
-//!
-//! Compare exclusive choices, selection feedback and radio button dimensions.
-
 use tessera_components::{
     alignment::{Alignment, CrossAxisAlignment},
     boxed::boxed,
@@ -264,12 +258,12 @@ fn ringtone() {
                                 .content("9:30")
                                 .style(type_style(14.0 * scale, 20.0 * scale))
                                 .modifier(Modifier::new().weight(1.0));
-                            icon().vector(filled::WIFI_SVG).size(Dp(16.0 * scale));
+                            icon().painter(filled::WIFI_SVG).size(Dp(16.0 * scale));
                             icon()
-                                .vector(filled::SIGNAL_CELLULAR_4_BAR_SVG)
+                                .painter(filled::SIGNAL_CELLULAR_4_BAR_SVG)
                                 .size(Dp(16.0 * scale));
                             icon()
-                                .vector(filled::BATTERY_FULL_SVG)
+                                .painter(filled::BATTERY_FULL_SVG)
                                 .size(Dp(16.0 * scale));
                         });
                     row()
@@ -280,13 +274,15 @@ fn ringtone() {
                                 .width(Dp(370.0 * scale)),
                         )
                         .children(move || {
-                            icon().vector(filled::ARROW_BACK_SVG).size(Dp(24.0 * scale));
+                            icon()
+                                .painter(filled::ARROW_BACK_SVG)
+                                .size(Dp(24.0 * scale));
                             spacer().modifier(Modifier::new().width(Dp(20.0 * scale)));
                             text()
                                 .content(I18N.text("ui-ringtone"))
                                 .style(type_style(22.0 * scale, 28.0 * scale))
                                 .modifier(Modifier::new().weight(1.0));
-                            icon().vector(filled::MORE_VERT_SVG).size(Dp(24.0 * scale));
+                            icon().painter(filled::MORE_VERT_SVG).size(Dp(24.0 * scale));
                         });
                     boxed()
                         .modifier(

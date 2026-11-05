@@ -1,9 +1,3 @@
-//! Side sheet specifications, tokens and modal demonstrations.
-//!
-//! ## Usage
-//!
-//! Compare standard and modal side sheets and review dismissal behavior.
-
 mod figures;
 
 use tessera_components::{
@@ -721,7 +715,7 @@ fn tokens() {
                             .modifier(Modifier::new().fill_max_width())
                             .children(move || {
                                 icon()
-                                    .vector(filled::FOLDER_SVG)
+                                    .painter(filled::FOLDER_SVG)
                                     .size(Dp(20.0))
                                     .tint(scheme.on_surface_variant);
                                 spacer().modifier(Modifier::new().width(Dp(12.0)));
@@ -731,7 +725,7 @@ fn tokens() {
                                     .color(INK)
                                     .modifier(Modifier::new().weight(1.0));
                                 icon()
-                                    .vector(if open {
+                                    .painter(if open {
                                         filled::ARROW_DROP_UP_SVG
                                     } else {
                                         filled::ARROW_DROP_DOWN_SVG

@@ -1,9 +1,3 @@
-//! Interactive Material component specification pages.
-//!
-//! ## Usage
-//!
-//! Explore component anatomy, configurations, tokens and behavior in context.
-
 use tessera_components::{
     alignment::{Alignment, CrossAxisAlignment},
     boxed::boxed,
@@ -22,6 +16,7 @@ use crate::res::I18N;
 
 pub(crate) use self::{
     drawers::{LiveDrawerSession, live_drawer_host},
+    media::FONTS,
     navigation_rail::{LiveRailSession, live_rail_host},
     side_sheets::{LiveSideSheetSession, live_side_sheet_host},
 };
@@ -194,7 +189,6 @@ fn spec_table(headers: Vec<String>, rows: Vec<Vec<String>>) {
 
 #[tessera]
 fn spec_table_cells(headers: Vec<String>, cells: Vec<TextTableCell>) {
-    media::load_fonts();
     let columns = headers.len();
     let mut values = headers
         .into_iter()

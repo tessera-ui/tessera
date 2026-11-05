@@ -1,9 +1,3 @@
-//! Native single-selection and multiple-selection menu figures.
-//!
-//! ## Usage
-//!
-//! Compare exclusive and independent choices using live dietary preferences.
-
 use std::fmt::Write as _;
 
 use tessera_components::{
@@ -151,7 +145,7 @@ fn selection_column(multiple: bool) {
                         .cursor_color(Color::TRANSPARENT)
                         .focus_border_width(Dp(3.0))
                         .trailing_icon(|| {
-                            icon().vector(filled::ARROW_DROP_UP_SVG).size(Dp(24.0));
+                            icon().painter(filled::ARROW_DROP_UP_SVG).size(Dp(24.0));
                         });
                 });
             boxed()

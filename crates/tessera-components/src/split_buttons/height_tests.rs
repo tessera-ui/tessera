@@ -54,7 +54,7 @@ fn fixture(probe: Option<TestProbe<Option<State<Settings>>>>) {
                         .on_click(|| {})
                         .content(move || {
                             let value = settings.get();
-                            icon().vector(filled::SEND_SVG);
+                            icon().painter(filled::SEND_SVG);
                             spacer().modifier(
                                 Modifier::new()
                                     .width(SplitButtonDefaults::icon_spacing(value.leading)),
@@ -70,7 +70,7 @@ fn fixture(probe: Option<TestProbe<Option<State<Settings>>>>) {
                         .accessibility_label("Options")
                         .on_click(|| {})
                         .content(|| {
-                            icon().vector(filled::ARROW_DROP_DOWN_SVG);
+                            icon().painter(filled::ARROW_DROP_DOWN_SVG);
                         });
                 });
         });

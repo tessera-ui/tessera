@@ -1,9 +1,3 @@
-//! Accessible menu selection and labeling figures.
-//!
-//! ## Usage
-//!
-//! Select a state or inspect a file action's accessible name.
-
 use tessera_components::{
     alignment::Alignment,
     boxed::boxed,
@@ -118,7 +112,7 @@ pub(super) fn state_selection() {
                                                 )
                                                 .children(move || {
                                                     icon()
-                                                        .vector(filled::ARROW_DROP_DOWN_SVG)
+                                                        .painter(filled::ARROW_DROP_DOWN_SVG)
                                                         .size(Dp(20.0))
                                                         .rotation(
                                                             if controller

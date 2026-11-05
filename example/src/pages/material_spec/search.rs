@@ -1,9 +1,3 @@
-//! Search specifications with editable queries and results.
-//!
-//! ## Usage
-//!
-//! Inspect search layouts, anatomy and keyboard actions.
-
 use tessera_components::{
     alignment::{Alignment, CrossAxisAlignment},
     boxed::boxed,
@@ -380,12 +374,12 @@ fn configuration_layout(full_screen: bool, divided: bool) {
                                 .content("9:30")
                                 .style(type_style(14.0 * scale, 20.0 * scale))
                                 .modifier(Modifier::new().weight(1.0));
-                            icon().vector(filled::WIFI_SVG).size(Dp(16.0 * scale));
+                            icon().painter(filled::WIFI_SVG).size(Dp(16.0 * scale));
                             icon()
-                                .vector(filled::SIGNAL_CELLULAR_4_BAR_SVG)
+                                .painter(filled::SIGNAL_CELLULAR_4_BAR_SVG)
                                 .size(Dp(16.0 * scale));
                             icon()
-                                .vector(filled::BATTERY_FULL_SVG)
+                                .painter(filled::BATTERY_FULL_SVG)
                                 .size(Dp(16.0 * scale));
                         });
                     boxed()
@@ -554,7 +548,7 @@ fn email_results(
                                     .content(I18N.text(time))
                                     .style(type_style(12.0, 16.0));
                                 gap(Dp(16.0));
-                                icon().vector(filled::STAR_BORDER_SVG).size(Dp(24.0));
+                                icon().painter(filled::STAR_BORDER_SVG).size(Dp(24.0));
                             });
                         })
                         .on_click(move || {
@@ -627,7 +621,7 @@ fn search_control(
                     submitted.set(false);
                 });
         } else {
-            icon().vector(filled::SEARCH_SVG).size(Dp(24.0));
+            icon().painter(filled::SEARCH_SVG).size(Dp(24.0));
         }
     });
     let trailing = RenderSlot::new(move || {
@@ -642,7 +636,7 @@ fn search_control(
                     submitted.set(false);
                 });
         } else {
-            icon().vector(filled::MIC_SVG).size(Dp(24.0));
+            icon().painter(filled::MIC_SVG).size(Dp(24.0));
         }
     });
     let content = if let Some(content) = results_content {
@@ -789,7 +783,7 @@ fn result_item(
             .headline(I18N.text(&(label)))
             .min_height(Dp(48.0))
             .leading(|| {
-                icon().vector(filled::HISTORY_SVG).size(Dp(24.0));
+                icon().painter(filled::HISTORY_SVG).size(Dp(24.0));
             })
             .on_click(move || {
                 controller.with_mut(|value| value.set_query(label.clone()));
@@ -894,7 +888,7 @@ fn avatar() {
         )
         .children(move || {
             icon()
-                .vector(filled::PERSON_SVG)
+                .painter(filled::PERSON_SVG)
                 .size(Dp(20.0))
                 .tint(scheme.on_tertiary_container);
         });
@@ -995,11 +989,11 @@ fn phone(geometry: State<Geometry>, active: bool) {
                                 .content("9:30")
                                 .style(type_style(14.0, 20.0))
                                 .modifier(Modifier::new().weight(1.0));
-                            icon().vector(filled::WIFI_SVG).size(Dp(16.0));
+                            icon().painter(filled::WIFI_SVG).size(Dp(16.0));
                             icon()
-                                .vector(filled::SIGNAL_CELLULAR_4_BAR_SVG)
+                                .painter(filled::SIGNAL_CELLULAR_4_BAR_SVG)
                                 .size(Dp(16.0));
-                            icon().vector(filled::BATTERY_FULL_SVG).size(Dp(16.0));
+                            icon().painter(filled::BATTERY_FULL_SVG).size(Dp(16.0));
                         });
                     gap(Dp(16.0));
                     anatomy_bar(geometry, active);
@@ -1036,7 +1030,7 @@ fn anatomy_bar(geometry: State<Geometry>, active: bool) {
                     .on_click(move || controller.with_mut(SearchBarController::close));
             } else {
                 boxed().modifier(watch(geometry, "leading")).children(|| {
-                    icon().vector(filled::MENU_SVG).size(Dp(24.0));
+                    icon().painter(filled::MENU_SVG).size(Dp(24.0));
                 });
             }
         })

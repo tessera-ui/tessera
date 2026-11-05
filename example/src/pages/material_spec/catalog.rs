@@ -1,9 +1,3 @@
-//! Component directory and independent interactive articles.
-//!
-//! ## Usage
-//!
-//! Browse components by category and open interactive specifications.
-
 use tessera_components::{
     boxed::boxed,
     column::column,
@@ -258,7 +252,6 @@ pub(super) fn component_pages(
     selected: Option<State<Option<usize>>>,
     sessions: Option<crate::app::AppLiveSessions>,
 ) {
-    super::media::load_fonts();
     let selected = if let Some(selected) = selected {
         selected
     } else {

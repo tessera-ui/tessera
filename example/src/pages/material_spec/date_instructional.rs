@@ -1,9 +1,3 @@
-//! Native date-input accessibility illustrations.
-//!
-//! ## Usage
-//!
-//! Explore date entry, formatting, clearing, and accessible labels.
-
 use tessera_components::{
     boxed::boxed,
     button::button,
@@ -873,7 +867,7 @@ fn visible_calendar_header(
                                     .content(I18N.text(&(label)))
                                     .style(theme.typography.label_large);
                                 boxed().modifier(Modifier::new().width(Dp(4.0)));
-                                icon().vector(filled::ARROW_DROP_DOWN_SVG).size(Dp(18.0));
+                                icon().painter(filled::ARROW_DROP_DOWN_SVG).size(Dp(18.0));
                             });
                     });
             }

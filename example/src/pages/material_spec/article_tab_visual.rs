@@ -1,15 +1,7 @@
-//! Interaction visuals for article section navigation.
-//!
-//! ## Usage
-//!
-//! Identify hovered, pressed, selected, and keyboard-focused article sections.
+use tessera_components::{modifier::ModifierExt as _, shape_def::Shape};
+use tessera_ui::{Asset, Color, Dp, Modifier};
 
-use tessera_components::{
-    image_vector::{ImageVectorData, TryIntoImageVectorData as _},
-    modifier::ModifierExt as _,
-    shape_def::Shape,
-};
-use tessera_ui::{Color, Dp, Modifier};
+use crate::res::material_spec::tab_symbols as assets;
 
 use super::srgb;
 
@@ -138,61 +130,33 @@ pub(super) fn font_family(selected: bool, hovered: bool, pressed: bool) -> &'sta
     }
 }
 
-pub(super) fn vectors() -> Vec<ImageVectorData> {
-    [
-        include_bytes!("../../../assets/material_spec/tab_symbols/info_0_400.svg").as_slice(),
-        include_bytes!("../../../assets/material_spec/tab_symbols/info_0_600.svg").as_slice(),
-        include_bytes!("../../../assets/material_spec/tab_symbols/info_0_300.svg").as_slice(),
-        include_bytes!("../../../assets/material_spec/tab_symbols/info_1_400.svg").as_slice(),
-        include_bytes!("../../../assets/material_spec/tab_symbols/info_1_600.svg").as_slice(),
-        include_bytes!("../../../assets/material_spec/tab_symbols/info_1_300.svg").as_slice(),
-        include_bytes!("../../../assets/material_spec/tab_symbols/style_0_400.svg").as_slice(),
-        include_bytes!("../../../assets/material_spec/tab_symbols/style_0_600.svg").as_slice(),
-        include_bytes!("../../../assets/material_spec/tab_symbols/style_0_300.svg").as_slice(),
-        include_bytes!("../../../assets/material_spec/tab_symbols/style_1_400.svg").as_slice(),
-        include_bytes!("../../../assets/material_spec/tab_symbols/style_1_600.svg").as_slice(),
-        include_bytes!("../../../assets/material_spec/tab_symbols/style_1_300.svg").as_slice(),
-        include_bytes!("../../../assets/material_spec/tab_symbols/design_services_0_400.svg")
-            .as_slice(),
-        include_bytes!("../../../assets/material_spec/tab_symbols/design_services_0_600.svg")
-            .as_slice(),
-        include_bytes!("../../../assets/material_spec/tab_symbols/design_services_0_300.svg")
-            .as_slice(),
-        include_bytes!("../../../assets/material_spec/tab_symbols/design_services_1_400.svg")
-            .as_slice(),
-        include_bytes!("../../../assets/material_spec/tab_symbols/design_services_1_600.svg")
-            .as_slice(),
-        include_bytes!("../../../assets/material_spec/tab_symbols/design_services_1_300.svg")
-            .as_slice(),
-        include_bytes!("../../../assets/material_spec/tab_symbols/accessibility_new_0_400.svg")
-            .as_slice(),
-        include_bytes!("../../../assets/material_spec/tab_symbols/accessibility_new_0_600.svg")
-            .as_slice(),
-        include_bytes!("../../../assets/material_spec/tab_symbols/accessibility_new_0_300.svg")
-            .as_slice(),
-        include_bytes!("../../../assets/material_spec/tab_symbols/accessibility_new_1_400.svg")
-            .as_slice(),
-        include_bytes!("../../../assets/material_spec/tab_symbols/accessibility_new_1_600.svg")
-            .as_slice(),
-        include_bytes!("../../../assets/material_spec/tab_symbols/accessibility_new_1_300.svg")
-            .as_slice(),
-    ]
-    .into_iter()
-    .map(|bytes| {
-        bytes
-            .try_into_image_vector_data()
-            .expect("bundled article symbol")
-    })
-    .collect()
-}
-
-pub(super) fn vector(
-    vectors: &[ImageVectorData],
-    index: usize,
-    selected: bool,
-    hovered: bool,
-    pressed: bool,
-) -> ImageVectorData {
+pub(super) fn asset(index: usize, selected: bool, hovered: bool, pressed: bool) -> Asset {
+    let assets = [
+        assets::INFO_0_400_SVG,
+        assets::INFO_0_600_SVG,
+        assets::INFO_0_300_SVG,
+        assets::INFO_1_400_SVG,
+        assets::INFO_1_600_SVG,
+        assets::INFO_1_300_SVG,
+        assets::STYLE_0_400_SVG,
+        assets::STYLE_0_600_SVG,
+        assets::STYLE_0_300_SVG,
+        assets::STYLE_1_400_SVG,
+        assets::STYLE_1_600_SVG,
+        assets::STYLE_1_300_SVG,
+        assets::DESIGN_SERVICES_0_400_SVG,
+        assets::DESIGN_SERVICES_0_600_SVG,
+        assets::DESIGN_SERVICES_0_300_SVG,
+        assets::DESIGN_SERVICES_1_400_SVG,
+        assets::DESIGN_SERVICES_1_600_SVG,
+        assets::DESIGN_SERVICES_1_300_SVG,
+        assets::ACCESSIBILITY_NEW_0_400_SVG,
+        assets::ACCESSIBILITY_NEW_0_600_SVG,
+        assets::ACCESSIBILITY_NEW_0_300_SVG,
+        assets::ACCESSIBILITY_NEW_1_400_SVG,
+        assets::ACCESSIBILITY_NEW_1_600_SVG,
+        assets::ACCESSIBILITY_NEW_1_300_SVG,
+    ];
     let state = if pressed {
         2
     } else if hovered {
@@ -200,7 +164,7 @@ pub(super) fn vector(
     } else {
         0
     };
-    vectors[index * 6 + usize::from(selected) * 3 + state].clone()
+    assets[index * 6 + usize::from(selected) * 3 + state]
 }
 
 pub(super) fn focus_modifier(modifier: Modifier, visible: bool, hovered: bool) -> Modifier {

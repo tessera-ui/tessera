@@ -59,6 +59,8 @@ jobs:
           toolchain: stable
           components: rust-src, rust-analyzer
           target: wasm32-unknown-unknown
+      - name: Install Binaryen
+        run: sudo apt-get update && sudo apt-get install -y binaryen
       - name: Build web example
         run: cargo tessera web build --release -p example
 

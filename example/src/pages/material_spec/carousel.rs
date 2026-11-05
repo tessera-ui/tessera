@@ -1,9 +1,3 @@
-//! Interactive carousel specifications and browsing patterns.
-//!
-//! ## Usage
-//!
-//! Compare media layouts, scrolling and accessible collection browsing.
-
 use std::sync::Arc;
 
 use tessera_components::{
@@ -766,7 +760,7 @@ fn media_item(
                 )
                 .children(move || {
                     icon()
-                        .vector(match index % 3 {
+                        .painter(match index % 3 {
                             0 => filled::LANDSCAPE_SVG,
                             1 => filled::LOCAL_FLORIST_SVG,
                             _ => filled::WATER_DROP_SVG,
@@ -1543,7 +1537,7 @@ fn state_tile(index: usize, label: String) {
                                 .modifier(Modifier::new().fill_max_size())
                                 .children(move || {
                                     icon()
-                                        .vector(filled::LANDSCAPE_SVG)
+                                        .painter(filled::LANDSCAPE_SVG)
                                         .tint(content)
                                         .size(Dp(32.0));
                                 });

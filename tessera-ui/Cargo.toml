@@ -20,8 +20,6 @@ headless = ["serde", "serde_json"]
 uuid = { version = "1.26.1", features = ["v4", "js"] }
 bytemuck = { version = "1.24.0", features = ["derive"] }
 tracing = "0.1.44"
-tracing-subscriber = { version = "0.3.22", features = ["env-filter"] }
-parking_lot = { version = "0.12.5", features = ["deadlock_detection"] }
 pollster = "0.4.0"
 wgpu = "30.0.1"
 indextree = "4.7.4"
@@ -38,6 +36,10 @@ im = "15.1.0"
 serde = { version = "1.0.228", features = ["derive"], optional = true }
 serde_json = { version = "1.0.149", optional = true }
 interprocess = { version = "2.4.4", optional = true }
+
+[target.'cfg(not(target_family = "wasm"))'.dependencies]
+tracing-subscriber = { version = "0.3.22", features = ["env-filter"] }
+parking_lot = { version = "0.12.5", features = ["deadlock_detection"] }
 
 [target.'cfg(target_family = "unix")'.dependencies]
 libc = "0.2.185"
@@ -61,8 +63,12 @@ objc2-quartz-core = { version = "0.3.2", default-features = false, features = [
 winit = { package = "tessera-winit", version = "0.30.13", path = "../crates/tessera-winit" }
 
 [target.'cfg(target_family = "wasm")'.dependencies]
+tracing-subscriber = { version = "0.3.22", default-features = false, features = ["fmt", "tracing-log"] }
+parking_lot = "0.12.5"
 console_error_panic_hook = "0.1.7"
-web-sys = { version = "0.3.93", features = ["console", "CssStyleDeclaration", "Document", "Element", "HtmlCanvasElement", "Window"] }
+js-sys = "0.3.93"
+wasm-bindgen = "0.2.116"
+web-sys = { version = "0.3.93", features = ["console", "CssStyleDeclaration", "Document", "Element", "HtmlCanvasElement", "Window", "Response", "Url"] }
 wasm-bindgen-futures = "0.4.55"
 web-time = "1.1.0"
 

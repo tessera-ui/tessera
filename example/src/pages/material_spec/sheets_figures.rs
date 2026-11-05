@@ -1,9 +1,3 @@
-//! Bottom sheet article figures drawn with native Tessera primitives.
-//!
-//! ## Usage
-//!
-//! Illustrate bottom sheet variants, anatomy, measurements and guidance scenes.
-
 use tessera_components::{
     alignment::Alignment,
     boxed::boxed,
@@ -27,9 +21,9 @@ use crate::res::I18N;
 
 use super::{
     super::{ACCENT, INK, srgb},
-    Geometry, annotations, caption,
+    ALBUMS, Geometry, annotations, caption,
     color::at,
-    gap, sheet_albums, sheet_canvas, type_style,
+    gap, sheet_canvas, type_style,
 };
 
 fn top_rounded(radius: f64) -> Shape {
@@ -83,22 +77,22 @@ fn glyph(kind: Glyph, x: f64, y: f64, size: f64, tint: Color) {
     boxed().modifier(at(x, y)).children(move || {
         let builder = icon().size(Dp(size)).tint(tint);
         match kind {
-            Glyph::Share => builder.vector(filled::SHARE_SVG),
-            Glyph::Add => builder.vector(filled::ADD_SVG),
-            Glyph::Trash => builder.vector(filled::DELETE_SVG),
-            Glyph::Bag => builder.vector(filled::SHOPPING_BAG_SVG),
-            Glyph::Archive => builder.vector(filled::ARCHIVE_SVG),
-            Glyph::Link => builder.vector(filled::LINK_SVG),
-            Glyph::Edit => builder.vector(filled::EDIT_SVG),
-            Glyph::Copy => builder.vector(filled::CONTENT_COPY_SVG),
-            Glyph::Nearby => builder.vector(filled::NEAR_ME_SVG),
-            Glyph::Folder => builder.vector(filled::FOLDER_SVG),
-            Glyph::Document => builder.vector(filled::DESCRIPTION_SVG),
-            Glyph::Checked => builder.vector(filled::CHECK_BOX_SVG),
-            Glyph::Unchecked => builder.vector(filled::CHECK_BOX_OUTLINE_BLANK_SVG),
-            Glyph::Mail => builder.vector(filled::MAIL_SVG),
-            Glyph::Video => builder.vector(filled::VIDEOCAM_SVG),
-            Glyph::Drive => builder.vector(filled::ADD_TO_DRIVE_SVG),
+            Glyph::Share => builder.painter(filled::SHARE_SVG),
+            Glyph::Add => builder.painter(filled::ADD_SVG),
+            Glyph::Trash => builder.painter(filled::DELETE_SVG),
+            Glyph::Bag => builder.painter(filled::SHOPPING_BAG_SVG),
+            Glyph::Archive => builder.painter(filled::ARCHIVE_SVG),
+            Glyph::Link => builder.painter(filled::LINK_SVG),
+            Glyph::Edit => builder.painter(filled::EDIT_SVG),
+            Glyph::Copy => builder.painter(filled::CONTENT_COPY_SVG),
+            Glyph::Nearby => builder.painter(filled::NEAR_ME_SVG),
+            Glyph::Folder => builder.painter(filled::FOLDER_SVG),
+            Glyph::Document => builder.painter(filled::DESCRIPTION_SVG),
+            Glyph::Checked => builder.painter(filled::CHECK_BOX_SVG),
+            Glyph::Unchecked => builder.painter(filled::CHECK_BOX_OUTLINE_BLANK_SVG),
+            Glyph::Mail => builder.painter(filled::MAIL_SVG),
+            Glyph::Video => builder.painter(filled::VIDEOCAM_SVG),
+            Glyph::Drive => builder.painter(filled::ADD_TO_DRIVE_SVG),
         };
     });
 }
@@ -698,13 +692,11 @@ pub(super) fn tablet_figure() {
 
 #[tessera]
 fn photo(index: usize, x: f64, y: f64, w: f64, h: f64, radius: Option<f64>) {
-    image()
-        .raster(tessera_ui::remember_with_key(index, move || sheet_albums()[index].clone()).get())
-        .modifier(
-            at(x, y)
-                .required_size(Dp(w), Dp(h))
-                .clip_shape(Shape::rounded_rectangle(Dp(radius.unwrap_or(0.0)))),
-        );
+    image().painter(ALBUMS[index]).modifier(
+        at(x, y)
+            .required_size(Dp(w), Dp(h))
+            .clip_shape(Shape::rounded_rectangle(Dp(radius.unwrap_or(0.0)))),
+    );
 }
 
 #[tessera]

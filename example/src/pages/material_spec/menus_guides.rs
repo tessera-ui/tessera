@@ -1,9 +1,3 @@
-//! Menu guideline, state and baseline reference figures.
-//!
-//! ## Usage
-//!
-//! Compare menu states, baseline anatomy and placement guidance.
-
 use tessera_components::{
     alignment::{Alignment, CrossAxisAlignment, MainAxisAlignment},
     boxed::boxed,
@@ -460,7 +454,7 @@ fn baseline_icon(code: u8, tint: Color) {
         14 => filled::UPLOAD_SVG,
         _ => filled::CHECK_SVG,
     };
-    icon().vector(vector).size(Dp(24.0)).tint(tint);
+    icon().painter(vector).size(Dp(24.0)).tint(tint);
 }
 
 /// Static baseline menu row: 48dp tall, 12dp padding and gaps, 24dp icons.
@@ -962,7 +956,7 @@ fn trigger_tile(kind: usize) {
                         }
                         2 => {
                             icon()
-                                .vector(filled::MORE_VERT_SVG)
+                                .painter(filled::MORE_VERT_SVG)
                                 .size(Dp(24.0))
                                 .tint(tone);
                         }

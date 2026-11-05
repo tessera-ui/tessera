@@ -1,9 +1,3 @@
-//! Native icon-button dimensions and touch-target diagrams.
-//!
-//! ## Usage
-//!
-//! Inspect visual dimensions, interactive bounds and shape corners.
-
 use std::fmt::Write as _;
 
 use tessera_components::{
@@ -28,7 +22,7 @@ use tessera_ui::{
 use crate::res::I18N;
 
 use super::{
-    super::{annotations, gap, media, srgb, subheading, type_style},
+    super::{annotations, gap, srgb, subheading, type_style},
     SIZES, context,
 };
 
@@ -127,7 +121,6 @@ fn numbered_legend(items: Vec<&'static str>) {
 
 #[tessera]
 fn stage(width: f64, height: f64, label: String, child: RenderSlot) {
-    media::load_fonts();
     let measured = remember(move || Dp(width));
     let scheme = use_context::<MaterialTheme>().unwrap().get().color_scheme;
     boxed()

@@ -7,11 +7,12 @@ use std::path::{Path, PathBuf};
 
 use image::GenericImageView;
 use tessera_ui::{
-    AssetExt, Color, ComputedData, LayoutResult, MeasurementError, Modifier, Px,
+    Color, ComputedData, LayoutResult, MeasurementError, Modifier, Px,
     layout::{MeasureScope, layout},
     tessera,
 };
-use thiserror::Error;
+
+pub use image::ImageError as ImageLoadError;
 
 use crate::{
     image_vector::{ImageVectorLoadError, TintMode, TryIntoImageVectorData},
@@ -23,21 +24,6 @@ use crate::{
 };
 
 pub use crate::pipelines::image::command::ImageData;
-
-/// Errors that can occur while loading raster image data.
-#[derive(Debug, Error)]
-pub enum ImageLoadError {
-    /// Failed to read bytes from an asset handle.
-    #[error("failed to read image bytes from asset: {source}")]
-    AssetRead {
-        /// Underlying IO error.
-        #[source]
-        source: std::io::Error,
-    },
-    /// Image decoding failed.
-    #[error(transparent)]
-    Decode(#[from] image::ImageError),
-}
 
 /// Converts a source into decoded raster image data.
 pub trait TryIntoImageData {
@@ -163,36 +149,6 @@ impl ImageBuilder {
             .configure("painter", move |props| props.painter = value);
         Ok(Self { props: self.props })
     }
-
-    /// Decodes raster image data from an asset handle and stores it.
-    pub fn try_raster_asset<T>(&self, asset: T) -> Result<Self, ImageLoadError>
-    where
-        T: AssetExt,
-    {
-        let bytes = asset
-            .read()
-            .map_err(|source| ImageLoadError::AssetRead { source })?;
-        let value = Some(Painter::Raster(decode_image_from_bytes(bytes.as_ref())?));
-        self.props
-            .configure("painter", move |props| props.painter = value);
-        Ok(Self { props: self.props })
-    }
-
-    /// Decodes vector image data from an asset handle and stores it.
-    pub fn try_vector_asset<T>(&self, asset: T) -> Result<Self, ImageVectorLoadError>
-    where
-        T: AssetExt,
-    {
-        let bytes = asset
-            .read()
-            .map_err(|source| ImageVectorLoadError::AssetRead { source })?;
-        let value = Some(Painter::Vector(
-            bytes.as_ref().try_into_image_vector_data()?,
-        ));
-        self.props
-            .configure("painter", move |props| props.painter = value);
-        Ok(Self { props: self.props })
-    }
 }
 
 #[derive(Clone, PartialEq)]
@@ -203,6 +159,7 @@ struct ImageLayout {
 impl tessera_ui::LayoutModifierNode for ImageLayout {
     fn measure(&self, input: &mut MeasureScope<'_>) -> Result<LayoutResult, MeasurementError> {
         let (intrinsic_width, intrinsic_height) = match &self.painter {
+            Painter::Asset(_) => (Px::ZERO, Px::ZERO),
             Painter::Vector(data) => (
                 clamp_f32_to_px(data.viewport_width),
                 clamp_f32_to_px(data.viewport_height),
@@ -225,6 +182,7 @@ impl tessera_ui::DrawModifierNode for ImageLayout {
     ) {
         let input = &mut *ctx.render_input;
         match &self.painter {
+            Painter::Asset(_) => {}
             Painter::Raster(data) => {
                 let image_command = ImageCommand {
                     data: data.clone(),
@@ -282,7 +240,9 @@ impl tessera_ui::DrawModifierNode for ImageLayout {
 #[tessera]
 pub fn image(#[prop(skip_setter)] painter: Option<Painter>, modifier: Option<Modifier>) {
     let modifier = modifier.unwrap_or_default();
-    let painter = painter.unwrap_or_else(|| Painter::Raster(placeholder_image_data()));
+    let painter = painter
+        .and_then(Painter::resolve)
+        .unwrap_or_else(|| Painter::Raster(placeholder_image_data()));
     let policy = ImageLayout {
         painter: painter.clone(),
     };

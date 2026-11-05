@@ -6,7 +6,6 @@ use std::{
     time::{Duration, Instant},
 };
 
-use aho_corasick::AhoCorasick;
 use anyhow::{Context, Result, anyhow};
 use cargo_metadata::MetadataCommand;
 use cargo_mobile2::{
@@ -28,23 +27,25 @@ use cargo_mobile2::{
     util,
 };
 use clap::ValueEnum;
-use globset::{Glob, GlobSet, GlobSetBuilder};
 use handlebars::{Handlebars, handlebars_helper};
 use include_dir::{Dir, include_dir};
 use notify::{Event, EventKind, RecursiveMode, Watcher};
 use serde::Deserialize;
 use serde_json::{Value, json};
-use tessera_build::{
-    AssetBackend, asset_namespace, load_tessera_config_from_dir, resolve_assets_dir,
-    resolve_resource_dirs,
-};
+use tessera_build::{AssetBackend, load_tessera_config_from_dir, resolve_resource_dirs};
 
 use crate::{
     call_guard, output,
     template::{write_template_dir, write_template_file},
 };
 
-use super::find_package_dir;
+use super::{
+    assets::{
+        PlatformAssetCandidate, collect_platform_asset_candidates, collect_resolved_packages,
+        collect_used_platform_asset_paths, sync_assets,
+    },
+    find_package_dir,
+};
 
 const DEFAULT_ARCH: &str = "arm64";
 const DEFAULT_MIN_SDK_VERSION: u32 = 24;
@@ -1052,22 +1053,6 @@ fn sync_android_project(ctx: &AndroidContext) -> Result<()> {
     Ok(())
 }
 
-#[derive(Debug)]
-struct ResolvedPackage {
-    name: String,
-    version: String,
-    dir: PathBuf,
-    is_root: bool,
-}
-
-#[derive(Debug)]
-struct PlatformAssetCandidate {
-    platform_path: String,
-    source_path: PathBuf,
-    target_path: PathBuf,
-    always_copy: bool,
-}
-
 fn collect_android_plugins(ctx: &AndroidContext) -> Result<Vec<AndroidPlugin>> {
     let packages =
         collect_resolved_packages(ctx.config.app().root_dir(), ctx.package_dir.as_ref())?;
@@ -1165,220 +1150,27 @@ fn sync_android_assets_internal(
     used_platform_paths: Option<&HashSet<String>>,
     precomputed_candidates: Option<&[PlatformAssetCandidate]>,
 ) -> Result<()> {
-    let tessera_assets_root = ctx.config.project_dir().join("app/src/main/assets/tessera");
-    if tessera_assets_root.exists() {
-        fs::remove_dir_all(&tessera_assets_root)
-            .with_context(|| format!("Failed to remove {}", tessera_assets_root.display()))?;
-    }
-
-    if ctx.asset_backend != AssetBackend::Platform {
-        return Ok(());
-    }
-
-    let owned_candidates;
-    let candidates = if let Some(candidates) = precomputed_candidates {
+    let root = ctx.config.project_dir().join("app/src/main/assets/tessera");
+    let collected;
+    let candidates = if ctx.asset_backend != AssetBackend::Platform {
+        &[]
+    } else if let Some(candidates) = precomputed_candidates {
         candidates
     } else {
         let packages =
             collect_resolved_packages(ctx.config.app().root_dir(), ctx.package_dir.as_ref())?;
-        owned_candidates = collect_platform_asset_candidates(&packages, &tessera_assets_root)?;
-        &owned_candidates
+        collected = collect_platform_asset_candidates(&packages, &root)?;
+        &collected
     };
-    let mut copied = 0usize;
-    let mut always_copy_total = 0usize;
-    for candidate in candidates {
-        if candidate.always_copy {
-            always_copy_total += 1;
-        } else if used_platform_paths
-            .map(|used| !used.contains(&candidate.platform_path))
-            .unwrap_or(false)
-        {
-            continue;
-        }
-
-        if let Some(parent) = candidate.target_path.parent() {
-            fs::create_dir_all(parent)
-                .with_context(|| format!("Failed to create {}", parent.display()))?;
-        }
-        fs::copy(&candidate.source_path, &candidate.target_path).with_context(|| {
-            format!(
-                "Failed to copy asset {} to {}",
-                candidate.source_path.display(),
-                candidate.target_path.display()
-            )
-        })?;
-        copied += 1;
-    }
-
-    if copied > 0 {
-        if let Some(used) = used_platform_paths {
-            output::status(
-                "Assets",
-                format!(
-                    "synced {} of {} platform assets to {} (used paths: {}, prune_exclude hits: {})",
-                    copied,
-                    candidates.len(),
-                    display_path(&tessera_assets_root),
-                    used.len(),
-                    always_copy_total
-                ),
-            );
-        } else {
-            output::status(
-                "Assets",
-                format!(
-                    "synced platform assets to {}",
-                    display_path(&tessera_assets_root)
-                ),
-            );
-        }
-    } else if used_platform_paths.is_some() {
-        output::status(
-            "Assets",
-            format!(
-                "synced 0 platform assets to {}",
-                display_path(&tessera_assets_root)
-            ),
-        );
-    }
-
-    Ok(())
-}
-
-fn collect_platform_asset_candidates(
-    packages: &[ResolvedPackage],
-    tessera_assets_root: &Path,
-) -> Result<Vec<PlatformAssetCandidate>> {
-    let mut candidates = Vec::new();
-
-    for package in packages {
-        let Some(config) = load_tessera_config_from_dir(&package.dir)? else {
-            continue;
-        };
-        let Some(assets_dir) = resolve_assets_dir(&package.dir, Some(&config)) else {
-            continue;
-        };
-        if !assets_dir.is_dir() {
-            return Err(anyhow!(
-                "Configured assets directory not found for package `{}`: {}",
-                package.name,
-                assets_dir.display()
-            ));
-        }
-
-        let tree_shaking_exclude_patterns = config
-            .assets
-            .as_ref()
-            .map(|assets| assets.tree_shaking_exclude_patterns())
-            .unwrap_or(&[]);
-        let tree_shaking_exclude_matcher =
-            build_tree_shaking_exclude_matcher(tree_shaking_exclude_patterns, &package.name)?;
-        let namespace = asset_namespace(&package.name, &package.version);
-        collect_package_platform_asset_candidates(
-            &assets_dir,
-            &namespace,
-            tessera_assets_root,
-            tree_shaking_exclude_matcher.as_ref(),
-            &mut candidates,
-        )?;
-    }
-
-    candidates.sort_by(|left, right| left.platform_path.cmp(&right.platform_path));
-    Ok(candidates)
-}
-
-fn collect_package_platform_asset_candidates(
-    assets_dir: &Path,
-    namespace: &str,
-    tessera_assets_root: &Path,
-    tree_shaking_exclude_matcher: Option<&GlobSet>,
-    out: &mut Vec<PlatformAssetCandidate>,
-) -> Result<()> {
-    for source_path in collect_files_recursive(assets_dir)? {
-        let relative = source_path
-            .strip_prefix(assets_dir)
-            .with_context(|| format!("Failed to relativize {}", source_path.display()))?;
-        let relative_path = normalize_relative_path(relative);
-        let platform_path = format!("tessera/{namespace}/{relative_path}");
-        let target_path = tessera_assets_root.join(namespace).join(relative);
-        out.push(PlatformAssetCandidate {
-            platform_path,
-            source_path,
-            target_path,
-            always_copy: tree_shaking_exclude_matcher
-                .map(|matcher| matcher.is_match(&relative_path))
-                .unwrap_or(false),
-        });
-    }
-    Ok(())
-}
-
-fn build_tree_shaking_exclude_matcher(
-    patterns: &[String],
-    package_name: &str,
-) -> Result<Option<GlobSet>> {
-    if patterns.is_empty() {
-        return Ok(None);
-    }
-
-    let mut builder = GlobSetBuilder::new();
-    for pattern in patterns {
-        let normalized = normalize_tree_shaking_pattern(pattern);
-        if normalized.is_empty() {
-            return Err(anyhow!(
-                "Invalid empty assets.tree_shaking.exclude pattern in package `{}`",
-                package_name
-            ));
-        }
-
-        let glob = Glob::new(&normalized).with_context(|| {
-            format!(
-                "Invalid assets.tree_shaking.exclude pattern `{}` in package `{}`",
-                pattern, package_name
-            )
-        })?;
-        builder.add(glob);
-    }
-
-    let matcher = builder.build().with_context(|| {
+    let (count, bytes) = sync_assets(&root, candidates, used_platform_paths)?;
+    output::status(
+        "Assets",
         format!(
-            "Failed to build assets.tree_shaking.exclude matcher for package `{}`",
-            package_name
-        )
-    })?;
-    Ok(Some(matcher))
-}
-
-fn normalize_tree_shaking_pattern(pattern: &str) -> String {
-    let normalized = pattern.trim().replace('\\', "/");
-    if let Some(stripped) = normalized.strip_prefix("./") {
-        stripped.to_string()
-    } else {
-        normalized
-    }
-}
-
-fn collect_files_recursive(root: &Path) -> Result<Vec<PathBuf>> {
-    let mut files = Vec::new();
-    let mut stack = vec![root.to_path_buf()];
-    while let Some(dir) = stack.pop() {
-        for entry in
-            fs::read_dir(&dir).with_context(|| format!("Failed to read {}", dir.display()))?
-        {
-            let entry = entry?;
-            let path = entry.path();
-            let file_type = entry
-                .file_type()
-                .with_context(|| format!("Failed to inspect {}", path.display()))?;
-            if file_type.is_dir() {
-                stack.push(path);
-            } else if file_type.is_file() {
-                files.push(path);
-            }
-        }
-    }
-    files.sort();
-    Ok(files)
+            "delivered {count} assets ({bytes} bytes) to {}",
+            display_path(&root)
+        ),
+    );
+    Ok(())
 }
 
 fn collect_existing_android_libs(ctx: &AndroidContext, profile: Profile) -> Vec<PathBuf> {
@@ -1397,116 +1189,6 @@ fn collect_existing_android_libs(ctx: &AndroidContext, profile: Profile) -> Vec<
     paths.sort();
     paths.dedup();
     paths
-}
-
-fn collect_used_platform_asset_paths(
-    binary_paths: &[PathBuf],
-    candidates: &[PlatformAssetCandidate],
-) -> Result<HashSet<String>> {
-    let patterns = candidates
-        .iter()
-        .map(|candidate| candidate.platform_path.as_bytes())
-        .collect::<Vec<_>>();
-    let matcher = AhoCorasick::new(patterns)
-        .context("Failed to build platform asset path matcher for binary scan")?;
-
-    let mut used = HashSet::new();
-    for binary_path in binary_paths {
-        let bytes = fs::read(binary_path)
-            .with_context(|| format!("Failed to read {}", binary_path.display()))?;
-        for matched in matcher.find_iter(&bytes) {
-            if let Some(candidate) = candidates.get(matched.pattern().as_usize()) {
-                used.insert(candidate.platform_path.clone());
-            }
-        }
-    }
-    Ok(used)
-}
-
-fn normalize_relative_path(path: &Path) -> String {
-    path.iter()
-        .map(|segment| segment.to_string_lossy())
-        .collect::<Vec<_>>()
-        .join("/")
-}
-
-fn collect_resolved_packages(
-    root_dir: &Path,
-    package_dir: Option<&PathBuf>,
-) -> Result<Vec<ResolvedPackage>> {
-    let manifest_path = root_dir.join("Cargo.toml");
-    let metadata = MetadataCommand::new()
-        .manifest_path(&manifest_path)
-        .exec()
-        .context("Failed to run cargo metadata")?;
-
-    let root_manifest = package_dir
-        .map(|dir| dir.join("Cargo.toml"))
-        .unwrap_or_else(|| manifest_path.clone())
-        .canonicalize()
-        .with_context(|| "Failed to resolve root Cargo.toml")?;
-
-    let root_pkg = metadata
-        .packages
-        .iter()
-        .find(|pkg| {
-            pkg.manifest_path
-                .clone()
-                .into_std_path_buf()
-                .canonicalize()
-                .map(|path| path == root_manifest)
-                .unwrap_or(false)
-        })
-        .ok_or_else(|| anyhow!("Failed to resolve the root package from cargo metadata"))?;
-
-    let resolve = metadata
-        .resolve
-        .as_ref()
-        .ok_or_else(|| anyhow!("cargo metadata missing dependency graph"))?;
-
-    let mut nodes = HashMap::new();
-    for node in &resolve.nodes {
-        nodes.insert(node.id.clone(), node);
-    }
-
-    let mut visited = HashSet::new();
-    let mut stack = vec![root_pkg.id.clone()];
-    while let Some(id) = stack.pop() {
-        if visited.insert(id.clone())
-            && let Some(node) = nodes.get(&id)
-        {
-            for dep in &node.deps {
-                stack.push(dep.pkg.clone());
-            }
-        }
-    }
-
-    let mut packages = Vec::new();
-    for pkg in metadata
-        .packages
-        .iter()
-        .filter(|pkg| visited.contains(&pkg.id))
-    {
-        let dir = pkg
-            .manifest_path
-            .clone()
-            .into_std_path_buf()
-            .parent()
-            .map(Path::to_path_buf)
-            .ok_or_else(|| anyhow!("Failed to locate package root for {}", pkg.manifest_path))?;
-        packages.push(ResolvedPackage {
-            name: pkg.name.to_string(),
-            version: pkg.version.to_string(),
-            dir,
-            is_root: pkg.id == root_pkg.id,
-        });
-    }
-    packages.sort_by(|left, right| {
-        left.name
-            .cmp(&right.name)
-            .then(left.version.cmp(&right.version))
-    });
-    Ok(packages)
 }
 
 fn sync_android_plugins(project_dir: &Path, plugins: &[AndroidPlugin]) -> Result<()> {

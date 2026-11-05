@@ -1,15 +1,9 @@
-//! Accessible dialog interaction and labeling examples.
-//!
-//! ## Usage
-//!
-//! Explore keyboard navigation and labels for dialog controls.
-
 use tessera_components::{
     alignment::Alignment,
     boxed::boxed,
     button::button,
     icon::icon,
-    image::{ImageData, TryIntoImageData as _, image},
+    image::image,
     material_icons::filled,
     modifier::{InteractionVisualState, ModifierExt as _, Padding, SemanticsArgs},
     row::row,
@@ -23,7 +17,7 @@ use tessera_ui::{
     modifier::FocusModifierExt as _, remember, tessera, use_context,
 };
 
-use crate::res::I18N;
+use crate::res::{I18N, material_spec as assets};
 
 use super::{
     annotations, dialog_marker, dialog_phone_status, dialog_scene_action, dialog_scene_input,
@@ -140,7 +134,7 @@ fn keyboard_content(reverse: bool, scale: f64) {
             .children(move || {
                 boxed().modifier(Modifier::new().offset(Dp(144.0 * scale), Dp(24.0 * scale)))
                     .children(move || {
-                        icon().vector(filled::DELETE_OUTLINE_SVG).size(Dp(24.0 * scale)).tint(scheme.secondary);
+                        icon().painter(filled::DELETE_OUTLINE_SVG).size(Dp(24.0 * scale)).tint(scheme.secondary);
                     });
                 placed_text("ui-permanently-delete".into(), 24.0, 32.0, 46.0, 64.0, 264.0, scale);
                 text().content(I18N.text("ui-deleting-the-selected-messages-will-also-remove-them-from-all-synced-devices-you-won-t-be"))
@@ -384,7 +378,7 @@ fn event_header(title: String, scale: f64, close: Callback, save: Callback) {
         )
         .child(move || {
             icon()
-                .vector(filled::CLOSE_SVG)
+                .painter(filled::CLOSE_SVG)
                 .size(Dp(24.0 * scale))
                 .tint(scheme.on_surface);
         });
@@ -480,16 +474,8 @@ fn use_sparingly() {
         });
 }
 
-pub(super) fn photo_data() -> ImageData {
-    include_bytes!("../../../assets/material_spec/dialog-accessibility-photos.png")
-        .as_slice()
-        .try_into_image_data()
-        .expect("dialog photo examples")
-}
-
 #[tessera]
 fn photo_region(x: f64, y: f64, width: f64, height: f64, radius: f64, scale: f64) {
-    let photo = remember(photo_data).get();
     boxed()
         .modifier(
             Modifier::new()
@@ -503,11 +489,13 @@ fn photo_region(x: f64, y: f64, width: f64, height: f64, radius: f64, scale: f64
                 }),
         )
         .children(move || {
-            image().raster(photo.clone()).modifier(
-                Modifier::new()
-                    .offset(Dp(-x * scale), Dp(-y * scale))
-                    .required_size(Dp(676.0 * scale), Dp(600.0 * scale)),
-            );
+            image()
+                .painter(assets::DIALOG_ACCESSIBILITY_PHOTOS_PNG)
+                .modifier(
+                    Modifier::new()
+                        .offset(Dp(-x * scale), Dp(-y * scale))
+                        .required_size(Dp(676.0 * scale), Dp(600.0 * scale)),
+                );
         });
 }
 
@@ -750,7 +738,7 @@ fn contained_elements(scale: f64) {
                             .modifier(Modifier::new().offset(Dp(16.0 * scale), Dp(134.0 * scale)))
                             .children(move || {
                                 icon()
-                                    .vector(filled::PERSON_SVG)
+                                    .painter(filled::PERSON_SVG)
                                     .size(Dp(24.0 * scale))
                                     .tint(scheme.primary);
                             });

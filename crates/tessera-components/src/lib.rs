@@ -91,6 +91,7 @@ pub mod flow_column;
 pub mod flow_row;
 pub mod fluid_glass;
 pub mod fluid_switch;
+pub mod fonts;
 pub mod glass_button;
 pub mod glass_progress;
 pub mod glass_slider;

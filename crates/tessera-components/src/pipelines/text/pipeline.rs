@@ -18,13 +18,6 @@ use crate::theme::TextStyle;
 
 use super::command::{TextCommand, TextConstraint};
 
-#[cfg(target_family = "wasm")]
-use crate::res;
-#[cfg(target_family = "wasm")]
-use std::io;
-#[cfg(target_family = "wasm")]
-use tessera_ui::AssetExt;
-
 struct TextResources {
     font_system: Arc<RwLock<glyphon::FontSystem>>,
 }
@@ -32,7 +25,7 @@ struct TextResources {
 impl Default for TextResources {
     fn default() -> Self {
         Self {
-            font_system: Arc::new(init_font_system()),
+            font_system: Arc::new(init_font_system(glyphon::FontSystem::new())),
         }
     }
 }
@@ -61,145 +54,33 @@ struct TextFont {
     family: Option<&'static str>,
 }
 
-fn load_material_fonts(db: &mut fontdb::Database) {
-    let existing: Vec<_> = db
+fn init_font_system(mut fonts: glyphon::FontSystem) -> RwLock<glyphon::FontSystem> {
+    #[cfg(target_os = "android")]
+    fonts.db_mut().load_fonts_dir("/system/fonts");
+    let tessera_ui::LoadState::Ready(bytes) = crate::res::ROBOTO_REGULAR_TTF.load().get() else {
+        panic!("the default font must be embedded");
+    };
+    let existing = fonts
+        .db()
         .faces()
-        .filter(|face| {
-            face.families
-                .iter()
-                .any(|(name, _)| matches!(name.as_str(), "Roboto" | "Noto Sans SC"))
-        })
+        .filter(|face| face.families.iter().any(|(name, _)| name == "Roboto"))
         .map(|face| face.id)
-        .collect();
+        .collect::<Vec<_>>();
     for id in existing {
-        db.remove_face(id);
+        fonts.db_mut().remove_face(id);
     }
-    #[cfg(not(target_family = "wasm"))]
-    for bytes in [
-        include_bytes!("../../../assets/Roboto-Regular.ttf").as_slice(),
-        include_bytes!("../../../assets/Roboto-Medium.ttf").as_slice(),
-        include_bytes!("../../../assets/Roboto-Bold.ttf").as_slice(),
-        include_bytes!("../../../assets/NotoSansSC-Regular.otf").as_slice(),
-    ] {
-        db.load_font_source(fontdb::Source::Binary(Arc::new(bytes)));
-    }
+    fonts
+        .db_mut()
+        .load_font_source(fontdb::Source::Binary(Arc::new(bytes)));
+    fonts.db_mut().set_sans_serif_family("Roboto");
     #[cfg(target_family = "wasm")]
-    for asset in [
-        res::ROBOTO_REGULAR_TTF,
-        res::ROBOTO_MEDIUM_TTF,
-        res::ROBOTO_BOLD_TTF,
-        res::NOTOSANSSC_REGULAR_OTF,
-    ] {
-        if let Err(err) = load_asset_font_data(db, asset) {
-            eprintln!("wasm fontdb: failed to load bundled text font: {err}");
-        }
-    }
-    db.set_sans_serif_family("Roboto");
-}
-
-#[cfg(target_os = "android")]
-fn is_android_emoji_face(face: &fontdb::FaceInfo) -> bool {
-    let post_script = face.post_script_name.as_str();
-    if post_script.contains("NotoColorEmoji") {
-        return true;
-    }
-
-    face.families
-        .iter()
-        .any(|(name, _)| name.contains("Noto Color Emoji"))
-}
-
-#[cfg(target_os = "android")]
-fn remove_system_emoji_faces(db: &mut fontdb::Database) -> usize {
-    let ids: Vec<_> = db
-        .faces()
-        .filter(|face| {
-            matches!(
-                &face.source,
-                fontdb::Source::File(_) | fontdb::Source::SharedFile(_, _)
-            ) && is_android_emoji_face(face)
-        })
-        .map(|face| face.id)
-        .collect();
-
-    // Android ships COLRv1 emoji fonts, which swash cannot rasterize yet.
-    for id in &ids {
-        db.remove_face(*id);
-    }
-
-    ids.len()
-}
-
-#[cfg(target_os = "android")]
-fn load_embedded_android_emoji_font(db: &mut fontdb::Database) -> usize {
-    let before = db.len();
-    let data = include_bytes_zstd::include_bytes_zstd!("assets/NotoColorEmoji_COLRv0.ttf", 19);
-    if data.is_empty() {
-        return 0;
-    }
-    db.load_font_data(data);
-    db.len().saturating_sub(before)
-}
-
-#[cfg(target_os = "android")]
-fn ensure_android_emoji_font(db: &mut fontdb::Database) {
-    // Use the bundled COLRv0 emoji font to avoid COLRv1 rendering gaps.
-    remove_system_emoji_faces(db);
-    load_embedded_android_emoji_font(db);
-}
-
-#[cfg(target_os = "android")]
-fn init_font_system() -> RwLock<glyphon::FontSystem> {
-    let mut font_system = glyphon::FontSystem::new();
-
     {
-        let db = font_system.db_mut();
-        db.load_fonts_dir("/system/fonts");
-        ensure_android_emoji_font(db);
-        load_material_fonts(db);
-        db.set_sans_serif_family("Roboto");
-        db.set_serif_family("Noto Serif");
-        db.set_monospace_family("Droid Sans Mono");
-        db.set_cursive_family("Dancing Script");
-        db.set_fantasy_family("Dancing Script");
+        fonts.db_mut().set_serif_family("Noto Sans SC");
+        fonts.db_mut().set_monospace_family("Noto Sans SC");
+        fonts.db_mut().set_cursive_family("Noto Sans SC");
+        fonts.db_mut().set_fantasy_family("Noto Sans SC");
     }
-
-    RwLock::new(font_system)
-}
-
-#[cfg(target_family = "wasm")]
-fn load_asset_font_data(db: &mut fontdb::Database, asset: res::Asset) -> io::Result<usize> {
-    let before = db.len();
-    let bytes = asset.read()?;
-    db.load_font_data(bytes.as_ref().to_vec());
-    Ok(db.len().saturating_sub(before))
-}
-
-#[cfg(target_family = "wasm")]
-fn init_font_system() -> RwLock<glyphon::FontSystem> {
-    let mut font_system = glyphon::FontSystem::new();
-
-    {
-        let db = font_system.db_mut();
-        if let Err(err) = load_asset_font_data(db, res::NOTOCOLOREMOJI_COLRV0_TTF) {
-            eprintln!("wasm fontdb: failed to load emoji font asset: {err}");
-        }
-        load_material_fonts(db);
-        db.set_serif_family("Noto Sans SC");
-        db.set_monospace_family("Noto Sans SC");
-        db.set_cursive_family("Noto Sans SC");
-        db.set_fantasy_family("Noto Sans SC");
-    }
-
-    RwLock::new(font_system)
-}
-
-#[cfg(not(target_os = "android"))]
-#[cfg(not(target_family = "wasm"))]
-fn init_font_system() -> RwLock<glyphon::FontSystem> {
-    let mut font_system = glyphon::FontSystem::new();
-    load_material_fonts(font_system.db_mut());
-    RwLock::new(font_system)
+    RwLock::new(fonts)
 }
 
 /// Borrows the font system owned by the active runtime session.
@@ -409,6 +290,7 @@ impl TextData {
         style: TextStyle,
         constraint: TextConstraint,
     ) -> Self {
+        crate::fonts::prepare(&text, style);
         let font_size = style.font_size.to_pixels_f32();
         let line_height = style.line_height.unwrap_or(style.font_size).to_pixels_f32();
         let font = TextFont {
@@ -677,6 +559,8 @@ mod tests {
 
     #[test]
     fn retained_text_copies_share_shapes_and_isolate_scroll_and_opacity() {
+        let session = tessera_ui::RuntimeSession::new();
+        let _session = session.enter();
         let shaped = TextData::shape(
             "Shared shaped glyphs".into(),
             Color::BLACK,
@@ -728,6 +612,8 @@ mod tests {
 
     #[test]
     fn horizontal_buffer_scroll_moves_glyph_origin_without_moving_clip_bounds() {
+        let session = tessera_ui::RuntimeSession::new();
+        let _session = session.enter();
         let shaped = TextData::shape(
             "Scrollable editor text".into(),
             Color::BLACK,
@@ -757,6 +643,8 @@ mod tests {
 
     #[test]
     fn wrapping_keeps_words_intact_and_falls_back_for_words_wider_than_the_line() {
+        let session = tessera_ui::RuntimeSession::new();
+        let _session = session.enter();
         let style = MaterialTypography::default().body_medium;
         let alpha = TextData::shape(
             "alpha ".to_string(),
@@ -808,10 +696,17 @@ mod tests {
     fn bundled_fonts_shape_latin_weights_and_chinese_without_system_fonts() {
         let session = tessera_ui::RuntimeSession::new();
         session.run(|| {
-            let mut db = glyphon::fontdb::Database::new();
-            super::load_material_fonts(&mut db);
-            *super::write_font_system() =
-                glyphon::FontSystem::new_with_locale_and_db("en-US".into(), db);
+            let db = glyphon::fontdb::Database::new();
+            *super::write_font_system() = super::init_font_system(
+                glyphon::FontSystem::new_with_locale_and_db("en-US".into(), db),
+            )
+            .into_inner();
+            assert!(
+                read_font_system()
+                    .db()
+                    .faces()
+                    .any(|face| face.families.iter().any(|(name, _)| name == "Roboto"))
+            );
             let typography = MaterialTypography::default();
             let shape = |content: &str, style| {
                 TextData::shape(

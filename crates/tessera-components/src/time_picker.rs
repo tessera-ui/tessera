@@ -1274,7 +1274,7 @@ fn time_clock(state: State<TimePickerState>, hour_step: u8, minute_step: u8) {
             let inner = policy.inner();
             let track = tessera_ui::remember_with_key(inner, move || clock_track(inner)).get();
             icon()
-                .vector(track)
+                .painter(track)
                 .size(CLOCK_SIZE)
                 .rotation(policy.angle().to_degrees())
                 .tint(scheme.primary)

@@ -1,10 +1,3 @@
-//! Bottom sheet specifications, tokens and modal demonstrations.
-//!
-//! ## Usage
-//!
-//! Compare sheet variants, adjust modal sheet height and review dismissal
-//! behaviour.
-
 use tessera_components::{
     alignment::{Alignment, CrossAxisAlignment},
     bottom_sheet::{BottomSheetController, BottomSheetExpansion, bottom_sheet_provider},
@@ -14,7 +7,7 @@ use tessera_components::{
     column::column,
     icon::icon,
     icon_button::icon_button,
-    image::{ImageData, TryIntoImageData as _, image},
+    image::image,
     list_item::list_item,
     material_icons::filled,
     modifier::{ModifierExt as _, SemanticsArgs},
@@ -30,7 +23,7 @@ use tessera_ui::{
     modifier::FocusModifierExt as _, remember, scaled_box, tessera, use_context,
 };
 
-use crate::res::I18N;
+use crate::res::{I18N, material_spec as assets};
 
 use super::{
     INK,
@@ -809,7 +802,7 @@ fn sheet_content(close: Callback, action: State<String>) {
                     )
                     .leading(move || {
                         icon()
-                            .vector(match index {
+                            .painter(match index {
                                 0 => filled::SHARE_SVG,
                                 1 => filled::LINK_SVG,
                                 _ => filled::BOOKMARK_SVG,
@@ -991,11 +984,11 @@ fn token_folder(#[prop(into)] name: String, index: usize, depth: usize, open: St
             Dp(8.0),
         ))
         .leading(|| {
-            icon().vector(filled::FOLDER_SVG).size(Dp(20.0));
+            icon().painter(filled::FOLDER_SVG).size(Dp(20.0));
         })
         .trailing(move || {
             icon()
-                .vector(if expanded {
+                .painter(if expanded {
                     filled::EXPAND_LESS_SVG
                 } else {
                     filled::EXPAND_MORE_SVG
@@ -1129,16 +1122,6 @@ fn touch_target() {
     }));
 }
 
-fn sheet_albums() -> [ImageData; 4] {
-    [
-        include_bytes!("../../../assets/material_spec/sheets-player-album-1.png").as_slice(),
-        include_bytes!("../../../assets/material_spec/sheets-player-album-2.png").as_slice(),
-        include_bytes!("../../../assets/material_spec/sheets-player-album-3.png").as_slice(),
-        include_bytes!("../../../assets/material_spec/sheets-player-cover.png").as_slice(),
-    ]
-    .map(|bytes| bytes.try_into_image_data().expect("sheet album artwork"))
-}
-
 #[tessera]
 fn sheet_context_text(
     content: String,
@@ -1156,9 +1139,15 @@ fn sheet_context_text(
         .modifier(Modifier::new().offset(Dp(x * scale), Dp(y * scale)));
 }
 
+const ALBUMS: [tessera_ui::Asset; 4] = [
+    assets::SHEETS_PLAYER_ALBUM_1_PNG,
+    assets::SHEETS_PLAYER_ALBUM_2_PNG,
+    assets::SHEETS_PLAYER_ALBUM_3_PNG,
+    assets::SHEETS_PLAYER_COVER_PNG,
+];
+
 #[tessera]
 fn music_context() {
-    let albums = remember(sheet_albums);
     let playing = remember(|| true);
     let cover = remember(|| 3usize);
     let scale = 1.0_f64;
@@ -1199,7 +1188,7 @@ fn music_context() {
                                     for (index, x, w) in
                                         [(0, 19.0, 151.0), (1, 186.0, 151.0), (2, 354.0, 58.0)]
                                     {
-                                        image().raster(albums.get()[index].clone()).modifier(
+                                        image().painter(ALBUMS[index]).modifier(
                                             Modifier::new()
                                                 .offset(Dp(x * scale), Dp(24.0 * scale))
                                                 .size(Dp(w * scale), Dp(124.0 * scale))
@@ -1216,15 +1205,13 @@ fn music_context() {
                                                 .background(scheme.surface_container),
                                         )
                                         .children(move || {
-                                            image()
-                                                .raster(albums.get()[cover.get()].clone())
-                                                .modifier(
-                                                    Modifier::new()
-                                                        .size(Dp(64.0 * scale), Dp(68.0 * scale))
-                                                        .clip_shape(Shape::rounded_rectangle(Dp(
-                                                            8.0 * scale,
-                                                        ))),
-                                                );
+                                            image().painter(ALBUMS[cover.get()]).modifier(
+                                                Modifier::new()
+                                                    .size(Dp(64.0 * scale), Dp(68.0 * scale))
+                                                    .clip_shape(Shape::rounded_rectangle(Dp(
+                                                        8.0 * scale
+                                                    ))),
+                                            );
                                             sheet_context_text(
                                                 "ui-cassette-futurism".into(),
                                                 80.0,

@@ -1,9 +1,3 @@
-//! Navigation bar and rail specification articles.
-//!
-//! ## Usage
-//!
-//! Compare primary destination layouts, selection and rail expansion.
-
 #[path = "destination_articles.rs"]
 pub(super) mod article_pages;
 
@@ -969,7 +963,7 @@ fn baseline_figure(
                                         boxed()
                                             .modifier(Modifier::new().offset(Dp::ZERO, Dp(56.0)))
                                             .children(|| {
-                                                icon().vector(filled::MENU_SVG).size(Dp(24.0));
+                                                icon().painter(filled::MENU_SVG).size(Dp(24.0));
                                             });
                                     });
                                 for index in 0..count {
@@ -1098,7 +1092,7 @@ fn baseline_destination(
                                     badged_box()
                                         .content(move || {
                                             icon()
-                                                .vector(
+                                                .painter(
                                                     [
                                                         filled::CIRCLE_SVG,
                                                         filled::CHANGE_HISTORY_SVG,

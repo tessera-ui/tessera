@@ -37,6 +37,7 @@ mod session;
 pub use session::{RuntimeSession, RuntimeSessionGuard, RuntimeSessionId, WeakRuntimeSession};
 
 pub(crate) use session::{local_runtime_resource, runtime_resource};
+
 mod component_tree;
 pub mod context;
 mod cursor;
@@ -80,7 +81,7 @@ pub use winit;
 
 pub use crate::{
     accessibility::{AccessibilityActionHandler, AccessibilityId, AccessibilityNode},
-    asset::AssetExt,
+    asset::{Asset, LoadState, Resource},
     clip::{ClipRegion, ClipShape, ui_stencil_state},
     clipboard::{
         ClipboardAction, ClipboardInput, ClipboardInputModifierNode, ClipboardResponse,

@@ -40,6 +40,7 @@ pub fn run() -> EntryPoint {
         })
         .package(tessera_components::ComponentsPackage)
         .package(res::i18n())
+        .package(pages::FONTS)
         .package(CustomShaderPackage)
 }
 

@@ -1,9 +1,3 @@
-//! Divider specification article with full-width, inset, and vertical figures.
-//!
-//! ## Usage
-//!
-//! Compare full-width, inset, and vertical dividers in grouped content.
-
 use tessera_components::{
     alignment::{Alignment, CrossAxisAlignment, MainAxisAlignment},
     boxed::boxed,
@@ -552,17 +546,17 @@ fn header(#[prop(into)] title: String, search: Option<bool>) {
                         .padding_symmetric(Dp(14.0), Dp::ZERO),
                 )
                 .children(move || {
-                    icon().vector(filled::MENU_SVG).size(Dp(18.0));
+                    icon().painter(filled::MENU_SVG).size(Dp(18.0));
                     spacer().modifier(Modifier::new().width(Dp(14.0)));
                     text()
                         .content(I18N.text(&(title)))
                         .style(type_style(16.0, 24.0))
                         .modifier(Modifier::new().weight(1.0));
                     if search.unwrap_or(true) {
-                        icon().vector(filled::SEARCH_SVG).size(Dp(18.0));
+                        icon().painter(filled::SEARCH_SVG).size(Dp(18.0));
                         spacer().modifier(Modifier::new().width(Dp(12.0)));
                     }
-                    icon().vector(filled::MORE_VERT_SVG).size(Dp(18.0));
+                    icon().painter(filled::MORE_VERT_SVG).size(Dp(18.0));
                 });
         });
 }
@@ -680,7 +674,7 @@ fn row_item(kind: u8, index: usize) {
             }
             if kind == CONTACTS {
                 icon()
-                    .vector(filled::INFO_SVG)
+                    .painter(filled::INFO_SVG)
                     .size(Dp(18.0))
                     .tint(scheme.on_surface_variant);
             }
@@ -758,7 +752,7 @@ fn advice(tone: u8) {
         )
         .cross_axis_alignment(CrossAxisAlignment::Center)
         .children(move || {
-            icon().vector(asset).size(Dp(18.0)).tint(ink);
+            icon().painter(asset).size(Dp(18.0)).tint(ink);
             spacer().modifier(Modifier::new().width(Dp(8.0)));
             text()
                 .content(I18N.text(label))
@@ -1458,7 +1452,7 @@ fn chip(#[prop(into)] label: String, selected: bool) {
         .children(move || {
             if selected {
                 icon()
-                    .vector(filled::CHECK_SVG)
+                    .painter(filled::CHECK_SVG)
                     .size(Dp(12.0))
                     .tint(scheme.on_secondary_container);
                 spacer().modifier(Modifier::new().width(Dp(6.0)));

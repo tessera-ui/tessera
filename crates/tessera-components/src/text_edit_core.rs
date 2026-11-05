@@ -463,6 +463,7 @@ struct PreviewReplaceResult {
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 struct TextLayoutCacheKey {
+    fonts: u64,
     layout_version: u64,
     max_width_bits: Option<u32>,
     max_height_bits: Option<u32>,
@@ -471,6 +472,7 @@ struct TextLayoutCacheKey {
 impl TextLayoutCacheKey {
     fn new(layout_version: u64, constraint: &TextConstraint) -> Self {
         Self {
+            fonts: crate::fonts::revision(),
             layout_version,
             max_width_bits: constraint.max_width.map(f32::to_bits),
             max_height_bits: constraint.max_height.map(f32::to_bits),
@@ -1813,6 +1815,7 @@ impl TextLayoutState {
 /// user interaction state. It is designed to be shared between UI components
 /// via a `TextEditorController`.
 pub struct TextEditorController {
+    font_revision: u64,
     line_height: Px,
     blink_start_frame_nanos: u64,
     current_frame_nanos: u64,
@@ -1937,12 +1940,12 @@ impl TextEditorController {
             .map(|(_, size)| size)
     }
 
-    fn measure_intrinsic_size(&mut self, constraint: &TextConstraint) -> ComputedData {
+    fn measure_intrinsic_size(
+        &mut self,
+        constraint: &TextConstraint,
+        display: Option<TransformedText>,
+    ) -> ComputedData {
         let raw = self.edit_state.text();
-        let display = self
-            .edit_state
-            .display_transform_ref()
-            .map(|transform| transform.call(raw.clone()));
         let content = display
             .as_ref()
             .map_or(raw.as_str(), |display| display.text());
@@ -2020,6 +2023,7 @@ impl TextEditorController {
         let cursor_color = Color::BLACK;
         Self {
             line_height: line_height_px,
+            font_revision: 0,
             blink_start_frame_nanos: frame_nanos,
             current_frame_nanos: frame_nanos,
             focus_handler: FocusRequester::new(),
@@ -2058,9 +2062,36 @@ impl TextEditorController {
         self.line_height
     }
 
-    // Returns the current text buffer as `TextData`, applying the given layout
-    // constraints.
-    fn text_data(&mut self, constraint: TextConstraint) -> TextData {
+    fn prepare_display(&self) -> Option<TransformedText> {
+        let raw = self.edit_state.text();
+        let display = self
+            .edit_state
+            .display_transform_ref()
+            .map(|transform| transform.call(raw.clone()))
+            .filter(|display| display.text() != raw);
+        crate::fonts::prepare(
+            display
+                .as_ref()
+                .map_or(raw.as_str(), |display| display.text()),
+            self.edit_state.style,
+        );
+        display
+    }
+
+    fn text_data(
+        &mut self,
+        constraint: TextConstraint,
+        display: Option<TransformedText>,
+    ) -> TextData {
+        let fonts = crate::fonts::revision();
+        if self.font_revision != fonts {
+            self.edit_state.editor.with_buffer_mut(|buffer| {
+                for line in &mut buffer.lines {
+                    line.reset_shaping();
+                }
+            });
+            self.font_revision = fonts;
+        }
         if let Some(text_data) = self
             .layout_state
             .cached_text_data_for_constraint(&constraint, self.scroll_state.as_scroll())
@@ -2071,29 +2102,22 @@ impl TextEditorController {
         self.edit_state
             .sync_size_and_shape_until_scroll(&constraint);
 
-        let (display_buffer, transformed_text) =
-            if let Some(transform) = self.edit_state.display_transform_ref() {
-                let (metrics, scroll) = self.edit_state.metrics_and_scroll();
-                let content = self.edit_state.text();
-                let transformed = transform.call(content.clone());
-                if transformed.text() == content {
-                    (None, None)
-                } else {
-                    let text_buffer = build_display_buffer(
-                        transformed.text(),
-                        self.edit_state.text_color(),
-                        metrics.font_size,
-                        metrics.line_height,
-                        &constraint,
-                        self.wrap_mode(),
-                        scroll,
-                        Some(self.edit_state.style),
-                    );
-                    (Some(text_buffer), Some(transformed))
-                }
-            } else {
-                (None, None)
-            };
+        let (display_buffer, transformed_text) = if let Some(transformed) = display {
+            let (metrics, scroll) = self.edit_state.metrics_and_scroll();
+            let text_buffer = build_display_buffer(
+                transformed.text(),
+                self.edit_state.text_color(),
+                metrics.font_size,
+                metrics.line_height,
+                &constraint,
+                self.wrap_mode(),
+                scroll,
+                Some(self.edit_state.style),
+            );
+            (Some(text_buffer), Some(transformed))
+        } else {
+            (None, None)
+        };
 
         let text_data = if let Some(buffer) = display_buffer.as_ref() {
             TextData::from_buffer(buffer.clone())
@@ -3458,6 +3482,7 @@ impl PartialEq for TextEditLayout {
 
 impl tessera_ui::LayoutModifierNode for TextEditLayout {
     fn measure(&self, input: &mut MeasureScope<'_>) -> Result<LayoutResult, MeasurementError> {
+        let display = self.controller.with(TextEditorController::prepare_display);
         let result = LayoutResult::default();
         let max_width_pixels: Option<Px> = input.parent_constraint().width().resolve_max();
         let max_height_pixels: Option<Px> = input.parent_constraint().height().resolve_max();
@@ -3471,8 +3496,9 @@ impl tessera_ui::LayoutModifierNode for TextEditLayout {
                 .controller
                 .with(|controller| controller.cached_intrinsic_size(&text_constraint));
             let size = cached.unwrap_or_else(|| {
-                self.controller
-                    .with_mut(|controller| controller.measure_intrinsic_size(&text_constraint))
+                self.controller.with_mut(|controller| {
+                    controller.measure_intrinsic_size(&text_constraint, display)
+                })
             });
             return Ok(result.with_size(size));
         }
@@ -3484,7 +3510,7 @@ impl tessera_ui::LayoutModifierNode for TextEditLayout {
 
         let text_data = self
             .controller
-            .with_mut(|c| c.text_data(text_constraint.clone()));
+            .with_mut(|c| c.text_data(text_constraint.clone(), display));
 
         let line_height = self.controller.with(|c| c.line_height());
         let DerivedLayoutGeometry {
@@ -4074,19 +4100,25 @@ mod tests {
         let mut controller = TextEditorController::new(Dp(16.0), Some(Dp(24.0)));
         controller.set_single_line(true);
         controller.set_text("Carmen");
-        controller.text_data(TextConstraint {
-            max_width: Some(200.0),
-            max_height: Some(24.0),
-        });
+        controller.text_data(
+            TextConstraint {
+                max_width: Some(200.0),
+                max_height: Some(24.0),
+            },
+            controller.prepare_display(),
+        );
         controller.set_text_style(crate::theme::TextStyle {
             font_size: Dp(28.0),
             line_height: Some(Dp(42.0)),
             ..Default::default()
         });
-        controller.text_data(TextConstraint {
-            max_width: Some(350.0),
-            max_height: Some(42.0),
-        });
+        controller.text_data(
+            TextConstraint {
+                max_width: Some(350.0),
+                max_height: Some(42.0),
+            },
+            controller.prepare_display(),
+        );
         let scroll = controller.editor().with_buffer(|buffer| buffer.scroll());
         assert_eq!(scroll.line, 0);
         assert_eq!(
@@ -4105,9 +4137,8 @@ mod tests {
             max_width: Some(240.0),
             max_height: Some(80.0),
         };
-        let text_cache_key = TextLayoutCacheKey::new(controller.text_layout_version(), &constraint);
-
-        controller.text_data(constraint.clone());
+        controller.text_data(constraint.clone(), controller.prepare_display());
+        let text_cache_key = controller.text_cache_key().expect("initial text layout");
         controller.update_layout_geometry(
             &constraint,
             vec![RectDef {
@@ -4130,7 +4161,7 @@ mod tests {
             },
         );
 
-        controller.text_data(constraint.clone());
+        controller.text_data(constraint.clone(), controller.prepare_display());
         assert_eq!(
             controller
                 .cached_layout(&constraint)
@@ -4146,7 +4177,7 @@ mod tests {
         ));
 
         controller.invalidate_layout_geometry();
-        controller.text_data(constraint.clone());
+        controller.text_data(constraint.clone(), controller.prepare_display());
         assert_eq!(controller.cached_layout(&constraint), None);
         assert!(matches!(
             controller.text_cache_key(),
@@ -4166,7 +4197,7 @@ mod tests {
             max_height: Some(40.0),
         };
 
-        controller.text_data(constraint.clone());
+        controller.text_data(constraint.clone(), controller.prepare_display());
         let text_layout_version = controller.text_layout_version();
         let text_cache_key = TextLayoutCacheKey::new(text_layout_version, &constraint);
 
@@ -4183,7 +4214,7 @@ mod tests {
             controller.scroll()
         );
 
-        controller.text_data(constraint);
+        controller.text_data(constraint, controller.prepare_display());
         assert!(matches!(
             controller.text_cache_key(),
             Some(key) if key == text_cache_key
@@ -4197,10 +4228,13 @@ mod tests {
         let mut controller =
             controller_with_text("hello world hello world hello world hello world");
         controller.set_single_line(true);
-        controller.text_data(TextConstraint {
-            max_width: Some(60.0),
-            max_height: Some(40.0),
-        });
+        controller.text_data(
+            TextConstraint {
+                max_width: Some(60.0),
+                max_height: Some(40.0),
+            },
+            controller.prepare_display(),
+        );
 
         assert!(controller.has_horizontal_overflow());
         let consumed = controller.scroll_horizontal_consumed(10_000.0);
@@ -4215,10 +4249,13 @@ mod tests {
         let runtime = tessera_ui::RuntimeSession::new();
         let _scope = runtime.enter();
         let mut controller = controller_with_text("111\n222\n333\n444\n555\n666\n777\n888");
-        controller.text_data(TextConstraint {
-            max_width: Some(120.0),
-            max_height: Some(20.0),
-        });
+        controller.text_data(
+            TextConstraint {
+                max_width: Some(120.0),
+                max_height: Some(20.0),
+            },
+            controller.prepare_display(),
+        );
         assert!(controller.has_vertical_overflow());
     }
 
@@ -4227,10 +4264,13 @@ mod tests {
         let runtime = tessera_ui::RuntimeSession::new();
         let _scope = runtime.enter();
         let mut controller = controller_with_text("111\n222\n333\n444\n555\n666\n777\n888");
-        controller.text_data(TextConstraint {
-            max_width: Some(120.0),
-            max_height: Some(20.0),
-        });
+        controller.text_data(
+            TextConstraint {
+                max_width: Some(120.0),
+                max_height: Some(20.0),
+            },
+            controller.prepare_display(),
+        );
         assert!(controller.scroll_vertical_consumed(1_000.0) > 0.0);
         // The editor engine clamps vertical scroll, so at the bottom nothing
         // more is consumed and the remainder can go to an ancestor.
@@ -4244,10 +4284,13 @@ mod tests {
         let text = "hello world hello world hello world hello world";
         let mut controller = controller_with_text(text);
         controller.set_single_line(true);
-        controller.text_data(TextConstraint {
-            max_width: Some(60.0),
-            max_height: Some(40.0),
-        });
+        controller.text_data(
+            TextConstraint {
+                max_width: Some(60.0),
+                max_height: Some(40.0),
+            },
+            controller.prepare_display(),
+        );
         controller.set_text_and_selection(text, TextSelection::collapsed(text.len()));
 
         assert!(controller.scroll_state().horizontal() > 0.0);
@@ -4267,7 +4310,7 @@ mod tests {
             max_height: Some(20.0),
         };
 
-        controller.text_data(constraint.clone());
+        controller.text_data(constraint.clone(), controller.prepare_display());
         let text_layout_version = controller.text_layout_version();
         let text_cache_key = TextLayoutCacheKey::new(text_layout_version, &constraint);
 
@@ -4291,10 +4334,13 @@ mod tests {
         let _scope = runtime.enter();
         let mut controller = controller_with_text("hello");
         controller.set_text_and_selection("hello", TextSelection { start: 4, end: 1 });
-        controller.text_data(TextConstraint {
-            max_width: Some(120.0),
-            max_height: Some(40.0),
-        });
+        controller.text_data(
+            TextConstraint {
+                max_width: Some(120.0),
+                max_height: Some(40.0),
+            },
+            controller.prepare_display(),
+        );
 
         let raw_editor = controller.current_raw_layout_editor();
         let anchor = match raw_editor.selection() {
@@ -4866,7 +4912,7 @@ mod tests {
             max_width: Some(240.0),
             max_height: Some(80.0),
         };
-        controller.text_data(constraint);
+        controller.text_data(constraint, controller.prepare_display());
         let buffer = controller.editor().with_buffer(|buffer| buffer.clone());
         let editor = build_display_editor(
             buffer.clone(),
@@ -5242,6 +5288,8 @@ mod tests {
 
     #[test]
     fn transformed_composition_rects_follow_mapped_display_offsets() {
+        let runtime = tessera_ui::RuntimeSession::new();
+        let _scope = runtime.enter();
         let transformed = TransformedText::from_strings("1234567890", "123 456 7890".to_string());
         let constraint = TextConstraint {
             max_width: Some(240.0),
@@ -5334,7 +5382,7 @@ mod tests {
             max_width: Some(1000.0),
             max_height: None,
         };
-        let before = controller.text_data(constraint.clone());
+        let before = controller.text_data(constraint.clone(), controller.prepare_display());
         let style = crate::theme::TextStyle {
             font_weight: 700,
             letter_spacing: Dp(1.0),
@@ -5343,9 +5391,14 @@ mod tests {
         controller.set_text_style(style);
         assert_eq!(controller.selection(), selection);
         assert_eq!(controller.text(), "Material typography");
-        assert!(controller.text_data(constraint.clone()).size[0] > before.size[0]);
+        assert!(
+            controller
+                .text_data(constraint.clone(), controller.prepare_display())
+                .size[0]
+                > before.size[0]
+        );
         controller.set_text("Roboto");
-        let _ = controller.text_data(constraint);
+        let _ = controller.text_data(constraint, controller.prepare_display());
         let buffer = controller.editor().with_buffer(Clone::clone);
         let glyph = &buffer.layout_runs().next().unwrap().glyphs[0];
         let system = crate::pipelines::text::pipeline::read_font_system();

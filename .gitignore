@@ -1,6 +1,7 @@
 /target
 .gradle/
 example/gen/web/pkg-web/
+example/gen/web/tessera/
 __pycache__/
 tessera-profiler.jsonl
 /.baseline-metadata.json

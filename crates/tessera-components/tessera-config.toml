@@ -1,5 +1,6 @@
 [assets]
 dir = "assets"
+embed = ["Roboto-Regular.ttf"]
 
 [i18n]
 fallback = "en"

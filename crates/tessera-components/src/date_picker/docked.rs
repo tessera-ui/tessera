@@ -387,7 +387,7 @@ fn menu_button(label: String, description: String, width: Dp, expanded: bool, ac
                         .color(theme.color_scheme.on_surface);
                     spacer().modifier(Modifier::new().width(Dp(4.0)));
                     icon()
-                        .vector(filled::ARROW_DROP_DOWN_SVG)
+                        .painter(filled::ARROW_DROP_DOWN_SVG)
                         .size(Dp(18.0))
                         .tint(theme.color_scheme.on_surface_variant);
                 });
@@ -657,7 +657,7 @@ fn choice(label: String, selected: bool, enabled: bool, action: Callback) {
                 .children(move || {
                     if selected {
                         icon()
-                            .vector(filled::CHECK_SVG)
+                            .painter(filled::CHECK_SVG)
                             .size(Dp(24.0))
                             .tint(theme.color_scheme.on_surface);
                     } else {

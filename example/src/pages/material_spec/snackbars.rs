@@ -1,9 +1,3 @@
-//! Snackbar specification figures and queued notifications.
-//!
-//! ## Usage
-//!
-//! Show brief process updates with optional undo and dismiss actions.
-
 #[cfg(all(test, not(target_arch = "wasm32")))]
 #[path = "snackbars_tests.rs"]
 mod regression_tests;
@@ -392,16 +386,16 @@ fn advice(tone: u8) {
         .children(move || {
             match tone {
                 DO => {
-                    icon().vector(filled::CHECK_SVG).size(Dp(18.0)).tint(ink);
+                    icon().painter(filled::CHECK_SVG).size(Dp(18.0)).tint(ink);
                 }
                 CAUTION => {
                     icon()
-                        .vector(filled::PRIORITY_HIGH_SVG)
+                        .painter(filled::PRIORITY_HIGH_SVG)
                         .size(Dp(18.0))
                         .tint(ink);
                 }
                 _ => {
-                    icon().vector(filled::CLOSE_SVG).size(Dp(18.0)).tint(ink);
+                    icon().painter(filled::CLOSE_SVG).size(Dp(18.0)).tint(ink);
                 }
             }
             spacer().modifier(Modifier::new().width(Dp(8.0)));
@@ -976,16 +970,16 @@ fn nav_bar() {
                             )
                             .children(move || match index {
                                 0 => {
-                                    icon().vector(filled::INBOX_SVG).size(Dp(18.0));
+                                    icon().painter(filled::INBOX_SVG).size(Dp(18.0));
                                 }
                                 1 => {
-                                    icon().vector(filled::EMAIL_SVG).size(Dp(18.0));
+                                    icon().painter(filled::EMAIL_SVG).size(Dp(18.0));
                                 }
                                 2 => {
-                                    icon().vector(filled::VIDEOCAM_SVG).size(Dp(18.0));
+                                    icon().painter(filled::VIDEOCAM_SVG).size(Dp(18.0));
                                 }
                                 _ => {
-                                    icon().vector(filled::ACCOUNT_CIRCLE_SVG).size(Dp(18.0));
+                                    icon().painter(filled::ACCOUNT_CIRCLE_SVG).size(Dp(18.0));
                                 }
                             });
                         text()
@@ -1016,16 +1010,16 @@ fn photo_toolbar() {
                     .modifier(Modifier::new().size(Dp(36.0), Dp(36.0)))
                     .children(move || match index {
                         0 => {
-                            icon().vector(filled::MORE_VERT_SVG).size(Dp(18.0));
+                            icon().painter(filled::MORE_VERT_SVG).size(Dp(18.0));
                         }
                         1 => {
-                            icon().vector(filled::EDIT_SVG).size(Dp(18.0));
+                            icon().painter(filled::EDIT_SVG).size(Dp(18.0));
                         }
                         2 => {
-                            icon().vector(filled::MIC_SVG).size(Dp(18.0));
+                            icon().painter(filled::MIC_SVG).size(Dp(18.0));
                         }
                         _ => {
-                            icon().vector(filled::IMAGE_SVG).size(Dp(18.0));
+                            icon().painter(filled::IMAGE_SVG).size(Dp(18.0));
                         }
                     });
             }
@@ -1041,7 +1035,7 @@ fn photo_toolbar() {
                         ),
                 )
                 .children(|| {
-                    icon().vector(filled::ADD_SVG).size(Dp(18.0));
+                    icon().painter(filled::ADD_SVG).size(Dp(18.0));
                 });
         });
 }
@@ -1061,7 +1055,7 @@ fn fab(position: (f64, f64)) {
         .content_alignment(Alignment::Center)
         .child(move || {
             icon()
-                .vector(filled::ADD_SVG)
+                .painter(filled::ADD_SVG)
                 .size(Dp(24.0))
                 .tint(scheme.on_primary_container);
         });
@@ -1223,7 +1217,7 @@ fn mock_bar(placed: Bar) {
                                 .modifier(Modifier::new().size(Dp(32.0), Dp(32.0)))
                                 .children(move || {
                                     icon()
-                                        .vector(filled::CLOSE_SVG)
+                                        .painter(filled::CLOSE_SVG)
                                         .size(Dp(18.0))
                                         .tint(scheme.inverse_on_surface);
                                 });
@@ -1242,7 +1236,7 @@ fn bar_text(placed: Bar) {
         .children(move || {
             if placed.icon {
                 icon()
-                    .vector(filled::PRIORITY_HIGH_SVG)
+                    .painter(filled::PRIORITY_HIGH_SVG)
                     .size(Dp(18.0))
                     .tint(ink);
                 spacer().modifier(Modifier::new().width(Dp(8.0)));
@@ -2260,7 +2254,7 @@ fn web_row(saved: bool) {
                         .style(type_style(12.0, 16.0))
                         .color(scheme.on_surface_variant);
                     spacer().modifier(Modifier::new().weight(1.0));
-                    icon().vector(filled::SEARCH_SVG).size(Dp(16.0));
+                    icon().painter(filled::SEARCH_SVG).size(Dp(16.0));
                 });
             spacer().modifier(Modifier::new().width(Dp(12.0)));
             row()
@@ -2274,7 +2268,7 @@ fn web_row(saved: bool) {
                 .children(move || {
                     if saved {
                         icon()
-                            .vector(filled::CHECK_SVG)
+                            .painter(filled::CHECK_SVG)
                             .size(Dp(14.0))
                             .tint(scheme.primary);
                         spacer().modifier(Modifier::new().width(Dp(6.0)));
@@ -2291,13 +2285,13 @@ fn web_row(saved: bool) {
                     .modifier(Modifier::new().size(Dp(32.0), Dp(32.0)))
                     .children(move || match index {
                         0 => {
-                            icon().vector(filled::HELP_OUTLINE_SVG).size(Dp(18.0));
+                            icon().painter(filled::HELP_OUTLINE_SVG).size(Dp(18.0));
                         }
                         1 => {
-                            icon().vector(filled::SETTINGS_SVG).size(Dp(18.0));
+                            icon().painter(filled::SETTINGS_SVG).size(Dp(18.0));
                         }
                         _ => {
-                            icon().vector(filled::ACCOUNT_CIRCLE_SVG).size(Dp(18.0));
+                            icon().painter(filled::ACCOUNT_CIRCLE_SVG).size(Dp(18.0));
                         }
                     });
             }
@@ -2773,7 +2767,7 @@ fn inline_feedback() {
                         .cross_axis_alignment(CrossAxisAlignment::Center)
                         .children(move || {
                             if saved.get() {
-                                icon().vector(filled::CHECK_SVG).size(Dp(18.0));
+                                icon().painter(filled::CHECK_SVG).size(Dp(18.0));
                                 spacer().modifier(Modifier::new().width(Dp(8.0)));
                             }
                             text().content(I18N.text(if saved.get() {

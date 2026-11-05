@@ -88,7 +88,7 @@ fn field_fixture(observed: tessera_ui::testing::TestProbe<FixtureHandles>) {
                                 .modifier(observe("field").width(Dp(240.0)))
                                 .leading_icon(|| {
                                     boxed().modifier(observe("icon")).children(|| {
-                                        icon().vector(filled::PERSON_SVG).size(Dp(24.0));
+                                        icon().painter(filled::PERSON_SVG).size(Dp(24.0));
                                     });
                                 });
                         });

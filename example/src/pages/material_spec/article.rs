@@ -1,9 +1,3 @@
-//! Shared layout for interactive specification articles.
-//!
-//! ## Usage
-//!
-//! Read component specifications and navigate directly to their live examples.
-
 use std::collections::BTreeMap;
 
 use tessera_components::{
@@ -38,7 +32,7 @@ use super::{
         article_tab_modifier, article_tablist_modifier, focus_article_tab, focused_article_tab,
         sync_article_navigation,
     },
-    article_tab_visual, gap, heading, media, srgb, type_style,
+    article_tab_visual, gap, heading, srgb, type_style,
 };
 
 #[path = "article_modal.rs"]
@@ -392,7 +386,7 @@ fn article_footer_link(
                     .children(move || {
                         if previous {
                             icon()
-                                .vector(filled::ARROW_RIGHT_ALT_SVG)
+                                .painter(filled::ARROW_RIGHT_ALT_SVG)
                                 .rotation(180.0)
                                 .size(Dp(24.0))
                                 .tint(INK);
@@ -403,7 +397,7 @@ fn article_footer_link(
                             .color(INK);
                         if !previous {
                             icon()
-                                .vector(filled::ARROW_RIGHT_ALT_SVG)
+                                .painter(filled::ARROW_RIGHT_ALT_SVG)
                                 .size(Dp(24.0))
                                 .tint(INK);
                         }
@@ -472,7 +466,6 @@ fn article_tab_row(
     pinned: State<bool>,
     pages: Option<Vec<ArticlePage>>,
 ) {
-    media::load_fonts();
     let horizontal = remember(ScrollableController::new);
     let contents = remember(|| [Dp(160.0); 4]);
     let density = tessera_ui::dp::scale_factor();
@@ -729,7 +722,6 @@ fn article_tab_strip(
     progress: [f32; 4],
     viewport_width: Px,
 ) {
-    let vectors = remember(article_tab_visual::vectors);
     let minimums = article_tab_minimums(contents);
     let reveal = ArticleTabReveal {
         selected: selected.get(),
@@ -839,11 +831,9 @@ fn article_tab_strip(
                             .cross_axis_alignment(CrossAxisAlignment::Center)
                             .children(move || {
                                 icon()
-                                    .vector(vectors.with(|vectors| {
-                                        article_tab_visual::vector(
-                                            vectors, index, active, hovered, pressed,
-                                        )
-                                    }))
+                                    .painter(article_tab_visual::asset(
+                                        index, active, hovered, pressed,
+                                    ))
                                     .size(Dp(24.0))
                                     .tint(article_tab_visual::foreground(active, hovered, pressed));
                                 spacer().modifier(Modifier::new().width(Dp(8.0)));

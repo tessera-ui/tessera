@@ -6,7 +6,7 @@
 use std::sync::Arc;
 
 use tessera_ui::{
-    AssetExt, AxisConstraint, Color, ComputedData, Dp, LayoutResult, MeasurementError, Px,
+    AxisConstraint, Color, ComputedData, Dp, LayoutResult, MeasurementError, Px,
     layout::{MeasureScope, layout},
     tessera, use_context,
 };
@@ -97,44 +97,6 @@ impl IconBuilder {
             .configure("content", move |props| props.content = value);
         Ok(Self { props: self.props })
     }
-
-    /// Decodes vector icon content from an asset handle.
-    pub fn try_vector_asset<T>(&self, asset: T) -> Result<Self, ImageVectorLoadError>
-    where
-        T: AssetExt,
-    {
-        let bytes = asset
-            .read()
-            .map_err(|source| ImageVectorLoadError::AssetRead { source })?;
-        let value = Some(Painter::Vector(
-            bytes.as_ref().try_into_image_vector_data()?,
-        ));
-        self.props
-            .configure("content", move |props| props.content = value);
-        Ok(Self { props: self.props })
-    }
-
-    /// Decodes raster icon content from an asset handle.
-    pub fn try_raster_asset<T>(&self, asset: T) -> Result<Self, ImageLoadError>
-    where
-        T: AssetExt,
-    {
-        let bytes = asset
-            .read()
-            .map_err(|source| ImageLoadError::AssetRead { source })?;
-        let value = Some(Painter::Raster(bytes.as_ref().try_into_image_data()?));
-        self.props
-            .configure("content", move |props| props.content = value);
-        Ok(Self { props: self.props })
-    }
-}
-
-impl From<crate::material_icons::Asset> for ImageVectorData {
-    fn from(asset: crate::material_icons::Asset) -> Self {
-        asset
-            .try_into_image_vector_data()
-            .expect("bundled material icon svg should load")
-    }
 }
 
 #[derive(Clone, PartialEq)]
@@ -188,6 +150,7 @@ impl tessera_ui::DrawModifierNode for IconLayout {
         let input = &mut *ctx.render_input;
         let mut metadata = input.metadata_mut();
         match &self.content {
+            Painter::Asset(_) => {}
             Painter::Vector(data) => {
                 let command = ImageVectorCommand {
                     data: data.clone(),
@@ -252,7 +215,9 @@ pub fn icon(
     tint_mode: Option<TintMode>,
     rotation: Option<f32>,
 ) {
-    let content = content.unwrap_or_else(|| Painter::Raster((*placeholder_raster_data()).clone()));
+    let content = content
+        .and_then(Painter::resolve)
+        .unwrap_or_else(|| Painter::Raster((*placeholder_raster_data()).clone()));
     let default_size = use_context::<IconSize>()
         .map(|size| size.get().0)
         .unwrap_or(Dp(24.0));
@@ -285,6 +250,7 @@ pub fn icon(
 
 fn intrinsic_dimensions(content: &Painter) -> (Px, Px) {
     match content {
+        Painter::Asset(_) => (Px::ZERO, Px::ZERO),
         Painter::Vector(data) => (
             clamp_f32_to_px(data.viewport_width),
             clamp_f32_to_px(data.viewport_height),

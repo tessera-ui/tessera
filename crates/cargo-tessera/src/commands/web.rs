@@ -19,7 +19,13 @@ use wasm_bindgen_cli_support::Bindgen;
 
 use crate::{call_guard, output};
 
-use super::find_package_dir;
+use super::{
+    assets::{
+        collect_platform_asset_candidates, collect_resolved_packages,
+        collect_used_platform_asset_paths, sync_assets,
+    },
+    find_package_dir,
+};
 
 const INDEX_TEMPLATE: &str = include_str!("../../templates/basic/gen/web/index.html.hbs");
 const WASM_BINDGEN_DEP: &str = "wasm-bindgen = \"0.2.105\"";
@@ -214,8 +220,12 @@ fn web_build_command(project_dir: &Path, release: bool, features: &[String]) -> 
         .arg(project_dir.join("Cargo.toml"))
         .arg("--target")
         .arg(WASM_TARGET)
-        .env("TESSERA_ASSET_BACKEND", AssetBackend::Embed.as_str());
+        .env("TESSERA_ASSET_BACKEND", AssetBackend::Platform.as_str());
     if release {
+        cmd.env(
+            "CARGO_PROFILE_RELEASE_OPT_LEVEL",
+            std::env::var("CARGO_PROFILE_RELEASE_OPT_LEVEL").unwrap_or_else(|_| "z".into()),
+        );
         cmd.arg("--release");
     }
 
@@ -275,6 +285,36 @@ fn build_project(
                 output_dir.display()
             )
         })?;
+
+    let packages = collect_resolved_packages(project_dir, None)?;
+    let assets_root = project_dir.join(WEB_HOST_DIR).join("tessera");
+    let candidates = collect_platform_asset_candidates(&packages, &assets_root)?;
+    let wasm = output_dir.join(format!("{}_bg.wasm", metadata.lib_name));
+    if release {
+        output::status("Optimizing", "WebAssembly for size");
+        let optimized = wasm.with_extension("optimized.wasm");
+        let status = Command::new("wasm-opt")
+            .arg(&wasm)
+            .args([
+                "-Oz",
+                "--enable-bulk-memory",
+                "--enable-reference-types",
+                "--enable-multivalue",
+                "--enable-sign-ext",
+                "--enable-nontrapping-float-to-int",
+            ])
+            .arg("-o")
+            .arg(&optimized)
+            .status()
+            .context("Install Binaryen (wasm-opt) to build a web release")?;
+        if !status.success() {
+            bail!("wasm-opt failed");
+        }
+        fs::rename(optimized, &wasm)?;
+    }
+    let used = collect_used_platform_asset_paths(&[wasm], &candidates)?;
+    let (_, total) = sync_assets(&assets_root, &candidates, Some(&used))?;
+    output::status("Assets", format!("{} bytes delivered separately", total));
 
     if !project_dir.join(WEB_HOST_DIR).join("index.html").exists() {
         output::warn(
@@ -401,34 +441,28 @@ fn ensure_index_html(project_dir: &Path, metadata: &ProjectMetadata) -> Result<b
 }
 
 fn ensure_pkg_web_ignored(project_dir: &Path) -> Result<bool> {
-    let gitignore_path = project_dir.join(".gitignore");
-    let mut content = if gitignore_path.exists() {
-        fs::read_to_string(&gitignore_path)
-            .with_context(|| format!("Failed to read {}", gitignore_path.display()))?
-    } else {
-        String::new()
-    };
-
-    let normalized = content.replace("/pkg-web", "/gen/web/pkg-web");
-    if normalized != content {
-        fs::write(&gitignore_path, normalized)
-            .with_context(|| format!("Failed to write {}", gitignore_path.display()))?;
-        return Ok(true);
+    let path = project_dir.join(".gitignore");
+    let original = fs::read_to_string(&path).or_else(|error| {
+        if error.kind() == std::io::ErrorKind::NotFound {
+            Ok(String::new())
+        } else {
+            Err(error)
+        }
+    })?;
+    let mut content = original.clone();
+    for pattern in ["/gen/web/pkg-web", "/gen/web/tessera"] {
+        if !content.lines().any(|line| line.trim() == pattern) {
+            if !content.is_empty() && !content.ends_with('\n') {
+                content.push('\n');
+            }
+            content.push_str(pattern);
+            content.push('\n');
+        }
     }
-
-    if content
-        .lines()
-        .any(|line| line.trim() == "/gen/web/pkg-web")
-    {
+    if content == original {
         return Ok(false);
     }
-
-    if !content.is_empty() && !content.ends_with('\n') {
-        content.push('\n');
-    }
-    content.push_str("/gen/web/pkg-web\n");
-    fs::write(&gitignore_path, content)
-        .with_context(|| format!("Failed to write {}", gitignore_path.display()))?;
+    fs::write(path, content)?;
     Ok(true)
 }
 
@@ -798,7 +832,7 @@ mod tests {
                 command
                     .get_envs()
                     .any(|(key, value)| key == "TESSERA_ASSET_BACKEND"
-                        && value == Some(std::ffi::OsStr::new("embed")))
+                        && value == Some(std::ffi::OsStr::new("platform")))
             );
         }
     }

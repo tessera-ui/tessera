@@ -1,9 +1,3 @@
-//! Native icon-button configuration and shape-morph figures.
-//!
-//! ## Usage
-//!
-//! Compare configurations and interact with pressed and selected shapes.
-
 use tessera_components::{
     alignment::Alignment,
     boxed::boxed,
@@ -25,7 +19,7 @@ use tessera_ui::{
 };
 
 use crate::{
-    pages::material_spec::{gap, icon_buttons::context, media, srgb, subheading, type_style},
+    pages::material_spec::{gap, icon_buttons::context, srgb, subheading, type_style},
     res::I18N,
 };
 
@@ -271,7 +265,6 @@ fn morph_grid(selection: bool) {
 
 #[tessera]
 fn stage(width: f64, height: f64, label: String, background: Color, child: RenderSlot) {
-    media::load_fonts();
     let measured = remember(move || Dp(width));
     boxed()
         .modifier(Modifier::new().fill_max_width().on_layout_coordinates(

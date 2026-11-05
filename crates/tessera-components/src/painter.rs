@@ -3,9 +3,12 @@
 //! ## Usage
 //!
 //! Pass one painter value into image-like and icon-like components.
-use std::path::{Path, PathBuf};
+use std::{
+    path::{Path, PathBuf},
+    sync::Arc,
+};
 
-use tessera_ui::AssetExt;
+use tessera_ui::{Asset, LoadState, Resource};
 use thiserror::Error;
 
 use crate::{
@@ -16,6 +19,8 @@ use crate::{
 /// Shared visual content that can be rendered by image-like components.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Painter {
+    /// Asset content loaded and decoded on demand.
+    Asset(Resource<Painter>),
     /// Vector content backed by decoded vector geometry.
     Vector(ImageVectorData),
     /// Raster content backed by decoded image pixels.
@@ -34,22 +39,31 @@ impl From<ImageData> for Painter {
     }
 }
 
-impl From<crate::material_icons::Asset> for Painter {
-    fn from(asset: crate::material_icons::Asset) -> Self {
-        Self::Vector(asset.into())
+impl From<Asset> for Painter {
+    fn from(asset: Asset) -> Self {
+        Self::Asset(asset.load_with(decode_asset))
     }
+}
+
+impl Painter {
+    pub(crate) fn resolve(self) -> Option<Self> {
+        match self {
+            Self::Asset(resource) => match resource.get() {
+                LoadState::Ready(painter) => Some(painter),
+                LoadState::Loading | LoadState::Failed(_) => None,
+            },
+            painter => Some(painter),
+        }
+    }
+}
+
+fn decode_asset(bytes: Arc<[u8]>) -> std::io::Result<Painter> {
+    try_decode_bytes(&bytes).map_err(std::io::Error::other)
 }
 
 /// Errors that can occur while decoding a painter source.
 #[derive(Debug, Error)]
 pub enum PainterLoadError {
-    /// Failed to read bytes from an asset handle.
-    #[error("failed to read painter bytes from asset: {source}")]
-    AssetRead {
-        /// Underlying IO error.
-        #[source]
-        source: std::io::Error,
-    },
     /// Failed to decode bytes or a path as either vector or raster content.
     #[error("failed to decode painter as vector or raster content")]
     Decode {
@@ -72,17 +86,6 @@ where
     T: TryIntoPainter,
 {
     source.try_into_painter()
-}
-
-/// Decodes a painter from an asset handle.
-pub fn try_painter_asset<T>(asset: T) -> Result<Painter, PainterLoadError>
-where
-    T: AssetExt,
-{
-    let bytes = asset
-        .read()
-        .map_err(|source| PainterLoadError::AssetRead { source })?;
-    try_decode_bytes(bytes.as_ref())
 }
 
 impl TryIntoPainter for Painter {

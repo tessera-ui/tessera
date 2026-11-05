@@ -34,6 +34,8 @@ jobs:
       - name: Build Documentation
         run: |
           cargo doc --all --no-deps
+      - name: Install Binaryen
+        run: sudo apt-get update && sudo apt-get install -y binaryen
       - name: Build Web Example
         run: cargo +stable tessera web build --release -p example
       - name: Assemble Pages Site

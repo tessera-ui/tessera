@@ -980,7 +980,7 @@ mod tests {
                 ..Default::default()
             }))
             .children(|| {
-                icon().vector(filled::ADD_SVG);
+                icon().painter(filled::ADD_SVG);
             });
     }
 

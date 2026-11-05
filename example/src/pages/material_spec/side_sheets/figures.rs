@@ -1,9 +1,3 @@
-//! Annotated side sheet figures for the specification article.
-//!
-//! ## Usage
-//!
-//! Illustrate side sheet anatomy, color roles, measurements and guidance.
-
 use tessera_components::{
     alignment::{Alignment, CrossAxisAlignment, MainAxisAlignment},
     boxed::boxed,
@@ -432,7 +426,7 @@ pub(super) fn guidance_card(good: bool, #[prop(into)] note: String, figure: Opti
                 .cross_axis_alignment(CrossAxisAlignment::Center)
                 .children(move || {
                     icon()
-                        .vector(if good {
+                        .painter(if good {
                             filled::CHECK_SVG
                         } else {
                             filled::CLOSE_SVG
@@ -518,7 +512,7 @@ fn backdrop(kind: Backdrop, start: bool, x: f64, width: f64, height: f64) {
                     .modifier(at(24.0, 24.0, width - 48.0, hero_h))
                     .children(move || {
                         icon()
-                            .vector(filled::LANDSCAPE_SVG)
+                            .painter(filled::LANDSCAPE_SVG)
                             .size(Dp(64.0))
                             .tint(scheme.on_tertiary_container);
                     });
@@ -553,7 +547,7 @@ fn backdrop(kind: Backdrop, start: bool, x: f64, width: f64, height: f64) {
                         ))
                         .children(move || {
                             icon()
-                                .vector(filled::DESCRIPTION_SVG)
+                                .painter(filled::DESCRIPTION_SVG)
                                 .size(Dp(20.0))
                                 .tint(scheme.on_primary_container);
                         });
@@ -728,7 +722,7 @@ fn glyph(kind: Glyph, x: f64, y: f64, tint: Color) {
         .modifier(at(x, y, 24.0, 24.0))
         .children(move || {
             icon()
-                .vector(match kind {
+                .painter(match kind {
                     Glyph::Back => filled::ARROW_BACK_SVG,
                     Glyph::Close => filled::CLOSE_SVG,
                 })
@@ -798,7 +792,7 @@ fn sheet_body(body: Body, start: bool, width: f64, height: f64) {
                         ))
                         .children(move || {
                             icon()
-                                .vector(filled::CHECK_SVG)
+                                .painter(filled::CHECK_SVG)
                                 .size(Dp(16.0))
                                 .tint(scheme.on_primary);
                         });
@@ -829,7 +823,7 @@ fn sheet_body(body: Body, start: bool, width: f64, height: f64) {
                 ))
                 .children(move || {
                     icon()
-                        .vector(filled::MUSIC_NOTE_SVG)
+                        .painter(filled::MUSIC_NOTE_SVG)
                         .size(Dp(40.0))
                         .tint(scheme.on_tertiary_container);
                 });
@@ -1535,7 +1529,7 @@ pub(super) fn transition_figure() {
             .alignment(Alignment::Center)
             .modifier(at(352.0, 236.0, 48.0, 48.0))
             .children(move || {
-                icon().vector(filled::ARROW_FORWARD_SVG).size(Dp(32.0)).tint(scheme.on_secondary_container);
+                icon().painter(filled::ARROW_FORWARD_SVG).size(Dp(32.0)).tint(scheme.on_secondary_container);
             });
         device(tablet, 416.0, 48.0, 536.0, 424.0);
     });

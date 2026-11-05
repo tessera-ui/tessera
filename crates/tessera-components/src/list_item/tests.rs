@@ -44,7 +44,7 @@ fn fixture(mode: u8, alignment: Option<ListItemVerticalAlignment>, minimum: Opti
                 })
                 .leading(|| {
                     boxed().modifier(tagged("leading")).children(|| {
-                        icon().vector(filled::HOME_SVG);
+                        icon().painter(filled::HOME_SVG);
                     });
                 })
                 .trailing(|| {

@@ -1,14 +1,8 @@
-//! Text field accessibility labeling diagrams.
-//!
-//! ## Usage
-//!
-//! Inspect accessible field names, actions, errors and supporting text.
-
 use tessera_components::{
     boxed::boxed,
     column::column,
     icon_button::{IconButtonColorStyle, icon_button},
-    image::{TryIntoImageData, image},
+    image::image,
     material_icons::filled,
     menus::{MenuAnchor, MenuController, menu_item, menu_provider},
     modifier::{InteractionVisualState, ModifierExt as _, SemanticsArgs},
@@ -24,7 +18,7 @@ use tessera_ui::{
     use_context,
 };
 
-use crate::res::I18N;
+use crate::res::{I18N, material_spec as assets};
 
 use super::{gap, srgb, type_style};
 
@@ -208,12 +202,6 @@ fn callout(x: f64, y: f64, width: f64, height: f64, label: String, role: String,
 
 #[tessera]
 fn email_diagram(scale: f64) {
-    let photo = remember(|| {
-        include_bytes!("../../../assets/material_spec/text-field-accessibility-email.png")
-            .as_slice()
-            .try_into_image_data()
-            .expect("official text field photo")
-    });
     let scheme = use_context::<MaterialTheme>().unwrap().get().color_scheme;
     rectangle(0.0, 0.0, 307.0, 300.0, scheme.secondary_container, scale);
     rectangle(307.0, 0.0, 8.0, 300.0, scheme.outline_variant, scale);
@@ -233,11 +221,13 @@ fn email_diagram(scale: f64) {
         .children(move || {
             // Clip to the photograph so all field and annotation pixels stay
             // native.
-            image().raster(photo.get()).modifier(
-                Modifier::new()
-                    .offset(Dp(-339.0 * scale), Dp::ZERO)
-                    .required_size(Dp(676.0 * scale), Dp(300.0 * scale)),
-            );
+            image()
+                .painter(assets::TEXT_FIELD_ACCESSIBILITY_EMAIL_PNG)
+                .modifier(
+                    Modifier::new()
+                        .offset(Dp(-339.0 * scale), Dp::ZERO)
+                        .required_size(Dp(676.0 * scale), Dp(300.0 * scale)),
+                );
         });
     editable_field(340.0, 128.0, 327.0, "ui-email".into(), "".into(), scale);
     editable_field(
@@ -424,20 +414,11 @@ fn dropdown_field(scale: f64) {
 
 #[tessera]
 fn reference_photo(source: usize, x: f64, y: f64, width: f64, height: f64, scale: f64) {
-    let photo = remember(|| {
-        let bytes: &[u8] = match source {
-            2 => {
-                include_bytes!("../../../assets/material_spec/text-field-accessibility-affixes.png")
-            }
-            3 => include_bytes!("../../../assets/material_spec/text-field-accessibility-error.png"),
-            _ => include_bytes!(
-                "../../../assets/material_spec/text-field-accessibility-required.png"
-            ),
-        };
-        bytes
-            .try_into_image_data()
-            .expect("official text field photo")
-    });
+    let asset = match source {
+        2 => assets::TEXT_FIELD_ACCESSIBILITY_AFFIXES_PNG,
+        3 => assets::TEXT_FIELD_ACCESSIBILITY_ERROR_PNG,
+        _ => assets::TEXT_FIELD_ACCESSIBILITY_REQUIRED_PNG,
+    };
     boxed()
         .modifier(
             Modifier::new()
@@ -456,7 +437,7 @@ fn reference_photo(source: usize, x: f64, y: f64, width: f64, height: f64, scale
         )
         .children(move || {
             // Only the original photograph lies inside this clip rectangle.
-            image().raster(photo.get()).modifier(
+            image().painter(asset).modifier(
                 Modifier::new()
                     .offset(Dp(-x * scale), Dp(-y * scale))
                     .required_size(Dp(676.0 * scale), Dp(300.0 * scale)),

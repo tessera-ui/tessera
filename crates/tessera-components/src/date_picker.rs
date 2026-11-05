@@ -863,7 +863,7 @@ fn calendar_view(
                                         .color(scheme.on_surface_variant);
                                     spacer().modifier(Modifier::new().width(Dp(8.0)));
                                     icon()
-                                        .vector(if view.get() == DatePickerView::Year {
+                                        .painter(if view.get() == DatePickerView::Year {
                                             filled::ARROW_DROP_UP_SVG
                                         } else {
                                             filled::ARROW_DROP_DOWN_SVG

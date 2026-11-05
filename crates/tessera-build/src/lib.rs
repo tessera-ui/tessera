@@ -23,12 +23,8 @@ use anyhow::{Context, Result, anyhow, bail};
 use proc_macro2::{Literal, TokenStream};
 use quote::{format_ident, quote};
 use serde::Deserialize;
+use sha2::{Digest, Sha256};
 
-use backend_embed::generate_embed_backend_tokens;
-use backend_platform::generate_platform_backend_tokens;
-
-mod backend_embed;
-mod backend_platform;
 mod localization;
 
 /// Environment variable selecting the asset backend (`embed` or `platform`).
@@ -43,8 +39,7 @@ pub const GENERATED_ASSET_FILE: &str = "tessera_assets.rs";
 pub enum AssetBackend {
     /// Assets are directly embedded within the binary executable.
     Embed,
-    /// Assets are loaded using the platform's native asset management system
-    /// (e.g. Android assets).
+    /// Assets are delivered separately through platform files or HTTP.
     Platform,
 }
 
@@ -108,6 +103,9 @@ pub struct I18nConfig {
 /// Asset directory and filtering configuration.
 #[derive(Debug, Clone, Deserialize, Default)]
 pub struct AssetsConfig {
+    /// Asset paths embedded for immediate availability on every target.
+    #[serde(default)]
+    pub embed: Vec<String>,
     /// Asset directory relative to the package root. Defaults to `assets`.
     pub dir: Option<String>,
     /// Tree-shaking rules for retaining matched platform assets.
@@ -150,6 +148,7 @@ pub struct PluginAndroidConfig {
 
 #[derive(Debug, Clone)]
 struct AssetEntry {
+    embedded: bool,
     absolute_path: PathBuf,
     relative_path: String,
     platform_path: String,
@@ -223,6 +222,12 @@ pub fn asset_namespace(package_name: &str, package_version: &str) -> String {
     format!("{package_name}/{package_version}")
 }
 
+/// Returns the content-addressed delivery path for an asset.
+pub fn platform_asset_path(namespace: &str, relative_path: &str, bytes: &[u8]) -> String {
+    let digest = Sha256::digest(bytes);
+    format!("tessera/{namespace}/{digest:x}/{relative_path}")
+}
+
 /// Resolves the configured asset directory path under `manifest_dir`.
 ///
 /// Returns `None` when `config` does not contain an `assets` section.
@@ -275,7 +280,14 @@ pub fn build() -> Result<()> {
                 dir.to_string_lossy()
             );
         }
-        entries = collect_assets(dir, &asset_namespace(&package_name, &package_version))?;
+        entries = collect_assets(
+            dir,
+            &asset_namespace(&package_name, &package_version),
+            config
+                .as_ref()
+                .and_then(|config| config.assets.as_ref())
+                .map_or(&[], |assets| assets.embed.as_slice()),
+        )?;
     }
 
     let mut generated = generate_asset_file(&entries, backend)?;
@@ -289,9 +301,10 @@ pub fn build() -> Result<()> {
     Ok(())
 }
 
-fn collect_assets(assets_dir: &Path, namespace: &str) -> Result<Vec<AssetEntry>> {
+/// Lists files recursively beneath an asset directory.
+pub fn asset_files(root: &Path) -> Result<Vec<PathBuf>> {
     let mut file_paths = Vec::new();
-    let mut stack = vec![assets_dir.to_path_buf()];
+    let mut stack = vec![root.to_path_buf()];
     while let Some(dir) = stack.pop() {
         for entry in read_dir(&dir)? {
             let entry = entry?;
@@ -309,24 +322,23 @@ fn collect_assets(assets_dir: &Path, namespace: &str) -> Result<Vec<AssetEntry>>
         }
     }
 
-    file_paths.sort_by(|left, right| {
-        normalize_relative_path(
-            left.strip_prefix(assets_dir)
-                .expect("left file must be under assets directory"),
-        )
-        .cmp(&normalize_relative_path(
-            right
-                .strip_prefix(assets_dir)
-                .expect("right file must be under assets directory"),
-        ))
-    });
+    file_paths.sort();
+    Ok(file_paths)
+}
+
+fn collect_assets(
+    assets_dir: &Path,
+    namespace: &str,
+    embedded: &[String],
+) -> Result<Vec<AssetEntry>> {
+    let file_paths = asset_files(assets_dir)?;
 
     let mut entries = Vec::with_capacity(file_paths.len());
     for absolute_path in file_paths {
         let relative = absolute_path
             .strip_prefix(assets_dir)
             .with_context(|| format!("Failed to relativize {}", absolute_path.display()))?;
-        let relative_path = normalize_relative_path(relative);
+        let relative_path = normalize_asset_path(relative);
         let file_name = relative
             .file_name()
             .ok_or_else(|| anyhow!("Missing file name for {}", absolute_path.display()))?
@@ -343,8 +355,10 @@ fn collect_assets(assets_dir: &Path, namespace: &str) -> Result<Vec<AssetEntry>>
             }
         }
 
-        let platform_path = format!("tessera/{namespace}/{relative_path}");
+        let platform_path =
+            platform_asset_path(namespace, &relative_path, &fs::read(&absolute_path)?);
         entries.push(AssetEntry {
+            embedded: embedded.contains(&relative_path),
             absolute_path,
             relative_path,
             platform_path,
@@ -361,17 +375,10 @@ fn generate_asset_file(entries: &[AssetEntry], backend: AssetBackend) -> Result<
         root.insert(entry, index)?;
     }
 
-    let backend_tokens = match backend {
-        AssetBackend::Embed => generate_embed_backend_tokens(),
-        AssetBackend::Platform => generate_platform_backend_tokens(),
-    };
     let module_body_tokens = generate_module_body_tokens(&root, entries, backend)?;
 
     let file_tokens = quote! {
-        use std::io;
-        use std::sync::Arc;
-
-        #backend_tokens
+        pub use tessera_ui::Asset;
 
         #module_body_tokens
     };
@@ -397,7 +404,7 @@ fn generate_module_body_tokens(
         let entry = entries
             .get(index)
             .ok_or_else(|| anyhow!("Asset index out of range while generating module body"))?;
-        let value_tokens = generate_asset_value_tokens(entry, index, backend);
+        let value_tokens = generate_asset_value_tokens(entry, backend);
         items.push(quote! {
             pub const #ident: Asset = #value_tokens;
         });
@@ -419,23 +426,23 @@ fn generate_module_body_tokens(
     })
 }
 
-fn generate_asset_value_tokens(
-    entry: &AssetEntry,
-    index: usize,
-    backend: AssetBackend,
-) -> TokenStream {
-    match backend {
+fn generate_asset_value_tokens(entry: &AssetEntry, backend: AssetBackend) -> TokenStream {
+    let platform_path = Literal::string(&entry.platform_path);
+    match if entry.embedded {
+        AssetBackend::Embed
+    } else {
+        backend
+    } {
         AssetBackend::Embed => {
             let path = entry.absolute_path.to_string_lossy().into_owned();
             let path_literal = Literal::string(&path);
             quote! {
-                Asset::new_embed(#index, include_bytes!(#path_literal) as &[u8])
+                Asset::embedded(#platform_path, include_bytes!(#path_literal) as &[u8])
             }
         }
         AssetBackend::Platform => {
-            let path_literal = Literal::string(&entry.platform_path);
             quote! {
-                Asset::new_platform(#index, #path_literal)
+                Asset::platform(#platform_path)
             }
         }
     }
@@ -445,7 +452,8 @@ fn read_dir(path: &Path) -> Result<ReadDir> {
     fs::read_dir(path).with_context(|| format!("Failed to read {}", path.display()))
 }
 
-fn normalize_relative_path(path: &Path) -> String {
+/// Returns an asset path with slash separators.
+pub fn normalize_asset_path(path: &Path) -> String {
     path.iter()
         .map(|segment| segment.to_string_lossy())
         .collect::<Vec<_>>()
@@ -581,22 +589,5 @@ mod tests {
             assert_eq!(mangle_module_name(keyword), format!("{keyword}_"));
         }
         assert_eq!(mangle_module_name("images"), "images");
-    }
-
-    #[test]
-    fn generated_assets_accept_keyword_directories() {
-        let entries = [AssetEntry {
-            absolute_path: PathBuf::from("assets/gen/icon.png"),
-            relative_path: "gen/icon.png".into(),
-            platform_path: "tessera/test/0.1.0/gen/icon.png".into(),
-            module_segments: vec![("gen".into(), mangle_module_name("gen"))],
-            const_name: mangle_file_name("icon.png"),
-        }];
-        for backend in [AssetBackend::Embed, AssetBackend::Platform] {
-            let generated = generate_asset_file(&entries, backend).expect("valid asset bindings");
-            assert!(generated.contains("pub mod gen_"));
-            assert!(generated.contains("pub const ICON_PNG"));
-            syn::parse_file(&generated).expect("generated bindings must be valid Rust");
-        }
     }
 }

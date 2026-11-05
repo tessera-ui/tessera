@@ -1,9 +1,3 @@
-//! Interactive expressive toolbar specifications.
-//!
-//! ## Usage
-//!
-//! Explore toolbar action groups, placement and keyboard navigation.
-
 use tessera_components::{
     alignment::{Alignment, CrossAxisAlignment, MainAxisAlignment},
     boxed::boxed,
@@ -406,7 +400,7 @@ fn baseline_figure() {
                                             notice.set("ui-baseline-create-activated".into())
                                         })
                                         .content(|| {
-                                            icon().vector(filled::ADD_SVG);
+                                            icon().painter(filled::ADD_SVG);
                                         });
                                 });
                         });
@@ -573,7 +567,7 @@ fn figure(variant: Variant, color: ToolbarColorStyle, measurements: bool) {
                                                         })
                                                         .content(|| {
                                                             icon()
-                                                                .vector(filled::ADD_SVG)
+                                                                .painter(filled::ADD_SVG)
                                                                 .size(Dp(24.0));
                                                         });
                                                 }
@@ -1204,7 +1198,7 @@ fn fab_pair(
                 })
                 .content(move || {
                     icon()
-                        .vector(match fab {
+                        .painter(match fab {
                             FabKind::Reply => filled::REPLY_SVG,
                             FabKind::Add => filled::ADD_SVG,
                             FabKind::EndCall => filled::CALL_END_SVG,
@@ -1872,7 +1866,7 @@ fn placement_figure(placement: Placement) {
                                         for vector in
                                             [filled::INBOX_SVG, filled::STAR_SVG, filled::SEND_SVG]
                                         {
-                                            icon().vector(vector).size(Dp(24.0));
+                                            icon().painter(vector).size(Dp(24.0));
                                             gap(Dp(24.0));
                                         }
                                     });
@@ -2232,7 +2226,7 @@ fn bottom_bar(icons: usize, fab: bool, notice: State<String>) {
                             .accessibility_label(I18N.text("ui-compose"))
                             .on_click(move || notice.set("ui-compose-activated".into()))
                             .content(|| {
-                                icon().vector(filled::ADD_SVG);
+                                icon().painter(filled::ADD_SVG);
                             });
                     }
                 });
@@ -3375,7 +3369,7 @@ fn mock_toolbar(kind: MockBar) {
                         spacer().modifier(Modifier::new().width(Dp(12.0)));
                     }
                     icon()
-                        .vector(action_icon(label))
+                        .painter(action_icon(label))
                         .size(Dp(20.0))
                         .tint(scheme.on_primary_container);
                 }
@@ -3415,7 +3409,7 @@ fn mock_nav_bar() {
                             .alignment(Alignment::Center)
                             .modifier(indicator)
                             .children(move || {
-                                icon().vector(action_icon(label)).size(Dp(18.0)).tint(
+                                icon().painter(action_icon(label)).size(Dp(18.0)).tint(
                                     if selected {
                                         scheme.on_secondary_container
                                     } else {
@@ -3633,7 +3627,7 @@ fn m2_bar(icons: usize) {
                                     spacer().modifier(Modifier::new().width(Dp(24.0)));
                                 }
                                 icon()
-                                    .vector(action_icon(label))
+                                    .painter(action_icon(label))
                                     .size(Dp(24.0))
                                     .tint(scheme.on_primary);
                             }
@@ -3650,7 +3644,7 @@ fn m2_bar(icons: usize) {
                 )
                 .children(move || {
                     icon()
-                        .vector(filled::ADD_SVG)
+                        .painter(filled::ADD_SVG)
                         .size(Dp(24.0))
                         .tint(scheme.on_secondary_container);
                 });

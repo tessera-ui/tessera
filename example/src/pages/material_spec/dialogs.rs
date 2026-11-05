@@ -1,9 +1,3 @@
-//! Dialog specification figures and modal interactions.
-//!
-//! ## Usage
-//!
-//! Inspect dialog anatomy, spacing and focus behavior.
-
 use std::collections::BTreeMap;
 
 use tessera_components::{
@@ -14,7 +8,7 @@ use tessera_components::{
     column::column,
     dialog::{DialogRole, basic_dialog, dialog_provider, full_screen_dialog},
     icon::icon,
-    image::{ImageData, TryIntoImageData as _, image},
+    image::image,
     material_icons::filled,
     menus::{MenuAnchor, MenuController, menu_item, menu_provider},
     modifier::{ModifierExt as _, Padding, SemanticsArgs},
@@ -31,7 +25,7 @@ use tessera_ui::{
     accesskit::Role, modifier::FocusModifierExt as _, remember, scaled_box, tessera, use_context,
 };
 
-use crate::res::I18N;
+use crate::res::{I18N, material_spec as assets};
 
 use super::{
     INK,
@@ -361,13 +355,6 @@ fn labels(values: &[&str]) -> Vec<String> {
     values.iter().map(|value| (*value).to_owned()).collect()
 }
 
-fn product_data() -> ImageData {
-    include_bytes!("../../../assets/material_spec/dialog-guideline-product.png")
-        .as_slice()
-        .try_into_image_data()
-        .expect("dialog product example")
-}
-
 #[tessera]
 fn verdict_band(verdict: Verdict) {
     let (color, vector, label) = match verdict {
@@ -389,7 +376,7 @@ fn verdict_band(verdict: Verdict) {
             row()
                 .cross_axis_alignment(CrossAxisAlignment::Center)
                 .children(move || {
-                    icon().vector(vector).tint(color).size(Dp(20.0));
+                    icon().painter(vector).tint(color).size(Dp(20.0));
                     spacer().modifier(Modifier::new().width(Dp(8.0)));
                     text()
                         .content(I18N.text(label))
@@ -675,7 +662,7 @@ fn backdrop_scene(backdrop: Backdrop, dialog: Option<RenderSlot>) {
             let dialog = dialog.clone();
             if backdrop == Backdrop::Product {
                 image()
-                    .raster(remember(product_data).get())
+                    .painter(assets::DIALOG_GUIDELINE_PRODUCT_PNG)
                     .modifier(Modifier::new().required_size(Dp(400.0), Dp(325.0)));
             } else if backdrop == Backdrop::Surface {
                 placeholder_lines();
@@ -690,7 +677,7 @@ fn backdrop_scene(backdrop: Backdrop, dialog: Option<RenderSlot>) {
                     .modifier(Modifier::new().fill_max_size())
                     .children(move || {
                         image()
-                            .raster(remember(accessibility::photo_data).get())
+                            .painter(assets::DIALOG_ACCESSIBILITY_PHOTOS_PNG)
                             .modifier(Modifier::new().required_size(Dp(720.0), Dp(639.0)));
                     });
                 if backdrop == Backdrop::Photos {
@@ -781,7 +768,7 @@ fn full_screen_scene(
                         )
                         .children(move || {
                             icon()
-                                .vector(filled::CLOSE_SVG)
+                                .painter(filled::CLOSE_SVG)
                                 .size(Dp(24.0))
                                 .tint(scheme.on_surface);
                             spacer().modifier(Modifier::new().width(Dp(16.0)));
@@ -926,7 +913,7 @@ fn calendar_scene() {
                         )
                         .children(move || {
                             icon()
-                                .vector(filled::ADD_SVG)
+                                .painter(filled::ADD_SVG)
                                 .size(Dp(24.0))
                                 .tint(scheme.on_primary_container);
                         });
@@ -1909,7 +1896,7 @@ fn basic_figure(measurements: bool) {
                                                                 )
                                                                 .children(move || {
                                                                     icon()
-                                                                        .vector(
+                                                                        .painter(
                                                                             filled::RESTART_ALT_SVG,
                                                                         )
                                                                         .size(Dp(24.0 * scale))
@@ -2043,16 +2030,8 @@ fn dialog_figure_action(
         });
 }
 
-fn dialog_account_photo() -> ImageData {
-    include_bytes!("../../../assets/material_spec/dialog-basic-anatomy.png")
-        .as_slice()
-        .try_into_image_data()
-        .expect("official dialog account photographs")
-}
-
 #[tessera]
 fn dialog_account_avatar(index: usize, scale: f64) {
-    let photo = remember(dialog_account_photo).get();
     boxed()
         .modifier(
             Modifier::new()
@@ -2067,7 +2046,7 @@ fn dialog_account_avatar(index: usize, scale: f64) {
                 }),
         )
         .children(move || {
-            image().raster(photo.clone()).modifier(
+            image().painter(assets::DIALOG_BASIC_ANATOMY_PNG).modifier(
                 Modifier::new()
                     .offset(
                         Dp(-378.0 * scale),
@@ -2521,7 +2500,7 @@ fn dialog_phone_status(scale: f64) {
             .modifier(Modifier::new().offset(Dp(x * scale), Dp(25.0 * scale)))
             .children(move || {
                 icon()
-                    .vector(vector)
+                    .painter(vector)
                     .size(Dp(16.0 * scale))
                     .tint(scheme.on_surface);
             });
@@ -2543,7 +2522,7 @@ fn dialog_phone_header(title: String, scale: f64, close: Callback, save: Callbac
         .on_click_shared(close)
         .child(move || {
             icon()
-                .vector(filled::CLOSE_SVG)
+                .painter(filled::CLOSE_SVG)
                 .size(Dp(24.0 * scale))
                 .tint(scheme.on_surface);
         });
@@ -2642,7 +2621,7 @@ fn dialog_scene_input(
                                 .on_click(move || menu.with_mut(MenuController::toggle))
                                 .child(move || {
                                     icon()
-                                        .vector(filled::ARROW_DROP_DOWN_SVG)
+                                        .painter(filled::ARROW_DROP_DOWN_SVG)
                                         .size(Dp(24.0 * scale));
                                 });
                         });
@@ -2695,9 +2674,9 @@ dialog_canvas(1024.0, 486.0, RenderSlot::new(move || {
                         boxed().modifier(watch(geometry, "icon").semantics(SemanticsArgs { test_tag: Some("dialog-figure-icon".into()), merge_descendants: true,
 ..Default::default() }).offset(Dp(134.0 * scale), Dp::ZERO).size(Dp(24.0 * scale), Dp(24.0 * scale)))
                             .children(move || {
-                                icon().vector(filled::PHONE_ANDROID_SVG).size(Dp(24.0 * scale)).tint(scheme.secondary);
+                                icon().painter(filled::PHONE_ANDROID_SVG).size(Dp(24.0 * scale)).tint(scheme.secondary);
                                 boxed().modifier(Modifier::new().offset(Dp(6.0 * scale), Dp(6.0 * scale))).children(move || {
-                                    icon().vector(filled::DONE_SVG).size(Dp(12.0 * scale)).tint(scheme.secondary);
+                                    icon().painter(filled::DONE_SVG).size(Dp(12.0 * scale)).tint(scheme.secondary);
                                 });
                             });
                         text().content(I18N.text("ui-dialog-with-hero-icon")).style(dialog_type_style(24.0, 32.0, scale)).color(scheme.on_surface)
@@ -2991,7 +2970,7 @@ fn full_spec_header(
                 .content_padding(Padding::all(Dp::ZERO))
                 .child(move || {
                     icon()
-                        .vector(filled::CLOSE_SVG)
+                        .painter(filled::CLOSE_SVG)
                         .size(Dp(24.0 * scale))
                         .tint(scheme.on_surface);
                 });

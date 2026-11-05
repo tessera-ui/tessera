@@ -1,21 +1,16 @@
-//! Official illustration and typography assets for specification pages.
-//!
-//! ## Usage
-//!
-//! Present component articles with their attributed Material Design artwork.
-
 use tessera_components::{
     alignment::{Alignment, CrossAxisAlignment},
     boxed::boxed,
     column::column,
-    image::{TryIntoImageData as _, image},
+    fonts::{Font, Fonts},
+    image::image,
     modifier::{ModifierExt as _, SemanticsArgs},
     row::row,
     shape_def::Shape,
     surface::surface,
-    text::{text, write_font_system},
+    text::text,
 };
-use tessera_ui::{AssetExt as _, Dp, Modifier, accesskit::Role, remember_with_key, tessera};
+use tessera_ui::{Dp, Modifier, accesskit::Role, tessera};
 
 use crate::res::I18N;
 
@@ -32,44 +27,43 @@ pub(super) struct PageMedia {
     thumbnail: Option<(crate::res::Asset, f64, f64)>,
 }
 
+pub(crate) const FONTS: Fonts = Fonts(&[
+    Font {
+        asset: crate::res::material_spec::EXAMPLESANSDISPLAY_TTF,
+        family: "Example Sans Display",
+        fallback: &[],
+    },
+    Font {
+        asset: crate::res::material_spec::EXAMPLESANSTEXT_TTF,
+        family: "Example Sans Text",
+        fallback: &[],
+    },
+    Font {
+        asset: crate::res::material_spec::EXAMPLESANSTABS_TTF,
+        family: "Example Sans Tabs",
+        fallback: &[],
+    },
+    Font {
+        asset: crate::res::material_spec::EXAMPLESANSTABSHOVER_TTF,
+        family: "Example Sans Tabs Hover",
+        fallback: &[],
+    },
+    Font {
+        asset: crate::res::material_spec::EXAMPLESANSTABSSELECTED_TTF,
+        family: "Example Sans Tabs Selected",
+        fallback: &[],
+    },
+    Font {
+        asset: crate::res::material_spec::EXAMPLESANSTABSPRESSED_TTF,
+        family: "Example Sans Tabs Pressed",
+        fallback: &[],
+    },
+]);
+
+#[cfg(test)]
 pub(super) fn load_fonts() {
-    let mut fonts = write_font_system();
-    for (name, asset) in [
-        (
-            "ExampleSansDisplay-Regular",
-            crate::res::material_spec::EXAMPLESANSDISPLAY_TTF,
-        ),
-        (
-            "ExampleSansText-Regular",
-            crate::res::material_spec::EXAMPLESANSTEXT_TTF,
-        ),
-        (
-            "ExampleSansTabs-Medium",
-            crate::res::material_spec::EXAMPLESANSTABS_TTF,
-        ),
-        (
-            "ExampleSansTabsHover-Medium",
-            crate::res::material_spec::EXAMPLESANSTABSHOVER_TTF,
-        ),
-        (
-            "ExampleSansTabsSelected-Medium",
-            crate::res::material_spec::EXAMPLESANSTABSSELECTED_TTF,
-        ),
-        (
-            "ExampleSansTabsPressed-Medium",
-            crate::res::material_spec::EXAMPLESANSTABSPRESSED_TTF,
-        ),
-    ] {
-        if !fonts.db().faces().any(|face| face.post_script_name == name) {
-            fonts.db_mut().load_font_data(
-                asset
-                    .read()
-                    .expect("bundled specification font")
-                    .as_ref()
-                    .to_vec(),
-            );
-        }
-    }
+    use tessera_ui::TesseraPackage;
+    Fonts(FONTS.0).register(&mut tessera_ui::EntryRegistry::new());
 }
 
 pub(super) fn page_media(title: &str) -> Option<PageMedia> {
@@ -423,14 +417,6 @@ pub(super) fn picture(#[prop(into)] title: String, width: Dp, height: Dp, thumbn
         } else {
             (media.asset, media.width, media.height)
         };
-        let pixels = remember_with_key((media.slug, thumbnail), || {
-            asset
-                .read()
-                .expect("bundled specification illustration")
-                .as_ref()
-                .try_into_image_data()
-                .expect("valid specification illustration")
-        });
         let scale = (width.0 / natural_width).max(height.0 / natural_height);
         boxed()
             .modifier(
@@ -449,7 +435,7 @@ pub(super) fn picture(#[prop(into)] title: String, width: Dp, height: Dp, thumbn
             )
             .alignment(Alignment::Center)
             .children(move || {
-                image().painter(pixels.get()).modifier(
+                image().painter(asset).modifier(
                     Modifier::new()
                         .required_size(Dp(natural_width * scale), Dp(natural_height * scale)),
                 );

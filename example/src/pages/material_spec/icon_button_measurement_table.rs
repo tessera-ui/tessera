@@ -1,9 +1,3 @@
-//! Native corner-radius reference table for icon-button measurements.
-//!
-//! ## Usage
-//!
-//! Compare button corners across sizes on narrow screens.
-
 use tessera_components::{
     alignment::{Alignment, CrossAxisAlignment},
     boxed::boxed,
@@ -21,10 +15,7 @@ use tessera_ui::{
     remember, tessera, use_context,
 };
 
-use crate::{
-    pages::material_spec::{media, type_style},
-    res::I18N,
-};
+use crate::{pages::material_spec::type_style, res::I18N};
 
 const MIN_WIDTH: Dp = Dp(616.0);
 const ROW_HEIGHT: Dp = Dp(56.0);
@@ -44,7 +35,6 @@ const CELLS: [[&str; 6]; 4] = [
 
 #[tessera]
 pub(super) fn figure() {
-    media::load_fonts();
     let width = remember(|| MIN_WIDTH);
     let scroll = remember(ScrollableController::new);
     let scheme = use_context::<MaterialTheme>().unwrap().get().color_scheme;

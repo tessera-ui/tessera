@@ -1,26 +1,8 @@
-//! Material Design icon assets and decode helpers.
+//! Material Design icon assets.
 //!
-//! ## Usage
-//!
-//! Use style modules (for example [`filled`]) to obtain icon assets, then
-//! decode them with [`TryIntoImageVectorData`] or `try_painter_asset(...)`.
-use tessera_ui::AssetExt;
-
-use crate::{
-    image_vector::{ImageVectorLoadError, TryIntoImageVectorData},
-    pipelines::image_vector::command::ImageVectorData,
-};
+//! Pass a style module's asset directly to `icon().painter(...)`.
 
 pub use crate::res::material_icons::{filled, outlined, round, sharp, two_tone};
 
 /// Material icon asset handle.
-pub type Asset = crate::res::Asset;
-
-impl TryIntoImageVectorData for Asset {
-    fn try_into_image_vector_data(self) -> Result<ImageVectorData, ImageVectorLoadError> {
-        let bytes = self
-            .read()
-            .map_err(|source| ImageVectorLoadError::AssetRead { source })?;
-        bytes.as_ref().try_into_image_vector_data()
-    }
-}
+pub type Asset = tessera_ui::Asset;

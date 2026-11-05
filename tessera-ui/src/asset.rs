@@ -1,117 +1,273 @@
-//! Asset reading abstractions for generated resource handles.
+//! On-demand resources owned by a UI session.
 //!
-//! ## Usage
-//!
-//! Use generated asset constants and call [`AssetExt::read`] to load raw bytes.
+//! Pass generated assets to components or retain a resource and observe its loading state.
 
-use std::{any::TypeId, collections::HashMap, io, sync::Arc};
+use std::{
+    cell::RefCell,
+    collections::HashMap,
+    io,
+    sync::{Arc, Weak},
+};
 
-use parking_lot::RwLock;
+use crate::{State, StateOwner, local_runtime_resource};
 
-type AssetCacheKey = (TypeId, u64);
-type AssetCacheMap = HashMap<AssetCacheKey, AssetCacheEntry>;
+#[cfg(not(target_family = "wasm"))]
+use crate::runtime_resource;
 
-const CACHE_MAX_ENTRIES: usize = 4096;
-const CACHE_MAX_BYTES: usize = 64 * 1024 * 1024;
+#[cfg(target_os = "android")]
+mod android;
+#[cfg(target_family = "wasm")]
+mod web;
 
+/// A resource that may still be loading.
+#[derive(Clone, Debug)]
+pub enum LoadState<T> {
+    /// The resource has been requested.
+    Loading,
+    /// The resource is available.
+    Ready(T),
+    /// Loading or decoding failed.
+    Failed(Arc<io::Error>),
+}
+
+/// A generated, immutable asset reference.
+#[derive(Clone, Copy)]
+pub struct Asset {
+    path: &'static str,
+    bytes: Option<&'static [u8]>,
+}
+
+/// A shared resource lifetime. Retain it while observing its loading state.
 #[derive(Clone)]
-struct AssetCacheEntry {
-    bytes: Arc<[u8]>,
-    len: usize,
-    last_access_tick: u64,
+pub struct Resource<T: Send + Sync + 'static>(Arc<ResourceEntry<T>>);
+
+struct ResourceEntry<T: Send + Sync + 'static> {
+    asset: Asset,
+    owner: StateOwner,
+    state: State<LoadState<T>>,
 }
 
-#[derive(Default)]
-struct AssetLruCache {
-    entries: AssetCacheMap,
-    total_bytes: usize,
-    next_tick: u64,
+impl<T: Send + Sync + 'static> std::fmt::Debug for Resource<T> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_tuple("Resource").field(&self.0.asset).finish()
+    }
 }
 
-impl AssetLruCache {
-    fn get(&mut self, key: AssetCacheKey) -> Option<Arc<[u8]>> {
-        let tick = self.bump_tick();
-        if let Some(entry) = self.entries.get_mut(&key) {
-            entry.last_access_tick = tick;
-            return Some(entry.bytes.clone());
-        }
-        None
+impl<T: Send + Sync + 'static> PartialEq for Resource<T> {
+    fn eq(&self, other: &Self) -> bool {
+        Arc::ptr_eq(&self.0, &other.0)
     }
+}
+impl<T: Send + Sync + 'static> Eq for Resource<T> {}
 
-    fn insert(&mut self, key: AssetCacheKey, bytes: Arc<[u8]>) {
-        let tick = self.bump_tick();
-        let entry_len = bytes.len();
-        let entry = AssetCacheEntry {
-            len: entry_len,
-            bytes,
-            last_access_tick: tick,
-        };
-
-        if let Some(previous) = self.entries.insert(key, entry) {
-            self.total_bytes = self.total_bytes.saturating_sub(previous.len);
-        }
-        self.total_bytes = self.total_bytes.saturating_add(entry_len);
-        self.evict_if_needed();
+impl<T: Clone + Send + Sync + 'static> Resource<T> {
+    /// Observes loading state on the owning UI thread and tracks build or measurement.
+    pub fn get(&self) -> LoadState<T> {
+        self.0.state.get()
     }
+}
 
-    fn bump_tick(&mut self) -> u64 {
-        self.next_tick = self.next_tick.wrapping_add(1);
-        self.next_tick
+struct AssetCache<T: Send + Sync + 'static>(
+    RefCell<HashMap<(&'static str, usize), Weak<ResourceEntry<T>>>>,
+);
+
+impl<T: Send + Sync + 'static> Default for AssetCache<T> {
+    fn default() -> Self {
+        Self(RefCell::default())
     }
+}
 
-    fn evict_if_needed(&mut self) {
-        while (self.total_bytes > CACHE_MAX_BYTES || self.entries.len() > CACHE_MAX_ENTRIES)
-            && self.entries.len() > 1
-        {
-            let Some(victim_key) = self
-                .entries
-                .iter()
-                .min_by_key(|(_, entry)| entry.last_access_tick)
-                .map(|(key, _)| *key)
-            else {
-                break;
-            };
+#[cfg(not(target_family = "wasm"))]
+struct AssetWorker(std::sync::mpsc::Sender<Box<dyn FnOnce() + Send>>);
 
-            if let Some(removed) = self.entries.remove(&victim_key) {
-                self.total_bytes = self.total_bytes.saturating_sub(removed.len);
+#[cfg(not(target_family = "wasm"))]
+impl Default for AssetWorker {
+    fn default() -> Self {
+        let (sender, receiver) = std::sync::mpsc::channel::<Box<dyn FnOnce() + Send>>();
+        std::thread::spawn(move || {
+            for work in receiver {
+                work();
             }
-        }
+        });
+        Self(sender)
     }
 }
 
-/// Trait implemented by generated asset handle types.
-pub trait AssetExt: Copy {
-    /// Read raw bytes for this asset.
-    fn read(self) -> io::Result<Arc<[u8]>>;
+impl std::fmt::Debug for Asset {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        self.path.fmt(f)
+    }
 }
 
-/// Shared helper for generated asset readers that adds an in-memory LRU cache.
-///
-/// Each generated asset type should call this function from `AssetExt::read`,
-/// passing its `index` as `asset_id` and a backend-specific loader closure.
-#[doc(hidden)]
-pub fn read_with_lru_cache<T, F>(asset_id: u64, loader: F) -> io::Result<Arc<[u8]>>
-where
-    T: 'static,
-    F: FnOnce() -> io::Result<Arc<[u8]>>,
-{
-    let cache = crate::runtime_resource::<RwLock<AssetLruCache>>();
-    let cache_key = (TypeId::of::<T>(), asset_id);
+impl PartialEq for Asset {
+    fn eq(&self, other: &Self) -> bool {
+        self.path == other.path
+    }
+}
+impl Eq for Asset {}
 
-    {
-        let mut cache = cache.write();
-        if let Some(bytes) = cache.get(cache_key) {
-            return Ok(bytes);
+impl std::hash::Hash for Asset {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.path.hash(state);
+    }
+}
+
+impl Asset {
+    /// Creates an asset backed by static bytes.
+    #[doc(hidden)]
+    pub const fn embedded(path: &'static str, bytes: &'static [u8]) -> Self {
+        Self {
+            path,
+            bytes: Some(bytes),
         }
     }
 
-    let loaded = loader()?;
-
-    let mut cache = cache.write();
-    if let Some(bytes) = cache.get(cache_key) {
-        return Ok(bytes);
+    /// Creates an asset delivered with the application.
+    #[doc(hidden)]
+    pub const fn platform(path: &'static str) -> Self {
+        Self { path, bytes: None }
     }
 
-    cache.insert(cache_key, loaded.clone());
-    Ok(loaded)
+    /// Returns the asset's content-addressed package path.
+    pub fn path(self) -> &'static str {
+        self.path
+    }
+
+    /// Requests bytes in the active UI session.
+    ///
+    /// Retain the returned handle, for example with `remember`. Repeated live
+    /// requests share a result. Completion invalidates dependent builds
+    /// and measurements. Embedded resources are available immediately.
+    pub fn load(self) -> Resource<Arc<[u8]>> {
+        self.load_with(Ok)
+    }
+
+    /// Requests and caches a decoded resource in the active UI session.
+    ///
+    /// Retain the returned handle while using the resource. Results and failures
+    /// are shared by asset, output type, and decoder until the last handle drops.
+    /// Decoders may run on a background thread.
+    pub fn load_with<T: Clone + Send + Sync + 'static>(
+        self,
+        decode: fn(Arc<[u8]>) -> io::Result<T>,
+    ) -> Resource<T> {
+        let cache = local_runtime_resource::<AssetCache<T>>();
+        let key = (self.path, decode as usize);
+        let resource = {
+            let mut entries = cache.0.borrow_mut();
+            if let Some(entry) = entries.get(&key).and_then(Weak::upgrade) {
+                return Resource(entry);
+            }
+            entries.retain(|_, entry| entry.strong_count() > 0);
+            let owner = StateOwner::new();
+            let state = owner.state_with_key((), || LoadState::Loading);
+            let entry = Arc::new(ResourceEntry {
+                asset: self,
+                owner,
+                state,
+            });
+            entries.insert(key, Arc::downgrade(&entry));
+            Resource(entry)
+        };
+        let state = resource.0.state;
+        let finish = move |result: io::Result<T>| {
+            state.set(match result {
+                Ok(value) => LoadState::Ready(value),
+                Err(error) => {
+                    tracing::warn!(asset = self.path, %error, "resource loading failed");
+                    LoadState::Failed(Arc::new(error))
+                }
+            });
+        };
+        if let Some(bytes) = self.bytes {
+            finish(decode(Arc::from(bytes)));
+        } else {
+            let dispatcher = resource.0.owner.dispatcher();
+            #[cfg(target_family = "wasm")]
+            wasm_bindgen_futures::spawn_local(async move {
+                let result = web::read(self.path).await;
+                if dispatcher.is_alive() {
+                    let result = result.and_then(decode);
+                    dispatcher.dispatch(move || finish(result));
+                }
+            });
+            #[cfg(not(target_family = "wasm"))]
+            let _ = runtime_resource::<AssetWorker>().0.send(Box::new(move || {
+                if !dispatcher.is_alive() {
+                    return;
+                }
+                #[cfg(target_os = "android")]
+                let result = android::read(self.path);
+                #[cfg(not(target_os = "android"))]
+                let result = std::fs::read(self.path).map(Arc::from);
+                let result = result.and_then(decode);
+                dispatcher.dispatch(move || finish(result));
+            }));
+        }
+        resource
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn decoded_assets_share_results_within_their_session() {
+        let asset = Asset::embedded("test/shared", b"original");
+        crate::RuntimeSession::new().run(|| {
+            let resource = asset.load();
+            let LoadState::Ready(first) = resource.get() else {
+                panic!("embedded asset")
+            };
+            let LoadState::Ready(second) = asset.load().get() else {
+                panic!("cached asset")
+            };
+            assert!(Arc::ptr_eq(&first, &second));
+            let LoadState::Ready(upper) = asset
+                .load_with(|bytes| Ok(Arc::<[u8]>::from(bytes.to_ascii_uppercase())))
+                .get()
+            else {
+                panic!("decoded asset")
+            };
+            assert_eq!(&*upper, b"ORIGINAL");
+            let released = {
+                let resource = Asset::embedded("test/released", b"temporary").load();
+                let LoadState::Ready(bytes) = resource.get() else {
+                    panic!("embedded asset")
+                };
+                Arc::downgrade(&bytes)
+            };
+            assert!(released.upgrade().is_none());
+            assert!(matches!(
+                asset
+                    .load_with::<()>(|_| Err(io::Error::other("invalid resource")))
+                    .get(),
+                LoadState::Failed(_)
+            ));
+        });
+    }
+
+    #[cfg(not(any(target_family = "wasm", target_os = "android")))]
+    #[test]
+    fn platform_resources_deliver_results_on_the_owning_ui_thread() {
+        let file = tempfile::NamedTempFile::new().unwrap();
+        std::fs::write(file.path(), b"background bytes").unwrap();
+        let path = Box::leak(file.path().to_str().unwrap().to_owned().into_boxed_str());
+        crate::RuntimeSession::new().run(|| {
+            let resource = Asset::platform(path).load();
+            let (finished, wait) = std::sync::mpsc::channel();
+            runtime_resource::<AssetWorker>()
+                .0
+                .send(Box::new(move || finished.send(()).unwrap()))
+                .unwrap();
+            wait.recv().unwrap();
+            assert!(matches!(resource.get(), LoadState::Loading));
+            crate::dispatcher::flush();
+            let LoadState::Ready(bytes) = resource.get() else {
+                panic!("completed resource")
+            };
+            assert_eq!(&*bytes, b"background bytes");
+        });
+    }
 }

@@ -1,9 +1,3 @@
-//! Dialog token sets for basic and full-screen dialogs.
-//!
-//! ## Usage
-//!
-//! Inspect the color, type, shape and state tokens of each dialog variant.
-
 use tessera_components::{
     alignment::{CrossAxisAlignment, MainAxisAlignment},
     boxed::boxed,
@@ -122,7 +116,7 @@ fn token_menu(
                                             text().content(I18N.text(SET_NAMES[selected.get()]));
                                             boxed().modifier(Modifier::new().width(Dp(8.0)));
                                             icon()
-                                                .vector(filled::ARROW_DROP_DOWN_SVG)
+                                                .painter(filled::ARROW_DROP_DOWN_SVG)
                                                 .size(Dp(18.0));
                                         });
                                 });

@@ -918,8 +918,13 @@ fn chip_remove_action(
 
 #[tessera]
 fn chip_avatar(painter: Option<Painter>, alpha: Option<f32>) {
-    let painter = painter.expect("chip avatar painter");
+    let Some(painter) = painter.and_then(Painter::resolve) else {
+        crate::spacer::spacer()
+            .modifier(Modifier::new().size(ChipDefaults::AVATAR_SIZE, ChipDefaults::AVATAR_SIZE));
+        return;
+    };
     let (width, height) = match &painter {
+        Painter::Asset(_) => unreachable!("painter is resolved"),
         Painter::Raster(data) => (f64::from(data.width), f64::from(data.height)),
         Painter::Vector(data) => (
             f64::from(data.viewport_width),

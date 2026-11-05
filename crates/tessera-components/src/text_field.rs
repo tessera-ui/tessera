@@ -1810,13 +1810,13 @@ mod native_field_regressions {
                                         ))
                                         .children(|| {
                                             crate::icon::icon()
-                                                .vector(crate::material_icons::filled::SEARCH_SVG)
+                                                .painter(crate::material_icons::filled::SEARCH_SVG)
                                                 .size(Dp(24.0));
                                         });
                                 })
                                 .trailing_icon(|| {
                                     crate::icon::icon()
-                                        .vector(crate::material_icons::filled::CANCEL_SVG)
+                                        .painter(crate::material_icons::filled::CANCEL_SVG)
                                         .size(Dp(24.0));
                                 })
                                 .on_change_shared(on_change);
@@ -2275,7 +2275,7 @@ mod native_field_regressions {
                     if leading {
                         field.leading_icon(|| {
                             crate::icon::icon()
-                                .vector(crate::material_icons::filled::SEARCH_SVG)
+                                .painter(crate::material_icons::filled::SEARCH_SVG)
                                 .size(Dp(24.0));
                         });
                     }

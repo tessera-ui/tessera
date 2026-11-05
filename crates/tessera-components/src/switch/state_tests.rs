@@ -103,7 +103,7 @@ fn fixture(probe: Option<TestProbe<Option<State<Settings>>>>) {
                             let color = use_context::<ContentColor>().unwrap().get().current;
                             if settings.get().icon {
                                 icon()
-                                    .vector(icon_data.get())
+                                    .painter(icon_data.get())
                                     .size_optional(settings.get().icon_size);
                             } else {
                                 surface()

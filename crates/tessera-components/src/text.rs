@@ -156,6 +156,7 @@ struct TextLayout {
 }
 
 struct CachedText {
+    fonts: u64,
     text: String,
     style: TextStyle,
     font_size_px: f32,
@@ -171,15 +172,18 @@ impl PartialEq for TextLayout {
 
 impl TextLayout {
     fn shaped_text(&self, constraint: TextConstraint) -> TextData {
+        let fonts = crate::fonts::prepare(&self.text, self.style);
         let mut cache = self.shaped.lock();
         let font_size_px = self.style.font_size.to_pixels_f32();
         if cache.as_ref().is_none_or(|cached| {
-            cached.text != self.text
+            cached.fonts != fonts
+                || cached.text != self.text
                 || cached.style != self.style
                 || cached.font_size_px != font_size_px
                 || cached.constraint != constraint
         }) {
             *cache = Some(CachedText {
+                fonts,
                 text: self.text.clone(),
                 style: self.style,
                 font_size_px,

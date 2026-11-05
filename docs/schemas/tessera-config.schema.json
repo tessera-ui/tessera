@@ -42,6 +42,13 @@
               "default": []
             }
           }
+        },
+        "embed": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Asset paths embedded for immediate availability on every target."
         }
       }
     },
