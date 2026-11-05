@@ -1129,7 +1129,7 @@ fn surface_content(
 ///     .modifier(Modifier::new().padding(Padding::all(Dp(16.0))))
 ///     .on_click(|| println!("Surface was clicked!"))
 ///     .child(|| {
-///         text().content("Click me");
+///         text("Click me");
 ///     });
 /// # });
 /// # }

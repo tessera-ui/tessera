@@ -281,23 +281,20 @@ fn segmented_row(
                     });
             }
             gap(Dp(16.0));
-            text()
-                .content(I18N.format(
-                    "ui-value-selection-value",
-                    [
-                        ("v0", I18N.text(&label).into()),
-                        ("v1", I18N.text(&selection_summary(selected.get())).into()),
-                    ],
-                ))
-                .style(type_style(14.0, 20.0));
+            text(I18N.format(
+                "ui-value-selection-value",
+                [
+                    ("v0", I18N.text(&label).into()),
+                    ("v1", I18N.text(&selection_summary(selected.get())).into()),
+                ],
+            ))
+            .style(type_style(14.0, 20.0));
         });
 }
 
 #[tessera]
 fn prose(#[prop(into)] value: String) {
-    text()
-        .content(I18N.text(value))
-        .style(type_style(16.0, 24.0));
+    text(I18N.text(value)).style(type_style(16.0, 24.0));
 }
 
 #[tessera]
@@ -374,7 +371,7 @@ fn expressive_update(on_recommended: Callback) {
         .accessibility_label(I18N.text("ui-open-recommended-button-groups"))
         .on_click_shared(on_recommended)
         .child(move || {
-            text().content(I18N.text("ui-open-recommended-button-groups"));
+            text(I18N.text("ui-open-recommended-button-groups"));
         });
 }
 
@@ -518,7 +515,7 @@ fn configurations() {
                 .accessibility_label(I18N.text("ui-segmented-configuration-icons"))
                 .on_click(move || icons.set(!icons.get()))
                 .child(move || {
-                    text().content(I18N.text("ui-icons"));
+                    text(I18N.text("ui-icons"));
                 });
             button()
                 .tonal()
@@ -526,7 +523,7 @@ fn configurations() {
                 .accessibility_label(I18N.text("ui-segmented-configuration-checkmark"))
                 .on_click(move || checks.set(!checks.get()))
                 .child(move || {
-                    text().content(I18N.text("ui-checkmark"));
+                    text(I18N.text("ui-checkmark"));
                 });
             button()
                 .tonal()
@@ -534,7 +531,7 @@ fn configurations() {
                 .accessibility_label(I18N.text("ui-segmented-configuration-enabled"))
                 .on_click(move || enabled.set(!enabled.get()))
                 .child(move || {
-                    text().content(I18N.text("ui-enabled"));
+                    text(I18N.text("ui-enabled"));
                 });
             button()
                 .tonal()
@@ -542,7 +539,7 @@ fn configurations() {
                 .accessibility_label(I18N.text("ui-segmented-configuration-compact"))
                 .on_click(move || compact.set(!compact.get()))
                 .child(move || {
-                    text().content(I18N.text("ui-compact-height"));
+                    text(I18N.text("ui-compact-height"));
                 });
         });
     gap(Dp(24.0));

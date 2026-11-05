@@ -81,7 +81,7 @@ fn fixture(observed: TestProbe<FixtureHandles>) {
                     .accessibility_label("Before tabs")
                     .on_click(|| {})
                     .child(|| {
-                        text().content("Before tabs");
+                        text("Before tabs");
                     });
                 let observed = observed.clone();
                 tabs()
@@ -118,7 +118,7 @@ fn fixture(observed: TestProbe<FixtureHandles>) {
                     .accessibility_label("After tabs")
                     .on_click(|| {})
                     .child(|| {
-                        text().content("After tabs");
+                        text("After tabs");
                     });
             });
         });

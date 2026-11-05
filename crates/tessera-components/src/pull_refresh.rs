@@ -381,7 +381,7 @@ pub fn pull_refresh_indicator(
 ///                         .modifier(Modifier::new().vertical_scroll(scroll))
 ///                         .child(move || {
 ///                             column().children(|| {
-///                                 text().content("Pull down to refresh");
+///                                 text("Pull down to refresh");
 ///                             });
 ///                         });
 ///                 });

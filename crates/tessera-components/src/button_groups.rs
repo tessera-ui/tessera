@@ -337,7 +337,7 @@ impl ButtonGroupsState {
 /// # fn demo() {
 /// button_groups().child(
 ///     || {
-///         text().content("Button 1");
+///         text("Button 1");
 ///     },
 ///     |_| {},
 /// );

@@ -348,7 +348,7 @@ impl ListItemDefaults {
 ///                 .on_selection_change(move |value| selected.set(value))
 ///                 .accessibility_label("Inbox")
 ///                 .content(|| {
-///                     text().content("Inbox");
+///                     text("Inbox");
 ///                 })
 ///                 .supporting_text("3 new messages");
 ///         });
@@ -595,8 +595,7 @@ fn list_item_text_line(
     } else if text_value.is_empty() {
         spacer();
     } else {
-        text()
-            .content(text_value)
+        text(text_value)
             .style(style.unwrap_or_default())
             .color(color.unwrap_or(Color::TRANSPARENT));
     }

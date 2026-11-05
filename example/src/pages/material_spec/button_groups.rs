@@ -266,9 +266,7 @@ fn legend(items: Vec<String>) {
                     .children(move || {
                         badge(index + 1);
                         spacer().modifier(Modifier::new().width(Dp(12.0)));
-                        text()
-                            .content(I18N.text(&(item)))
-                            .style(type_style(16.0, 24.0));
+                        text(I18N.text(&(item))).style(type_style(16.0, 24.0));
                     });
             }
         });
@@ -293,14 +291,12 @@ fn guidance(#[prop(into)] mark: String, #[prop(into)] note: String, color: Color
                         .background_with_shape(color, Shape::rounded_rectangle(Dp(8.0))),
                 )
                 .children(move || {
-                    text()
-                        .content(I18N.text(&(mark)))
+                    text(I18N.text(&(mark)))
                         .style(type_style(14.0, 20.0))
                         .color(Color::WHITE);
                 });
             spacer().modifier(Modifier::new().width(Dp(12.0)));
-            text()
-                .content(I18N.text(&(note)))
+            text(I18N.text(&(note)))
                 .color(scheme.on_surface_variant)
                 .style(type_style(14.0, 20.0));
         });
@@ -361,7 +357,7 @@ fn group(
                             spacer().modifier(Modifier::new().width(Dp(8.0)));
                         }
                         if let Some(label) = item.label {
-                            text().content(I18N.text(label));
+                            text(I18N.text(label));
                         }
                     });
             }),
@@ -723,14 +719,14 @@ fn playground() {
                                 });
                             })
                             .child(move || {
-                                text().content(I18N.text("ui-connected"));
+                                text(I18N.text("ui-connected"));
                             });
                         button()
                             .text()
                             .accessibility_label(I18N.text("ui-cycle-size"))
                             .on_click(move || size.set(next_size(size.get())))
                             .child(move || {
-                                text().content(I18N.format(
+                                text(I18N.format(
                                     "ui-size-value",
                                     [("v0", I18N.text(&size_name(size.get())).into())],
                                 ));
@@ -741,7 +737,7 @@ fn playground() {
                             .accessibility_label(I18N.text("ui-square-shape"))
                             .on_click(move || square.set(!square.get()))
                             .child(move || {
-                                text().content(I18N.text("ui-square"));
+                                text(I18N.text("ui-square"));
                             });
                         button()
                             .tonal()
@@ -749,7 +745,7 @@ fn playground() {
                             .accessibility_label(I18N.text("ui-multiple-selection"))
                             .on_click(move || multiple.set(!multiple.get()))
                             .child(move || {
-                                text().content(I18N.text("ui-multiple"));
+                                text(I18N.text("ui-multiple"));
                             });
                         button()
                             .tonal()
@@ -757,7 +753,7 @@ fn playground() {
                             .accessibility_label(I18N.text("ui-selection-required"))
                             .on_click(move || required.set(!required.get()))
                             .child(move || {
-                                text().content(I18N.text("ui-required"));
+                                text(I18N.text("ui-required"));
                             });
                         button()
                             .tonal()
@@ -765,7 +761,7 @@ fn playground() {
                             .accessibility_label(I18N.text("ui-disabled-group"))
                             .on_click(move || enabled.set(!enabled.get()))
                             .child(move || {
-                                text().content(I18N.text("ui-disabled"));
+                                text(I18N.text("ui-disabled"));
                             });
                         button()
                             .tonal()
@@ -773,7 +769,7 @@ fn playground() {
                             .accessibility_label(I18N.text("ui-item-icons"))
                             .on_click(move || icons.set(!icons.get()))
                             .child(move || {
-                                text().content(I18N.text("ui-icons"));
+                                text(I18N.text("ui-icons"));
                             });
                     });
                 gap(Dp(32.0));
@@ -803,10 +799,10 @@ fn playground() {
                                 row().children(move || {
                                     icon().painter(filled::EDIT_SVG);
                                     spacer().modifier(Modifier::new().width(Dp(8.0)));
-                                    text().content(I18N.text("ui-one"));
+                                    text(I18N.text("ui-one"));
                                 });
                             } else {
-                                text().content(I18N.text("ui-one"));
+                                text(I18N.text("ui-one"));
                             }
                         }),
                         CallbackWith::new(|_| {}),
@@ -817,10 +813,10 @@ fn playground() {
                                 row().children(move || {
                                     icon().painter(filled::EDIT_SVG);
                                     spacer().modifier(Modifier::new().width(Dp(8.0)));
-                                    text().content(I18N.text("ui-two"));
+                                    text(I18N.text("ui-two"));
                                 });
                             } else {
-                                text().content(I18N.text("ui-two"));
+                                text(I18N.text("ui-two"));
                             }
                         }),
                         CallbackWith::new(|_| {}),
@@ -831,48 +827,45 @@ fn playground() {
                                 row().children(move || {
                                     icon().painter(filled::EDIT_SVG);
                                     spacer().modifier(Modifier::new().width(Dp(8.0)));
-                                    text().content(I18N.text("ui-three"));
+                                    text(I18N.text("ui-three"));
                                 });
                             } else {
-                                text().content(I18N.text("ui-three"));
+                                text(I18N.text("ui-three"));
                             }
                         }),
                         CallbackWith::new(|_| {}),
                     );
                 gap(Dp(24.0));
-                text()
-                    .content(
-                        I18N.format(
-                            "ui-value-value-value-selection-value",
-                            [
-                                ("v0", I18N.text(&style_name(style.get())).into()),
-                                ("v1", I18N.text(&size_name(size.get())).into()),
-                                (
-                                    "v2",
-                                    I18N.text(
-                                        &(if multiple.get() {
-                                            "ui-multiple-7083"
-                                        } else {
-                                            "ui-single-7084"
-                                        }),
-                                    )
+                text(
+                    I18N.format(
+                        "ui-value-value-value-selection-value",
+                        [
+                            ("v0", I18N.text(&style_name(style.get())).into()),
+                            ("v1", I18N.text(&size_name(size.get())).into()),
+                            (
+                                "v2",
+                                I18N.text(
+                                    &(if multiple.get() {
+                                        "ui-multiple-7083"
+                                    } else {
+                                        "ui-single-7084"
+                                    }),
+                                )
+                                .into(),
+                            ),
+                            (
+                                "v3",
+                                (0..3)
+                                    .filter(|index| state.with(|state| state.is_selected(*index)))
+                                    .map(|index| (index + 1).to_string())
+                                    .collect::<Vec<_>>()
+                                    .join(", ")
                                     .into(),
-                                ),
-                                (
-                                    "v3",
-                                    (0..3)
-                                        .filter(|index| {
-                                            state.with(|state| state.is_selected(*index))
-                                        })
-                                        .map(|index| (index + 1).to_string())
-                                        .collect::<Vec<_>>()
-                                        .join(", ")
-                                        .into(),
-                                ),
-                            ],
-                        ),
-                    )
-                    .style(type_style(14.0, 20.0));
+                            ),
+                        ],
+                    ),
+                )
+                .style(type_style(14.0, 20.0));
             });
     }));
 }
@@ -895,14 +888,14 @@ fn tokens() {
                 .accessibility_label(I18N.text("ui-connected-token-set"))
                 .on_click(move || connected.set(!connected.get()))
                 .child(move || {
-                    text().content(I18N.text("ui-connected"));
+                    text(I18N.text("ui-connected"));
                 });
             button()
                 .text()
                 .accessibility_label(I18N.text("ui-cycle-token-set-size"))
                 .on_click(move || size.set(next_size(size.get())))
                 .child(move || {
-                    text().content(I18N.format(
+                    text(I18N.format(
                         "ui-size-value",
                         [("v0", I18N.text(&size_name(size.get())).into())],
                     ));
@@ -1227,8 +1220,7 @@ fn anatomy() {
                                 .cross_axis_alignment(CrossAxisAlignment::Center)
                                 .children(move || {
                                     if variant == ButtonVariant::Elevated {
-                                        text()
-                                            .content(I18N.text("ui-elevated-style-not-recommended"))
+                                        text(I18N.text("ui-elevated-style-not-recommended"))
                                             .color(INK)
                                             .style(type_style(14.0, 20.0));
                                     } else {
@@ -1524,8 +1516,7 @@ fn measurements() {
                                 [("v0", I18N.text(&size_name(size)).into())],
                             ));
                             gap(Dp(12.0));
-                            text()
-                                .content(I18N.text(size_name(size)))
+                            text(I18N.text(size_name(size)))
                                 .color(INK)
                                 .style(type_style(14.0, 20.0));
                         });
@@ -1725,19 +1716,19 @@ fn guidelines_anatomy() {
                     .selection_mode(ButtonGroupsSelectionMode::Single)
                     .child_shared(
                         RenderSlot::new(move || {
-                            text().content(I18N.text("ui-day"));
+                            text(I18N.text("ui-day"));
                         }),
                         CallbackWith::new(|_| {}),
                     )
                     .child_shared(
                         RenderSlot::new(move || {
-                            text().content(I18N.text("ui-week"));
+                            text(I18N.text("ui-week"));
                         }),
                         CallbackWith::new(|_| {}),
                     )
                     .child_shared(
                         RenderSlot::new(move || {
-                            text().content(I18N.text("ui-month"));
+                            text(I18N.text("ui-month"));
                         }),
                         CallbackWith::new(|_| {}),
                     );
@@ -1952,18 +1943,14 @@ fn interaction_style() {
                     .variant(ButtonVariant::Tonal)
                     .label(I18N.text("ui-extra-small-button-group"));
                 gap(Dp(8.0));
-                text()
-                    .content(I18N.text("ui-extra-small-button-group"))
-                    .style(type_style(14.0, 20.0));
+                text(I18N.text("ui-extra-small-button-group")).style(type_style(14.0, 20.0));
                 gap(Dp(24.0));
                 group(mixed_items(), ButtonGroupsStyle::Standard)
                     .size(ButtonGroupsSize::Small)
                     .variant(ButtonVariant::Tonal)
                     .label(I18N.text("ui-small-button-group"));
                 gap(Dp(8.0));
-                text()
-                    .content(I18N.text("ui-small-button-group"))
-                    .style(type_style(14.0, 20.0));
+                text(I18N.text("ui-small-button-group")).style(type_style(14.0, 20.0));
             });
     }));
     gap(Dp(48.0));
@@ -2020,14 +2007,11 @@ fn labeling() {
         column()
             .modifier(Modifier::new().fill_max_width())
             .children(move || {
-                text()
-                    .content(I18N.text("ui-dinner-club"))
+                text(I18N.text("ui-dinner-club"))
                     .color(INK)
                     .style(type_style(20.0, 28.0));
                 gap(Dp(8.0));
-                text()
-                    .content(I18N.text("ui-3-messages"))
-                    .style(type_style(16.0, 24.0));
+                text(I18N.text("ui-3-messages")).style(type_style(16.0, 24.0));
                 gap(Dp(24.0));
                 group(
                     vec![

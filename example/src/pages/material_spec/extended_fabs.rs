@@ -169,17 +169,14 @@ pub(super) fn extended_fabs_spec(
 
 #[tessera]
 fn prose(#[prop(into)] value: String) {
-    text()
-        .content(I18N.text(value))
-        .style(type_style(16.0, 24.0));
+    text(I18N.text(value)).style(type_style(16.0, 24.0));
 }
 
 #[tessera]
 fn caption(#[prop(into)] value: String) {
     let scheme = use_context::<MaterialTheme>().unwrap().get().color_scheme;
     gap(Dp(16.0));
-    text()
-        .content(I18N.text(value))
+    text(I18N.text(value))
         .color(scheme.on_surface_variant)
         .style(type_style(14.0, 20.0));
 }
@@ -204,9 +201,7 @@ fn bullets(items: Vec<String>) {
                                 .background_with_shape(scheme.on_surface_variant, Shape::Ellipse),
                         );
                         spacer().modifier(Modifier::new().width(Dp(16.0)));
-                        text()
-                            .content(I18N.text(&(item)))
-                            .style(type_style(16.0, 24.0));
+                        text(I18N.text(&(item))).style(type_style(16.0, 24.0));
                     });
             }
         });
@@ -239,8 +234,7 @@ fn fab(
             .on_click(move || activations.set(activations.get() + 1));
         if counted.unwrap_or(false) {
             gap(Dp(16.0));
-            text()
-                .content(I18N.format("ui-activations-value", [("v0", (activations.get()).into())]))
+            text(I18N.format("ui-activations-value", [("v0", (activations.get()).into())]))
                 .style(type_style(14.0, 20.0));
         }
     });
@@ -464,15 +458,11 @@ fn configurations() {
                 gap(Dp(40.0));
                 subheading("ui-3-icon-position".into());
                 gap(Dp(24.0));
-                text()
-                    .content(I18N.text("ui-with-leading-icon"))
-                    .style(type_style(14.0, 20.0));
+                text(I18N.text("ui-with-leading-icon")).style(type_style(14.0, 20.0));
                 gap(Dp(16.0));
                 fab("ui-compose");
                 gap(Dp(24.0));
-                text()
-                    .content(I18N.text("ui-without-icon"))
-                    .style(type_style(14.0, 20.0));
+                text(I18N.text("ui-without-icon")).style(type_style(14.0, 20.0));
                 gap(Dp(16.0));
                 fab("ui-compose").with_icon(false);
             });
@@ -503,7 +493,7 @@ fn collapsible(#[prop(into)] label: String) {
                     .accessibility_label(I18N.text("ui-collapse-or-expand-the-extended-fab-label"))
                     .on_click(move || expanded.set(!expanded.get()))
                     .child(move || {
-                        text().content(I18N.text(if expanded.get() {
+                        text(I18N.text(if expanded.get() {
                             "ui-collapse-label"
                         } else {
                             "ui-expand-label"
@@ -518,27 +508,26 @@ fn collapsible(#[prop(into)] label: String) {
                     .content_color(scheme.on_primary_container)
                     .on_click(move || activations.set(activations.get() + 1));
                 gap(Dp(16.0));
-                text()
-                    .content(
-                        I18N.format(
-                            "ui-value-activations-value-format-161",
-                            [
-                                (
-                                    "v0",
-                                    I18N.text(
-                                        &(if expanded.get() {
-                                            "ui-expanded"
-                                        } else {
-                                            "ui-collapsed"
-                                        }),
-                                    )
-                                    .into(),
-                                ),
-                                ("v1", (activations.get()).into()),
-                            ],
-                        ),
-                    )
-                    .style(type_style(14.0, 20.0));
+                text(
+                    I18N.format(
+                        "ui-value-activations-value-format-161",
+                        [
+                            (
+                                "v0",
+                                I18N.text(
+                                    &(if expanded.get() {
+                                        "ui-expanded"
+                                    } else {
+                                        "ui-collapsed"
+                                    }),
+                                )
+                                .into(),
+                            ),
+                            ("v1", (activations.get()).into()),
+                        ],
+                    ),
+                )
+                .style(type_style(14.0, 20.0));
             });
     }));
 }
@@ -619,8 +608,7 @@ fn anatomy() {
             fab("ui-compose");
             gap(Dp(32.0));
             for line in ["ui-1-container", "ui-2-icon-optional", "ui-3-label-text"] {
-                text()
-                    .content(I18N.text(line))
+                text(I18N.text(line))
                     .color(INK)
                     .style(type_style(16.0, 28.0));
             }
@@ -664,8 +652,7 @@ fn colors() {
                                         }
                                     });
                                 gap(Dp(16.0));
-                                text()
-                                    .content("1  Primary container    2  Secondary container    3  Tertiary container    4  Primary    5  Secondary    6  Tertiary")
+                                text("1  Primary container    2  Secondary container    3  Tertiary container    4  Primary    5  Secondary    6  Tertiary")
                                     .style(type_style(14.0, 20.0));
                             });
                     });
@@ -694,10 +681,7 @@ fn states() {
                         fab("ui-elevated").tone(3);
                     });
                 gap(Dp(32.0));
-                text()
-                    .content(
-                        I18N.text("ui-hover-focus-with-tab-or-press-the-actions-above-to-see-the-state-layer-and-elevation-respo"),
-                    )
+                text(I18N.text("ui-hover-focus-with-tab-or-press-the-actions-above-to-see-the-state-layer-and-elevation-respo"))
                     .style(type_style(14.0, 20.0));
             });
     }));
@@ -865,15 +849,15 @@ fn usage() {
             .children(move || {
                 fab("ui-compose");
                 gap(Dp(16.0));
-                text()
-                    .content(I18N.text("ui-do-keep-the-label-short-and-specific-to-the-action"))
+                text(I18N.text("ui-do-keep-the-label-short-and-specific-to-the-action"))
                     .style(type_style(14.0, 20.0));
                 gap(Dp(32.0));
                 fab("ui-create-a-new-message");
                 gap(Dp(16.0));
-                text()
-                    .content(I18N.text("ui-don-t-repeat-the-whole-task-description-the-floating-action-stays-concise"))
-                    .style(type_style(14.0, 20.0));
+                text(I18N.text(
+                    "ui-don-t-repeat-the-whole-task-description-the-floating-action-stays-concise",
+                ))
+                .style(type_style(14.0, 20.0));
             });
     }));
     gap(Dp(16.0));
@@ -936,8 +920,7 @@ fn placement() {
             column()
                 .modifier(Modifier::new().fill_max_size().padding_all(Dp(24.0)))
                 .children(move || {
-                    text()
-                        .content(I18N.text("ui-content"))
+                    text(I18N.text("ui-content"))
                         .color(scheme.on_surface_variant)
                         .style(type_style(14.0, 20.0));
                     spacer().modifier(Modifier::new().weight(1.0));
@@ -1097,14 +1080,12 @@ fn labeling() {
             .children(move || {
                 fab("ui-compose");
                 gap(Dp(16.0));
-                text()
-                    .content(I18N.text("ui-do-one-label-one-announcement-compose-button"))
+                text(I18N.text("ui-do-one-label-one-announcement-compose-button"))
                     .style(type_style(14.0, 20.0));
                 gap(Dp(32.0));
                 fab("ui-compose").tone(1);
                 gap(Dp(16.0));
-                text()
-                    .content(I18N.text("ui-don-t-compose-edit-pencil-icon-button-the-icon-description-duplicates-the-action"))
+                text(I18N.text("ui-don-t-compose-edit-pencil-icon-button-the-icon-description-duplicates-the-action"))
                     .style(type_style(14.0, 20.0));
             });
     }));

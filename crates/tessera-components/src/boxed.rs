@@ -75,9 +75,8 @@ fn compute_child_offset(
 /// # #[tessera]
 /// # fn component() {
 /// boxed().children(|| {
-///     text().content("Background");
-///     text()
-///         .content("Foreground")
+///     text("Background");
+///     text("Foreground")
 ///         .modifier(Modifier::new().align(Alignment::Center));
 /// });
 /// # }

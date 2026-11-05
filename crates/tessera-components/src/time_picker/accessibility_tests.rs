@@ -62,7 +62,7 @@ fn fixture(
                                 .accessibility_label("Confirm time")
                                 .on_click(|| {})
                                 .child(|| {
-                                    text().content("OK");
+                                    text("OK");
                                 });
                         });
                 });

@@ -63,7 +63,7 @@ fn long_dialog_fixture(output: tessera_ui::testing::TestProbe<Option<State<(bool
                     .content(|| {
                         column().children(|| {
                             for index in 0..30 {
-                                text().content(format!("Message line {index:02}"));
+                                text(format!("Message line {index:02}"));
                             }
                         });
                     })
@@ -73,7 +73,7 @@ fn long_dialog_fixture(output: tessera_ui::testing::TestProbe<Option<State<(bool
                             .accessibility_label("Keep editing")
                             .on_click(move || state.with_mut(|state| state.0 = false))
                             .child(|| {
-                                text().content("Keep editing");
+                                text("Keep editing");
                             });
                     })
                     .confirm_button(move || {
@@ -87,7 +87,7 @@ fn long_dialog_fixture(output: tessera_ui::testing::TestProbe<Option<State<(bool
                                 })
                             })
                             .child(|| {
-                                text().content("Confirm");
+                                text("Confirm");
                             });
                     });
             });
@@ -209,14 +209,14 @@ fn main_content(settings: State<Settings>) {
                     .enabled(settings.get().origin_enabled)
                     .on_click(move || settings.with_mut(|s| s.open = true))
                     .child(|| {
-                        text().content("Open");
+                        text("Open");
                     });
             }
             button()
                 .accessibility_label("Other task")
                 .on_click(move || settings.with_mut(|s| s.background_actions += 1))
                 .child(|| {
-                    text().content("Other");
+                    text("Other");
                 });
         });
 }
@@ -227,20 +227,20 @@ fn modal_content(settings: State<Settings>) {
         .modifier(Modifier::new().width(Dp(200.0)))
         .children(move || {
             if !settings.get().actions {
-                text().content("Modal information");
+                text("Modal information");
                 return;
             }
             button()
                 .accessibility_label("First action")
                 .on_click(move || settings.with_mut(|s| s.open = false))
                 .child(|| {
-                    text().content("Accept");
+                    text("Accept");
                 });
             button()
                 .accessibility_label("Second action")
                 .on_click(move || settings.with_mut(|s| s.open = false))
                 .child(|| {
-                    text().content("Cancel");
+                    text("Cancel");
                 });
         });
 }

@@ -862,7 +862,7 @@ fn apply_pager_input_modifiers(
 ///                 .page_count(4)
 ///                 .initial_page(2)
 ///                 .page_content(|page| {
-///                     text().content(format!("Page {page}"));
+///                     text(format!("Page {page}"));
 ///                 });
 ///         });
 /// }
@@ -975,7 +975,7 @@ pub fn horizontal_pager(
 ///         .theme(|| MaterialTheme::default())
 ///         .child(move || {
 ///             vertical_pager().page_count(2).page_content(|page| {
-///                 text().content(format!("Page {page}"));
+///                 text(format!("Page {page}"));
 ///             });
 ///         });
 /// }

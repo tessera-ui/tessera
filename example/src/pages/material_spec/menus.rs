@@ -688,8 +688,7 @@ fn labeling() {
 
 #[tessera]
 fn prose(#[prop(into)] value: String) {
-    text()
-        .content(I18N.text(value))
+    text(I18N.text(value))
         .style(type_style(16.0, 24.0))
         .color(INK);
 }
@@ -798,8 +797,7 @@ fn configuration(grouped: bool, style: MenuColorStyle) {
                                                 .size(Dp(20.0))
                                                 .tint(scheme.on_secondary_container);
                                             boxed().modifier(Modifier::new().width(Dp(8.0)));
-                                            text()
-                                                .content(I18N.text("ui-label"))
+                                            text(I18N.text("ui-label"))
                                                 .color(scheme.on_secondary_container);
                                         });
                                 });
@@ -993,7 +991,7 @@ fn launch() {
                             }))
                             .on_click(move || menu.with_mut(MenuController::toggle))
                             .child(move || {
-                                text().content(I18N.text("ui-open-menu"));
+                                text(I18N.text("ui-open-menu"));
                             });
                         gap(Dp(16.0));
                         prose(notice.get());
@@ -1115,9 +1113,7 @@ fn menu_figure(anatomy: bool, measurements: bool, style: MenuColorStyle) {
                                 )
                                 .alignment(Alignment::CenterStart)
                                 .children(move || {
-                                    text()
-                                        .content(I18N.text("ui-label-text"))
-                                        .style(type_style(14.0, 20.0));
+                                    text(I18N.text("ui-label-text")).style(type_style(14.0, 20.0));
                                 });
                             boxed()
                                 .modifier(watch(geometry, "fourth").fill_max_width())
@@ -1144,9 +1140,7 @@ fn menu_figure(anatomy: bool, measurements: bool, style: MenuColorStyle) {
                                 Dp(third.y + third.h / 2.0 - 9.0),
                             ))
                             .content(move || {
-                                text()
-                                    .content(I18N.text("ui-new"))
-                                    .style(type_style(12.0, 16.0));
+                                text(I18N.text("ui-new")).style(type_style(12.0, 16.0));
                             });
                     }
                 });
@@ -1458,8 +1452,7 @@ fn menu_color_figure(style: MenuColorStyle, dark: bool) {
                                         .padding_symmetric(Dp(12.0), Dp::ZERO),
                                 )
                                 .children(move || {
-                                    text()
-                                        .content(I18N.text("ui-label-text"))
+                                    text(I18N.text("ui-label-text"))
                                         .style(type_style(14.0, 20.0))
                                         .color(if style == MenuColorStyle::Standard {
                                             scheme.on_surface_variant
@@ -1638,8 +1631,7 @@ fn menu_color_marker(number: usize, role: String, x: Dp, y: Dp) {
                 }),
         )
         .children(move || {
-            text()
-                .content((number).to_string())
+            text((number).to_string())
                 .style(type_style(14.0, 20.0))
                 .color(scheme.surface);
         });

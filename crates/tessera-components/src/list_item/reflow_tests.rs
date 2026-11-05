@@ -69,8 +69,8 @@ fn fixture(probe: TestProbe<FixtureHandles>) {
                     let content = if settings.get().expanded {
                         Some(RenderSlot::new(|| {
                             column().children(|| {
-                                text().content("One-line item");
-                                text().content("Custom main content");
+                                text("One-line item");
+                                text("Custom main content");
                             });
                         }))
                     } else {
@@ -90,7 +90,7 @@ fn fixture(probe: TestProbe<FixtureHandles>) {
                             spacer().modifier(Modifier::new().size(Dp(20.0), Dp(20.0)));
                         })
                         .trailing(|| {
-                            text().content("1");
+                            text("1");
                         })
                         .on_click(move || {
                             settings.with_mut(|s| {

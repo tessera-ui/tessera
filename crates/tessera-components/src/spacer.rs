@@ -43,9 +43,9 @@ impl tessera_ui::LayoutModifierNode for SpacerLayout {
 /// # #[tessera]
 /// # fn component() {
 /// row().children(|| {
-///     text().content("Left");
+///     text("Left");
 ///     spacer().modifier(Modifier::new().weight(1.0));
-///     text().content("Right");
+///     text("Right");
 /// });
 /// # }
 /// # tessera_ui::testing::layout_test(component).run();

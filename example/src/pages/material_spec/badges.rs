@@ -116,7 +116,7 @@ fn badged_icon(kind: usize, count: u32) {
                     badge().modifier(hidden);
                 } else {
                     badge_with_content().modifier(hidden).content(move || {
-                        text().content(I18N.text(if count > 999 {
+                        text(I18N.text(if count > 999 {
                             "999+".to_owned()
                         } else {
                             count.to_string()
@@ -197,21 +197,20 @@ fn navigation_examples(
                     });
             }
             gap(Dp(16.0));
-            text()
-                .content(
-                    I18N.format(
-                        "ui-value-destination-value",
-                        [
-                            ("v0", I18N.text(&caption).into()),
-                            (
-                                "v1",
-                                I18N.text(&(["ui-home", "ui-inbox", "ui-updates"][selected.get()]))
-                                    .into(),
-                            ),
-                        ],
-                    ),
-                )
-                .style(type_style(14.0, 20.0));
+            text(
+                I18N.format(
+                    "ui-value-destination-value",
+                    [
+                        ("v0", I18N.text(&caption).into()),
+                        (
+                            "v1",
+                            I18N.text(&(["ui-home", "ui-inbox", "ui-updates"][selected.get()]))
+                                .into(),
+                        ),
+                    ],
+                ),
+            )
+            .style(type_style(14.0, 20.0));
         });
 }
 
@@ -233,7 +232,7 @@ fn specimens() {
                     ..Default::default()
                 }))
                 .content(move || {
-                    text().content("7");
+                    text("7");
                 });
             badge_with_content()
                 .modifier(Modifier::new().semantics(SemanticsArgs {
@@ -242,7 +241,7 @@ fn specimens() {
                     ..Default::default()
                 }))
                 .content(move || {
-                    text().content("999+");
+                    text("999+");
                 });
         });
 }
@@ -379,14 +378,14 @@ fn configuration() {
                 .accessibility_label(I18N.text("ui-add-unread-item"))
                 .on_click(move || count.set(count.get() + 1))
                 .child(move || {
-                    text().content(I18N.text("ui-add-unread"));
+                    text(I18N.text("ui-add-unread"));
                 });
             button()
                 .text()
                 .accessibility_label(I18N.text("ui-clear-unread-items"))
                 .on_click(move || count.set(0))
                 .child(move || {
-                    text().content(I18N.text("ui-clear"));
+                    text(I18N.text("ui-clear"));
                 });
             button()
                 .tonal()
@@ -394,7 +393,7 @@ fn configuration() {
                 .accessibility_label(I18N.text("ui-use-badge-navigation-rail"))
                 .on_click(move || rail.set(!rail.get()))
                 .child(move || {
-                    text().content(I18N.text("ui-rail"));
+                    text(I18N.text("ui-rail"));
                 });
             button()
                 .tonal()
@@ -403,7 +402,7 @@ fn configuration() {
                 .accessibility_label(I18N.text("ui-only-selected-bar-label"))
                 .on_click(move || labels.set(!labels.get()))
                 .child(move || {
-                    text().content(I18N.text("ui-selected-label-only"));
+                    text(I18N.text("ui-selected-label-only"));
                 });
         });
     gap(Dp(24.0));
@@ -417,16 +416,13 @@ fn configuration() {
         );
     }));
     gap(Dp(24.0));
-    text()
-        .content(I18N.format("ui-unread-count-value", [("v0", (count.get()).into())]))
+    text(I18N.format("ui-unread-count-value", [("v0", (count.get()).into())]))
         .style(type_style(16.0, 24.0));
 }
 
 #[tessera]
 fn prose(#[prop(into)] value: String) {
-    text()
-        .content(I18N.text(value))
-        .style(type_style(16.0, 24.0));
+    text(I18N.text(value)).style(type_style(16.0, 24.0));
 }
 
 #[tessera]
@@ -456,7 +452,7 @@ fn badge_figure(small: bool, measurements: bool) {
                         badge_with_content()
                             .modifier(watch(geometry, "badge"))
                             .content(move || {
-                                text().content("3");
+                                text("3");
                             });
                     }
                 });
@@ -574,14 +570,12 @@ fn badge_overview_destination(number: usize) {
                         badge();
                     } else {
                         badge_with_content().content(move || {
-                            text().content(I18N.text(if number == 2 { "1" } else { "999+" }));
+                            text(I18N.text(if number == 2 { "1" } else { "999+" }));
                         });
                     }
                 });
             gap(Dp(12.0));
-            text()
-                .content(I18N.text("ui-label"))
-                .style(type_style(14.0, 20.0));
+            text(I18N.text("ui-label")).style(type_style(14.0, 20.0));
             gap(Dp(32.0));
             boxed()
                 .alignment(Alignment::Center)
@@ -591,8 +585,7 @@ fn badge_overview_destination(number: usize) {
                         .background_with_shape(scheme.inverse_surface, Shape::Ellipse),
                 )
                 .children(move || {
-                    text()
-                        .content((number).to_string())
+                    text((number).to_string())
                         .style(type_style(14.0, 20.0))
                         .color(scheme.inverse_on_surface);
                 });
@@ -873,18 +866,17 @@ fn readable_badge_navigation() {
             }
         });
     gap(Dp(16.0));
-    text()
-        .content(
-            I18N.format(
-                "ui-value-selected-unread-badge-cleared",
-                [(
-                    "v0",
-                    I18N.text(&(["ui-home", "ui-inbox", "ui-updates"][selected.get()]))
-                        .into(),
-                )],
-            ),
-        )
-        .style(type_style(14.0, 20.0));
+    text(
+        I18N.format(
+            "ui-value-selected-unread-badge-cleared",
+            [(
+                "v0",
+                I18N.text(&(["ui-home", "ui-inbox", "ui-updates"][selected.get()]))
+                    .into(),
+            )],
+        ),
+    )
+    .style(type_style(14.0, 20.0));
 }
 
 #[cfg(all(test, not(target_family = "wasm")))]

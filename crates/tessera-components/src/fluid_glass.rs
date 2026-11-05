@@ -150,7 +150,7 @@ fn apply_fluid_glass_block_input_modifier(base: Modifier, block_input: bool) -> 
 /// # #[tessera]
 /// # fn component() {
 /// fluid_glass().child(|| {
-///     text().content("Content on glass");
+///     text("Content on glass");
 /// });
 /// # }
 /// # tessera_ui::testing::layout_test(component).run();

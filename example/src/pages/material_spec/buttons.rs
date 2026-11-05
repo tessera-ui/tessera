@@ -227,7 +227,7 @@ pub(super) fn button_preview(
             }
         })
         .child(move || {
-            text().content(I18N.text(&(label)));
+            text(I18N.text(&(label)));
         });
 }
 
@@ -285,8 +285,7 @@ fn overview_art() {
                             }),
                     )
                     .children(move || {
-                        text()
-                            .content((index + 1).to_string())
+                        text((index + 1).to_string())
                             .style(type_style(16.0 * scale, 24.0 * scale))
                             .color(scheme.surface);
                     });
@@ -330,9 +329,7 @@ fn overview_button(style: ButtonVariant, index: usize, scale: f64) {
         )
         .on_click(move || actions.set(actions.get() + 1))
         .child(move || {
-            text()
-                .content(I18N.text(style_name(style)))
-                .style(label_style);
+            text(I18N.text(style_name(style))).style(label_style);
         });
 }
 
@@ -474,7 +471,7 @@ fn tokens() {
                     ))
                     .on_click(move || style.set(variant))
                     .child(move || {
-                        text().content(I18N.text(style_name(variant)));
+                        text(I18N.text(style_name(variant)));
                     });
             }
         });
@@ -555,13 +552,12 @@ fn color_examples(dark: bool) {
                     column()
                         .modifier(Modifier::new().fill_max_width().padding_all(Dp(32.0)))
                         .children(move || {
-                            text()
-                                .content(I18N.text(if dark {
-                                    "ui-dark-scheme"
-                                } else {
-                                    "ui-light-scheme"
-                                }))
-                                .style(type_style(24.0, 32.0));
+                            text(I18N.text(if dark {
+                                "ui-dark-scheme"
+                            } else {
+                                "ui-light-scheme"
+                            }))
+                            .style(type_style(24.0, 32.0));
                             gap(Dp(24.0));
                             style_grid(
                                 vec![
@@ -854,9 +850,7 @@ fn button_state_matrix(style: ButtonVariant, toggle: bool) {
         });
     gap(Dp(24.0));
     if toggle {
-        text()
-            .content(I18N.text("ui-a-unselected-b-selected"))
-            .style(type_style(16.0, 24.0));
+        text(I18N.text("ui-a-unselected-b-selected")).style(type_style(16.0, 24.0));
     }
     for (index, label) in [
         "ui-enabled",
@@ -868,12 +862,11 @@ fn button_state_matrix(style: ButtonVariant, toggle: bool) {
     .into_iter()
     .enumerate()
     {
-        text()
-            .content(I18N.format(
-                "ui-value-value",
-                [("v0", (index + 1).into()), ("v1", I18N.text(&label).into())],
-            ))
-            .style(type_style(16.0, 24.0));
+        text(I18N.format(
+            "ui-value-value",
+            [("v0", (index + 1).into()), ("v1", I18N.text(&label).into())],
+        ))
+        .style(type_style(16.0, 24.0));
     }
 }
 
@@ -889,8 +882,7 @@ fn button_state_marker(label: String, x: f64, y: f64, scale: f64) {
                 .background_with_shape(scheme.on_surface, Shape::Ellipse),
         )
         .children(move || {
-            text()
-                .content(I18N.text(&(label)))
+            text(I18N.text(&(label)))
                 .style(type_style(14.0 * scale, 20.0 * scale))
                 .color(scheme.surface);
         });
@@ -947,17 +939,16 @@ fn button_state_item(
             }
         })
         .child(move || {
-            text()
-                .content(I18N.text(
-                    [
-                        "ui-enabled",
-                        "ui-disabled",
-                        "ui-hovered",
-                        "ui-focused",
-                        "ui-pressed",
-                    ][state],
-                ))
-                .style(label_style);
+            text(I18N.text(
+                [
+                    "ui-enabled",
+                    "ui-disabled",
+                    "ui-hovered",
+                    "ui-focused",
+                    "ui-pressed",
+                ][state],
+            ))
+            .style(label_style);
         });
 }
 
@@ -1221,17 +1212,14 @@ fn size_name(size: ButtonSize) -> &'static str {
 
 #[tessera]
 pub(super) fn prose(#[prop(into)] value: String) {
-    text()
-        .content(I18N.text(value))
-        .style(type_style(16.0, 24.0));
+    text(I18N.text(value)).style(type_style(16.0, 24.0));
 }
 
 #[tessera]
 pub(super) fn caption(#[prop(into)] value: String) {
     let scheme = use_context::<MaterialTheme>().unwrap().get().color_scheme;
     gap(Dp(16.0));
-    text()
-        .content(I18N.text(value))
+    text(I18N.text(value))
         .color(scheme.on_surface_variant)
         .style(type_style(14.0, 20.0));
 }
@@ -1257,9 +1245,7 @@ pub(super) fn bullets(items: Vec<String>) {
                                 .background_with_shape(scheme.on_surface_variant, Shape::Ellipse),
                         );
                         spacer().modifier(Modifier::new().width(Dp(16.0)));
-                        text()
-                            .content(I18N.text(&(item)))
-                            .style(type_style(16.0, 24.0));
+                        text(I18N.text(&(item))).style(type_style(16.0, 24.0));
                     });
             }
         });
@@ -1275,8 +1261,7 @@ pub(super) fn badge(number: usize) {
                 .background_with_shape(INK, Shape::Ellipse),
         )
         .children(move || {
-            text()
-                .content((number).to_string())
+            text((number).to_string())
                 .style(type_style(12.0, 16.0))
                 .color(Color::WHITE);
         });
@@ -1295,9 +1280,7 @@ fn legend(items: Vec<&'static str>) {
                     .children(move || {
                         badge(index + 1);
                         spacer().modifier(Modifier::new().width(Dp(12.0)));
-                        text()
-                            .content(I18N.text(item))
-                            .style(type_style(16.0, 24.0));
+                        text(I18N.text(item)).style(type_style(16.0, 24.0));
                     });
             }
         });
@@ -1332,14 +1315,12 @@ fn guidance(#[prop(into)] mark: String, #[prop(into)] note: String, color: Color
                         .background_with_shape(color, Shape::rounded_rectangle(Dp(8.0))),
                 )
                 .children(move || {
-                    text()
-                        .content(I18N.text(&(mark)))
+                    text(I18N.text(&(mark)))
                         .style(type_style(14.0, 20.0))
                         .color(Color::WHITE);
                 });
             spacer().modifier(Modifier::new().width(Dp(12.0)));
-            text()
-                .content(I18N.text(&(note)))
+            text(I18N.text(&(note)))
                 .color(scheme.on_surface_variant)
                 .style(type_style(14.0, 20.0))
                 .modifier(Modifier::new().weight(1.0));
@@ -1363,9 +1344,7 @@ fn figure_grid(
                     .alignment(Alignment::Center)
                     .modifier(Modifier::new().width(Dp(CELL)))
                     .children(move || {
-                        text()
-                            .content(I18N.text(header))
-                            .style(type_style(14.0, 20.0));
+                        text(I18N.text(header)).style(type_style(14.0, 20.0));
                     });
             }
         });
@@ -1377,9 +1356,7 @@ fn figure_grid(
                     boxed()
                         .modifier(Modifier::new().width(Dp(40.0)))
                         .children(move || {
-                            text()
-                                .content(I18N.text(label))
-                                .style(type_style(16.0, 24.0));
+                            text(I18N.text(label)).style(type_style(16.0, 24.0));
                         });
                     for column in 0..count {
                         boxed()
@@ -1409,8 +1386,7 @@ fn note(#[prop(into)] value: String) {
         .children(move || {
             icon().painter(filled::STAR_SVG).size(Dp(24.0));
             spacer().modifier(Modifier::new().width(Dp(16.0)));
-            text()
-                .content(I18N.text(&(value)))
+            text(I18N.text(&(value)))
                 .style(type_style(16.0, 24.0))
                 .modifier(Modifier::new().weight(1.0));
         });
@@ -1533,7 +1509,7 @@ fn style_grid(columns: Vec<&'static str>, rows: Vec<&'static str>) {
         RenderSlotWith::new(move |(row, column): (usize, usize)| {
             let style = STYLES[row];
             if column > 0 && style == ButtonVariant::Text {
-                text().content("--").style(type_style(14.0, 20.0));
+                text("--").style(type_style(14.0, 20.0));
             } else {
                 button_preview(
                     style,
@@ -1574,8 +1550,7 @@ fn m2_button(style: ButtonVariant) {
                 .padding_symmetric(Dp(16.0), Dp::ZERO),
         )
         .children(move || {
-            text()
-                .content(I18N.text("ui-button-7082"))
+            text(I18N.text("ui-button-7082"))
                 .color(content)
                 .style(type_style(14.0, 20.0));
         });
@@ -1625,12 +1600,8 @@ fn flight_example(large: bool) {
 #[tessera]
 fn flight_info() {
     column().children(move || {
-        text()
-            .content(I18N.text("ui-sfo-jfk"))
-            .style(type_style(24.0, 32.0));
-        text()
-            .content(I18N.text("ui-depart-8-05-am-nonstop-5h-32m"))
-            .style(type_style(14.0, 20.0));
+        text(I18N.text("ui-sfo-jfk")).style(type_style(24.0, 32.0));
+        text(I18N.text("ui-depart-8-05-am-nonstop-5h-32m")).style(type_style(14.0, 20.0));
     });
 }
 
@@ -1931,13 +1902,9 @@ fn usage_example() {
         column()
             .modifier(Modifier::new().fill_max_width())
             .children(move || {
-                text()
-                    .content(I18N.text("ui-appointment-thea"))
-                    .style(type_style(24.0, 32.0));
+                text(I18N.text("ui-appointment-thea")).style(type_style(24.0, 32.0));
                 gap(Dp(8.0));
-                text()
-                    .content(I18N.text("ui-your-host-has-not-yet-joined"))
-                    .style(type_style(16.0, 24.0));
+                text(I18N.text("ui-your-host-has-not-yet-joined")).style(type_style(16.0, 24.0));
                 gap(Dp(24.0));
                 flow_row()
                     .item_spacing(Dp(16.0))
@@ -1949,7 +1916,7 @@ fn usage_example() {
                             .accessibility_label(I18N.text("ui-ask-to-join"))
                             .on_click(|| {})
                             .child(move || {
-                                text().content(I18N.text("ui-ask-to-join"));
+                                text(I18N.text("ui-ask-to-join"));
                             });
                         button()
                             .outlined()
@@ -1957,7 +1924,7 @@ fn usage_example() {
                             .accessibility_label(I18N.text("ui-share-details"))
                             .on_click(|| {})
                             .child(move || {
-                                text().content(I18N.text("ui-share-details"));
+                                text(I18N.text("ui-share-details"));
                             });
                     });
             });
@@ -2014,7 +1981,7 @@ fn toggle_example() {
                             .accessibility_label(I18N.text("ui-filled-toggle"))
                             .on_click(move || filled.set(!filled.get()))
                             .child(move || {
-                                text().content(I18N.text("ui-filled"));
+                                text(I18N.text("ui-filled"));
                             });
                         button()
                             .tonal()
@@ -2023,7 +1990,7 @@ fn toggle_example() {
                             .accessibility_label(I18N.text("ui-tonal-toggle"))
                             .on_click(move || tonal.set(!tonal.get()))
                             .child(move || {
-                                text().content(I18N.text("ui-tonal"));
+                                text(I18N.text("ui-tonal"));
                             });
                         button()
                             .outlined()
@@ -2032,52 +1999,51 @@ fn toggle_example() {
                             .accessibility_label(I18N.text("ui-outlined-toggle"))
                             .on_click(move || outlined.set(!outlined.get()))
                             .child(move || {
-                                text().content(I18N.text("ui-outlined"));
+                                text(I18N.text("ui-outlined"));
                             });
                     });
                 gap(Dp(16.0));
-                text()
-                    .content(
-                        I18N.format(
-                            "ui-filled-value-tonal-value-outlined-value",
-                            [
-                                (
-                                    "v0",
-                                    I18N.text(
-                                        &(if filled.get() {
-                                            "ui-selected-7075"
-                                        } else {
-                                            "ui-unselected-7076"
-                                        }),
-                                    )
-                                    .into(),
-                                ),
-                                (
-                                    "v1",
-                                    I18N.text(
-                                        &(if tonal.get() {
-                                            "ui-selected-7075"
-                                        } else {
-                                            "ui-unselected-7076"
-                                        }),
-                                    )
-                                    .into(),
-                                ),
-                                (
-                                    "v2",
-                                    I18N.text(
-                                        &(if outlined.get() {
-                                            "ui-selected-7075"
-                                        } else {
-                                            "ui-unselected-7076"
-                                        }),
-                                    )
-                                    .into(),
-                                ),
-                            ],
-                        ),
-                    )
-                    .style(type_style(14.0, 20.0));
+                text(
+                    I18N.format(
+                        "ui-filled-value-tonal-value-outlined-value",
+                        [
+                            (
+                                "v0",
+                                I18N.text(
+                                    &(if filled.get() {
+                                        "ui-selected-7075"
+                                    } else {
+                                        "ui-unselected-7076"
+                                    }),
+                                )
+                                .into(),
+                            ),
+                            (
+                                "v1",
+                                I18N.text(
+                                    &(if tonal.get() {
+                                        "ui-selected-7075"
+                                    } else {
+                                        "ui-unselected-7076"
+                                    }),
+                                )
+                                .into(),
+                            ),
+                            (
+                                "v2",
+                                I18N.text(
+                                    &(if outlined.get() {
+                                        "ui-selected-7075"
+                                    } else {
+                                        "ui-unselected-7076"
+                                    }),
+                                )
+                                .into(),
+                            ),
+                        ],
+                    ),
+                )
+                .style(type_style(14.0, 20.0));
             });
     }));
 }
@@ -2178,7 +2144,7 @@ fn guidelines_anatomy() {
                     })
                     .on_click(|| {})
                     .child(move || {
-                        text().content(I18N.text("ui-send"));
+                        text(I18N.text("ui-send"));
                     });
             });
     }));
@@ -2408,13 +2374,10 @@ fn activation_demo() {
                     )
                     .on_click(move || activations.set(activations.get() + 1))
                     .child(move || {
-                        text().content(I18N.text("ui-perform-action"));
+                        text(I18N.text("ui-perform-action"));
                     });
                 gap(Dp(16.0));
-                text()
-                    .content(
-                        I18N.format("ui-activations-value", [("v0", (activations.get()).into())]),
-                    )
+                text(I18N.format("ui-activations-value", [("v0", (activations.get()).into())]))
                     .style(type_style(14.0, 20.0));
             });
     }));
@@ -2475,11 +2438,10 @@ fn contrast_examples() {
                         .accessibility_label(I18N.text("ui-above-three-to-one"))
                         .on_click(|| {})
                         .child(move || {
-                            text().content(I18N.text("ui-share"));
+                            text(I18N.text("ui-share"));
                         });
                     gap(Dp(12.0));
-                    text()
-                        .content(I18N.text("ui-above-3-1-primary-container-on-surface"))
+                    text(I18N.text("ui-above-3-1-primary-container-on-surface"))
                         .style(type_style(14.0, 20.0));
                 });
                 column().children(move || {
@@ -2490,11 +2452,10 @@ fn contrast_examples() {
                         .accessibility_label(I18N.text("ui-below-three-to-one"))
                         .on_click(|| {})
                         .child(move || {
-                            text().content(I18N.text("ui-share"));
+                            text(I18N.text("ui-share"));
                         });
                     gap(Dp(12.0));
-                    text()
-                        .content(I18N.text("ui-below-3-1-low-contrast-container-and-label"))
+                    text(I18N.text("ui-below-3-1-low-contrast-container-and-label"))
                         .style(type_style(14.0, 20.0));
                 });
             });
@@ -2513,7 +2474,7 @@ fn text_scale_example() {
                     .accessibility_label(I18N.text("ui-save"))
                     .on_click(|| {})
                     .child(move || {
-                        text().content(I18N.text("ui-save"));
+                        text(I18N.text("ui-save"));
                     });
                 gap(Dp(12.0));
                 prose("ui-a-concise-label-keeps-its-single-line-shape-when-text-is-scaled-up");
@@ -2524,7 +2485,7 @@ fn text_scale_example() {
                     .accessibility_label(I18N.text("ui-save-the-current-document-to-your-device"))
                     .on_click(|| {})
                     .child(move || {
-                        text().content(I18N.text("ui-save-the-current-document-to-your-device"));
+                        text(I18N.text("ui-save-the-current-document-to-your-device"));
                     });
                 gap(Dp(12.0));
                 prose("ui-a-long-label-wraps-or-truncates-once-the-text-size-grows-prefer-a-shorter-string-or-a-wide");
@@ -2543,15 +2504,19 @@ fn rapid_click_example() {
                     .tonal()
                     .size(ButtonSize::Medium)
                     .accessibility_label(I18N.text("ui-skip-forward"))
-                    .accessibility_description(I18N.format("ui-activations-value", [("v0", (clicks.get()).into())]))
+                    .accessibility_description(
+                        I18N.format("ui-activations-value", [("v0", (clicks.get()).into())]),
+                    )
                     .on_click(move || clicks.set(clicks.get() + 1))
                     .child(move || {
-                        text().content(I18N.text("ui-skip-forward"));
+                        text(I18N.text("ui-skip-forward"));
                     });
                 gap(Dp(16.0));
-                text()
-                    .content(I18N.format("ui-press-repeatedly-to-check-the-shape-and-state-animations-activations-value", [("v0", (clicks.get()).into())]))
-                    .style(type_style(14.0, 20.0));
+                text(I18N.format(
+                    "ui-press-repeatedly-to-check-the-shape-and-state-animations-activations-value",
+                    [("v0", (clicks.get()).into())],
+                ))
+                .style(type_style(14.0, 20.0));
             });
     }));
 }
@@ -2590,7 +2555,7 @@ fn keyboard_demo() {
                             .accessibility_label(I18N.text("ui-save"))
                             .on_click(move || status.set("ui-save-activated".to_string()))
                             .child(move || {
-                                text().content(I18N.text("ui-save"));
+                                text(I18N.text("ui-save"));
                             });
                         button()
                             .outlined()
@@ -2598,13 +2563,11 @@ fn keyboard_demo() {
                             .accessibility_label(I18N.text("ui-discard"))
                             .on_click(move || status.set("ui-discard-activated".to_string()))
                             .child(move || {
-                                text().content(I18N.text("ui-discard"));
+                                text(I18N.text("ui-discard"));
                             });
                     });
                 gap(Dp(16.0));
-                text()
-                    .content(I18N.text(status.get()))
-                    .style(type_style(14.0, 20.0));
+                text(I18N.text(status.get())).style(type_style(14.0, 20.0));
             });
     }));
 }
@@ -2629,12 +2592,10 @@ fn labeling_example() {
         column()
             .modifier(Modifier::new().fill_max_width())
             .children(move || {
-                text()
-                    .content(I18N.text("ui-maze-of-mycelium"))
+                text(I18N.text("ui-maze-of-mycelium"))
                     .style(type_style(20.0, 28.0));
                 gap(Dp(8.0));
-                text()
-                    .content(I18N.text("ui-from-truffle-hunting-in-the-forests-of-france-to-digging-deep-underground-to-find-vast-myc"))
+                text(I18N.text("ui-from-truffle-hunting-in-the-forests-of-france-to-digging-deep-underground-to-find-vast-myc"))
                     .style(type_style(16.0, 24.0));
                 gap(Dp(24.0));
                 row()
@@ -2646,7 +2607,7 @@ fn labeling_example() {
                             .accessibility_label(I18N.text("ui-back"))
                             .on_click(|| {})
                             .child(move || {
-                                text().content(I18N.text("ui-back"));
+                                text(I18N.text("ui-back"));
                             });
                         spacer().modifier(Modifier::new().width(Dp(8.0)));
                         button()
@@ -2655,15 +2616,13 @@ fn labeling_example() {
                             .accessibility_label(I18N.text("ui-next"))
                             .on_click(|| {})
                             .child(move || {
-                                text().content(I18N.text("ui-next"));
+                                text(I18N.text("ui-next"));
                             });
                         spacer().modifier(Modifier::new().width(Dp(32.0)));
                         column().children(move || {
-                            text()
-                                .content(I18N.text("ui-label-next"))
+                            text(I18N.text("ui-label-next"))
                                 .style(type_style(14.0, 20.0));
-                            text()
-                                .content(I18N.text("ui-role-button"))
+                            text(I18N.text("ui-role-button"))
                                 .style(type_style(14.0, 20.0));
                         });
                     });
@@ -2738,7 +2697,7 @@ fn playground() {
                             .accessibility_label(I18N.text("ui-cycle-color-style"))
                             .on_click(move || style.set(next_style(style.get())))
                             .child(move || {
-                                text().content(I18N.format(
+                                text(I18N.format(
                                     "ui-style-value",
                                     [("v0", I18N.text(&style_name(style.get())).into())],
                                 ));
@@ -2748,7 +2707,7 @@ fn playground() {
                             .accessibility_label(I18N.text("ui-cycle-size"))
                             .on_click(move || size.set(next_size(size.get())))
                             .child(move || {
-                                text().content(I18N.format(
+                                text(I18N.format(
                                     "ui-size-value",
                                     [("v0", I18N.text(&size_name(size.get())).into())],
                                 ));
@@ -2765,7 +2724,7 @@ fn playground() {
                                 });
                             })
                             .child(move || {
-                                text().content(I18N.text("ui-square"));
+                                text(I18N.text("ui-square"));
                             });
                         button()
                             .tonal()
@@ -2779,7 +2738,7 @@ fn playground() {
                                 }
                             })
                             .child(move || {
-                                text().content(I18N.text("ui-toggle"));
+                                text(I18N.text("ui-toggle"));
                             });
                         button()
                             .tonal()
@@ -2787,7 +2746,7 @@ fn playground() {
                             .accessibility_label(I18N.text("ui-disabled"))
                             .on_click(move || enabled.set(!enabled.get()))
                             .child(move || {
-                                text().content(I18N.text("ui-disabled"));
+                                text(I18N.text("ui-disabled"));
                             });
                         button()
                             .tonal()
@@ -2795,7 +2754,7 @@ fn playground() {
                             .accessibility_label(I18N.text("ui-leading-icon"))
                             .on_click(move || with_icon.set(!with_icon.get()))
                             .child(move || {
-                                text().content(I18N.text("ui-icon"));
+                                text(I18N.text("ui-icon"));
                             });
                     });
                 gap(Dp(32.0));
@@ -2827,34 +2786,33 @@ fn playground() {
                         }
                     })
                     .child(move || {
-                        text().content(I18N.text("ui-enable"));
+                        text(I18N.text("ui-enable"));
                     });
                 gap(Dp(24.0));
-                text()
-                    .content(
-                        I18N.format(
-                            "ui-activations-value-value",
-                            [
-                                ("v0", (activations.get()).into()),
-                                (
-                                    "v1",
-                                    I18N.text(
-                                        &(if toggle.get() && style.get() != ButtonVariant::Text {
-                                            if selected.get() {
-                                                "ui-selected"
-                                            } else {
-                                                "ui-unselected"
-                                            }
+                text(
+                    I18N.format(
+                        "ui-activations-value-value",
+                        [
+                            ("v0", (activations.get()).into()),
+                            (
+                                "v1",
+                                I18N.text(
+                                    &(if toggle.get() && style.get() != ButtonVariant::Text {
+                                        if selected.get() {
+                                            "ui-selected"
                                         } else {
-                                            "ui-default-action"
-                                        }),
-                                    )
-                                    .into(),
-                                ),
-                            ],
-                        ),
-                    )
-                    .style(type_style(14.0, 20.0));
+                                            "ui-unselected"
+                                        }
+                                    } else {
+                                        "ui-default-action"
+                                    }),
+                                )
+                                .into(),
+                            ),
+                        ],
+                    ),
+                )
+                .style(type_style(14.0, 20.0));
             });
     }));
 }

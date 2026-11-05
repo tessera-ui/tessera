@@ -844,8 +844,7 @@ fn fab_menu_action(
                             if let Some(painter) = item.icon.clone() {
                                 icon().painter(painter).size(Dp(24.0));
                             }
-                            text()
-                                .content(item.label.clone())
+                            text(item.label.clone())
                                 .style(style)
                                 .modifier(Modifier::new().clip_to_bounds());
                         });

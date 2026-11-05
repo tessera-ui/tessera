@@ -80,8 +80,7 @@ pub(super) fn option_label(
         .alignment(Alignment::CenterStart)
         .modifier(modifier.default_min_size(Dp(48.0), Dp(48.0)))
         .children(move || {
-            text()
-                .content(I18N.text(&(label)))
+            text(I18N.text(&(label)))
                 .style(style.unwrap_or(type_style(16.0, 24.0)))
                 .color(color.unwrap_or(scheme.on_surface));
         });
@@ -234,8 +233,7 @@ pub(super) fn selection_article(
 
 #[tessera]
 fn paragraph(#[prop(into)] value: String) {
-    text()
-        .content(I18N.text(value))
+    text(I18N.text(value))
         .style(type_style(16.0, 24.0))
         .color(INK);
 }

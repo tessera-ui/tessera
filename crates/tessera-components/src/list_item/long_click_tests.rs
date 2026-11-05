@@ -138,7 +138,7 @@ fn fixture(probe: TestProbe<FixtureHandles>, events: TestProbe<Events>) {
                                             }
                                         })
                                         .child(|| {
-                                            text().content("Child");
+                                            text("Child");
                                         });
                                 }
                             });
@@ -163,7 +163,7 @@ fn fixture(probe: TestProbe<FixtureHandles>, events: TestProbe<Events>) {
                                 })
                                 .on_long_click_optional(surface_long)
                                 .child(|| {
-                                    text().content("Surface");
+                                    text("Surface");
                                 });
                         }
                     }

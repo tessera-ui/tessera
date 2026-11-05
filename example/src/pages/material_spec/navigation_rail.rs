@@ -279,16 +279,13 @@ pub(super) fn navigation_rail_spec(
 
 #[tessera]
 fn prose(#[prop(into)] value: String) {
-    text()
-        .content(I18N.text(value))
-        .style(type_style(16.0, 24.0));
+    text(I18N.text(value)).style(type_style(16.0, 24.0));
 }
 
 #[tessera]
 fn caption(#[prop(into)] value: String) {
     let scheme = use_context::<MaterialTheme>().unwrap().get().color_scheme;
-    text()
-        .content(I18N.text(value))
+    text(I18N.text(value))
         .color(scheme.on_surface_variant)
         .style(type_style(14.0, 20.0));
 }
@@ -297,9 +294,7 @@ fn caption(#[prop(into)] value: String) {
 fn bullets(items: Vec<String>) {
     column().children(move || {
         for item in items.clone() {
-            text()
-                .content(format!("•  {}", I18N.text(item)))
-                .style(type_style(16.0, 24.0));
+            text(format!("•  {}", I18N.text(item))).style(type_style(16.0, 24.0));
             gap(Dp(8.0));
         }
     });
@@ -313,9 +308,7 @@ fn legend(number: usize, #[prop(into)] label: String) {
         .children(move || {
             figures::number(number);
             spacer().modifier(Modifier::new().width(Dp(12.0)));
-            text()
-                .content(I18N.text(&(label)))
-                .style(type_style(16.0, 24.0));
+            text(I18N.text(&(label))).style(type_style(16.0, 24.0));
         });
 }
 
@@ -2331,12 +2324,11 @@ fn behavior(
                         modal_open.set(true);
                     }
                 });
-            text()
-                .content(I18N.format(
-                    "ui-current-destination-value",
-                    [("v0", I18N.text(&(NAMES[modal_selected.get()])).into())],
-                ))
-                .style(type_style(14.0, 20.0));
+            text(I18N.format(
+                "ui-current-destination-value",
+                [("v0", I18N.text(&(NAMES[modal_selected.get()])).into())],
+            ))
+            .style(type_style(14.0, 20.0));
         });
     caption(
         "ui-open-from-the-menu-then-choose-a-destination-select-the-scrim-or-press-escape-to-close-and",
@@ -2491,21 +2483,20 @@ fn behavior_rail() {
                         });
                 });
             gap(Dp(16.0));
-            text()
-                .content(I18N.text(format_rail_status(
-                    if expanded.get() {
-                        "ui-expanded"
-                    } else {
-                        "ui-collapsed"
-                    },
-                    selected.get(),
-                )))
-                .modifier(Modifier::new().semantics(SemanticsArgs {
-                    test_tag: Some(format!("behavior-rail-destination-{}", selected.get())),
-                    merge_descendants: true,
-                    ..Default::default()
-                }))
-                .style(type_style(14.0, 20.0));
+            text(I18N.text(format_rail_status(
+                if expanded.get() {
+                    "ui-expanded"
+                } else {
+                    "ui-collapsed"
+                },
+                selected.get(),
+            )))
+            .modifier(Modifier::new().semantics(SemanticsArgs {
+                test_tag: Some(format!("behavior-rail-destination-{}", selected.get())),
+                merge_descendants: true,
+                ..Default::default()
+            }))
+            .style(type_style(14.0, 20.0));
         });
 }
 
@@ -2611,23 +2602,21 @@ fn scrolling_rail_view(
                                         }),
                                 )
                                 .children(move || {
-                                    text()
-                                        .content(I18N.format(
-                                            "ui-value-message-value",
-                                            [
-                                                ("v0", I18N.text(&(NAMES[selected.get()])).into()),
-                                                ("v1", (index + 1).into()),
-                                            ],
-                                        ))
-                                        .style(type_style(14.0, 20.0));
+                                    text(I18N.format(
+                                        "ui-value-message-value",
+                                        [
+                                            ("v0", I18N.text(&(NAMES[selected.get()])).into()),
+                                            ("v1", (index + 1).into()),
+                                        ],
+                                    ))
+                                    .style(type_style(14.0, 20.0));
                                 });
                             gap(Dp(12.0));
                         }
                     });
             });
         gap(Dp(16.0));
-        text()
-            .content(I18N.text(format_rail_status("ui-fixed-rail", selected.get())))
+        text(I18N.text(format_rail_status("ui-fixed-rail", selected.get())))
             .style(type_style(14.0, 20.0))
             .modifier(Modifier::new().semantics(SemanticsArgs {
                 test_tag: Some(format!("scrolling-rail-destination-{}", selected.get())),
@@ -2799,8 +2788,7 @@ fn voicemail_weights() {
                                 );
                             });
                         gap(Dp(8.0));
-                        text()
-                            .content(I18N.text("ui-voicemail"))
+                        text(I18N.text("ui-voicemail"))
                             .style(style.clone())
                             .color(scheme.on_surface);
                     });

@@ -145,9 +145,7 @@ fn section(title: &'static str, content: RenderSlot) -> SpecSection {
 
 #[tessera]
 fn prose(content: String) {
-    text()
-        .content(I18N.text(content))
-        .style(type_style(16.0, 24.0));
+    text(I18N.text(content)).style(type_style(16.0, 24.0));
 }
 
 #[tessera]
@@ -237,9 +235,7 @@ fn tooltip_split(lead: Option<RenderSlot>, figure: Option<RenderSlot>) {
 
 #[tessera]
 fn tooltip_term(title: String, body: String) {
-    text()
-        .content(I18N.text(title))
-        .style(emphasis_style(16.0, 24.0));
+    text(I18N.text(title)).style(emphasis_style(16.0, 24.0));
     prose(body);
 }
 
@@ -258,8 +254,7 @@ fn tooltip_caption(content: String) {
     boxed()
         .modifier(Modifier::new().padding_symmetric(Dp(8.0), Dp::ZERO))
         .children(move || {
-            text()
-                .content(I18N.text(&(content)))
+            text(I18N.text(&(content)))
                 .style(type_style(16.0, 24.0))
                 .color(scheme.on_surface_variant);
         });
@@ -313,8 +308,7 @@ fn tooltip_guidance(
                     }
                 });
             gap(Dp(16.0));
-            text()
-                .content(I18N.text(&(caption)))
+            text(I18N.text(&(caption)))
                 .style(type_style(16.0, 24.0))
                 .color(scheme.on_surface_variant)
                 .modifier(Modifier::new().padding_symmetric(Dp(8.0), Dp::ZERO));
@@ -615,9 +609,7 @@ fn tooltip_plain_mock(label: String) {
             boxed()
                 .modifier(Modifier::new().padding_symmetric(Dp(8.0), Dp(4.0)))
                 .children(move || {
-                    text()
-                        .content(I18N.text(&(label)))
-                        .style(type_style(12.0, 16.0));
+                    text(I18N.text(&(label))).style(type_style(12.0, 16.0));
                 });
         });
 }
@@ -663,14 +655,10 @@ fn tooltip_rich_mock(
                         ))
                         .children(move || {
                             if !headline.is_empty() {
-                                text()
-                                    .content(I18N.text(&(headline)))
-                                    .style(emphasis_style(14.0, 20.0));
+                                text(I18N.text(&(headline))).style(emphasis_style(14.0, 20.0));
                                 gap(Dp(4.0));
                             }
-                            text()
-                                .content(I18N.text(&(message)))
-                                .style(type_style(14.0, 20.0));
+                            text(I18N.text(&(message))).style(type_style(14.0, 20.0));
                         });
                     if !actions.is_empty() {
                         gap(Dp(4.0));
@@ -727,7 +715,7 @@ fn tooltip_rich_mock_action(label: String, geometry: Option<State<SpaceGeometry>
         .modifier(modifier)
         .accessibility_label(I18N.text(&(label)))
         .child(move || {
-            text().content(I18N.text(&(label)));
+            text(I18N.text(&(label)));
         });
 }
 
@@ -844,8 +832,7 @@ fn tooltip_mock(kind: usize) {
                                 .size(Dp(24.0))
                                 .tint(scheme.primary);
                             spacer().modifier(Modifier::new().width(Dp(8.0)));
-                            text()
-                                .content(I18N.text("ui-edit"))
+                            text(I18N.text("ui-edit"))
                                 .style(type_style(14.0, 20.0))
                                 .color(scheme.primary);
                         });
@@ -1079,8 +1066,7 @@ fn tooltip_variant_examples(guidelines: Option<bool>) {
                                 .background_with_shape(srgb(50, 47, 53), Shape::Ellipse),
                         )
                         .children(move || {
-                            text()
-                                .content((number).to_string())
+                            text((number).to_string())
                                 .style(type_style(16.0, 24.0))
                                 .color(srgb(255, 255, 255));
                         });
@@ -1106,13 +1092,11 @@ fn tooltip_legend(labels: Vec<String>) {
                             .background_with_shape(scheme.on_surface, Shape::CAPSULE),
                     )
                     .children(move || {
-                        text()
-                            .content((index + 1).to_string())
+                        text((index + 1).to_string())
                             .style(type_style(14.0, 20.0))
                             .color(scheme.surface);
                     });
-                text()
-                    .content(I18N.text(&(label)))
+                text(I18N.text(&(label)))
                     .style(type_style(16.0, 24.0))
                     .modifier(Modifier::new().padding_symmetric(Dp(12.0), Dp(4.0)));
             });
@@ -1152,20 +1136,17 @@ fn tooltip_material_comparison() {
                                 column()
                                     .modifier(Modifier::new().padding_symmetric(Dp(16.0), Dp(12.0)))
                                     .children(move || {
-                                        text()
-                                            .content(I18N.text("ui-rich-tooltip"))
+                                        text(I18N.text("ui-rich-tooltip"))
                                             .style(type_style(14.0, 20.0))
                                             .color(srgb(60, 64, 67));
                                         gap(Dp(4.0));
-                                        text()
-                                            .content(I18N.text(RICH_OVERVIEW_MESSAGE))
+                                        text(I18N.text(RICH_OVERVIEW_MESSAGE))
                                             .style(type_style(14.0, 20.0))
                                             .color(srgb(60, 64, 67));
                                         gap(Dp(20.0));
                                         row().children(move || {
                                             for _ in 0..2 {
-                                                text()
-                                                    .content(I18N.text("ui-action"))
+                                                text(I18N.text("ui-action"))
                                                     .style(type_style(14.0, 20.0))
                                                     .color(srgb(26, 115, 232))
                                                     .modifier(
@@ -1245,8 +1226,7 @@ fn tooltip_advice_bar(label: String, tone: usize) {
                 .painter(symbol)
                 .size(Dp(20.0))
                 .tint(ink);
-            text()
-                .content(I18N.text(&(label)))
+            text(I18N.text(&(label)))
                 .style(type_style(16.0, 24.0))
                 .color(ink)
                 .modifier(Modifier::new().padding_symmetric(Dp(8.0), Dp::ZERO));
@@ -1467,9 +1447,8 @@ fn tooltip_keyboard_table() {
                                                         modifier.semantics(SemanticsArgs { test_tag: Some(format!("tooltip-table-header-{column_index}")), merge_descendants: true,
 ..Default::default() })
                                                     } else { modifier };
-                                                    text()
+                                                    text(I18N.text(content))
                                                         .modifier(modifier)
-                                                        .content(I18N.text(content))
                                                         .style(style)
                                                         .color(scheme.on_surface);
                                                 });
@@ -1505,8 +1484,7 @@ fn tooltip_focus_marker(number: usize, x: f64, y: f64) {
                 }),
         )
         .children(move || {
-            text()
-                .content((number).to_string())
+            text((number).to_string())
                 .style(type_style(12.0, 16.0))
                 .color(srgb(255, 255, 255));
         });
@@ -1550,17 +1528,15 @@ fn tooltip_focus_sequence() {
                             column()
                                 .modifier(Modifier::new().padding_symmetric(Dp(16.0), Dp::ZERO))
                                 .children(move || {
-                                    text()
-                                        .content(I18N.text("ui-permissions"))
+                                    text(I18N.text("ui-permissions"))
                                         .style(emphasis_style(14.0, 20.0));
                                     gap(Dp(4.0));
-                                    text()
-                                        .content(I18N.text("ui-configure-permissions-for-selected-service-accounts-you-can-add-and-remove-service-account"))
+                                    text(I18N.text("ui-configure-permissions-for-selected-service-accounts-you-can-add-and-remove-service-account"))
                                         .style(type_style(14.0, 20.0));
                                     row()
                                         .cross_axis_alignment(CrossAxisAlignment::Center)
                                         .children(move || {
-                                            text().content("Visit ").style(type_style(14.0, 20.0));
+                                            text("Visit ").style(type_style(14.0, 20.0));
                                             boxed()
                                                 .modifier(
                                                     watch_in_space(geometry, "focus_link")
@@ -1578,12 +1554,11 @@ fn tooltip_focus_sequence() {
                                                         }),
                                                 )
                                                 .children(move || {
-                                                    text()
-                                                        .content(I18N.text("ui-permission-settings"))
+                                                    text(I18N.text("ui-permission-settings"))
                                                         .style(type_style(14.0, 20.0))
                                                         .color(scheme.primary);
                                                 });
-                                            text().content(I18N.text("ui-for-details")).style(type_style(14.0, 20.0));
+                                            text(I18N.text("ui-for-details")).style(type_style(14.0, 20.0));
                                         });
                                 });
                             gap(Dp(8.0));
@@ -1599,7 +1574,7 @@ fn tooltip_focus_sequence() {
                                             .text()
                                             .accessibility_label(I18N.text("ui-request-access-action-illustration"))
                                             .child(move || {
-                                                text().content(I18N.text("ui-request-access"));
+                                                text(I18N.text("ui-request-access"));
                                             });
                                     });
                                     content.render();
@@ -1754,12 +1729,10 @@ fn tooltip_role_box(entries: Vec<(String, String)>, x: f64, y: f64, width: f64) 
                 if index > 0 {
                     gap(Dp(8.0));
                 }
-                text()
-                    .content(I18N.text(&(name)))
+                text(I18N.text(&(name)))
                     .style(type_style(14.0, 20.0))
                     .color(srgb(230, 224, 233));
-                text()
-                    .content(I18N.text(&(value)))
+                text(I18N.text(&(value)))
                     .style(emphasis_style(14.0, 20.0))
                     .color(pink);
             }
@@ -1897,16 +1870,14 @@ fn tooltip_browser_mock() {
                 .background_with_shape(srgb(120, 116, 126), Shape::Ellipse),
         )
         .children(move || {
-            text()
-                .content("M")
+            text("M")
                 .style(type_style(12.0, 16.0))
                 .color(srgb(255, 255, 255));
         });
     boxed()
         .modifier(Modifier::new().offset(Dp(144.0), Dp(118.0)))
         .children(move || {
-            text()
-                .content(I18N.text("ui-lunch-at-lee-s"))
+            text(I18N.text("ui-lunch-at-lee-s"))
                 .style(type_style(22.0, 28.0))
                 .color(scheme.on_surface);
         });
@@ -1941,7 +1912,7 @@ fn tokens() {
                     )
                     .on_click(move || rich.set(value))
                     .child(move || {
-                        text().content(I18N.text(label));
+                        text(I18N.text(label));
                     });
             }
         });
@@ -1999,8 +1970,7 @@ fn detail(rich: bool) {
             gap(Dp(24.0));
             prose("ui-color-values-are-implemented-through-design-tokens-for-design-this-means-working-with-colo".into());
             gap(Dp(16.0));
-            text()
-                .content(I18N.text("ui-learn-more-about-design-tokens"))
+            text(I18N.text("ui-learn-more-about-design-tokens"))
                 .style(type_style(16.0, 24.0))
                 .color(scheme.primary);
             gap(Dp(24.0));
@@ -2147,13 +2117,11 @@ fn tooltip_color_pair(rich: bool) {
                             .background_with_shape(scheme.on_surface, Shape::CAPSULE),
                     )
                     .children(move || {
-                        text()
-                            .content((index + 1).to_string())
+                        text((index + 1).to_string())
                             .style(type_style(14.0, 20.0))
                             .color(scheme.surface);
                     });
-                text()
-                    .content(I18N.text(label))
+                text(I18N.text(label))
                     .style(type_style(16.0, 24.0))
                     .modifier(Modifier::new().padding_symmetric(Dp(12.0), Dp(4.0)));
             });
@@ -2239,7 +2207,7 @@ fn tooltip_configuration(number: usize, headline: bool, actions: usize, x: Dp, y
                         for action in 1..=actions {
                             button().text()
                                 .accessibility_label(I18N.format("ui-tooltip-configuration-value-action-value", [("v0", (number).into()), ("v1", (action).into())]))
-                                .child(move || { text().content(I18N.text("ui-action")); });
+                                .child(move || { text(I18N.text("ui-action")); });
                         }
                     });
                 });
@@ -2262,7 +2230,7 @@ fn tooltip_configuration(number: usize, headline: bool, actions: usize, x: Dp, y
                                                 .modifier(Modifier::new().required_size(Dp(24.0), Dp(24.0))
                                                     .border_with_shape(Dp(1.0), scheme.on_surface, Shape::Ellipse))
                                                 .children(move || {
-                                                    text().content((number).to_string())
+                                                    text((number).to_string())
                                                         .style(type_style(14.0, 20.0))
                                                         .color(scheme.on_surface);
                                                 });
@@ -2466,8 +2434,7 @@ fn tooltip_reference_popup(
                                 .get()
                                 .typography
                                 .label_large;
-                            text()
-                                .content(I18N.text(action_text))
+                            text(I18N.text(action_text))
                                 .style(style)
                                 .modifier(watch_in_space(geometry, "action_label"));
                         });
@@ -2496,7 +2463,7 @@ fn tooltip_reference_popup(
             .title_small;
         // The provider exposes a title string, so annotations measure an
         // equivalent hidden label.
-        text().content(I18N.text(headline)).style(style).modifier(
+        text(I18N.text(headline)).style(style).modifier(
             watch_in_space(geometry, "headline_label")
                 .size_in(None, Some(Dp(280.0)), None, None)
                 .alpha(0.0)
@@ -2952,8 +2919,7 @@ fn tooltip_color_marker(number: usize, label: String, x: Dp, y: Dp) {
                 }),
         )
         .children(move || {
-            text()
-                .content((number).to_string())
+            text((number).to_string())
                 .style(type_style(14.0, 20.0))
                 .color(scheme.surface);
         });
@@ -3031,7 +2997,7 @@ fn live_tooltips(on_acknowledge: Option<tessera_ui::Callback>) {
                                         .accessibility_label(I18N.text("ui-about-collections"))
                                         .on_click(move || rich.with_mut(TooltipController::show))
                                         .child(move || {
-                                            text().content(I18N.text("ui-about-collections"));
+                                            text(I18N.text("ui-about-collections"));
                                         });
                                 });
                             });
@@ -3119,7 +3085,7 @@ fn placement_examples() {
                                     .text()
                                     .accessibility_label(I18N.text("ui-learn-more"))
                                     .child(move || {
-                                        text().content(I18N.text("ui-learn-more"));
+                                        text(I18N.text("ui-learn-more"));
                                     });
                             })
                             .child(move |_| {

@@ -133,7 +133,7 @@ impl AppBarDefaults {
 /// #     .theme(|| MaterialTheme::default())
 /// #     .child(|| {
 /// app_bar().content(|| {
-///     text().content("Inbox");
+///     text("Inbox");
 /// });
 /// #     });
 /// # }
@@ -315,7 +315,7 @@ impl TopAppBarBuilder {
 ///     .subtitle(format!("{} unread messages", unread.get()))
 ///     .action(move || {
 ///         button().text().on_click_shared(mark_read).child(|| {
-///             text().content("Mark read");
+///             text("Mark read");
 ///         });
 ///     });
 /// mark_read.call();
@@ -488,14 +488,12 @@ pub fn top_app_bar(
                         if let Some(content) = title_content {
                             content.render();
                         } else if !compact_title.is_empty() {
-                            text()
-                                .content(compact_title.clone())
+                            text(compact_title.clone())
                                 .style(theme.typography.title_large)
                                 .color(title_color);
                         }
                         if let Some(subtitle) = &compact_subtitle {
-                            text()
-                                .content(subtitle.clone())
+                            text(subtitle.clone())
                                 .style(theme.typography.label_medium)
                                 .color(scheme.on_surface_variant);
                         }
@@ -543,14 +541,10 @@ pub fn top_app_bar(
                             if let Some(content) = title_content {
                                 content.render();
                             } else if !title.is_empty() {
-                                text()
-                                    .content(title.clone())
-                                    .style(title_style)
-                                    .color(title_color);
+                                text(title.clone()).style(title_style).color(title_color);
                             }
                             if let Some(subtitle) = &subtitle {
-                                text()
-                                    .content(subtitle.clone())
+                                text(subtitle.clone())
                                     .style(subtitle_style)
                                     .color(scheme.on_surface_variant);
                             }

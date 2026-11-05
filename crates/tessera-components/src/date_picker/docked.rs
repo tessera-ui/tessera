@@ -178,7 +178,7 @@ fn calendar_content(
                             .accessibility_label(I18N.text("md3-cancel"))
                             .on_click_shared(on_cancel)
                             .child(move || {
-                                text().content(I18N.text("md3-cancel"));
+                                text(I18N.text("md3-cancel"));
                             });
                         spacer().modifier(Modifier::new().width(Dp(8.0)));
                         button()
@@ -186,7 +186,7 @@ fn calendar_content(
                             .accessibility_label(I18N.text("md3-ok"))
                             .on_click_shared(on_confirm)
                             .child(move || {
-                                text().content(I18N.text("md3-ok"));
+                                text(I18N.text("md3-ok"));
                             });
                     });
             }
@@ -235,8 +235,7 @@ fn menu_header(state: State<DatePickerState>, menu: State<DockedDatePickerView>)
                                         }),
                                     );
                                 } else {
-                                    text()
-                                        .content(label.clone())
+                                    text(label.clone())
                                         .style(theme.typography.label_large)
                                         .color(
                                             theme
@@ -381,8 +380,7 @@ fn menu_button(label: String, description: String, width: Dp, expanded: bool, ac
                 .modifier(Modifier::new().padding_symmetric(Dp(8.0), Dp::ZERO))
                 .cross_axis_alignment(CrossAxisAlignment::Center)
                 .children(move || {
-                    text()
-                        .content(label.clone())
+                    text(label.clone())
                         .style(theme.typography.label_large)
                         .color(theme.color_scheme.on_surface);
                     spacer().modifier(Modifier::new().width(Dp(4.0)));
@@ -438,8 +436,7 @@ fn calendar(
                             .alignment(Alignment::Center)
                             .modifier(Modifier::new().size(DATE_CELL_SIZE, DATE_CELL_SIZE))
                             .children(move || {
-                                text()
-                                    .content(weekday_narrow_label(weekday))
+                                text(weekday_narrow_label(weekday))
                                     .style(theme.typography.body_large)
                                     .color(theme.color_scheme.on_surface);
                             });
@@ -664,8 +661,7 @@ fn choice(label: String, selected: bool, enabled: bool, action: Callback) {
                         spacer().modifier(Modifier::new().width(Dp(24.0)));
                     }
                     spacer().modifier(Modifier::new().width(Dp(16.0)));
-                    text()
-                        .content(label.clone())
+                    text(label.clone())
                         .style(theme.typography.body_large)
                         .color(theme.color_scheme.on_surface);
                 });

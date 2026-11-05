@@ -215,17 +215,14 @@ pub(super) fn floating_actions_spec(
 
 #[tessera]
 fn prose(#[prop(into)] value: String) {
-    text()
-        .content(I18N.text(value))
-        .style(type_style(16.0, 24.0));
+    text(I18N.text(value)).style(type_style(16.0, 24.0));
 }
 
 #[tessera]
 fn caption(#[prop(into)] value: String) {
     let scheme = use_context::<MaterialTheme>().unwrap().get().color_scheme;
     gap(Dp(16.0));
-    text()
-        .content(I18N.text(value))
+    text(I18N.text(value))
         .color(scheme.on_surface_variant)
         .style(type_style(14.0, 20.0));
 }
@@ -250,9 +247,7 @@ fn bullets(items: Vec<String>) {
                                 .background_with_shape(scheme.on_surface_variant, Shape::Ellipse),
                         );
                         spacer().modifier(Modifier::new().width(Dp(16.0)));
-                        text()
-                            .content(I18N.text(&(item)))
-                            .style(type_style(16.0, 24.0));
+                        text(I18N.text(&(item))).style(type_style(16.0, 24.0));
                     });
             }
         });
@@ -286,8 +281,7 @@ fn fab(
             });
         if counted.unwrap_or(false) {
             gap(Dp(16.0));
-            text()
-                .content(I18N.format("ui-activations-value", [("v0", (activations.get()).into())]))
+            text(I18N.format("ui-activations-value", [("v0", (activations.get()).into())]))
                 .style(type_style(14.0, 20.0));
         }
     });
@@ -579,8 +573,7 @@ fn anatomy() {
             fab("ui-add");
             gap(Dp(32.0));
             for line in ["ui-1-container", "ui-2-icon"] {
-                text()
-                    .content(I18N.text(line))
+                text(I18N.text(line))
                     .color(INK)
                     .style(type_style(16.0, 28.0));
             }
@@ -621,8 +614,7 @@ fn colors() {
                                         }
                                     });
                                 gap(Dp(16.0));
-                                text()
-                                    .content("1  Primary container    2  Secondary container    3  Tertiary container    4  Primary    5  Secondary    6  Tertiary")
+                                text("1  Primary container    2  Secondary container    3  Tertiary container    4  Primary    5  Secondary    6  Tertiary")
                                     .style(type_style(14.0, 20.0));
                             });
                     });
@@ -654,10 +646,7 @@ fn states() {
                         fab("ui-accent").tone(3);
                     });
                 gap(Dp(32.0));
-                text()
-                    .content(
-                        I18N.text("ui-hover-focus-with-tab-or-press-the-actions-above-to-see-the-state-layer-and-elevation-respo"),
-                    )
+                text(I18N.text("ui-hover-focus-with-tab-or-press-the-actions-above-to-see-the-state-layer-and-elevation-respo"))
                     .style(type_style(14.0, 20.0));
             });
     }));
@@ -804,8 +793,7 @@ fn usage() {
             .children(move || {
                 fab("ui-add");
                 gap(Dp(16.0));
-                text()
-                    .content(I18N.text("ui-do-one-fab-with-a-familiar-icon-for-the-primary-action"))
+                text(I18N.text("ui-do-one-fab-with-a-familiar-icon-for-the-primary-action"))
                     .style(type_style(14.0, 20.0));
                 gap(Dp(32.0));
                 row()
@@ -816,8 +804,7 @@ fn usage() {
                         fab("ui-edit").tone(2);
                     });
                 gap(Dp(16.0));
-                text()
-                    .content(I18N.text("ui-don-t-two-fabs-competing-for-equally-important-actions"))
+                text(I18N.text("ui-don-t-two-fabs-competing-for-equally-important-actions"))
                     .style(type_style(14.0, 20.0));
             });
     }));
@@ -906,8 +893,7 @@ fn placement() {
             column()
                 .modifier(Modifier::new().fill_max_size().padding_all(Dp(24.0)))
                 .children(move || {
-                    text()
-                        .content(I18N.text("ui-content"))
+                    text(I18N.text("ui-content"))
                         .color(scheme.on_surface_variant)
                         .style(type_style(14.0, 20.0));
                     spacer().modifier(Modifier::new().weight(1.0));
@@ -972,7 +958,7 @@ fn behaviors() {
                     .accessibility_label(I18N.text("ui-hide-or-show-the-floating-action"))
                     .on_click(move || visible.set(!visible.get()))
                     .child(move || {
-                        text().content(I18N.text(if visible.get() {
+                        text(I18N.text(if visible.get() {
                             "ui-hide-fab"
                         } else {
                             "ui-show-fab"
@@ -982,9 +968,7 @@ fn behaviors() {
                 if visible.get() {
                     fab("ui-add").counted(true);
                 } else {
-                    text()
-                        .content(I18N.text("ui-fab-hidden-while-scrolling"))
-                        .style(type_style(14.0, 20.0));
+                    text(I18N.text("ui-fab-hidden-while-scrolling")).style(type_style(14.0, 20.0));
                 }
             });
     }));
@@ -1103,17 +1087,17 @@ fn labeling() {
             .children(move || {
                 fab("ui-add");
                 gap(Dp(16.0));
-                text()
-                    .content(I18N.text("ui-do-add-button-the-label-names-the-action"))
+                text(I18N.text("ui-do-add-button-the-label-names-the-action"))
                     .style(type_style(14.0, 20.0));
                 gap(Dp(32.0));
                 fab("ui-add").tone(1);
                 gap(Dp(16.0));
-                text()
-                    .content(I18N.text(
+                text(
+                    I18N.text(
                         "ui-don-t-plus-icon-describing-the-glyph-does-not-explain-the-action",
-                    ))
-                    .style(type_style(14.0, 20.0));
+                    ),
+                )
+                .style(type_style(14.0, 20.0));
             });
     }));
     gap(Dp(32.0));

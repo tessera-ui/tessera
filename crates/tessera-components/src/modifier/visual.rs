@@ -340,8 +340,7 @@ mod tests {
                                             .modifier(Modifier::new().fill_max_size())
                                             .child(|| {});
                                     }
-                                    crate::text::text()
-                                        .content("Mask")
+                                    crate::text::text("Mask")
                                         .color(Color::BLACK)
                                         .modifier(Modifier::new().offset(Dp(0.0), Dp(40.0)));
                                 });

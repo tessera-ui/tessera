@@ -331,16 +331,13 @@ fn usage_caption(variant: CarouselVariant) -> &'static str {
 
 #[tessera]
 fn paragraph(content: String) {
-    text()
-        .content(I18N.text(content))
-        .style(type_style(16.0, 24.0));
+    text(I18N.text(content)).style(type_style(16.0, 24.0));
 }
 
 #[tessera]
 fn caption(#[prop(into)] content: String) {
     let scheme = use_context::<MaterialTheme>().unwrap().get().color_scheme;
-    text()
-        .content(I18N.text(content))
+    text(I18N.text(content))
         .color(scheme.on_surface_variant)
         .style(type_style(14.0, 20.0));
 }
@@ -349,9 +346,7 @@ fn caption(#[prop(into)] content: String) {
 fn bullets(items: Vec<String>) {
     column().children(move || {
         for item in items.clone() {
-            text()
-                .content(format!("•  {}", I18N.text(item)))
-                .style(type_style(16.0, 24.0));
+            text(format!("•  {}", I18N.text(item))).style(type_style(16.0, 24.0));
             gap(Dp(8.0));
         }
     });
@@ -372,15 +367,12 @@ fn legend(number: usize, #[prop(into)] label: String) {
                         .background_with_shape(scheme.inverse_surface, Shape::Ellipse),
                 )
                 .children(move || {
-                    text()
-                        .content((number).to_string())
+                    text((number).to_string())
                         .style(type_style(12.0, 16.0))
                         .color(scheme.inverse_on_surface);
                 });
             spacer().modifier(Modifier::new().width(Dp(12.0)));
-            text()
-                .content(I18N.text(&(label)))
-                .style(type_style(16.0, 24.0));
+            text(I18N.text(&(label))).style(type_style(16.0, 24.0));
         });
 }
 
@@ -400,14 +392,12 @@ fn advice(#[prop(into)] mark: String, #[prop(into)] note: String, color: Color) 
                         .padding_symmetric(Dp(12.0), Dp(4.0)),
                 )
                 .children(move || {
-                    text()
-                        .content(I18N.text(&(mark)))
+                    text(I18N.text(&(mark)))
                         .style(type_style(14.0, 20.0))
                         .color(Color::WHITE);
                 });
             spacer().modifier(Modifier::new().width(Dp(12.0)));
-            text()
-                .content(I18N.text(&(note)))
+            text(I18N.text(&(note)))
                 .color(scheme.on_surface_variant)
                 .style(type_style(14.0, 20.0));
         });
@@ -451,9 +441,7 @@ fn collection(
                                     .padding_symmetric(Dp(16.0), Dp(0.0)),
                             )
                             .children(move || {
-                                text()
-                                    .content(I18N.text(&(header)))
-                                    .style(type_style(22.0, 28.0));
+                                text(I18N.text(&(header))).style(type_style(22.0, 28.0));
                                 spacer().modifier(Modifier::new().weight(1.0));
                                 icon_button()
                                     .icon(filled::ARROW_FORWARD_SVG)
@@ -472,17 +460,16 @@ fn collection(
                             .accessibility_label(I18N.text("ui-show-all-carousel-items"))
                             .on_click(move || all.set(true))
                             .child(move || {
-                                text().content(I18N.text("ui-show-all"));
+                                text(I18N.text("ui-show-all"));
                             });
                     }
                     if selected.get() != 0 {
                         gap(Dp(8.0));
-                        text()
-                            .content(I18N.format(
-                                "ui-collection-value-opened",
-                                [("v0", (selected.get()).into())],
-                            ))
-                            .style(type_style(14.0, 20.0));
+                        text(I18N.format(
+                            "ui-collection-value-opened",
+                            [("v0", (selected.get()).into())],
+                        ))
+                        .style(type_style(14.0, 20.0));
                     }
                 });
         })
@@ -524,12 +511,11 @@ fn all_items_page(open: State<bool>, selected: State<usize>, title: String) {
                                 .modifier(Modifier::new().fill_max_width().padding_all(Dp(16.0)))
                                 .children(move || {
                                     if selected.get() != 0 {
-                                        text()
-                                            .content(I18N.format(
-                                                "ui-collection-value-opened",
-                                                [("v0", (selected.get()).into())],
-                                            ))
-                                            .style(type_style(14.0, 20.0));
+                                        text(I18N.format(
+                                            "ui-collection-value-opened",
+                                            [("v0", (selected.get()).into())],
+                                        ))
+                                        .style(type_style(14.0, 20.0));
                                         gap(Dp(16.0));
                                     }
                                     for index in 0..6 {
@@ -857,14 +843,14 @@ fn layout_figure(
                 .accessibility_label(I18N.text("ui-inspect-collection-start"))
                 .on_click(move || controller.with_mut(|controller| controller.jump_to_item(0)))
                 .child(move || {
-                    text().content(I18N.text("ui-collection-start"));
+                    text(I18N.text("ui-collection-start"));
                 });
             button()
                 .text()
                 .accessibility_label(I18N.text("ui-inspect-collection-end"))
                 .on_click(move || controller.with_mut(|controller| controller.jump_to_item(5)))
                 .child(move || {
-                    text().content(I18N.text("ui-collection-end"));
+                    text(I18N.text("ui-collection-end"));
                 });
         });
     }
@@ -1504,8 +1490,7 @@ fn state_tile(index: usize, label: String) {
                         .background_with_shape(scheme.inverse_surface, Shape::Ellipse),
                 )
                 .children(move || {
-                    text()
-                        .content((index + 1).to_string())
+                    text((index + 1).to_string())
                         .style(type_style(12.0, 16.0))
                         .color(scheme.inverse_on_surface);
                 });
@@ -1541,8 +1526,7 @@ fn state_tile(index: usize, label: String) {
                                         .tint(content)
                                         .size(Dp(32.0));
                                 });
-                            text()
-                                .content(I18N.text(&(label)))
+                            text(I18N.text(&(label)))
                                 .color(content)
                                 .style(type_style(12.0, 16.0));
                         });
@@ -1585,9 +1569,7 @@ fn dynamic_widths() {
                                     ),
                             );
                             gap(Dp(16.0));
-                            text()
-                                .content(format!("{width:.0}dp"))
-                                .style(type_style(14.0, 20.0));
+                            text(format!("{width:.0}dp")).style(type_style(14.0, 20.0));
                         });
                     spacer().modifier(Modifier::new().width(Dp(40.0)));
                 }

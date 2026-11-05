@@ -121,14 +121,13 @@ fn canvas(is_switch: bool) {
                                 });
                         })
                         .title_content(move || {
-                            text()
-                                .content(I18N.text(if is_switch {
-                                    "ui-privacy"
-                                } else {
-                                    "ui-meal-options"
-                                }))
-                                .style(style(22.0, 28.0, 400, 0.0))
-                                .color(scheme.on_surface);
+                            text(I18N.text(if is_switch {
+                                "ui-privacy"
+                            } else {
+                                "ui-meal-options"
+                            }))
+                            .style(style(22.0, 28.0, 400, 0.0))
+                            .color(scheme.on_surface);
                         });
                     if is_switch {
                         for index in 0..3 {
@@ -138,8 +137,7 @@ fn canvas(is_switch: bool) {
                         boxed()
                             .modifier(Modifier::new().offset(Dp(16.0), Dp(80.0)))
                             .children(move || {
-                                text()
-                                    .content(I18N.text("ui-extras"))
+                                text(I18N.text("ui-extras"))
                                     .style(style(14.0, 20.0, 500, 0.1))
                                     .color(scheme.on_surface_variant);
                             });
@@ -189,8 +187,7 @@ fn extra(index: usize) {
             focus,
         ))
         .children(move || {
-            text()
-                .content(I18N.text(label))
+            text(I18N.text(label))
                 .style(style(16.0, 24.0, 400, 0.5))
                 .color(scheme.on_surface);
         });
@@ -236,13 +233,11 @@ fn setting(index: usize) {
         ))
         .children(move || {
             column().children(move || {
-                text()
-                    .content(I18N.text(label))
+                text(I18N.text(label))
                     .style(style(16.0, 24.0, 400, 0.5))
                     .color(scheme.on_surface);
                 if let Some(supporting) = supporting {
-                    text()
-                        .content(I18N.text(supporting))
+                    text(I18N.text(supporting))
                         .style(style(14.0, 20.0, 400, 0.2))
                         .color(scheme.on_surface_variant);
                 }

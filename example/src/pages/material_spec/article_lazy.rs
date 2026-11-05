@@ -252,15 +252,13 @@ fn contents(data: State<ArticleData>, width: State<Dp>, bindings: State<ChapterB
                             .padding_symmetric(inset, Dp::ZERO),
                     )
                     .children(move || {
-                        text()
-                            .content(I18N.text("ui-on-this-page"))
+                        text(I18N.text("ui-on-this-page"))
                             .style(type_style(14.0, 20.0))
                             .color(INK);
                         gap(Dp(8.0));
                         let page = data.get();
                         for (index, section) in page.sections.iter().enumerate() {
-                            text()
-                                .content(I18N.text(section.title))
+                            text(I18N.text(section.title))
                                 .style(type_style(16.0, 24.0))
                                 .color(ACCENT)
                                 .modifier(

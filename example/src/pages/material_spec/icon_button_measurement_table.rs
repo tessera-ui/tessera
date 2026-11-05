@@ -160,8 +160,7 @@ fn cell(row: usize, column: usize, value: String, ink: Color, rule: Color) {
                 }),
         )
         .children(move || {
-            text()
-                .content(I18N.text(&(value)))
+            text(I18N.text(&(value)))
                 .style(type_style(16.0, 24.0))
                 .color(ink)
                 .modifier(Modifier::new().padding_symmetric(Dp(24.0), Dp(16.0)));

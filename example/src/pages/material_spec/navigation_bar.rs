@@ -151,16 +151,13 @@ pub(super) fn navigation_bar_spec(
 
 #[tessera]
 fn prose(#[prop(into)] value: String) {
-    text()
-        .content(I18N.text(value))
-        .style(type_style(16.0, 24.0));
+    text(I18N.text(value)).style(type_style(16.0, 24.0));
 }
 
 #[tessera]
 fn caption(#[prop(into)] value: String) {
     let scheme = use_context::<MaterialTheme>().unwrap().get().color_scheme;
-    text()
-        .content(I18N.text(value))
+    text(I18N.text(value))
         .color(scheme.on_surface_variant)
         .style(type_style(14.0, 20.0));
 }
@@ -169,9 +166,7 @@ fn caption(#[prop(into)] value: String) {
 fn bullets(items: Vec<String>) {
     column().children(move || {
         for item in items.clone() {
-            text()
-                .content(format!("•  {}", I18N.text(item)))
-                .style(type_style(16.0, 24.0));
+            text(format!("•  {}", I18N.text(item))).style(type_style(16.0, 24.0));
             gap(Dp(8.0));
         }
     });
@@ -187,8 +182,7 @@ fn badge(number: usize) {
                 .background_with_shape(INK, Shape::Ellipse),
         )
         .children(move || {
-            text()
-                .content((number).to_string())
+            text((number).to_string())
                 .style(type_style(12.0, 16.0))
                 .color(Color::WHITE);
         });
@@ -202,9 +196,7 @@ fn legend(number: usize, #[prop(into)] label: String) {
         .children(move || {
             badge(number);
             spacer().modifier(Modifier::new().width(Dp(12.0)));
-            text()
-                .content(I18N.text(&(label)))
-                .style(type_style(16.0, 24.0));
+            text(I18N.text(&(label))).style(type_style(16.0, 24.0));
         });
 }
 
@@ -224,14 +216,12 @@ fn guidance_line(#[prop(into)] mark: String, #[prop(into)] note: String, color: 
                         .background_with_shape(color, Shape::rounded_rectangle(Dp(8.0))),
                 )
                 .children(move || {
-                    text()
-                        .content(I18N.text(&(mark)))
+                    text(I18N.text(&(mark)))
                         .style(type_style(14.0, 20.0))
                         .color(Color::WHITE);
                 });
             spacer().modifier(Modifier::new().width(Dp(12.0)));
-            text()
-                .content(I18N.text(&(note)))
+            text(I18N.text(&(note)))
                 .color(scheme.on_surface_variant)
                 .style(type_style(14.0, 20.0));
         });
@@ -291,7 +281,7 @@ fn bar_demo(
                                             )
                                             .modifier(Modifier::new())
                                             .content(move || {
-                                                text().content(I18N.text(&(badge_text)));
+                                                text(I18N.text(&(badge_text)));
                                             });
                                     })
                                     .content(move || {
@@ -304,15 +294,14 @@ fn bar_demo(
                 }
             });
             gap(Dp(16.0));
-            text()
-                .content(I18N.format(
-                    "ui-selected-destination",
-                    [
-                        ("caption", I18N.text(&caption_text).into()),
-                        ("destination", I18N.text(NAMES[selected.get()]).into()),
-                    ],
-                ))
-                .style(type_style(14.0, 20.0));
+            text(I18N.format(
+                "ui-selected-destination",
+                [
+                    ("caption", I18N.text(&caption_text).into()),
+                    ("destination", I18N.text(NAMES[selected.get()]).into()),
+                ],
+            ))
+            .style(type_style(14.0, 20.0));
         });
 }
 
@@ -453,9 +442,7 @@ fn configurations() {
                         count.set(if count.get() == 5 { 3 } else { count.get() + 1 });
                     })
                     .child(move || {
-                        text().content(
-                            I18N.format("ui-destinations-value", [("v0", (count.get()).into())]),
-                        );
+                        text(I18N.format("ui-destinations-value", [("v0", (count.get()).into())]));
                     });
                 button()
                     .tonal()
@@ -463,7 +450,7 @@ fn configurations() {
                     .accessibility_label(I18N.text("ui-toggle-selected-only-labels"))
                     .on_click(move || selected_only.set(!selected_only.get()))
                     .child(move || {
-                        text().content(I18N.text(if selected_only.get() {
+                        text(I18N.text(if selected_only.get() {
                             "ui-labels-selected-only"
                         } else {
                             "ui-labels-always"
@@ -475,7 +462,7 @@ fn configurations() {
                     .accessibility_label(I18N.text("ui-toggle-inbox-badge"))
                     .on_click(move || badges.set(!badges.get()))
                     .child(move || {
-                        text().content(I18N.text(if badges.get() {
+                        text(I18N.text(if badges.get() {
                             "ui-badge-3"
                         } else {
                             "ui-badge-off"

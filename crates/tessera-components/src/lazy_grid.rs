@@ -414,7 +414,7 @@ impl tessera_ui::LayoutModifierNode for LazyGridLayout {
 ///         .columns(GridCells::fixed(2))
 ///         .overscan(0)
 ///         .items(4, move |i| {
-///             text().content(format!("Tile {i}")).modifier(
+///             text(format!("Tile {i}")).modifier(
 ///                 Modifier::new().semantics(SemanticsArgs {
 ///                     test_tag: Some(format!("tile-{i}")), ..Default::default()
 ///                 })
@@ -604,7 +604,7 @@ fn lazy_grid_slots(args: LazyGridSlotsArgs, axis: LazyGridAxis) {
 ///         .rows(GridCells::fixed(2))
 ///         .overscan(0)
 ///         .items(3, move |i| {
-///             text().content(format!("Tile {i}")).modifier(
+///             text(format!("Tile {i}")).modifier(
 ///                 Modifier::new().semantics(SemanticsArgs {
 ///                     test_tag: Some(format!("tile-{i}")), ..Default::default()
 ///                 })
@@ -1403,9 +1403,7 @@ mod tests {
                 .cross_axis_spacing(Dp(8.0))
                 .estimated_item_size(Dp(60.0))
                 .items(4, |_| {
-                    text().content(
-                        "Keep measured grid geometry when the viewport temporarily collapses.",
-                    );
+                    text("Keep measured grid geometry when the viewport temporarily collapses.");
                 });
         });
     }

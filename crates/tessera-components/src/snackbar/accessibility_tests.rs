@@ -46,7 +46,7 @@ fn fixture(observed: tessera_ui::testing::TestProbe<FixtureHandles>) {
                 .accessibility_label("Current task")
                 .on_click(|| {})
                 .child(|| {
-                    text().content("Continue editing");
+                    text("Continue editing");
                 });
             if settings.get().visible {
                 snackbar()

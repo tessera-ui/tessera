@@ -41,7 +41,7 @@ fn fixture(observed: tessera_ui::testing::TestProbe<FixtureHandles>) {
                         refreshing.set(true);
                     })
                     .indicator(|| {
-                        text().content("Custom refresh indicator");
+                        text("Custom refresh indicator");
                     })
                     .child(move || {
                         boxed()
@@ -50,7 +50,7 @@ fn fixture(observed: tessera_ui::testing::TestProbe<FixtureHandles>) {
                                 boxed()
                                     .modifier(Modifier::new().fill_max_width().height(Dp(600.0)))
                                     .children(|| {
-                                        text().content("Refreshable content");
+                                        text("Refreshable content");
                                     });
                             });
                     });

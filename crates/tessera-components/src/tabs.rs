@@ -751,8 +751,7 @@ pub fn tab_label(
                                 ));
                             };
                             {
-                                text_component()
-                                    .content(current.text)
+                                text_component(current.text)
                                     .color(content_color)
                                     .style(style);
                             };
@@ -765,8 +764,7 @@ pub fn tab_label(
                             .tint(content_color);
                     }
                 } else if has_text {
-                    text_component()
-                        .content(current.text)
+                    text_component(current.text)
                         .color(content_color)
                         .style(style);
                 }
@@ -1259,9 +1257,9 @@ impl tessera_ui::DrawModifierNode for TabsLayout {
 ///     });
 ///
 ///     if active_tab == 0 {
-///         text().content("Content for Flights");
+///         text("Content for Flights");
 ///     } else {
-///         text().content("Content for Hotel");
+///         text("Content for Hotel");
 ///     }
 /// #         });
 /// }

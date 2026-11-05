@@ -387,8 +387,7 @@ fn marker(value: String, x: f64, y: f64) {
                 .background_with_shape(scheme.inverse_surface, Shape::CAPSULE),
         )
         .children(move || {
-            text()
-                .content(I18N.text(&(value)))
+            text(I18N.text(&(value)))
                 .color(scheme.inverse_on_surface)
                 .style(type_style(16.0, 24.0));
         });
@@ -396,9 +395,7 @@ fn marker(value: String, x: f64, y: f64) {
 
 #[tessera]
 fn paragraph(value: String) {
-    text()
-        .content(I18N.text(value))
-        .style(type_style(16.0, 24.0));
+    text(I18N.text(value)).style(type_style(16.0, 24.0));
 }
 
 #[tessera]
@@ -421,8 +418,7 @@ fn legend(items: Vec<String>) {
                         ),
                 )
                 .children(move || {
-                    text()
-                        .content((index + 1).to_string())
+                    text((index + 1).to_string())
                         .color(
                             use_context::<MaterialTheme>()
                                 .unwrap()
@@ -433,9 +429,7 @@ fn legend(items: Vec<String>) {
                         .style(type_style(16.0, 24.0));
                 });
             spacer().modifier(Modifier::new().width(Dp(12.0)));
-            text()
-                .content(I18N.text(&(value)))
-                .style(type_style(16.0, 24.0));
+            text(I18N.text(&(value))).style(type_style(16.0, 24.0));
         });
         gap(Dp(8.0));
     }

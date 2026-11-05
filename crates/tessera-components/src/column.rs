@@ -45,9 +45,9 @@ use crate::{
 /// # #[tessera]
 /// # fn component() {
 /// column().children(|| {
-///     text().content("First item");
+///     text("First item");
 ///     spacer().modifier(Modifier::new().weight(1.0));
-///     text().content("Last item");
+///     text("Last item");
 /// });
 /// # }
 /// # tessera_ui::testing::layout_test(component).run();

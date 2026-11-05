@@ -67,8 +67,7 @@ pub(super) fn search_spec(route: Option<crate::pages::material_spec::article::Ar
 
 #[tessera]
 fn prose(#[prop(into)] value: String) {
-    text()
-        .content(I18N.text(value))
+    text(I18N.text(value))
         .style(type_style(16.0, 24.0))
         .color(INK);
 }
@@ -76,8 +75,7 @@ fn prose(#[prop(into)] value: String) {
 #[tessera]
 fn caption(#[prop(into)] value: String) {
     let scheme = use_context::<MaterialTheme>().unwrap().get().color_scheme;
-    text()
-        .content(I18N.text(value))
+    text(I18N.text(value))
         .color(scheme.on_surface_variant)
         .style(type_style(14.0, 20.0));
 }
@@ -92,8 +90,7 @@ fn badge(number: usize) {
                 .background_with_shape(INK, Shape::Ellipse),
         )
         .children(move || {
-            text()
-                .content((number).to_string())
+            text((number).to_string())
                 .style(type_style(12.0, 16.0))
                 .color(Color::WHITE);
         });
@@ -107,9 +104,7 @@ fn legend(number: usize, #[prop(into)] label: String) {
         .children(move || {
             badge(number);
             spacer().modifier(Modifier::new().width(Dp(12.0)));
-            text()
-                .content(I18N.text(&(label)))
-                .style(type_style(16.0, 24.0));
+            text(I18N.text(&(label))).style(type_style(16.0, 24.0));
         });
 }
 
@@ -117,9 +112,7 @@ fn legend(number: usize, #[prop(into)] label: String) {
 fn bullets(items: Vec<String>) {
     column().children(move || {
         for item in items.clone() {
-            text()
-                .content(format!("•  {}", I18N.text(item)))
-                .style(type_style(16.0, 24.0));
+            text(format!("•  {}", I18N.text(item))).style(type_style(16.0, 24.0));
             gap(Dp(8.0));
         }
     });
@@ -370,8 +363,7 @@ fn configuration_layout(full_screen: bool, divided: bool) {
                                 .width(Dp(if full_screen { 364.0 } else { 496.0 } * scale)),
                         )
                         .children(move || {
-                            text()
-                                .content("9:30")
+                            text("9:30")
                                 .style(type_style(14.0 * scale, 20.0 * scale))
                                 .modifier(Modifier::new().weight(1.0));
                             icon().painter(filled::WIFI_SVG).size(Dp(16.0 * scale));
@@ -474,14 +466,13 @@ fn email_results(
             ..Default::default()
         }))
         .children(move || {
-            text()
-                .content(I18N.text(if submitted.get() {
-                    "ui-results"
-                } else {
-                    "ui-suggestions"
-                }))
-                .style(type_style(12.0, 16.0))
-                .modifier(Modifier::new().padding_all(Dp(16.0)));
+            text(I18N.text(if submitted.get() {
+                "ui-results"
+            } else {
+                "ui-suggestions"
+            }))
+            .style(type_style(12.0, 16.0))
+            .modifier(Modifier::new().padding_all(Dp(16.0)));
             let mut count = 0;
             for (sender, subject, preview, time, initial) in [
                 (
@@ -536,17 +527,14 @@ fn email_results(
                                         ),
                                 )
                                 .children(move || {
-                                    text()
-                                        .content(I18N.text(initial))
+                                    text(I18N.text(initial))
                                         .style(type_style(16.0, 24.0))
                                         .color(scheme.on_tertiary_container);
                                 });
                         })
                         .trailing(move || {
                             column().children(move || {
-                                text()
-                                    .content(I18N.text(time))
-                                    .style(type_style(12.0, 16.0));
+                                text(I18N.text(time)).style(type_style(12.0, 16.0));
                                 gap(Dp(16.0));
                                 icon().painter(filled::STAR_BORDER_SVG).size(Dp(24.0));
                             });
@@ -587,16 +575,15 @@ fn live_search(initial_active: bool, full_screen: bool, divided: bool) {
                 search_control(controller, submitted, full_screen, divided);
             });
         gap(Dp(16.0));
-        text()
-            .content(I18N.text(if full_screen {
-                "ui-full-screen-layout"
-            } else if divided {
-                "ui-divided-baseline-style"
-            } else {
-                "ui-docked-layout-contained-style"
-            }))
-            .style(type_style(14.0, 20.0))
-            .color(scheme.on_surface_variant);
+        text(I18N.text(if full_screen {
+            "ui-full-screen-layout"
+        } else if divided {
+            "ui-divided-baseline-style"
+        } else {
+            "ui-docked-layout-contained-style"
+        }))
+        .style(type_style(14.0, 20.0))
+        .color(scheme.on_surface_variant);
     }));
 }
 
@@ -747,16 +734,15 @@ fn results(controller: State<SearchBarController>, submitted: State<bool>) {
                 }),
         )
         .children(move || {
-            text()
-                .content(I18N.text(if submitted.get() {
-                    "ui-search-results"
-                } else if query.is_empty() {
-                    "ui-recent-searches"
-                } else {
-                    "ui-quick-results"
-                }))
-                .style(type_style(12.0, 16.0))
-                .modifier(Modifier::new().padding_all(Dp(16.0)));
+            text(I18N.text(if submitted.get() {
+                "ui-search-results"
+            } else if query.is_empty() {
+                "ui-recent-searches"
+            } else {
+                "ui-quick-results"
+            }))
+            .style(type_style(12.0, 16.0))
+            .modifier(Modifier::new().padding_all(Dp(16.0)));
             for label in choices {
                 result_item(
                     controller,
@@ -985,8 +971,7 @@ fn phone(geometry: State<Geometry>, active: bool) {
                         .cross_axis_alignment(CrossAxisAlignment::Center)
                         .modifier(Modifier::new().fill_max_width().height(Dp(32.0)))
                         .children(move || {
-                            text()
-                                .content("9:30")
+                            text("9:30")
                                 .style(type_style(14.0, 20.0))
                                 .modifier(Modifier::new().weight(1.0));
                             icon().painter(filled::WIFI_SVG).size(Dp(16.0));

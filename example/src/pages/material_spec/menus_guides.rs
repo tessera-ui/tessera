@@ -87,8 +87,7 @@ fn baseline_mark(geometry: Option<State<Geometry>>, slot: Option<usize>, part: u
 #[tessera]
 pub(super) fn caption(#[prop(into)] value: String) {
     let scheme = use_context::<MaterialTheme>().unwrap().get().color_scheme;
-    text()
-        .content(I18N.text(value))
+    text(I18N.text(value))
         .color(scheme.on_surface_variant)
         .style(type_style(14.0, 20.0));
 }
@@ -97,8 +96,7 @@ pub(super) fn caption(#[prop(into)] value: String) {
 pub(super) fn bullets(items: Vec<String>) {
     column().children(move || {
         for item in items.clone() {
-            text()
-                .content(format!("•  {}", I18N.text(item)))
+            text(format!("•  {}", I18N.text(item)))
                 .style(type_style(16.0, 24.0))
                 .color(INK);
             gap(Dp(8.0));
@@ -119,8 +117,7 @@ pub(super) fn badge(number: usize) {
                 .background_with_shape(fill, Shape::Ellipse),
         )
         .children(move || {
-            text()
-                .content((number).to_string())
+            text((number).to_string())
                 .style(type_style(12.0, 16.0))
                 .color(ink);
         });
@@ -138,8 +135,7 @@ pub(super) fn legend(items: Vec<String>) {
                     .children(move || {
                         badge(index + 1);
                         spacer().modifier(Modifier::new().width(Dp(12.0)));
-                        text()
-                            .content(I18N.text(&(label)))
+                        text(I18N.text(&(label)))
                             .style(type_style(14.0, 20.0))
                             .color(INK);
                     });
@@ -163,14 +159,12 @@ fn verdict(good: bool, #[prop(into)] note: String) {
                     ),
             )
             .children(move || {
-                text()
-                    .content(I18N.text(if good { "ui-do" } else { "ui-dont" }))
+                text(I18N.text(if good { "ui-do" } else { "ui-dont" }))
                     .style(type_style(14.0, 20.0))
                     .color(Color::WHITE);
             });
         gap(Dp(8.0));
-        text()
-            .content(I18N.text(&(note)))
+        text(I18N.text(&(note)))
             .style(type_style(14.0, 20.0))
             .color(tone);
     });
@@ -499,21 +493,18 @@ fn baseline_row(
             column()
                 .modifier(baseline_mark(geometry, slot, 2).weight(1.0))
                 .children(move || {
-                    text()
-                        .content(I18N.text(&(label)))
+                    text(I18N.text(&(label)))
                         .style(type_style(14.0, 20.0))
                         .color(content);
                     if let Some(supporting) = supporting.clone() {
-                        text()
-                            .content(I18N.text(supporting))
+                        text(I18N.text(supporting))
                             .style(type_style(12.0, 16.0))
                             .color(muted);
                     }
                 });
             if let Some(shortcut) = trailing_text.clone() {
                 spacer().modifier(Modifier::new().width(Dp(12.0)));
-                text()
-                    .content(I18N.text(shortcut))
+                text(I18N.text(shortcut))
                     .style(type_style(14.0, 20.0))
                     .color(muted)
                     .modifier(baseline_mark(geometry, slot, 3));
@@ -921,8 +912,7 @@ fn trigger_tile(kind: usize) {
                                         .padding_symmetric(Dp(16.0), Dp::ZERO),
                                 )
                                 .children(move || {
-                                    text()
-                                        .content(I18N.text("ui-activated"))
+                                    text(I18N.text("ui-activated"))
                                         .style(type_style(14.0, 20.0))
                                         .color(on_accent);
                                 });
@@ -944,12 +934,10 @@ fn trigger_tile(kind: usize) {
                                         .padding_symmetric(Dp(12.0), Dp(6.0)),
                                 )
                                 .children(move || {
-                                    text()
-                                        .content(I18N.text("ui-label"))
+                                    text(I18N.text("ui-label"))
                                         .style(type_style(12.0, 16.0))
                                         .color(line);
-                                    text()
-                                        .content(I18N.text("ui-item-2"))
+                                    text(I18N.text("ui-item-2"))
                                         .style(type_style(16.0, 24.0))
                                         .color(INK);
                                 });
@@ -961,8 +949,7 @@ fn trigger_tile(kind: usize) {
                                 .tint(tone);
                         }
                         _ => {
-                            text()
-                                .content(I18N.text("ui-although-a-little-too-small"))
+                            text(I18N.text("ui-although-a-little-too-small"))
                                 .style(type_style(14.0, 20.0))
                                 .modifier(
                                     Modifier::new()
@@ -1356,12 +1343,10 @@ pub(super) fn opening_figure() {
     panel(RenderSlot::new(move || {
         column().children(move || {
             row().children(move || {
-                text()
-                    .content(I18N.text("ui-it-showed-a-lady-fitted-out"))
+                text(I18N.text("ui-it-showed-a-lady-fitted-out"))
                     .style(type_style(16.0, 24.0))
                     .color(INK);
-                text()
-                    .content(I18N.text("ui-with-a-fur-hat-and-fur-boa"))
+                text(I18N.text("ui-with-a-fur-hat-and-fur-boa"))
                     .style(type_style(16.0, 24.0))
                     .color(INK)
                     .modifier(
@@ -1427,8 +1412,7 @@ pub(super) fn context_figure() {
     let link = scheme.primary;
     panel(RenderSlot::new(move || {
         column().children(move || {
-            text()
-                .content(I18N.text("ui-city-council-approves-new-riverside-park"))
+            text(I18N.text("ui-city-council-approves-new-riverside-park"))
                 .style(type_style(16.0, 24.0))
                 .color(link);
             gap(Dp(8.0));
@@ -1778,8 +1762,7 @@ pub(super) fn adaptive_figure(compact: bool) {
                                     .children(move || {
                                         baseline_icon(code, muted);
                                         spacer().modifier(Modifier::new().width(Dp(16.0)));
-                                        text()
-                                            .content(I18N.text(label))
+                                        text(I18N.text(label))
                                             .style(type_style(14.0, 20.0))
                                             .color(ink);
                                     });
@@ -1896,8 +1879,7 @@ pub(super) fn slots_figure() {
                                             ),
                                     )
                                     .children(move || {
-                                        text()
-                                            .content(I18N.text("ui-slot"))
+                                        text(I18N.text("ui-slot"))
                                             .style(type_style(14.0, 20.0))
                                             .color(muted);
                                     });
@@ -1958,8 +1940,7 @@ fn slot_image_row(image: Color, on_image: Color, ink: Color) {
                     baseline_icon(13, on_image);
                 });
             spacer().modifier(Modifier::new().width(Dp(12.0)));
-            text()
-                .content(I18N.text("ui-album-cover"))
+            text(I18N.text("ui-album-cover"))
                 .style(type_style(14.0, 20.0))
                 .color(ink);
         });
@@ -1981,8 +1962,7 @@ fn slot_progress_row(muted: Color, ink: Color, track: Color, bar: Color) {
             column()
                 .modifier(Modifier::new().weight(1.0))
                 .children(move || {
-                    text()
-                        .content(I18N.text("ui-uploading-2-of-5"))
+                    text(I18N.text("ui-uploading-2-of-5"))
                         .style(type_style(14.0, 20.0))
                         .color(ink);
                     gap(Dp(6.0));
@@ -2016,8 +1996,7 @@ fn slot_swatch_row(ink: Color, swatches: Vec<Color>) {
                 .padding_symmetric(Dp(12.0), Dp::ZERO),
         )
         .children(move || {
-            text()
-                .content(I18N.text("ui-theme"))
+            text(I18N.text("ui-theme"))
                 .style(type_style(14.0, 20.0))
                 .color(ink);
             spacer().modifier(Modifier::new().weight(1.0));

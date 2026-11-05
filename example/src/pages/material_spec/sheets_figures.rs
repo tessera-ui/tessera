@@ -118,8 +118,7 @@ fn ring(x: f64, y: f64, w: f64, h: f64, stroke: f64, color: Color, fill: Option<
 
 #[tessera]
 fn label(#[prop(into)] content: String, x: f64, y: f64, size: f64, color: Color) {
-    text()
-        .content(I18N.text(content))
+    text(I18N.text(content))
         .style(type_style(size, (size * 1.4).round()))
         .color(color)
         .modifier(at(x, y));
@@ -131,8 +130,7 @@ fn centered(#[prop(into)] content: String, center: f64, y: f64, size: f64, color
         .alignment(Alignment::TopCenter)
         .modifier(at(center - 60.0, y).required_width(Dp(120.0)))
         .children(move || {
-            text()
-                .content(I18N.text(&(content)))
+            text(I18N.text(&(content)))
                 .style(type_style(size, (size * 1.4).round()))
                 .color(color);
         });
@@ -310,8 +308,7 @@ fn badge(
         .alignment(Alignment::Center)
         .modifier(modifier)
         .children(move || {
-            text()
-                .content((number).to_string())
+            text((number).to_string())
                 .style(type_style(14.0, 20.0))
                 .color(if outlined { INK } else { Color::WHITE });
         });
@@ -337,8 +334,7 @@ pub(super) fn badge_legend(items: Vec<String>) {
                             ));
                         });
                     spacer().modifier(Modifier::new().width(Dp(12.0)));
-                    text()
-                        .content(I18N.text(&(item)))
+                    text(I18N.text(&(item)))
                         .style(type_style(14.0, 20.0))
                         .color(srgb(73, 69, 79));
                 });
@@ -725,8 +721,7 @@ fn avatar(#[prop(into)] initial: String, center: f64, y: f64, diameter: f64, col
                 .background_with_shape(color, Shape::Ellipse),
         )
         .children(move || {
-            text()
-                .content(I18N.text(&(initial)))
+            text(I18N.text(&(initial)))
                 .style(type_style(diameter * 0.4, diameter * 0.5))
                 .color(Color::WHITE);
         });
@@ -1041,8 +1036,7 @@ pub(super) fn focus_figure() {
                         .background_with_shape(touch_color(), Shape::rounded_rectangle(Dp(4.0))),
                 )
                 .children(move || {
-                    text()
-                        .content(I18N.text("ui-tab"))
+                    text(I18N.text("ui-tab"))
                         .style(type_style(12.0, 16.0))
                         .color(Color::WHITE);
                 });

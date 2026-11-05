@@ -56,7 +56,7 @@ fn slot(name: String) {
                     .size(Dp(8.0), Dp(8.0))
                     .background(color),
             );
-            text().modifier(tagged(&name)).content(name.clone());
+            text(name.clone()).modifier(tagged(&name));
         });
 }
 

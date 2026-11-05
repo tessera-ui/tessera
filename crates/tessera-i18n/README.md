@@ -19,8 +19,8 @@ EntryPoint::new(app).package(res::i18n())
 Resolve messages near their output:
 
 ```rust
-text().content(res::I18N.text("home-title"));
-text().content(res::I18N.format("unread-messages", [("count", 3.into())]));
+text(res::I18N.text("home-title"));
+text(res::I18N.format("unread-messages", [("count", 3.into())]));
 ```
 
 ```fluent

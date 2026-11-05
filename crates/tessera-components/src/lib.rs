@@ -47,7 +47,7 @@
 //!
 //! // Button example
 //! button().filled().on_click(|| {}).child(|| {
-//!     text().content("Click me");
+//!     text("Click me");
 //! });
 //!
 //! // Text editor example

@@ -198,8 +198,7 @@ pub(super) fn number(value: usize) {
                 .background_with_shape(INK, Shape::Ellipse),
         )
         .children(move || {
-            text()
-                .content((value).to_string())
+            text((value).to_string())
                 .style(type_style(12.0, 16.0))
                 .color(Color::WHITE);
         });
@@ -376,7 +375,7 @@ fn specimen_item(
                             .modifier(watch(geometry, "max-badge"))
                             .children(move || {
                                 badge_with_content().content(move || {
-                                    text().content("999+");
+                                    text("999+");
                                 });
                             });
                     });
@@ -396,7 +395,7 @@ fn specimen_item(
                             .modifier(watch(geometry, "large-badge"))
                             .children(move || {
                                 badge_with_content().content(move || {
-                                    text().content("3");
+                                    text("3");
                                 });
                             });
                     });
@@ -411,8 +410,7 @@ fn specimen_item(
                         .modifier(watch(geometry, "large-badge"))
                         .children(move || {
                             badge_with_content().content(move || {
-                                text()
-                                    .content(I18N.text(if max_badge { "999+" } else { "3" }))
+                                text(I18N.text(if max_badge { "999+" } else { "3" }))
                                     .modifier(watch(geometry, "badge-label"));
                             });
                         });
@@ -586,8 +584,7 @@ fn filled_marker(number: usize, x: Dp, y: Dp, dark: bool) {
                 .background_with_shape(fill, Shape::rounded_rectangle(Dp(16.0))),
         )
         .children(move || {
-            text()
-                .content((number).to_string())
+            text((number).to_string())
                 .style(type_style(14.0, 20.0))
                 .color(ink);
         });
@@ -1234,8 +1231,7 @@ fn mock_header(
                             .background_with_shape(scheme.tertiary, Shape::Ellipse),
                     )
                     .children(move || {
-                        text()
-                            .content("M")
+                        text("M")
                             .style(type_style(16.0, 24.0))
                             .color(scheme.on_tertiary);
                     });
@@ -1297,10 +1293,7 @@ fn mock_fab(expanded: bool, set: usize, tertiary: bool, geometry: Option<State<G
             icon().painter(symbol).size(Dp(24.0)).tint(ink);
             if expanded {
                 spacer().modifier(Modifier::new().width(Dp(12.0)));
-                text()
-                    .content(I18N.text(word))
-                    .style(style.clone())
-                    .color(ink);
+                text(I18N.text(word)).style(style.clone()).color(ink);
             }
         });
 }
@@ -1448,7 +1441,7 @@ fn mock_item(
                         .modifier(tagged(sink, "large-badge"))
                         .children(move || {
                             badge_with_content().content(move || {
-                                text().content("3").modifier(tagged(sink, "badge-label"));
+                                text("3").modifier(tagged(sink, "badge-label"));
                             });
                         });
                 });
@@ -1501,8 +1494,7 @@ fn mock_item(
                         });
                         if show_label {
                             spacer().modifier(Modifier::new().width(Dp(8.0)));
-                            text()
-                                .content(I18N.text(&(label)))
+                            text(I18N.text(&(label)))
                                 .style(label_style.clone())
                                 .color(label_color);
                         }
@@ -1557,8 +1549,7 @@ fn mock_item(
                     });
                     if show_label {
                         gap(Dp(4.0));
-                        text()
-                            .content(I18N.text(&(label)))
+                        text(I18N.text(&(label)))
                             .style(label_style.clone())
                             .color(label_color);
                     }
@@ -1579,10 +1570,7 @@ fn mock_item(
                             .background_with_shape(srgb(29, 27, 32), Shape::Ellipse),
                     )
                     .children(move || {
-                        text()
-                            .content("1")
-                            .style(type_style(11.0, 16.0))
-                            .color(Color::WHITE);
+                        text("1").style(type_style(11.0, 16.0)).color(Color::WHITE);
                     });
             });
         } else {
@@ -1770,8 +1758,7 @@ fn mock_bar() {
                                     });
                             });
                         gap(Dp(4.0));
-                        text()
-                            .content(I18N.text(label_for(1, index)))
+                        text(I18N.text(label_for(1, index)))
                             .style(style.clone())
                             .color(scheme.on_surface_variant);
                     });
@@ -1849,8 +1836,7 @@ fn app_content(kind: usize) {
                         .background(scheme.primary_container),
                 )
                 .children(move || {
-                    text()
-                        .content("8:30")
+                    text("8:30")
                         .style(style.clone())
                         .color(scheme.on_primary_container);
                 });
@@ -1947,16 +1933,14 @@ pub(super) fn example(
                     )
                     .children(move || {
                         icon().painter(symbol).size(Dp(20.0)).tint(ink);
-                        text()
-                            .content(I18N.text(word))
+                        text(I18N.text(word))
                             .style(type_style(16.0, 24.0))
                             .color(ink)
                             .modifier(Modifier::new().padding_symmetric(Dp(8.0), Dp::ZERO));
                     });
             }
             gap(Dp(12.0));
-            text()
-                .content(I18N.text(&(note)))
+            text(I18N.text(&(note)))
                 .style(type_style(14.0, 20.0))
                 .color(scheme.on_surface_variant);
         });
@@ -2019,8 +2003,7 @@ pub(super) fn key_chip(#[prop(into)] key: String) {
                 .padding_symmetric(Dp(16.0), Dp::ZERO),
         )
         .children(move || {
-            text()
-                .content(I18N.text(&(key)))
+            text(I18N.text(&(key)))
                 .style(type_style(14.0, 20.0))
                 .color(Color::WHITE);
         });
@@ -2055,13 +2038,12 @@ pub(super) fn label_callout() {
                         if index > 0 {
                             gap(Dp(8.0));
                         }
-                        text()
-                            .content(I18N.text(key))
+                        text(I18N.text(key))
                             .style(type_style(14.0, 20.0))
                             .color(scheme.on_surface_variant);
                         let mut style = type_style(16.0, 24.0);
                         style.font_weight = 600;
-                        text().content(I18N.text(value)).style(style).color(accent);
+                        text(I18N.text(value)).style(style).color(accent);
                     }
                 });
             boxed().modifier(

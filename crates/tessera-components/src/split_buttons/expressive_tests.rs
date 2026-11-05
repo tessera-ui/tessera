@@ -70,7 +70,7 @@ fn sized_icon(index: usize) {
 fn label(index: usize, styles: TestProbe<[Option<TextStyle>; 5]>) {
     let style = use_context::<TextStyle>().unwrap().get();
     styles.with_mut(|styles| styles[index] = Some(style));
-    text().content("Send");
+    text("Send");
 }
 
 #[tessera]

@@ -439,7 +439,7 @@ pub fn segmented_button(
                                             Modifier::new().width(SEGMENTED_ICON_SPACING),
                                         );
                                         {
-                                            text().content(label.clone()).modifier(
+                                            text(label.clone()).modifier(
                                                 Modifier::new().offset(label_offset, Dp(0.0)),
                                             );
                                         };

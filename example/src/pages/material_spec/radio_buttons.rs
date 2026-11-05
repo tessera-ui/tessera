@@ -140,9 +140,7 @@ pub(super) fn radio_buttons_spec(
 
 #[tessera]
 fn prose(#[prop(into)] value: String) {
-    text()
-        .content(I18N.text(value))
-        .style(type_style(16.0, 24.0));
+    text(I18N.text(value)).style(type_style(16.0, 24.0));
 }
 
 #[tessera]
@@ -254,8 +252,7 @@ fn ringtone() {
                                 .width(Dp(364.0 * scale)),
                         )
                         .children(move || {
-                            text()
-                                .content("9:30")
+                            text("9:30")
                                 .style(type_style(14.0 * scale, 20.0 * scale))
                                 .modifier(Modifier::new().weight(1.0));
                             icon().painter(filled::WIFI_SVG).size(Dp(16.0 * scale));
@@ -278,8 +275,7 @@ fn ringtone() {
                                 .painter(filled::ARROW_BACK_SVG)
                                 .size(Dp(24.0 * scale));
                             spacer().modifier(Modifier::new().width(Dp(20.0 * scale)));
-                            text()
-                                .content(I18N.text("ui-ringtone"))
+                            text(I18N.text("ui-ringtone"))
                                 .style(type_style(22.0 * scale, 28.0 * scale))
                                 .modifier(Modifier::new().weight(1.0));
                             icon().painter(filled::MORE_VERT_SVG).size(Dp(24.0 * scale));

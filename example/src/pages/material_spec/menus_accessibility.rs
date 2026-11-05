@@ -94,12 +94,10 @@ pub(super) fn state_selection() {
                                                         .padding_symmetric(Dp(16.0), Dp(8.0)),
                                                 )
                                                 .children(move || {
-                                                    text()
-                                                        .content(I18N.text("ui-state"))
+                                                    text(I18N.text("ui-state"))
                                                         .style(type_style(12.0, 16.0))
                                                         .color(scheme.on_surface_variant);
-                                                    text()
-                                                        .content(I18N.text(selected.get()))
+                                                    text(I18N.text(selected.get()))
                                                         .style(type_style(16.0, 24.0))
                                                         .color(scheme.on_surface);
                                                 });
@@ -191,9 +189,7 @@ pub(super) fn labeling() {
                     column()
                         .modifier(Modifier::new().padding_symmetric(Dp(64.0), Dp(24.0)))
                         .children(move || {
-                            text()
-                                .content(I18N.text("ui-my-files"))
-                                .style(type_style(22.0, 28.0));
+                            text(I18N.text("ui-my-files")).style(type_style(22.0, 28.0));
                             gap(Dp(16.0));
                             for name in [
                                 "ui-photos",
@@ -206,9 +202,7 @@ pub(super) fn labeling() {
                                     .alignment(Alignment::CenterStart)
                                     .modifier(Modifier::new().height(Dp(48.0)))
                                     .children(move || {
-                                        text()
-                                            .content(I18N.text(name))
-                                            .style(type_style(14.0, 20.0));
+                                        text(I18N.text(name)).style(type_style(14.0, 20.0));
                                     });
                             }
                         });
@@ -269,11 +263,8 @@ pub(super) fn labeling() {
                     column()
                         .modifier(Modifier::new().padding_all(Dp(14.0)))
                         .children(move || {
-                            text()
-                                .content(I18N.text("ui-label"))
-                                .style(type_style(16.0, 24.0));
-                            text()
-                                .content(I18N.text("ui-preview"))
+                            text(I18N.text("ui-label")).style(type_style(16.0, 24.0));
+                            text(I18N.text("ui-preview"))
                                 .style(type_style(16.0, 24.0))
                                 .color(scheme.tertiary);
                         });

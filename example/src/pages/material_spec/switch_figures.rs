@@ -244,8 +244,7 @@ fn marker(number: usize, x: Dp, y: Dp, circular: bool) {
                 }),
         )
         .children(move || {
-            text()
-                .content((number).to_string())
+            text((number).to_string())
                 .style(TextStyle {
                     font_size: Dp(16.0),
                     line_height: Some(Dp(24.0)),
@@ -272,12 +271,11 @@ fn legend(configuration: bool) {
         .into_iter()
         .enumerate()
         {
-            text()
-                .content(I18N.format(
-                    "ui-value-value",
-                    [("v0", (index + 1).into()), ("v1", I18N.text(&label).into())],
-                ))
-                .style(type_style(16.0, 28.0));
+            text(I18N.format(
+                "ui-value-value",
+                [("v0", (index + 1).into()), ("v1", I18N.text(&label).into())],
+            ))
+            .style(type_style(16.0, 28.0));
         }
     });
 }

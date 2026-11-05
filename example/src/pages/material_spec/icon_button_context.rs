@@ -109,16 +109,13 @@ pub(in crate::pages::material_spec) fn density() {
 
 #[tessera]
 fn paragraph(#[prop(into)] value: String) {
-    text()
-        .content(I18N.text(value))
-        .style(type_style(16.0, 24.0));
+    text(I18N.text(value)).style(type_style(16.0, 24.0));
 }
 
 #[tessera]
 fn caption(#[prop(into)] value: String) {
     gap(Dp(24.0));
-    text()
-        .content(I18N.text(value))
+    text(I18N.text(value))
         .style(type_style(16.0, 24.0))
         .modifier(Modifier::new().padding_symmetric(Dp(8.0), Dp::ZERO));
 }
@@ -194,8 +191,7 @@ fn canvas(height: f64, geometry: State<SpaceGeometry>, child: RenderSlot) {
 
 #[tessera]
 fn placed_text(#[prop(into)] value: String, x: f64, y: f64, width: f64, size: f64, line: f64) {
-    text()
-        .content(I18N.text(value))
+    text(I18N.text(value))
         .style(type_style(size, line))
         .modifier(Modifier::new().offset(Dp(x), Dp(y)).width(Dp(width)));
 }
@@ -530,25 +526,20 @@ fn labeling_annotation(geometry: State<SpaceGeometry>, selected: State<bool>) {
         )
         .children(move || {
             column().children(move || {
-                text()
-                    .content(I18N.text("ui-label"))
-                    .style(type_style(14.0, 20.0));
-                text()
-                    .content(I18N.text(if selected.get() {
-                        "ui-remove-from-favorites"
-                    } else {
-                        "ui-add-to-favorites"
-                    }))
-                    .color(tint)
-                    .style(tessera_components::theme::TextStyle {
-                        font_weight: 700,
-                        ..type_style(16.0, 20.0)
-                    });
+                text(I18N.text("ui-label")).style(type_style(14.0, 20.0));
+                text(I18N.text(if selected.get() {
+                    "ui-remove-from-favorites"
+                } else {
+                    "ui-add-to-favorites"
+                }))
+                .color(tint)
+                .style(tessera_components::theme::TextStyle {
+                    font_weight: 700,
+                    ..type_style(16.0, 20.0)
+                });
                 gap(Dp(8.0));
-                text()
-                    .content(I18N.text("ui-role"))
-                    .style(type_style(14.0, 20.0));
-                text().content(I18N.text("ui-button")).color(tint).style(
+                text(I18N.text("ui-role")).style(type_style(14.0, 20.0));
+                text(I18N.text("ui-button")).color(tint).style(
                     tessera_components::theme::TextStyle {
                         font_weight: 700,
                         ..type_style(16.0, 20.0)
@@ -676,8 +667,7 @@ fn density_annotation(geometry: State<SpaceGeometry>) {
                 }),
         )
         .children(move || {
-            text()
-                .content(I18N.text("ui-target-size-48"))
+            text(I18N.text("ui-target-size-48"))
                 .style(type_style(16.0, 24.0))
                 .color(Color::WHITE);
         });

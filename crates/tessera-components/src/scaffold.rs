@@ -272,7 +272,7 @@ impl tessera_ui::LayoutModifierNode for ScaffoldLayout {
 ///                     top_app_bar().title("Inbox");
 ///                 })
 ///                 .content(|| {
-///                     text().content("Hello scaffold");
+///                     text("Hello scaffold");
 ///                 });
 ///         });
 /// }

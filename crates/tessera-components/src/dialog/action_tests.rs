@@ -42,7 +42,7 @@ fn dialog_action_fixture() {
                             .accessibility_label("Dismiss action")
                             .on_click(|| {})
                             .child(|| {
-                                text().content("Dismiss action");
+                                text("Dismiss action");
                             });
                     })
                     .confirm_button(|| {
@@ -55,7 +55,7 @@ fn dialog_action_fixture() {
                             .accessibility_label("Confirm action")
                             .on_click(|| {})
                             .child(|| {
-                                text().content("Confirm action");
+                                text("Confirm action");
                             });
                     });
             });
@@ -110,7 +110,7 @@ fn dialog_accessibility_fixture(observed: TestProbe<Option<State<(u8, bool)>>>) 
                         });
                 }
                 2 => {
-                    text().content("Custom content");
+                    text("Custom content");
                 }
                 3 => {
                     full_screen_dialog(Callback::new(|| {}))
@@ -133,7 +133,7 @@ fn dialog_accessibility_fixture(observed: TestProbe<Option<State<(u8, bool)>>>) 
                         .headline("Custom body")
                         .supporting_text("Unused supporting text")
                         .content(|| {
-                            text().content("Custom content");
+                            text("Custom content");
                         });
                 }
             });

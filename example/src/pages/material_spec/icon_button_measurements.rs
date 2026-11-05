@@ -52,7 +52,7 @@ pub(super) fn figures() {
         RenderSlot::new(move || {
             subheading("ui-target-sizes".into());
             gap(Dp(24.0));
-            text().content(I18N.text("ui-extra-small-and-small-icon-buttons-must-have-a-target-size-of-48x48dp-or-larger-to-be-acce")).style(type_style(16.0,24.0));
+            text(I18N.text("ui-extra-small-and-small-icon-buttons-must-have-a-target-size-of-48x48dp-or-larger-to-be-acce")).style(type_style(16.0,24.0));
         }),
         RenderSlot::new(|| {
             targets();
@@ -80,9 +80,7 @@ fn caption(items: Vec<&'static str>) {
         .line_spacing(Dp(4.0))
         .children(move || {
             for item in &items {
-                text()
-                    .content(I18N.text(*item))
-                    .style(type_style(16.0, 24.0));
+                text(I18N.text(*item)).style(type_style(16.0, 24.0));
             }
         });
 }
@@ -105,15 +103,12 @@ fn numbered_legend(items: Vec<&'static str>) {
                             ),
                     )
                     .children(move || {
-                        text()
-                            .content((index + 1).to_string())
+                        text((index + 1).to_string())
                             .color(scheme.inverse_on_surface)
                             .style(type_style(16.0, 24.0));
                     });
                 boxed().modifier(Modifier::new().size(Dp(12.0), Dp(1.0)));
-                text()
-                    .content(I18N.text(item))
-                    .style(type_style(14.0, 20.0));
+                text(I18N.text(item)).style(type_style(14.0, 20.0));
             });
         gap(Dp(8.0));
     }
@@ -190,9 +185,7 @@ fn label(value: String, x: f64, y: f64, width: f64) {
                 .size(Dp(width), Dp(24.0)),
         )
         .children(move || {
-            text()
-                .content(I18N.text(&(value)))
-                .style(type_style(14.0, 20.0));
+            text(I18N.text(&(value))).style(type_style(14.0, 20.0));
         });
 }
 
@@ -208,8 +201,7 @@ fn badge(value: String, x: f64, y: f64) {
                 .background_with_shape(scheme.inverse_surface, Shape::Ellipse),
         )
         .children(move || {
-            text()
-                .content(I18N.text(&(value)))
+            text(I18N.text(&(value)))
                 .color(scheme.inverse_on_surface)
                 .style(type_style(16.0, 24.0));
         });

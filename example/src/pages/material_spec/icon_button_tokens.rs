@@ -40,8 +40,7 @@ const SETS: [&str; 9] = [
 pub(super) fn figure() {
     let selected = remember(|| 0_usize);
     let shared = remember(|| false);
-    text()
-        .content(I18N.text("ui-icon-button-tokens-are-organized-by-common-behavior-color-style-and-size-choose-a-token-se"))
+    text(I18N.text("ui-icon-button-tokens-are-organized-by-common-behavior-color-style-and-size-choose-a-token-se"))
         .style(type_style(16.0, 24.0));
     gap(Dp(24.0));
     subheading("ui-color".into());
@@ -60,7 +59,7 @@ pub(super) fn figure() {
                     ))
                     .on_click(move || selected.set(index))
                     .child(move || {
-                        text().content(I18N.text(name(STYLES[index])));
+                        text(I18N.text(name(STYLES[index])));
                     });
             }
         });
@@ -81,7 +80,7 @@ pub(super) fn figure() {
                     ))
                     .on_click(move || selected.set(index + 4))
                     .child(move || {
-                        text().content(I18N.text(["ui-xs", "S", "M", "L", "ui-xl"][index]));
+                        text(I18N.text(["ui-xs", "S", "M", "L", "ui-xl"][index]));
                     });
             }
         });
@@ -105,7 +104,7 @@ pub(super) fn figure() {
         }))
         .on_click(move || shared.set(!shared.get()))
         .child(move || {
-            text().content(I18N.text(if shared.get() {
+            text(I18N.text(if shared.get() {
                 "ui-hide-shared-behavior-summary"
             } else {
                 "ui-show-shared-behavior-summary"
@@ -364,7 +363,7 @@ fn preview(set: usize) {
                     });
                 })
                 .child(move || {
-                    text().content(I18N.text(if shape.get() == IconButtonShape::Round {
+                    text(I18N.text(if shape.get() == IconButtonShape::Round {
                         "ui-use-square-resting-shape"
                     } else {
                         "ui-use-round-resting-shape"
@@ -372,26 +371,25 @@ fn preview(set: usize) {
                 });
         });
     gap(Dp(16.0));
-    text()
-        .content(
-            I18N.format(
-                "ui-value-preview-value-activations-value",
-                [
-                    ("v0", I18N.text(&name(style)).into()),
-                    (
-                        "v1",
-                        I18N.text(
-                            &(if selected.get() {
-                                "ui-selected"
-                            } else {
-                                "ui-unselected"
-                            }),
-                        )
-                        .into(),
-                    ),
-                    ("v2", (actions.get()).into()),
-                ],
-            ),
-        )
-        .style(type_style(16.0, 24.0));
+    text(
+        I18N.format(
+            "ui-value-preview-value-activations-value",
+            [
+                ("v0", I18N.text(&name(style)).into()),
+                (
+                    "v1",
+                    I18N.text(
+                        &(if selected.get() {
+                            "ui-selected"
+                        } else {
+                            "ui-unselected"
+                        }),
+                    )
+                    .into(),
+                ),
+                ("v2", (actions.get()).into()),
+            ],
+        ),
+    )
+    .style(type_style(16.0, 24.0));
 }

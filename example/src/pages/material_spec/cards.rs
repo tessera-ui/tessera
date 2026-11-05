@@ -124,15 +124,14 @@ fn sample(
                 body(label.clone());
             });
         gap(Dp(8.0));
-        text()
-            .content(I18N.format(
-                "ui-value-activations-value",
-                [
-                    ("v0", I18N.text(&caption).into()),
-                    ("v1", (actions.get()).into()),
-                ],
-            ))
-            .style(type_style(12.0, 16.0));
+        text(I18N.format(
+            "ui-value-activations-value",
+            [
+                ("v0", I18N.text(&caption).into()),
+                ("v1", (actions.get()).into()),
+            ],
+        ))
+        .style(type_style(12.0, 16.0));
     });
 }
 
@@ -141,12 +140,9 @@ fn body(#[prop(into)] label: String) {
     column()
         .modifier(Modifier::new().fill_max_width().padding_all(Dp(16.0)))
         .children(move || {
-            text()
-                .content(I18N.text(&(label)))
-                .style(type_style(24.0, 32.0));
+            text(I18N.text(&(label))).style(type_style(24.0, 32.0));
             gap(Dp(8.0));
-            text()
-                .content(I18N.text("ui-a-focused-collection-of-related-content"))
+            text(I18N.text("ui-a-focused-collection-of-related-content"))
                 .style(type_style(16.0, 24.0));
         });
 }
@@ -164,7 +160,7 @@ fn tokens() {
                 ))
                 .on_click(move || variant.set(style))
                 .child(move || {
-                    text().content(I18N.text(name(style)));
+                    text(I18N.text(name(style)));
                 });
         }
     });
@@ -353,13 +349,12 @@ fn detail(variant: CardVariant) {
                 });
         });
     gap(Dp(24.0));
-    text()
-        .content(I18N.text(if variant == CardVariant::Outlined {
-            "ui-1-container-2-outline"
-        } else {
-            "ui-1-container"
-        }))
-        .style(type_style(16.0, 24.0));
+    text(I18N.text(if variant == CardVariant::Outlined {
+        "ui-1-container-2-outline"
+    } else {
+        "ui-1-container"
+    }))
+    .style(type_style(16.0, 24.0));
     gap(Dp(48.0));
     subheading(I18N.format(
         "ui-value-card-color",
@@ -375,7 +370,7 @@ fn detail(variant: CardVariant) {
         [("v0", I18N.text(&name(variant)).into())],
     ));
     gap(Dp(24.0));
-    text().content(I18N.text("ui-hover-focus-with-tab-or-hold-a-card-to-inspect-actual-feedback-disabled-cards-do-not-activ"))
+    text(I18N.text("ui-hover-focus-with-tab-or-hold-a-card-to-inspect-actual-feedback-disabled-cards-do-not-activ"))
         .style(type_style(16.0, 24.0));
     gap(Dp(24.0));
     panel(RenderSlot::new(move || {
@@ -454,9 +449,7 @@ fn measurements() {
 
 #[tessera]
 fn prose(#[prop(into)] value: String) {
-    text()
-        .content(I18N.text(value))
-        .style(type_style(16.0, 24.0));
+    text(I18N.text(value)).style(type_style(16.0, 24.0));
 }
 
 #[tessera]
@@ -492,16 +485,16 @@ fn card_figure(annotated: bool) {
                 column().modifier(Modifier::new().fill_max_width()).children(move || {
                     spacer().modifier(watch(geometry,"media").fill_max_width().height(Dp(194.0)).background(scheme.tertiary_container));
                     column().modifier(Modifier::new().fill_max_width().padding_all(Dp(16.0))).children(move || {
-                        text().content(I18N.text("ui-headline")).style(type_style(40.0,48.0)).modifier(watch(geometry,"headline"));
-                        text().content(I18N.text("ui-subhead")).style(type_style(24.0,32.0)).modifier(watch(geometry,"subhead"));
+                        text(I18N.text("ui-headline")).style(type_style(40.0,48.0)).modifier(watch(geometry,"headline"));
+                        text(I18N.text("ui-subhead")).style(type_style(24.0,32.0)).modifier(watch(geometry,"subhead"));
                         gap(Dp(32.0));
-                        text().content(I18N.text("ui-explain-more-about-the-topic-shown-in-the-headline-and-subhead-through-supporting-text"))
+                        text(I18N.text("ui-explain-more-about-the-topic-shown-in-the-headline-and-subhead-through-supporting-text"))
                             .style(type_style(14.0,20.0)).modifier(watch(geometry,"support"));
                         gap(Dp(32.0));
                         row().main_axis_alignment(MainAxisAlignment::End).modifier(Modifier::new().fill_max_width()).children(move || {
-                            button().outlined().accessibility_label(I18N.text("ui-card-secondary-action")).on_click(move || calls.set(calls.get()+1)).child(move || {text().content(I18N.text("ui-action"));});
+                            button().outlined().accessibility_label(I18N.text("ui-card-secondary-action")).on_click(move || calls.set(calls.get()+1)).child(move || {text(I18N.text("ui-action"));});
                             spacer().modifier(Modifier::new().width(Dp(8.0)));
-                            button().modifier(watch(geometry,"action")).accessibility_label(I18N.text("ui-card-primary-button")).on_click(move || calls.set(calls.get()+1)).child(move || {text().content(I18N.text("ui-action"));});
+                            button().modifier(watch(geometry,"action")).accessibility_label(I18N.text("ui-card-primary-button")).on_click(move || calls.set(calls.get()+1)).child(move || {text(I18N.text("ui-action"));});
                         });
                     });
                 });
@@ -509,12 +502,11 @@ fn card_figure(annotated: bool) {
             if annotated {boxed().modifier(Modifier::new().fill_max_size()).children(move || {card_callouts(geometry);});}
         });
     gap(Dp(8.0));
-    text()
-        .content(I18N.format(
-            "ui-card-button-actions-value",
-            [("v0", (calls.get()).into())],
-        ))
-        .style(type_style(12.0, 16.0));
+    text(I18N.format(
+        "ui-card-button-actions-value",
+        [("v0", (calls.get()).into())],
+    ))
+    .style(type_style(12.0, 16.0));
 }
 
 #[tessera]
@@ -638,8 +630,7 @@ fn collection_card(index: usize) {
                             scheme.tertiary_container
                         }),
                 );
-                text()
-                    .content(I18N.format("ui-collection-value", [("v0", (index + 1).into())]))
+                text(I18N.format("ui-collection-value", [("v0", (index + 1).into())]))
                     .style(type_style(18.0, 24.0))
                     .modifier(Modifier::new().padding_all(Dp(16.0)));
             });
@@ -737,14 +728,13 @@ fn action_models() {
                         column()
                             .modifier(Modifier::new().padding_all(Dp(16.0)))
                             .children(move || {
-                                text()
-                                    .content(I18N.text("ui-non-actionable-card"))
+                                text(I18N.text("ui-non-actionable-card"))
                                     .style(type_style(20.0, 28.0));
                                 gap(Dp(16.0));
                                 button()
                                     .on_click(move || clicks.set(clicks.get() + 1))
                                     .child(move || {
-                                        text().content(I18N.text("ui-action"));
+                                        text(I18N.text("ui-action"));
                                     });
                             });
                     });
@@ -786,7 +776,7 @@ fn card_behavior() {
 fn expanding_card() {
     let expanded = remember(|| false);
     panel(RenderSlot::new(move || {
-        card().outlined().modifier(Modifier::new().width(Dp(360.0))).content(move || {column().modifier(Modifier::new().padding_all(Dp(16.0))).children(move || {text().content(I18N.text("ui-explore-the-details")).style(type_style(24.0,32.0));gap(Dp(16.0));if expanded.get() {prose("ui-expanded-content-stays-within-the-card-s-hierarchy-and-grows-the-card-instead-of-introduci");gap(Dp(16.0));}button().text().accessibility_label(I18N.text("ui-toggle-card-details")).on_click(move || expanded.set(!expanded.get())).child(move || {text().content(I18N.text(if expanded.get() {"ui-show-less"} else {"ui-learn-more"}));});});});
+        card().outlined().modifier(Modifier::new().width(Dp(360.0))).content(move || {column().modifier(Modifier::new().padding_all(Dp(16.0))).children(move || {text(I18N.text("ui-explore-the-details")).style(type_style(24.0,32.0));gap(Dp(16.0));if expanded.get() {prose("ui-expanded-content-stays-within-the-card-s-hierarchy-and-grows-the-card-instead-of-introduci");gap(Dp(16.0));}button().text().accessibility_label(I18N.text("ui-toggle-card-details")).on_click(move || expanded.set(!expanded.get())).child(move || {text(I18N.text(if expanded.get() {"ui-show-less"} else {"ui-learn-more"}));});});});
     }));
 }
 

@@ -131,9 +131,7 @@ fn availability() {
 
 #[tessera]
 fn prose(#[prop(into)] content: String) {
-    text()
-        .content(I18N.text(content))
-        .style(type_style(16.0, 24.0));
+    text(I18N.text(content)).style(type_style(16.0, 24.0));
 }
 
 #[tessera]
@@ -142,9 +140,7 @@ fn immediate_example() {
     column()
         .modifier(Modifier::new().fill_max_width())
         .children(move || {
-            text()
-                .content(I18N.text("ui-volume"))
-                .style(type_style(16.0, 24.0));
+            text(I18N.text("ui-volume")).style(type_style(16.0, 24.0));
             gap(Dp(16.0));
             slider()
                 .size(SliderSize::Medium)
@@ -158,12 +154,11 @@ fn immediate_example() {
                 })
                 .accessibility_label(I18N.text("ui-volume"));
             gap(Dp(16.0));
-            text()
-                .content(I18N.format(
-                    "ui-volume-value",
-                    [("v0", format!("{:.0}", value.get() * 100.0).into())],
-                ))
-                .style(type_style(16.0, 24.0));
+            text(I18N.format(
+                "ui-volume-value",
+                [("v0", format!("{:.0}", value.get() * 100.0).into())],
+            ))
+            .style(type_style(16.0, 24.0));
         });
 }
 
@@ -179,9 +174,7 @@ fn value_example(editor: Option<State<TextInputController>>) {
             editor
         }),
     };
-    text()
-        .content(I18N.text("ui-keyboard-adjustable-value"))
-        .style(type_style(16.0, 24.0));
+    text(I18N.text("ui-keyboard-adjustable-value")).style(type_style(16.0, 24.0));
     gap(Dp(8.0));
     row()
         .cross_axis_alignment(CrossAxisAlignment::Center)
@@ -226,8 +219,7 @@ fn value_example(editor: Option<State<TextInputController>>) {
     if invalid.get() {
         gap(Dp(4.0));
         let scheme = use_context::<MaterialTheme>().unwrap().get().color_scheme;
-        text()
-            .content(I18N.text("ui-enter-a-number-from-0-to-100"))
+        text(I18N.text("ui-enter-a-number-from-0-to-100"))
             .style(type_style(12.0, 16.0))
             .color(scheme.error)
             .modifier(Modifier::new().semantics(SemanticsArgs {
@@ -304,13 +296,11 @@ fn sample(
                             tessera_components::spacer::spacer()
                                 .modifier(Modifier::new().width(Dp(12.0)));
                         }
-                        text()
-                            .content(I18N.text(&(label)))
-                            .style(if leading_icon.is_some() {
-                                type_style(20.0, 24.0)
-                            } else {
-                                type_style(16.0, 24.0)
-                            });
+                        text(I18N.text(&(label))).style(if leading_icon.is_some() {
+                            type_style(20.0, 24.0)
+                        } else {
+                            type_style(16.0, 24.0)
+                        });
                     });
                 gap(Dp(16.0));
             }
@@ -414,8 +404,7 @@ pub(super) fn variants() {
     {
         row().children(move || {
             number(index + 1);
-            text()
-                .content(I18N.text(label))
+            text(I18N.text(label))
                 .modifier(Modifier::new().padding_symmetric(Dp(12.0), Dp(4.0)))
                 .style(type_style(16.0, 24.0));
         });
@@ -498,8 +487,7 @@ fn variants_figure() {
                                     }),
                             )
                             .children(move || {
-                                text()
-                                    .content((index + 1).to_string())
+                                text((index + 1).to_string())
                                     .style(type_style(16.0, 24.0))
                                     .color(scheme.inverse_on_surface);
                             });
@@ -554,8 +542,7 @@ fn number(value: usize) {
                 .alignment(Alignment::Center)
                 .modifier(Modifier::new().fill_max_size())
                 .children(move || {
-                    text()
-                        .content((value).to_string())
+                    text((value).to_string())
                         .color(Color::WHITE)
                         .style(type_style(12.0, 16.0));
                 });
@@ -584,8 +571,7 @@ fn configuration_legend(number: usize, label: String) {
         .cross_axis_alignment(CrossAxisAlignment::Center)
         .children(move || {
             configuration_number(number);
-            text()
-                .content(I18N.text(&(label)))
+            text(I18N.text(&(label)))
                 .modifier(Modifier::new().padding_symmetric(Dp(12.0), Dp(4.0)))
                 .style(type_style(16.0, 24.0));
         });
@@ -603,8 +589,7 @@ fn configuration_number(number: usize) {
                 .background_with_shape(scheme.inverse_surface, Shape::rounded_rectangle(Dp(12.0))),
         )
         .children(move || {
-            text()
-                .content((number).to_string())
+            text((number).to_string())
                 .style(type_style(16.0, 24.0))
                 .color(scheme.inverse_on_surface);
         });
@@ -834,9 +819,7 @@ pub(super) fn anatomy() {
         "ui-5-inactive-track",
         "ui-6-inset-icon-optional",
     ] {
-        text()
-            .content(I18N.text(label))
-            .style(type_style(16.0, 28.0));
+        text(I18N.text(label)).style(type_style(16.0, 28.0));
     }
 }
 
@@ -1007,8 +990,7 @@ fn color_marker(number: usize, center_x: Dp, center_y: Dp, dark: bool) {
                 }),
         )
         .children(move || {
-            text()
-                .content((number).to_string())
+            text((number).to_string())
                 .style(type_style(14.0, 20.0))
                 .color(scheme.inverse_on_surface);
         });
@@ -1226,8 +1208,7 @@ fn state_specimen(
                 }),
         )
         .children(move || {
-            text()
-                .content((index + 1).to_string())
+            text((index + 1).to_string())
                 .style(type_style(14.0, 20.0))
                 .color(scheme.inverse_on_surface);
         });
@@ -1282,12 +1263,10 @@ pub(super) fn measurements() {
         ],
     );
     gap(Dp(64.0));
-    text()
-        .content("Material Design 3")
+    text("Material Design 3")
         .style(type_style(28.0, 36.0))
         .color(INK);
-    text()
-        .content(I18N.text("ui-sliders-interactive-specifications"))
+    text(I18N.text("ui-sliders-interactive-specifications"))
         .style(type_style(16.0, 24.0))
         .color(INK);
 }
@@ -1700,9 +1679,7 @@ fn slider_size_figure() {
         }),
     );
     gap(Dp(16.0));
-    text()
-        .content("1  XS     2  S     3  M     4  L     5  XL")
-        .style(type_style(16.0, 24.0));
+    text("1  XS     2  S     3  M     4  L     5  XL").style(type_style(16.0, 24.0));
 }
 
 #[tessera]
@@ -1841,8 +1818,7 @@ fn size_annotation_geometry(
                 }),
         )
         .children(move || {
-            text()
-                .content((index + 1).to_string())
+            text((index + 1).to_string())
                 .style(type_style(14.0, 20.0))
                 .color(scheme.inverse_on_surface);
         });

@@ -206,10 +206,7 @@ fn navigation_rail_item_view_content(
                 provide_context(
                     || label_style,
                     move || {
-                        text()
-                            .content(label.clone())
-                            .color(label_color)
-                            .style(label_style);
+                        text(label.clone()).color(label_color).style(label_style);
                     },
                 );
             }
@@ -939,7 +936,7 @@ fn navigation_rail_content(
 ///             .on_close_request(move || open.set(false))
 ///             .main_content(move || {
 ///                 button().on_click(move || open.set(true)).child(|| {
-///                     text().content("Open navigation");
+///                     text("Open navigation");
 ///                 });
 ///             })
 ///             .content(move |rail| {
@@ -1308,7 +1305,7 @@ mod modal_tests {
                                 .accessibility_label("Open rail")
                                 .on_click(move || open.set(true))
                                 .child(|| {
-                                    text().content("Open rail");
+                                    text("Open rail");
                                 });
                         });
                 })
@@ -1317,7 +1314,7 @@ mod modal_tests {
                         .accessibility_label("Close rail")
                         .on_click(move || open.set(false))
                         .child(|| {
-                            text().content("Close rail");
+                            text("Close rail");
                         });
                 })
                 .content(move |rail| {

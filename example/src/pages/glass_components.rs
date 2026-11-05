@@ -20,18 +20,17 @@ pub fn glass_components_page() {
         .content_padding(Dp(16.0))
         .item_spacing(Dp(8.0))
         .item(move || {
-            text()
-                .content(I18N.text("ui-glass-components"))
+            text(I18N.text("ui-glass-components"))
                 .style(theme.with(|t| t.typography.headline_large));
         })
         .item(move || {
-            text().content(I18N.text("ui-dragable-glass"));
+            text(I18N.text("ui-dragable-glass"));
         })
         .item(move || {
             boxed()
                 .modifier(Modifier::new().fill_max_width())
                 .children(move || {
-                    text().content(
+                    text(
                         I18N.text("ui-the-quick-brown-fox-jumps-over-the-lazy-dog")
                             .repeat(10),
                     );
@@ -60,11 +59,11 @@ pub fn glass_components_page() {
                     offset.set((Px::ZERO, Px::ZERO));
                 })
                 .child(move || {
-                    text().content(I18N.text("ui-reset"));
+                    text(I18N.text("ui-reset"));
                 });
         })
         .item(move || {
-            text().content(I18N.text("ui-blur-radius"));
+            text(I18N.text("ui-blur-radius"));
         })
         .item(move || {
             slider()

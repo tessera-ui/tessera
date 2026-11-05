@@ -155,7 +155,7 @@ fn fixture(probe: tessera_ui::testing::TestProbe<FixtureHandles>) {
                         .accessibility_label("After card")
                         .on_click(|| {})
                         .child(|| {
-                            text().content("After card");
+                            text("After card");
                         });
                     let scheme = use_context::<MaterialTheme>().unwrap().get().color_scheme;
                     let color = match config.get().variant {
@@ -173,8 +173,7 @@ fn fixture(probe: tessera_ui::testing::TestProbe<FixtureHandles>) {
                         .accessibility_role(Role::Group)
                         .accessibility_label("Reference color")
                         .child(|| {
-                            text()
-                                .content("Card content")
+                            text("Card content")
                                 .accessibility_label("Reference label")
                                 .modifier(Modifier::new().padding_all(Dp(16.0)));
                         });
@@ -195,15 +194,13 @@ fn card_content(config: State<Config>, nested_calls: State<u32>) {
                 }),
         )
         .children(move || {
-            text()
-                .content("Card content")
-                .modifier(Modifier::new().padding_all(Dp(16.0)));
+            text("Card content").modifier(Modifier::new().padding_all(Dp(16.0)));
             if config.get().nested_action {
                 button()
                     .accessibility_label("Nested action")
                     .on_click(move || nested_calls.with_mut(|calls| *calls += 1))
                     .child(|| {
-                        text().content("Nested action");
+                        text("Nested action");
                     });
             }
         });

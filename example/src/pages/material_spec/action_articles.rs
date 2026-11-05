@@ -584,8 +584,7 @@ fn segmented_access_chapter(
 
 #[tessera]
 fn paragraph(#[prop(into)] value: String) {
-    text()
-        .content(I18N.text(value))
+    text(I18N.text(value))
         .style(type_style(16.0, 24.0))
         .color(INK);
 }
@@ -668,7 +667,7 @@ fn recommendation(kind: Kind, on_recommended: Option<Callback>) {
     column().modifier(Modifier::new().fill_max_width().background_with_shape(scheme.secondary_container,Shape::rounded_rectangle(Dp(16.0))).padding_all(Dp(24.0)).semantics(SemanticsArgs {role:Some(Role::Note),label:Some(I18N.text("ui-m3-expressive-recommendation")),merge_descendants:true,..Default::default()})).children(move || {
         paragraph("ui-segmented-buttons-are-no-longer-recommended-for-m3-expressive-use-a-connected-button-group");
         if let Some(on_recommended)=on_recommended {
-            gap(Dp(16.0)); button().text().accessibility_label(I18N.text("ui-open-recommended-button-groups")).on_click_shared(on_recommended).child(move || { text().content(I18N.text("ui-explore-button-groups")); });
+            gap(Dp(16.0)); button().text().accessibility_label(I18N.text("ui-open-recommended-button-groups")).on_click_shared(on_recommended).child(move || { text(I18N.text("ui-explore-button-groups")); });
         }
     });
     gap(Dp(32.0));

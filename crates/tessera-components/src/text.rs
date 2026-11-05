@@ -36,10 +36,10 @@ pub use crate::pipelines::text::pipeline::{read_font_system, write_font_system};
 ///
 /// ## Parameters
 ///
+/// - `content` — required text content to display.
 /// - `modifier` — modifier chain applied to the text node; caller semantics
 ///   remain intact. The default label is the content and the default role is a
 ///   label, unless supplied by the modifier.
-/// - `content` — text content to display.
 /// - `color` — optional text color override.
 /// - `style` — optional text style override for typography presets.
 /// - `size` — optional font size override.
@@ -57,8 +57,7 @@ pub use crate::pipelines::text::pipeline::{read_font_system, write_font_system};
 ///
 /// #[tessera]
 /// fn demo() {
-///     text()
-///         .content("Hello, world!")
+///     text("Hello, world!")
 ///         .color(Color::new(0.2, 0.5, 0.8, 1.0))
 ///         .style(tessera_components::theme::TextStyle {
 ///             font_size: Dp(32.0),
@@ -71,8 +70,8 @@ pub use crate::pipelines::text::pipeline::{read_font_system, write_font_system};
 /// ```
 #[tessera]
 pub fn text(
+    #[prop(into)] content: String,
     modifier: Option<Modifier>,
-    #[prop(into)] content: Option<String>,
     color: Option<Color>,
     style: Option<TextStyle>,
     size: Option<Dp>,
@@ -81,7 +80,6 @@ pub fn text(
     #[prop(into)] accessibility_description: Option<String>,
 ) {
     let modifier = modifier.unwrap_or_default();
-    let content = content.unwrap_or_default();
     let theme = use_context::<MaterialTheme>();
     let inherited_style = use_context::<TextStyle>().map(|s| s.get());
     let resolved_style = style
@@ -103,7 +101,7 @@ pub fn text(
         .unwrap_or(Dp(size.0 * 1.2));
 
     let policy = TextLayout {
-        text: content.clone(),
+        text: content,
         color,
         style: TextStyle {
             font_size: size,
@@ -280,12 +278,12 @@ mod tests {
                 .modifier(Modifier::new().width(Dp(300.0)))
                 .children(|| {
                     for index in 0..3 {
-                        text()
-                            .content("Cell")
-                            .modifier(Modifier::new().weight(1.0).semantics(SemanticsArgs {
+                        text("Cell").modifier(Modifier::new().weight(1.0).semantics(
+                            SemanticsArgs {
                                 test_tag: Some(format!("weighted-label-{index}")),
                                 ..Default::default()
-                            }));
+                            },
+                        ));
                     }
                 });
         });
@@ -325,8 +323,7 @@ mod tests {
                         ..Default::default()
                     }))
                     .children(|| {
-                        text()
-                            .content("Material labels stay readable when their containers resize.");
+                        text("Material labels stay readable when their containers resize.");
                     });
             });
         });
@@ -379,7 +376,7 @@ mod tests {
                 ..Default::default()
             }))
             .children(move || {
-                text().content("Color cache").color(color.get());
+                text("Color cache").color(color.get());
             });
     }
 

@@ -48,14 +48,12 @@ fn verdict(tone: u8, #[prop(into)] note: String) {
             row()
                 .cross_axis_alignment(CrossAxisAlignment::Center)
                 .children(move || {
-                    text()
-                        .content(I18N.text(mark))
+                    text(I18N.text(mark))
                         .style(type_style(14.0, 20.0))
                         .color(color);
                 });
             gap(Dp(4.0));
-            text()
-                .content(I18N.text(&(note)))
+            text(I18N.text(&(note)))
                 .color(scheme.on_surface_variant)
                 .style(type_style(14.0, 20.0));
         });
@@ -126,8 +124,7 @@ fn field(
 #[tessera]
 fn support(#[prop(into)] value: String, error: bool) {
     let scheme = use_context::<MaterialTheme>().unwrap().get().color_scheme;
-    text()
-        .content(I18N.text(value))
+    text(I18N.text(value))
         .color(if error {
             scheme.error
         } else {
@@ -206,8 +203,7 @@ pub(super) fn label_misuse() {
                     column()
                         .modifier(Modifier::new().width(Dp(200.0)))
                         .children(move || {
-                            text()
-                                .content(I18N.text("ui-enter-the-name-printed-on-your-card-5964"))
+                            text(I18N.text("ui-enter-the-name-printed-on-your-card-5964"))
                                 .style(type_style(12.0, 16.0))
                                 .modifier(
                                     Modifier::new().padding(Padding::symmetric(Dp(16.0), Dp(4.0))),
@@ -354,8 +350,7 @@ fn input_mode(mode: u8) {
                 };
             }));
             gap(Dp(12.0));
-            text()
-                .content(I18N.text(note))
+            text(I18N.text(note))
                 .color(scheme.on_surface_variant)
                 .style(type_style(14.0, 20.0));
         });

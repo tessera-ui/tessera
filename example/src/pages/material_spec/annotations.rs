@@ -214,8 +214,7 @@ pub(super) fn marker(number: usize, x: Dp, y: Dp) {
                 ),
         )
         .children(move || {
-            text()
-                .content((number).to_string())
+            text((number).to_string())
                 .style(type_style(14.0, 20.0))
                 .color(INK);
         });
@@ -231,8 +230,7 @@ pub(super) fn dimension(label: String, x: Dp, y: Dp) {
             ..Default::default()
         }))
         .children(move || {
-            text()
-                .content(I18N.text(&(label)))
+            text(I18N.text(&(label)))
                 .style(type_style(14.0, 20.0))
                 .color(INK);
         });

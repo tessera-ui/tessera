@@ -534,8 +534,7 @@ fn header_title(title: String, description: String, width: Dp, compact: bool, wi
                     column()
                         .modifier(Modifier::new().fill_max_width())
                         .children(move || {
-                            text()
-                                .content(I18N.text(&(title)))
+                            text(I18N.text(&(title)))
                                 .style(if compact {
                                     type_style(45.0, 52.0)
                                 } else if wide {
@@ -550,8 +549,7 @@ fn header_title(title: String, description: String, width: Dp, compact: bool, wi
                                     ..Default::default()
                                 }));
                             gap(Dp(16.0));
-                            text()
-                                .content(I18N.text(&(description)))
+                            text(I18N.text(&(description)))
                                 .style(if compact {
                                     type_style(16.0, 24.0)
                                 } else {

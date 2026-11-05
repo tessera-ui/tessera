@@ -104,8 +104,7 @@ fn panel(dark: bool) {
                             }),
                     )
                     .children(move || {
-                        text()
-                            .content((column + 1).to_string())
+                        text((column + 1).to_string())
                             .style(type_style(14.0, 20.0))
                             .color(scheme.surface);
                     });

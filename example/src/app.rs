@@ -124,7 +124,7 @@ pub(crate) fn app(
                                     });
                                 })
                                 .child(move || {
-                                    text().content(if locale.locale() == langid!("zh-CN") {
+                                    text(if locale.locale() == langid!("zh-CN") {
                                         "English"
                                     } else {
                                         "简体中文"

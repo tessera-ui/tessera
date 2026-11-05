@@ -216,14 +216,13 @@ fn settings(is_switch: bool) {
         column()
             .modifier(Modifier::new().width(Dp(400.0)))
             .children(move || {
-                text()
-                    .content(I18N.text(if is_switch {
-                        "ui-settings"
-                    } else {
-                        "ui-allow-access"
-                    }))
-                    .style(type_style(24.0, 32.0))
-                    .color(INK);
+                text(I18N.text(if is_switch {
+                    "ui-settings"
+                } else {
+                    "ui-allow-access"
+                }))
+                .style(type_style(24.0, 32.0))
+                .color(INK);
                 gap(Dp(24.0));
                 if is_switch {
                     setting_row(true, true, "Wi-Fi");
@@ -280,20 +279,18 @@ pub(super) fn checkbox_group() {
                         }
                     });
                 gap(Dp(16.0));
-                text()
-                    .content(
-                        I18N.format(
-                            "ui-selected-items-value",
-                            [(
-                                "v0",
-                                (items.with(|items| {
-                                    items.iter().filter(|selected| **selected).count()
-                                }))
-                                .into(),
-                            )],
-                        ),
-                    )
-                    .style(type_style(16.0, 24.0));
+                text(
+                    I18N.format(
+                        "ui-selected-items-value",
+                        [(
+                            "v0",
+                            (items
+                                .with(|items| items.iter().filter(|selected| **selected).count()))
+                            .into(),
+                        )],
+                    ),
+                )
+                .style(type_style(16.0, 24.0));
             });
     }));
 }
@@ -332,13 +329,13 @@ fn tokens(is_switch: bool) {
             .text()
             .on_click(move || dimensions.set(false))
             .child(move || {
-                text().content(I18N.text("ui-color-tokens"));
+                text(I18N.text("ui-color-tokens"));
             });
         button()
             .text()
             .on_click(move || dimensions.set(true))
             .child(move || {
-                text().content(I18N.text("ui-size-tokens"));
+                text(I18N.text("ui-size-tokens"));
             });
     });
     gap(Dp(24.0));
@@ -468,12 +465,8 @@ fn checkbox_anatomy() {
                     selection_control(false, false, true, true, 0, "ui-indeterminate-checkbox");
                 });
             gap(Dp(24.0));
-            text()
-                .content(I18N.text("ui-1-container"))
-                .style(type_style(16.0, 28.0));
-            text()
-                .content(I18N.text("ui-2-icon"))
-                .style(type_style(16.0, 28.0));
+            text(I18N.text("ui-1-container")).style(type_style(16.0, 28.0));
+            text(I18N.text("ui-2-icon")).style(type_style(16.0, 28.0));
         });
     }));
 }
@@ -489,13 +482,12 @@ fn color_scheme(is_switch: bool, dark: bool) {
                     column()
                         .modifier(Modifier::new().fill_max_width().padding_all(Dp(32.0)))
                         .children(move || {
-                            text()
-                                .content(I18N.text(if dark {
-                                    "ui-dark-scheme"
-                                } else {
-                                    "ui-light-scheme"
-                                }))
-                                .style(type_style(24.0, 32.0));
+                            text(I18N.text(if dark {
+                                "ui-dark-scheme"
+                            } else {
+                                "ui-light-scheme"
+                            }))
+                            .style(type_style(24.0, 32.0));
                             gap(Dp(24.0));
                             setting_row(is_switch, true, "ui-selected");
                             setting_row(is_switch, false, "ui-unselected");
@@ -512,8 +504,7 @@ fn colors(is_switch: bool) {
     gap(Dp(32.0));
     super::subheading("ui-adjacent-text-label-color".into());
     gap(Dp(16.0));
-    text()
-        .content(I18N.text(if is_switch {
+    text(I18N.text(if is_switch {
             "ui-use-on-surface-for-the-setting-name-and-on-surface-variant-for-supporting-text-keep-these"
         } else {
             "ui-use-on-surface-for-adjacent-option-labels-selection-changes-the-checkbox-while-the-label-k"
@@ -611,13 +602,12 @@ fn measurements(is_switch: bool) {
                     selection_control(is_switch, true, false, true, 0, "ui-measured-control");
                 });
             gap(Dp(24.0));
-            text()
-                .content(I18N.text(if is_switch {
-                    "ui-52-48dp-interaction-target"
-                } else {
-                    "ui-48-48dp-interaction-target"
-                }))
-                .style(type_style(16.0, 24.0));
+            text(I18N.text(if is_switch {
+                "ui-52-48dp-interaction-target"
+            } else {
+                "ui-48-48dp-interaction-target"
+            }))
+            .style(type_style(16.0, 24.0));
         });
     }));
     gap(Dp(32.0));

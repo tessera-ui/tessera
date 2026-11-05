@@ -181,9 +181,7 @@ fn fixture(probe: tessera_ui::testing::TestProbe<Option<State<Settings>>>) {
                                                                     .size(Dp(4.0), Dp(4.0)),
                                                             )
                                                             .style(SurfaceStyle::Filled { color });
-                                                        text()
-                                                            .modifier(tagged("number"))
-                                                            .content("3");
+                                                        text("3").modifier(tagged("number"));
                                                     });
                                             } else {
                                                 badge().modifier(modifier);

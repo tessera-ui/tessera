@@ -77,7 +77,7 @@ impl GlassButtonBuilder {
 ///         .primary()
 ///         .on_click(|| println!("Button clicked!"))
 ///         .child(|| {
-///             text().content("Click Me");
+///             text("Click Me");
 ///         });
 /// }
 ///

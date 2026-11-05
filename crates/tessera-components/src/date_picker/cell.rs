@@ -208,8 +208,7 @@ pub fn date_picker_day(
                 })
                 .draw(visual)
                 .child(move || {
-                    text()
-                        .content(label.clone())
+                    text(label.clone())
                         .modifier(Modifier::new().semantics(SemanticsArgs {
                             hidden: true,
                             ..Default::default()
@@ -346,8 +345,7 @@ pub fn date_picker_year(
                         .alignment(crate::alignment::Alignment::Center)
                         .modifier(Modifier::new().fill_max_size())
                         .children(move || {
-                            text()
-                                .content(label.clone())
+                            text(label.clone())
                                 .modifier(Modifier::new().semantics(SemanticsArgs {
                                     hidden: true,
                                     ..Default::default()

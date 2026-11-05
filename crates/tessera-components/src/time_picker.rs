@@ -351,7 +351,7 @@ fn time_picker_content(
                 .style(Color::TRANSPARENT.into())
                 .content_alignment(Alignment::Center)
                 .child(move || {
-                    text().content(":").style(theme.typography.display_large);
+                    text(":").style(theme.typography.display_large);
                 });
             time_number(state, TimePickerSelection::Minute, input);
             if !snapshot.is_24_hour {
@@ -611,8 +611,7 @@ fn time_number(state: State<TimePickerState>, field: TimePickerSelection, input:
                     text
                 });
             spacer().modifier(Modifier::new().height(Dp(4.0)));
-            text()
-                .content(label.clone())
+            text(label.clone())
                 .style(theme.typography.body_small)
                 .color(scheme.on_surface_variant);
         } else {
@@ -635,8 +634,7 @@ fn time_number(state: State<TimePickerState>, field: TimePickerSelection, input:
                     FocusManager::current().defer_keyboard_until_layout();
                 })
                 .child(move || {
-                    text()
-                        .content(format_two_digit(value))
+                    text(format_two_digit(value))
                         .style(theme.typography.display_large)
                         .color(foreground);
                 });
@@ -695,8 +693,7 @@ fn time_period_selector(state: State<TimePickerState>, input: bool) {
                             .block_input(false)
                             .content_alignment(Alignment::Center)
                             .child(move || {
-                                text()
-                                    .content(I18N.text(label))
+                                text(I18N.text(label))
                                     .style(theme.typography.title_medium)
                                     .color(if selected {
                                         scheme.on_tertiary_container
@@ -1364,18 +1361,17 @@ fn clock_value(
         .on_click(move || select_clock_slot(state, index))
         .content_alignment(Alignment::Center)
         .child(move || {
-            text()
-                .content(if snapshot.selection == TimePickerSelection::Minute {
-                    format_two_digit(number)
-                } else {
-                    number.to_string()
-                })
-                .style(theme.typography.body_large)
-                .color(if selected {
-                    theme.color_scheme.on_primary
-                } else {
-                    theme.color_scheme.on_surface
-                });
+            text(if snapshot.selection == TimePickerSelection::Minute {
+                format_two_digit(number)
+            } else {
+                number.to_string()
+            })
+            .style(theme.typography.body_large)
+            .color(if selected {
+                theme.color_scheme.on_primary
+            } else {
+                theme.color_scheme.on_surface
+            });
         });
 }
 
@@ -1480,14 +1476,13 @@ pub fn time_picker_dialog(
             input: state.with(|state| state.display_mode() == TimePickerDisplayMode::Input),
         })
         .child(move || {
-            text()
-                .content(
-                    title
-                        .clone()
-                        .unwrap_or_else(|| I18N.text("md3-select-time")),
-                )
-                .style(theme.typography.label_medium)
-                .color(theme.color_scheme.on_surface_variant);
+            text(
+                title
+                    .clone()
+                    .unwrap_or_else(|| I18N.text("md3-select-time")),
+            )
+            .style(theme.typography.label_medium)
+            .color(theme.color_scheme.on_surface_variant);
             time_picker()
                 .modifier(picker_modifier.clone())
                 .state(state)

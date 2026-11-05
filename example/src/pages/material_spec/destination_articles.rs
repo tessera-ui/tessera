@@ -29,8 +29,7 @@ pub(crate) fn figure_marker(number: usize, x: Dp, y: Dp, scale: f64) {
                 ),
         )
         .children(move || {
-            text()
-                .content((number).to_string())
+            text((number).to_string())
                 .style(type_style(16.0 * scale, 20.0 * scale))
                 .color(scheme.on_surface);
         });

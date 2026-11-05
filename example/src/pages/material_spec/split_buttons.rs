@@ -255,16 +255,13 @@ pub(super) fn split_buttons_spec(
 
 #[tessera]
 fn prose(#[prop(into)] value: String) {
-    text()
-        .content(I18N.text(value))
-        .style(type_style(16.0, 24.0));
+    text(I18N.text(value)).style(type_style(16.0, 24.0));
 }
 
 #[tessera]
 fn caption(#[prop(into)] value: String) {
     let scheme = use_context::<MaterialTheme>().unwrap().get().color_scheme;
-    text()
-        .content(I18N.text(value))
+    text(I18N.text(value))
         .color(scheme.on_surface_variant)
         .style(type_style(14.0, 20.0));
 }
@@ -273,9 +270,7 @@ fn caption(#[prop(into)] value: String) {
 fn bullets(items: Vec<String>) {
     column().children(move || {
         for item in items.clone() {
-            text()
-                .content(format!("•  {}", I18N.text(item)))
-                .style(type_style(16.0, 24.0));
+            text(format!("•  {}", I18N.text(item))).style(type_style(16.0, 24.0));
             gap(Dp(8.0));
         }
     });
@@ -291,8 +286,7 @@ fn badge(number: usize) {
                 .background_with_shape(INK, Shape::Ellipse),
         )
         .children(move || {
-            text()
-                .content((number).to_string())
+            text((number).to_string())
                 .style(type_style(12.0, 16.0))
                 .color(Color::WHITE);
         });
@@ -306,9 +300,7 @@ fn legend(number: usize, #[prop(into)] label: String) {
         .children(move || {
             badge(number);
             spacer().modifier(Modifier::new().width(Dp(12.0)));
-            text()
-                .content(I18N.text(&(label)))
-                .style(type_style(16.0, 24.0));
+            text(I18N.text(&(label))).style(type_style(16.0, 24.0));
         });
 }
 
@@ -328,14 +320,12 @@ fn guidance_line(#[prop(into)] mark: String, #[prop(into)] note: String, color: 
                         .background_with_shape(color, Shape::rounded_rectangle(Dp(8.0))),
                 )
                 .children(move || {
-                    text()
-                        .content(I18N.text(&(mark)))
+                    text(I18N.text(&(mark)))
                         .style(type_style(14.0, 20.0))
                         .color(Color::WHITE);
                 });
             spacer().modifier(Modifier::new().width(Dp(12.0)));
-            text()
-                .content(I18N.text(&(note)))
+            text(I18N.text(&(note)))
                 .color(scheme.on_surface_variant)
                 .style(type_style(14.0, 20.0));
         });
@@ -386,7 +376,7 @@ fn demo(
                                 spacer().modifier(
                                     Modifier::new().width(SplitButtonDefaults::icon_spacing(size)),
                                 );
-                                text().content(I18N.text("ui-edit"));
+                                text(I18N.text("ui-edit"));
                             });
                     }
                 })
@@ -433,22 +423,20 @@ fn demo(
                     }
                 });
             gap(Dp(12.0));
-            text()
-                .content(I18N.format(
-                    "ui-main-action-count",
-                    [
-                        ("caption", I18N.text(&caption_label).into()),
-                        ("count", count.get().into()),
-                    ],
+            text(I18N.format(
+                "ui-main-action-count",
+                [
+                    ("caption", I18N.text(&caption_label).into()),
+                    ("count", count.get().into()),
+                ],
+            ))
+            .style(type_style(14.0, 20.0));
+            if menu.source.get() == caption_label {
+                text(I18N.format(
+                    "ui-menu-choice-value",
+                    [("v0", I18N.text(&menu.result.get()).into())],
                 ))
                 .style(type_style(14.0, 20.0));
-            if menu.source.get() == caption_label {
-                text()
-                    .content(I18N.format(
-                        "ui-menu-choice-value",
-                        [("v0", I18N.text(&menu.result.get()).into())],
-                    ))
-                    .style(type_style(14.0, 20.0));
             }
         });
 }
@@ -863,7 +851,7 @@ fn states(menu: Menu) {
                 }
             })
             .child(move || {
-                text().content(I18N.text("ui-disabled"));
+                text(I18N.text("ui-disabled"));
             });
         gap(Dp(24.0));
         panel(RenderSlot::new(move || {
@@ -959,7 +947,7 @@ fn measurements_figure() {
                         .content(move || {
                             icon().painter(filled::PUBLISH_SVG);
                             spacer().modifier(Modifier::new().width(Dp(8.0)));
-                            text().content(I18N.text("ui-publish"));
+                            text(I18N.text("ui-publish"));
                         });
                 })
                 .trailing_button(move || {

@@ -561,11 +561,11 @@ fn dialog_provider_render(
 ///             .full_screen(true)
 ///             .on_close_request_shared(close)
 ///             .main_content(|| {
-///                 text().content("Calendar");
+///                 text("Calendar");
 ///             })
 ///             .dialog_content(move |dialog| {
 ///                 full_screen_dialog(close).dialog(dialog).title("New event").content(|| {
-///                     text().content("Event details");
+///                     text("Event details");
 ///                 });
 ///             });
 ///         close.call();
@@ -628,7 +628,7 @@ pub fn full_screen_dialog(
                                 .accessibility_label(confirm_label.clone())
                                 .on_click_shared(on_confirm)
                                 .child(move || {
-                                    text().content(confirm_label.clone());
+                                    text(confirm_label.clone());
                                 });
                         });
                     }
@@ -681,7 +681,7 @@ pub fn full_screen_dialog(
 ///     .headline("Dialog Title")
 ///     .confirm_button(|| {
 ///         button().filled().on_click(|| {}).child(|| {
-///             text().content("Confirm");
+///             text("Confirm");
 ///         });
 ///     });
 /// #     });
@@ -754,8 +754,7 @@ pub fn basic_dialog(
                 if let Some(headline) = headline.as_ref() {
                     let headline = headline.clone();
                     {
-                        text()
-                            .content(headline.clone())
+                        text(headline.clone())
                             .style(theme.typography.headline_small)
                             .color(scheme.on_surface);
                     };
@@ -772,8 +771,7 @@ pub fn basic_dialog(
                     if let Some(content) = content {
                         content.render();
                     } else {
-                        text()
-                            .content(supporting_text.clone())
+                        text(supporting_text.clone())
                             .style(theme.typography.body_medium)
                             .color(scheme.on_surface_variant);
                     }

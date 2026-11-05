@@ -201,16 +201,13 @@ pub(super) fn chips_spec(route: Option<crate::pages::material_spec::article::Art
 
 #[tessera]
 fn prose(#[prop(into)] value: String) {
-    text()
-        .content(I18N.text(value))
-        .style(type_style(16.0, 24.0));
+    text(I18N.text(value)).style(type_style(16.0, 24.0));
 }
 
 #[tessera]
 fn caption(#[prop(into)] value: String) {
     let scheme = use_context::<MaterialTheme>().unwrap().get().color_scheme;
-    text()
-        .content(I18N.text(value))
+    text(I18N.text(value))
         .color(scheme.on_surface_variant)
         .style(type_style(14.0, 20.0));
 }
@@ -219,9 +216,7 @@ fn caption(#[prop(into)] value: String) {
 fn bullets(items: Vec<String>) {
     column().children(move || {
         for item in items.clone() {
-            text()
-                .content(format!("•  {}", I18N.text(item)))
-                .style(type_style(16.0, 24.0));
+            text(format!("•  {}", I18N.text(item))).style(type_style(16.0, 24.0));
             gap(Dp(8.0));
         }
     });
@@ -237,8 +232,7 @@ fn badge(number: usize) {
                 .background_with_shape(INK, Shape::Ellipse),
         )
         .children(move || {
-            text()
-                .content((number).to_string())
+            text((number).to_string())
                 .style(type_style(12.0, 16.0))
                 .color(Color::WHITE);
         });
@@ -252,9 +246,7 @@ fn legend(number: usize, #[prop(into)] label: String) {
         .children(move || {
             badge(number);
             spacer().modifier(Modifier::new().width(Dp(12.0)));
-            text()
-                .content(I18N.text(&(label)))
-                .style(type_style(16.0, 24.0));
+            text(I18N.text(&(label))).style(type_style(16.0, 24.0));
         });
 }
 
@@ -274,14 +266,12 @@ fn guidance_line(#[prop(into)] mark: String, #[prop(into)] note: String, color: 
                         .background_with_shape(color, Shape::rounded_rectangle(Dp(8.0))),
                 )
                 .children(move || {
-                    text()
-                        .content(I18N.text(&(mark)))
+                    text(I18N.text(&(mark)))
                         .style(type_style(14.0, 20.0))
                         .color(Color::WHITE);
                 });
             spacer().modifier(Modifier::new().width(Dp(12.0)));
-            text()
-                .content(I18N.text(&(note)))
+            text(I18N.text(&(note)))
                 .color(scheme.on_surface_variant)
                 .style(type_style(14.0, 20.0));
         });
@@ -405,8 +395,7 @@ fn search_stroke() {
                         .shape_style(ChipShapeStyle::Standard)
                         .on_remove(|| {});
                 });
-            text()
-                .content("→")
+            text("→")
                 .color(scheme.on_surface_variant)
                 .style(type_style(16.0, 24.0));
             boxed()
@@ -836,7 +825,7 @@ fn chip_diagram(variant: ChipVariant, measurements: bool) {
                         .outlined()
                         .on_click(move || removed.set(false))
                         .child(move || {
-                            text().content(I18N.text("ui-restore-input-chip"));
+                            text(I18N.text("ui-restore-input-chip"));
                         });
                 } else {
                     let chip =
@@ -976,9 +965,7 @@ fn assist_example() {
     let saved = remember(|| false);
     panel(RenderSlot::new(move || {
         column().children(move || {
-            text()
-                .content(I18N.text("ui-team-catch-up"))
-                .style(type_style(24.0, 32.0));
+            text(I18N.text("ui-team-catch-up")).style(type_style(24.0, 32.0));
             prose("ui-wednesday-10-00-10-30");
             gap(Dp(16.0));
             flow_row().item_spacing(Dp(8.0)).children(move || {
@@ -1033,9 +1020,7 @@ fn filter_example() {
     let selection = remember(|| [false; 3]);
     panel(RenderSlot::new(move || {
         column().children(move || {
-            text()
-                .content(I18N.text("ui-filter-results"))
-                .style(type_style(20.0, 28.0));
+            text(I18N.text("ui-filter-results")).style(type_style(20.0, 28.0));
             gap(Dp(16.0));
             flow_row()
                 .item_spacing(Dp(8.0))
@@ -1046,7 +1031,7 @@ fn filter_example() {
                     }
                 });
             gap(Dp(16.0));
-            text().content(I18N.format(
+            text(I18N.format(
                 "ui-value-filters-selected",
                 [(
                     "v0",
@@ -1104,9 +1089,7 @@ fn input_example() {
     let selected = remember(|| [false; 3]);
     panel(RenderSlot::new(move || {
         column().children(move || {
-            text()
-                .content(I18N.text("ui-to"))
-                .style(type_style(14.0, 20.0));
+            text(I18N.text("ui-to")).style(type_style(14.0, 20.0));
             gap(Dp(8.0));
             flow_row()
                 .item_spacing(Dp(8.0))
@@ -1125,7 +1108,7 @@ fn input_example() {
                     selected.set([false; 3]);
                 })
                 .child(move || {
-                    text().content(I18N.text("ui-restore-recipients"));
+                    text(I18N.text("ui-restore-recipients"));
                 });
         });
     }));
@@ -1239,7 +1222,7 @@ fn tokens() {
                     ))
                     .on_click(move || selected.set(variant))
                     .child(move || {
-                        text().content(I18N.text(name(variant)));
+                        text(I18N.text(name(variant)));
                     });
             }
         });
@@ -1458,8 +1441,7 @@ fn sample(
         }
         if !toggles {
             gap(Dp(8.0));
-            text()
-                .content(I18N.format("ui-actions-value", [("v0", (actions.get()).into())]))
+            text(I18N.format("ui-actions-value", [("v0", (actions.get()).into())]))
                 .style(type_style(12.0, 16.0));
         }
     });

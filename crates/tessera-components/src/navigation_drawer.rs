@@ -241,8 +241,7 @@ pub fn navigation_drawer_item(
                         icon.render();
                         spacer().modifier(Modifier::new().width(Dp(12.0)));
                     }
-                    text()
-                        .content(label.clone())
+                    text(label.clone())
                         .style(theme.typography.label_large)
                         .color(foreground);
                     spacer().modifier(Modifier::new().weight(1.0));
@@ -298,12 +297,10 @@ mod tests {
                         navigation_drawer_item()
                             .label("Saved")
                             .badge(|| {
-                                text().content("24").modifier(Modifier::new().semantics(
-                                    SemanticsArgs {
-                                        test_tag: Some("saved-badge".into()),
-                                        ..Default::default()
-                                    },
-                                ));
+                                text("24").modifier(Modifier::new().semantics(SemanticsArgs {
+                                    test_tag: Some("saved-badge".into()),
+                                    ..Default::default()
+                                }));
                             })
                             .selected(selected.get() == 1)
                             .modifier(Modifier::new().semantics(SemanticsArgs {

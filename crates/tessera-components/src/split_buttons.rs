@@ -410,7 +410,7 @@ impl SplitTrailingButtonBuilder {
 ///         split_button_layout()
 ///             .leading_button(|| {
 ///                 split_leading_button().on_click(|| {}).content(|| {
-///                     text().content("Send");
+///                     text("Send");
 ///                 });
 ///             })
 ///             .trailing_button(move || {
@@ -483,7 +483,7 @@ pub fn split_button_layout(
 ///             .accessibility_label("Send")
 ///             .on_click(move || activations.set(activations.get() + 1))
 ///             .content(|| {
-///                 text().content("Send");
+///                 text("Send");
 ///             });
 ///     });
 ///     assert_eq!(activations.get(), 0);
@@ -799,7 +799,7 @@ mod tests {
                                 ..Default::default()
                             }))
                             .content(|| {
-                                text().content("Send");
+                                text("Send");
                             });
                     })
                     .trailing_button(|| {
@@ -811,7 +811,7 @@ mod tests {
                                 ..Default::default()
                             }))
                             .content(|| {
-                                text().content("More");
+                                text("More");
                             });
                     });
             });

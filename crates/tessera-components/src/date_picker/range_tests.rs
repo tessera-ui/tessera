@@ -113,7 +113,7 @@ fn nested_fixture(
                         .accessibility_label("Outside calendar")
                         .on_click(|| {})
                         .child(|| {
-                            text().content("Outside calendar");
+                            text("Outside calendar");
                         });
                     spacer().modifier(Modifier::new().height(Dp(300.0)));
                 });
@@ -130,7 +130,7 @@ fn nested_fixture(
                         .accessibility_label("After calendar")
                         .on_click(|| {})
                         .child(|| {
-                            text().content("After calendar");
+                            text("After calendar");
                         });
                     spacer().modifier(Modifier::new().height(Dp(400.0)));
                 });

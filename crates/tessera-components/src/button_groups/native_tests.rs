@@ -155,7 +155,7 @@ fn fixture(probe: TestProbe<FixtureHandles>) {
                                                         icon().painter(filled::HOME_SVG);
                                                     });
                                                 spacer().modifier(Modifier::new().width(Dp(8.0)));
-                                                text().content(format!("G{index} {item}"));
+                                                text(format!("G{index} {item}"));
                                             });
                                     },
                                     move |selected| {

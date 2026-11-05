@@ -177,8 +177,7 @@ fn color_half(side: bool, modal: bool, dark: bool, notice: State<String>) {
                                 .modifier(at(4.0, 12.0).then(watch_color(geometry, dark, "back")))
                                 .on_click(move || notice.set("ui-back-action-selected".into()));
                         }
-                        text()
-                            .content(I18N.text("ui-headline"))
+                        text(I18N.text("ui-headline"))
                             .style(type_style(22.0, 28.0))
                             .color(scheme.on_surface_variant)
                             .modifier(
@@ -446,8 +445,7 @@ fn marker(number: usize, side: bool, dark: bool, x: f64, y: f64) {
                 }),
         )
         .children(move || {
-            text()
-                .content((number).to_string())
+            text((number).to_string())
                 .style(type_style(16.0, 24.0))
                 .color(scheme.inverse_on_surface);
         });

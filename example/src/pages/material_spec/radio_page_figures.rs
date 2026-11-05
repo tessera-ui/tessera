@@ -317,9 +317,7 @@ pub(super) fn checkout(initial: Option<usize>, clear: bool) {
                         .children(move || {
                             icon().painter(filled::ARROW_BACK_SVG).size(Dp(24.0));
                             spacer().modifier(Modifier::new().width(Dp(16.0)));
-                            text()
-                                .content(I18N.text("ui-checkout"))
-                                .style(type_style(22.0, 28.0));
+                            text(I18N.text("ui-checkout")).style(type_style(22.0, 28.0));
                         });
                     column()
                         .modifier(Modifier::new().fill_max_width().padding_all(Dp(16.0)))
@@ -356,7 +354,7 @@ pub(super) fn checkout(initial: Option<usize>, clear: bool) {
                                     .accessibility_label(I18N.text("ui-clear-shipping-selection"))
                                     .on_click(move || selected.set(None))
                                     .child(move || {
-                                        text().content(I18N.text("ui-clear-selection"));
+                                        text(I18N.text("ui-clear-selection"));
                                     });
                             }
                         });
@@ -452,9 +450,7 @@ pub(super) fn language() {
                 .children(move || {
                     icon().painter(filled::LANGUAGE_SVG).size(Dp(24.0));
                     gap(Dp(12.0));
-                    text()
-                        .content(I18N.text("ui-choose-your-language"))
-                        .style(type_style(20.0, 28.0));
+                    text(I18N.text("ui-choose-your-language")).style(type_style(20.0, 28.0));
                     super::prose("ui-you-can-always-change-this-later");
                     gap(Dp(16.0));
                     options(
@@ -478,7 +474,7 @@ pub(super) fn language() {
                                 status.set("ui-selection-restored".into());
                             })
                             .child(move || {
-                                text().content(I18N.text("ui-cancel"));
+                                text(I18N.text("ui-cancel"));
                             });
                         button()
                             .text()
@@ -503,7 +499,7 @@ pub(super) fn language() {
                                 );
                             })
                             .child(move || {
-                                text().content(I18N.text("ui-continue"));
+                                text(I18N.text("ui-continue"));
                             });
                     });
                     gap(Dp(12.0));
@@ -668,9 +664,7 @@ fn card(title: String, content: RenderSlot) {
                 ),
         )
         .children(move || {
-            text()
-                .content(I18N.text(&(title)))
-                .style(type_style(20.0, 28.0));
+            text(I18N.text(&(title))).style(type_style(20.0, 28.0));
             gap(Dp(16.0));
             content.render();
         });
@@ -982,8 +976,7 @@ fn native_label(value: String, x: f64, y: f64, width: f64) {
                 .size(Dp(width), Dp(32.0)),
         )
         .children(move || {
-            text()
-                .content(I18N.text(&(value)))
+            text(I18N.text(&(value)))
                 .style(type_style(16.0, 24.0))
                 .color(scheme.on_surface);
         });

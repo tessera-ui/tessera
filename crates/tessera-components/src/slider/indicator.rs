@@ -367,10 +367,7 @@ fn label_layer(
                                     .map(|height| tessera_ui::Dp(height.0 * f64::from(scale)));
                                 style.letter_spacing =
                                     tessera_ui::Dp(style.letter_spacing.0 * f64::from(scale));
-                                text()
-                                    .content(request.label)
-                                    .color(request.foreground)
-                                    .style(style);
+                                text(request.label).color(request.foreground).style(style);
                             });
                     });
             }

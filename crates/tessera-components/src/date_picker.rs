@@ -619,8 +619,7 @@ fn date_picker_content(args: DatePickerConfig) {
                             .padding(Padding::new(Dp(24.0), Dp(16.0), Dp(12.0), Dp(12.0))),
                     )
                     .children(move || {
-                        text()
-                            .content(title.clone())
+                        text(title.clone())
                             .style(theme.typography.label_large)
                             .color(scheme.on_surface_variant);
                         spacer().modifier(Modifier::new().height(Dp(24.0)));
@@ -630,8 +629,7 @@ fn date_picker_content(args: DatePickerConfig) {
                             .main_axis_alignment(MainAxisAlignment::SpaceBetween)
                             .cross_axis_alignment(CrossAxisAlignment::Center)
                             .children(move || {
-                                text()
-                                    .content(headline.clone())
+                                text(headline.clone())
                                     .style(theme.typography.headline_large)
                                     .color(scheme.on_surface);
                                 if args.show_mode_toggle {
@@ -857,8 +855,7 @@ fn calendar_view(
                             row()
                                 .cross_axis_alignment(CrossAxisAlignment::Center)
                                 .children(move || {
-                                    text()
-                                        .content(format_month_year(snapshot.displayed_month))
+                                    text(format_month_year(snapshot.displayed_month))
                                         .style(theme.typography.label_large)
                                         .color(scheme.on_surface_variant);
                                     spacer().modifier(Modifier::new().width(Dp(8.0)));
@@ -920,8 +917,7 @@ fn calendar_view(
                                     .modifier(Modifier::new().size(DATE_CELL_SIZE, DATE_CELL_SIZE))
                                     .content_alignment(Alignment::Center)
                                     .child(move || {
-                                        text()
-                                            .content(weekday_narrow_label(weekday))
+                                        text(weekday_narrow_label(weekday))
                                             .style(theme.typography.body_large)
                                             .color(scheme.on_surface);
                                     });
@@ -1220,8 +1216,7 @@ fn date_input_view(state: State<DatePickerState>) {
                     value
                 });
             if let Some(error) = &error {
-                text()
-                    .content(error.clone())
+                text(error.clone())
                     .style(theme.typography.body_small)
                     .color(theme.color_scheme.error);
             }
@@ -1769,7 +1764,7 @@ mod tests {
                         .accessibility_label("Confirm external view")
                         .on_click(move || on_action.call(1))
                         .child(|| {
-                            text().content("OK");
+                            text("OK");
                         });
                 })
                 .dismiss_button(move || {
@@ -1778,7 +1773,7 @@ mod tests {
                         .accessibility_label("Cancel external view")
                         .on_click(move || on_action.call(2))
                         .child(|| {
-                            text().content("Cancel");
+                            text("Cancel");
                         });
                 });
         });
@@ -1968,7 +1963,7 @@ mod tests {
                     .accessibility_label("After single calendar")
                     .on_click(|| {})
                     .child(|| {
-                        text().content("After single calendar");
+                        text("After single calendar");
                     });
             });
         });

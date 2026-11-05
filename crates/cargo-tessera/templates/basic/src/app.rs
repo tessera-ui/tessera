@@ -14,7 +14,7 @@ pub fn app() {
             surface()
                 .modifier(Modifier::new().fill_max_size())
                 .child(|| {
-                    text().content("Hello Tessera!");
+                    text("Hello Tessera!");
                 });
         });
 }

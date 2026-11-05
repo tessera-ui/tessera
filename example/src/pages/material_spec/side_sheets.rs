@@ -279,8 +279,7 @@ fn sheet_article(
 
 #[tessera]
 fn prose(#[prop(into)] value: String) {
-    text()
-        .content(I18N.text(value))
+    text(I18N.text(value))
         .style(type_style(16.0, 24.0))
         .color(INK);
 }
@@ -288,8 +287,7 @@ fn prose(#[prop(into)] value: String) {
 #[tessera]
 fn caption(#[prop(into)] value: String) {
     let scheme = use_context::<MaterialTheme>().unwrap().get().color_scheme;
-    text()
-        .content(I18N.text(value))
+    text(I18N.text(value))
         .color(scheme.on_surface_variant)
         .style(type_style(14.0, 20.0));
 }
@@ -298,8 +296,7 @@ fn caption(#[prop(into)] value: String) {
 fn bullets(items: Vec<String>) {
     column().children(move || {
         for item in items.clone() {
-            text()
-                .content(format!("•  {}", I18N.text(item)))
+            text(format!("•  {}", I18N.text(item)))
                 .style(type_style(16.0, 24.0))
                 .color(INK);
             gap(Dp(8.0));
@@ -329,7 +326,7 @@ fn launch(open: State<bool>, session: Option<LiveSideSheetSession>) {
                     }
                 })
                 .child(move || {
-                    text().content(I18N.text("ui-open-modal-side-sheet"));
+                    text(I18N.text("ui-open-modal-side-sheet"));
                 });
             gap(Dp(16.0));
             caption(
@@ -653,8 +650,7 @@ fn tokens() {
                                 .padding_symmetric(Dp(16.0), Dp(8.0)),
                         )
                         .children(move || {
-                            text()
-                                .content(I18N.text("ui-sheets-side"))
+                            text(I18N.text("ui-sheets-side"))
                                 .style(type_style(14.0, 20.0))
                                 .color(scheme.on_secondary_container);
                         });
@@ -674,7 +670,7 @@ fn tokens() {
                             });
                         })
                         .child(move || {
-                            text().content(I18N.text(if all_open {
+                            text(I18N.text(if all_open {
                                 "ui-collapse-all"
                             } else {
                                 "ui-expand-all"
@@ -690,13 +686,11 @@ fn tokens() {
                         .padding_symmetric(Dp(24.0), Dp(12.0)),
                 )
                 .children(move || {
-                    text()
-                        .content(I18N.text("ui-token"))
+                    text(I18N.text("ui-token"))
                         .style(type_style(14.0, 20.0))
                         .color(INK)
                         .modifier(Modifier::new().weight(1.0));
-                    text()
-                        .content(I18N.text("ui-default-light"))
+                    text(I18N.text("ui-default-light"))
                         .style(type_style(14.0, 20.0))
                         .color(scheme.on_surface_variant);
                 });
@@ -719,8 +713,7 @@ fn tokens() {
                                     .size(Dp(20.0))
                                     .tint(scheme.on_surface_variant);
                                 spacer().modifier(Modifier::new().width(Dp(12.0)));
-                                text()
-                                    .content(I18N.text(group))
+                                text(I18N.text(group))
                                     .style(type_style(16.0, 24.0))
                                     .color(INK)
                                     .modifier(Modifier::new().weight(1.0));
@@ -748,22 +741,21 @@ fn token_group(#[prop(into)] group: String) {
     for token in TOKENS.iter().filter(|token| token.group == group) {
         if token.section != section {
             section = token.section;
-            text()
-                .content(I18N.format(
-                    "ui-value-value-format-31",
-                    [
-                        ("v0", I18N.text(&group).into()),
-                        ("v1", I18N.text(&section).into()),
-                    ],
-                ))
-                .style(type_style(14.0, 20.0))
-                .color(scheme.on_surface_variant)
-                .modifier(
-                    Modifier::new()
-                        .fill_max_width()
-                        .background(scheme.surface_container)
-                        .padding_symmetric(Dp(32.0), Dp(10.0)),
-                );
+            text(I18N.format(
+                "ui-value-value-format-31",
+                [
+                    ("v0", I18N.text(&group).into()),
+                    ("v1", I18N.text(&section).into()),
+                ],
+            ))
+            .style(type_style(14.0, 20.0))
+            .color(scheme.on_surface_variant)
+            .modifier(
+                Modifier::new()
+                    .fill_max_width()
+                    .background(scheme.surface_container)
+                    .padding_symmetric(Dp(32.0), Dp(10.0)),
+            );
         }
         let (name, value) = (token.name, token.value);
         row()
@@ -774,8 +766,7 @@ fn token_group(#[prop(into)] group: String) {
                     .padding_symmetric(Dp(24.0), Dp(12.0)),
             )
             .children(move || {
-                text()
-                    .content(I18N.text(name))
+                text(I18N.text(name))
                     .style(type_style(14.0, 20.0))
                     .color(INK)
                     .modifier(Modifier::new().weight(1.0));
@@ -798,18 +789,15 @@ fn token_group(#[prop(into)] group: String) {
                             .padding_symmetric(Dp(12.0), Dp(8.0)),
                     )
                     .children(move || {
-                        text()
-                            .content(I18N.text(value))
-                            .style(type_style(14.0, 20.0))
-                            .color(
-                                if swatch.is_some_and(|color| {
-                                    0.2126 * color.r + 0.7152 * color.g + 0.0722 * color.b < 0.25
-                                }) {
-                                    Color::WHITE
-                                } else {
-                                    INK
-                                },
-                            );
+                        text(I18N.text(value)).style(type_style(14.0, 20.0)).color(
+                            if swatch.is_some_and(|color| {
+                                0.2126 * color.r + 0.7152 * color.g + 0.0722 * color.b < 0.25
+                            }) {
+                                Color::WHITE
+                            } else {
+                                INK
+                            },
+                        );
                     });
             });
     }
@@ -1092,8 +1080,7 @@ fn standard_body(open: State<bool>) {
             column()
                 .modifier(Modifier::new().fill_max_width().padding_all(Dp(16.0)))
                 .children(move || {
-                    text()
-                        .content(I18N.text("ui-primary-content"))
+                    text(I18N.text("ui-primary-content"))
                         .style(type_style(18.0, 24.0))
                         .color(INK);
                     gap(Dp(12.0));
@@ -1102,7 +1089,7 @@ fn standard_body(open: State<bool>) {
                         .accessibility_label(I18N.text("ui-open-standard-side-sheet"))
                         .on_click(move || open.set(true))
                         .child(move || {
-                            text().content(I18N.text("ui-open-standard-side-sheet"));
+                            text(I18N.text("ui-open-standard-side-sheet"));
                         });
                 });
         });
@@ -1168,8 +1155,7 @@ fn sheet_header(
                     } else {
                         Color::TRANSPARENT
                     };
-                    text()
-                        .content(I18N.text(&(title)))
+                    text(I18N.text(&(title)))
                         .style(type_style(22.0, 28.0))
                         .color(scheme.on_surface_variant)
                         .modifier(heading.clone().border_with_shape(
@@ -1200,19 +1186,16 @@ fn standard_content(open: State<bool>) {
                         .padding_symmetric(Dp(24.0), Dp::ZERO),
                 )
                 .children(move || {
-                    text()
-                        .content(I18N.text("ui-festival-concert"))
+                    text(I18N.text("ui-festival-concert"))
                         .style(type_style(16.0, 24.0))
                         .color(INK);
                     gap(Dp(8.0));
                     caption("ui-albums");
                     gap(Dp(8.0));
-                    text()
-                        .content(I18N.text("ui-home-space"))
+                    text(I18N.text("ui-home-space"))
                         .style(type_style(14.0, 20.0))
                         .color(INK);
-                    text()
-                        .content(I18N.text("ui-64-items"))
+                    text(I18N.text("ui-64-items"))
                         .style(type_style(12.0, 16.0))
                         .color(scheme.on_surface_variant);
                 });
@@ -1381,8 +1364,7 @@ fn sheet_content(modal_open: State<bool>, filters: State<[bool; 5]>, notice: Sta
                         .padding_symmetric(Dp(24.0), Dp::ZERO),
                 )
                 .children(move || {
-                    text()
-                        .content(I18N.text("ui-labels"))
+                    text(I18N.text("ui-labels"))
                         .style(type_style(14.0, 20.0))
                         .color(scheme.on_surface_variant);
                     gap(Dp(8.0));
@@ -1398,9 +1380,7 @@ fn sheet_content(modal_open: State<bool>, filters: State<[bool; 5]>, notice: Sta
                                     })
                                     .accessibility_label(I18N.text(label));
                                 spacer().modifier(Modifier::new().width(Dp(16.0)));
-                                text()
-                                    .content(I18N.text(label))
-                                    .style(type_style(16.0, 24.0));
+                                text(I18N.text(label)).style(type_style(16.0, 24.0));
                             });
                     }
                 });
@@ -1428,7 +1408,7 @@ fn sheet_content(modal_open: State<bool>, filters: State<[bool; 5]>, notice: Sta
                             modal_open.set(false);
                         })
                         .child(move || {
-                            text().content(I18N.text("ui-save"));
+                            text(I18N.text("ui-save"));
                         });
                     spacer().modifier(Modifier::new().width(Dp(8.0)));
                     button()
@@ -1437,7 +1417,7 @@ fn sheet_content(modal_open: State<bool>, filters: State<[bool; 5]>, notice: Sta
                         .accessibility_label(I18N.text("ui-cancel-filters"))
                         .on_click(move || modal_open.set(false))
                         .child(move || {
-                            text().content(I18N.text("ui-cancel"));
+                            text(I18N.text("ui-cancel"));
                         });
                 });
         });

@@ -91,7 +91,7 @@ fn rail_fixture(options_probe: tessera_ui::testing::TestProbe<Option<State<Optio
                                             badge_with_content()
                                                 .modifier(tagged("rail-badge"))
                                                 .content(|| {
-                                                    text().content("3");
+                                                    text("3");
                                                 });
                                         });
                                 });

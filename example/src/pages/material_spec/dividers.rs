@@ -96,8 +96,7 @@ fn open_external(_url: &str) {}
 #[tessera]
 fn external_link(#[prop(into)] label: String, #[prop(into)] url: String) {
     let scheme = use_context::<MaterialTheme>().unwrap().get().color_scheme;
-    text()
-        .content(I18N.text(&(label)))
+    text(I18N.text(&(label)))
         .style(type_style(16.0, 24.0))
         .color(scheme.primary)
         .modifier(Modifier::new().clickable_with(ClickableArgs {
@@ -238,16 +237,13 @@ pub(super) fn divider_spec(route: Option<crate::pages::material_spec::article::A
 
 #[tessera]
 fn prose(#[prop(into)] value: String) {
-    text()
-        .content(I18N.text(value))
-        .style(type_style(16.0, 24.0));
+    text(I18N.text(value)).style(type_style(16.0, 24.0));
 }
 
 #[tessera]
 fn caption(#[prop(into)] value: String) {
     let scheme = use_context::<MaterialTheme>().unwrap().get().color_scheme;
-    text()
-        .content(I18N.text(value))
+    text(I18N.text(value))
         .color(scheme.on_surface_variant)
         .style(type_style(16.0, 24.0));
 }
@@ -256,12 +252,10 @@ fn caption(#[prop(into)] value: String) {
 fn bullets(items: Vec<String>) {
     for item in items {
         row().children(move || {
-            text()
-                .content("•")
+            text("•")
                 .style(type_style(16.0, 24.0))
                 .modifier(Modifier::new().width(Dp(20.0)));
-            text()
-                .content(I18N.text(&(item)))
+            text(I18N.text(&(item)))
                 .style(type_style(16.0, 24.0))
                 .modifier(Modifier::new().weight(1.0));
         });
@@ -279,8 +273,7 @@ fn badge(number: usize) {
                 .background_with_shape(srgb(43, 41, 48), Shape::Ellipse),
         )
         .children(move || {
-            text()
-                .content((number).to_string())
+            text((number).to_string())
                 .style(type_style(12.0, 16.0))
                 .color(srgb(255, 255, 255));
         });
@@ -294,8 +287,7 @@ fn numbered(items: Vec<String>) {
             .children(move || {
                 badge(index + 1);
                 spacer().modifier(Modifier::new().width(Dp(12.0)));
-                text()
-                    .content(I18N.text(&(item)))
+                text(I18N.text(&(item)))
                     .style(type_style(16.0, 24.0))
                     .modifier(Modifier::new().weight(1.0));
             });
@@ -312,8 +304,7 @@ fn legend(number: usize, #[prop(into)] label: String) {
         .children(move || {
             badge(number);
             spacer().modifier(Modifier::new().width(Dp(12.0)));
-            text()
-                .content(I18N.text(&(label)))
+            text(I18N.text(&(label)))
                 .style(type_style(14.0, 20.0))
                 .color(scheme.on_surface_variant);
         });
@@ -527,15 +518,9 @@ fn header(#[prop(into)] title: String, search: Option<bool>) {
                 .background(scheme.surface_container),
         )
         .children(move || {
-            text()
-                .content("9:30")
-                .style(type_style(11.0, 16.0))
-                .modifier(Modifier::new().padding(Padding::new(
-                    Dp(20.0),
-                    Dp(10.0),
-                    Dp(20.0),
-                    Dp(6.0),
-                )));
+            text("9:30").style(type_style(11.0, 16.0)).modifier(
+                Modifier::new().padding(Padding::new(Dp(20.0), Dp(10.0), Dp(20.0), Dp(6.0))),
+            );
             let title = title.clone();
             row()
                 .cross_axis_alignment(CrossAxisAlignment::Center)
@@ -548,8 +533,7 @@ fn header(#[prop(into)] title: String, search: Option<bool>) {
                 .children(move || {
                     icon().painter(filled::MENU_SVG).size(Dp(18.0));
                     spacer().modifier(Modifier::new().width(Dp(14.0)));
-                    text()
-                        .content(I18N.text(&(title)))
+                    text(I18N.text(&(title)))
                         .style(type_style(16.0, 24.0))
                         .modifier(Modifier::new().weight(1.0));
                     if search.unwrap_or(true) {
@@ -658,17 +642,13 @@ fn row_item(kind: u8, index: usize) {
             column()
                 .modifier(Modifier::new().weight(1.0))
                 .children(move || {
-                    text()
-                        .content(I18N.text(title))
-                        .style(type_style(14.0, 20.0));
-                    text()
-                        .content(I18N.text(body))
+                    text(I18N.text(title)).style(type_style(14.0, 20.0));
+                    text(I18N.text(body))
                         .style(type_style(12.0, 16.0))
                         .color(scheme.on_surface_variant);
                 });
             if !trailing.is_empty() {
-                text()
-                    .content(I18N.text(trailing))
+                text(I18N.text(trailing))
                     .style(type_style(11.0, 16.0))
                     .color(scheme.on_surface_variant);
             }
@@ -724,8 +704,7 @@ fn list_screen(kind: u8, rules: u8, count: Option<usize>) {
 
 #[tessera]
 fn section_title(#[prop(into)] label: String) {
-    text()
-        .content(I18N.text(label))
+    text(I18N.text(label))
         .style(type_style(18.0, 24.0))
         .modifier(Modifier::new().padding(Padding::new(Dp(16.0), Dp(14.0), Dp(16.0), Dp(6.0))));
 }
@@ -754,8 +733,7 @@ fn advice(tone: u8) {
         .children(move || {
             icon().painter(asset).size(Dp(18.0)).tint(ink);
             spacer().modifier(Modifier::new().width(Dp(8.0)));
-            text()
-                .content(I18N.text(label))
+            text(I18N.text(label))
                 .style(type_style(14.0, 20.0))
                 .color(ink);
         });
@@ -781,8 +759,7 @@ fn guidance(
                 advice(tone);
             }
             gap(Dp(16.0));
-            text()
-                .content(I18N.text(&(note)))
+            text(I18N.text(&(note)))
                 .style(type_style(16.0, 24.0))
                 .color(
                     use_context::<MaterialTheme>()
@@ -824,8 +801,7 @@ fn pin(tone: u8, number: usize, #[prop(into)] label: String, background: Color) 
                 .alignment(Alignment::Center)
                 .modifier(pill)
                 .children(move || {
-                    text()
-                        .content((number).to_string())
+                    text((number).to_string())
                         .style(type_style(11.0, 16.0))
                         .color(ink);
                 });
@@ -1008,8 +984,7 @@ fn measure_figure() {
                                     },
                                 ))
                                 .children(move || {
-                                    text()
-                                        .content("1")
+                                    text("1")
                                         .style(type_style(12.0, 16.0))
                                         .color(INK);
                                     spacer().modifier(Modifier::new().width(Dp(5.0)));
@@ -1062,8 +1037,7 @@ fn measure_figure() {
 fn measurements() {
     measure_figure();
     gap(Dp(12.0));
-    text()
-        .content(I18N.text("ui-measurements"))
+    text(I18N.text("ui-measurements"))
         .style(type_style(14.0, 20.0))
         .color(
             use_context::<MaterialTheme>()
@@ -1285,11 +1259,8 @@ fn order_row(index: usize) {
                 spacer().modifier(Modifier::new().width(Dp(12.0)));
             }
             column().children(move || {
-                text()
-                    .content(I18N.text(title))
-                    .style(type_style(13.0, 18.0));
-                text()
-                    .content(I18N.text(body))
+                text(I18N.text(title)).style(type_style(13.0, 18.0));
+                text(I18N.text(body))
                     .style(type_style(11.0, 16.0))
                     .color(scheme.on_surface_variant);
             });
@@ -1316,19 +1287,16 @@ fn article_card() {
                     column()
                         .modifier(Modifier::new().weight(1.0))
                         .children(move || {
-                            text()
-                                .content(I18N.text("ui-the-fortnightly-2589"))
+                            text(I18N.text("ui-the-fortnightly-2589"))
                                 .style(type_style(18.0, 24.0));
                             gap(Dp(4.0));
-                            text()
-                                .content(I18N.text("ui-how-to-farm-with-less-water-lessons-from"))
+                            text(I18N.text("ui-how-to-farm-with-less-water-lessons-from"))
                                 .style(type_style(11.0, 16.0))
                                 .color(scheme.on_surface_variant);
                         });
                 });
             horizontal_divider();
-            text()
-                .content(I18N.text("ui-read-more"))
+            text(I18N.text("ui-read-more"))
                 .style(type_style(11.0, 16.0))
                 .color(scheme.primary)
                 .modifier(Modifier::new().padding_symmetric(Dp(12.0), Dp(12.0)));
@@ -1361,8 +1329,7 @@ fn order_list() {
                         .background(scheme.surface),
                 )
                 .children(move || {
-                    text()
-                        .content(I18N.text("ui-your-order"))
+                    text(I18N.text("ui-your-order"))
                         .style(type_style(18.0, 24.0))
                         .modifier(Modifier::new().padding(Padding::new(
                             Dp(16.0),
@@ -1457,8 +1424,7 @@ fn chip(#[prop(into)] label: String, selected: bool) {
                     .tint(scheme.on_secondary_container);
                 spacer().modifier(Modifier::new().width(Dp(6.0)));
             }
-            text()
-                .content(I18N.text(&(label)))
+            text(I18N.text(&(label)))
                 .style(type_style(11.0, 16.0))
                 .color(if selected {
                     scheme.on_secondary_container
@@ -1486,10 +1452,7 @@ fn chips(labels: Vec<String>, selected: usize) {
 #[tessera]
 fn plant_copy() {
     let scheme = use_context::<MaterialTheme>().unwrap().get().color_scheme;
-    text()
-        .content(
-            I18N.text("ui-hand-selected-from-a-variety-of-rare-and-exotic-desert-plants-presented-in-a-locally-craft"),
-        )
+    text(I18N.text("ui-hand-selected-from-a-variety-of-rare-and-exotic-desert-plants-presented-in-a-locally-craft"))
         .style(type_style(11.0, 17.0))
         .color(scheme.on_surface)
         .modifier(Modifier::new().padding(Padding::new(
@@ -1524,8 +1487,7 @@ fn product_detail() {
                 .children(move || {
                     plant_copy();
                     rule(INSET_MARGIN, INSET_MARGIN);
-                    text()
-                        .content(I18N.text("ui-select-size"))
+                    text(I18N.text("ui-select-size"))
                         .style(type_style(12.0, 16.0))
                         .modifier(Modifier::new().padding(Padding::new(
                             Dp(16.0),
@@ -1548,8 +1510,7 @@ fn product_detail() {
                                 .border_with_shape(Dp(1.0), scheme.outline, Shape::CAPSULE),
                         )
                         .children(move || {
-                            text()
-                                .content(I18N.text("ui-add-to-cart"))
+                            text(I18N.text("ui-add-to-cart"))
                                 .style(type_style(11.0, 16.0))
                                 .color(scheme.primary);
                         });
@@ -1612,8 +1573,7 @@ fn inset_guidelines() {
                     media(76.0, srgb(214, 196, 176));
                     plant_copy();
                     rule(INSET_MARGIN, INSET_MARGIN);
-                    text()
-                        .content(I18N.text("ui-select-type"))
+                    text(I18N.text("ui-select-type"))
                         .style(type_style(12.0, 16.0))
                         .modifier(Modifier::new().padding(Padding::new(
                             Dp(16.0),
@@ -1729,8 +1689,7 @@ fn pointer(geometry: State<SpaceGeometry>, #[prop(into)] target: String, number:
                             .padding_symmetric(Dp(12.0), Dp::ZERO),
                     )
                     .children(move || {
-                        text()
-                            .content(I18N.text("ui-decorative"))
+                        text(I18N.text("ui-decorative"))
                             .style(type_style(13.0, 18.0))
                             .color(srgb(255, 255, 255));
                     });
@@ -1833,22 +1792,17 @@ fn vertical_guidelines() {
                                                 .background_with_shape(swatch(5), Shape::Ellipse),
                                         );
                                         spacer().modifier(Modifier::new().width(Dp(10.0)));
-                                        text()
-                                            .content(I18N.text("ui-by-selen-zeynep"))
+                                        text(I18N.text("ui-by-selen-zeynep"))
                                             .style(type_style(11.0, 16.0));
                                     });
                                 gap(Dp(16.0));
-                                text()
-                                    .content(I18N.text("ui-what-buttons-are-artists-pushing-when-they-perform-live"))
+                                text(I18N.text("ui-what-buttons-are-artists-pushing-when-they-perform-live"))
                                     .style(TextStyle {
                                         font_weight: 500,
                                         ..type_style(12.0, 18.0)
                                     });
                                 gap(Dp(10.0));
-                                text()
-                                    .content(
-                                        I18N.text("ui-the-general-consensus-is-that-artists-using-digital-turntables-are-just-pushing-random-but"),
-                                    )
+                                text(I18N.text("ui-the-general-consensus-is-that-artists-using-digital-turntables-are-just-pushing-random-but"))
                                     .style(type_style(11.0, 16.0))
                                     .color(scheme.on_surface_variant);
                             });

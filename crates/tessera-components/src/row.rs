@@ -141,9 +141,9 @@ impl tessera_ui::LayoutModifierNode for RowLayout {
 /// # #[tessera]
 /// # fn component() {
 /// row().children(|| {
-///     text().content("First");
+///     text("First");
 ///     spacer().modifier(Modifier::new().weight(1.0));
-///     text().content("Last");
+///     text("Last");
 /// });
 /// # }
 /// # tessera_ui::testing::layout_test(component).run();

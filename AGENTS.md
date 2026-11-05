@@ -49,7 +49,7 @@ programming contract; the guidelines below also govern framework implementation.
 - The runtime finalizes props when execution starts and completes dynamically registered descendants before layout. Saving, moving, dropping, or forgetting a handle has no execution or cancellation effect. Modifying a committed or stale handle panics.
 - Generated `*Builder` types are configuration handles; they do not execute component bodies from `Drop`. Scope restoration and resource cleanup guards may still use `Drop`.
 - Keep child content in `RenderSlot` / `RenderSlotWith`. Controlled slot expansion can commit earlier Pending calls in the current fragment, so handle validity is per call rather than per frame. See [component calls](docs/COMPONENT_CALLS.md).
-- Public component calls use named configuration: `component().foo(value).bar(value);`.
+- Pass required values at entry, such as `text("Title")`; configure optional props with named setters.
 - Do not introduce public wrapper variants (`*_with_controller`, `*_impl`, or extra public forwarding layers).
 - Component parameters must use owned types that satisfy the macro requirements (`Clone`, `Default`, `Send`, `Sync`, and `'static` through the generated props model).
 - `#[tessera]` parameter-level `#[default(...)]` is not supported. Do not introduce it in new or migrated code.

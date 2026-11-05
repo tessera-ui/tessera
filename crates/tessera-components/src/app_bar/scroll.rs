@@ -297,7 +297,7 @@ impl AppBarScrollState {
 ///                     column()
 ///                         .modifier(Modifier::new().vertical_scroll(scroll))
 ///                         .children(|| {
-///                             text().content("Messages");
+///                             text("Messages");
 ///                         });
 ///                 });
 ///         });

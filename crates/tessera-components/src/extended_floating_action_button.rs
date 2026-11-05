@@ -332,14 +332,10 @@ pub fn extended_floating_action_button(
                             .painter(painter)
                             .size(snapshot.size.icon_size());
                     }
-                    text()
-                        .content(snapshot.label)
-                        .style(snapshot.style)
-                        .modifier(
-                            Modifier::new().alpha(
-                                motion.with(|motion| motion.opacity.value().clamp(0.0, 1.0)),
-                            ),
-                        );
+                    text(snapshot.label).style(snapshot.style).modifier(
+                        Modifier::new()
+                            .alpha(motion.with(|motion| motion.opacity.value().clamp(0.0, 1.0))),
+                    );
                 });
         });
 }

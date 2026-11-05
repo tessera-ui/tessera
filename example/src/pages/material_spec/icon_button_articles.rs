@@ -234,9 +234,7 @@ pub(in crate::pages::material_spec) fn contrast() {
 
 #[tessera]
 fn paragraph(value: String) {
-    text()
-        .content(I18N.text(value))
-        .style(type_style(16.0, 24.0));
+    text(I18N.text(value)).style(type_style(16.0, 24.0));
 }
 
 #[tessera]
@@ -329,14 +327,13 @@ fn contrast_example(good: bool) {
                 ),
         )
         .children(move || {
-            text()
-                .content(I18N.text(if good {
-                    "ui-above-3-1-do"
-                } else {
-                    "ui-below-3-1-don-t"
-                }))
-                .style(type_style(16.0, 24.0))
-                .color(Color::BLACK);
+            text(I18N.text(if good {
+                "ui-above-3-1-do"
+            } else {
+                "ui-below-3-1-don-t"
+            }))
+            .style(type_style(16.0, 24.0))
+            .color(Color::BLACK);
             gap(Dp(24.0));
             icon_button()
                 .variant(IconButtonVariant::Standard)

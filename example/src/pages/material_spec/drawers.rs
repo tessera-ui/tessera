@@ -441,8 +441,7 @@ pub(super) fn drawers_spec(
 
 #[tessera]
 fn prose(#[prop(into)] value: String) {
-    text()
-        .content(I18N.text(value))
+    text(I18N.text(value))
         .style(type_style(16.0, 24.0))
         .color(INK);
 }
@@ -483,8 +482,7 @@ fn availability() {
 
 #[tessera]
 fn expressive_update() {
-    text()
-        .content(I18N.text("ui-may-2025"))
+    text(I18N.text("ui-may-2025"))
         .style(guides::medium_style(16.0, 24.0))
         .color(INK);
     gap(Dp(16.0));
@@ -510,12 +508,10 @@ fn differences() {
 fn bullets(items: Vec<String>) {
     for item in items {
         row().children(move || {
-            text()
-                .content("•")
+            text("•")
                 .style(type_style(16.0, 24.0))
                 .modifier(Modifier::new().width(Dp(24.0)));
-            text()
-                .content(I18N.text(&(item)))
+            text(I18N.text(&(item)))
                 .style(type_style(16.0, 24.0))
                 .modifier(Modifier::new().weight(1.0));
         });
@@ -529,9 +525,9 @@ fn mail_messages(selected: State<usize>, width: f64) {
     column().modifier(Modifier::new().width(Dp(width)).padding_all(Dp(16.0))).children(move || {
         surface().shape(Shape::CAPSULE).style(scheme.surface_container_high.into())
             .modifier(Modifier::new().fill_max_width().height(Dp(48.0)))
-            .child(move || { text().content(I18N.text("ui-search-replies")).style(type_style(14.0,20.0)); });
+            .child(move || { text(I18N.text("ui-search-replies")).style(type_style(14.0,20.0)); });
         gap(Dp(16.0));
-        text().content(I18N.text(DESTINATIONS[selected.get().min(4)])).style(type_style(22.0,28.0));
+        text(I18N.text(DESTINATIONS[selected.get().min(4)])).style(type_style(22.0,28.0));
         for (sender, subject, body) in [
             ("ui-ellie-pietersen", "ui-adoption-volunteering", "ui-i-just-learned-about-this-volunteering-opportunity-the-organization-is-looking-for-help-wi"),
             ("ui-in-yeong-hui", "ui-museum-field-trip", "ui-about-26-students-have-signed-up-we-are-looking-for-parent-volunteers-to-share-the-day"),
@@ -542,11 +538,11 @@ fn mail_messages(selected: State<usize>, width: f64) {
                 .modifier(Modifier::new().fill_max_width())
                 .child(move || {
                     column().modifier(Modifier::new().padding_all(Dp(16.0))).children(move || {
-                        text().content(I18N.text(sender)).style(type_style(12.0,16.0));
+                        text(I18N.text(sender)).style(type_style(12.0,16.0));
                         gap(Dp(8.0));
-                        text().content(I18N.text(subject)).style(type_style(18.0,24.0));
+                        text(I18N.text(subject)).style(type_style(18.0,24.0));
                         gap(Dp(8.0));
-                        text().content(I18N.text(body)).style(type_style(14.0,20.0));
+                        text(I18N.text(body)).style(type_style(14.0,20.0));
                     });
                 });
         }
@@ -604,8 +600,7 @@ fn responsive_figure(kind: u8) {
                     });
                 });
             drawer_scene(false, selected, 512.0, 64.0, 464.0, 440.0);
-            text()
-                .content(I18N.text("ui-navigation-rail-to-navigation-drawer"))
+            text(I18N.text("ui-navigation-rail-to-navigation-drawer"))
                 .style(type_style(16.0, 24.0))
                 .modifier(Modifier::new().offset(Dp(48.0), Dp(16.0)));
         } else if kind == 1 {
@@ -662,7 +657,7 @@ fn visibility_panel(number: usize, initial: bool) {
                 ))
                 .on_click(move || visible.set(!visible.get()))
                 .child(move || {
-                    text().content(I18N.text(if visible.get() {
+                    text(I18N.text(if visible.get() {
                         "ui-hide-navigation"
                     } else {
                         "ui-show-navigation"
@@ -678,14 +673,13 @@ fn visibility_panel(number: usize, initial: bool) {
                 geometry,
             )
             .child(move || {
-                text()
-                    .content(I18N.text(if visible.get() {
-                        "ui-drawer-visible-content-shares-the-window"
-                    } else {
-                        "ui-drawer-hidden-content-uses-the-full-window"
-                    }))
-                    .style(type_style(16.0, 24.0))
-                    .modifier(Modifier::new().offset(Dp(48.0), Dp(20.0)));
+                text(I18N.text(if visible.get() {
+                    "ui-drawer-visible-content-shares-the-window"
+                } else {
+                    "ui-drawer-hidden-content-uses-the-full-window"
+                }))
+                .style(type_style(16.0, 24.0))
+                .modifier(Modifier::new().offset(Dp(48.0), Dp(20.0)));
                 row()
                     .modifier(
                         Modifier::new()
@@ -789,8 +783,7 @@ fn recommendation(window_size_classes: Option<bool>, on_recommended: Option<Call
             column()
                 .modifier(Modifier::new().weight(1.0))
                 .children(move || {
-                    text()
-                        .content(I18N.format("ui-note-the-navigation-drawer-is-no-longer-recommended-in-the-material-3-expressive-update-fo", [("v0", I18N.text(&ending).into())]))
+                    text(I18N.format("ui-note-the-navigation-drawer-is-no-longer-recommended-in-the-material-3-expressive-update-fo", [("v0", I18N.text(&ending).into())]))
                         .style(type_style(14.0, 24.0))
                         .color(ink);
                     if let Some(on_recommended) = on_recommended {
@@ -800,7 +793,7 @@ fn recommendation(window_size_classes: Option<bool>, on_recommended: Option<Call
                             .accessibility_label(I18N.text("ui-open-recommended-navigation-rail"))
                             .on_click_shared(on_recommended)
                             .child(move || {
-                                text().content(I18N.text("ui-expanded-navigation-rail")).color(ink);
+                                text(I18N.text("ui-expanded-navigation-rail")).color(ink);
                             });
                     }
                 });
@@ -820,7 +813,7 @@ fn launch(open: State<bool>, selected: State<usize>, session: Option<LiveDrawerS
                 }
             })
             .child(move || {
-                text().content(I18N.text("ui-open-navigation-drawer"));
+                text(I18N.text("ui-open-navigation-drawer"));
             });
         gap(Dp(16.0));
         prose(I18N.format(
@@ -907,8 +900,7 @@ fn drawer_destinations(
             let modifier = geometry
                 .map(|geometry| watch(geometry, "headline"))
                 .unwrap_or_default();
-            text()
-                .content(I18N.text("ui-mail"))
+            text(I18N.text("ui-mail"))
                 .style(theme.typography.title_small)
                 .modifier(modifier);
         });
@@ -928,7 +920,7 @@ fn drawer_destinations(
         let badge_style = theme.typography.label_large;
         let badge_slot = if index == 0 {
             Some(RenderSlot::new(move || {
-                text().content("24").style(badge_style).modifier(
+                text("24").style(badge_style).modifier(
                     geometry
                         .map(|geometry| watch(geometry, "badge"))
                         .unwrap_or_default(),
@@ -1003,16 +995,15 @@ fn drawer_destinations(
                 .padding_symmetric(Dp(16.0), Dp::ZERO),
         )
         .children(move || {
-            text()
-                .content(I18N.text(if open.is_some() {
-                    "ui-personal-folders"
-                } else if folders {
-                    "ui-personal-folders-2672"
-                } else {
-                    "ui-labels"
-                }))
-                .style(theme.typography.title_small)
-                .modifier(observe(geometry, "subhead"));
+            text(I18N.text(if open.is_some() {
+                "ui-personal-folders"
+            } else if folders {
+                "ui-personal-folders-2672"
+            } else {
+                "ui-labels"
+            }))
+            .style(theme.typography.title_small)
+            .modifier(observe(geometry, "subhead"));
         });
     navigation_drawer_item()
         .modifier(observe(geometry, "label_row").semantics(SemanticsArgs {
@@ -1259,8 +1250,7 @@ fn drawer_label_probes(geometry: State<Geometry>) {
                     .required_size(Dp((end - x).max(0.0)), Dp(row.h)),
             )
             .children(move || {
-                text()
-                    .content(I18N.text(label))
+                text(I18N.text(label))
                     .style(style)
                     .color(tessera_ui::Color::TRANSPARENT)
                     .accessibility_label(I18N.format(
@@ -1292,8 +1282,7 @@ fn drawer_marker(number: usize, x: f64, y: f64) {
                 }),
         )
         .children(move || {
-            text()
-                .content((number).to_string())
+            text((number).to_string())
                 .style(type_style(14.0, 20.0))
                 .color(tessera_ui::Color::WHITE);
         });
@@ -1622,9 +1611,7 @@ fn legend_entries(entries: Vec<(usize, String)>) {
                         drawer_marker(number, 0.0, 0.0);
                     });
                 spacer().modifier(Modifier::new().width(Dp(16.0)));
-                text()
-                    .content(I18N.text(&(label)))
-                    .style(type_style(16.0, 24.0));
+                text(I18N.text(&(label))).style(type_style(16.0, 24.0));
             });
         gap(Dp(12.0));
     }
@@ -1691,7 +1678,7 @@ fn differences_figure() {
                                                     .children(move || {
                                                         icon().painter(match index { 0=>filled::MAIL_SVG,1=>filled::SEND_SVG,2=>filled::FAVORITE_SVG,_=>filled::ARCHIVE_SVG }).size(Dp(24.0)).tint(if index == 0 { srgb(98, 0, 238) } else { srgb(97, 97, 97) });
                                                         spacer().modifier(Modifier::new().width(Dp(24.0)));
-                                                        text().content(I18N.text(label)).style(theme.typography.label_large).color(if index == 0 { srgb(98, 0, 238) } else { srgb(33, 33, 33) });
+                                                        text(I18N.text(label)).style(theme.typography.label_large).color(if index == 0 { srgb(98, 0, 238) } else { srgb(33, 33, 33) });
                                                     });
                                             });
                                     }
@@ -1738,14 +1725,14 @@ fn state_panel(number: usize, label: String, state: InteractionVisualState, x: f
         .semantics(SemanticsArgs { role:Some(Role::Group),label:Some(I18N.format("ui-drawer-value-state-presentation", [("v0", I18N.text(&label).into())])),merge_descendants:true,..Default::default() }))
         .children(move || {
             drawer_marker(number, 20.0, 20.0);
-            text().content(I18N.text(&(label))).style(type_style(14.0,20.0)).modifier(Modifier::new().offset(Dp(60.0),Dp(26.0)));
+            text(I18N.text(&(label))).style(type_style(14.0,20.0)).modifier(Modifier::new().offset(Dp(60.0),Dp(26.0)));
             boxed().modifier(Modifier::new().offset(Dp(128.0),Dp(88.0)).required_size(Dp(400.0),Dp(320.0))
                 .background_with_shape(theme.color_scheme.surface, Shape::rounded_rectangle(Dp(24.0)))
                 .border_with_shape(Dp(8.0), theme.color_scheme.outline_variant, Shape::rounded_rectangle(Dp(24.0))));
             boxed().modifier(Modifier::new().offset(Dp(136.0),Dp(96.0)))
                 .children(move || {
                     navigation_drawer().modifier(Modifier::new().height(Dp(400.0))).content(move || {
-                        text().content(I18N.text("ui-mail")).style(theme.typography.title_small).modifier(Modifier::new().padding_all(Dp(16.0)));
+                        text(I18N.text("ui-mail")).style(theme.typography.title_small).modifier(Modifier::new().padding_all(Dp(16.0)));
                         for (index, destination) in DESTINATIONS.into_iter().take(4).enumerate() {
                             if index == 2 {
                                 surface().shape(Shape::CAPSULE).style(tessera_ui::Color::TRANSPARENT.into())
@@ -1760,13 +1747,13 @@ fn state_panel(number: usize, label: String, state: InteractionVisualState, x: f
                                             .children(move || {
                                                 icon().painter(outlined::FAVORITE_BORDER_SVG).size(Dp(24.0));
                                                 spacer().modifier(Modifier::new().width(Dp(12.0)));
-                                                text().content(I18N.text("ui-favorites")).style(theme.typography.label_large);
+                                                text(I18N.text("ui-favorites")).style(theme.typography.label_large);
                                             });
                                     });
                             } else {
                                 navigation_drawer_item().label(I18N.text(destination)).selected(index == 0)
                                     .icon(move || { icon().painter(match index {0=>filled::INBOX_SVG,1=>outlined::SEND_SVG,_=>outlined::DELETE_SVG}).size(Dp(24.0)); })
-                                    .badge(move || { if index == 0 { text().content("24").style(theme.typography.label_large); } });
+                                    .badge(move || { if index == 0 { text("24").style(theme.typography.label_large); } });
                             }
                         }
                     });

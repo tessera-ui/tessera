@@ -137,12 +137,10 @@ fn wrapped_slot_fixture() {
             list_item()
                 .modifier(tagged("wrapped-item"))
                 .content(|| {
-                    text().content("Headline");
+                    text("Headline");
                 })
                 .supporting_content(|| {
-                    text()
-                        .modifier(tagged("wrapped-supporting"))
-                        .content("Supporting text wraps");
+                    text("Supporting text wraps").modifier(tagged("wrapped-supporting"));
                 })
                 .leading(|| {
                     spacer().modifier(Modifier::new().size(Dp(20.0), Dp(20.0)));

@@ -99,8 +99,7 @@ pub(super) fn app_bars_spec(route: Option<crate::pages::material_spec::article::
 #[tessera]
 fn caption(#[prop(into)] value: String) {
     let scheme = use_context::<MaterialTheme>().unwrap().get().color_scheme;
-    text()
-        .content(I18N.text(value))
+    text(I18N.text(value))
         .color(scheme.on_surface_variant)
         .style(type_style(14.0, 20.0));
 }
@@ -114,9 +113,7 @@ fn bullets(items: Vec<String>, nested: Option<bool>) {
     };
     column().children(move || {
         for item in items.clone() {
-            text()
-                .content(format!("{marker}{}", I18N.text(item)))
-                .style(type_style(16.0, 24.0));
+            text(format!("{marker}{}", I18N.text(item))).style(type_style(16.0, 24.0));
             gap(Dp(8.0));
         }
     });
@@ -126,12 +123,11 @@ fn bullets(items: Vec<String>, nested: Option<bool>) {
 fn numbered(items: Vec<String>) {
     column().children(move || {
         for (index, item) in items.clone().into_iter().enumerate() {
-            text()
-                .content(I18N.format(
-                    "ui-value-value",
-                    [("v0", (index + 1).into()), ("v1", I18N.text(&item).into())],
-                ))
-                .style(type_style(16.0, 24.0));
+            text(I18N.format(
+                "ui-value-value",
+                [("v0", (index + 1).into()), ("v1", I18N.text(&item).into())],
+            ))
+            .style(type_style(16.0, 24.0));
             gap(Dp(8.0));
         }
     });
@@ -162,8 +158,7 @@ fn verdict_band(good: bool) {
                         .tint(color)
                         .size(Dp(20.0));
                     spacer().modifier(Modifier::new().width(Dp(8.0)));
-                    text()
-                        .content(I18N.text(if good { "ui-do" } else { "ui-dont" }))
+                    text(I18N.text(if good { "ui-do" } else { "ui-dont" }))
                         .color(color)
                         .style(type_style(16.0, 24.0));
                 });
@@ -593,15 +588,14 @@ fn specimen(kind: usize) {
                 });
             if !status.get().is_empty() {
                 gap(Dp(8.0));
-                text()
-                    .content(I18N.format(
-                        "ui-value-value-format-1",
-                        [
-                            ("v0", I18N.text(&preset.figure).into()),
-                            ("v1", I18N.text(&status.get()).into()),
-                        ],
-                    ))
-                    .style(type_style(14.0, 20.0));
+                text(I18N.format(
+                    "ui-value-value-format-1",
+                    [
+                        ("v0", I18N.text(&preset.figure).into()),
+                        ("v1", I18N.text(&status.get()).into()),
+                    ],
+                ))
+                .style(type_style(14.0, 20.0));
             }
         });
 }
@@ -649,7 +643,7 @@ fn specimen_lines(floating: bool) {
                 &["ui-saved-item-1", "ui-saved-item-2"]
             };
             for line in lines {
-                text().content(I18N.text(*line)).style(type_style(14.0, 20.0));
+                text(I18N.text(*line)).style(type_style(14.0, 20.0));
                 gap(Dp(8.0));
             }
         });
@@ -1282,8 +1276,7 @@ fn mirrored_title(rtl: bool) {
                 .padding_symmetric(Dp(4.0), Dp(0.0)),
         )
         .children(move || {
-            text()
-                .content(I18N.text("ui-headline"))
+            text(I18N.text("ui-headline"))
                 .color(scheme.on_surface)
                 .style(type_style(22.0, 28.0));
         });
@@ -1464,9 +1457,7 @@ fn section(title: &'static str, content: RenderSlot) -> SpecSection {
 
 #[tessera]
 fn paragraph(content: String) {
-    text()
-        .content(I18N.text(content))
-        .style(type_style(16.0, 24.0));
+    text(I18N.text(content)).style(type_style(16.0, 24.0));
 }
 
 #[tessera]
@@ -1516,7 +1507,7 @@ fn sample(
                                     scroll.with_mut(AppBarScrollState::reset);
                                 })
                                 .child(move || {
-                                    text().content(I18N.text(title));
+                                    text(I18N.text(title));
                                 });
                         }
                         button()
@@ -1528,7 +1519,7 @@ fn sample(
                             ))
                             .on_click(move || subtitle.set(!subtitle.get()))
                             .child(move || {
-                                text().content(I18N.text("ui-subtitle"));
+                                text(I18N.text("ui-subtitle"));
                             });
                         button()
                             .tonal()
@@ -1539,7 +1530,7 @@ fn sample(
                             ))
                             .on_click(move || centered.set(!centered.get()))
                             .child(move || {
-                                text().content(I18N.text("ui-centered"));
+                                text(I18N.text("ui-centered"));
                             });
                         button()
                             .tonal()
@@ -1550,7 +1541,7 @@ fn sample(
                             ))
                             .on_click(move || filled_action.set(!filled_action.get()))
                             .child(move || {
-                                text().content(I18N.text("ui-filled-action"));
+                                text(I18N.text("ui-filled-action"));
                             });
                         button()
                             .tonal()
@@ -1563,7 +1554,7 @@ fn sample(
                             )
                             .on_click(move || logo.set(!logo.get()))
                             .child(move || {
-                                text().content(I18N.text("ui-logo"));
+                                text(I18N.text("ui-logo"));
                             });
                         button()
                             .text()
@@ -1578,7 +1569,7 @@ fn sample(
                                 });
                             })
                             .child(move || {
-                                text().content(I18N.text("ui-reset-scroll"));
+                                text(I18N.text("ui-reset-scroll"));
                             });
                     });
                 gap(Dp(24.0));
@@ -1686,17 +1677,16 @@ fn sample(
                                     )
                                     .children(move || {
                                         for index in 0..20 {
-                                            text()
-                                                .content(I18N.format(
-                                                    "ui-saved-item-value",
-                                                    [("v0", (index + 1).into())],
-                                                ))
-                                                .style(type_style(16.0, 24.0))
-                                                .modifier(
-                                                    Modifier::new()
-                                                        .fill_max_width()
-                                                        .padding_all(Dp(16.0)),
-                                                );
+                                            text(I18N.format(
+                                                "ui-saved-item-value",
+                                                [("v0", (index + 1).into())],
+                                            ))
+                                            .style(type_style(16.0, 24.0))
+                                            .modifier(
+                                                Modifier::new()
+                                                    .fill_max_width()
+                                                    .padding_all(Dp(16.0)),
+                                            );
                                         }
                                     });
                             });
@@ -1706,15 +1696,14 @@ fn sample(
                 });
             if controls.unwrap_or(false) {
                 gap(Dp(16.0));
-                text()
-                    .content(I18N.format(
-                        "ui-value-action-value",
-                        [
-                            ("v0", I18N.text(&label.get()).into()),
-                            ("v1", I18N.text(&status.get()).into()),
-                        ],
-                    ))
-                    .style(type_style(14.0, 20.0));
+                text(I18N.format(
+                    "ui-value-action-value",
+                    [
+                        ("v0", I18N.text(&label.get()).into()),
+                        ("v1", I18N.text(&status.get()).into()),
+                    ],
+                ))
+                .style(type_style(14.0, 20.0));
             }
         });
 }
@@ -1764,8 +1753,7 @@ fn search_avatar(status: State<String>, geometry: Option<State<Geometry>>) {
                         .background_with_shape(scheme.primary, Shape::Ellipse),
                 )
                 .children(move || {
-                    text()
-                        .content("A")
+                    text("A")
                         .color(scheme.on_primary)
                         .style(type_style(24.0, 32.0));
                 });
@@ -1939,9 +1927,7 @@ fn search_sample(
                                                 Modifier::new().size(Dp(field_width), Dp(56.0)),
                                             )
                                             .children(move || {
-                                                text()
-                                                    .content("Body Large")
-                                                    .style(type_style(16.0, 24.0));
+                                                text("Body Large").style(type_style(16.0, 24.0));
                                             });
                                     }
                                 });
@@ -2027,7 +2013,7 @@ fn search_sample(
                             column()
                                 .modifier(Modifier::new().padding_all(Dp(16.0)))
                                 .children(move || {
-                                    text().content(if query.get().is_empty() {
+                                    text(if query.get().is_empty() {
                                         I18N.text("ui-search-saved-items")
                                     } else {
                                         I18N.format(
@@ -2040,9 +2026,7 @@ fn search_sample(
                 });
         });
     if !status.get().is_empty() {
-        text()
-            .content(I18N.text(status.get()))
-            .style(type_style(14.0, 20.0));
+        text(I18N.text(status.get())).style(type_style(14.0, 20.0));
     }
 }
 
@@ -2138,28 +2122,27 @@ fn baseline_bar(large: bool, #[prop(into)] label: Option<String>) {
                             ));
                     }
                 });
-            text()
-                .content(I18N.text(if large {
-                    "Headline Medium"
-                } else {
-                    "Headline Small"
-                }))
-                .color(scheme.on_surface)
-                .style(if large {
-                    type_style(28.0, 36.0)
-                } else {
-                    type_style(24.0, 32.0)
-                })
-                .modifier(
-                    Modifier::new()
-                        .align(Alignment::BottomStart)
-                        .padding(Padding::new(
-                            Dp(16.0),
-                            Dp(0.0),
-                            Dp(16.0),
-                            Dp(if large { 28.0 } else { 24.0 }),
-                        )),
-                );
+            text(I18N.text(if large {
+                "Headline Medium"
+            } else {
+                "Headline Small"
+            }))
+            .color(scheme.on_surface)
+            .style(if large {
+                type_style(28.0, 36.0)
+            } else {
+                type_style(24.0, 32.0)
+            })
+            .modifier(
+                Modifier::new()
+                    .align(Alignment::BottomStart)
+                    .padding(Padding::new(
+                        Dp(16.0),
+                        Dp(0.0),
+                        Dp(16.0),
+                        Dp(if large { 28.0 } else { 24.0 }),
+                    )),
+            );
         });
 }
 
@@ -2398,9 +2381,7 @@ fn tokens() {
         ("ui-app-bar-size-large-flexible", LARGE_FLEXIBLE_TOKENS),
     ] {
         gap(Dp(32.0));
-        text()
-            .content(I18N.text(title))
-            .style(type_style(16.0, 24.0));
+        text(I18N.text(title)).style(type_style(16.0, 24.0));
         gap(Dp(16.0));
         spec_table(vec!["ui-token".into(), "ui-value".into()], token_rows(rows));
     }
@@ -2409,9 +2390,7 @@ fn tokens() {
     gap(Dp(16.0));
     paragraph("ui-the-default-search-component-tokens-are-used-in-the-search-app-bar-inside-an-app-bar-the-s".into());
     gap(Dp(24.0));
-    text()
-        .content(I18N.text("ui-search-bar-enabled-and-contained-expressive"))
-        .style(type_style(16.0, 24.0));
+    text(I18N.text("ui-search-bar-enabled-and-contained-expressive")).style(type_style(16.0, 24.0));
     gap(Dp(16.0));
     spec_table(
         vec!["ui-token".into(), "ui-value".into()],
@@ -2951,9 +2930,7 @@ fn baseline_app_bars() {
             ],
         ),
     ] {
-        text()
-            .content(I18N.text(title))
-            .style(type_style(16.0, 24.0));
+        text(I18N.text(title)).style(type_style(16.0, 24.0));
         gap(Dp(16.0));
         spec_table(
             vec!["ui-token".into(), "ui-value".into()],
@@ -3420,12 +3397,11 @@ fn app_figure(
         "ui-1-container-2-leading-button-3-trailing-elements-4-headline-5-subtitle".into()
     });
     if actions.get() > 0 {
-        text()
-            .content(I18N.format(
-                "ui-app-bar-figure-actions-value",
-                [("v0", (actions.get()).into())],
-            ))
-            .style(type_style(14.0, 20.0));
+        text(I18N.format(
+            "ui-app-bar-figure-actions-value",
+            [("v0", (actions.get()).into())],
+        ))
+        .style(type_style(14.0, 20.0));
     }
 }
 

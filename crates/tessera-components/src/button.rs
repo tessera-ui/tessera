@@ -381,7 +381,7 @@ struct ButtonResolvedArgs {
 ///     .selected(selected.get())
 ///     .on_click_shared(toggle)
 ///     .child(|| {
-///         text().content("Favorite");
+///         text("Favorite");
 ///     });
 /// assert!(!selected.get());
 /// toggle.call();
@@ -968,7 +968,7 @@ mod tests {
         probe.styles.with_mut(|styles| styles[index] = Some(style));
         let color = use_context::<ContentColor>().unwrap().get().current;
         probe.colors.with_mut(|colors| colors[index] = Some(color));
-        text().content("Go");
+        text("Go");
     }
 
     #[tessera]

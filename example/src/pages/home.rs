@@ -21,8 +21,7 @@ pub fn home_page() {
         .content_padding(Dp(16.0))
         .cross_axis_alignment(CrossAxisAlignment::Start)
         .item(move || {
-                text()
-                    .content(I18N.text("ui-hello-from-tessera"))
+                text(I18N.text("ui-hello-from-tessera"))
                     .style(theme.with(|t| t.typography.headline_large));
                 })
         .item(|| {
@@ -35,6 +34,6 @@ pub fn home_page() {
                 spacer().modifier(Modifier::new().height(Dp(5.0)));
                 })
         .item(move || {
-                text().content(I18N.text("ui-this-is-a-sample-application-for-the-tessera-ui-framework-tessera-is-a-modern-ui-framework"));
+                text(I18N.text("ui-this-is-a-sample-application-for-the-tessera-ui-framework-tessera-is-a-modern-ui-framework"));
             });
 }

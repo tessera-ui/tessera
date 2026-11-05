@@ -58,14 +58,13 @@ fn padded_text_fixture(probe: TestProbe<FixtureHandles>) {
                         bottom: Dp(4.0),
                     });
                 if direct.get() {
-                    text()
+                    text("Padded label")
                         .modifier(outer.then(inner))
-                        .content("Padded label")
                         .color(ink.get());
                 } else {
                     boxed().modifier(outer).children(move || {
                         boxed().modifier(inner.clone()).children(move || {
-                            text().content("Padded label").color(ink.get());
+                            text("Padded label").color(ink.get());
                         });
                     });
                 }

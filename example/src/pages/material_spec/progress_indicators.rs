@@ -149,9 +149,7 @@ pub(super) fn progress_indicators_spec(
 
 #[tessera]
 fn prose(#[prop(into)] value: String) {
-    text()
-        .content(I18N.text(value))
-        .style(type_style(16.0, 24.0));
+    text(I18N.text(value)).style(type_style(16.0, 24.0));
 }
 
 #[tessera]
@@ -256,12 +254,11 @@ fn auto_determinate() {
                 .progress_optional(Some(progress.get()))
                 .accessibility_label(I18N.text("ui-determinate-download-progress"));
             gap(Dp(16.0));
-            text()
-                .content(I18N.format(
-                    "ui-value-complete",
-                    [("v0", ((progress.get() * 100.0).round() as u32).into())],
-                ))
-                .style(type_style(14.0, 20.0));
+            text(I18N.format(
+                "ui-value-complete",
+                [("v0", ((progress.get() * 100.0).round() as u32).into())],
+            ))
+            .style(type_style(14.0, 20.0));
             gap(Dp(16.0));
             flow_row()
                 .item_spacing(Dp(8.0))
@@ -275,7 +272,7 @@ fn auto_determinate() {
                             running.set(true);
                         })
                         .child(move || {
-                            text().content(I18N.text("ui-restart"));
+                            text(I18N.text("ui-restart"));
                         });
                     button()
                         .tonal()
@@ -283,7 +280,7 @@ fn auto_determinate() {
                         .accessibility_label(I18N.text("ui-pause-determinate-progress"))
                         .on_click(move || running.set(!running.get()))
                         .child(move || {
-                            text().content(I18N.text(if running.get() {
+                            text(I18N.text(if running.get() {
                                 "ui-pause"
                             } else {
                                 "ui-resume"
@@ -489,7 +486,7 @@ fn configurations() {
                 .accessibility_label(I18N.text("ui-progress-configuration-wavy"))
                 .on_click(move || wavy.set(!wavy.get()))
                 .child(move || {
-                    text().content(I18N.text("ui-wavy"));
+                    text(I18N.text("ui-wavy"));
                 });
             button()
                 .tonal()
@@ -497,7 +494,7 @@ fn configurations() {
                 .accessibility_label(I18N.text("ui-progress-configuration-thick"))
                 .on_click(move || thick.set(!thick.get()))
                 .child(move || {
-                    text().content(I18N.text("ui-thick-stroke"));
+                    text(I18N.text("ui-thick-stroke"));
                 });
             button()
                 .tonal()
@@ -505,7 +502,7 @@ fn configurations() {
                 .accessibility_label(I18N.text("ui-progress-configuration-determinate"))
                 .on_click(move || determinate.set(!determinate.get()))
                 .child(move || {
-                    text().content(I18N.text("ui-determinate"));
+                    text(I18N.text("ui-determinate"));
                 });
         });
     gap(Dp(24.0));
@@ -526,37 +523,36 @@ fn configurations() {
             thick.get(),
         );
         gap(Dp(16.0));
-        text()
-            .content(
-                I18N.format(
-                    "ui-value-value-stroke",
-                    [
-                        (
-                            "v0",
-                            I18N.text(
-                                &(if determinate.get() {
-                                    "ui-determinate-7102"
-                                } else {
-                                    "ui-indeterminate"
-                                }),
-                            )
-                            .into(),
-                        ),
-                        (
-                            "v1",
-                            I18N.text(
-                                &(if thick.get() {
-                                    "ui-thick"
-                                } else {
-                                    "ui-default-7074"
-                                }),
-                            )
-                            .into(),
-                        ),
-                    ],
-                ),
-            )
-            .style(type_style(14.0, 20.0));
+        text(
+            I18N.format(
+                "ui-value-value-stroke",
+                [
+                    (
+                        "v0",
+                        I18N.text(
+                            &(if determinate.get() {
+                                "ui-determinate-7102"
+                            } else {
+                                "ui-indeterminate"
+                            }),
+                        )
+                        .into(),
+                    ),
+                    (
+                        "v1",
+                        I18N.text(
+                            &(if thick.get() {
+                                "ui-thick"
+                            } else {
+                                "ui-default-7074"
+                            }),
+                        )
+                        .into(),
+                    ),
+                ],
+            ),
+        )
+        .style(type_style(14.0, 20.0));
     }));
 }
 

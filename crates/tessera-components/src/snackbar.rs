@@ -556,13 +556,12 @@ pub fn snackbar(
                     provide_context(|| typography.body_medium, {
                         let message = message.clone();
                         move || {
-                            text()
+                            text(message.clone())
                                 .modifier(Modifier::new().semantics(SemanticsArgs {
                                     role: Some(Role::Status),
                                     live: Some(Live::Polite),
                                     ..Default::default()
                                 }))
-                                .content(message.clone())
                                 .color(content_color);
                         }
                     });
@@ -574,7 +573,7 @@ pub fn snackbar(
                             .content_color(action_color)
                             .ripple_color(action_color)
                             .child(move || {
-                                text().content(label.clone()).color(action_color);
+                                text(label.clone()).color(action_color);
                             });
                     }
                     if let Some(on_dismiss) = on_dismiss {

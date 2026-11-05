@@ -143,10 +143,7 @@ pub(super) fn token_sets() {
     let expanded = remember(|| [[false; 5]; 2]);
     prose("ui-browse-the-component-elements-attributes-tokens-and-their-values");
     gap(Dp(8.0));
-    text()
-        .content(
-            I18N.text("ui-reference-values-follow-the-material-3-filled-and-outlined-text-field-token-specification"),
-        )
+    text(I18N.text("ui-reference-values-follow-the-material-3-filled-and-outlined-text-field-token-specification"))
         .style(type_style(14.0, 20.0));
     gap(Dp(24.0));
     flow_row()
@@ -177,7 +174,7 @@ pub(super) fn token_sets() {
                     )
                     .on_click(move || variant.set(index))
                     .child(move || {
-                        text().content(I18N.text(name));
+                        text(I18N.text(name));
                     });
             }
             let index = variant.get();
@@ -198,7 +195,7 @@ pub(super) fn token_sets() {
                     });
                 })
                 .child(move || {
-                    text().content(I18N.text(action));
+                    text(I18N.text(action));
                 });
         });
     gap(Dp(16.0));
@@ -235,13 +232,10 @@ pub(super) fn token_sets() {
                     .cross_axis_alignment(CrossAxisAlignment::Center)
                     .modifier(Modifier::new().fill_max_width())
                     .children(move || {
-                        text()
-                            .content(I18N.text(title))
+                        text(I18N.text(title))
                             .style(type_style(16.0, 24.0))
                             .modifier(Modifier::new().weight(1.0));
-                        text()
-                            .content(I18N.text(if open { "▾" } else { "▸" }))
-                            .style(type_style(16.0, 24.0));
+                        text(I18N.text(if open { "▾" } else { "▸" })).style(type_style(16.0, 24.0));
                     });
             });
         if open {

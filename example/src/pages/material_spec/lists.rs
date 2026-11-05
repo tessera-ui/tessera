@@ -150,25 +150,23 @@ fn mode_demo(
                 });
             if mode == ListItemSelectionMode::Action {
                 gap(Dp(16.0));
-                text()
-                    .content(I18N.format(
-                        "ui-value-primary-actions-value",
+                text(I18N.format(
+                    "ui-value-primary-actions-value",
+                    [
+                        ("v0", I18N.text(&caption).into()),
+                        ("v1", (state.primary.get()).into()),
+                    ],
+                ))
+                .style(type_style(14.0, 20.0));
+                if multi_action {
+                    text(I18N.format(
+                        "ui-value-secondary-actions-value",
                         [
                             ("v0", I18N.text(&caption).into()),
-                            ("v1", (state.primary.get()).into()),
+                            ("v1", (state.secondary.get()).into()),
                         ],
                     ))
                     .style(type_style(14.0, 20.0));
-                if multi_action {
-                    text()
-                        .content(I18N.format(
-                            "ui-value-secondary-actions-value",
-                            [
-                                ("v0", I18N.text(&caption).into()),
-                                ("v1", (state.secondary.get()).into()),
-                            ],
-                        ))
-                        .style(type_style(14.0, 20.0));
                 }
             }
         });
@@ -250,13 +248,10 @@ fn item(
 
 #[tessera]
 fn variants() {
-    text()
-        .content(
-            I18N.text(
-                "ui-expressive-lists-add-grouped-corners-selection-treatment-and-flexible-slots",
-            ),
-        )
-        .style(type_style(16.0, 24.0));
+    text(
+        I18N.text("ui-expressive-lists-add-grouped-corners-selection-treatment-and-flexible-slots"),
+    )
+    .style(type_style(16.0, 24.0));
     gap(Dp(24.0));
     panel(RenderSlot::new(|| {
         mode_demo(
@@ -404,20 +399,19 @@ fn anatomy() {
                             .on_click(move || secondary.set(secondary.get() + 1));
                     });
                 gap(Dp(16.0));
-                text().content(I18N.format(
+                text(I18N.format(
                     "ui-summary-actions-value",
                     [("v0", (secondary.get()).into())],
                 ));
             });
     }));
     gap(Dp(24.0));
-    text()
-        .content(I18N.text(
-            "ui-1-container-2-overline-3-label-4-trailing-content-5-supporting-text-6-leading-icon",
-        ))
-        .style(type_style(16.0, 24.0));
+    text(I18N.text(
+        "ui-1-container-2-overline-3-label-4-trailing-content-5-supporting-text-6-leading-icon",
+    ))
+    .style(type_style(16.0, 24.0));
     gap(Dp(24.0));
-    text().content(I18N.text("ui-content-occupies-the-largest-slot-selection-rows-expose-one-selection-interaction-action-r"))
+    text(I18N.text("ui-content-occupies-the-largest-slot-selection-rows-expose-one-selection-interaction-action-r"))
         .style(type_style(16.0, 24.0));
 }
 
@@ -470,11 +464,12 @@ fn colors() {
 
 #[tessera]
 fn states() {
-    text()
-        .content(I18N.text(
+    text(
+        I18N.text(
             "ui-hover-focus-with-tab-press-and-hold-or-select-a-row-to-inspect-real-feedback",
-        ))
-        .style(type_style(16.0, 24.0));
+        ),
+    )
+    .style(type_style(16.0, 24.0));
     gap(Dp(24.0));
     for enabled in [true, false] {
         state_configuration(enabled);
@@ -608,9 +603,7 @@ fn baseline() {
 
 #[tessera]
 fn prose(#[prop(into)] value: String) {
-    text()
-        .content(I18N.text(value))
-        .style(type_style(16.0, 24.0));
+    text(I18N.text(value)).style(type_style(16.0, 24.0));
 }
 
 #[tessera]
@@ -666,19 +659,16 @@ fn list_anatomy_diagram() {
                         })
                         .content(move || {
                             column().children(move || {
-                                text()
-                                    .content(I18N.text("ui-overline"))
+                                text(I18N.text("ui-overline"))
                                     .style(type_style(12.0, 16.0))
                                     .modifier(watch(geometry, "overline"));
-                                text()
-                                    .content(I18N.text("ui-label-text"))
+                                text(I18N.text("ui-label-text"))
                                     .style(type_style(16.0, 24.0))
                                     .modifier(watch(geometry, "label"));
                             });
                         })
                         .trailing(move || {
-                            text()
-                                .content("100+")
+                            text("100+")
                                 .style(type_style(14.0, 20.0))
                                 .modifier(watch(geometry, "trailing-text"));
                         });
@@ -692,8 +682,7 @@ fn list_anatomy_diagram() {
                             });
                         })
                         .supporting_content(move || {
-                            text()
-                                .content(I18N.text("ui-supporting-text"))
+                            text(I18N.text("ui-supporting-text"))
                                 .style(type_style(14.0, 20.0))
                                 .modifier(watch(geometry, "support"));
                         });
@@ -714,7 +703,7 @@ fn list_anatomy_diagram() {
                                         ),
                                 )
                                 .children(move || {
-                                    text().content("A").color(scheme.on_primary_container);
+                                    text("A").color(scheme.on_primary_container);
                                 });
                         })
                         .trailing(move || {
@@ -941,7 +930,7 @@ fn list_detail_example() {
     panel(RenderSlot::new(move || {
         flow_row().item_spacing(Dp(24.0)).line_spacing(Dp(24.0)).children(move || {
         column().modifier(Modifier::new().width(Dp(240.0))).children(move || {for index in 0..3 {detail_row(index,selected);}});
-        column().modifier(Modifier::new().width(Dp(240.0)).padding_all(Dp(16.0))).children(move || {text().content(I18N.text(ITEMS[selected.get()])).style(type_style(24.0,32.0));gap(Dp(16.0));prose("ui-the-selected-item-s-details-remain-next-to-the-list-in-an-expanded-layout");});
+        column().modifier(Modifier::new().width(Dp(240.0)).padding_all(Dp(16.0))).children(move || {text(I18N.text(ITEMS[selected.get()])).style(type_style(24.0,32.0));gap(Dp(16.0));prose("ui-the-selected-item-s-details-remain-next-to-the-list-in-an-expanded-layout");});
     });
     }));
 }

@@ -79,11 +79,11 @@ fn app() {
         .child(|| {
             column().children(|| {
                 button().filled().on_click(|| {}).child(|| {
-                    text().content("+");
+                    text("+");
                 });
-                text().content("Count: 0");
+                text("Count: 0");
                 button().filled().on_click(|| {}).child(|| {
-                    text().content("-");
+                    text("-");
                 });
             });
         });
@@ -111,13 +111,13 @@ fn app() {
                 button()
                     .filled()
                     .on_click(move || count.with_mut(|c| *c += 1))
-                    .child(|| text().content("+"));
+                    .child(|| text("+"));
                 let label = format!("Count: {}", count.get());
-                text().content(label);
+                text(label);
                 button()
                     .filled()
                     .on_click(move || count.with_mut(|c| *c -= 1))
-                    .child(|| text().content("-"));
+                    .child(|| text("-"));
             });
         });
 }

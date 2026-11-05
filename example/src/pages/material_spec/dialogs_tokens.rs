@@ -93,8 +93,7 @@ fn token_menu(
             column()
                 .modifier(Modifier::new().fill_max_width())
                 .children(move || {
-                    text()
-                        .content(I18N.text("ui-select-a-component-variant-below-to-see-its-elements-attributes-tokens-and-their-values"))
+                    text(I18N.text("ui-select-a-component-variant-below-to-see-its-elements-attributes-tokens-and-their-values"))
                         .style(type_style(16.0, 24.0));
                     gap(Dp(16.0));
                     row()
@@ -113,7 +112,7 @@ fn token_menu(
                                     row()
                                         .cross_axis_alignment(CrossAxisAlignment::Center)
                                         .children(move || {
-                                            text().content(I18N.text(SET_NAMES[selected.get()]));
+                                            text(I18N.text(SET_NAMES[selected.get()]));
                                             boxed().modifier(Modifier::new().width(Dp(8.0)));
                                             icon()
                                                 .painter(filled::ARROW_DROP_DOWN_SVG)
@@ -133,7 +132,7 @@ fn token_menu(
                                     expanded.with_mut(|state| state[index].fill(open));
                                 })
                                 .child(move || {
-                                    text().content(I18N.text(if all_open(selected, expanded) {
+                                    text(I18N.text(if all_open(selected, expanded) {
                                         "ui-collapse-all"
                                     } else {
                                         "ui-expand-all"
@@ -141,12 +140,10 @@ fn token_menu(
                                 });
                         });
                     gap(Dp(8.0));
-                    text()
-                        .content(I18N.text("ui-token-values-shown-for-default-light"))
+                    text(I18N.text("ui-token-values-shown-for-default-light"))
                         .style(type_style(14.0, 20.0));
                     gap(Dp(4.0));
-                    text()
-                        .content(I18N.text("ui-values-are-the-published-token-values-shape-elevation-and-type-style-tokens-are-published"))
+                    text(I18N.text("ui-values-are-the-published-token-values-shape-elevation-and-type-style-tokens-are-published"))
                         .style(type_style(14.0, 20.0));
                     gap(Dp(16.0));
                     for (group_index, group) in GROUPS.into_iter().enumerate() {
@@ -163,7 +160,7 @@ fn token_menu(
                             .child(move || {
                                 let open =
                                     expanded.with(|state| state[selected.get()][group_index]);
-                                text().content(I18N.format("ui-value-value", [("v0", I18N.text(&(if open { "−" } else { "+" })).into()), ("v1", I18N.text(&group).into())]));
+                                text(I18N.format("ui-value-value", [("v0", I18N.text(&(if open { "−" } else { "+" })).into()), ("v1", I18N.text(&group).into())]));
                             });
                         if open {
                             token_group(selected.get(), group_index);
@@ -198,15 +195,14 @@ fn token_group(index: usize, group_index: usize) {
     }
     for section in sections {
         gap(Dp(8.0));
-        text()
-            .content(I18N.format(
-                "ui-value-value-format-31",
-                [
-                    ("v0", I18N.text(&group).into()),
-                    ("v1", I18N.text(&section).into()),
-                ],
-            ))
-            .style(type_style(14.0, 20.0));
+        text(I18N.format(
+            "ui-value-value-format-31",
+            [
+                ("v0", I18N.text(&group).into()),
+                ("v1", I18N.text(&section).into()),
+            ],
+        ))
+        .style(type_style(14.0, 20.0));
         gap(Dp(8.0));
         let rows = set
             .iter()

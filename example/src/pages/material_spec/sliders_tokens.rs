@@ -93,11 +93,10 @@ fn token_menu(
             column()
                 .modifier(Modifier::new().fill_max_width())
                 .children(move || {
-                    text()
-                        .content(I18N.text(
-                            "ui-switch-between-common-slider-tokens-and-the-five-size-token-sets",
-                        ))
-                        .style(type_style(16.0, 24.0));
+                    text(I18N.text(
+                        "ui-switch-between-common-slider-tokens-and-the-five-size-token-sets",
+                    ))
+                    .style(type_style(16.0, 24.0));
                     gap(Dp(16.0));
                     flow_row()
                         .item_spacing(Dp(16.0))
@@ -116,7 +115,7 @@ fn token_menu(
                                     row()
                                         .cross_axis_alignment(CrossAxisAlignment::Center)
                                         .children(move || {
-                                            text().content(I18N.text(SET_NAMES[selected.get()]));
+                                            text(I18N.text(SET_NAMES[selected.get()]));
                                             boxed().modifier(Modifier::new().width(Dp(8.0)));
                                             icon()
                                                 .painter(filled::ARROW_DROP_DOWN_SVG)
@@ -150,7 +149,7 @@ fn token_menu(
                                     let all_open = expanded.with(|state| {
                                         state[index][..GROUPS[index].len()].iter().all(|open| *open)
                                     });
-                                    text().content(I18N.text(if all_open {
+                                    text(I18N.text(if all_open {
                                         "ui-collapse-all"
                                     } else {
                                         "ui-expand-all"
@@ -174,7 +173,7 @@ fn token_menu(
                                 let index = selected.get();
                                 let open = expanded.with(|state| state[index][group_index]);
                                 let group = GROUPS[index][group_index];
-                                text().content(I18N.format(
+                                text(I18N.format(
                                     "ui-value-value",
                                     [
                                         ("v0", I18N.text(&(if open { "−" } else { "+" })).into()),
@@ -283,8 +282,10 @@ pub(super) fn availability() {
         cells,
     );
     gap(Dp(16.0));
-    text().content(I18N.text("ui-configurations-only-available-using-tokens-don-t-have-implemented-presets-in-code-to"))
-        .style(type_style(16.0,24.0));
+    text(I18N.text(
+        "ui-configurations-only-available-using-tokens-don-t-have-implemented-presets-in-code-to",
+    ))
+    .style(type_style(16.0, 24.0));
 }
 
 const TOKEN_SETS: [&[Token]; 6] = [

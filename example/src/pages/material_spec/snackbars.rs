@@ -203,16 +203,13 @@ pub(super) fn snackbars_spec(route: Option<crate::pages::material_spec::article:
 
 #[tessera]
 fn prose(#[prop(into)] value: String) {
-    text()
-        .content(I18N.text(value))
-        .style(type_style(16.0, 24.0));
+    text(I18N.text(value)).style(type_style(16.0, 24.0));
 }
 
 #[tessera]
 fn caption(#[prop(into)] value: String) {
     let scheme = use_context::<MaterialTheme>().unwrap().get().color_scheme;
-    text()
-        .content(I18N.text(value))
+    text(I18N.text(value))
         .style(type_style(16.0, 24.0))
         .color(scheme.on_surface_variant)
         .modifier(Modifier::new().padding_symmetric(Dp(8.0), Dp::ZERO));
@@ -225,12 +222,10 @@ fn bullets(items: Vec<&'static str>) {
         .children(move || {
             for &item in &items {
                 row().children(move || {
-                    text()
-                        .content("•")
+                    text("•")
                         .style(type_style(16.0, 24.0))
                         .modifier(Modifier::new().width(Dp(20.0)));
-                    text()
-                        .content(I18N.text(item))
+                    text(I18N.text(item))
                         .style(type_style(16.0, 24.0))
                         .modifier(Modifier::new().weight(1.0));
                 });
@@ -257,14 +252,12 @@ fn numbered(items: Vec<&'static str>) {
                                     .background_with_shape(scheme.on_surface, Shape::CAPSULE),
                             )
                             .children(move || {
-                                text()
-                                    .content((index + 1).to_string())
+                                text((index + 1).to_string())
                                     .style(type_style(12.0, 16.0))
                                     .color(scheme.surface);
                             });
                         spacer().modifier(Modifier::new().width(Dp(12.0)));
-                        text()
-                            .content(I18N.text(item))
+                        text(I18N.text(item))
                             .style(type_style(16.0, 24.0))
                             .color(scheme.on_surface_variant);
                     });
@@ -399,8 +392,7 @@ fn advice(tone: u8) {
                 }
             }
             spacer().modifier(Modifier::new().width(Dp(8.0)));
-            text()
-                .content(I18N.text(label))
+            text(I18N.text(label))
                 .style(type_style(14.0, 20.0))
                 .color(ink);
         });
@@ -842,8 +834,7 @@ fn message_list() {
     column()
         .modifier(Modifier::new().fill_max_width())
         .children(move || {
-            text()
-                .content("9:30")
+            text("9:30")
                 .style(type_style(11.0, 16.0))
                 .color(scheme.on_surface)
                 .modifier(Modifier::new().padding(Padding::new(
@@ -884,12 +875,10 @@ fn message_list() {
                         );
                         spacer().modifier(Modifier::new().width(Dp(12.0)));
                         column().children(move || {
-                            text()
-                                .content(I18N.text(name))
+                            text(I18N.text(name))
                                 .style(type_style(13.0, 18.0))
                                 .color(scheme.on_surface);
-                            text()
-                                .content(I18N.text(line))
+                            text(I18N.text(line))
                                 .style(type_style(11.0, 16.0))
                                 .color(scheme.on_surface_variant);
                         });
@@ -982,8 +971,7 @@ fn nav_bar() {
                                     icon().painter(filled::ACCOUNT_CIRCLE_SVG).size(Dp(18.0));
                                 }
                             });
-                        text()
-                            .content(I18N.text(label))
+                        text(I18N.text(label))
                             .style(type_style(10.0, 14.0))
                             .color(scheme.on_surface_variant);
                     });
@@ -1086,8 +1074,7 @@ fn pin(number: usize, position: (f64, f64)) {
                 .background_with_shape(srgb(232, 140, 230), Shape::Ellipse),
         )
         .children(move || {
-            text()
-                .content((number).to_string())
+            text((number).to_string())
                 .style(type_style(12.0, 16.0))
                 .color(srgb(29, 27, 32));
         });
@@ -1113,25 +1100,24 @@ fn dialog_mock() {
             column()
                 .modifier(Modifier::new().fill_max_width().padding_all(Dp(20.0)))
                 .children(move || {
-                    text()
-                        .content(I18N.text("ui-sign-in-to-continue"))
+                    text(I18N.text("ui-sign-in-to-continue"))
                         .style(type_style(18.0, 24.0))
                         .color(scheme.on_surface);
                     gap(Dp(12.0));
-                    text()
-                        .content(I18N.text(
+                    text(
+                        I18N.text(
                             "ui-sign-in-to-sync-your-mail-dismissing-keeps-you-on-this-screen",
-                        ))
-                        .style(type_style(12.0, 16.0))
-                        .color(scheme.on_surface_variant);
+                        ),
+                    )
+                    .style(type_style(12.0, 16.0))
+                    .color(scheme.on_surface_variant);
                     gap(Dp(20.0));
                     row()
                         .main_axis_alignment(MainAxisAlignment::End)
                         .modifier(Modifier::new().fill_max_width())
                         .children(move || {
                             for label in ["ui-cancel", "ui-sign-in"] {
-                                text()
-                                    .content(I18N.text(label))
+                                text(I18N.text(label))
                                     .style(type_style(13.0, 18.0))
                                     .color(scheme.primary)
                                     .modifier(
@@ -1242,20 +1228,17 @@ fn bar_text(placed: Bar) {
                 spacer().modifier(Modifier::new().width(Dp(8.0)));
             }
             if placed.styled {
-                text()
-                    .content(I18N.text("ui-saved-in"))
+                text(I18N.text("ui-saved-in"))
                     .style(type_style(12.0, 16.0))
                     .color(ink);
-                text()
-                    .content(I18N.text("ui-vacation-album"))
+                text(I18N.text("ui-vacation-album"))
                     .style(TextStyle {
                         font_weight: 700,
                         ..type_style(12.0, 16.0)
                     })
                     .color(scheme.inverse_primary);
             } else {
-                text()
-                    .content(I18N.text(placed.message))
+                text(I18N.text(placed.message))
                     .style(type_style(12.0, 16.0))
                     .color(ink);
             }
@@ -1271,15 +1254,13 @@ fn bar_action(#[prop(into)] label: String, color: Color, elevated: bool) {
             .shape(Shape::CAPSULE)
             .elevation(Dp(1.0))
             .child(move || {
-                text()
-                    .content(I18N.text(&(label)))
+                text(I18N.text(&(label)))
                     .style(type_style(12.0, 16.0))
                     .color(scheme.primary)
                     .modifier(Modifier::new().padding_symmetric(Dp(14.0), Dp(6.0)));
             });
     } else {
-        text()
-            .content(I18N.text(label))
+        text(I18N.text(label))
             .style(TextStyle {
                 font_weight: 500,
                 ..type_style(12.0, 16.0)
@@ -1820,7 +1801,7 @@ fn sample(
                     )
                     .on_click(move || visible.set(true))
                     .child(move || {
-                        text().content(I18N.text("ui-show-snackbar"));
+                        text(I18N.text("ui-show-snackbar"));
                     });
             }
         });
@@ -1836,8 +1817,7 @@ fn config_badge(number: usize) {
             Shape::Ellipse,
         ))
         .children(move || {
-            text()
-                .content((number).to_string())
+            text((number).to_string())
                 .style(type_style(11.0, 16.0))
                 .color(srgb(230, 224, 233));
         });
@@ -1966,7 +1946,7 @@ fn queued() {
                         .accessibility_label(I18N.text("ui-next-snackbar-two-lines"))
                         .on_click(move || two_lines.set(!two_lines.get()))
                         .child(move || {
-                            text().content(I18N.text("ui-two-lines"));
+                            text(I18N.text("ui-two-lines"));
                         });
                     button()
                         .tonal()
@@ -1974,7 +1954,7 @@ fn queued() {
                         .accessibility_label(I18N.text("ui-next-snackbar-action"))
                         .on_click(move || action.set(!action.get()))
                         .child(move || {
-                            text().content(I18N.text("ui-action"));
+                            text(I18N.text("ui-action"));
                         });
                     button()
                         .tonal()
@@ -1982,7 +1962,7 @@ fn queued() {
                         .accessibility_label(I18N.text("ui-next-snackbar-dismiss"))
                         .on_click(move || dismiss.set(!dismiss.get()))
                         .child(move || {
-                            text().content(I18N.text("ui-close-icon"));
+                            text(I18N.text("ui-close-icon"));
                         });
                     button()
                         .tonal()
@@ -1990,7 +1970,7 @@ fn queued() {
                         .accessibility_label(I18N.text("ui-stack-snackbar-action"))
                         .on_click(move || stacked.set(!stacked.get()))
                         .child(move || {
-                            text().content(I18N.text("ui-action-on-new-line"));
+                            text(I18N.text("ui-action-on-new-line"));
                         });
                     button()
                         .filled()
@@ -2006,7 +1986,7 @@ fn queued() {
                             result.set("ui-waiting".to_owned());
                         })
                         .child(move || {
-                            text().content(I18N.text("ui-enqueue"));
+                            text(I18N.text("ui-enqueue"));
                         });
                 });
             gap(Dp(24.0));
@@ -2047,25 +2027,23 @@ fn queued() {
                         });
                 });
             gap(Dp(16.0));
-            text()
-                .content(I18N.format(
-                    "ui-snackbar-result-value",
-                    [("v0", I18N.text(&result.get()).into())],
-                ))
-                .style(type_style(14.0, 20.0));
-            text()
-                .content(
-                    I18N.format(
-                        "ui-snackbar-visible-value",
-                        [(
-                            "v0",
-                            (state.with(SnackbarHostState::is_showing))
-                                .to_string()
-                                .into(),
-                        )],
-                    ),
-                )
-                .style(type_style(14.0, 20.0));
+            text(I18N.format(
+                "ui-snackbar-result-value",
+                [("v0", I18N.text(&result.get()).into())],
+            ))
+            .style(type_style(14.0, 20.0));
+            text(
+                I18N.format(
+                    "ui-snackbar-visible-value",
+                    [(
+                        "v0",
+                        (state.with(SnackbarHostState::is_showing))
+                            .to_string()
+                            .into(),
+                    )],
+                ),
+            )
+            .style(type_style(14.0, 20.0));
         });
 }
 
@@ -2249,8 +2227,7 @@ fn web_row(saved: bool) {
                         .padding_symmetric(Dp(12.0), Dp::ZERO),
                 )
                 .children(move || {
-                    text()
-                        .content(I18N.text("ui-search"))
+                    text(I18N.text("ui-search"))
                         .style(type_style(12.0, 16.0))
                         .color(scheme.on_surface_variant);
                     spacer().modifier(Modifier::new().weight(1.0));
@@ -2273,8 +2250,7 @@ fn web_row(saved: bool) {
                             .tint(scheme.primary);
                         spacer().modifier(Modifier::new().width(Dp(6.0)));
                     }
-                    text()
-                        .content(I18N.text(if saved { "ui-saved" } else { "ui-save" }))
+                    text(I18N.text(if saved { "ui-saved" } else { "ui-save" }))
                         .style(type_style(12.0, 16.0))
                         .color(scheme.primary);
                 });
@@ -2626,7 +2602,7 @@ fn timing_demo() {
                             });
                         })
                         .child(move || {
-                            text().content(I18N.text("ui-message-only"));
+                            text(I18N.text("ui-message-only"));
                         });
                     button()
                         .tonal()
@@ -2642,7 +2618,7 @@ fn timing_demo() {
                             });
                         })
                         .child(move || {
-                            text().content(I18N.text("ui-with-action"));
+                            text(I18N.text("ui-with-action"));
                         });
                 });
             gap(Dp(16.0));
@@ -2727,10 +2703,7 @@ fn web_requirements() {
     gap(Dp(24.0));
     panel(RenderSlot::new(actionable_demo));
     gap(Dp(24.0));
-    text()
-        .content(
-            I18N.text("ui-note-material-web-doesn-t-yet-include-the-snackbar-component-this-guidance-still-applies-t"),
-        )
+    text(I18N.text("ui-note-material-web-doesn-t-yet-include-the-snackbar-component-this-guidance-still-applies-t"))
         .style(TextStyle {
             font_weight: 700,
             ..type_style(16.0, 24.0)
@@ -2770,11 +2743,7 @@ fn inline_feedback() {
                                 icon().painter(filled::CHECK_SVG).size(Dp(18.0));
                                 spacer().modifier(Modifier::new().width(Dp(8.0)));
                             }
-                            text().content(I18N.text(if saved.get() {
-                                "ui-saved"
-                            } else {
-                                "ui-save"
-                            }));
+                            text(I18N.text(if saved.get() { "ui-saved" } else { "ui-save" }));
                         });
                 });
             gap(Dp(24.0));
@@ -2813,16 +2782,15 @@ fn actionable_demo() {
                     }
                 })
                 .child(move || {
-                    text().content(I18N.text("ui-delete-photo"));
+                    text(I18N.text("ui-delete-photo"));
                 });
             gap(Dp(12.0));
-            text()
-                .content(I18N.text(if kept.get() {
-                    "ui-photo-in-album-yes"
-                } else {
-                    "ui-photo-in-album-no"
-                }))
-                .style(type_style(14.0, 20.0));
+            text(I18N.text(if kept.get() {
+                "ui-photo-in-album-yes"
+            } else {
+                "ui-photo-in-album-no"
+            }))
+            .style(type_style(14.0, 20.0));
             gap(Dp(16.0));
             boxed()
                 .alignment(Alignment::Center)
@@ -2979,24 +2947,20 @@ fn callout(#[prop(into)] name: String, #[prop(into)] role: String) {
                 .padding_all(Dp(12.0)),
         )
         .children(move || {
-            text()
-                .content(I18N.text("ui-label"))
+            text(I18N.text("ui-label"))
                 .style(type_style(11.0, 16.0))
                 .color(srgb(230, 224, 233));
-            text()
-                .content(I18N.text(&(name)))
+            text(I18N.text(&(name)))
                 .style(TextStyle {
                     font_weight: 700,
                     ..type_style(12.0, 16.0)
                 })
                 .color(accent);
             gap(Dp(8.0));
-            text()
-                .content(I18N.text("ui-role"))
+            text(I18N.text("ui-role"))
                 .style(type_style(11.0, 16.0))
                 .color(srgb(230, 224, 233));
-            text()
-                .content(I18N.text(&(role)))
+            text(I18N.text(&(role)))
                 .style(TextStyle {
                     font_weight: 700,
                     ..type_style(12.0, 16.0)

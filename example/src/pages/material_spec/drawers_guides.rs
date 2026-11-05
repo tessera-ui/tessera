@@ -348,8 +348,7 @@ pub(super) fn medium_style(size: f64, line: f64) -> TextStyle {
 
 #[tessera]
 fn minor_heading(#[prop(into)] label: String) {
-    text()
-        .content(I18N.text(label))
+    text(I18N.text(label))
         .style(medium_style(16.0, 24.0))
         .modifier(Modifier::new().semantics(SemanticsArgs {
             role: Some(Role::Heading),
@@ -361,8 +360,7 @@ fn minor_heading(#[prop(into)] label: String) {
 #[tessera]
 pub(super) fn caption(#[prop(into)] value: String) {
     let scheme = use_context::<MaterialTheme>().unwrap().get().color_scheme;
-    text()
-        .content(I18N.text(value))
+    text(I18N.text(value))
         .style(type_style(14.0, 20.0))
         .color(scheme.on_surface_variant);
 }
@@ -407,8 +405,7 @@ fn advice(tone: u8) {
         .children(move || {
             icon().painter(asset).size(Dp(18.0)).tint(ink);
             spacer().modifier(Modifier::new().width(Dp(8.0)));
-            text()
-                .content(I18N.text(label))
+            text(I18N.text(label))
                 .style(type_style(14.0, 20.0))
                 .color(ink);
         });
@@ -773,7 +770,7 @@ fn subhead_row(#[prop(into)] label: String) {
                 .padding_symmetric(Dp(16.0), Dp::ZERO),
         )
         .children(move || {
-            text().content(I18N.text(&(label))).style(style);
+            text(I18N.text(&(label))).style(style);
         });
 }
 
@@ -856,7 +853,7 @@ fn drawer_item(variant: u8, index: usize, selected: State<usize>) {
     let with_icon = variant != 15 && !(variant == 20 && index >= 2);
     let badge = if index == 0 && !home {
         Some(RenderSlot::new(move || {
-            text().content("24");
+            text("24");
         }))
     } else {
         None
@@ -909,17 +906,12 @@ fn plain_item(two_lines: bool) {
             spacer().modifier(Modifier::new().width(Dp(12.0)));
             column().children(move || {
                 if two_lines {
-                    text()
-                        .content(I18N.text("ui-notifications-from-family"))
+                    text(I18N.text("ui-notifications-from-family"))
                         .style(style)
                         .color(color);
-                    text()
-                        .content(I18N.text("ui-and-friends"))
-                        .style(style)
-                        .color(color);
+                    text(I18N.text("ui-and-friends")).style(style).color(color);
                 } else {
-                    text()
-                        .content(I18N.text("ui-notifications-from-family-and-friends"))
+                    text(I18N.text("ui-notifications-from-family-and-friends"))
                         .style(style)
                         .color(color);
                 }
@@ -951,7 +943,7 @@ fn a11y_item(photos: bool, index: usize, selected: usize, outlined_selected: boo
     };
     let badge = if index == 1 && !photos {
         Some(RenderSlot::new(move || {
-            text().content("100+");
+            text("100+");
         }))
     } else {
         None
@@ -1026,8 +1018,7 @@ fn key_chip(#[prop(into)] label: String, x: f64, y: f64, width: f64) {
                 .background_with_shape(a11y_purple(), Shape::rounded_rectangle(Dp(4.0))),
         )
         .children(move || {
-            text()
-                .content(I18N.text(&(label)))
+            text(I18N.text(&(label)))
                 .style(medium_style(14.0, 20.0))
                 .color(tessera_ui::Color::WHITE);
         });
@@ -1087,12 +1078,10 @@ fn labeling_figure(photos: bool) {
                 if index > 0 {
                     gap(Dp(8.0));
                 }
-                text()
-                    .content(I18N.text(name))
+                text(I18N.text(name))
                     .style(type_style(16.0, 24.0))
                     .color(scheme.on_surface);
-                text()
-                    .content(I18N.text(value))
+                text(I18N.text(value))
                     .style(medium_style(16.0, 24.0))
                     .color(a11y_purple());
             }

@@ -613,7 +613,7 @@ impl PointerInputModifierNode for MenuKeyboardBoundary {
 ///     .placement(MenuPlacement::BelowStart)
 ///     .controller(menu)
 ///     .main_content(|| {
-///         text().content("Main content");
+///         text("Main content");
 ///     })
 ///     .menu_content(|menu| {
 ///         menu_item().menu(menu).label("Edit").on_click(|| {});
@@ -1189,7 +1189,7 @@ impl Default for MenuItemConfig {
 ///         menu_item().menu(menu).label("Open");
 ///     })
 ///     .main_content(|| {
-///         text().content("Main content");
+///         text("Main content");
 ///     });
 /// # });
 /// # }
@@ -1472,13 +1472,11 @@ fn menu_item_surface(
                                 .modifier(Modifier::new().weight(1.0))
                                 .cross_axis_alignment(CrossAxisAlignment::Start)
                                 .children(move || {
-                                    text()
-                                        .content(label.clone())
+                                    text(label.clone())
                                         .style(theme.typography.body_large)
                                         .color(label_color);
                                     if let Some(supporting) = supporting.as_ref() {
-                                        text()
-                                            .content(supporting.clone())
+                                        text(supporting.clone())
                                             .style(theme.typography.body_medium)
                                             .color(supporting_color);
                                     }
@@ -1494,8 +1492,7 @@ fn menu_item_surface(
                                         .size(MENU_LEADING_SIZE)
                                         .tint(supporting_color);
                                 } else if let Some(trailing) = item.trailing_text.clone() {
-                                    text()
-                                        .content(trailing)
+                                    text(trailing)
                                         .style(theme.typography.label_small)
                                         .color(supporting_color);
                                 }

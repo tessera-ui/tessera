@@ -34,8 +34,7 @@ use super::{
 
 #[tessera]
 fn prose(#[prop(into)] value: String) {
-    text()
-        .content(I18N.text(value))
+    text(I18N.text(value))
         .style(type_style(16.0, 24.0))
         .color(INK);
 }
@@ -192,8 +191,7 @@ fn sheet_article(
 #[tessera]
 fn caption(#[prop(into)] value: String) {
     let scheme = use_context::<MaterialTheme>().unwrap().get().color_scheme;
-    text()
-        .content(I18N.text(value))
+    text(I18N.text(value))
         .color(scheme.on_surface_variant)
         .style(type_style(14.0, 20.0));
 }
@@ -202,8 +200,7 @@ fn caption(#[prop(into)] value: String) {
 fn bullets(items: Vec<String>) {
     column().children(move || {
         for item in items.clone() {
-            text()
-                .content(format!("•  {}", I18N.text(item)))
+            text(format!("•  {}", I18N.text(item)))
                 .style(type_style(16.0, 24.0))
                 .color(INK);
             gap(Dp(8.0));
@@ -559,7 +556,7 @@ fn expansion_controls(controller: State<BottomSheetController>) {
                     });
                 })
                 .child(move || {
-                    text().content(I18N.text("ui-open-expanded"));
+                    text(I18N.text("ui-open-expanded"));
                 });
             spacer().modifier(Modifier::new().width(Dp(12.0)));
             button()
@@ -572,7 +569,7 @@ fn expansion_controls(controller: State<BottomSheetController>) {
                     });
                 })
                 .child(move || {
-                    text().content(I18N.text("ui-open-partial"));
+                    text(I18N.text("ui-open-partial"));
                 });
         });
     gap(Dp(16.0));
@@ -766,7 +763,7 @@ fn launch(controller: State<BottomSheetController>) {
             controller.with_mut(BottomSheetController::open);
         })
         .child(move || {
-            text().content(I18N.text("ui-open-modal-bottom-sheet"));
+            text(I18N.text("ui-open-modal-bottom-sheet"));
         });
 }
 
@@ -780,8 +777,7 @@ fn sheet_content(close: Callback, action: State<String>) {
                 .cross_axis_alignment(CrossAxisAlignment::Center)
                 .modifier(Modifier::new().fill_max_width())
                 .children(move || {
-                    text()
-                        .content(I18N.text("ui-share-this-place"))
+                    text(I18N.text("ui-share-this-place"))
                         .style(theme.typography.title_large)
                         .modifier(Modifier::new().weight(1.0));
                     icon_button()
@@ -822,7 +818,7 @@ fn sheet_content(close: Callback, action: State<String>) {
                 .accessibility_label(I18N.text("ui-dismiss-sheet"))
                 .on_click_shared(close)
                 .child(move || {
-                    text().content(I18N.text("ui-cancel"));
+                    text(I18N.text("ui-cancel"));
                 });
         });
 }
@@ -934,14 +930,12 @@ fn token_browser() {
                                 ),
                         )
                         .children(move || {
-                            text()
-                                .content(I18N.text("ui-sheets-bottom"))
+                            text(I18N.text("ui-sheets-bottom"))
                                 .style(type_style(14.0, 20.0))
                                 .color(scheme.on_secondary_container);
                         });
                     spacer().modifier(Modifier::new().weight(1.0));
-                    text()
-                        .content(I18N.text("ui-default-light"))
+                    text(I18N.text("ui-default-light"))
                         .style(type_style(14.0, 20.0))
                         .color(scheme.on_surface_variant);
                 });
@@ -1023,8 +1017,7 @@ fn token_row(#[prop(into)] name: String, value: String, swatch: Option<Color>) {
                 }),
         )
         .children(move || {
-            text()
-                .content(I18N.text(&(name)))
+            text(I18N.text(&(name)))
                 .style(type_style(14.0, 20.0))
                 .color(INK)
                 .modifier(Modifier::new().weight(1.0));
@@ -1037,8 +1030,7 @@ fn token_row(#[prop(into)] name: String, value: String, swatch: Option<Color>) {
                 );
                 spacer().modifier(Modifier::new().width(Dp(8.0)));
             }
-            text()
-                .content(I18N.text(&(value)))
+            text(I18N.text(&(value)))
                 .style(type_style(14.0, 20.0))
                 .color(scheme.on_surface_variant)
                 .modifier(Modifier::new().weight(1.0));
@@ -1063,7 +1055,7 @@ fn touch_target() {
                         controller.with_mut(BottomSheetController::open);
                     })
                     .child(move || {
-                        text().content(I18N.text("ui-open-bottom-sheet"));
+                        text(I18N.text("ui-open-bottom-sheet"));
                     });
             });
     });
@@ -1075,8 +1067,7 @@ fn touch_target() {
                     .cross_axis_alignment(CrossAxisAlignment::Center)
                     .modifier(Modifier::new().fill_max_width())
                     .children(move || {
-                        text()
-                            .content(I18N.text("ui-sheet-controls"))
+                        text(I18N.text("ui-sheet-controls"))
                             .style(type_style(20.0, 28.0))
                             .modifier(Modifier::new().weight(1.0));
                         icon_button()
@@ -1086,8 +1077,7 @@ fn touch_target() {
                             .on_click_shared(close);
                     });
                 gap(Dp(8.0));
-                text()
-                    .content(I18N.text("ui-select-the-drag-handle-to-change-height"))
+                text(I18N.text("ui-select-the-drag-handle-to-change-height"))
                     .style(type_style(14.0, 20.0));
             });
     });
@@ -1110,15 +1100,25 @@ fn touch_target() {
                     .bottom_sheet_content_shared(body);
             });
         gap(Dp(12.0));
-        text()
-            .content(I18N.format("ui-48dp-drag-handle-value-tab-to-the-handle-then-space-or-enter-changes-height", [("v0", I18N.text(&(if controller.with(BottomSheetController::expansion)
-                    == BottomSheetExpansion::Expanded
-                {
-                    "ui-expanded"
-                } else {
-                    "ui-partially-expanded"
-                })).into())]))
-            .color(scheme.on_surface);
+        text(
+            I18N.format(
+                "ui-48dp-drag-handle-value-tab-to-the-handle-then-space-or-enter-changes-height",
+                [(
+                    "v0",
+                    I18N.text(
+                        &(if controller.with(BottomSheetController::expansion)
+                            == BottomSheetExpansion::Expanded
+                        {
+                            "ui-expanded"
+                        } else {
+                            "ui-partially-expanded"
+                        }),
+                    )
+                    .into(),
+                )],
+            ),
+        )
+        .color(scheme.on_surface);
     }));
 }
 
@@ -1132,8 +1132,7 @@ fn sheet_context_text(
     scale: f64,
     color: Color,
 ) {
-    text()
-        .content(I18N.text(content))
+    text(I18N.text(content))
         .style(type_style(size * scale, line * scale))
         .color(color)
         .modifier(Modifier::new().offset(Dp(x * scale), Dp(y * scale)));

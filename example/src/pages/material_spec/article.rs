@@ -391,8 +391,7 @@ fn article_footer_link(
                                 .size(Dp(24.0))
                                 .tint(INK);
                         }
-                        text()
-                            .content(I18N.text(label))
+                        text(I18N.text(label))
                             .style(type_style(16.0, 24.0))
                             .color(INK);
                         if !previous {
@@ -403,8 +402,7 @@ fn article_footer_link(
                         }
                     });
                 gap(Dp(8.0));
-                text()
-                    .content(I18N.text(&(title)))
+                text(I18N.text(&(title)))
                     .style(type_style(24.0, 32.0))
                     .color(INK);
             });
@@ -837,8 +835,7 @@ fn article_tab_strip(
                                     .size(Dp(24.0))
                                     .tint(article_tab_visual::foreground(active, hovered, pressed));
                                 spacer().modifier(Modifier::new().width(Dp(8.0)));
-                                text()
-                                    .content(I18N.text(label))
+                                text(I18N.text(label))
                                     .style(tessera_components::theme::TextStyle {
                                         font_family: Some(article_tab_visual::font_family(
                                             active, hovered, pressed,

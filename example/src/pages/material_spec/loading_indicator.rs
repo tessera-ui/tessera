@@ -134,17 +134,14 @@ pub(super) fn loading_indicator_spec(
 
 #[tessera]
 fn prose(#[prop(into)] value: String) {
-    text()
-        .content(I18N.text(value))
-        .style(type_style(16.0, 24.0));
+    text(I18N.text(value)).style(type_style(16.0, 24.0));
 }
 
 #[tessera]
 fn caption(#[prop(into)] value: String) {
     let scheme = use_context::<MaterialTheme>().unwrap().get().color_scheme;
     gap(Dp(16.0));
-    text()
-        .content(I18N.text(value))
+    text(I18N.text(value))
         .color(scheme.on_surface_variant)
         .style(type_style(14.0, 20.0));
 }
@@ -169,9 +166,7 @@ fn bullets(items: Vec<String>) {
                                 .background_with_shape(scheme.on_surface_variant, Shape::Ellipse),
                         );
                         spacer().modifier(Modifier::new().width(Dp(16.0)));
-                        text()
-                            .content(I18N.text(&(item)))
-                            .style(type_style(16.0, 24.0));
+                        text(I18N.text(&(item))).style(type_style(16.0, 24.0));
                     });
             }
         });
@@ -345,16 +340,12 @@ fn configurations() {
         .paused(paused.get());
     gap(Dp(16.0));
     flow_row().item_spacing(Dp(16.0)).children(move || {
-        text()
-            .content(I18N.text("ui-contained-loading"))
-            .style(type_style(14.0, 20.0));
+        text(I18N.text("ui-contained-loading")).style(type_style(14.0, 20.0));
         switch()
             .checked(contained.get())
             .accessibility_label(I18N.text("ui-contained-loading"))
             .on_toggle(move |value| contained.set(value));
-        text()
-            .content(I18N.text("ui-pause-animation"))
-            .style(type_style(14.0, 20.0));
+        text(I18N.text("ui-pause-animation")).style(type_style(14.0, 20.0));
         switch()
             .checked(paused.get())
             .accessibility_label(I18N.text("ui-pause-loading-animation"))
@@ -484,8 +475,7 @@ fn anatomy() {
                 });
             gap(Dp(32.0));
             for line in ["ui-1-shape", "ui-2-container-contained-only"] {
-                text()
-                    .content(I18N.text(line))
+                text(I18N.text(line))
                     .color(INK)
                     .style(type_style(16.0, 28.0));
             }
@@ -534,9 +524,10 @@ fn colors() {
                                         .contained(true);
                                     });
                                 gap(Dp(16.0));
-                                text()
-                                    .content(I18N.text("ui-1-primary-2-primary-container-with-on-primary-container"))
-                                    .style(type_style(14.0, 20.0));
+                                text(I18N.text(
+                                    "ui-1-primary-2-primary-container-with-on-primary-container",
+                                ))
+                                .style(type_style(14.0, 20.0));
                             });
                     });
             });
@@ -563,8 +554,7 @@ fn states() {
                         spinner("ui-paused-indicator").paused(true);
                     });
                 gap(Dp(24.0));
-                text()
-                    .content(I18N.text("ui-1-running-2-determinate-3-paused"))
+                text(I18N.text("ui-1-running-2-determinate-3-paused"))
                     .style(type_style(14.0, 20.0));
             });
     }));
@@ -640,16 +630,12 @@ fn usage() {
             .children(move || {
                 spinner("ui-loading-article");
                 gap(Dp(16.0));
-                text()
-                    .content(I18N.text("ui-do-place-the-indicator-in-the-region-that-is-loading"))
+                text(I18N.text("ui-do-place-the-indicator-in-the-region-that-is-loading"))
                     .style(type_style(14.0, 20.0));
                 gap(Dp(32.0));
                 spinner("ui-loading-image-gallery").contained(true);
                 gap(Dp(16.0));
-                text()
-                    .content(
-                        I18N.text("ui-don-t-use-a-contained-indicator-as-a-full-screen-blocker"),
-                    )
+                text(I18N.text("ui-don-t-use-a-contained-indicator-as-a-full-screen-blocker"))
                     .style(type_style(14.0, 20.0));
             });
     }));
@@ -687,8 +673,7 @@ fn placement() {
             column()
                 .modifier(Modifier::new().fill_max_size().padding_all(Dp(24.0)))
                 .children(move || {
-                    text()
-                        .content(I18N.text("ui-content-region"))
+                    text(I18N.text("ui-content-region"))
                         .color(scheme.on_surface_variant)
                         .style(type_style(14.0, 20.0));
                     spacer().modifier(Modifier::new().weight(1.0));
@@ -737,11 +722,10 @@ fn behavior() {
                     spinner("ui-paused-for-reduced-motion").paused(true);
                 });
                 gap(Dp(16.0));
-                text()
-                    .content(I18N.text(
-                        "ui-the-paused-example-holds-its-current-shape-and-stops-requesting-frames",
-                    ))
-                    .style(type_style(14.0, 20.0));
+                text(I18N.text(
+                    "ui-the-paused-example-holds-its-current-shape-and-stops-requesting-frames",
+                ))
+                .style(type_style(14.0, 20.0));
             });
     }));
     gap(Dp(24.0));
@@ -775,9 +759,10 @@ fn use_cases() {
             .children(move || {
                 spinner("ui-loading-content");
                 gap(Dp(16.0));
-                text()
-                    .content(I18N.text("ui-the-indicator-exposes-the-label-loading-content-to-assistive-technology"))
-                    .style(type_style(14.0, 20.0));
+                text(I18N.text(
+                    "ui-the-indicator-exposes-the-label-loading-content-to-assistive-technology",
+                ))
+                .style(type_style(14.0, 20.0));
             });
     }));
 }
@@ -806,10 +791,7 @@ fn interaction_style() {
                             );
                     });
                 gap(Dp(16.0));
-                text()
-                    .content(
-                        I18N.text("ui-above-3-1-in-the-primary-role-versus-a-low-contrast-pairing"),
-                    )
+                text(I18N.text("ui-above-3-1-in-the-primary-role-versus-a-low-contrast-pairing"))
                     .style(type_style(14.0, 20.0));
             });
     }));
@@ -831,14 +813,12 @@ fn labeling() {
             .children(move || {
                 spinner("ui-loading-content");
                 gap(Dp(16.0));
-                text()
-                    .content(I18N.text("ui-do-loading-content-names-the-pending-work"))
+                text(I18N.text("ui-do-loading-content-names-the-pending-work"))
                     .style(type_style(14.0, 20.0));
                 gap(Dp(32.0));
                 spinner("ui-loading").contained(true);
                 gap(Dp(16.0));
-                text()
-                    .content(I18N.text("ui-don-t-rely-on-the-animation-alone-a-bare-loading-without-context-is-ambiguous"))
+                text(I18N.text("ui-don-t-rely-on-the-animation-alone-a-bare-loading-without-context-is-ambiguous"))
                     .style(type_style(14.0, 20.0));
             });
     }));

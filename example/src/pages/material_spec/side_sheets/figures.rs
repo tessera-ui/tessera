@@ -295,8 +295,7 @@ pub(super) fn marker(number: usize, x: f64, y: f64, tag: Option<String>) {
                 }),
         )
         .children(move || {
-            text()
-                .content((number).to_string())
+            text((number).to_string())
                 .style(type_style(14.0, 20.0))
                 .color(scheme.inverse_on_surface);
         });
@@ -355,8 +354,7 @@ pub(super) fn legend(entries: Vec<(usize, String)>) {
                                 });
                         });
                     spacer().modifier(Modifier::new().width(Dp(16.0)));
-                    text()
-                        .content(I18N.text(&(label)))
+                    text(I18N.text(&(label)))
                         .style(type_style(16.0, 24.0))
                         .color(INK);
                 });
@@ -434,14 +432,12 @@ pub(super) fn guidance_card(good: bool, #[prop(into)] note: String, figure: Opti
                         .size(Dp(24.0))
                         .tint(color);
                     spacer().modifier(Modifier::new().width(Dp(8.0)));
-                    text()
-                        .content(I18N.text(if good { "ui-do" } else { "ui-dont" }))
+                    text(I18N.text(if good { "ui-do" } else { "ui-dont" }))
                         .style(type_style(16.0, 24.0))
                         .color(color);
                 });
             gap(Dp(8.0));
-            text()
-                .content(I18N.text(&(note)))
+            text(I18N.text(&(note)))
                 .style(type_style(14.0, 20.0))
                 .color(INK);
         });
@@ -656,8 +652,7 @@ pub(super) fn sheet_panel(mock: Mock, x: f64, y: f64, width: f64, height: f64) {
                     28.0,
                 ))
                 .children(move || {
-                    text()
-                        .content(I18N.text(mock.title))
+                    text(I18N.text(mock.title))
                         .style(type_style(22.0, 28.0))
                         .color(scheme.on_surface_variant);
                 });
@@ -744,8 +739,7 @@ fn mock_button(filled: bool, #[prop(into)] label: String, x: f64, y: f64, width:
         .alignment(Alignment::Center)
         .modifier(modifier)
         .children(move || {
-            text()
-                .content(I18N.text(&(label)))
+            text(I18N.text(&(label)))
                 .style(type_style(14.0, 20.0))
                 .color(if filled {
                     scheme.on_primary
@@ -757,8 +751,7 @@ fn mock_button(filled: bool, #[prop(into)] label: String, x: f64, y: f64, width:
 
 #[tessera]
 fn label(#[prop(into)] value: String, x: f64, y: f64, size: f64, color: Color) {
-    text()
-        .content(I18N.text(value))
+    text(I18N.text(value))
         .style(type_style(size, size + 6.0))
         .color(color)
         .modifier(Modifier::new().offset(Dp(x), Dp(y)));
@@ -896,8 +889,7 @@ fn sheet_body(body: Body, start: bool, width: f64, height: f64) {
                         Shape::rounded_rectangle(Dp(8.0)),
                     ))
                     .children(move || {
-                        text()
-                            .content(I18N.text(name))
+                        text(I18N.text(name))
                             .style(type_style(14.0, 20.0))
                             .color(ink);
                     });
@@ -1274,8 +1266,7 @@ fn measurement_sheet(modal: bool, geometry: State<SpaceGeometry>) {
                             .modifier(part(geometry, modal, "back"))
                             .on_click(|| {});
                     }
-                    text()
-                        .content(I18N.text("ui-headline"))
+                    text(I18N.text("ui-headline"))
                         .style(type_style(22.0, 28.0))
                         .color(scheme.on_surface_variant)
                         .modifier(part(geometry, modal, "headline").weight(1.0));
@@ -1287,8 +1278,7 @@ fn measurement_sheet(modal: bool, geometry: State<SpaceGeometry>) {
                         .on_click(|| {});
                 });
             for name in ["ui-labels", "ui-events", "ui-personal", "ui-projects"] {
-                text()
-                    .content(I18N.text(name))
+                text(I18N.text(name))
                     .style(type_style(14.0, 20.0))
                     .color(scheme.on_surface_variant)
                     .modifier(Modifier::new().padding_symmetric(Dp(24.0), Dp(6.0)));
@@ -1317,7 +1307,7 @@ fn measurement_sheet(modal: bool, geometry: State<SpaceGeometry>) {
                             .accessibility_label(I18N.text("ui-save-filters"))
                             .on_click(|| {})
                             .child(move || {
-                                text().content(I18N.text("ui-save"));
+                                text(I18N.text("ui-save"));
                             });
                         spacer().modifier(Modifier::new().width(Dp(8.0)));
                         button()
@@ -1326,7 +1316,7 @@ fn measurement_sheet(modal: bool, geometry: State<SpaceGeometry>) {
                             .accessibility_label(I18N.text("ui-cancel-filters"))
                             .on_click(|| {})
                             .child(move || {
-                                text().content(I18N.text("ui-cancel"));
+                                text(I18N.text("ui-cancel"));
                             });
                     });
             }
@@ -1688,8 +1678,7 @@ pub(super) fn role_figure() {
                     .background_with_shape(scheme.inverse_surface, Shape::rounded_rectangle(Dp(8.0))),
             )
             .children(move || {
-                text()
-                    .content(I18N.text("ui-role-dialog"))
+                text(I18N.text("ui-role-dialog"))
                     .style(type_style(14.0, 20.0))
                     .color(scheme.inverse_on_surface);
             });

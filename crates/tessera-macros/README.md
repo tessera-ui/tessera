@@ -63,7 +63,7 @@ fn counter_component() {
         .on_click(move || count.with_mut(|c| *c += 1))
         .child(move || {
             let label = format!("Count: {}", count.get());
-            text().content(label);
+            text(label);
         });
 }
 ```

@@ -155,16 +155,13 @@ pub(super) fn fab_menu_spec(route: Option<crate::pages::material_spec::article::
 
 #[tessera]
 fn prose(#[prop(into)] value: String) {
-    text()
-        .content(I18N.text(value))
-        .style(type_style(16.0, 24.0));
+    text(I18N.text(value)).style(type_style(16.0, 24.0));
 }
 
 #[tessera]
 fn caption(#[prop(into)] value: String) {
     let scheme = use_context::<MaterialTheme>().unwrap().get().color_scheme;
-    text()
-        .content(I18N.text(value))
+    text(I18N.text(value))
         .color(scheme.on_surface_variant)
         .style(type_style(14.0, 20.0));
 }
@@ -173,9 +170,7 @@ fn caption(#[prop(into)] value: String) {
 fn bullets(items: Vec<String>) {
     column().children(move || {
         for item in items.clone() {
-            text()
-                .content(format!("•  {}", I18N.text(item)))
-                .style(type_style(16.0, 24.0));
+            text(format!("•  {}", I18N.text(item))).style(type_style(16.0, 24.0));
             gap(Dp(8.0));
         }
     });
@@ -191,8 +186,7 @@ fn badge(number: usize) {
                 .background_with_shape(INK, Shape::Ellipse),
         )
         .children(move || {
-            text()
-                .content((number).to_string())
+            text((number).to_string())
                 .style(type_style(12.0, 16.0))
                 .color(Color::WHITE);
         });
@@ -206,9 +200,7 @@ fn legend(number: usize, #[prop(into)] label: String) {
         .children(move || {
             badge(number);
             spacer().modifier(Modifier::new().width(Dp(12.0)));
-            text()
-                .content(I18N.text(&(label)))
-                .style(type_style(16.0, 24.0));
+            text(I18N.text(&(label))).style(type_style(16.0, 24.0));
         });
 }
 
@@ -228,14 +220,12 @@ fn guidance_line(#[prop(into)] mark: String, #[prop(into)] note: String, color: 
                         .background_with_shape(color, Shape::rounded_rectangle(Dp(8.0))),
                 )
                 .children(move || {
-                    text()
-                        .content(I18N.text(&(mark)))
+                    text(I18N.text(&(mark)))
                         .style(type_style(14.0, 20.0))
                         .color(Color::WHITE);
                 });
             spacer().modifier(Modifier::new().width(Dp(12.0)));
-            text()
-                .content(I18N.text(&(note)))
+            text(I18N.text(&(note)))
                 .color(scheme.on_surface_variant)
                 .style(type_style(14.0, 20.0));
         });
@@ -319,13 +309,10 @@ fn menu_demo(
                                     Dp(24.0),
                                 )))
                                 .children(move || {
-                                    text()
-                                        .content(I18N.text("ui-create"))
+                                    text(I18N.text("ui-create"))
                                         .style(theme.typography.title_large);
                                     gap(Dp(8.0));
-                                    text()
-                                        .content(I18N.text(status.get()))
-                                        .style(type_style(16.0, 24.0));
+                                    text(I18N.text(status.get())).style(type_style(16.0, 24.0));
                                 });
                         });
                 });
@@ -681,11 +668,10 @@ fn six_items() {
                             column()
                                 .modifier(Modifier::new().padding_all(Dp(24.0)))
                                 .children(move || {
-                                    text()
-                                        .content(I18N.text("ui-up-to-six-actions"))
+                                    text(I18N.text("ui-up-to-six-actions"))
                                         .style(theme.typography.title_large);
                                     gap(Dp(8.0));
-                                    text().content(I18N.text(status.get()));
+                                    text(I18N.text(status.get()));
                                 });
                         });
                 });

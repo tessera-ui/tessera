@@ -120,8 +120,7 @@ fn gap(height: Dp) {
 #[tessera]
 fn heading(label: String, compact: Option<bool>, level: Option<u8>) {
     let level = level.unwrap_or(2).clamp(2, 4);
-    text()
-        .content(I18N.text(label))
+    text(I18N.text(label))
         .style(if level >= 3 {
             type_style(24.0, 32.0)
         } else if compact.unwrap_or(false) {
@@ -139,8 +138,7 @@ fn heading(label: String, compact: Option<bool>, level: Option<u8>) {
 
 #[tessera]
 fn subheading(label: String, level: Option<u8>) {
-    text()
-        .content(I18N.text(label))
+    text(I18N.text(label))
         .style(type_style(24.0, 32.0))
         .modifier(Modifier::new().semantics(SemanticsArgs {
             role: Some(tessera_ui::accesskit::Role::Heading),

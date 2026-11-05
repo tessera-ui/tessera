@@ -1007,7 +1007,7 @@ fn carousel_item(
 ///     let controller = remember(|| CarouselController::new(2));
 ///     assert_eq!(controller.with(CarouselController::current_item), 2);
 ///     carousel(12).controller(controller).content(|item| {
-///         text().content(format!("Photo {}", item.index + 1));
+///         text(format!("Photo {}", item.index + 1));
 ///     });
 /// }
 /// ```
@@ -1707,7 +1707,7 @@ mod tests {
                                     });
                             })
                             .item(|| {
-                                text().content("Following carousel");
+                                text("Following carousel");
                             });
                     }
                 });
@@ -2287,19 +2287,19 @@ mod tests {
         column().modifier(Modifier::new().semantics(SemanticsArgs {
             label: Some("Responsive carousel section".into()), merge_descendants: true, ..Default::default()
         })).children(move || {
-            text().content("Carousel");
-            text().content("Items retain their full size as masks expand and collapse. Drag horizontally or use arrow keys, Home, and End.");
+            text("Carousel");
+            text("Items retain their full size as masks expand and collapse. Drag horizontally or use arrow keys, Home, and End.");
             flow_row().item_spacing(Dp(8.0)).line_spacing(Dp(8.0)).children(move || {
                 for label in ["Layout: Multi-browse", "Previous item", "Next item", "Use reverse layout", "Disable scrolling"] {
-                    button().tonal().child(move || { text().content(label); });
+                    button().tonal().child(move || { text(label); });
                 }
             });
             spacer().modifier(Modifier::new().height(Dp(12.0)));
             carousel(12).controller(controller).height(Dp(180.0)).preferred_item_width(Dp(186.0)).item_spacing(Dp(8.0)).content(|item| {
-                button().modifier(Modifier::new().fill_max_size()).child(move || { text().content(format!("{} {}", if item.masked_width() >= Dp(120.0) { "Collection" } else { "Preview" }, item.index + 1)); });
+                button().modifier(Modifier::new().fill_max_size()).child(move || { text(format!("{} {}", if item.masked_width() >= Dp(120.0) { "Collection" } else { "Preview" }, item.index + 1)); });
             });
-            text().content(format!("Current item: {}", controller.with(CarouselController::current_item)));
-            text().content("No item activated");
+            text(format!("Current item: {}", controller.with(CarouselController::current_item)));
+            text("No item activated");
         });
     }
 
@@ -2321,20 +2321,17 @@ mod tests {
                         .item_spacing(Dp(24.0))
                         .item(move || {
                             column().children(move || {
-                                text()
-                                    .content("Material Components")
+                                text("Material Components")
                                     .style(theme.get().typography.headline_large);
                                 spacer().modifier(Modifier::new().height(Dp(8.0)));
-                                text().content(
-                                    "Additional Material 3 components beyond the basic set.",
-                                );
+                                text("Additional Material 3 components beyond the basic set.");
                             });
                         })
                         .item(move || {
                             responsive_section(controller);
                         })
                         .item(|| {
-                            text().content("Following responsive section");
+                            text("Following responsive section");
                         });
                 });
         });

@@ -104,7 +104,7 @@ pub(super) fn time_pickers_spec(route: Option<crate::pages::material_spec::artic
                                 .accessibility_label(I18N.text("ui-open-time-picker-dialog"))
                                 .on_click(move || open_picker(modal, draft, committed))
                                 .child(move || {
-                                    text().content(I18N.text("ui-open-dialog"));
+                                    text(I18N.text("ui-open-dialog"));
                                 });
                             confirmed_time(committed);
                             gap(Dp(24.0));
@@ -175,7 +175,7 @@ pub(super) fn time_pickers_spec(route: Option<crate::pages::material_spec::artic
                                     .accessibility_label(I18N.text("ui-open-placement-time-picker"))
                                     .on_click(move || open_picker(modal, draft, committed))
                                     .child(move || {
-                                        text().content(I18N.text("ui-open-time-picker"));
+                                        text(I18N.text("ui-open-time-picker"));
                                     });
                                 confirmed_time(committed);
                             }),
@@ -239,15 +239,14 @@ fn open_picker(modal: State<bool>, draft: Sample, committed: State<(u8, u8)>) {
 fn confirmed_time(committed: State<(u8, u8)>) {
     let (hour, minute) = committed.get();
     gap(Dp(16.0));
-    text()
-        .content(I18N.format(
-            "ui-saved-time-value-value",
-            [
-                ("v0", format!("{:02}", hour).into()),
-                ("v1", format!("{:02}", minute).into()),
-            ],
-        ))
-        .style(type_style(16.0, 24.0));
+    text(I18N.format(
+        "ui-saved-time-value-value",
+        [
+            ("v0", format!("{:02}", hour).into()),
+            ("v1", format!("{:02}", minute).into()),
+        ],
+    ))
+    .style(type_style(16.0, 24.0));
 }
 
 #[tessera]
@@ -271,7 +270,7 @@ fn controls(sample: Sample, #[prop(into)] label: String) {
                     FocusManager::current().defer_keyboard_until_layout();
                 })
                 .child(move || {
-                    text().content(
+                    text(
                         I18N.text(if sample.state.with(TimePickerState::is_24_hour) {
                             "ui-24-hours"
                         } else {
@@ -297,13 +296,13 @@ fn controls(sample: Sample, #[prop(into)] label: String) {
                     FocusManager::current().defer_keyboard_until_layout();
                 })
                 .child(move || {
-                    text().content(I18N.text(
-                        if sample.layout.get() == TimePickerLayout::Horizontal {
+                    text(
+                        I18N.text(if sample.layout.get() == TimePickerLayout::Horizontal {
                             "ui-horizontal"
                         } else {
                             "ui-vertical"
-                        },
-                    ));
+                        }),
+                    );
                 });
             button()
                 .tonal()
@@ -321,7 +320,7 @@ fn controls(sample: Sample, #[prop(into)] label: String) {
                     FocusManager::current().defer_keyboard_until_layout();
                 })
                 .child(move || {
-                    text().content(
+                    text(
                         I18N.text(
                             if sample
                                 .state
@@ -347,24 +346,21 @@ fn visual(sample: Sample, #[prop(into)] label: String, modal: Option<State<bool>
             picker_surface(sample, label.clone()).modal_optional(modal);
         });
     gap(Dp(16.0));
-    text()
-        .content(
-            (sample.state.with(|state| {
-                I18N.format(
-                    "ui-value-time-value-value",
-                    [
-                        ("v0", I18N.text(&caption).into()),
-                        ("v1", format!("{:02}", state.hour()).into()),
-                        ("v2", format!("{:02}", state.minute()).into()),
-                    ],
-                )
-            }))
-            .to_string(),
-        )
-        .style(type_style(16.0, 24.0));
-    text()
-        .content(I18N.text(sample.status.get()))
-        .style(type_style(14.0, 20.0));
+    text(
+        (sample.state.with(|state| {
+            I18N.format(
+                "ui-value-time-value-value",
+                [
+                    ("v0", I18N.text(&caption).into()),
+                    ("v1", format!("{:02}", state.hour()).into()),
+                    ("v2", format!("{:02}", state.minute()).into()),
+                ],
+            )
+        }))
+        .to_string(),
+    )
+    .style(type_style(16.0, 24.0));
+    text(I18N.text(sample.status.get())).style(type_style(14.0, 20.0));
 }
 
 #[tessera]
@@ -444,7 +440,7 @@ fn picker_contents(
                     }
                 })
                 .child(move || {
-                    text().content(I18N.text("ui-ok"));
+                    text(I18N.text("ui-ok"));
                 });
         })
         .dismiss_button(move || {
@@ -458,7 +454,7 @@ fn picker_contents(
                     }
                 })
                 .child(move || {
-                    text().content(I18N.text("ui-cancel"));
+                    text(I18N.text("ui-cancel"));
                 });
         });
 }
@@ -648,13 +644,11 @@ fn time_color_pair(input: bool) {
                             .background_with_shape(scheme.on_surface, Shape::CAPSULE),
                     )
                     .children(move || {
-                        text()
-                            .content((index + 1).to_string())
+                        text((index + 1).to_string())
                             .color(scheme.surface)
                             .style(type_style(14.0, 20.0));
                     });
-                text()
-                    .content(I18N.text(label))
+                text(I18N.text(label))
                     .style(type_style(16.0, 24.0))
                     .modifier(Modifier::new().padding_symmetric(Dp(12.0), Dp::ZERO));
             });
@@ -664,7 +658,7 @@ fn time_color_pair(input: bool) {
 
 #[tessera]
 fn states() {
-    text().content(I18N.text("ui-hover-focus-with-tab-or-use-the-arrow-keys-on-the-dial-activate-a-value-with-enter-or-spac")).style(type_style(16.0, 24.0));
+    text(I18N.text("ui-hover-focus-with-tab-or-use-the-arrow-keys-on-the-dial-activate-a-value-with-enter-or-spac")).style(type_style(16.0, 24.0));
     gap(Dp(24.0));
     example("ui-states", false);
 }
@@ -733,8 +727,7 @@ fn configurations() {
     gap(Dp(24.0));
     time_configuration_pair(true, false);
     gap(Dp(24.0));
-    text()
-        .content(I18N.text("ui-switch-orientation-clock-format-and-input-mode"))
+    text(I18N.text("ui-switch-orientation-clock-format-and-input-mode"))
         .style(type_style(16.0, 24.0));
     gap(Dp(24.0));
     example("ui-configurations", false);
@@ -869,9 +862,7 @@ fn time_configuration_card(input: bool, horizontal: bool, twenty_four: bool, lab
             if open.get() {
                 picker_surface(sample, label.clone()).modal(open);
             } else {
-                text()
-                    .content(I18N.text(sample.status.get()))
-                    .style(type_style(16.0, 24.0));
+                text(I18N.text(sample.status.get())).style(type_style(16.0, 24.0));
                 button()
                     .text()
                     .accessibility_label(
@@ -879,13 +870,11 @@ fn time_configuration_card(input: bool, horizontal: bool, twenty_four: bool, lab
                     )
                     .on_click(move || open.set(true))
                     .child(move || {
-                        text().content(I18N.text("ui-open-time-picker"));
+                        text(I18N.text("ui-open-time-picker"));
                     });
             }
             gap(Dp(16.0));
-            text()
-                .content(I18N.text(&(label)))
-                .style(type_style(16.0, 24.0));
+            text(I18N.text(&(label))).style(type_style(16.0, 24.0));
         });
 }
 
@@ -901,9 +890,7 @@ enum FigureKind {
 
 #[tessera]
 fn prose(#[prop(into)] value: String) {
-    text()
-        .content(I18N.text(value))
-        .style(type_style(16.0, 24.0));
+    text(I18N.text(value)).style(type_style(16.0, 24.0));
 }
 
 #[tessera]
@@ -1223,9 +1210,7 @@ fn time_figure(
     }
     if kind != FigureKind::Colors {
         gap(Dp(12.0));
-        text()
-            .content(I18N.text(sample.status.get()))
-            .style(type_style(14.0, 20.0));
+        text(I18N.text(sample.status.get())).style(type_style(14.0, 20.0));
     }
 }
 
@@ -1308,9 +1293,7 @@ fn time_legend_item(number: usize, label: String) {
         .children(move || {
             annotations::marker(number, Dp::ZERO, Dp::ZERO);
             spacer().modifier(Modifier::new().width(Dp(12.0)));
-            text()
-                .content(I18N.text(&(label)))
-                .style(type_style(16.0, 24.0));
+            text(I18N.text(&(label))).style(type_style(16.0, 24.0));
         });
 }
 
@@ -1336,21 +1319,20 @@ fn time_figure_contents(
         .modifier(Modifier::new().padding_all(Dp(24.0)).width(Dp(body_width)))
         .children(move || {
             let label = label.clone();
-            text()
-                .content(I18N.text(if input {
-                    "ui-enter-time"
-                } else {
-                    "ui-select-time"
-                }))
-                .style(theme.typography.label_medium)
-                .color(theme.color_scheme.on_surface_variant)
-                .modifier(watch_precise(geometry, "headline").semantics(
-                    tessera_components::modifier::SemanticsArgs {
-                        test_tag: Some("time-spec-headline".into()),
-                        merge_descendants: true,
-                        ..Default::default()
-                    },
-                ));
+            text(I18N.text(if input {
+                "ui-enter-time"
+            } else {
+                "ui-select-time"
+            }))
+            .style(theme.typography.label_medium)
+            .color(theme.color_scheme.on_surface_variant)
+            .modifier(watch_precise(geometry, "headline").semantics(
+                tessera_components::modifier::SemanticsArgs {
+                    test_tag: Some("time-spec-headline".into()),
+                    merge_descendants: true,
+                    ..Default::default()
+                },
+            ));
             if !horizontal {
                 gap(Dp(20.0));
             }
@@ -1412,7 +1394,7 @@ fn time_figure_contents(
                         )
                         .on_click(move || sample.status.set("ui-cancelled".into()))
                         .child(move || {
-                            text().content(I18N.text("ui-cancel"));
+                            text(I18N.text("ui-cancel"));
                         });
                     spacer().modifier(Modifier::new().width(Dp(8.0)));
                     button()
@@ -1436,7 +1418,7 @@ fn time_figure_contents(
                             }))
                         })
                         .child(move || {
-                            text().content(I18N.text("ui-ok"));
+                            text(I18N.text("ui-ok"));
                         });
                 });
         });
@@ -1974,8 +1956,7 @@ fn time_color_marker(number: usize, label: String, x: Dp, y: Dp) {
                 }),
         )
         .children(move || {
-            text()
-                .content((number).to_string())
+            text((number).to_string())
                 .style(type_style(14.0, 20.0))
                 .color(scheme.surface);
         });
@@ -2107,7 +2088,7 @@ fn time_behavior(sample: Sample, modal: State<bool>, draft: Sample, committed: S
         .accessibility_label(I18N.text("ui-open-behavior-time-picker"))
         .on_click(move || open_picker(modal, draft, committed))
         .child(move || {
-            text().content(I18N.text("ui-open-time-picker"));
+            text(I18N.text("ui-open-time-picker"));
         });
     gap(Dp(24.0));
     confirmed_time(committed);

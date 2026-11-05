@@ -7,17 +7,17 @@ layout and drawing.
 
 ```rust
 row().children(|| {
-    let title = text();
-    let description = text();
+    let title = text("Title");
+    let description = text("Description");
 
-    description.content("Description");
-    title.content("Title");
+    description.size(Dp(14.0));
+    title.size(Dp(24.0));
 });
 ```
 
 The resulting order is Title, Description. Saving, moving, passing, dropping,
 or forgetting a handle leaves that order and the registered uses intact.
-Chaining remains the usual concise form: `text().content("Title").color(RED);`.
+Chaining remains the usual concise form: `text("Title").color(RED);`.
 Ordinary helpers can accept a handle and configure it. Declaration ownership,
 control-flow group, key, and stable component identity come from the entry
 call, including when configuration happens in another group.
@@ -93,13 +93,13 @@ An unexpanded slot registers no uses from its closure.
 
 ```rust
 row().children(|| {
-    text().content("Title");
+    text("Title");
 });
 ```
 
 A component handle already refers to a registered use. It is not child content
 and has no implicit conversion to a slot, reattachment, or invocation operation.
-Calling `text()` as an argument happens before the receiving function runs.
+Calling `text("Title")` as an argument happens before the receiving function runs.
 
 Pass actions directly as ordinary closures that update state or controllers;
 subsequent UI construction reflects the result. Create `Callback` / `CallbackWith`

@@ -158,9 +158,7 @@ pub(super) fn toolbars_spec(route: Option<crate::pages::material_spec::article::
 
 #[tessera]
 fn paragraph(content: String) {
-    text()
-        .content(I18N.text(content))
-        .style(type_style(16.0, 24.0));
+    text(I18N.text(content)).style(type_style(16.0, 24.0));
 }
 
 #[tessera]
@@ -582,9 +580,7 @@ fn figure(variant: Variant, color: ToolbarColorStyle, measurements: bool) {
                 legend(vec!["ui-container".into(), "ui-placed-components".into()]);
             }
             if !notice.get().is_empty() {
-                text()
-                    .content(I18N.text(notice.get()))
-                    .style(type_style(14.0, 20.0));
+                text(I18N.text(notice.get())).style(type_style(14.0, 20.0));
             }
         });
 }
@@ -710,16 +706,13 @@ fn toolbar_annotations(geometry: State<Geometry>, measurements: bool, variant: V
 
 #[tessera]
 fn prose(#[prop(into)] value: String) {
-    text()
-        .content(I18N.text(value))
-        .style(type_style(16.0, 24.0));
+    text(I18N.text(value)).style(type_style(16.0, 24.0));
 }
 
 #[tessera]
 fn caption(#[prop(into)] value: String) {
     let scheme = use_context::<MaterialTheme>().unwrap().get().color_scheme;
-    text()
-        .content(I18N.text(value))
+    text(I18N.text(value))
         .color(scheme.on_surface_variant)
         .style(type_style(14.0, 20.0));
 }
@@ -735,8 +728,7 @@ fn bullets(items: Vec<String>) {
                     Some(nested) => (Dp(24.0), nested.to_string()),
                     None => (Dp::ZERO, item),
                 };
-                text()
-                    .content(format!("•  {}", I18N.text(item)))
+                text(format!("•  {}", I18N.text(item)))
                     .modifier(Modifier::new().padding(Padding::new(
                         indent,
                         Dp::ZERO,
@@ -759,8 +751,7 @@ fn number_badge(number: usize) {
                 .background_with_shape(INK, Shape::Ellipse),
         )
         .children(move || {
-            text()
-                .content((number).to_string())
+            text((number).to_string())
                 .style(type_style(12.0, 16.0))
                 .color(Color::WHITE);
         });
@@ -782,8 +773,7 @@ fn legend(items: Vec<String>) {
                     .children(move || {
                         number_badge(index + 1);
                         spacer().modifier(Modifier::new().width(Dp(12.0)));
-                        text()
-                            .content(I18N.text(&(label)))
+                        text(I18N.text(&(label)))
                             .modifier(Modifier::new().weight(1.0))
                             .style(type_style(14.0, 20.0));
                     });
@@ -807,14 +797,12 @@ fn guidance(#[prop(into)] mark: String, #[prop(into)] note: String, color: Color
                         .background_with_shape(color, Shape::rounded_rectangle(Dp(8.0))),
                 )
                 .children(move || {
-                    text()
-                        .content(I18N.text(&(mark)))
+                    text(I18N.text(&(mark)))
                         .style(type_style(14.0, 20.0))
                         .color(Color::WHITE);
                 });
             spacer().modifier(Modifier::new().width(Dp(12.0)));
-            text()
-                .content(I18N.text(&(note)))
+            text(I18N.text(&(note)))
                 .modifier(Modifier::new().weight(1.0))
                 .color(scheme.on_surface_variant)
                 .style(type_style(14.0, 20.0));
@@ -1708,7 +1696,7 @@ fn nav_button(next: bool, notice: State<String>, tag: Option<String>) {
                 notice.set(I18N.format("ui-value-activated", [("v0", I18N.text(&label).into())]))
             })
             .child(move || {
-                text().content(I18N.text(label));
+                text(I18N.text(label));
             });
     } else {
         button()
@@ -1719,7 +1707,7 @@ fn nav_button(next: bool, notice: State<String>, tag: Option<String>) {
                 notice.set(I18N.format("ui-value-activated", [("v0", I18N.text(&label).into())]))
             })
             .child(move || {
-                text().content(I18N.text(label));
+                text(I18N.text(label));
             });
     }
 }
@@ -2069,7 +2057,7 @@ fn overflow_example() {
                                 open.set(false);
                             })
                             .child(move || {
-                                text().content(I18N.text(label));
+                                text(I18N.text(label));
                             });
                     }
                     icon_button()
@@ -2105,7 +2093,7 @@ fn overflow_example() {
                                             open.set(false);
                                         })
                                         .child(move || {
-                                            text().content(I18N.text(label));
+                                            text(I18N.text(label));
                                         });
                                 }
                             });
@@ -2133,7 +2121,7 @@ fn overflow_collapse_example() {
                 .accessibility_label(I18N.text("ui-toggle-window-size"))
                 .on_click(move || compact_window.set(!compact_window.get()))
                 .child(move || {
-                    text().content(I18N.text(if compact_window.get() {
+                    text(I18N.text(if compact_window.get() {
                         "ui-show-larger-window"
                     } else {
                         "ui-show-compact-window"
@@ -2628,7 +2616,7 @@ fn token_chip(set: TokenSet, selected: State<TokenSet>) {
             .accessibility_label(I18N.text(label))
             .on_click(move || selected.set(set))
             .child(move || {
-                text().content(I18N.text(label));
+                text(I18N.text(label));
             });
     } else {
         button()
@@ -2637,7 +2625,7 @@ fn token_chip(set: TokenSet, selected: State<TokenSet>) {
             .accessibility_label(I18N.text(label))
             .on_click(move || selected.set(set))
             .child(move || {
-                text().content(I18N.text(label));
+                text(I18N.text(label));
             });
     }
 }
@@ -3236,9 +3224,7 @@ fn slots() {
                                 ),
                         )
                         .children(move || {
-                            text()
-                                .content((index).to_string())
-                                .style(type_style(16.0, 24.0));
+                            text((index).to_string()).style(type_style(16.0, 24.0));
                         });
                 }
             });
@@ -3350,14 +3336,13 @@ fn mock_toolbar(kind: MockBar) {
                         .alignment(Alignment::Center)
                         .modifier(pill)
                         .children(move || {
-                            text()
-                                .content(I18N.text(label))
-                                .style(type_style(12.0, 16.0))
-                                .color(if selected {
+                            text(I18N.text(label)).style(type_style(12.0, 16.0)).color(
+                                if selected {
                                     scheme.on_surface
                                 } else {
                                     scheme.on_primary_container
-                                });
+                                },
+                            );
                         });
                 }
             } else {
@@ -3417,8 +3402,7 @@ fn mock_nav_bar() {
                                     },
                                 );
                             });
-                        text()
-                            .content(I18N.text(label))
+                        text(I18N.text(label))
                             .style(type_style(11.0, 14.0))
                             .color(scheme.on_surface_variant);
                     });
@@ -3481,8 +3465,7 @@ fn phone_mock(#[prop(into)] title: String, toolbar: MockBar, nav_bar: bool) {
                 )
                 .cross_axis_alignment(CrossAxisAlignment::Center)
                 .children(move || {
-                    text()
-                        .content(I18N.text(&(title)))
+                    text(I18N.text(&(title)))
                         .style(type_style(16.0, 24.0))
                         .modifier(Modifier::new().fill_max_width().padding(Padding::new(
                             Dp(16.0),
@@ -3697,7 +3680,7 @@ fn collapsing_example() {
                         .accessibility_label(I18N.text("ui-toggle-toolbar-expansion"))
                         .on_click(move || expanded.set(!expanded.get()))
                         .child(move || {
-                            text().content(I18N.text(if expanded.get() {
+                            text(I18N.text(if expanded.get() {
                                 "ui-collapse-actions"
                             } else {
                                 "ui-expand-actions"
@@ -3709,7 +3692,7 @@ fn collapsing_example() {
                         .accessibility_label(I18N.text("ui-toggle-toolbar-visibility"))
                         .on_click(move || visible.set(!visible.get()))
                         .child(move || {
-                            text().content(I18N.text(if visible.get() {
+                            text(I18N.text(if visible.get() {
                                 "ui-move-offscreen"
                             } else {
                                 "ui-show-toolbar"
@@ -3730,13 +3713,12 @@ fn collapsing_example() {
                 }
             }));
             gap(Dp(16.0));
-            text()
-                .content(I18N.text(if notice.get().is_empty() {
-                    "ui-no-toolbar-action-yet".to_owned()
-                } else {
-                    notice.get()
-                }))
-                .style(type_style(14.0, 20.0));
+            text(I18N.text(if notice.get().is_empty() {
+                "ui-no-toolbar-action-yet".to_owned()
+            } else {
+                notice.get()
+            }))
+            .style(type_style(14.0, 20.0));
         });
 }
 

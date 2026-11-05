@@ -51,14 +51,14 @@ fn fixture(observed: tessera_ui::testing::TestProbe<FixtureHandles>) {
                         .enabled(settings.get().origin_enabled)
                         .on_click(|| {})
                         .child(|| {
-                            text().content("Show notification");
+                            text("Show notification");
                         });
                 }
                 button()
                     .accessibility_label("Other task")
                     .on_click(|| {})
                     .child(|| {
-                        text().content("Continue elsewhere");
+                        text("Continue elsewhere");
                     });
                 snackbar_host().state(host);
             });
@@ -238,8 +238,7 @@ fn custom_slot_fixture(observed: tessera_ui::testing::TestProbe<FixtureHandles>)
         snackbar_host()
             .state(host)
             .snackbar(|data: super::SnackbarData| {
-                text()
-                    .content(data.message().to_owned())
+                text(data.message().to_owned())
                     .accessibility_label(format!("Custom notification: {}", data.message()));
             });
     });

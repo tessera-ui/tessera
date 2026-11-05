@@ -129,7 +129,7 @@ fn fixture(observed: TestProbe<Option<State<Settings>>>) {
                     .accessibility_label("After")
                     .on_click(|| {})
                     .child(|| {
-                        text().content("Continue");
+                        text("Continue");
                     });
             });
         });

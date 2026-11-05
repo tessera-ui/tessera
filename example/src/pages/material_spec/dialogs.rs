@@ -241,8 +241,7 @@ const CAUTION_COLOR: Color = Color::from_rgb(0.659, 0.373, 0.0);
 fn bullets(items: Vec<String>) {
     column().children(move || {
         for item in items.clone() {
-            text()
-                .content(format!("•  {}", I18N.text(item)))
+            text(format!("•  {}", I18N.text(item)))
                 .style(type_style(16.0, 24.0))
                 .color(INK);
             gap(Dp(8.0));
@@ -253,8 +252,7 @@ fn bullets(items: Vec<String>) {
 #[tessera]
 fn caption(#[prop(into)] value: String) {
     let scheme = use_context::<MaterialTheme>().unwrap().get().color_scheme;
-    text()
-        .content(I18N.text(value))
+    text(I18N.text(value))
         .color(scheme.on_surface_variant)
         .style(type_style(14.0, 20.0));
 }
@@ -275,14 +273,12 @@ fn guidance_line(#[prop(into)] mark: String, #[prop(into)] note: String, color: 
                         .background_with_shape(color, Shape::rounded_rectangle(Dp(8.0))),
                 )
                 .children(move || {
-                    text()
-                        .content(I18N.text(&(mark)))
+                    text(I18N.text(&(mark)))
                         .style(type_style(14.0, 20.0))
                         .color(Color::WHITE);
                 });
             spacer().modifier(Modifier::new().width(Dp(12.0)));
-            text()
-                .content(I18N.text(&(note)))
+            text(I18N.text(&(note)))
                 .color(scheme.on_surface_variant)
                 .style(type_style(14.0, 20.0))
                 .modifier(Modifier::new().weight(1.0));
@@ -308,14 +304,12 @@ fn legend(items: Vec<String>) {
                                 ),
                         )
                         .children(move || {
-                            text()
-                                .content((index + 1).to_string())
+                            text((index + 1).to_string())
                                 .style(type_style(12.0, 16.0))
                                 .color(scheme.surface);
                         });
                     spacer().modifier(Modifier::new().width(Dp(12.0)));
-                    text()
-                        .content(I18N.text(&(item)))
+                    text(I18N.text(&(item)))
                         .style(type_style(14.0, 20.0))
                         .color(scheme.on_surface_variant);
                 });
@@ -378,8 +372,7 @@ fn verdict_band(verdict: Verdict) {
                 .children(move || {
                     icon().painter(vector).tint(color).size(Dp(20.0));
                     spacer().modifier(Modifier::new().width(Dp(8.0)));
-                    text()
-                        .content(I18N.text(label))
+                    text(I18N.text(label))
                         .color(color)
                         .style(type_style(16.0, 24.0));
                 });
@@ -485,8 +478,7 @@ fn guide_marker() {
                 }),
         )
         .children(move || {
-            text()
-                .content("1")
+            text("1")
                 .style(type_style(12.0, 16.0))
                 .color(scheme.surface);
         });
@@ -518,8 +510,7 @@ fn mock_action(label: String, disabled: bool, marked: bool) {
                 guide_marker();
                 spacer().modifier(Modifier::new().width(Dp(8.0)));
             }
-            text()
-                .content(I18N.text(&(label)))
+            text(I18N.text(&(label)))
                 .style(type_style(14.0, 20.0))
                 .color(color);
         });
@@ -560,14 +551,12 @@ fn mock_dialog(
         )
         .children(move || {
             let (actions, content) = (actions.clone(), content.clone());
-            text()
-                .content(I18N.text(&(headline)))
+            text(I18N.text(&(headline)))
                 .style(type_style(24.0, 32.0))
                 .color(scheme.on_surface);
             if let Some(body) = body.clone() {
                 gap(Dp(16.0));
-                text()
-                    .content(I18N.text(body))
+                text(I18N.text(body))
                     .style(type_style(14.0, 20.0))
                     .color(scheme.on_surface_variant);
             }
@@ -724,8 +713,7 @@ fn radio_options(selected: Option<usize>) {
                                 }
                             });
                         spacer().modifier(Modifier::new().width(Dp(16.0)));
-                        text()
-                            .content(I18N.text(label))
+                        text(I18N.text(label))
                             .style(type_style(16.0, 24.0))
                             .color(scheme.on_surface);
                     });
@@ -772,8 +760,7 @@ fn full_screen_scene(
                                 .size(Dp(24.0))
                                 .tint(scheme.on_surface);
                             spacer().modifier(Modifier::new().width(Dp(16.0)));
-                            text()
-                                .content(I18N.text(&(title)))
+                            text(I18N.text(&(title)))
                                 .style(type_style(22.0, 28.0))
                                 .color(scheme.on_surface);
                             if mark_title {
@@ -781,8 +768,7 @@ fn full_screen_scene(
                                 guide_marker();
                             }
                             spacer().modifier(Modifier::new().weight(1.0));
-                            text()
-                                .content(I18N.text(&(action)))
+                            text(I18N.text(&(action)))
                                 .style(type_style(14.0, 20.0))
                                 .color(scheme.primary);
                         });
@@ -794,8 +780,7 @@ fn full_screen_scene(
                                     .cross_axis_alignment(CrossAxisAlignment::Center)
                                     .modifier(Modifier::new().fill_max_width())
                                     .children(move || {
-                                        text()
-                                            .content(I18N.text(&(headline)))
+                                        text(I18N.text(&(headline)))
                                             .style(type_style(24.0, 32.0))
                                             .color(scheme.on_surface)
                                             .modifier(Modifier::new().weight(1.0));
@@ -810,13 +795,11 @@ fn full_screen_scene(
                                 ("ui-location", "ui-mountain-view"),
                                 ("ui-date", "ui-fri-aug-8-7-00-pm"),
                             ] {
-                                text()
-                                    .content(I18N.text(caption))
+                                text(I18N.text(caption))
                                     .style(type_style(12.0, 16.0))
                                     .color(scheme.on_surface_variant);
                                 gap(Dp(4.0));
-                                text()
-                                    .content(I18N.text(value))
+                                text(I18N.text(value))
                                     .style(type_style(16.0, 24.0))
                                     .color(scheme.on_surface);
                                 gap(Dp(8.0));
@@ -850,8 +833,7 @@ fn calendar_scene() {
             column()
                 .modifier(Modifier::new().fill_max_width())
                 .children(move || {
-                    text()
-                        .content(I18N.text("ui-august-2025"))
+                    text(I18N.text("ui-august-2025"))
                         .style(type_style(22.0, 28.0))
                         .color(scheme.on_surface);
                     gap(Dp(12.0));
@@ -863,8 +845,7 @@ fn calendar_scene() {
                                     .alignment(Alignment::Center)
                                     .modifier(Modifier::new().weight(1.0).height(Dp(24.0)))
                                     .children(move || {
-                                        text()
-                                            .content(I18N.text(day))
+                                        text(I18N.text(day))
                                             .style(type_style(12.0, 16.0))
                                             .color(scheme.on_surface_variant);
                                     });
@@ -882,8 +863,7 @@ fn calendar_scene() {
                                         .modifier(Modifier::new().weight(1.0).height(Dp(30.0)))
                                         .children(move || {
                                             if (1..=31).contains(&date) {
-                                                text()
-                                                    .content((date).to_string())
+                                                text((date).to_string())
                                                     .style(type_style(14.0, 20.0))
                                                     .color(scheme.on_surface);
                                             }
@@ -1007,13 +987,11 @@ fn guideline_hero() {
                         }),
                 )
                 .children(move || {
-                    text()
-                        .content(I18N.text("ui-basic-dialog-title"))
+                    text(I18N.text("ui-basic-dialog-title"))
                         .style(type_style(24.0, 32.0))
                         .color(scheme.on_surface);
                     gap(Dp(16.0));
-                    text()
-                        .content(I18N.text("ui-a-dialog-is-a-type-of-modal-window-that-appears-in-front-of-app-content-to-provide-critica"))
+                    text(I18N.text("ui-a-dialog-is-a-type-of-modal-window-that-appears-in-front-of-app-content-to-provide-critica"))
                         .style(type_style(14.0, 20.0))
                         .color(scheme.on_surface_variant);
                     gap(Dp(24.0));
@@ -1701,8 +1679,7 @@ fn event_dialog(
 
 #[tessera]
 fn prose(#[prop(into)] value: String) {
-    text()
-        .content(I18N.text(value))
+    text(I18N.text(value))
         .style(type_style(16.0, 24.0))
         .color(INK);
 }
@@ -1719,7 +1696,7 @@ fn launch(open: State<bool>, full: State<bool>, saved: State<bool>) {
                 open.set(true);
             })
             .child(move || {
-                text().content(I18N.text("ui-open-basic-dialog"));
+                text(I18N.text("ui-open-basic-dialog"));
             });
         gap(Dp(12.0));
         button()
@@ -1731,7 +1708,7 @@ fn launch(open: State<bool>, full: State<bool>, saved: State<bool>) {
                 open.set(true);
             })
             .child(move || {
-                text().content(I18N.text("ui-open-full-screen-dialog"));
+                text(I18N.text("ui-open-full-screen-dialog"));
             });
         if saved.get() {
             gap(Dp(12.0));
@@ -1747,7 +1724,7 @@ fn action(label: String, callback: Callback) {
         .accessibility_label(I18N.text(&(label)))
         .on_click_shared(callback)
         .child(move || {
-            text().content(I18N.text(&(label)));
+            text(I18N.text(&(label)));
         });
 }
 
@@ -1905,33 +1882,32 @@ fn basic_figure(measurements: bool) {
                                                         });
                                                     gap(Dp(16.0 * scale));
                                                 }
-                                                text()
-                                                    .content(I18N.text(if measurements {
-                                                        "ui-basic-dialog-title"
-                                                    } else {
-                                                        "ui-reset-settings"
-                                                    }))
-                                                    .style(dialog_type_style(24.0, 32.0, scale))
-                                                    .color(scheme.on_surface)
-                                                    .modifier(if measurements {
-                                                        watch(geometry, "headline").semantics(
-                                                            SemanticsArgs {
-                                                                test_tag: Some(
-                                                                    "dialog-figure-headline".into(),
-                                                                ),
-                                                                ..Default::default()
-                                                            },
-                                                        )
-                                                    } else {
-                                                        watch(geometry, "headline")
-                                                            .semantics(SemanticsArgs {
-                                                                test_tag: Some(
-                                                                    "dialog-figure-headline".into(),
-                                                                ),
-                                                                ..Default::default()
-                                                            })
-                                                            .align(Alignment::Center)
-                                                    });
+                                                text(I18N.text(if measurements {
+                                                    "ui-basic-dialog-title"
+                                                } else {
+                                                    "ui-reset-settings"
+                                                }))
+                                                .style(dialog_type_style(24.0, 32.0, scale))
+                                                .color(scheme.on_surface)
+                                                .modifier(if measurements {
+                                                    watch(geometry, "headline").semantics(
+                                                        SemanticsArgs {
+                                                            test_tag: Some(
+                                                                "dialog-figure-headline".into(),
+                                                            ),
+                                                            ..Default::default()
+                                                        },
+                                                    )
+                                                } else {
+                                                    watch(geometry, "headline")
+                                                        .semantics(SemanticsArgs {
+                                                            test_tag: Some(
+                                                                "dialog-figure-headline".into(),
+                                                            ),
+                                                            ..Default::default()
+                                                        })
+                                                        .align(Alignment::Center)
+                                                });
                                                 gap(Dp(16.0 * scale));
                                                 dialog_body(geometry, measurements, scale);
                                                 gap(Dp(
@@ -2026,7 +2002,7 @@ fn dialog_figure_action(
         .child(move || {
             let mut style = dialog_type_style(14.0, 20.0, scale);
             style.font_weight = 500;
-            text().content(I18N.text(&(label))).style(style);
+            text(I18N.text(&(label))).style(style);
         });
 }
 
@@ -2061,7 +2037,7 @@ fn dialog_account_avatar(index: usize, scale: f64) {
 fn dialog_body(geometry: State<Geometry>, measurements: bool, scale: f64) {
     let scheme = use_context::<MaterialTheme>().unwrap().get().color_scheme;
     column().modifier(Modifier::new().fill_max_width()).children(move || {
-        text().content(I18N.text(if measurements {
+        text(I18N.text(if measurements {
             "ui-a-dialog-is-a-modal-window-that-appears-in-front-of-app-content-to-provide-critical-inform-2275"
         } else {
             "ui-this-will-reset-your-app-preferences-back-to-their-default-settings-the-following-accounts-2276"
@@ -2078,7 +2054,7 @@ fn dialog_body(geometry: State<Geometry>, measurements: bool, scale: f64) {
                     .modifier(Modifier::new().fill_max_width().height(Dp(56.0 * scale))).children(move || {
                         dialog_account_avatar(index, scale);
                         spacer().modifier(Modifier::new().width(Dp(16.0 * scale)));
-                        text().content(I18N.text(email)).style(dialog_type_style(14.0, 20.0, scale)).color(scheme.on_surface)
+                        text(I18N.text(email)).style(dialog_type_style(14.0, 20.0, scale)).color(scheme.on_surface)
                             .modifier(Modifier::new().weight(1.0));
                     });
             }
@@ -2318,8 +2294,7 @@ fn dialog_marker(number: usize, x: f64, y: f64, scale: f64) {
                 }),
         )
         .children(move || {
-            text()
-                .content((number).to_string())
+            text((number).to_string())
                 .style(dialog_type_style(14.0, 20.0, scale))
                 .color(INK);
         });
@@ -2327,8 +2302,7 @@ fn dialog_marker(number: usize, x: f64, y: f64, scale: f64) {
 
 #[tessera]
 fn dialog_dimension(label: String, x: f64, y: f64, scale: f64) {
-    text()
-        .content(I18N.text(&(label)))
+    text(I18N.text(&(label)))
         .style(dialog_type_style(14.0, 20.0, scale))
         .color(INK)
         .modifier(
@@ -2396,8 +2370,8 @@ dialog_canvas(1024.0, 622.0, RenderSlot::new(move || {
                                 .background_with_shape(scheme.surface_container_high, Shape::rounded_rectangle(Dp(28.0 * scale)))
                                 .padding_all(Dp(24.0 * scale)))
                                 .children(move || {
-                                    text().content(I18N.text("ui-basic-dialog-title")).style(dialog_type_style(24.0, 32.0, scale)).color(scheme.on_surface);
-                                    text().content(I18N.text("ui-a-dialog-is-a-modal-window-that-appears-in-front-of-app-content-to-provide-critical-inform-2278"))
+                                    text(I18N.text("ui-basic-dialog-title")).style(dialog_type_style(24.0, 32.0, scale)).color(scheme.on_surface);
+                                    text(I18N.text("ui-a-dialog-is-a-modal-window-that-appears-in-front-of-app-content-to-provide-critical-inform-2278"))
                                         .style(dialog_type_style(14.0, 20.0, scale)).color(scheme.on_surface_variant)
                                         .modifier(Modifier::new().offset(Dp::ZERO, Dp(52.0 * scale)).width(Dp(264.0 * scale)));
                                     dialog_scene_action("ui-text-button".into(), "ui-overview-basic-dismiss".into(), 40.0, 132.0, 112.0, scale,
@@ -2417,7 +2391,7 @@ dialog_canvas(1024.0, 622.0, RenderSlot::new(move || {
                                 .size(Dp(364.0 * scale), Dp(scale)).background(scheme.outline_variant));
                             for (index, caption) in ["ui-from", "To"].into_iter().enumerate() {
                                 let y = 318.0 + index as f64 * 104.0;
-                                text().content(I18N.text(caption)).style(dialog_type_style(12.0, 16.0, scale)).color(scheme.on_surface_variant)
+                                text(I18N.text(caption)).style(dialog_type_style(12.0, 16.0, scale)).color(scheme.on_surface_variant)
                                     .modifier(Modifier::new().offset(Dp(24.0 * scale), Dp(y * scale)));
                                 for (column, kind) in ["date", "time"].into_iter().enumerate() {
                                     dialog_scene_input(24.0 + column as f64 * 185.0, y + 25.0, 177.0,
@@ -2450,8 +2424,7 @@ fn dialog_overview_badge(number: usize, center: f64, scale: f64) {
                 }),
         )
         .children(move || {
-            text()
-                .content((number).to_string())
+            text((number).to_string())
                 .style(dialog_type_style(16.0, 24.0, scale))
                 .color(scheme.surface);
         });
@@ -2486,8 +2459,7 @@ fn dialog_phone_frame(x: f64, y: f64, height: f64, scale: f64, child: RenderSlot
 #[tessera]
 fn dialog_phone_status(scale: f64) {
     let scheme = use_context::<MaterialTheme>().unwrap().get().color_scheme;
-    text()
-        .content("9:30")
+    text("9:30")
         .style(dialog_type_style(14.0, 20.0, scale))
         .color(scheme.on_surface)
         .modifier(Modifier::new().offset(Dp(24.0 * scale), Dp(23.0 * scale)));
@@ -2526,8 +2498,7 @@ fn dialog_phone_header(title: String, scale: f64, close: Callback, save: Callbac
                 .size(Dp(24.0 * scale))
                 .tint(scheme.on_surface);
         });
-    text()
-        .content(I18N.text(title))
+    text(I18N.text(title))
         .style(dialog_type_style(22.0, 28.0, scale))
         .color(scheme.on_surface)
         .modifier(Modifier::new().offset(Dp(56.0 * scale), Dp(74.0 * scale)));
@@ -2565,7 +2536,7 @@ fn dialog_scene_action(
         .child(move || {
             let mut style = dialog_type_style(14.0, 20.0, scale);
             style.font_weight = 500;
-            text().content(I18N.text(&(label))).style(style);
+            text(I18N.text(&(label))).style(style);
         });
 }
 
@@ -2679,10 +2650,10 @@ dialog_canvas(1024.0, 486.0, RenderSlot::new(move || {
                                     icon().painter(filled::DONE_SVG).size(Dp(12.0 * scale)).tint(scheme.secondary);
                                 });
                             });
-                        text().content(I18N.text("ui-dialog-with-hero-icon")).style(dialog_type_style(24.0, 32.0, scale)).color(scheme.on_surface)
+                        text(I18N.text("ui-dialog-with-hero-icon")).style(dialog_type_style(24.0, 32.0, scale)).color(scheme.on_surface)
                             .modifier(watch(geometry, "headline").semantics(SemanticsArgs { test_tag: Some("dialog-figure-headline".into()), merge_descendants: true,
 ..Default::default() }).offset(Dp::ZERO, Dp(40.0 * scale)).align(Alignment::TopCenter));
-                        text().content(I18N.text("ui-a-dialog-is-a-modal-window-that-appears-in-front-of-app-content-to-provide-critical-inform-2295"))
+                        text(I18N.text("ui-a-dialog-is-a-modal-window-that-appears-in-front-of-app-content-to-provide-critical-inform-2295"))
                             .style(dialog_type_style(14.0, 20.0, scale)).color(scheme.on_surface_variant)
                             .modifier(watch(geometry, "body").semantics(SemanticsArgs { test_tag: Some("dialog-figure-body".into()), merge_descendants: true,
 ..Default::default() }).offset(Dp::ZERO, Dp(88.0 * scale)).width(Dp(292.0 * scale)));
@@ -2804,8 +2775,7 @@ fn dialog_color_marker(number: usize, role: String, x: f64, y: f64, scale: f64) 
                 }),
         )
         .children(move || {
-            text()
-                .content((number).to_string())
+            text((number).to_string())
                 .style(dialog_type_style(14.0, 20.0, scale))
                 .color(INK);
         });
@@ -2881,7 +2851,7 @@ fn full_spec_figure(mode: usize) {
                                     match mode {0 => "ui-carmen-s-birthday-surprise-party", 1 => "ui-mam-s-birthday", _ => ""}.into(),
                                     I18N.format("ui-full-spec-value-event-name", [("v0", (mode).into())]), scale);
                                 if mode == 1 {
-                                    text().content(I18N.text("ui-with-mam-s-birthday-around-the-corner-i-d-like-to-start-planning-location-and-food-i-can-h"))
+                                    text(I18N.text("ui-with-mam-s-birthday-around-the-corner-i-d-like-to-start-planning-location-and-food-i-can-h"))
                                         .style(dialog_type_style(16.0, 24.0, scale)).color(scheme.on_surface_variant)
                                         .modifier(watch(geometry, "body").semantics(SemanticsArgs { test_tag: Some("dialog-figure-body".into()), merge_descendants: true,
 ..Default::default() }).offset(Dp(24.0 * scale), Dp(280.0 * scale)).width(Dp(364.0 * scale)));
@@ -2892,7 +2862,7 @@ fn full_spec_figure(mode: usize) {
                                     for (row, caption) in ["ui-from", "To"].into_iter().enumerate() {
                                         if mode == 0 && row == 1 {continue;}
                                         let top = if mode == 0 {318.0} else {316.0 + row as f64 * 104.0};
-                                        text().content(I18N.text(caption)).style(dialog_type_style(12.0, 16.0, scale)).color(scheme.on_surface_variant)
+                                        text(I18N.text(caption)).style(dialog_type_style(12.0, 16.0, scale)).color(scheme.on_surface_variant)
                                             .modifier(Modifier::new().offset(Dp(24.0 * scale), Dp(top * scale)));
                                         for column in 0..2 {
                                             dialog_scene_input(24.0 + column as f64 * 185.0,
@@ -2906,9 +2876,9 @@ fn full_spec_figure(mode: usize) {
                                         checkbox().checked(all_day.get()).size(Dp(18.0 * scale))
                                             .on_toggle(move |next| all_day.set(next)).accessibility_label(I18N.text("ui-measurement-all-day"))
                                             .modifier(Modifier::new().offset(Dp(28.0 * scale), Dp(513.0 * scale)).size(Dp(48.0 * scale), Dp(48.0 * scale)));
-                                        text().content(I18N.text("ui-all-day")).style(dialog_type_style(16.0, 24.0, scale)).color(scheme.on_surface_variant)
+                                        text(I18N.text("ui-all-day")).style(dialog_type_style(16.0, 24.0, scale)).color(scheme.on_surface_variant)
                                             .modifier(Modifier::new().offset(Dp(80.0 * scale), Dp(525.0 * scale)));
-                                        text().content(I18N.text("ui-timezone")).style(dialog_type_style(12.0, 16.0, scale)).color(scheme.on_surface_variant)
+                                        text(I18N.text("ui-timezone")).style(dialog_type_style(12.0, 16.0, scale)).color(scheme.on_surface_variant)
                                             .modifier(Modifier::new().offset(Dp(24.0 * scale), Dp(572.0 * scale)));
                                         dialog_scene_input(24.0, 599.0, 364.0, "ui-label".into(), "ui-input".into(), "ui-measurement-timezone".into(), true, scale);
                                         spacer().modifier(Modifier::new().offset(Dp(152.0 * scale), Dp(878.0 * scale)).size(Dp(108.0 * scale), Dp(4.0 * scale))
@@ -2974,8 +2944,7 @@ fn full_spec_header(
                         .size(Dp(24.0 * scale))
                         .tint(scheme.on_surface);
                 });
-            text()
-                .content(I18N.text(&(title)))
+            text(I18N.text(&(title)))
                 .style(dialog_type_style(22.0, 28.0, scale))
                 .color(scheme.on_surface)
                 .modifier(
@@ -3356,7 +3325,7 @@ fn full_figure() {
                             visible.set(true);
                         })
                         .child(move || {
-                            text().content(I18N.text("ui-show-full-screen-dialog"));
+                            text(I18N.text("ui-show-full-screen-dialog"));
                         });
                 });
             }
@@ -3405,7 +3374,7 @@ fn event_form(draft: State<EventDraft>) {
                         .checked(draft.with(|value| value.all_day))
                         .on_toggle(move |next| draft.with_mut(|value| value.all_day = next))
                         .accessibility_label(I18N.text("ui-all-day-7091"));
-                    text().content(I18N.text("ui-all-day-7091"));
+                    text(I18N.text("ui-all-day-7091"));
                 });
             gap(Dp(16.0));
             prose("ui-time-zone");

@@ -275,7 +275,7 @@ impl LazyListContent {
 /// fn demo() {
 ///     lazy_column().items(1000, |i| {
 ///         let text_content = format!("Item #{i}");
-///         text().content(text_content);
+///         text(text_content);
 ///     });
 /// }
 /// ```
@@ -439,7 +439,7 @@ fn lazy_column_slots(parameters: State<LazyListSlotsArgs>) {
 /// fn demo() {
 ///     lazy_row().items(100, |i| {
 ///         let text_content = format!("Item {i}");
-///         text().content(text_content);
+///         text(text_content);
 ///     });
 /// }
 /// ```
@@ -2244,7 +2244,7 @@ mod tests {
                 .controller(controller)
                 .estimated_item_size(Dp(60.0))
                 .items(3, |_| {
-                    text().content("A responsive list retains measured geometry while its viewport is temporarily collapsed.");
+                    text("A responsive list retains measured geometry while its viewport is temporarily collapsed.");
                 });
         });
     }

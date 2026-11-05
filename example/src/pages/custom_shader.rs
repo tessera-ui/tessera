@@ -70,12 +70,10 @@ pub fn custom_shader_page() {
         .content_padding(Dp(16.0))
         .item_spacing(Dp(14.0))
         .item(move || {
-            text()
-                .content(I18N.text("ui-custom-shader"))
-                .style(theme.with(|t| t.typography.headline_large));
+            text(I18N.text("ui-custom-shader")).style(theme.with(|t| t.typography.headline_large));
         })
         .item(move || {
-            text().content(I18N.text("ui-a-ray-tracing-demo"));
+            text(I18N.text("ui-a-ray-tracing-demo"));
         })
         .item(move || {
             raymarch_canvas(
@@ -90,13 +88,13 @@ pub fn custom_shader_page() {
             );
         })
         .item(move || {
-            text().content(I18N.format(
+            text(I18N.format(
                 "ui-time-scale-valuex",
                 [("v0", format!("{:.2}", time_scale).into())],
             ));
         })
         .item(move || {
-            text().content(I18N.text("ui-animation-speed"));
+            text(I18N.text("ui-animation-speed"));
         })
         .item(move || {
             slider()

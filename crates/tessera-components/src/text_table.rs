@@ -281,8 +281,7 @@ fn table_row(
             .alignment(Alignment::CenterStart)
             .modifier(modifier)
             .children(move || {
-                text()
-                    .content(cell.text.clone())
+                text(cell.text.clone())
                     .style(if heading { header_style } else { style })
                     .color(if heading { header_color } else { color })
                     .modifier(Modifier::new().padding(padding));

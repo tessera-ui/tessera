@@ -509,13 +509,11 @@ fn component_card(component: Component, index: usize, selected: State<Option<usi
                     column()
                         .modifier(Modifier::new().fill_max_width().padding_all(Dp(24.0)))
                         .children(move || {
-                            text()
-                                .content(I18N.text(component.title))
+                            text(I18N.text(component.title))
                                 .style(type_style(24.0, 32.0))
                                 .color(INK);
                             gap(Dp(8.0));
-                            text()
-                                .content(I18N.text(component.description))
+                            text(I18N.text(component.description))
                                 .style(type_style(16.0, 24.0))
                                 .color(INK);
                         });

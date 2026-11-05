@@ -137,7 +137,7 @@ fn keyboard_content(reverse: bool, scale: f64) {
                         icon().painter(filled::DELETE_OUTLINE_SVG).size(Dp(24.0 * scale)).tint(scheme.secondary);
                     });
                 placed_text("ui-permanently-delete".into(), 24.0, 32.0, 46.0, 64.0, 264.0, scale);
-                text().content(I18N.text("ui-deleting-the-selected-messages-will-also-remove-them-from-all-synced-devices-you-won-t-be"))
+                text(I18N.text("ui-deleting-the-selected-messages-will-also-remove-them-from-all-synced-devices-you-won-t-be"))
                     .style(dialog_type_style(14.0, 20.0, scale)).color(scheme.on_surface_variant)
                     .modifier(Modifier::new().offset(Dp(24.0 * scale), Dp(112.0 * scale)).width(Dp(264.0 * scale)));
                 for (index, label, x, width, focus) in [
@@ -152,7 +152,7 @@ fn keyboard_content(reverse: bool, scale: f64) {
                             .size(Dp(width * scale), Dp(40.0 * scale)).focus_requester(focus))
                         .on_click(move || shown.set(false))
                         .child(move || {
-                            text().content(I18N.text(label)).style(dialog_type_style(14.0, 20.0, scale));
+                            text(I18N.text(label)).style(dialog_type_style(14.0, 20.0, scale));
                         });
                 }
             });
@@ -198,8 +198,7 @@ fn keyboard_content(reverse: bool, scale: f64) {
             }
         })
         .child(move || {
-            text()
-                .content(I18N.text(if reverse { "ui-shift-tab" } else { "ui-tab" }))
+            text(I18N.text(if reverse { "ui-shift-tab" } else { "ui-tab" }))
                 .style(dialog_type_style(28.0, 36.0, scale));
         });
     numbered(if reverse { 2 } else { 1 }, 326.0, 505.0, scale);
@@ -225,7 +224,7 @@ fn traffic_labels(scale: f64) {
             .semantics(SemanticsArgs { role: Some(Role::AlertDialog), label: Some(I18N.text("ui-set-up-traffic-updates")), ..Default::default() }))
             .children(move || {
                 placed_text("ui-set-up-traffic-updates".into(), 24.0, 32.0, 24.0, 24.0, 264.0, scale);
-                text().content(I18N.text("ui-get-notified-when-traffic-is-impacted-along-your-usual-routes-add-your-preferred-routes-an"))
+                text(I18N.text("ui-get-notified-when-traffic-is-impacted-along-your-usual-routes-add-your-preferred-routes-an"))
                     .style(dialog_type_style(14.0, 20.0, scale)).color(scheme.on_surface_variant)
                     .modifier(Modifier::new().offset(Dp(24.0 * scale), Dp(72.0 * scale)).width(Dp(264.0 * scale)));
                 dialog_scene_action("ui-no-thanks".into(), "ui-decline-traffic-updates".into(), 128.0, 180.0, 96.0, scale,
@@ -425,8 +424,7 @@ fn annotation_card(
         )
         .children(move || {
             placed_text("ui-label".into(), 16.0, 20.0, 0.0, 0.0, width - 44.0, scale);
-            text()
-                .content(I18N.text(&(label)))
+            text(I18N.text(&(label)))
                 .style(dialog_type_style(16.0, 20.0, scale))
                 .color(scheme.tertiary)
                 .modifier(
@@ -435,8 +433,7 @@ fn annotation_card(
                         .width(Dp((width - 44.0) * scale)),
                 );
             placed_text("ui-role".into(), 16.0, 20.0, 0.0, 56.0, width - 44.0, scale);
-            text()
-                .content(I18N.text(&(role)))
+            text(I18N.text(&(role)))
                 .style(dialog_type_style(16.0, 20.0, scale))
                 .color(scheme.tertiary)
                 .modifier(
@@ -540,8 +537,7 @@ fn photo_content(modal: bool, scale: f64) {
                 ),
         )
         .children(move || {
-            text()
-                .content("Jun\n8")
+            text("Jun\n8")
                 .style(dialog_type_style(12.0, 16.0, scale))
                 .color(scheme.on_primary_container);
         });
@@ -575,8 +571,7 @@ fn photo_content(modal: bool, scale: f64) {
                     266.0,
                     scale,
                 );
-                text()
-                    .content(I18N.text("ui-three-new-photos-were-synced-to-your-device"))
+                text(I18N.text("ui-three-new-photos-were-synced-to-your-device"))
                     .style(dialog_type_style(14.0, 20.0, scale))
                     .color(scheme.on_surface_variant)
                     .modifier(
@@ -607,8 +602,7 @@ fn photo_content(modal: bool, scale: f64) {
                     ),
             )
             .children(move || {
-                text()
-                    .content(I18N.text("ui-three-new-photos-were-synced-to-your-device"))
+                text(I18N.text("ui-three-new-photos-were-synced-to-your-device"))
                     .style(dialog_type_style(14.0, 20.0, scale))
                     .color(scheme.inverse_on_surface);
             });
@@ -660,10 +654,7 @@ fn enlarged_text(scale: f64) {
                     264.0,
                     scale,
                 );
-                text()
-                    .content(
-                        I18N.text("ui-you-won-t-be-able-to-restore-your-history-once-it-s-cleared"),
-                    )
+                text(I18N.text("ui-you-won-t-be-able-to-restore-your-history-once-it-s-cleared"))
                     .style(dialog_type_style(28.0, 36.0, scale))
                     .color(scheme.on_surface_variant)
                     .modifier(
@@ -682,8 +673,7 @@ fn enlarged_text(scale: f64) {
                     )
                     .on_click(move || shown.set(false))
                     .child(move || {
-                        text()
-                            .content(I18N.text("ui-don-t-clear"))
+                        text(I18N.text("ui-don-t-clear"))
                             .style(dialog_type_style(28.0, 36.0, scale));
                     });
             });
@@ -817,8 +807,7 @@ fn map_background(scale: f64) {
 #[tessera]
 fn placed_text(value: String, size: f64, line: f64, x: f64, y: f64, width: f64, scale: f64) {
     let scheme = use_context::<MaterialTheme>().unwrap().get().color_scheme;
-    text()
-        .content(I18N.text(value))
+    text(I18N.text(value))
         .style(dialog_type_style(size, line, scale))
         .color(scheme.on_surface)
         .modifier(
@@ -840,8 +829,7 @@ fn numbered(value: usize, x: f64, y: f64, scale: f64) {
                 .background_with_shape(scheme.inverse_surface, Shape::Ellipse),
         )
         .children(move || {
-            text()
-                .content((value).to_string())
+            text((value).to_string())
                 .style(dialog_type_style(28.0, 36.0, scale))
                 .color(scheme.inverse_on_surface);
         });

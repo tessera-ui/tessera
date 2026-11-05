@@ -90,7 +90,7 @@ fn sample(
                                 .accessibility_label(I18N.text("ui-expand-navigation-rail"))
                                 .on_click(move || expanded.set(!expanded.get()))
                                 .child(move || {
-                                    text().content(I18N.text("ui-expanded"));
+                                    text(I18N.text("ui-expanded"));
                                 });
                             button()
                                 .tonal()
@@ -98,7 +98,7 @@ fn sample(
                                 .accessibility_label(I18N.text("ui-hide-collapsed-rail"))
                                 .on_click(move || hidden.set(!hidden.get()))
                                 .child(move || {
-                                    text().content(I18N.text("ui-hide-when-collapsed"));
+                                    text(I18N.text("ui-hide-when-collapsed"));
                                 });
                         } else {
                             button()
@@ -118,7 +118,7 @@ fn sample(
                                     })
                                 })
                                 .child(move || {
-                                    text().content(I18N.format(
+                                    text(I18N.format(
                                         "ui-layout-value",
                                         [("v0", format!("{:?}", position.get()).into())],
                                     ));
@@ -136,7 +136,7 @@ fn sample(
                                     }
                                 })
                                 .child(move || {
-                                    text().content(I18N.format(
+                                    text(I18N.format(
                                         "ui-destinations-value",
                                         [("v0", (count.get()).into())],
                                     ));
@@ -195,25 +195,23 @@ fn sample(
                     });
             }
             gap(Dp(16.0));
-            text()
-                .content(I18N.format(
-                    "ui-value-destination-value",
+            text(I18N.format(
+                "ui-value-destination-value",
+                [
+                    ("v0", I18N.text(&caption).into()),
+                    ("v1", I18N.text(&(NAMES[selected.get()])).into()),
+                ],
+            ))
+            .style(type_style(14.0, 20.0));
+            if fab.unwrap_or(false) {
+                text(I18N.format(
+                    "ui-value-compositions-value",
                     [
                         ("v0", I18N.text(&caption).into()),
-                        ("v1", I18N.text(&(NAMES[selected.get()])).into()),
+                        ("v1", (actions.get()).into()),
                     ],
                 ))
                 .style(type_style(14.0, 20.0));
-            if fab.unwrap_or(false) {
-                text()
-                    .content(I18N.format(
-                        "ui-value-compositions-value",
-                        [
-                            ("v0", I18N.text(&caption).into()),
-                            ("v1", (actions.get()).into()),
-                        ],
-                    ))
-                    .style(type_style(14.0, 20.0));
             }
         });
 }
@@ -343,13 +341,12 @@ fn tokens(rail: bool) {
 fn anatomy(rail: bool) {
     native_figure(rail, false, 1, false);
     gap(Dp(24.0));
-    text()
-        .content(I18N.text(if rail {
-            "ui-1-container-2-optional-menu-3-optional-fab-4-icon-5-active-indicator-6-label"
-        } else {
-            "ui-1-container-2-icon-3-label-4-active-indicator"
-        }))
-        .style(type_style(16.0, 24.0));
+    text(I18N.text(if rail {
+        "ui-1-container-2-optional-menu-3-optional-fab-4-icon-5-active-indicator-6-label"
+    } else {
+        "ui-1-container-2-icon-3-label-4-active-indicator"
+    }))
+    .style(type_style(16.0, 24.0));
 }
 
 #[tessera]
@@ -553,16 +550,15 @@ fn color_specimen(rail: bool, initially_expanded: bool, dark: bool, backdrop: Co
                         });
                 });
             if actions.get() > 0 {
-                text()
-                    .content(I18N.format(
-                        "ui-value-value-compositions-value",
-                        [
-                            ("v0", I18N.text(&mode).into()),
-                            ("v1", I18N.text(&context).into()),
-                            ("v2", (actions.get()).into()),
-                        ],
-                    ))
-                    .style(type_style(14.0, 20.0));
+                text(I18N.format(
+                    "ui-value-value-compositions-value",
+                    [
+                        ("v0", I18N.text(&mode).into()),
+                        ("v1", I18N.text(&context).into()),
+                        ("v2", (actions.get()).into()),
+                    ],
+                ))
+                .style(type_style(14.0, 20.0));
             }
         });
 }
@@ -812,8 +808,7 @@ fn navigation_color_marker(number: usize, role: String, x: Dp, y: Dp) {
                 }),
         )
         .children(move || {
-            text()
-                .content((number).to_string())
+            text((number).to_string())
                 .style(type_style(14.0, 20.0))
                 .color(scheme.surface);
         });
@@ -821,7 +816,7 @@ fn navigation_color_marker(number: usize, role: String, x: Dp, y: Dp) {
 
 #[tessera]
 fn baseline(rail: bool) {
-    text().content(I18N.text(if rail { "ui-the-baseline-rail-is-retained-for-comparison-use-a-collapsed-or-expanded-navigation-rail-f" } else { "ui-the-baseline-bar-is-retained-for-comparison-use-the-flexible-navigation-bar-for-new-design" })).style(type_style(16.0, 24.0));
+    text(I18N.text(if rail { "ui-the-baseline-rail-is-retained-for-comparison-use-a-collapsed-or-expanded-navigation-rail-f" } else { "ui-the-baseline-bar-is-retained-for-comparison-use-the-flexible-navigation-bar-for-new-design" })).style(type_style(16.0, 24.0));
     gap(Dp(24.0));
     baseline_figure(rail, false);
     gap(Dp(32.0));
@@ -842,7 +837,7 @@ fn baseline(rail: bool) {
     color_legend(rail, true);
     gap(Dp(32.0));
     subheading("ui-states".into());
-    text().content(I18N.text("ui-select-a-destination-or-move-keyboard-focus-to-inspect-the-live-selection-and-input-feedba")).style(type_style(16.0, 24.0));
+    text(I18N.text("ui-select-a-destination-or-move-keyboard-focus-to-inspect-the-live-selection-and-input-feedba")).style(type_style(16.0, 24.0));
     gap(Dp(24.0));
     baseline_figure(rail, false);
     gap(Dp(32.0));
@@ -852,7 +847,7 @@ fn baseline(rail: bool) {
     gap(Dp(32.0));
     subheading("ui-configurations".into());
     if rail {
-        text().content(I18N.text("ui-keep-destinations-in-a-vertical-group-a-menu-or-primary-action-may-precede-the-destination")).style(type_style(16.0, 24.0));
+        text(I18N.text("ui-keep-destinations-in-a-vertical-group-a-menu-or-primary-action-may-precede-the-destination")).style(type_style(16.0, 24.0));
         gap(Dp(24.0));
         baseline_figure(true, false);
     } else {
@@ -1118,8 +1113,7 @@ fn baseline_destination(
                                 });
                         });
                     gap(Dp(4.0));
-                    text()
-                        .content(I18N.text("ui-label"))
+                    text(I18N.text("ui-label"))
                         .style(label_style)
                         .color(if active {
                             scheme.on_surface
@@ -1132,7 +1126,7 @@ fn baseline_destination(
 
 #[tessera]
 fn states(rail: bool) {
-    text().content(I18N.text("ui-select-a-destination-move-focus-with-tab-and-arrow-keys-and-activate-it-with-enter-or-spac")).style(type_style(16.0,24.0));
+    text(I18N.text("ui-select-a-destination-move-focus-with-tab-and-arrow-keys-and-activate-it-with-enter-or-spac")).style(type_style(16.0,24.0));
     gap(Dp(24.0));
     panel(RenderSlot::new(move || {
         sample("ui-state", rail, false);
@@ -1383,19 +1377,17 @@ fn native_figure(rail: bool, expanded: bool, annotation: usize, badges: bool) {
                         });
                 });
             gap(Dp(16.0));
-            text()
-                .content(I18N.format(
-                    "ui-figure-destination-value",
-                    [("v0", (selected.get() + 1).into())],
+            text(I18N.format(
+                "ui-figure-destination-value",
+                [("v0", (selected.get() + 1).into())],
+            ))
+            .style(type_style(14.0, 20.0));
+            if actions.get() > 0 {
+                text(I18N.format(
+                    "ui-figure-compositions-value",
+                    [("v0", (actions.get()).into())],
                 ))
                 .style(type_style(14.0, 20.0));
-            if actions.get() > 0 {
-                text()
-                    .content(I18N.format(
-                        "ui-figure-compositions-value",
-                        [("v0", (actions.get()).into())],
-                    ))
-                    .style(type_style(14.0, 20.0));
             }
         });
 }
@@ -1425,7 +1417,7 @@ fn navigation_badge(index: usize, geometry: State<Geometry>) {
         .children(move || {
             if index == 1 {
                 badge_with_content().content(move || {
-                    text().content("3").modifier(watch(geometry, "badge-label"));
+                    text("3").modifier(watch(geometry, "badge-label"));
                 });
             } else {
                 badge();
@@ -1644,13 +1636,10 @@ fn placement(rail: bool) {
                         column()
                             .modifier(Modifier::new().weight(1.0).padding_all(Dp(24.0)))
                             .children(move || {
-                                text()
-                                    .content(I18N.text(NAMES[selected.get()]))
+                                text(I18N.text(NAMES[selected.get()]))
                                     .style(type_style(24.0, 32.0));
                                 gap(Dp(16.0));
-                                text()
-                                    .content(I18N.text("ui-page-content"))
-                                    .style(type_style(16.0, 24.0));
+                                text(I18N.text("ui-page-content")).style(type_style(16.0, 24.0));
                             });
                     });
             } else {
@@ -1665,8 +1654,7 @@ fn placement(rail: bool) {
                                     .padding_all(Dp(24.0)),
                             )
                             .children(move || {
-                                text()
-                                    .content(I18N.text(NAMES[selected.get()]))
+                                text(I18N.text(NAMES[selected.get()]))
                                     .style(type_style(24.0, 32.0));
                                 spacer().modifier(Modifier::new().weight(1.0));
                                 boxed()
@@ -1721,13 +1709,8 @@ fn modal_rail() {
                         .accessibility_label(I18N.text("ui-open-modal-expanded-rail"))
                         .on_click(move || open.set(true));
                     gap(Dp(24.0));
-                    text()
-                        .content(I18N.text(NAMES[selected.get()]))
-                        .style(type_style(24.0, 32.0));
-                    text()
-                        .content(
-                            I18N.text("ui-select-the-menu-to-reveal-navigation-over-this-page"),
-                        )
+                    text(I18N.text(NAMES[selected.get()])).style(type_style(24.0, 32.0));
+                    text(I18N.text("ui-select-the-menu-to-reveal-navigation-over-this-page"))
                         .style(type_style(16.0, 24.0));
                 });
         })

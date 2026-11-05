@@ -24,57 +24,51 @@ fn fixture(probe: Option<TestProbe<Option<State<bool>>>>) {
         probe.set(Some(changed));
     }
     column().children(move || {
-        text()
-            .modifier(Modifier::new().semantics(SemanticsArgs {
-                test_tag: Some("heading".into()),
-                role: Some(Role::Heading),
-                heading_level: Some(2),
-                label: Some("Caller heading".into()),
-                description: Some("Caller description".into()),
-                tooltip: Some("Heading tooltip".into()),
-                ..Default::default()
-            }))
-            .content(if changed.get() {
-                "Updated heading"
-            } else {
-                "Visible heading"
-            })
-            .accessibility_label_optional(if changed.get() {
-                Some("Explicit heading".into())
-            } else {
-                None
-            })
-            .accessibility_description_optional(if changed.get() {
-                Some("Explicit description".into())
-            } else {
-                None
-            });
-        text()
-            .modifier(Modifier::new().semantics(SemanticsArgs {
-                test_tag: Some("option".into()),
-                role: Some(Role::ListBoxOption),
-                selected: Some(true),
-                disabled: true,
-                ..Default::default()
-            }))
-            .content("Selected option");
-        text()
-            .modifier(Modifier::new().semantics(SemanticsArgs {
-                test_tag: Some("plain".into()),
-                ..Default::default()
-            }))
-            .content(if changed.get() {
-                "Changed text"
-            } else {
-                "Plain text"
-            });
-        text()
-            .modifier(Modifier::new().semantics(SemanticsArgs {
-                test_tag: Some("hidden".into()),
-                hidden: true,
-                ..Default::default()
-            }))
-            .content("Hidden text");
+        text(if changed.get() {
+            "Updated heading"
+        } else {
+            "Visible heading"
+        })
+        .modifier(Modifier::new().semantics(SemanticsArgs {
+            test_tag: Some("heading".into()),
+            role: Some(Role::Heading),
+            heading_level: Some(2),
+            label: Some("Caller heading".into()),
+            description: Some("Caller description".into()),
+            tooltip: Some("Heading tooltip".into()),
+            ..Default::default()
+        }))
+        .accessibility_label_optional(if changed.get() {
+            Some("Explicit heading".into())
+        } else {
+            None
+        })
+        .accessibility_description_optional(if changed.get() {
+            Some("Explicit description".into())
+        } else {
+            None
+        });
+        text("Selected option").modifier(Modifier::new().semantics(SemanticsArgs {
+            test_tag: Some("option".into()),
+            role: Some(Role::ListBoxOption),
+            selected: Some(true),
+            disabled: true,
+            ..Default::default()
+        }));
+        text(if changed.get() {
+            "Changed text"
+        } else {
+            "Plain text"
+        })
+        .modifier(Modifier::new().semantics(SemanticsArgs {
+            test_tag: Some("plain".into()),
+            ..Default::default()
+        }));
+        text("Hidden text").modifier(Modifier::new().semantics(SemanticsArgs {
+            test_tag: Some("hidden".into()),
+            hidden: true,
+            ..Default::default()
+        }));
     });
 }
 

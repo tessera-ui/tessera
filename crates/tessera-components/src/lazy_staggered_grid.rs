@@ -116,7 +116,7 @@ impl LazyStaggeredGridContent {
 ///         .columns(StaggeredGridCells::fixed(2))
 ///         .overscan(0)
 ///         .items(4, move |i| {
-///             text().content(format!("Tile {i}")).modifier(
+///             text(format!("Tile {i}")).modifier(
 ///                 Modifier::new().semantics(SemanticsArgs {
 ///                     test_tag: Some(format!("tile-{i}")), ..Default::default()
 ///                 })
@@ -306,7 +306,7 @@ fn lazy_staggered_grid_slots(args: LazyStaggeredGridSlotsArgs, axis: StaggeredGr
 ///         .rows(StaggeredGridCells::fixed(2))
 ///         .overscan(0)
 ///         .items(3, move |i| {
-///             text().content(format!("Tile {i}")).modifier(
+///             text(format!("Tile {i}")).modifier(
 ///                 Modifier::new().semantics(SemanticsArgs {
 ///                     test_tag: Some(format!("tile-{i}")), ..Default::default()
 ///                 })

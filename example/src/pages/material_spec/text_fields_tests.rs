@@ -1399,7 +1399,7 @@ fn pointer_clear_fixture(
                         .accessibility_label("Earlier Specs control")
                         .on_click(|| {})
                         .child(|| {
-                            text().content("Specs");
+                            text("Specs");
                         });
                     spacer().modifier(Modifier::new().height(Dp(600.0)));
                     field_measurements(outlined, 1);

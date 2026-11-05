@@ -820,7 +820,7 @@ pub fn chip(
                                                         .modifier(Modifier::new().width(spacing));
                                                 }
                                                 item_count += 1;
-                                                text().content(label.clone());
+                                                text(label.clone());
                                             }
 
                                             if let Some(icon_content) = trailing_icon.clone() {

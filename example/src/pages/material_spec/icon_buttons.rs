@@ -206,11 +206,10 @@ fn overview_art() {
             }
         });
     gap(Dp(24.0));
-    text()
-        .content(I18N.text(
-            "ui-standard-filled-unselected-filled-selected-filled-tonal-and-outlined-icon-buttons",
-        ))
-        .style(type_style(16.0, 24.0));
+    text(I18N.text(
+        "ui-standard-filled-unselected-filled-selected-filled-tonal-and-outlined-icon-buttons",
+    ))
+    .style(type_style(16.0, 24.0));
 }
 
 #[tessera]
@@ -304,12 +303,11 @@ fn hover_preview() {
                                 });
                             });
                     });
-                text()
-                    .content(I18N.format(
-                        "ui-hover-example-actions-value",
-                        [("v0", (count.get()).into())],
-                    ))
-                    .style(type_style(14.0, 20.0));
+                text(I18N.format(
+                    "ui-hover-example-actions-value",
+                    [("v0", (count.get()).into())],
+                ))
+                .style(type_style(14.0, 20.0));
             });
     }));
 }
@@ -333,7 +331,7 @@ fn variants() {
                         "ui-default-icon-action",
                     );
                     gap(Dp(16.0));
-                    text().content(I18N.text("ui-1-default-icon-button"));
+                    text(I18N.text("ui-1-default-icon-button"));
                 });
                 column().children(move || {
                     sample(
@@ -347,7 +345,7 @@ fn variants() {
                         "ui-toggle-favorite",
                     );
                     gap(Dp(16.0));
-                    text().content(I18N.text("ui-2-toggle-icon-button"));
+                    text(I18N.text("ui-2-toggle-icon-button"));
                 });
             });
     }));
@@ -444,8 +442,8 @@ fn anatomy() {
                         });
                 });
             gap(Dp(24.0));
-            text().content(I18N.text("ui-1-icon"));
-            text().content(I18N.text("ui-2-container"));
+            text(I18N.text("ui-1-icon"));
+            text(I18N.text("ui-2-container"));
         });
     }));
 }
@@ -519,9 +517,7 @@ fn style_examples(enabled: bool) {
                                 ),
                             );
                             gap(Dp(12.0));
-                            text()
-                                .content(I18N.text(label))
-                                .style(type_style(16.0, 24.0));
+                            text(I18N.text(label)).style(type_style(16.0, 24.0));
                         });
                     }
                 });
@@ -735,9 +731,7 @@ fn icon_state_matrix(style: IconButtonVariant, toggle: bool) {
         });
     gap(Dp(24.0));
     if toggle {
-        text()
-            .content(I18N.text("ui-a-unselected-b-selected-3245"))
-            .style(type_style(16.0, 24.0));
+        text(I18N.text("ui-a-unselected-b-selected-3245")).style(type_style(16.0, 24.0));
     }
     for (index, label) in [
         "ui-enabled",
@@ -749,12 +743,11 @@ fn icon_state_matrix(style: IconButtonVariant, toggle: bool) {
     .into_iter()
     .enumerate()
     {
-        text()
-            .content(I18N.format(
-                "ui-value-value",
-                [("v0", (index + 1).into()), ("v1", I18N.text(&label).into())],
-            ))
-            .style(type_style(16.0, 24.0));
+        text(I18N.format(
+            "ui-value-value",
+            [("v0", (index + 1).into()), ("v1", I18N.text(&label).into())],
+        ))
+        .style(type_style(16.0, 24.0));
     }
 }
 
@@ -770,8 +763,7 @@ fn icon_state_marker(label: String, x: f64, y: f64, scale: f64) {
                 .background_with_shape(scheme.on_surface, Shape::Ellipse),
         )
         .children(move || {
-            text()
-                .content(I18N.text(&(label)))
+            text(I18N.text(&(label)))
                 .style(type_style(14.0 * scale, 20.0 * scale))
                 .color(scheme.surface);
         });

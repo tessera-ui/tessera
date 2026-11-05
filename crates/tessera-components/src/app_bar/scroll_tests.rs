@@ -90,10 +90,10 @@ fn fixture(observed: tessera_ui::testing::TestProbe<FixtureHandles>) {
                                                         .accessibility_label("Content action")
                                                         .on_click(|| {})
                                                         .child(|| {
-                                                            text().content("Content action");
+                                                            text("Content action");
                                                         });
                                                 } else {
-                                                    text().content(format!("Item {index}"));
+                                                    text(format!("Item {index}"));
                                                 }
                                             });
                                     }

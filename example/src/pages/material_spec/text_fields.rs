@@ -151,7 +151,7 @@ fn sample(
                             ))
                             .on_click(move || active.set(!active.get()))
                             .child(move || {
-                                text().content(I18N.text("ui-enabled"));
+                                text(I18N.text("ui-enabled"));
                             });
                         button()
                             .tonal()
@@ -162,7 +162,7 @@ fn sample(
                             ))
                             .on_click(move || read_only.set(!read_only.get()))
                             .child(move || {
-                                text().content(I18N.text("ui-read-only"));
+                                text(I18N.text("ui-read-only"));
                             });
                         button()
                             .tonal()
@@ -175,7 +175,7 @@ fn sample(
                             )
                             .on_click(move || invalid.set(!invalid.get()))
                             .child(move || {
-                                text().content(I18N.text("ui-error"));
+                                text(I18N.text("ui-error"));
                             });
                         button()
                             .tonal()
@@ -188,7 +188,7 @@ fn sample(
                             )
                             .on_click(move || icons.set(!icons.get()))
                             .child(move || {
-                                text().content(I18N.text("ui-icons"));
+                                text(I18N.text("ui-icons"));
                             });
                         button()
                             .tonal()
@@ -199,7 +199,7 @@ fn sample(
                             ))
                             .on_click(move || affixes.set(!affixes.get()))
                             .child(move || {
-                                text().content(I18N.text("ui-prefix-and-suffix"));
+                                text(I18N.text("ui-prefix-and-suffix"));
                             });
                         button()
                             .tonal()
@@ -210,7 +210,7 @@ fn sample(
                             ))
                             .on_click(move || multiline.set(!multiline.get()))
                             .child(move || {
-                                text().content(I18N.text("ui-multiline"));
+                                text(I18N.text("ui-multiline"));
                             });
                         button()
                             .tonal()
@@ -221,7 +221,7 @@ fn sample(
                             ))
                             .on_click(move || secure.set(!secure.get()))
                             .child(move || {
-                                text().content(I18N.text("ui-secure"));
+                                text(I18N.text("ui-secure"));
                             });
                         button()
                             .text()
@@ -237,7 +237,7 @@ fn sample(
                                 controller.with_mut(|controller| controller.set_text(""));
                             })
                             .child(move || {
-                                text().content(I18N.text("ui-clear"));
+                                text(I18N.text("ui-clear"));
                             });
                     });
                 gap(Dp(24.0));
@@ -332,10 +332,10 @@ fn sample(
                     if affixes.get() {
                         field
                             .prefix(move || {
-                                text().content("$");
+                                text("$");
                             })
                             .suffix(move || {
-                                text().content(".00");
+                                text(".00");
                             });
                     }
                     if secure.get() {
@@ -354,79 +354,74 @@ fn sample(
                 )))
                 .children(move || {
                     let scheme = use_context::<MaterialTheme>().unwrap().get().color_scheme;
-                    text()
-                        .content(I18N.text(if invalid.get() {
-                            "ui-please-check-your-input"
+                    text(I18N.text(if invalid.get() {
+                        "ui-please-check-your-input"
+                    } else {
+                        "ui-supporting-text"
+                    }))
+                    .style(type_style(12.0, 16.0))
+                    .color(if invalid.get() {
+                        scheme.error
+                    } else {
+                        scheme.on_surface_variant
+                    })
+                    .modifier(Modifier::new().semantics(SemanticsArgs {
+                        role: Some(if invalid.get() {
+                            Role::Alert
                         } else {
-                            "ui-supporting-text"
-                        }))
-                        .style(type_style(12.0, 16.0))
-                        .color(if invalid.get() {
-                            scheme.error
-                        } else {
-                            scheme.on_surface_variant
-                        })
-                        .modifier(Modifier::new().semantics(SemanticsArgs {
-                            role: Some(if invalid.get() {
-                                Role::Alert
-                            } else {
-                                Role::Label
-                            }),
-                            ..Default::default()
-                        }));
+                            Role::Label
+                        }),
+                        ..Default::default()
+                    }));
                     if controls.unwrap_or(false) {
                         spacer().modifier(Modifier::new().weight(1.0).width(Dp(16.0)));
-                        text()
-                            .content(
-                                I18N.format(
-                                    "ui-value-characters",
-                                    [(
-                                        "v0",
-                                        (controller
-                                            .with(|controller| controller.text().chars().count()))
-                                        .into(),
-                                    )],
-                                ),
-                            )
-                            .style(type_style(12.0, 16.0));
+                        text(
+                            I18N.format(
+                                "ui-value-characters",
+                                [(
+                                    "v0",
+                                    (controller
+                                        .with(|controller| controller.text().chars().count()))
+                                    .into(),
+                                )],
+                            ),
+                        )
+                        .style(type_style(12.0, 16.0));
                     }
                 });
             if controls.unwrap_or(false) {
                 gap(Dp(16.0));
-                text()
-                    .content(
-                        I18N.format(
-                            "ui-value-value-value",
-                            [
-                                ("v0", I18N.text(&label.get()).into()),
-                                (
-                                    "v1",
-                                    ((if secure.get() {
-                                        "•".repeat(
-                                            controller.with(|controller| {
-                                                controller.text().chars().count()
-                                            }),
-                                        )
-                                    } else {
-                                        controller.with(TextInputController::text)
-                                    })
-                                    .to_string())
-                                    .to_string()
-                                    .into(),
-                                ),
-                            ],
-                        ),
-                    )
-                    .style(type_style(14.0, 20.0));
-                text()
-                    .content(I18N.format(
-                        "ui-value-submissions-value",
+                text(
+                    I18N.format(
+                        "ui-value-value-value",
                         [
                             ("v0", I18N.text(&label.get()).into()),
-                            ("v1", (submitted.get()).into()),
+                            (
+                                "v1",
+                                ((if secure.get() {
+                                    "•".repeat(
+                                        controller
+                                            .with(|controller| controller.text().chars().count()),
+                                    )
+                                } else {
+                                    controller.with(TextInputController::text)
+                                })
+                                .to_string())
+                                .to_string()
+                                .into(),
+                            ),
                         ],
-                    ))
-                    .style(type_style(14.0, 20.0));
+                    ),
+                )
+                .style(type_style(14.0, 20.0));
+                text(I18N.format(
+                    "ui-value-submissions-value",
+                    [
+                        ("v0", I18N.text(&label.get()).into()),
+                        ("v1", (submitted.get()).into()),
+                    ],
+                ))
+                .style(type_style(14.0, 20.0));
             }
         });
 }
@@ -543,14 +538,11 @@ fn detail(outlined: bool) {
             for variant in 0..3 {
                 field_measurements(outlined, variant);
                 gap(Dp(16.0));
-                text()
-                    .content(
-                        I18N.text([
+                text(I18N.text([
                             "ui-padding-and-size-measurements-without-icons",
                             "ui-padding-and-size-measurements-with-icons",
                             "ui-padding-and-size-measurements-with-supporting-text-and-character-count",
-                        ][variant]),
-                    )
+                        ][variant]))
                     .style(type_style(14.0, 20.0));
                 gap(Dp(32.0));
             }
@@ -645,15 +637,13 @@ fn anatomy_legend(items: Vec<&'static str>) {
                                 .alignment(Alignment::Center)
                                 .modifier(Modifier::new().fill_max_size())
                                 .children(move || {
-                                    text()
-                                        .content((index + 1).to_string())
+                                    text((index + 1).to_string())
                                         .style(type_style(14.0, 20.0))
                                         .color(BACKGROUND);
                                 });
                         });
                     spacer().modifier(Modifier::new().width(Dp(12.0)));
-                    text()
-                        .content(I18N.text(item))
+                    text(I18N.text(item))
                         .style(type_style(16.0, 24.0))
                         .modifier(Modifier::new().weight(1.0));
                 });
@@ -694,9 +684,7 @@ fn tokens() {
 
 #[tessera]
 fn prose(#[prop(into)] value: String) {
-    text()
-        .content(I18N.text(value))
-        .style(type_style(16.0, 24.0));
+    text(I18N.text(value)).style(type_style(16.0, 24.0));
 }
 
 #[tessera]
@@ -784,30 +772,25 @@ fn field_figure(outlined: bool, error: bool, multiline: bool, measurements: bool
                                 });
                             }
                             gap(Dp(4.0));
-                            text()
-                                .content(I18N.text(if error {
-                                    "ui-error-message"
-                                } else {
-                                    "ui-supporting-text"
-                                }))
-                                .color(if error {
-                                    scheme.error
-                                } else {
-                                    scheme.on_surface_variant
-                                })
-                                .style(type_style(12.0, 16.0))
-                                .modifier(
-                                    watch_in_space(geometry, "support")
-                                        .padding_symmetric(Dp(16.0), Dp::ZERO)
-                                        .semantics(SemanticsArgs {
-                                            role: Some(if error {
-                                                Role::Alert
-                                            } else {
-                                                Role::Label
-                                            }),
-                                            ..Default::default()
-                                        }),
-                                );
+                            text(I18N.text(if error {
+                                "ui-error-message"
+                            } else {
+                                "ui-supporting-text"
+                            }))
+                            .color(if error {
+                                scheme.error
+                            } else {
+                                scheme.on_surface_variant
+                            })
+                            .style(type_style(12.0, 16.0))
+                            .modifier(
+                                watch_in_space(geometry, "support")
+                                    .padding_symmetric(Dp(16.0), Dp::ZERO)
+                                    .semantics(SemanticsArgs {
+                                        role: Some(if error { Role::Alert } else { Role::Label }),
+                                        ..Default::default()
+                                    }),
+                            );
                         });
                     boxed()
                         .modifier(Modifier::new().fill_max_size())
@@ -879,12 +862,10 @@ fn field_annotation_geometry(
 fn bullets(items: Vec<String>) {
     for item in items {
         row().children(move || {
-            text()
-                .content("•")
+            text("•")
                 .style(type_style(16.0, 24.0))
                 .modifier(Modifier::new().width(Dp(24.0)));
-            text()
-                .content(I18N.text(&(item)))
+            text(I18N.text(&(item)))
                 .style(type_style(16.0, 24.0))
                 .modifier(Modifier::new().weight(1.0));
         });
@@ -958,9 +939,7 @@ fn differences() {
             });
     }));
     gap(Dp(16.0));
-    text()
-        .content(I18N.text("ui-text-fields-have-new-color-mappings"))
-        .style(type_style(14.0, 20.0));
+    text(I18N.text("ui-text-fields-have-new-color-mappings")).style(type_style(14.0, 20.0));
 }
 
 #[tessera]
@@ -1070,8 +1049,7 @@ fn overview_variant(outlined: bool, scale: f64, numbered: bool) {
                     .focus_border_width(Dp(2.0 * scale));
             }
             gap(Dp(4.0 * scale));
-            text()
-                .content(I18N.text("ui-supporting-text"))
+            text(I18N.text("ui-supporting-text"))
                 .style(type_style(12.0 * scale, 16.0 * scale))
                 .color(scheme.on_surface_variant)
                 .modifier(Modifier::new().padding_symmetric(Dp(16.0 * scale), Dp::ZERO));
@@ -1100,8 +1078,7 @@ fn overview_variant(outlined: bool, scale: f64, numbered: bool) {
                     }),
             )
             .children(move || {
-                text()
-                    .content(I18N.text(if outlined { "2" } else { "1" }))
+                text(I18N.text(if outlined { "2" } else { "1" }))
                     .style(type_style(16.0 * scale, 24.0 * scale))
                     .color(scheme.surface);
             });
@@ -1135,9 +1112,7 @@ fn contact_form(outlined: bool) {
             column()
                 .modifier(Modifier::new().width(Dp(320.0)))
                 .children(move || {
-                    text()
-                        .content(I18N.text("ui-contact-information"))
-                        .style(type_style(24.0, 32.0));
+                    text(I18N.text("ui-contact-information")).style(type_style(24.0, 32.0));
                     gap(Dp(32.0));
                     form_field("ui-name".into(), outlined, 0);
                     gap(Dp(24.0));
@@ -1170,9 +1145,7 @@ fn form_field(label: String, outlined: bool, mode: u8) {
         .children(move || {
             let label = label.clone();
             if mode == 1 {
-                text()
-                    .content(I18N.text(&(label)))
-                    .style(type_style(16.0, 24.0));
+                text(I18N.text(&(label))).style(type_style(16.0, 24.0));
                 gap(Dp(8.0));
             }
             let field = if outlined {
@@ -1215,24 +1188,20 @@ fn form_field(label: String, outlined: bool, mode: u8) {
             }
             if mode == 4 {
                 field.prefix(move || {
-                    text()
-                        .content("$")
-                        .modifier(Modifier::new().semantics(SemanticsArgs {
-                            role: Some(Role::Label),
-                            label: Some(I18N.text("ui-us-dollars")),
-                            ..Default::default()
-                        }));
+                    text("$").modifier(Modifier::new().semantics(SemanticsArgs {
+                        role: Some(Role::Label),
+                        label: Some(I18N.text("ui-us-dollars")),
+                        ..Default::default()
+                    }));
                 });
             }
             if mode == 5 {
                 field.suffix(move || {
-                    text()
-                        .content("@gmail.com")
-                        .modifier(Modifier::new().semantics(SemanticsArgs {
-                            role: Some(Role::Label),
-                            label: Some(I18N.text("ui-at-gmail-dot-com")),
-                            ..Default::default()
-                        }));
+                    text("@gmail.com").modifier(Modifier::new().semantics(SemanticsArgs {
+                        role: Some(Role::Label),
+                        label: Some(I18N.text("ui-at-gmail-dot-com")),
+                        ..Default::default()
+                    }));
                 });
             }
             if mode == 7 {
@@ -1288,8 +1257,7 @@ fn form_field(label: String, outlined: bool, mode: u8) {
                             _ => "ui-supporting-text",
                         }
                     };
-                    text()
-                        .content(I18N.text(support))
+                    text(I18N.text(support))
                         .style(type_style(12.0, 16.0))
                         .color(if mode == 7 || overflow {
                             scheme.error
@@ -1308,8 +1276,7 @@ fn form_field(label: String, outlined: bool, mode: u8) {
                     if mode == 6 {
                         let count = controller.with(|controller| controller.text().chars().count());
                         spacer().modifier(Modifier::new().weight(1.0));
-                        text()
-                            .content(I18N.format("ui-value-100", [("v0", (count).into())]))
+                        text(I18N.format("ui-value-100", [("v0", (count).into())]))
                             .color(if overflow {
                                 scheme.error
                             } else {
@@ -1644,8 +1611,7 @@ fn field_error_icon_example(password: bool, scale: f64) {
                 field.label(I18N.text("ui-username"));
             }
             gap(Dp(4.0 * scale));
-            text()
-                .content(I18N.text(support))
+            text(I18N.text(support))
                 .style(type_style(12.0 * scale, 16.0 * scale))
                 .color(scheme.error)
                 .modifier(
@@ -1774,8 +1740,7 @@ fn field_icon_example(kind: usize, scale: f64) {
                 }),
         )
         .children(move || {
-            text()
-                .content((kind).to_string())
+            text((kind).to_string())
                 .style(type_style(16.0 * scale, 24.0 * scale))
                 .color(scheme.surface);
         });
@@ -2018,8 +1983,7 @@ fn field_anatomy_item(populated: bool, outlined: bool, geometry: State<SpaceGeom
                 });
             }
             gap(Dp(4.0));
-            text()
-                .content(I18N.text("ui-supporting-text"))
+            text(I18N.text("ui-supporting-text"))
                 .color(scheme.on_surface_variant)
                 .style(type_style(12.0, 16.0))
                 .modifier(Modifier::new().padding_symmetric(Dp(16.0), Dp::ZERO));
@@ -2581,8 +2545,7 @@ fn field_color_callouts(outlined: bool, scale: f64) {
                     }),
             )
             .children(move || {
-                text()
-                    .content((index + 1).to_string())
+                text((index + 1).to_string())
                     .style(type_style(14.0 * scale, 20.0 * scale))
                     .color(scheme.surface);
             });
@@ -2657,8 +2620,7 @@ fn field_state_matrix(outlined: bool, error: bool, dark: bool) {
                                                         ),
                                                 )
                                                 .children(move || {
-                                                    text()
-                                                        .content((number).to_string())
+                                                    text((number).to_string())
                                                         .style(type_style(
                                                             14.0 * scale,
                                                             20.0 * scale,
@@ -2814,8 +2776,7 @@ fn field_state_item(
                 });
             }
             gap(Dp(4.0 * scale));
-            text()
-                .content(I18N.text("ui-supporting-text"))
+            text(I18N.text("ui-supporting-text"))
                 .style(type_style(12.0 * scale, 16.0 * scale))
                 .color(if error {
                     scheme.error
@@ -2873,8 +2834,7 @@ fn field_configurations(outlined: bool) {
                                             }),
                                     )
                                     .children(move || {
-                                        text()
-                                            .content((row + 1).to_string())
+                                        text((row + 1).to_string())
                                             .style(type_style(14.0 * scale, 20.0 * scale))
                                             .color(scheme.on_surface_variant);
                                     });
@@ -2999,18 +2959,17 @@ fn field_configuration_item(outlined: bool, row: usize, populated: bool, scale: 
             }
             if row == 4 {
                 field.prefix(move || {
-                    text().content("$");
+                    text("$");
                 });
             }
             if row == 5 {
                 field.suffix(move || {
-                    text().content(I18N.text("ui-lbs"));
+                    text(I18N.text("ui-lbs"));
                 });
             }
             if row == 0 {
                 gap(Dp(4.0 * scale));
-                text()
-                    .content(I18N.text("ui-supporting-text"))
+                text(I18N.text("ui-supporting-text"))
                     .style(type_style(12.0 * scale, 16.0 * scale))
                     .color(scheme.on_surface_variant)
                     .modifier(Modifier::new().padding_symmetric(Dp(16.0 * scale), Dp::ZERO));
@@ -3269,8 +3228,7 @@ fn field_measurement_item(
                             .padding_symmetric(Dp(16.0), Dp::ZERO),
                     )
                     .children(move || {
-                        text()
-                            .content(I18N.text("ui-supporting-text"))
+                        text(I18N.text("ui-supporting-text"))
                             .style(type_style(12.0, 16.0))
                             .color(scheme.on_surface_variant)
                             .modifier(
@@ -3305,8 +3263,7 @@ fn field_measurement_item(
                                 controller.with(|controller| controller.text().chars().count());
                             spacer()
                                 .modifier(watch_in_space(geometry, "counter-gap").width(Dp(16.0)));
-                            text()
-                                .content(format!("{count}/20"))
+                            text(format!("{count}/20"))
                                 .style(type_style(12.0, 16.0))
                                 .color(scheme.on_surface_variant)
                                 .modifier(watch_in_space(geometry, "counter").semantics(
@@ -3826,8 +3783,7 @@ fn field_anatomy_marker(number: usize, x: Dp, y: Dp) {
                 .border_with_shape(Dp(1.0), scheme.on_surface, Shape::CAPSULE),
         )
         .children(move || {
-            text()
-                .content((number).to_string())
+            text((number).to_string())
                 .style(type_style(14.0, 20.0))
                 .color(scheme.on_surface);
         });

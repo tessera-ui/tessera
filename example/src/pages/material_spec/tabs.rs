@@ -164,8 +164,7 @@ pub(super) fn tabs_spec(route: Option<crate::pages::material_spec::article::Arti
 
 #[tessera]
 fn paragraph(value: String) {
-    text()
-        .content(I18N.text(value))
+    text(I18N.text(value))
         .style(type_style(16.0, 24.0))
         .modifier(Modifier::new().fill_max_width());
 }
@@ -173,8 +172,7 @@ fn paragraph(value: String) {
 #[tessera]
 fn caption(#[prop(into)] value: String) {
     let scheme = use_context::<MaterialTheme>().unwrap().get().color_scheme;
-    text()
-        .content(I18N.text(value))
+    text(I18N.text(value))
         .color(scheme.on_surface_variant)
         .style(type_style(14.0, 20.0))
         .modifier(Modifier::new().fill_max_width());
@@ -186,9 +184,7 @@ fn bullets(items: Vec<String>) {
         .modifier(Modifier::new().fill_max_width())
         .children(move || {
             for item in items.clone() {
-                text()
-                    .content(format!("•  {}", I18N.text(item)))
-                    .style(type_style(16.0, 24.0));
+                text(format!("•  {}", I18N.text(item))).style(type_style(16.0, 24.0));
                 gap(Dp(8.0));
             }
         });
@@ -209,15 +205,12 @@ fn legend(number: usize, #[prop(into)] label: String) {
                         .background_with_shape(scheme.inverse_surface, Shape::Ellipse),
                 )
                 .children(move || {
-                    text()
-                        .content((number).to_string())
+                    text((number).to_string())
                         .style(type_style(12.0, 16.0))
                         .color(scheme.inverse_on_surface);
                 });
             spacer().modifier(Modifier::new().width(Dp(12.0)));
-            text()
-                .content(I18N.text(&(label)))
-                .style(type_style(16.0, 24.0));
+            text(I18N.text(&(label))).style(type_style(16.0, 24.0));
         });
 }
 
@@ -248,14 +241,12 @@ fn guidance_line(#[prop(into)] mark: String, #[prop(into)] note: String, color: 
                         .padding(Padding::symmetric(Dp(12.0), Dp(4.0))),
                 )
                 .children(move || {
-                    text()
-                        .content(I18N.text(&(mark)))
+                    text(I18N.text(&(mark)))
                         .style(type_style(14.0, 20.0))
                         .color(Color::WHITE);
                 });
             spacer().modifier(Modifier::new().width(Dp(12.0)));
-            text()
-                .content(I18N.text(&(note)))
+            text(I18N.text(&(note)))
                 .color(scheme.on_surface_variant)
                 .style(type_style(14.0, 20.0));
         });
@@ -822,7 +813,7 @@ fn sample(#[prop(into)] label: String, primary: bool, controls: Option<bool>) {
                                 .accessibility_label(I18N.text("ui-show-primary-tab-icons"))
                                 .on_click(move || icons.set(!icons.get()))
                                 .child(move || {
-                                    text().content(I18N.text("ui-icons"));
+                                    text(I18N.text("ui-icons"));
                                 });
                         }
                         button()
@@ -836,7 +827,7 @@ fn sample(#[prop(into)] label: String, primary: bool, controls: Option<bool>) {
                             )
                             .on_click(move || badge.set(!badge.get()))
                             .child(move || {
-                                text().content(I18N.text("ui-badge"));
+                                text(I18N.text("ui-badge"));
                             });
                         button()
                             .tonal()
@@ -852,7 +843,7 @@ fn sample(#[prop(into)] label: String, primary: bool, controls: Option<bool>) {
                                 }
                             })
                             .child(move || {
-                                text().content(I18N.text("ui-scrollable"));
+                                text(I18N.text("ui-scrollable"));
                             });
                         button()
                             .tonal()
@@ -863,7 +854,7 @@ fn sample(#[prop(into)] label: String, primary: bool, controls: Option<bool>) {
                             ))
                             .on_click(move || automatic.set(!automatic.get()))
                             .child(move || {
-                                text().content(I18N.text("ui-automatic-activation"));
+                                text(I18N.text("ui-automatic-activation"));
                             });
                         button()
                             .tonal()
@@ -874,7 +865,7 @@ fn sample(#[prop(into)] label: String, primary: bool, controls: Option<bool>) {
                             ))
                             .on_click(move || enabled.set(!enabled.get()))
                             .child(move || {
-                                text().content(I18N.text("ui-disable-hotels"));
+                                text(I18N.text("ui-disable-hotels"));
                             });
                         button()
                             .text()
@@ -884,7 +875,7 @@ fn sample(#[prop(into)] label: String, primary: bool, controls: Option<bool>) {
                             ))
                             .on_click(move || selected.set(if scrollable.get() { 4 } else { 2 }))
                             .child(move || {
-                                text().content(I18N.text("ui-select-last"));
+                                text(I18N.text("ui-select-last"));
                             });
                     });
                 gap(Dp(24.0));
@@ -932,36 +923,33 @@ fn sample(#[prop(into)] label: String, primary: bool, controls: Option<bool>) {
                     }
                 });
             gap(Dp(24.0));
-            text()
-                .content(I18N.format(
-                    "ui-value-content-value",
-                    [
-                        ("v0", I18N.text(&prefix).into()),
-                        ("v1", I18N.text(&(DESTINATIONS[selected.get()])).into()),
-                    ],
-                ))
-                .style(type_style(22.0, 30.0));
+            text(I18N.format(
+                "ui-value-content-value",
+                [
+                    ("v0", I18N.text(&prefix).into()),
+                    ("v1", I18N.text(&(DESTINATIONS[selected.get()])).into()),
+                ],
+            ))
+            .style(type_style(22.0, 30.0));
             gap(Dp(8.0));
-            text()
-                .content(I18N.text(
-                    [
-                        "ui-search-flights-and-manage-upcoming-journeys",
-                        "ui-review-hotel-bookings-and-saved-stays",
-                        "ui-find-train-departures-and-booked-seats",
-                        "ui-check-bus-routes-and-ticket-details",
-                        "ui-view-ferry-crossings-and-boarding-details",
-                    ][selected.get()],
-                ))
-                .style(type_style(16.0, 24.0));
-            text()
-                .content(I18N.format(
-                    "ui-value-activations-value",
-                    [
-                        ("v0", I18N.text(&prefix).into()),
-                        ("v1", (count.get()).into()),
-                    ],
-                ))
-                .style(type_style(14.0, 20.0));
+            text(I18N.text(
+                [
+                    "ui-search-flights-and-manage-upcoming-journeys",
+                    "ui-review-hotel-bookings-and-saved-stays",
+                    "ui-find-train-departures-and-booked-seats",
+                    "ui-check-bus-routes-and-ticket-details",
+                    "ui-view-ferry-crossings-and-boarding-details",
+                ][selected.get()],
+            ))
+            .style(type_style(16.0, 24.0));
+            text(I18N.format(
+                "ui-value-activations-value",
+                [
+                    ("v0", I18N.text(&prefix).into()),
+                    ("v1", (count.get()).into()),
+                ],
+            ))
+            .style(type_style(14.0, 20.0));
         });
 }
 
@@ -977,19 +965,19 @@ fn badge_title(#[prop(into)] label: String, icon_shown: bool, index: usize) {
                     })
                     .badge(move || {
                         badge_with_content().content(move || {
-                            text().content("3");
+                            text("3");
                         });
                     });
-                text().content(I18N.text(&(label)));
+                text(I18N.text(&(label)));
             });
     } else {
         row()
             .cross_axis_alignment(CrossAxisAlignment::Center)
             .children(move || {
-                text().content(I18N.text(&(label)));
+                text(I18N.text(&(label)));
                 spacer().modifier(Modifier::new().width(Dp(4.0)));
                 badge_with_content().content(move || {
-                    text().content("3");
+                    text("3");
                 });
             });
     }
@@ -1090,8 +1078,7 @@ fn themed_panel(dark: bool, content: RenderSlot) {
                     column()
                         .modifier(Modifier::new().fill_max_width().padding_all(Dp(24.0)))
                         .children(move || {
-                            text()
-                                .content(I18N.text(if dark { "ui-dark" } else { "ui-light" }))
+                            text(I18N.text(if dark { "ui-dark" } else { "ui-light" }))
                                 .style(type_style(14.0, 20.0));
                             gap(Dp(16.0));
                             column()
@@ -1108,13 +1095,12 @@ fn state_matrix(primary: bool) {
         .modifier(Modifier::new().fill_max_width())
         .children(move || {
             for active in [true, false] {
-                text()
-                    .content(I18N.text(if active {
-                        "ui-active-destination"
-                    } else {
-                        "ui-inactive-destination"
-                    }))
-                    .style(type_style(14.0, 20.0));
+                text(I18N.text(if active {
+                    "ui-active-destination"
+                } else {
+                    "ui-inactive-destination"
+                }))
+                .style(type_style(14.0, 20.0));
                 gap(Dp(8.0));
                 flow_row()
                     .item_spacing(Dp(12.0))
@@ -1177,8 +1163,7 @@ fn state_cell(primary: bool, active: bool, state: usize) {
                             ),
                         );
                     }
-                    text()
-                        .content(I18N.text("ui-label"))
+                    text(I18N.text("ui-label"))
                         .color(content)
                         .style(type_style(14.0, 20.0));
                     boxed()
@@ -1210,9 +1195,7 @@ fn state_cell(primary: bool, active: bool, state: usize) {
                         });
                 });
             gap(Dp(4.0));
-            text()
-                .content(I18N.text(name))
-                .style(type_style(12.0, 16.0));
+            text(I18N.text(name)).style(type_style(12.0, 16.0));
         });
 }
 
@@ -1532,14 +1515,12 @@ fn badge_legend() {
                                     badge();
                                 } else {
                                     badge_with_content().content(move || {
-                                        text().content(I18N.text(["", "3", "32", "999+"][index]));
+                                        text(I18N.text(["", "3", "32", "999+"][index]));
                                     });
                                 }
                             });
                         gap(Dp(8.0));
-                        text()
-                            .content(I18N.text(name))
-                            .style(type_style(14.0, 20.0));
+                        text(I18N.text(name)).style(type_style(14.0, 20.0));
                     });
             }
         });
@@ -1606,16 +1587,11 @@ fn swipe_tabs(selected: Option<State<usize>>) {
                         .padding_all(Dp(24.0)),
                 )
                 .children(move || {
-                    text()
-                        .content(I18N.text(title))
-                        .style(type_style(24.0, 32.0));
+                    text(I18N.text(title)).style(type_style(24.0, 32.0));
                     gap(Dp(8.0));
-                    text()
-                        .content(I18N.text(detail))
-                        .style(type_style(16.0, 24.0));
+                    text(I18N.text(detail)).style(type_style(16.0, 24.0));
                     gap(Dp(16.0));
-                    text()
-                        .content(I18N.text("ui-swipe-left-or-right-to-change-tabs"))
+                    text(I18N.text("ui-swipe-left-or-right-to-change-tabs"))
                         .color(hint)
                         .style(type_style(14.0, 20.0));
                 });
@@ -1786,15 +1762,14 @@ fn native_tabs_figure(
                         });
                 });
             gap(Dp(16.0));
-            text()
-                .content(I18N.format(
-                    "ui-figure-content-value",
-                    [(
-                        "v0",
-                        I18N.text(&figure_name(primary, selected.get())).into(),
-                    )],
-                ))
-                .style(type_style(16.0, 24.0));
+            text(I18N.format(
+                "ui-figure-content-value",
+                [(
+                    "v0",
+                    I18N.text(&figure_name(primary, selected.get())).into(),
+                )],
+            ))
+            .style(type_style(16.0, 24.0));
         });
 }
 
@@ -1836,8 +1811,7 @@ fn native_tab_title(
                             });
                     });
                 gap(Dp(2.0 * scale));
-                text()
-                    .content(I18N.text(figure_name(primary, index)))
+                text(I18N.text(figure_name(primary, index)))
                     .style(style)
                     .color(color)
                     .modifier(watch(geometry, LABEL_KEYS[index]));
@@ -1856,8 +1830,7 @@ fn native_tab_title(
                                 });
                             spacer().modifier(Modifier::new().width(Dp(8.0 * scale)));
                         }
-                        text()
-                            .content(I18N.text(figure_name(primary, index)))
+                        text(I18N.text(figure_name(primary, index)))
                             .style(style)
                             .color(color)
                             .modifier(watch(geometry, LABEL_KEYS[index]));
@@ -1883,7 +1856,7 @@ fn figure_badge(geometry: State<Geometry>, scale: f64) {
         .modifier(watch(geometry, "badge").size(Dp(16.0 * scale), Dp(16.0 * scale)))
         .children(move || {
             badge_with_content().content(move || {
-                text().content("3").style(style);
+                text("3").style(style);
             });
         });
 }
@@ -2056,37 +2029,36 @@ fn nested_tabs() {
                 tab(tab_row).label(I18N.text("ui-past"));
             });
         gap(Dp(32.0));
-        text()
-            .content(
-                I18N.format(
-                    "ui-value-value-format-25",
-                    [
-                        (
-                            "v0",
-                            I18N.text(
-                                &(if primary.get() == 0 {
-                                    "ui-travel"
-                                } else {
-                                    "ui-saved"
-                                }),
-                            )
-                            .into(),
-                        ),
-                        (
-                            "v1",
-                            I18N.text(
-                                &(if secondary.get() == 0 {
-                                    "ui-upcoming"
-                                } else {
-                                    "ui-past"
-                                }),
-                            )
-                            .into(),
-                        ),
-                    ],
-                ),
-            )
-            .style(type_style(22.0, 28.0));
+        text(
+            I18N.format(
+                "ui-value-value-format-25",
+                [
+                    (
+                        "v0",
+                        I18N.text(
+                            &(if primary.get() == 0 {
+                                "ui-travel"
+                            } else {
+                                "ui-saved"
+                            }),
+                        )
+                        .into(),
+                    ),
+                    (
+                        "v1",
+                        I18N.text(
+                            &(if secondary.get() == 0 {
+                                "ui-upcoming"
+                            } else {
+                                "ui-past"
+                            }),
+                        )
+                        .into(),
+                    ),
+                ],
+            ),
+        )
+        .style(type_style(22.0, 28.0));
     }));
 }
 
@@ -2120,12 +2092,9 @@ fn tab_placement() {
                         .padding_all(Dp(24.0)),
                 )
                 .children(move || {
-                    text()
-                        .content(I18N.text(DESTINATIONS[selected.get()]))
-                        .style(type_style(24.0, 32.0));
+                    text(I18N.text(DESTINATIONS[selected.get()])).style(type_style(24.0, 32.0));
                     gap(Dp(16.0));
-                    text()
-                        .content(I18N.text("ui-related-content-appears-below-the-tabs"))
+                    text(I18N.text("ui-related-content-appears-below-the-tabs"))
                         .style(type_style(16.0, 24.0));
                 });
         });
@@ -2169,15 +2138,13 @@ fn guidance_card(good: bool, #[prop(into)] note: String, figure: RenderSlot) {
                                 .padding(Padding::symmetric(Dp(12.0), Dp(0.0))),
                         )
                         .children(move || {
-                            text()
-                                .content(I18N.text(if good { "✓  Do" } else { "ui-don-t" }))
+                            text(I18N.text(if good { "✓  Do" } else { "ui-don-t" }))
                                 .style(type_style(14.0, 20.0))
                                 .color(Color::WHITE);
                         });
                 });
             gap(Dp(12.0));
-            text()
-                .content(I18N.text(&(note)))
+            text(I18N.text(&(note)))
                 .color(hint)
                 .style(type_style(14.0, 20.0))
                 .modifier(Modifier::new().fill_max_width());
@@ -2279,20 +2246,16 @@ fn mock_list_rows(swipeable: bool) {
                                     Modifier::new().size(Dp(72.0), Dp(40.0)).background(error),
                                 )
                                 .children(move || {
-                                    text()
-                                        .content(I18N.text("ui-delete"))
+                                    text(I18N.text("ui-delete"))
                                         .color(Color::WHITE)
                                         .style(type_style(12.0, 16.0));
                                 });
                         }
                         spacer().modifier(Modifier::new().width(Dp(16.0)));
-                        text()
-                            .content(I18N.text(title))
-                            .style(type_style(14.0, 20.0));
+                        text(I18N.text(title)).style(type_style(14.0, 20.0));
                         if swipeable && index == 0 {
                             spacer().modifier(Modifier::new().width(Dp(12.0)));
-                            text()
-                                .content(I18N.text("ui-swipe-5798"))
+                            text(I18N.text("ui-swipe-5798"))
                                 .color(hint)
                                 .style(type_style(12.0, 16.0));
                         }
@@ -2361,23 +2324,17 @@ fn mock_scrolled_screen(behind_bar: bool) {
                                     .padding(Padding::symmetric(Dp(16.0), Dp(0.0))),
                             )
                             .children(move || {
-                                text()
-                                    .content(I18N.text("ui-travel"))
-                                    .style(type_style(22.0, 28.0));
+                                text(I18N.text("ui-travel")).style(type_style(22.0, 28.0));
                             });
                     });
             } else {
-                text()
-                    .content(
-                        I18N.text("ui-scrolled-down-the-app-bar-and-tabs-moved-offscreen-together"),
-                    )
+                text(I18N.text("ui-scrolled-down-the-app-bar-and-tabs-moved-offscreen-together"))
                     .color(hint)
                     .style(type_style(12.0, 16.0))
                     .modifier(Modifier::new().padding(Padding::symmetric(Dp(16.0), Dp(8.0))));
             }
             for title in ["ui-lisbon", "ui-kyoto", "ui-oaxaca", "ui-bergen"] {
-                text()
-                    .content(I18N.text(title))
+                text(I18N.text(title))
                     .style(type_style(14.0, 20.0))
                     .modifier(Modifier::new().padding(Padding::symmetric(Dp(16.0), Dp(6.0))));
             }
@@ -2401,14 +2358,13 @@ fn mock_focus_tabs(space_enter: bool) {
                         .padding(Padding::symmetric(Dp(12.0), Dp(6.0))),
                 )
                 .children(move || {
-                    text()
-                        .content(I18N.text(if space_enter {
-                            "Space/Enter"
-                        } else {
-                            "Arrow/Tab"
-                        }))
-                        .color(key_text)
-                        .style(type_style(14.0, 20.0));
+                    text(I18N.text(if space_enter {
+                        "Space/Enter"
+                    } else {
+                        "Arrow/Tab"
+                    }))
+                    .color(key_text)
+                    .style(type_style(14.0, 20.0));
                 });
             gap(Dp(16.0));
             row().children(|| {
@@ -2484,12 +2440,11 @@ fn secondary_measure_figure(inline_icons: bool) {
                         });
                 });
             gap(Dp(16.0));
-            text()
-                .content(I18N.format(
-                    "ui-figure-content-value",
-                    [("v0", I18N.text(&figure_name(false, selected.get())).into())],
-                ))
-                .style(type_style(16.0, 24.0));
+            text(I18N.format(
+                "ui-figure-content-value",
+                [("v0", I18N.text(&figure_name(false, selected.get())).into())],
+            ))
+            .style(type_style(16.0, 24.0));
         });
 }
 
@@ -2611,7 +2566,7 @@ fn scrolling_tabs() {
                         });
                     })
                     .child(move || {
-                        text().content(I18N.text("ui-reset-scroll"));
+                        text(I18N.text("ui-reset-scroll"));
                     });
             });
             gap(Dp(16.0));
@@ -2688,18 +2643,17 @@ fn scrolling_tabs() {
                                                 ["ui-flights", "ui-trips", "ui-explore"]
                                                     [selected.get()];
                                             for index in 1..=24 {
-                                                text()
-                                                    .content(I18N.format(
-                                                        "ui-value-item-value",
-                                                        [
-                                                            ("v0", I18N.text(&destination).into()),
-                                                            ("v1", (index).into()),
-                                                        ],
-                                                    ))
-                                                    .style(type_style(16.0, 24.0))
-                                                    .modifier(Modifier::new().padding(
-                                                        Padding::symmetric(Dp(24.0), Dp(12.0)),
-                                                    ));
+                                                text(I18N.format(
+                                                    "ui-value-item-value",
+                                                    [
+                                                        ("v0", I18N.text(&destination).into()),
+                                                        ("v1", (index).into()),
+                                                    ],
+                                                ))
+                                                .style(type_style(16.0, 24.0))
+                                                .modifier(Modifier::new().padding(
+                                                    Padding::symmetric(Dp(24.0), Dp(12.0)),
+                                                ));
                                                 boxed().modifier(
                                                     Modifier::new()
                                                         .fill_max_width()

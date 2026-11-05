@@ -1067,20 +1067,14 @@ fn tooltip_panel(
                             )
                             .children(move || {
                                 if let Some(headline) = &headline {
-                                    text()
-                                        .content(headline.clone())
-                                        .style(theme.typography.title_small);
+                                    text(headline.clone()).style(theme.typography.title_small);
                                     crate::spacer::spacer()
                                         .modifier(Modifier::new().height(Dp(4.0)));
                                 }
-                                text()
-                                    .content(message.clone())
-                                    .style(theme.typography.body_medium);
+                                text(message.clone()).style(theme.typography.body_medium);
                             });
                     } else {
-                        text()
-                            .content(message.clone())
-                            .style(theme.typography.body_small);
+                        text(message.clone()).style(theme.typography.body_small);
                     }
                     if rich && has_actions {
                         crate::spacer::spacer().modifier(Modifier::new().height(Dp(12.0)));
@@ -1100,9 +1094,9 @@ fn tooltip_panel(
                                 let label = render_data.with(|(_, _, _, label, _, _, _)| {
                                     label.clone().unwrap_or_default()
                                 });
-                                text().content(label).style(render_data.with(
-                                    |(theme, _, _, _, _, _, _)| theme.typography.label_large,
-                                ));
+                                text(label).style(render_data.with(|(theme, _, _, _, _, _, _)| {
+                                    theme.typography.label_large
+                                }));
                             });
                     }
                 });
@@ -1349,11 +1343,11 @@ mod tests {
             let tooltip = if config.custom_actions {
                 tooltip.actions(move || {
                     crate::row::row().children(move || {
-                        button().text().accessibility_label("Not now").on_click(move || controller.with_mut(TooltipController::dismiss)).child(|| { text().content("Not now"); });
+                        button().text().accessibility_label("Not now").on_click(move || controller.with_mut(TooltipController::dismiss)).child(|| { text("Not now"); });
                         button().text().accessibility_label("Got it").on_click(move || {
                             controller.with_mut(TooltipController::dismiss);
                             actions.set(actions.get() + 1);
-                        }).child(|| { text().content("Got it"); });
+                        }).child(|| { text("Got it"); });
                     });
                 })
             } else {
@@ -1373,7 +1367,7 @@ mod tests {
                                     controller.with_mut(TooltipController::dismiss);
                                     TooltipRestoreInput { controller }.restore();
                                 }
-                            }).child(|| { text().content("Trigger"); });
+                            }).child(|| { text("Trigger"); });
                         });
                     });
                 });
@@ -1471,7 +1465,7 @@ mod tests {
                                             .modifier(Modifier::new().offset(Dp(120.0), Dp(240.0)))
                                             .child(|| {
                                                 button().child(|| {
-                                                    crate::text::text().content("Trigger");
+                                                    crate::text::text("Trigger");
                                                 });
                                             });
                                     });

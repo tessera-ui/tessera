@@ -59,7 +59,7 @@ fn fixture(probe: Option<TestProbe<Option<State<Settings>>>>) {
                                 Modifier::new()
                                     .width(SplitButtonDefaults::icon_spacing(value.leading)),
                             );
-                            text().content("Send");
+                            text("Send");
                         });
                 })
                 .trailing_button(move || {

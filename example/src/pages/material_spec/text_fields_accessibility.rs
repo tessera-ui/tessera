@@ -64,9 +64,7 @@ pub(super) fn labeling() {
 
 #[tessera]
 fn paragraph(#[prop(into)] value: String) {
-    text()
-        .content(I18N.text(value))
-        .style(type_style(16.0, 24.0));
+    text(I18N.text(value)).style(type_style(16.0, 24.0));
 }
 
 #[tessera]
@@ -181,19 +179,13 @@ fn callout(x: f64, y: f64, width: f64, height: f64, label: String, role: String,
                         .width(Dp((width - 32.0) * scale)),
                 )
                 .children(move || {
-                    text()
-                        .content(I18N.text("ui-label"))
-                        .style(type_style(14.0 * scale, 18.0 * scale));
-                    text()
-                        .content(I18N.text(&(label)))
+                    text(I18N.text("ui-label")).style(type_style(14.0 * scale, 18.0 * scale));
+                    text(I18N.text(&(label)))
                         .style(emphasis.clone())
                         .color(srgb(132, 69, 143));
                     gap(Dp(12.0 * scale));
-                    text()
-                        .content(I18N.text("ui-role"))
-                        .style(type_style(14.0 * scale, 18.0 * scale));
-                    text()
-                        .content(I18N.text(&(role)))
+                    text(I18N.text("ui-role")).style(type_style(14.0 * scale, 18.0 * scale));
+                    text(I18N.text(&(role)))
                         .style(emphasis)
                         .color(srgb(132, 69, 143));
                 });
@@ -695,16 +687,14 @@ fn labeled_field(kind: usize, x: f64, y: f64, width: f64, scale: f64) {
     }
     if kind == 1 {
         field.placeholder(I18N.text("ui-email")).suffix(move || {
-            text()
-                .content("@gmail.com")
+            text("@gmail.com")
                 .style(type_style(16.0 * scale, 24.0 * scale))
                 .accessibility_label(I18N.text("ui-at-gmail-dot-com-5953"));
         });
     }
     if kind == 0 {
         field.prefix(move || {
-            text()
-                .content("€")
+            text("€")
                 .style(type_style(16.0 * scale, 24.0 * scale))
                 .accessibility_label(I18N.text("ui-euro"));
         });
@@ -713,8 +703,7 @@ fn labeled_field(kind: usize, x: f64, y: f64, width: f64, scale: f64) {
         field.presentation_state(InteractionVisualState::Focus);
     }
     if kind == 3 {
-        text()
-            .content(format!("{}/20", count.get()))
+        text(format!("{}/20", count.get()))
             .style(type_style(12.0 * scale, 16.0 * scale))
             .accessibility_label(I18N.format(
                 "ui-character-count-value-of-20-characters-entered",
@@ -736,8 +725,7 @@ fn labeled_field(kind: usize, x: f64, y: f64, width: f64, scale: f64) {
             scale,
         );
     } else if !description.is_empty() {
-        text()
-            .content(I18N.text(if kind == 5 { "*required" } else { description }))
+        text(I18N.text(if kind == 5 { "*required" } else { description }))
             .style(type_style(12.0 * scale, 16.0 * scale))
             .color(if kind == 2 {
                 scheme.error

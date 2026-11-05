@@ -587,8 +587,7 @@ fn outlined_floating_label(
             label_offset: PxPosition::new(label_offset_x.into(), label_offset_y.into()),
         })
         .child(move || {
-            text()
-                .content(label_text.clone())
+            text(label_text.clone())
                 .modifier(Modifier::new().on_layout_size_changed(
                     move |size: tessera_ui::PxSize| {
                         if outline.with(|outline| outline.label_width) != size.width {
@@ -798,7 +797,7 @@ fn field_decoration(content: String, color: Color, style: TextStyle, single_line
                 .to_px(),
         })
         .child(move || {
-            text().content(content.clone()).color(color).style(style);
+            text(content.clone()).color(color).style(style);
         });
 }
 
@@ -1039,14 +1038,9 @@ fn text_field_body(
                         .label_offset_y(Dp(-line_height.0 * 0.5))
                         .outline(outline);
                 } else {
-                    text()
-                        .content(label)
-                        .style(label_style)
-                        .color(color)
-                        .modifier(
-                            Modifier::new()
-                                .offset(left, TextFieldDefaults::FLOATING_LABEL_Y_OFFSET),
-                        );
+                    text(label).style(label_style).color(color).modifier(
+                        Modifier::new().offset(left, TextFieldDefaults::FLOATING_LABEL_Y_OFFSET),
+                    );
                 }
             }
             if args.show_indicator && !outlined {
@@ -1823,10 +1817,10 @@ mod native_field_regressions {
                             if matches!(case, Case::Affixes) {
                                 field
                                     .prefix(|| {
-                                        text().content("$").accessibility_label("Dollar prefix");
+                                        text("$").accessibility_label("Dollar prefix");
                                     })
                                     .suffix(|| {
-                                        text().content("USD");
+                                        text("USD");
                                     });
                             }
                             if matches!(case, Case::Secure) {
@@ -1834,7 +1828,7 @@ mod native_field_regressions {
                                     .obfuscation_char('•')
                                     .context_menu(TextFieldContextMenu::secure_default());
                             }
-                            text().content(format!("Changes: {}", changes.get()));
+                            text(format!("Changes: {}", changes.get()));
                         });
                 });
         });

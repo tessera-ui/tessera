@@ -175,8 +175,7 @@ fn navigation_bar_item_view_content(
                 provide_context(
                     || typography.label_medium,
                     move || {
-                        text()
-                            .content(label.clone())
+                        text(label.clone())
                             .color(label_color)
                             .style(typography.label_medium);
                     },

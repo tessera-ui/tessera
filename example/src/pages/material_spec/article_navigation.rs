@@ -264,7 +264,7 @@ mod tests {
                                     None,
                                 ))
                                 .children(move || {
-                                    text().content(I18N.text(title));
+                                    text(I18N.text(title));
                                 });
                         }
                     });
@@ -442,7 +442,7 @@ mod tests {
                             },
                         ))
                         .children(|| {
-                            text().content("Before");
+                            text("Before");
                         });
                     row()
                         .modifier(article_tablist_modifier(
@@ -468,7 +468,7 @@ mod tests {
                                         None,
                                     ))
                                     .children(move || {
-                                        text().content(I18N.text(title));
+                                        text(I18N.text(title));
                                     });
                             }
                         });
@@ -481,7 +481,7 @@ mod tests {
                             },
                         ))
                         .children(|| {
-                            text().content("After");
+                            text("After");
                         });
                 });
             });

@@ -282,19 +282,18 @@ fn date_field(
                     });
             }
         });
-    text()
-        .content(I18N.text(if error.is_empty() {
-            format
-        } else {
-            error.clone()
-        }))
-        .style(type_style(12.0, 16.0))
-        .color(if error.is_empty() {
-            scheme.on_surface_variant
-        } else {
-            scheme.error
-        })
-        .modifier(Modifier::new().offset(Dp(x + 16.0), Dp(y + 60.0)));
+    text(I18N.text(if error.is_empty() {
+        format
+    } else {
+        error.clone()
+    }))
+    .style(type_style(12.0, 16.0))
+    .color(if error.is_empty() {
+        scheme.on_surface_variant
+    } else {
+        scheme.error
+    })
+    .modifier(Modifier::new().offset(Dp(x + 16.0), Dp(y + 60.0)));
 }
 
 #[tessera]
@@ -325,7 +324,7 @@ fn calendar_dialog(
                         .accessibility_label(I18N.text("ui-cancel-optional-date-selection"))
                         .on_click(move || open.set(false))
                         .child(move || {
-                            text().content(I18N.text("ui-cancel"));
+                            text(I18N.text("ui-cancel"));
                         });
                 })
                 .confirm_button(move || {
@@ -337,7 +336,7 @@ fn calendar_dialog(
                             open.set(false);
                         })
                         .child(move || {
-                            text().content(I18N.text("ui-ok"));
+                            text(I18N.text("ui-ok"));
                         });
                 });
         });
@@ -595,7 +594,7 @@ fn optional_clear() {
                                             .set(state.with(DatePickerState::selected_date)),
                                     })
                                     .child(move || {
-                                        text().content(I18N.text(caption));
+                                        text(I18N.text(caption));
                                     });
                             }
                         });
@@ -682,8 +681,7 @@ fn field_labels(
                                 if emphasized {
                                     style.font_weight = 700;
                                 }
-                                text()
-                                    .content(I18N.text(value))
+                                text(I18N.text(value))
                                     .style(style)
                                     .color(if emphasized {
                                         scheme.primary
@@ -863,9 +861,7 @@ fn visible_calendar_header(
                                 tessera_components::alignment::CrossAxisAlignment::Center,
                             )
                             .children(move || {
-                                text()
-                                    .content(I18N.text(&(label)))
-                                    .style(theme.typography.label_large);
+                                text(I18N.text(&(label))).style(theme.typography.label_large);
                                 boxed().modifier(Modifier::new().width(Dp(4.0)));
                                 icon().painter(filled::ARROW_DROP_DOWN_SVG).size(Dp(18.0));
                             });
@@ -880,9 +876,7 @@ fn visible_calendar_header(
                     )
                     .alignment(tessera_components::alignment::Alignment::Center)
                     .children(move || {
-                        text()
-                            .content(I18N.text(name))
-                            .style(theme.typography.body_large);
+                        text(I18N.text(name)).style(theme.typography.body_large);
                     });
             }
         });

@@ -398,8 +398,7 @@ pub fn date_range_picker(
                             .padding(Padding::new(Dp(24.0), Dp(16.0), Dp(12.0), Dp(12.0))),
                     )
                     .children(move || {
-                        text()
-                            .content(title.clone())
+                        text(title.clone())
                             .style(theme.typography.label_large)
                             .color(theme.color_scheme.on_surface_variant);
                         spacer().modifier(Modifier::new().height(Dp(24.0)));
@@ -408,8 +407,7 @@ pub fn date_range_picker(
                             .modifier(Modifier::new().fill_max_width().height(Dp(48.0)))
                             .cross_axis_alignment(CrossAxisAlignment::Center)
                             .children(move || {
-                                text()
-                                    .content(headline.clone())
+                                text(headline.clone())
                                     .style(theme.typography.headline_large)
                                     .color(theme.color_scheme.on_surface)
                                     .modifier(Modifier::new().weight(1.0));
@@ -442,13 +440,11 @@ pub fn date_range_picker(
                         column()
                             .modifier(Modifier::new().weight(1.0))
                             .children(move || {
-                                text()
-                                    .content(title.clone())
+                                text(title.clone())
                                     .style(theme.typography.label_large)
                                     .color(theme.color_scheme.on_surface_variant);
                                 spacer().modifier(Modifier::new().height(Dp(4.0)));
-                                text()
-                                    .content(headline.clone())
+                                text(headline.clone())
                                     .style(theme.typography.title_large)
                                     .color(theme.color_scheme.on_surface_variant);
                             });
@@ -552,8 +548,7 @@ fn range_calendar(
                         .modifier(Modifier::new().size(DATE_CELL_SIZE, DATE_CELL_SIZE))
                         .content_alignment(Alignment::Center)
                         .child(move || {
-                            text()
-                                .content(weekday_narrow_label(day))
+                            text(weekday_narrow_label(day))
                                 .style(theme.typography.body_large)
                                 .color(theme.color_scheme.on_surface);
                         });
@@ -628,8 +623,7 @@ fn range_month(
                     Dp(8.0),
                 )))
                 .children(move || {
-                    text()
-                        .content(format_month_year(month))
+                    text(format_month_year(month))
                         .style(theme.typography.title_small)
                         .color(theme.color_scheme.on_surface_variant);
                 });
@@ -789,8 +783,7 @@ fn range_input_field(
             value
         });
     if let Some(error) = error {
-        text()
-            .content(error)
+        text(error)
             .style(theme.typography.body_small)
             .color(theme.color_scheme.error);
     }
