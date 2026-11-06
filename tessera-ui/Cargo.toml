@@ -39,7 +39,7 @@ interprocess = { version = "2.4.4", optional = true }
 
 [target.'cfg(not(target_family = "wasm"))'.dependencies]
 tracing-subscriber = { version = "0.3.22", features = ["env-filter"] }
-parking_lot = { version = "0.12.5", features = ["deadlock_detection"] }
+parking_lot = { version = "0.13.0", features = ["deadlock_detection"] }
 
 [target.'cfg(target_family = "unix")'.dependencies]
 libc = "0.2.185"

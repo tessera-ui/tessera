@@ -8,7 +8,7 @@ homepage.workspace = true
 description = "Platform services and plugins for Tessera."
 
 [dependencies]
-parking_lot = "0.12.5"
+parking_lot = "0.13.0"
 tessera-ui = { path = "../../tessera-ui", version = "2.5.0" }
 tracing = "0.1.44"
 

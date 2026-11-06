@@ -18,7 +18,7 @@ image = { version = "0.25.9", default-features = false, features = [
 ] }
 glyphon = { package = "tessera-glyphon", version = "0.12.0", path = "../tessera-glyphon" }
 tracing = "0.1.44"
-parking_lot = { version = "0.12.5", features = ["arc_lock"] }
+parking_lot = { version = "0.13.0", features = ["arc_lock"] }
 tessera-foundation = { path = "../tessera-foundation", version = "0.1.0" }
 tessera-ui = { path = "../../tessera-ui", version = "2.5.0" }
 tessera-i18n = { path = "../tessera-i18n", version = "0.1.0" }
