@@ -106,22 +106,6 @@ ui-select-hours-minutes-and-for-a-12-hour-clock-am-or-pm = Select hours, minutes
 
 ui-keep-touch-selection-comfortable-on-mobile-devices = Keep touch selection comfortable on mobile devices.
 
-ui-the-availability-above-describes-the-material-libraries-the-live-examples-on-this-page-are = The availability above describes the Material libraries. The live examples on this page are rendered by Tessera.
-
-ui-material-3-keeps-the-dial-and-keyboard-variants-with-new-color-mappings-that-support-dynam = Material 3 keeps the dial and keyboard variants, with new color mappings that support dynamic color. Selected time and period fields use different container roles rather than one shared accent treatment.
-
-ui-accent-emphasis = Accent emphasis
-
-ui-color-system = Color system
-
-ui-previous-color-mappings = Previous color mappings
-
-ui-dynamic-color-compatible-semantic-roles = Dynamic color-compatible semantic roles
-
-ui-m3-dynamic-color-mapping = M3 dynamic color mapping
-
-ui-m3-selected-hour-and-selected-period-have-distinct-color-mappings = M3: selected hour and selected period have distinct color mappings.
-
 ui-center-a-modal-time-picker-above-a-scrim-the-main-content-remains-visible-for-context-but = Center a modal time picker above a scrim. The main content remains visible for context but is unavailable until the picker closes. Keep the whole container, input-mode switch and confirmation actions on screen.
 
 ui-use-the-dialog-below-to-try-a-real-modal-changes-remain-a-draft-until-ok-cancel-or-a-click = Use the dialog below to try a real modal. Changes remain a draft until OK; Cancel or a click outside the dialog preserves the saved value.

@@ -12,12 +12,6 @@ ui-people-can-navigate-to-another-region-within-the-sheet = People can navigate 
 
 ui-side-sheets-can-contain-a-back-icon-for-navigation = Side sheets can contain a back icon for navigation
 
-ui-right-to-left-rtl-language-support-with-left-side-sheet = Right-to-left (RTL) language support with left side sheet
-
-ui-shape-modal-side-sheets-have-a-16dp-corner-radius = Shape: modal side sheets have a 16dp corner radius
-
-ui-side-sheets-have-new-color-mappings-to-support-dynamic-color = Side sheets have new color mappings to support dynamic color
-
 ui-sheet-side-docked-container-color = Sheet side docked container color
 
 ui-sheet-side-docked-modal-container-color = Sheet side docked modal container color

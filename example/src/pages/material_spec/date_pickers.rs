@@ -626,21 +626,7 @@ fn chapter(title: &'static str, text: &'static str, figure: Figure) -> DateChapt
 
 fn date_chapters() -> Vec<(&'static str, Vec<DateChapter>)> {
     vec![
-        (
-            "ui-overview",
-            vec![
-                chapter(
-                    "ui-availability-resources",
-                    "ui-material-provides-design-and-implementation-resources-for-date-selection-availability-belo",
-                    Figure::None,
-                ),
-                chapter(
-                    "ui-differences-from-m2",
-                    "ui-m3-uses-larger-titles-and-labels-with-more-spacing-for-48dp-touch-targets-new-dynamic-colo",
-                    Figure::Day,
-                ),
-            ],
-        ),
+        ("ui-overview", vec![]),
         (
             "ui-guidelines",
             vec![
@@ -844,10 +830,6 @@ fn date_chapter(
         )
         .modal_controller_optional(modal_controller);
     }
-    if chapter.title == "ui-availability-resources" {
-        gap(Dp(24.0));
-        date_resources();
-    }
     if chapter.title == "ui-keyboard-navigation" {
         gap(Dp(24.0));
         spec_table(
@@ -947,40 +929,6 @@ fn date_canvas(width: f64, height: f64, content: RenderSlot) {
                     .children_shared(content.clone());
             });
         });
-}
-
-#[tessera]
-fn date_resources() {
-    spec_table(
-        vec!["ui-type".into(), "ui-resource".into(), "ui-status".into()],
-        vec![
-            vec![
-                "ui-design".into(),
-                "Material 3 Design Kit (Figma)".into(),
-                "ui-available".into(),
-            ],
-            vec![
-                "ui-implementation".into(),
-                "Flutter".into(),
-                "ui-available".into(),
-            ],
-            vec![
-                "ui-implementation".into(),
-                "Jetpack Compose".into(),
-                "ui-available".into(),
-            ],
-            vec![
-                "ui-implementation".into(),
-                "Android Views (MDC-Android)".into(),
-                "ui-available".into(),
-            ],
-            vec![
-                "ui-implementation".into(),
-                "Material Web".into(),
-                "ui-unavailable".into(),
-            ],
-        ],
-    );
 }
 
 #[tessera]

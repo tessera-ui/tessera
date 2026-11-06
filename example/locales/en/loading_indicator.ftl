@@ -10,37 +10,11 @@ ui-loading-content = Loading content
 
 ui-1-loading-indicator = 1  Loading indicator
 
-ui-may-2025-the-loading-indicator-replaces-the-circular-progress-indicator-for-short-indeterm = May 2025: the loading indicator replaces the circular progress indicator for short, indeterminate waits. It animates a single morphing shape instead of a rotating arc, and adds a contained style with its own container color.
-
-ui-a-morphing-shape-instead-of-a-rotating-arc = A morphing shape instead of a rotating arc
-
-ui-containment = Containment
-
-ui-a-contained-style-with-primary-container-color = A contained style with primary container color
-
 ui-determinate = Determinate
-
-ui-the-same-shape-can-express-a-measured-completion = The same shape can express a measured completion
 
 ui-default-loading-indicator = Default loading indicator
 
 ui-contained-loading-indicator = Contained loading indicator
-
-ui-default-and-contained-styles-share-the-same-morph = Default and contained styles share the same morph.
-
-ui-m2-a-circular-progress-indicator-rotated-a-stroke-arc-and-had-no-contained-style-m3-keeps = M2: a circular progress indicator rotated a stroke arc and had no contained style. M3 keeps the circular shape but pairs it with the expressive loading indicator, which morphs a solid shape and can sit in a container.
-
-ui-rotating-arc = Rotating arc
-
-ui-morphing-shape = Morphing shape
-
-ui-48dp-target-38dp-shape = 48dp target, 38dp shape
-
-ui-default-or-contained = Default or contained
-
-ui-separate-component = Separate component
-
-ui-same-component-with-a-progress-value = Same component with a progress value
 
 ui-loading-indicators-have-a-single-variant-choose-containment-and-a-determinate-value-as-con = Loading indicators have a single variant. Choose containment and a determinate value as configurations, not as separate components.
 
@@ -72,15 +46,7 @@ ui-paused-loading-indicator = Paused loading indicator
 
 ui-paused-contained-indicator = Paused contained indicator
 
-ui-default-contained = Default, contained
-
-ui-progress = Progress
-
-ui-indeterminate-determinate-0-100 = Indeterminate, determinate 0–100%
-
 ui-paused = Paused
-
-ui-animating-paused = Animating, paused
 
 ui-loading-indicators-have-a-single-token-set-grouped-by-color-size-and-shape = Loading indicators have a single token set, grouped by color, size, and shape.
 
@@ -233,5 +199,3 @@ ui-loading = Loading
 ui-don-t-rely-on-the-animation-alone-a-bare-loading-without-context-is-ambiguous = Don't: rely on the animation alone; a bare “Loading” without context is ambiguous.
 
 ui-update-the-label-when-the-wait-changes-stage-and-remove-the-indicator-once-the-content-arr = Update the label when the wait changes stage, and remove the indicator once the content arrives so assistive technology stops announcing a pending state.
-
-ui-tessera-examples-on-this-page-use-the-native-loading-indicator-component-the-indeterm = Tessera examples on this page use the native loading_indicator component. The indeterminate morph, determinate progress, the contained style, a paused state, and an accessibility label are implemented.

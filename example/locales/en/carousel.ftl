@@ -10,8 +10,6 @@ ui-carousel-item-dynamic-widths = Carousel item dynamic widths
 
 ui-carousels-show-a-collection-of-items-that-can-be-scrolled-on-and-off-the-screen = Carousels show a collection of items that can be scrolled on and off the screen
 
-ui-research = Research
-
 ui-requirements-on-scrolling-pages = Requirements on scrolling pages
 
 ui-the-multi-browse-layout-shows-at-least-one-large-medium-and-small-carousel-item = The multi-browse layout shows at least one large, medium, and small carousel item.
@@ -145,48 +143,6 @@ ui-item-visuals-have-a-parallax-effect-when-scrolled = Item visuals have a paral
 ui-items-change-size-as-they-move-through-the-carousel = Items change size as they move through the carousel
 
 ui-carousels-can-show-items-of-various-sizes = Carousels can show items of various sizes
-
-ui-november-2025 = November 2025
-
-ui-new-carousel-layout = New carousel layout:
-
-ui-uncontained-multi-aspect-ratio-shows-carousel-items-of-various-widths = Uncontained multi-aspect ratio: shows carousel items of various widths
-
-ui-new-carousel-layout-uncontained-multi-aspect-ratio = New carousel layout: uncontained multi-aspect ratio
-
-ui-additional-layouts-and-configurations = Additional layouts and configurations:
-
-ui-uncontained-items-scroll-to-the-edge-of-the-container = Uncontained: items scroll to the edge of the container
-
-ui-full-screen-one-edge-to-edge-large-item-at-a-time-scrolling-vertically = Full-screen: one edge-to-edge large item at a time, scrolling vertically
-
-ui-centered-carousels-the-center-aligned-hero-layout-shows-at-least-one-large-and-two-small-i = Centered carousels: the center-aligned hero layout shows at least one large and two small items, with the large item centered
-
-ui-hero-carousel-layout-at-least-one-large-and-one-small-item-at-a-time = Hero carousel layout: at least one large and one small item at a time
-
-ui-multi-browse-layout-at-least-one-large-medium-and-small-carousel-item-at-a-time = Multi-browse layout: at least one large, medium, and small carousel item at a time
-
-ui-this-component-is-new-in-material-3 = This component is new in Material 3.
-
-ui-shape-dynamic-carousel-items-change-shape-when-scrolled = Shape: Dynamic carousel items change shape when scrolled
-
-ui-motion-carousel-items-move-at-a-different-speed-than-their-content-creating-a-parallax-eff = Motion: Carousel items move at a different speed than their content, creating a parallax effect
-
-ui-interaction-when-scrolled-carousel-items-snap-into-place-to-maintain-the-same-layout-hero = Interaction: When scrolled, carousel items snap into place to maintain the same layout. Hero carousels swipe through one item at a time. Multi-browse carousels scroll through many items at once.
-
-ui-hero-carousels-scroll-through-one-large-item-at-a-time = Hero carousels scroll through one large item at a time
-
-ui-the-material-research-team-conducted-two-studies-quantitative-and-qualitative-with-over-20 = The Material Research Team conducted two studies (quantitative and qualitative) with over 200 participants to understand their perspectives of five different carousel designs. The studies measured their understanding of how to interact with each carousel, their expectations of the number of items in each design, and how they expected carousels to be used.
-
-ui-summary-of-findings = Summary of findings:
-
-ui-participants-thought-carousels-were-a-good-way-to-explore-many-different-kinds-of-content = Participants thought carousels were a good way to explore many different kinds of content
-
-ui-a-previewed-or-squished-item-strongly-indicated-that-there-was-more-content-to-swipe-throu = A previewed or squished item strongly indicated that there was more content to swipe through
-
-ui-participants-expected-around-10-items-in-a-carousel-that-scrolled-multiple-items-at-once = Participants expected around 10 items in a carousel that scrolled multiple items at once
-
-ui-while-some-contexts-were-considered-better-for-some-carousel-designs-all-designs-were-cons = While some contexts were considered better for some carousel designs, all designs were considered similarly usable
 
 ui-browse-the-component-elements-attributes-tokens-and-their-values = Browse the component elements, attributes, tokens, and their values.
 

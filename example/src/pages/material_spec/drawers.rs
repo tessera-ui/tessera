@@ -322,20 +322,7 @@ pub(super) fn drawers_spec(
                     gap(Dp(32.0));
                     launch(open, selected).session_optional(session);
                 })),
-                sections: vec![
-                    SpecSection {
-                        title: "ui-availability-resources",
-                        content: RenderSlot::new(availability),
-                    },
-                    SpecSection {
-                        title: "ui-m3-expressive-update",
-                        content: RenderSlot::new(expressive_update),
-                    },
-                    SpecSection {
-                        title: "ui-differences-from-m2",
-                        content: RenderSlot::new(differences),
-                    },
-                ],
+                sections: vec![],
             },
             ArticlePage {
                 title: "ui-guidelines",
@@ -444,64 +431,6 @@ fn prose(#[prop(into)] value: String) {
     text(I18N.text(value))
         .style(type_style(16.0, 24.0))
         .color(INK);
-}
-
-#[tessera]
-fn availability() {
-    spec_table(
-        vec!["ui-type".into(), "ui-resource".into(), "ui-status".into()],
-        vec![
-            vec![
-                "ui-design".into(),
-                "ui-design-kit-figma".into(),
-                "ui-available".into(),
-            ],
-            vec![
-                "ui-implementation".into(),
-                "Flutter".into(),
-                "ui-available".into(),
-            ],
-            vec![
-                "ui-implementation".into(),
-                "Jetpack Compose".into(),
-                "ui-available".into(),
-            ],
-            vec![
-                "ui-implementation".into(),
-                "Android Views (MDC-Android)".into(),
-                "ui-available".into(),
-            ],
-            vec![
-                "ui-implementation".into(),
-                "Web".into(),
-                "ui-unavailable".into(),
-            ],
-        ],
-    );
-}
-
-#[tessera]
-fn expressive_update() {
-    text(I18N.text("ui-may-2025"))
-        .style(guides::medium_style(16.0, 24.0))
-        .color(INK);
-    gap(Dp(16.0));
-    prose(
-        "ui-the-navigation-drawer-is-no-longer-recommended-use-the-expanded-navigation-rail-instead-mo",
-    );
-}
-
-#[tessera]
-fn differences() {
-    bullets(vec![
-        "ui-color-new-color-mappings-and-compatibility-with-dynamic-color".into(),
-        "ui-variants-distinguishes-two-separate-variants-of-navigation-drawer-standard-and-modal"
-            .into(),
-        "ui-shape-rounded-corners-at-the-ending-edge-of-the-drawer".into(),
-        "ui-states-updated-color-and-shape-for-indicating-selected-state".into(),
-    ]);
-    gap(Dp(32.0));
-    differences_figure();
 }
 
 #[tessera]
@@ -1338,7 +1267,7 @@ fn drawer_figure(modal: bool, mode: u8, geometry: Option<State<Geometry>>) {
         2 => "ui-padding-and-margins",
         3 => "ui-color-roles",
         4 => "ui-guidelines-anatomy",
-        _ => "anatomy",
+        _ => "ui-drawer-anatomy",
     };
     drawer_stage(
         width,
@@ -1652,48 +1581,6 @@ fn overview_figure() {
         (1, "ui-standard-navigation-drawer".into()),
         (2, "ui-modal-navigation-drawer".into()),
     ]);
-}
-
-#[tessera]
-fn differences_figure() {
-    row().children(move || {
-        for legacy in [true, false] {
-            column().modifier(Modifier::new().weight(1.0)).children(move || {
-                let geometry = remember(Geometry::new);
-                let selected = remember(|| 0usize);
-                drawer_stage(512.0, 356.0, if legacy { "ui-m2-rectangular-active-indicator".into() } else { "ui-m3-pill-shaped-active-indicator".into() }, geometry).background_optional(if legacy { Some(srgb(230, 230, 230)) } else { None }).child(move || {
-                    if legacy {
-                        let theme = use_context::<MaterialTheme>().unwrap().get();
-                        surface().shape(Shape::rounded_rectangle(Dp::ZERO)).style(tessera_ui::Color::WHITE.into())
-                            .modifier(Modifier::new().offset(Dp(48.0), Dp(40.0)).required_size(Dp(360.0), Dp(440.0)))
-                            .child(move || {
-                                column().modifier(Modifier::new().padding_all(Dp(12.0))).children(move || {
-                                    for (index, label) in ["ui-inbox", "ui-outbox", "ui-favorites", "ui-archive"].into_iter().enumerate() {
-                                        surface().shape(Shape::rounded_rectangle(Dp::ZERO))
-                                            .style(if index == 0 { srgb(238, 228, 253) } else { tessera_ui::Color::WHITE }.into())
-                                            .modifier(Modifier::new().fill_max_width().height(Dp(56.0)))
-                                            .child(move || {
-                                                row().modifier(Modifier::new().fill_max_size().padding_symmetric(Dp(16.0), Dp::ZERO))
-                                                    .cross_axis_alignment(tessera_components::alignment::CrossAxisAlignment::Center)
-                                                    .children(move || {
-                                                        icon().painter(match index { 0=>filled::MAIL_SVG,1=>filled::SEND_SVG,2=>filled::FAVORITE_SVG,_=>filled::ARCHIVE_SVG }).size(Dp(24.0)).tint(if index == 0 { srgb(98, 0, 238) } else { srgb(97, 97, 97) });
-                                                        spacer().modifier(Modifier::new().width(Dp(24.0)));
-                                                        text(I18N.text(label)).style(theme.typography.label_large).color(if index == 0 { srgb(98, 0, 238) } else { srgb(33, 33, 33) });
-                                                    });
-                                            });
-                                    }
-                                });
-                            });
-                    } else {
-                        drawer_scene(true, selected, 48.0, 40.0, 480.0, 440.0);
-                    }
-                });
-                gap(Dp(16.0));
-                guides::caption(if legacy { "ui-m2-navigation-drawer-had-square-corners-and-a-rectangular-shape-indicating-the-active-dest" } else { "ui-m3-navigation-drawer-has-rounded-corners-new-color-mappings-and-an-updated-style-for-indic" });
-            });
-            if legacy { spacer().modifier(Modifier::new().width(Dp(24.0))); }
-        }
-    });
 }
 
 #[tessera]

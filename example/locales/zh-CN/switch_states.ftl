@@ -1,3 +1,3 @@
-ui-value-value-value-switch-state = { $v0 } { $v1 } { $v2 } 开关状态
+ui-value-value-value-switch-state = { $v0 }主题下{ $v1 }且{ $v2 }的开关状态
 
-ui-switch-state-theme = { $theme }主题开关状态
+ui-switch-state-theme = { $theme }主题下的开关状态

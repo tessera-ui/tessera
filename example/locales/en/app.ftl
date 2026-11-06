@@ -2,9 +2,11 @@ ui-examples = Examples
 
 ui-home = Home
 
-ui-glass-components = Glass Components
+ui-material-components = Material components
 
-ui-custom-shader = Custom Shader
+ui-glass-components = Glass components
+
+ui-custom-shader = Custom shader
 
 ui-back-to-components = Back to components
 

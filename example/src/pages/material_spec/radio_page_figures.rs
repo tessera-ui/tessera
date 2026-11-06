@@ -35,26 +35,6 @@ pub(super) fn overview_article() {
     gap(Dp(32.0));
     super::overview();
     gap(Dp(48.0));
-    subheading("ui-resources-availability".into());
-    gap(Dp(24.0));
-    spec_table(
-        vec!["ui-resource".into(), "ui-status".into()],
-        vec![
-            vec![
-                "ui-native-radio-button-and-radio-group".into(),
-                "ui-available-in-this-example".into(),
-            ],
-            vec![
-                "ui-theme-colors-and-bundled-icons".into(),
-                "ui-available-in-the-interactive-figures".into(),
-            ],
-            vec![
-                "ui-keyboard-and-accessibility-semantics".into(),
-                "ui-available-on-the-live-controls".into(),
-            ],
-        ],
-    );
-    gap(Dp(48.0));
     subheading("ui-what-s-new".into());
     gap(Dp(24.0));
     super::prose(

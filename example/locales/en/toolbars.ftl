@@ -134,46 +134,6 @@ ui-don-t-show-at-the-same-time-as-a-navigation-bar = Don't show at the same time
 
 ui-configurations-of-floating-toolbars = Configurations of floating toolbars
 
-ui-jetpack-compose-bottom-app-bar = Jetpack Compose - Bottom app bar
-
-ui-jetpack-compose-expressive-docked-toolbar = Jetpack Compose: Expressive - Docked toolbar
-
-ui-jetpack-compose-expressive-floating-toolbar = Jetpack Compose: Expressive - Floating toolbar
-
-ui-android-views-mdc-android-bottom-app-bar = Android Views (MDC-Android) - Bottom app bar
-
-ui-android-views-mdc-android-expressive-docked-toolbar = Android Views (MDC-Android): Expressive - Docked toolbar
-
-ui-android-views-mdc-android-expressive-floating-toolbar = Android Views (MDC-Android): Expressive - Floating toolbar
-
-ui-flutter-bottom-app-bar = Flutter - Bottom app bar
-
-ui-the-bottom-app-bar-is-no-longer-recommended-and-should-be-replaced-with-the-docked-toolbar = The bottom app bar is no longer recommended and should be replaced with the docked toolbar, which functions similarly, but is shorter and has more flexibility. The floating toolbar was created for more versatility, greater amounts of actions, and more variety in where it's placed.
-
-ui-added-docked-toolbar-to-replace-bottom-app-bar = Added docked toolbar to replace bottom app bar
-
-ui-size-shorter-height = - Size: Shorter height
-
-ui-color-standard-or-vibrant = - Color: Standard or vibrant
-
-ui-flexibility-more-layout-and-element-options = - Flexibility: More layout and element options
-
-ui-added-floating-toolbar-with-the-following-configurations = Added floating toolbar with the following configurations:
-
-ui-layout-horizontal-or-vertical = - Layout: Horizontal or vertical
-
-ui-flexibility-can-hold-many-elements-and-components-can-be-paired-with-fab = - Flexibility: Can hold many elements and components. Can be paired with FAB.
-
-ui-bottom-app-bar-is-still-available-but-not-recommended = Bottom app bar is still available, but not recommended
-
-ui-floating-vibrant-color-scheme-and-paired-with-fab = Floating, vibrant color scheme and paired with FAB
-
-ui-docked-with-embedded-primary-action-instead-of-fab = Docked with embedded primary action instead of FAB
-
-ui-elevation-no-shadow = Elevation: No shadow
-
-ui-layout-container-height-is-taller-and-the-fab-is-now-contained-within-the-app-bar-containe = Layout: Container height is taller and the FAB is now contained within the app bar container
-
 ui-docked-toolbar = Docked toolbar
 
 ui-floating-toolbar = Floating toolbar
@@ -182,23 +142,13 @@ ui-the-baseline-bottom-app-bar-is-no-longer-recommended-it-should-be-replaced-wi
 
 ui-bottom-app-bar-not-recommended = Bottom app bar (not recommended)
 
-ui-not-recommended-use-docked-toolbar = Not recommended. Use docked toolbar.
-
 ui-standard-and-vibrant-toolbars = Standard and vibrant toolbars
 
 ui-vertical-floating-toolbar = Vertical floating toolbar
 
 ui-floating-toolbar-with-fab = Floating toolbar with FAB
 
-ui-available-as-bottom-app-bar = Available as bottom app bar
-
-ui-floating-toolbar-layout = Floating toolbar layout
-
-ui-other-elements = Other elements
-
-ui-with-fab = With FAB
-
-ui-note-implementation-differs-per-platform-in-tessera-the-fab-is-placed-next-to-the-floating = Note: *Implementation differs per platform. In Tessera, the FAB is placed next to the floating toolbar as a separate component, 8dp from its container.
+ui-note-implementation-differs-per-platform-in-tessera-the-fab-is-placed-next-to-the-floating = Note: In Tessera, the FAB is placed next to the floating toolbar as a separate component, 8dp from its container.
 
 ui-toolbar-standard-container-color = Toolbar standard container color
 
@@ -548,12 +498,6 @@ ui-do-use-a-toolbar-to-display-local-navigation-on-a-specific-page = Do: Use a t
 
 ui-don-t-show-a-navigation-bar-and-a-toolbar-with-navigation-controls-at-the-same-time-6443 = Don't: Show a navigation bar and a toolbar with navigation controls at the same time
 
-ui-m2-bottom-app-bar-in-the-primary-color-with-8dp-elevation-and-a-fab-overlapping-its-top-ed = M2 bottom app bar in the primary color with 8dp elevation and a FAB overlapping its top edge
-
-ui-m2-bottom-app-bar-had-higher-elevation-of-8dp-and-didn-t-contain-the-fab = M2: Bottom app bar had higher elevation of 8dp and didn't contain the FAB
-
-ui-m3-bottom-app-bar-has-new-colors-a-taller-container-no-elevation-or-shadow-and-contains-th = M3: Bottom app bar has new colors, a taller container, no elevation or shadow, and contains the FAB
-
 ui-toggle-toolbar-expansion = Toggle toolbar expansion
 
 ui-collapse-actions = Collapse actions
@@ -584,12 +528,10 @@ ui-container-height-vertical-width = Container height / vertical width
 
 ui-docked-leading-trailing-padding = Docked leading/trailing padding
 
-ui-with-a-floating-toolbar-of-actions =  with a floating toolbar of actions
+ui-with-a-floating-toolbar-of-actions = { " " }with a floating toolbar of actions
 
-ui-with-a-floating-toolbar-of-local-navigation =  with a floating toolbar of local navigation
+ui-with-a-floating-toolbar-of-local-navigation = { " " }with a floating toolbar of local navigation
 
-ui-above-a-navigation-bar =  above a navigation bar
+ui-above-a-navigation-bar = { " " }above a navigation bar
 
-ui-the-live-examples-on-this-page-use-tessera-s-docked-toolbar-and-floating-toolbar-comp = The live examples on this page use Tessera's docked_toolbar and floating_toolbar components with standard and vibrant colors, horizontal and vertical layouts, and paired FABs.
-
-ui-note-implementation-differs-per-platform-in-tessera-docked-toolbar-and-floating-toolb = Note: Implementation differs per platform. In Tessera, docked_toolbar and floating_toolbar are separate components; the baseline bottom app bar is composed from a surface, icon buttons and a FAB.
+ui-note-implementation-differs-per-platform-in-tessera-docked-toolbar-and-floating-toolb = Note: In Tessera, docked_toolbar and floating_toolbar are separate components; the baseline bottom app bar is composed of a surface, icon buttons, and a FAB.

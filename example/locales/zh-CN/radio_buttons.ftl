@@ -2,11 +2,11 @@ ui-radio-button-selection-example = 单选按钮选择示例
 
 ui-first-option = 第一个选项
 
-ui-second-option = 第二个选择
+ui-second-option = 第二个选项
 
 ui-ringtone = 铃声
 
-ui-disabled-icon = 已禁用的图标
+ui-disabled-icon = 停用的图标
 
 ui-hovered-state-layer = 悬停状态层
 

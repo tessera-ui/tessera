@@ -2,6 +2,8 @@ ui-examples = 示例
 
 ui-home = 首页
 
+ui-material-components = Material 组件
+
 ui-glass-components = 玻璃组件
 
 ui-custom-shader = 自定义着色器

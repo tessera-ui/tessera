@@ -7,36 +7,6 @@ ui-choose-a-default-button-for-an-action-and-a-toggle-button-for-a-persistent-se
     • Toggle icons can change from outlined when unselected to filled when selected.
     • Give every action a meaningful accessible name and a target of at least 48 × 48dp.
 
-ui-available-here = Available here
-
-ui-native-icon-button = Native icon button
-
-ui-default-and-toggle-actions-sizing-shapes-and-color-styles = Default and toggle actions, sizing, shapes and color styles
-
-ui-material-icon-assets = Material icon assets
-
-ui-bundled-icons-used-by-the-live-examples = Bundled icons used by the live examples
-
-ui-theme-and-accessibility = Theme and accessibility
-
-ui-theme-colors-accessible-names-keyboard-focus-and-selection = Theme colors, accessible names, keyboard focus and selection
-
-ui-may-2025-material-3-expressive = May 2025: Material 3 Expressive
-
-ui-material-3-expressive-expands-icon-buttons-with-five-sizes-narrow-and-wide-proportions-and = Material 3 Expressive expands icon buttons with five sizes, narrow and wide proportions, and round and square shapes. Pressing and selecting a button can change its shape, adding feedback beyond color alone.
-
-ui-expressive-choices = Expressive choices
-
-ui-extra-small-small-medium-large-and-extra-large = Extra small, small, medium, large and extra large
-
-ui-round-and-square-with-pressed-and-selected-shape-feedback = Round and square, with pressed and selected shape feedback
-
-ui-narrow-default-and-wide = Narrow, default and wide
-
-ui-filled-tonal-outlined-and-standard = Filled, tonal, outlined and standard
-
-ui-material-2-commonly-presents-an-icon-action-without-a-persistent-container-material-3-expr = Material 2 commonly presents an icon action without a persistent container. Material 3 Expressive retains that standard style and adds more ways to emphasize actions through containers, dimensions and shape. The examples below use native controls to compare those treatments.
-
 ui-use-icon-buttons-for-familiar-frequently-used-actions-such-as-favoriting-archiving-or-mark = Use icon buttons for familiar, frequently used actions such as favoriting, archiving or marking a message as read. Keep the most useful commands visible and place secondary actions in an overflow menu. Prefer a text button when the icon alone would be ambiguous.
 
 ui-the-heart-retains-its-selected-state-archive-moves-this-message-out-of-the-inbox-mark-as-r = The heart retains its selected state. Archive moves this message out of the inbox, Mark as read changes its read state, and More options opens a real menu with local message actions.
@@ -80,18 +50,6 @@ ui-use-recognizable-icons-for-contextual-actions-provide-meaningful-labels-prese
 ui-enabled-icon-buttons-need-at-least-3-1-contrast-between-the-icon-and-its-adjacent-backgrou = Enabled icon buttons need at least 3:1 contrast between the icon and its adjacent background. Any visual boundary needed to identify the control also needs at least 3:1 contrast with adjacent colors. Do not rely on color alone to communicate selection.
 
 ui-the-examples-use-the-same-white-surface-and-a-live-favorite-action-the-dark-icon-is-above = The examples use the same white surface and a live favorite action. The dark icon is above 3:1; the light gray icon is intentionally below 3:1 and is shown only as a negative example. Text labels remain readable.
-
-ui-material-2-treatment = Material 2 treatment
-
-ui-toggle-expressive-edit-action = Toggle Expressive edit action
-
-ui-activate-standard-edit-action = Activate standard edit action
-
-ui-container-shape-and-persistent-selection = Container, shape and persistent selection
-
-ui-standard-edit-action-activated = Standard edit action activated
-
-ui-recognizable-icon-without-a-persistent-container = Recognizable icon without a persistent container
 
 ui-above-3-1-do = Above 3:1 — Do
 

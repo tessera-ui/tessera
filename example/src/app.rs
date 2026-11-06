@@ -6,13 +6,11 @@ use tessera_components::{
     column::column,
     icon::icon,
     icon_button::icon_button,
-    list_item::list_item,
     material_icons::filled,
     modifier::ModifierExt as _,
+    navigation_drawer::navigation_drawer_item,
     scaffold::scaffold,
-    shape_def::{RoundedCorner, Shape},
     side_sheet::{SideSheetController, modal_side_sheet_provider},
-    spacer::spacer,
     surface::surface,
     text::text,
     theme::{MaterialTheme, material_theme},
@@ -20,7 +18,7 @@ use tessera_components::{
 use tessera_i18n::{I18n, langid};
 use tessera_shard::{RouterController, RouterDestination, shard_home};
 use tessera_ui::{
-    Color, Dp, FrameNanosControl, Modifier, RenderSlotWith, State, WindowInsets,
+    Asset, Color, Dp, FrameNanosControl, Modifier, RenderSlotWith, State, WindowInsets,
     current_frame_nanos, receive_frame_nanos, remember, tessera, use_context,
 };
 
@@ -161,37 +159,32 @@ pub(crate) fn app(
                                                 HomePageDestination {},
                                                 nav_controller,
                                                 side_sheet_controller,
-                                            );
-
-                                            spacer().modifier(Modifier::new().height(Dp(8.0)));
-
+                                            )
+                                            .icon_asset(filled::HOME_SVG);
                                             nav_item(
-                                                "Material Components",
+                                                "ui-material-components",
                                                 MaterialComponentsPageDestination {
                                                     selected: Some(selected),
                                                     sessions: Some(sessions),
                                                 },
                                                 nav_controller,
                                                 side_sheet_controller,
-                                            );
-
-                                            spacer().modifier(Modifier::new().height(Dp(8.0)));
-
+                                            )
+                                            .icon_asset(filled::WIDGETS_SVG);
                                             nav_item(
                                                 "ui-glass-components",
                                                 GlassComponentsPageDestination {},
                                                 nav_controller,
                                                 side_sheet_controller,
-                                            );
-
-                                            spacer().modifier(Modifier::new().height(Dp(8.0)));
-
+                                            )
+                                            .icon_asset(filled::BLUR_ON_SVG);
                                             nav_item(
                                                 "ui-custom-shader",
                                                 CustomShaderPageDestination {},
                                                 nav_controller,
                                                 side_sheet_controller,
-                                            );
+                                            )
+                                            .icon_asset(filled::GRADIENT_SVG);
                                         });
                                 });
                         });
@@ -232,10 +225,10 @@ fn nav_item<D: RouterDestination + Clone + PartialEq>(
     destination: D,
     nav_controller: State<RouterController>,
     side_sheet_controller: State<SideSheetController>,
+    icon_asset: Option<Asset>,
 ) {
-    list_item()
-        .modifier(Modifier::new().fill_max_width())
-        .headline(I18N.text(headline))
+    let item = navigation_drawer_item()
+        .label(I18N.text(headline))
         .on_click(move || {
             nav_controller.with_mut(|c| c.replace(destination.clone()));
             side_sheet_controller.with_mut(|c| {
@@ -244,14 +237,12 @@ fn nav_item<D: RouterDestination + Clone + PartialEq>(
                 }
             });
         })
-        .selected(nav_controller.with(RouterController::current_is::<D>))
-        .shape(Shape::RoundedRectangle {
-            top_left: RoundedCorner::new(Dp(16.0)),
-            top_right: RoundedCorner::Capsule,
-            bottom_right: RoundedCorner::Capsule,
-            bottom_left: RoundedCorner::new(Dp(16.0)),
-        })
-        .tonal_elevation(Dp(5.0));
+        .selected(nav_controller.with(RouterController::current_is::<D>));
+    if let Some(asset) = icon_asset {
+        item.icon(move || {
+            icon().painter(asset).size(Dp(24.0));
+        });
+    }
 }
 
 #[derive(Clone, Copy)]

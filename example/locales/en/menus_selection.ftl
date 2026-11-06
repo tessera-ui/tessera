@@ -17,3 +17,5 @@ ui-value-selection-menu = { $v0 } selection menu
 ui-gluten-free = Gluten-free
 
 ui-nut-free = Nut-free
+
+ui-single-selection = Single

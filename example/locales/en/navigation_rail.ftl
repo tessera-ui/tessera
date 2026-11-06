@@ -14,44 +14,6 @@ ui-collapsed-navigation-rail-on-a-phone = Collapsed navigation rail on a phone
 
 ui-collapsed-and-expanded-navigation-rails-can-transition-between-each-other-on-any-device-in = Collapsed and expanded navigation rails can transition between each other on any device, including large or medium window size classes like tablets, and compact window size classes like phones in portrait orientation
 
-ui-may-2025-a-collapsed-and-an-expanded-navigation-rail-replaced-the-baseline-navigation-rail = May 2025 — A collapsed and an expanded navigation rail replaced the baseline navigation rail. The expanded rail is meant to replace the navigation drawer; in Expressive interfaces, use an expanded navigation rail instead of a drawer.
-
-ui-baseline-navigation-rail-is-no-longer-recommended = Baseline navigation rail is no longer recommended
-
-ui-added-a-collapsed-navigation-rail-that-replaces-the-baseline-rail = Added a collapsed navigation rail that replaces the baseline rail
-
-ui-added-an-expanded-navigation-rail-that-replaces-the-navigation-drawer = Added an expanded navigation rail that replaces the navigation drawer
-
-ui-expanded-rail-modality-non-modal-or-modal = Expanded rail modality: non-modal or modal
-
-ui-expanded-behavior-transition-to-collapsed-rail-or-hide-when-collapsed = Expanded behavior: transition to collapsed rail, or hide when collapsed
-
-ui-active-label-on-vertical-items-changed-from-on-surface-variant-to-secondary = Active label on vertical items changed from on surface variant to secondary
-
-ui-collapsed-and-expanded-navigation-rails-on-timer-screens = Collapsed and expanded navigation rails on timer screens
-
-ui-collapsed-timer-navigation-rail = Collapsed timer navigation rail
-
-ui-expanded-timer-navigation-rail = Expanded timer navigation rail
-
-ui-the-collapsed-and-expanded-navigation-rails-match-visually-and-can-transition-into-each-ot = The collapsed and expanded navigation rails match visually and can transition into each other
-
-ui-behavior-predictive-back-interaction = Behavior: Predictive back interaction
-
-ui-states-the-active-destination-can-be-indicated-with-a-pill-shape-in-a-contrasting-color = States: The active destination can be indicated with a pill shape in a contrasting color
-
-ui-m2-navigation-rail = M2 navigation rail
-
-ui-m2-the-navigation-rail-uses-icon-color-weight-and-fill-to-communicate-which-destination-is = M2: The navigation rail uses icon color, weight, and fill to communicate which destination is active
-
-ui-m2-navigation-rail-with-photos = M2 navigation rail with photos
-
-ui-m3-navigation-rail = M3 navigation rail
-
-ui-m3-the-navigation-rail-uses-a-pill-shaped-active-indicator-to-communicate-which-destinatio = M3: The navigation rail uses a pill-shaped active indicator to communicate which destination is active
-
-ui-m3-navigation-rail-with-photos = M3 navigation rail with photos
-
 ui-collapsed-and-expanded-navigation-rail-variants = Collapsed and expanded navigation rail variants
 
 ui-collapsed-navigation-rail-variant = Collapsed navigation rail variant
@@ -64,10 +26,6 @@ ui-the-baseline-navigation-rail-is-no-longer-recommended-and-should-be-replaced-
 
 ui-the-baseline-navigation-rail-is-no-longer-recommended = The baseline navigation rail is no longer recommended
 
-ui-navigation-rail-baseline = Navigation rail (baseline)
-
-ui-not-recommended-use-collapsed-navigation-rail = Not recommended. Use collapsed navigation rail.
-
 ui-in-compact-windows-use-a-navigation-bar-instead-of-a-rail-from-the-medium-breakpoint-up-th = In compact windows, use a navigation bar instead of a rail. From the medium breakpoint up, the rail can be collapsed or expanded; an expanded rail is either standard (placed beside the content) or modal (overlaying the content).
 
 ui-expanded-standard-and-modal-navigation-rails-in-dark-theme = Expanded standard and modal navigation rails in dark theme
@@ -79,16 +37,6 @@ ui-expanded-modal-navigation-rail = Expanded modal navigation rail
 ui-expanded-layout-standard = Expanded layout: standard
 
 ui-expanded-layout-modal = Expanded layout: modal
-
-ui-expanded-layout = Expanded layout
-
-ui-standard-default = Standard (default)
-
-ui-available-as-navigation-drawer = Available as navigation drawer
-
-ui-available-as-modal-navigation-drawer = Available as modal navigation drawer
-
-ui-expanded-behavior = Expanded behavior
 
 ui-browse-the-component-elements-attributes-tokens-and-their-values-color-values-below-are-th = Browse the component elements, attributes, tokens, and their values. Color values below are the Default light scheme.
 
@@ -606,8 +554,6 @@ ui-the-accessibility-label-for-a-navigation-item-is-typically-the-same-as-the-ad
 
 ui-when-the-visible-ui-text-is-ambiguous-accessibility-labels-need-to-be-more-descriptive-for-4411 = When the visible UI text is ambiguous, accessibility labels need to be more descriptive. For example, a navigation item visibly labeled Recent would benefit from additional information in its accessibility label to clarify the destination's intent.
 
-ui-note-on-android-views-mdc-android-a-more-descriptive-accessibility-label-is-not-available = Note: On Android Views (MDC-Android), a more descriptive accessibility label is not available and the role is not announced.
-
 ui-accessibility-label-for-the-recent-destination = Accessibility label for the Recent destination
 
 ui-recent-destination-in-a-file-navigation-rail = Recent destination in a file navigation rail
@@ -631,5 +577,3 @@ ui-up-down-arrows = Up / Down arrows
 ui-expanded-7100 = expanded
 
 ui-collapsed-7101 = collapsed
-
-ui-this-page-documents-the-native-navigation-rail-and-navigation-rail-item-components-th = This page documents the native navigation_rail and navigation_rail_item components. The values below were verified against the published navigation rail specification.

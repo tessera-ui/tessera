@@ -56,7 +56,6 @@ fn reference_renderer(scene: Scene, width: u32) -> HeadlessRenderer {
                             }
                             Scene::Overview => {
                                 tooltip_variant_examples();
-                                tooltip_material_comparison();
                             }
                             Scene::Placement => {
                                 placement_examples();
@@ -538,25 +537,15 @@ fn tooltip_measurements_scale_native_content_and_keep_rulers_inside_the_canvas()
 
 #[test]
 #[ignore = "requires a native GPU adapter"]
-fn tooltip_overview_keeps_both_variants_on_one_canvas_and_the_material_comparison() {
+fn tooltip_overview_keeps_both_variants_on_one_canvas() {
     let mut renderer = reference_renderer(Scene::Overview, 1024);
     settle_color_pair_geometry(&mut renderer);
     let canvas = semantic_node(&renderer, "Plain and rich tooltip variants", Role::Group)
         .1
         .bounds()
         .unwrap();
-    let comparison = semantic_node(
-        &renderer,
-        "Material 2 and Material 3 tooltip comparison",
-        Role::Group,
-    )
-    .1
-    .bounds()
-    .unwrap();
     assert_eq!(canvas.width(), 1024.0);
     assert_eq!(canvas.height(), 385.0);
-    assert_eq!(comparison.width(), canvas.width());
-    assert!(comparison.y0 > canvas.y1);
     let tree = renderer.accessibility_snapshot().unwrap();
     let examples: Vec<_> = tree
         .nodes
@@ -586,12 +575,6 @@ fn tooltip_overview_keeps_both_variants_on_one_canvas_and_the_material_compariso
     assert!(plain.x1 < rich.x0);
     assert!(((plain.y0 + plain.y1) - (rich.y0 + rich.y1)).abs() <= 1.0);
     assert_eq!(rich.width(), 312.0);
-    assert!(tree.nodes.iter().any(|(_, node)| {
-        node.role() == Role::Dialog
-            && node
-                .bounds()
-                .is_some_and(|rect| rect.y0 >= comparison.y0 && rect.y1 <= comparison.y1)
-    }));
 }
 
 #[tessera]

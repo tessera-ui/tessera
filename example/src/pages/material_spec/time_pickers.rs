@@ -128,16 +128,7 @@ pub(super) fn time_pickers_spec(route: Option<crate::pages::material_spec::artic
                 ArticlePage {
                     title: "ui-overview",
                     intro: Some(RenderSlot::new(time_variants)),
-                    sections: vec![
-                        SpecSection {
-                            title: "ui-availability-resources",
-                            content: RenderSlot::new(time_resources),
-                        },
-                        SpecSection {
-                            title: "ui-differences-from-m2",
-                            content: RenderSlot::new(time_m2_difference),
-                        },
-                    ],
+                    sections: vec![],
                 },
                 ArticlePage {
                     title: "ui-guidelines",
@@ -916,81 +907,6 @@ fn time_variants() {
             time_configuration_card(false, false, false, "ui-time-picker-dial".into());
             time_configuration_card(true, false, false, "ui-time-picker-input".into());
         });
-}
-
-#[tessera]
-fn time_resources() {
-    spec_table(
-        vec!["ui-type".into(), "ui-resource".into(), "ui-status".into()],
-        vec![
-            vec![
-                "ui-design".into(),
-                "Material 3 Design Kit (Figma)".into(),
-                "ui-available".into(),
-            ],
-            vec![
-                "ui-implementation".into(),
-                "Flutter".into(),
-                "ui-available".into(),
-            ],
-            vec![
-                "ui-implementation".into(),
-                "Jetpack Compose".into(),
-                "ui-available".into(),
-            ],
-            vec![
-                "ui-implementation".into(),
-                "Android Views (MDC-Android)".into(),
-                "ui-available".into(),
-            ],
-            vec![
-                "ui-implementation".into(),
-                "Material Web".into(),
-                "ui-unavailable".into(),
-            ],
-        ],
-    );
-    gap(Dp(16.0));
-    prose(
-        "ui-the-availability-above-describes-the-material-libraries-the-live-examples-on-this-page-are",
-    );
-}
-
-#[tessera]
-fn time_m2_difference() {
-    prose(
-        "ui-material-3-keeps-the-dial-and-keyboard-variants-with-new-color-mappings-that-support-dynam",
-    );
-    gap(Dp(24.0));
-    spec_table(
-        vec!["ui-element".into(), "M2".into(), "M3".into()],
-        vec![
-            vec![
-                "ui-selected-time-field".into(),
-                "ui-accent-emphasis".into(),
-                "Primary container / on primary container".into(),
-            ],
-            vec![
-                "ui-selected-period".into(),
-                "ui-accent-emphasis".into(),
-                "Tertiary container / on tertiary container".into(),
-            ],
-            vec![
-                "ui-color-system".into(),
-                "ui-previous-color-mappings".into(),
-                "ui-dynamic-color-compatible-semantic-roles".into(),
-            ],
-        ],
-    );
-    gap(Dp(24.0));
-    time_figure(
-        false,
-        false,
-        false,
-        FigureKind::Plain,
-        "ui-m3-dynamic-color-mapping".into(),
-    );
-    prose("ui-m3-selected-hour-and-selected-period-have-distinct-color-mappings");
 }
 
 #[tessera]

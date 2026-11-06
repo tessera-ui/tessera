@@ -1,38 +1,30 @@
-ui-standard-filled-unselected-filled-selected-filled-tonal-and-outlined-icon-buttons = 标准、填充未选择、填充选择、填充色调和描边图标按钮
+ui-standard-filled-unselected-filled-selected-filled-tonal-and-outlined-icon-buttons = 标准、填充（未选中）、填充（选中）、色调填充和描边图标按钮
 
 ui-download = 下载
 
 ui-add-to-favorites = 添加到收藏夹
 
-ui-hover-favorite-action = 将鼠标悬停在最喜欢的动作上
+ui-hover-favorite-action = 悬停状态的收藏操作
 
 ui-default-icon-action = 默认图标操作
 
-ui-1-default-icon-button = 1 个默认图标按钮
+ui-1-default-icon-button = 1  默认图标按钮
 
-ui-toggle-favorite = 切换收藏夹
+ui-toggle-favorite = 切换收藏状态
 
-ui-2-toggle-icon-button = 2 切换图标按钮
+ui-2-toggle-icon-button = 2  切换图标按钮
 
-ui-extra-small-medium-large-extra-large = 特小号、中号、大号、特大号
+ui-anatomy-add-action = 结构示例中的添加操作
 
-ui-color-style = 颜色款式
+ui-1-icon = 1  图标
 
-ui-filled-default-tonal-outlined-standard = 填充（默认）、色调、描边、标准
-
-ui-narrow-wide = 窄、宽
-
-ui-anatomy-add-action = 解剖添加动作
-
-ui-1-icon = 1 个图标
-
-ui-2-container = 2 容器
+ui-2-container = 2  容器
 
 ui-toggle-off = 关闭
 
 ui-toggle-on = 开启
 
-ui-a-unselected-b-selected-3245 = 答：未选择。乙：已选择
+ui-a-unselected-b-selected-3245 = A：未选中。B：选中
 
 ui-hover-example-actions-value = 悬停示例操作：{ $v0 }
 

@@ -66,17 +66,7 @@ pub(super) fn tooltips_spec(route: Option<crate::pages::material_spec::article::
                 gap(Dp(32.0));
                 tooltip_variant_examples();
             })),
-            sections: vec![
-                section("ui-availability-resources", RenderSlot::new(tooltip_availability)),
-                section("ui-differences-from-m2", RenderSlot::new(|| {
-                    tooltip_points(vec![
-                        "ui-color-new-color-mappings-and-compatibility-with-dynamic-color",
-                        "ui-shape-rich-tooltips-have-more-rounded-corners",
-                    ]);
-                    gap(Dp(24.0));
-                    tooltip_material_comparison();
-                })),
-            ],
+            sections: vec![],
         },
         ArticlePage {
             title: "ui-guidelines",
@@ -152,40 +142,6 @@ fn tooltip_points(items: Vec<&'static str>) {
                 gap(Dp(12.0));
             }
         });
-}
-
-#[tessera]
-fn tooltip_availability() {
-    spec_table(
-        vec!["ui-type".into(), "ui-resource".into(), "ui-status".into()],
-        vec![
-            vec![
-                "ui-design".into(),
-                "ui-design-kit-figma".into(),
-                "ui-available".into(),
-            ],
-            vec![
-                "ui-implementation".into(),
-                "Flutter".into(),
-                "ui-unavailable".into(),
-            ],
-            vec![
-                "ui-implementation".into(),
-                "Jetpack Compose".into(),
-                "ui-available".into(),
-            ],
-            vec![
-                "ui-implementation".into(),
-                "Android Views (MDC-Android)".into(),
-                "ui-unavailable".into(),
-            ],
-            vec![
-                "ui-implementation".into(),
-                "Web".into(),
-                "ui-unavailable".into(),
-            ],
-        ],
-    );
 }
 
 #[tessera]
@@ -1099,104 +1055,6 @@ fn tooltip_legend(labels: Vec<String>) {
 }
 
 #[tessera]
-fn tooltip_material_comparison() {
-    material_theme()
-        .theme(|| tooltip_reference_theme(false))
-        .child(move || {
-            let geometry = remember(SpaceGeometry::new);
-            tooltip_stage(
-                1024.0,
-                302.0,
-                "ui-material-2-and-material-3-tooltip-comparison".into(),
-                geometry,
-            )
-            .child(move || {
-                boxed()
-                    .modifier(
-                        Modifier::new()
-                            .required_size(Dp(500.0), Dp(302.0))
-                            .background_with_shape(
-                                srgb(255, 255, 255),
-                                Shape::rounded_rectangle(Dp(24.0)),
-                            ),
-                    )
-                    .children(move || {
-                        surface()
-                            .modifier(Modifier::new().offset(Dp(94.0), Dp(64.0)).width(Dp(312.0)))
-                            .style(srgb(255, 255, 255).into())
-                            .shape(Shape::rounded_rectangle(Dp(8.0)))
-                            .elevation(Dp(3.0))
-                            .child(move || {
-                                column()
-                                    .modifier(Modifier::new().padding_symmetric(Dp(16.0), Dp(12.0)))
-                                    .children(move || {
-                                        text(I18N.text("ui-rich-tooltip"))
-                                            .style(type_style(14.0, 20.0))
-                                            .color(srgb(60, 64, 67));
-                                        gap(Dp(4.0));
-                                        text(I18N.text(RICH_OVERVIEW_MESSAGE))
-                                            .style(type_style(14.0, 20.0))
-                                            .color(srgb(60, 64, 67));
-                                        gap(Dp(20.0));
-                                        row().children(move || {
-                                            for _ in 0..2 {
-                                                text(I18N.text("ui-action"))
-                                                    .style(type_style(14.0, 20.0))
-                                                    .color(srgb(26, 115, 232))
-                                                    .modifier(
-                                                        Modifier::new()
-                                                            .padding_symmetric(Dp(8.0), Dp(8.0)),
-                                                    );
-                                            }
-                                        });
-                                    });
-                            });
-                    });
-                boxed().modifier(
-                    Modifier::new()
-                        .offset(Dp(524.0), Dp::ZERO)
-                        .required_size(Dp(500.0), Dp(302.0))
-                        .background_with_shape(
-                            srgb(247, 242, 250),
-                            Shape::rounded_rectangle(Dp(24.0)),
-                        ),
-                );
-                tooltip_reference_popup(
-                    geometry,
-                    false,
-                    true,
-                    RICH_OVERVIEW_MESSAGE.into(),
-                    774.0,
-                    151.0,
-                    1024.0,
-                    302.0,
-                );
-            });
-        });
-    gap(Dp(16.0));
-    row()
-        .modifier(Modifier::new().fill_max_width())
-        .children(|| {
-            for (index, caption) in [
-                "ui-m2-rich-tooltips-have-slightly-rounded-corners",
-                "ui-m3-rich-tooltips-have-more-rounded-corners-and-support-dynamic-color",
-            ]
-            .into_iter()
-            .enumerate()
-            {
-                if index == 1 {
-                    spacer().modifier(Modifier::new().width(Dp(24.0)));
-                }
-                column()
-                    .modifier(Modifier::new().weight(1.0))
-                    .children(move || {
-                        tooltip_caption(caption.into());
-                    });
-            }
-        });
-}
-
-#[tessera]
 fn tooltip_advice_bar(label: String, tone: usize) {
     let (background, ink, symbol) = match tone {
         0 => (srgb(52, 191, 73), srgb(29, 27, 32), filled::CHECK_SVG),
@@ -1530,7 +1388,7 @@ fn tooltip_focus_sequence() {
                                     row()
                                         .cross_axis_alignment(CrossAxisAlignment::Center)
                                         .children(move || {
-                                            text("Visit ").style(type_style(14.0, 20.0));
+                                            text(I18N.text("ui-visit")).style(type_style(14.0, 20.0));
                                             boxed()
                                                 .modifier(
                                                     watch_in_space(geometry, "focus_link")

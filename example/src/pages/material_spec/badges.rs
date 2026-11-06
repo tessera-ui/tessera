@@ -13,9 +13,8 @@ use tessera_components::{
     },
     navigation_rail::{navigation_rail, navigation_rail_item},
     shape_def::Shape,
-    surface::surface,
     text::text,
-    theme::{MaterialTheme, material_theme},
+    theme::MaterialTheme,
 };
 use tessera_ui::{
     Dp, Modifier, RenderSlot, State, accesskit::Role, remember, tessera, use_context,
@@ -24,10 +23,9 @@ use tessera_ui::{
 use crate::res::I18N;
 
 use super::{
-    ACCENT,
     annotations::{self, Geometry, relative, watch},
     article::{ArticlePage, SpecSection, article},
-    gap, panel, spec_table, subheading, type_style,
+    gap, panel, scheme_panel, spec_table, subheading, type_style,
 };
 
 #[tessera]
@@ -266,48 +264,35 @@ fn tokens() {
 #[tessera]
 fn colors() {
     for dark in [false, true] {
-        subheading(if dark {
-            "ui-dark-scheme".into()
-        } else {
-            "ui-light-scheme".into()
-        });
-        gap(Dp(24.0));
-        material_theme()
-            .theme(move || MaterialTheme::from_seed(ACCENT, dark))
-            .child(move || {
-                surface()
-                    .modifier(Modifier::new().fill_max_width())
-                    .child(move || {
-                        column()
-                            .modifier(Modifier::new().fill_max_width().padding_all(Dp(24.0)))
-                            .children(move || {
-                                let selected = remember(|| 1_usize);
-                                navigation_examples(
-                                    if dark {
-                                        "ui-dark-navigation-bar"
-                                    } else {
-                                        "ui-light-navigation-bar"
-                                    },
-                                    selected,
-                                    7,
-                                    false,
-                                    false,
-                                );
-                                gap(Dp(24.0));
-                                navigation_examples(
-                                    if dark {
-                                        "ui-dark-navigation-rail"
-                                    } else {
-                                        "ui-light-navigation-rail"
-                                    },
-                                    selected,
-                                    3,
-                                    true,
-                                    true,
-                                );
-                            });
-                    });
-            });
+        scheme_panel(
+            dark,
+            RenderSlot::new(move || {
+                let selected = remember(|| 1_usize);
+                navigation_examples(
+                    if dark {
+                        "ui-dark-navigation-bar"
+                    } else {
+                        "ui-light-navigation-bar"
+                    },
+                    selected,
+                    7,
+                    false,
+                    false,
+                );
+                gap(Dp(24.0));
+                navigation_examples(
+                    if dark {
+                        "ui-dark-navigation-rail"
+                    } else {
+                        "ui-light-navigation-rail"
+                    },
+                    selected,
+                    3,
+                    true,
+                    true,
+                );
+            }),
+        );
         gap(Dp(32.0));
     }
     subheading("ui-badge-color-roles".into());
@@ -604,45 +589,6 @@ fn overview_article() {
     ] {
         prose(format!("• {}", I18N.text(point)));
     }
-    gap(Dp(32.0));
-    subheading("ui-availability-resources".into());
-    spec_table(
-        vec!["ui-type".into(), "ui-resource".into(), "ui-status".into()],
-        vec![
-            vec![
-                "ui-design".into(),
-                "ui-design-kit-figma".into(),
-                "ui-available".into(),
-            ],
-            vec![
-                "ui-implementation".into(),
-                "Flutter".into(),
-                "ui-available".into(),
-            ],
-            vec![
-                "ui-implementation".into(),
-                "Jetpack Compose".into(),
-                "ui-available".into(),
-            ],
-            vec![
-                "ui-implementation".into(),
-                "Android Views (MDC-Android)".into(),
-                "ui-available".into(),
-            ],
-            vec![
-                "ui-implementation".into(),
-                "Web".into(),
-                "ui-unavailable".into(),
-            ],
-        ],
-    );
-    gap(Dp(32.0));
-    subheading("ui-differences-from-m2".into());
-    prose(
-        "ui-color-badges-use-new-color-mappings-and-support-dynamic-color-keep-the-default-error-and-o",
-    );
-    gap(Dp(24.0));
-    badge_figure(false, false);
 }
 
 #[tessera]
@@ -877,6 +823,7 @@ fn readable_badge_navigation() {
 mod form_article_tests {
     use std::time::Duration;
 
+    use tessera_components::theme::material_theme;
     use tessera_ui::{
         HeadlessConfig, HeadlessRenderer,
         accesskit::{Action, ActionRequest, NodeId, TreeId},

@@ -18,7 +18,6 @@ use tessera_components::{
     surface::{SurfaceStyle, surface},
     text::text,
     text_field::text_field,
-    text_table::TextTableCell,
     theme::MaterialTheme,
     toolbar::{ToolbarColorStyle, ToolbarOrientation, docked_toolbar, floating_toolbar},
 };
@@ -33,7 +32,7 @@ use super::{
     INK,
     annotations::{self, Geometry, dotted, relative, watch},
     article::{ArticlePage, SpecSection, article},
-    gap, panel, spec_table, spec_table_cells, subheading, type_style,
+    gap, panel, spec_table, subheading, type_style,
 };
 
 const DO_COLOR: Color = Color::from_rgb(0.121, 0.478, 0.196);
@@ -90,20 +89,7 @@ pub(super) fn toolbars_spec(route: Option<crate::pages::material_spec::article::
         ArticlePage {
             title: "ui-overview",
             intro: Some(RenderSlot::new(overview)),
-            sections: vec![
-                SpecSection {
-                    title: "ui-availability-resources",
-                    content: RenderSlot::new(availability),
-                },
-                SpecSection {
-                    title: "ui-m3-expressive-update",
-                    content: RenderSlot::new(expressive_update),
-                },
-                SpecSection {
-                    title: "ui-differences-from-m2",
-                    content: RenderSlot::new(differences),
-                },
-            ],
+            sections: vec![],
         },
         ArticlePage {
             title: "ui-guidelines",
@@ -1285,7 +1271,6 @@ enum GalleryKind {
     Overview,
     Variants,
     Configurations,
-    Expressive,
     UseCases,
     DockedVsFloating,
     ColorEmphasis,
@@ -1433,26 +1418,6 @@ fn gallery(kind: GalleryKind) {
                             .notice(notice);
                     });
                 }));
-            }
-            GalleryKind::Expressive => {
-                gallery_item(0).legend(1).content(move |gallery_tag| {
-                    fab_pair(Sample::Mail, FabKind::Reply)
-                        .gallery_tag(gallery_tag)
-                        .vibrant(true)
-                        .limit(fab_limit)
-                        .notice(notice);
-                });
-                gap(Dp(32.0));
-                gallery_item(1)
-                    .fill(true)
-                    .legend(2)
-                    .content(move |gallery_tag| {
-                        sample_toolbar(Sample::Navigate)
-                            .gallery_tag(gallery_tag)
-                            .docked(true)
-                            .limit(docked_limit)
-                            .notice(notice);
-                    });
             }
             GalleryKind::UseCases => {
                 floating_group(RenderSlot::new(move || {
@@ -2266,117 +2231,6 @@ fn overview() {
 }
 
 #[tessera]
-fn availability() {
-    let rows = [
-        ("ui-design", "ui-design-kit-figma", "ui-available"),
-        (
-            "ui-implementation",
-            "ui-jetpack-compose-bottom-app-bar",
-            "ui-available",
-        ),
-        (
-            "",
-            "ui-jetpack-compose-expressive-docked-toolbar",
-            "ui-available",
-        ),
-        (
-            "",
-            "ui-jetpack-compose-expressive-floating-toolbar",
-            "ui-available",
-        ),
-        (
-            "",
-            "ui-android-views-mdc-android-bottom-app-bar",
-            "ui-available",
-        ),
-        (
-            "",
-            "ui-android-views-mdc-android-expressive-docked-toolbar",
-            "ui-available",
-        ),
-        (
-            "",
-            "ui-android-views-mdc-android-expressive-floating-toolbar",
-            "ui-available",
-        ),
-        ("", "ui-flutter-bottom-app-bar", "ui-available"),
-        ("", "Web", "ui-unavailable"),
-    ];
-    let mut cells = Vec::new();
-    for (index, (kind, resource, status)) in rows.into_iter().enumerate() {
-        let row = index + 1;
-        if !kind.is_empty() {
-            cells.push(TextTableCell {
-                text: kind.into(),
-                row,
-                column: 0,
-                row_span: if index == 0 { 1 } else { rows.len() - 1 },
-                ..Default::default()
-            });
-        }
-        cells.push(TextTableCell {
-            text: resource.into(),
-            row,
-            column: 1,
-            ..Default::default()
-        });
-        cells.push(TextTableCell {
-            text: status.into(),
-            row,
-            column: 2,
-            ..Default::default()
-        });
-    }
-    spec_table_cells(
-        vec!["ui-type".into(), "ui-resource".into(), "ui-status".into()],
-        cells,
-    );
-    gap(Dp(24.0));
-    prose(
-        "ui-the-live-examples-on-this-page-use-tessera-s-docked-toolbar-and-floating-toolbar-comp",
-    );
-}
-
-#[tessera]
-fn expressive_update() {
-    prose(
-        "ui-the-bottom-app-bar-is-no-longer-recommended-and-should-be-replaced-with-the-docked-toolbar",
-    );
-    gap(Dp(24.0));
-    prose("ui-variants-and-naming-921");
-    gap(Dp(8.0));
-    bullets(vec![
-        "ui-added-docked-toolbar-to-replace-bottom-app-bar".into(),
-        "ui-size-shorter-height".into(),
-        "ui-color-standard-or-vibrant".into(),
-        "ui-flexibility-more-layout-and-element-options".into(),
-        "ui-added-floating-toolbar-with-the-following-configurations".into(),
-        "ui-layout-horizontal-or-vertical".into(),
-        "ui-color-standard-or-vibrant".into(),
-        "ui-flexibility-can-hold-many-elements-and-components-can-be-paired-with-fab".into(),
-        "ui-bottom-app-bar-is-still-available-but-not-recommended".into(),
-    ]);
-    gap(Dp(24.0));
-    gallery(GalleryKind::Expressive);
-    gap(Dp(16.0));
-    legend(vec![
-        "ui-floating-vibrant-color-scheme-and-paired-with-fab".into(),
-        "ui-docked-with-embedded-primary-action-instead-of-fab".into(),
-    ]);
-}
-
-#[tessera]
-fn differences() {
-    bullets(vec![
-        "ui-color-new-color-mappings-and-compatibility-with-dynamic-color".into(),
-        "ui-elevation-no-shadow".into(),
-        "ui-layout-container-height-is-taller-and-the-fab-is-now-contained-within-the-app-bar-containe".into(),
-    ]);
-    gap(Dp(24.0));
-    m2_comparison();
-}
-
-#[tessera]
 fn spec_variants() {
     gallery(GalleryKind::Variants);
     gap(Dp(16.0));
@@ -2395,40 +2249,9 @@ fn spec_variants() {
     gap(Dp(16.0));
     caption("ui-bottom-app-bar-not-recommended");
     gap(Dp(32.0));
-    spec_table(
-        vec!["ui-variant".into(), "M3".into(), "M3 Expressive".into()],
-        vec![
-            vec![
-                "ui-docked-toolbar".into(),
-                "--".into(),
-                "ui-available".into(),
-            ],
-            vec![
-                "ui-floating-toolbar".into(),
-                "--".into(),
-                "ui-available".into(),
-            ],
-            vec![
-                "ui-bottom-app-bar".into(),
-                "ui-available".into(),
-                "ui-not-recommended-use-docked-toolbar".into(),
-            ],
-        ],
-    );
-    gap(Dp(24.0));
     prose(
         "ui-note-implementation-differs-per-platform-in-tessera-docked-toolbar-and-floating-toolb",
     );
-}
-
-fn table_cell(text: &str, row: usize, column: usize, row_span: usize) -> TextTableCell {
-    TextTableCell {
-        text: text.into(),
-        row,
-        column,
-        row_span,
-        ..Default::default()
-    }
 }
 
 #[tessera]
@@ -2441,35 +2264,6 @@ fn spec_configurations() {
         "ui-floating-toolbar-with-fab".into(),
     ]);
     gap(Dp(32.0));
-    spec_table_cells(
-        vec![
-            "ui-category".into(),
-            "ui-configuration".into(),
-            "M3".into(),
-            "M3 Expressive".into(),
-        ],
-        vec![
-            table_cell("ui-color", 1, 0, 2),
-            table_cell("ui-standard-default", 1, 1, 1),
-            table_cell("ui-available-as-bottom-app-bar", 1, 2, 1),
-            table_cell("ui-available", 1, 3, 1),
-            table_cell("ui-vibrant", 2, 1, 1),
-            table_cell("--", 2, 2, 1),
-            table_cell("ui-available", 2, 3, 1),
-            table_cell("ui-floating-toolbar-layout", 3, 0, 2),
-            table_cell("ui-horizontal-default", 3, 1, 1),
-            table_cell("--", 3, 2, 1),
-            table_cell("ui-available", 3, 3, 1),
-            table_cell("ui-vertical", 4, 1, 1),
-            table_cell("--", 4, 2, 1),
-            table_cell("ui-available", 4, 3, 1),
-            table_cell("ui-other-elements", 5, 0, 1),
-            table_cell("ui-with-fab", 5, 1, 1),
-            table_cell("ui-available-as-bottom-app-bar", 5, 2, 1),
-            table_cell("Available*", 5, 3, 1),
-        ],
-    );
-    gap(Dp(24.0));
     prose(
         "ui-note-implementation-differs-per-platform-in-tessera-the-fab-is-placed-next-to-the-floating",
     );
@@ -3563,106 +3357,6 @@ fn navigation_diagram(kind: NavDiagram) {
 }
 
 #[tessera]
-fn m2_bar(icons: usize) {
-    let scheme = use_context::<MaterialTheme>().unwrap().get().color_scheme;
-    boxed()
-        .alignment(Alignment::TopStart)
-        .modifier(
-            Modifier::new()
-                .fill_max_width()
-                .height(Dp(84.0))
-                .semantics(SemanticsArgs {
-                    role: Some(Role::Image),
-                    label: Some(
-                        I18N.text("ui-m2-bottom-app-bar-in-the-primary-color-with-8dp-elevation-and-a-fab-overlapping-its-top-ed"),
-                    ),
-                    merge_descendants: true,
-                    ..Default::default()
-                }),
-        )
-        .children(move || {
-            surface()
-                .style(SurfaceStyle::Filled {
-                    color: scheme.primary,
-                })
-                .elevation(Dp(8.0))
-                .modifier(
-                    Modifier::new()
-                        .align(Alignment::BottomStart)
-                        .fill_max_width()
-                        .height(Dp(56.0)),
-                )
-                .child(move || {
-                    row()
-                        .modifier(
-                            Modifier::new()
-                                .fill_max_size()
-                                .padding_symmetric(Dp(16.0), Dp::ZERO),
-                        )
-                        .cross_axis_alignment(CrossAxisAlignment::Center)
-                        .children(move || {
-                            for (index, label) in ["ui-archive", "ui-delete", "ui-mark-unread", "ui-snooze"]
-                                .into_iter()
-                                .take(icons)
-                                .enumerate()
-                            {
-                                if index > 0 {
-                                    spacer().modifier(Modifier::new().width(Dp(24.0)));
-                                }
-                                icon()
-                                    .painter(action_icon(label))
-                                    .size(Dp(24.0))
-                                    .tint(scheme.on_primary);
-                            }
-                        });
-                });
-            boxed()
-                .alignment(Alignment::Center)
-                .modifier(
-                    Modifier::new()
-                        .align(Alignment::TopEnd)
-                        .padding(Padding::new(Dp::ZERO, Dp::ZERO, Dp(16.0), Dp::ZERO))
-                        .size(Dp(56.0), Dp(56.0))
-                        .background_with_shape(scheme.secondary_container, Shape::Ellipse),
-                )
-                .children(move || {
-                    icon()
-                        .painter(filled::ADD_SVG)
-                        .size(Dp(24.0))
-                        .tint(scheme.on_secondary_container);
-                });
-        });
-}
-
-#[tessera]
-fn m2_comparison() {
-    let width = remember(|| Dp::ZERO);
-    let notice = remember(String::new);
-    stage(
-        width,
-        RenderSlot::new(move || {
-            let icons = if compact(width.get()) { 2 } else { 4 };
-            gallery_item(0).fill(true).legend(1).content(move |_| {
-                m2_bar(icons);
-            });
-            gap(Dp(24.0));
-            gallery_item(1).fill(true).legend(2).content(move |_| {
-                bottom_bar(icons, true, notice);
-            });
-        }),
-    );
-    gap(Dp(16.0));
-    legend(vec![
-        "ui-m2-bottom-app-bar-had-higher-elevation-of-8dp-and-didn-t-contain-the-fab".into(),
-        "ui-m3-bottom-app-bar-has-new-colors-a-taller-container-no-elevation-or-shadow-and-contains-th".into(),
-    ]);
-    if !notice.get().is_empty() {
-        gap(Dp(12.0));
-        caption(notice.get());
-    }
-}
-
-#[tessera]
 fn collapsing_example() {
     let expanded = remember(|| true);
     let visible = remember(|| true);
@@ -3995,7 +3689,6 @@ mod tests {
             (GalleryKind::Overview, 7, &[1usize][..]),
             (GalleryKind::Variants, 2, &[][..]),
             (GalleryKind::Configurations, 6, &[5][..]),
-            (GalleryKind::Expressive, 2, &[0][..]),
             (GalleryKind::UseCases, 5, &[2][..]),
             (GalleryKind::Slots, 5, &[][..]),
             (GalleryKind::Emphasis, 2, &[1][..]),

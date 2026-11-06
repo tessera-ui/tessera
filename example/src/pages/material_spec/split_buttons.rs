@@ -153,18 +153,7 @@ pub(super) fn split_buttons_spec(
                             intro: Some(RenderSlot::new(move || {
                                 overview(menu);
                             })),
-                            sections: vec![
-                                SpecSection {
-                                    title: "ui-availability-resources",
-                                    content: RenderSlot::new(availability),
-                                },
-                                SpecSection {
-                                    title: "ui-m3-expressive-update",
-                                    content: RenderSlot::new(move || {
-                                        expressive_update(menu);
-                                    }),
-                                },
-                            ],
+                            sections: vec![],
                         },
                         ArticlePage {
                             title: "ui-guidelines",
@@ -462,80 +451,6 @@ fn overview(menu: Menu) {
 }
 
 #[tessera]
-fn availability() {
-    spec_table(
-        vec!["ui-type".into(), "ui-resource".into(), "ui-status".into()],
-        vec![
-            vec![
-                "ui-design".into(),
-                "ui-design-kit-figma".into(),
-                "ui-available".into(),
-            ],
-            vec![
-                "ui-implementation".into(),
-                "Jetpack Compose: Expressive".into(),
-                "ui-available".into(),
-            ],
-            vec![
-                "ui-implementation".into(),
-                "Android Views (MDC-Android): Expressive".into(),
-                "ui-available".into(),
-            ],
-            vec![
-                "ui-implementation".into(),
-                "Web: Expressive".into(),
-                "ui-unavailable".into(),
-            ],
-        ],
-    );
-    gap(Dp(24.0));
-    prose(
-        "ui-tessera-examples-on-this-page-use-the-native-split-button-layout-with-its-leading-and",
-    );
-}
-
-#[tessera]
-fn expressive_update(menu: Menu) {
-    subheading("ui-may-2025".into());
-    prose(
-        "ui-the-split-button-has-a-separate-menu-button-that-spins-and-changes-shape-when-activated-it",
-    );
-    gap(Dp(24.0));
-    prose("ui-new-component-added-to-catalog");
-    gap(Dp(16.0));
-    prose("Sizes:");
-    gap(Dp(8.0));
-    bullets(vec![
-        "ui-extra-small".into(),
-        "ui-small".into(),
-        "ui-medium".into(),
-        "ui-large".into(),
-        "ui-extra-large".into(),
-    ]);
-    gap(Dp(16.0));
-    prose("ui-color-styles-3705");
-    gap(Dp(8.0));
-    bullets(vec![
-        "ui-elevated".into(),
-        "ui-filled".into(),
-        "ui-tonal".into(),
-        "ui-outlined".into(),
-    ]);
-    gap(Dp(24.0));
-    panel(RenderSlot::new(move || {
-        demo(
-            menu,
-            "ui-expressive",
-            SplitButtonVariant::Filled,
-            SplitButtonSize::Medium,
-            true,
-        );
-    }));
-    gap(Dp(16.0));
-    caption("ui-split-buttons-have-the-same-five-recommended-sizes-as-label-and-icon-buttons");
-}
-
-#[tessera]
 fn variants(menu: Menu) {
     panel(RenderSlot::new(move || {
         demo(
@@ -548,15 +463,6 @@ fn variants(menu: Menu) {
     }));
     gap(Dp(16.0));
     caption("ui-a-split-button-pairs-a-leading-action-with-a-trailing-menu-segment");
-    gap(Dp(32.0));
-    spec_table(
-        vec!["ui-variant".into(), "M3".into(), "M3 Expressive".into()],
-        vec![vec![
-            "ui-split-button".into(),
-            "--".into(),
-            "ui-available".into(),
-        ]],
-    );
 }
 
 #[tessera]
@@ -628,29 +534,6 @@ fn configurations(menu: Menu) {
                 );
             });
     }));
-    gap(Dp(24.0));
-    spec_table(
-        vec![
-            "ui-category".into(),
-            "ui-configuration".into(),
-            "M3".into(),
-            "M3 Expressive".into(),
-        ],
-        vec![
-            vec![
-                "ui-size".into(),
-                "XS, S, M, L, XL".into(),
-                "--".into(),
-                "ui-available".into(),
-            ],
-            vec![
-                "ui-color".into(),
-                "ui-elevated-filled-tonal-outlined".into(),
-                "--".into(),
-                "ui-available".into(),
-            ],
-        ],
-    );
 }
 
 #[tessera]

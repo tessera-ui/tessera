@@ -11,19 +11,18 @@ use tessera_components::{
     row::row,
     shape_def::Shape,
     spacer::spacer,
-    surface::surface,
     text::text,
-    theme::{MaterialTheme, material_theme},
+    theme::MaterialTheme,
 };
 use tessera_ui::{Dp, Modifier, RenderSlot, remember, tessera, use_context};
 
 use crate::res::I18N;
 
 use super::{
-    ACCENT, INK,
+    INK,
     article::{ArticlePage, SpecSection, article},
     floating_actions::{TONES, tone_colors},
-    gap, panel, spec_table, subheading, type_style,
+    gap, panel, scheme_panel, spec_table, subheading, type_style,
 };
 
 const SIZES: [ExtendedFloatingActionButtonSize; 3] = [
@@ -87,20 +86,7 @@ pub(super) fn extended_fabs_spec(
         ArticlePage {
             title: "ui-overview",
             intro: Some(RenderSlot::new(overview)),
-            sections: vec![
-                SpecSection {
-                    title: "ui-availability-resources",
-                    content: RenderSlot::new(resources),
-                },
-                SpecSection {
-                    title: "ui-m3-expressive-update",
-                    content: RenderSlot::new(expressive),
-                },
-                SpecSection {
-                    title: "ui-differences-from-m2",
-                    content: RenderSlot::new(differences),
-                },
-            ],
+            sections: vec![],
         },
         ArticlePage {
             title: "ui-guidelines",
@@ -261,118 +247,6 @@ fn overview() {
 }
 
 #[tessera]
-fn resources() {
-    spec_table(
-        vec!["ui-type".into(), "ui-resource".into(), "ui-status".into()],
-        vec![
-            vec![
-                "ui-design".into(),
-                "ui-design-kit-figma".into(),
-                "ui-available".into(),
-            ],
-            vec![
-                "ui-implementation".into(),
-                "Flutter".into(),
-                "ui-available".into(),
-            ],
-            vec![
-                "ui-implementation".into(),
-                "Jetpack Compose".into(),
-                "ui-available".into(),
-            ],
-            vec![
-                "ui-implementation".into(),
-                "Jetpack Compose: Expressive".into(),
-                "ui-available".into(),
-            ],
-            vec![
-                "ui-implementation".into(),
-                "Android Views (MDC-Android)".into(),
-                "ui-available".into(),
-            ],
-            vec![
-                "ui-implementation".into(),
-                "Web".into(),
-                "ui-available".into(),
-            ],
-            vec![
-                "ui-implementation".into(),
-                "Web: Expressive".into(),
-                "ui-unavailable".into(),
-            ],
-        ],
-    );
-    gap(Dp(24.0));
-    prose(
-        "ui-tessera-examples-on-this-page-use-the-native-extended-floating-action-button-componen",
-    );
-}
-
-#[tessera]
-fn expressive() {
-    prose(
-        "ui-may-2025-the-extended-fab-gained-small-medium-and-large-sizes-and-the-baseline-extended-fa",
-    );
-    gap(Dp(24.0));
-    spec_table(
-        vec!["ui-change".into(), "ui-details".into()],
-        vec![
-            vec![
-                "ui-sizes".into(),
-                "ui-small-56dp-medium-80dp-and-large-96dp".into(),
-            ],
-            vec![
-                "ui-type-style".into(),
-                "ui-the-small-extended-fab-uses-title-medium-instead-of-label-large".into(),
-            ],
-            vec!["ui-padding".into(), "ui-inner-padding-was-reduced".into()],
-            vec![
-                "ui-baseline".into(),
-                "ui-extended-fab-baseline-is-no-longer-recommended".into(),
-            ],
-        ],
-    );
-    gap(Dp(32.0));
-    panel(RenderSlot::new(|| {
-        fab("ui-compose");
-    }));
-    caption("ui-the-small-extended-fab-is-the-recommended-size-in-the-expressive-update");
-}
-
-#[tessera]
-fn differences() {
-    prose(
-        "ui-m2-extended-fabs-used-a-fixed-48dp-height-a-single-primary-color-and-label-large-type-m3-i",
-    );
-    gap(Dp(16.0));
-    prose(
-        "ui-m3-expressive-the-container-grew-into-three-sizes-the-label-type-moved-to-title-medium-for",
-    );
-    gap(Dp(24.0));
-    spec_table(
-        vec!["ui-attribute".into(), "M2".into(), "M3 Expressive".into()],
-        vec![
-            vec!["ui-height".into(), "48dp".into(), "56 / 80 / 96dp".into()],
-            vec![
-                "ui-label-type".into(),
-                "Label large".into(),
-                "Title medium / title large / headline small".into(),
-            ],
-            vec![
-                "ui-icon-size".into(),
-                "24dp".into(),
-                "24 / 28 / 36dp".into(),
-            ],
-            vec![
-                "ui-color".into(),
-                "ui-single-accent".into(),
-                "ui-primary-secondary-and-tertiary-containers-or-accents".into(),
-            ],
-        ],
-    );
-}
-
-#[tessera]
 fn variants() {
     prose(
         "ui-three-sizes-share-the-same-anatomy-and-differ-in-height-icon-size-padding-and-label-type-s",
@@ -390,32 +264,6 @@ fn variants() {
     }));
     gap(Dp(16.0));
     caption("ui-1-small-extended-fab-2-medium-extended-fab-3-large-extended-fab-2899");
-    gap(Dp(32.0));
-    spec_table(
-        vec!["ui-variant".into(), "M3".into(), "M3 Expressive".into()],
-        vec![
-            vec![
-                "ui-small-extended-fab".into(),
-                "ui-available".into(),
-                "ui-available".into(),
-            ],
-            vec![
-                "ui-medium-extended-fab".into(),
-                "--".into(),
-                "ui-available".into(),
-            ],
-            vec![
-                "ui-large-extended-fab".into(),
-                "--".into(),
-                "ui-available".into(),
-            ],
-            vec![
-                "ui-extended-fab-baseline".into(),
-                "ui-available".into(),
-                "ui-not-recommended-use-small-extended-fab".into(),
-            ],
-        ],
-    );
 }
 
 #[tessera]
@@ -621,36 +469,22 @@ fn colors() {
     );
     gap(Dp(24.0));
     for dark in [false, true] {
-        subheading(if dark {
-            "ui-dark-scheme".into()
-        } else {
-            "ui-light-scheme".into()
-        });
-        gap(Dp(24.0));
-        material_theme()
-            .theme(move || MaterialTheme::from_seed(ACCENT, dark))
-            .child(move || {
-                surface()
-                    .modifier(Modifier::new().fill_max_width())
-                    .child(move || {
-                        column()
-                            .modifier(Modifier::new().fill_max_width().padding_all(Dp(24.0)))
-                            .children(move || {
-                                flow_row()
-                                    .item_spacing(Dp(24.0))
-                                    .line_spacing(Dp(24.0))
-                                    .children(move || {
-                                        for (tone, name) in TONES.into_iter().enumerate() {
-                                            fab(name)
-                                                .tone(tone);
-                                        }
-                                    });
-                                gap(Dp(16.0));
-                                text("1  Primary container    2  Secondary container    3  Tertiary container    4  Primary    5  Secondary    6  Tertiary")
-                                    .style(type_style(14.0, 20.0));
-                            });
+        scheme_panel(
+            dark,
+            RenderSlot::new(move || {
+                flow_row()
+                    .item_spacing(Dp(24.0))
+                    .line_spacing(Dp(24.0))
+                    .children(move || {
+                        for (tone, name) in TONES.into_iter().enumerate() {
+                            fab(name).tone(tone);
+                        }
                     });
-            });
+                gap(Dp(16.0));
+                text("1  Primary container    2  Secondary container    3  Tertiary container    4  Primary    5  Secondary    6  Tertiary")
+                    .style(type_style(14.0, 20.0));
+            }),
+        );
         gap(Dp(32.0));
     }
 }

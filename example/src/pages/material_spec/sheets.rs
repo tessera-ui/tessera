@@ -112,16 +112,7 @@ fn sheet_article(
         ArticlePage {
             title: "ui-overview",
             intro: Some(RenderSlot::new(|| { overview_intro(); })),
-            sections: vec![
-                SpecSection {
-                    title: "ui-availability-resources",
-                    content: RenderSlot::new(|| { availability(); }),
-                },
-                SpecSection {
-                    title: "ui-differences-from-m2",
-                    content: RenderSlot::new(|| { differences_from_m2(); }),
-                },
-            ],
+            sections: vec![],
         },
         ArticlePage {
             title: "ui-guidelines",
@@ -222,55 +213,6 @@ fn overview_intro() {
         "ui-standard-bottom-sheet".into(),
         "ui-modal-bottom-sheet".into(),
     ]);
-}
-
-#[tessera]
-fn availability() {
-    spec_table(
-        vec!["ui-type".into(), "ui-resource".into(), "ui-status".into()],
-        vec![
-            vec![
-                "ui-design".into(),
-                "ui-design-kit-figma".into(),
-                "ui-available".into(),
-            ],
-            vec![
-                "ui-implementation".into(),
-                "Flutter".into(),
-                "ui-available".into(),
-            ],
-            vec![
-                "ui-implementation".into(),
-                "Android Views (MDC-Android)".into(),
-                "ui-available".into(),
-            ],
-            vec![
-                "ui-implementation".into(),
-                "Jetpack Compose".into(),
-                "ui-available".into(),
-            ],
-            vec![
-                "ui-implementation".into(),
-                "Web".into(),
-                "ui-unavailable".into(),
-            ],
-        ],
-    );
-}
-
-#[tessera]
-fn differences_from_m2() {
-    figures::split()
-        .start(|| {
-            bullets(vec![
-                "ui-color-new-color-mappings-and-compatibility-with-dynamic-color".into(),
-                "ui-shape-bottom-sheets-have-a-28dp-top-corner-radius".into(),
-                "ui-layout-new-max-width-of-640dp-and-an-optional-drag-handle-with-an-accessible-48dp-hit-targ".into(),
-            ]);
-        })
-        .end(|| {
-            figures::m2_figure();
-        });
 }
 
 #[tessera]

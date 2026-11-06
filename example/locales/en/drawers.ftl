@@ -18,14 +18,6 @@ ui-put-the-most-frequent-destinations-at-the-top-and-group-related-destinations-
 
 ui-closing = Closing
 
-ui-the-navigation-drawer-is-no-longer-recommended-use-the-expanded-navigation-rail-instead-mo = The navigation drawer is no longer recommended. Use the expanded navigation rail instead. More on M3 Expressive
-
-ui-variants-distinguishes-two-separate-variants-of-navigation-drawer-standard-and-modal = Variants: Distinguishes two separate variants of navigation drawer: Standard and modal
-
-ui-shape-rounded-corners-at-the-ending-edge-of-the-drawer = Shape: Rounded corners at the ending edge of the drawer
-
-ui-states-updated-color-and-shape-for-indicating-selected-state = States: Updated color and shape for indicating selected state
-
 ui-search-replies = Search replies
 
 ui-ellie-pietersen = Ellie Pietersen
@@ -82,6 +74,8 @@ ui-work = Work
 
 ui-element-sizes = element sizes
 
+ui-drawer-anatomy = anatomy
+
 ui-padding-and-margins = padding and margins
 
 ui-color-roles = color roles
@@ -93,14 +87,6 @@ ui-active-indicator = Active indicator
 ui-badge-label-text = Badge label text
 
 ui-standard-and-modal-navigation-drawers = Standard and modal navigation drawers
-
-ui-m2-rectangular-active-indicator = M2 rectangular active indicator
-
-ui-m3-pill-shaped-active-indicator = M3 pill-shaped active indicator
-
-ui-m2-navigation-drawer-had-square-corners-and-a-rectangular-shape-indicating-the-active-dest = M2: Navigation drawer had square corners and a rectangular shape indicating the active destination
-
-ui-m3-navigation-drawer-has-rounded-corners-new-color-mappings-and-an-updated-style-for-indic = M3: Navigation drawer has rounded corners, new color mappings, and an updated style for indicating the active destination
 
 ui-element-size-measurements = Element size measurements
 

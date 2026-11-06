@@ -1,15 +1,5 @@
 ui-sliders-select-a-value-or-range-along-a-track-use-standard-centered-or-range-variants-show = Sliders select a value or range along a track. Use standard, centered, or range variants, show the full available range, and apply changes immediately.
 
-ui-the-may-2025-update-adds-horizontal-and-vertical-orientations-five-sizes-from-xs-to-xl-and = The May 2025 update adds horizontal and vertical orientations, five sizes from XS to XL, and an optional inset icon for standard sliders. Continuous sliders are now called standard sliders; discrete sliders use the stops configuration.
-
-ui-previous-updates = Previous updates
-
-ui-visual-refresh-to-improve-non-text-contrast = Visual refresh to improve non-text contrast
-
-ui-the-december-2023-refresh-adds-centered-and-range-configurations-refreshed-color-mappings = The December 2023 refresh adds centered and range configurations, refreshed color mappings, end stops, larger value labels, and a vertical handle that narrows when pressed.
-
-ui-material-3-replaces-the-circular-handle-with-a-vertical-handle-and-introduces-dynamic-colo = Material 3 replaces the circular handle with a vertical handle and introduces dynamic color roles. End stops keep the extent of the inactive track distinguishable.
-
 ui-use-sliders-to-adjust-continuous-settings-such-as-volume-brightness-or-filter-intensity-ap = Use sliders to adjust continuous settings such as volume, brightness, or filter intensity. Apply every value change immediately so the result stays connected to the handle movement.
 
 ui-standard-sliders-start-at-a-minimum-centered-sliders-place-zero-in-the-middle-range-slider = Standard sliders start at a minimum; centered sliders place zero in the middle; range sliders choose a minimum and maximum. Prefer horizontal range sliders to reduce cognitive effort.
@@ -80,8 +70,6 @@ ui-the-accessibility-label-should-match-the-adjacent-visible-label-and-use-the-s
 
 ui-volume = Volume
 
-ui-tessera-examples-on-this-page-use-the-native-slider-with-standard-centered-and-range-confi = Tessera examples on this page use the native slider with standard, centered and range configurations, five sizes, both orientations and an optional inset icon.
-
 ui-keyboard-adjustable-value = Keyboard-adjustable value
 
 ui-slider-value = Slider value
@@ -105,14 +93,6 @@ ui-ring-volume = Ring volume
 ui-media-volume = Media volume
 
 ui-range = Range
-
-ui-available-as-continuous-slider = Available as “continuous” slider
-
-ui-available-web-only = Available (web only)
-
-ui-discrete = Discrete
-
-ui-available-as-stops-configuration = Available as “stops” configuration
 
 ui-centered-slider-variant = Centered slider variant
 
@@ -177,6 +157,10 @@ ui-value-size-configuration = { $v0 } size configuration
 ui-value-slider-color-roles = { $v0 } slider color roles
 
 ui-value-value-inset-color-roles = { $v0 } { $v1 } inset color roles
+
+ui-inactive = inactive
+
+ui-active = active
 
 ui-slider-color-marker-value-value = Slider color marker { $v0 } { $v1 }
 

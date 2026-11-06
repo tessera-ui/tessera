@@ -79,20 +79,7 @@ pub(super) fn navigation_bar_spec(
         ArticlePage {
             title: "ui-overview",
             intro: Some(RenderSlot::new(overview)),
-            sections: vec![
-                SpecSection {
-                    title: "ui-availability-resources",
-                    content: RenderSlot::new(availability),
-                },
-                SpecSection {
-                    title: "ui-m3-expressive-update",
-                    content: RenderSlot::new(expressive_update),
-                },
-                SpecSection {
-                    title: "ui-differences-from-m2",
-                    content: RenderSlot::new(differences),
-                },
-            ],
+            sections: vec![],
         },
         ArticlePage {
             title: "ui-guidelines",
@@ -327,102 +314,12 @@ fn overview() {
 }
 
 #[tessera]
-fn availability() {
-    spec_table(
-        vec!["ui-type".into(), "ui-resource".into(), "ui-status".into()],
-        vec![
-            vec![
-                "ui-design".into(),
-                "ui-design-kit-figma".into(),
-                "ui-available".into(),
-            ],
-            vec![
-                "ui-implementation".into(),
-                "Jetpack Compose".into(),
-                "ui-available".into(),
-            ],
-            vec![
-                "ui-implementation".into(),
-                "Android Views (MDC-Android)".into(),
-                "ui-available".into(),
-            ],
-            vec![
-                "ui-implementation".into(),
-                "Web".into(),
-                "ui-available".into(),
-            ],
-        ],
-    );
-    gap(Dp(24.0));
-    prose(
-        "ui-tessera-examples-on-this-page-use-the-native-navigation-bar-and-navigation-bar-item-c",
-    );
-}
-
-#[tessera]
-fn expressive_update() {
-    prose(
-        "ui-the-m3-navigation-bar-keeps-the-same-structure-as-the-baseline-a-container-with-an-active",
-    );
-    gap(Dp(16.0));
-    bullets(vec![
-        "ui-active-indicator-56-32dp-in-the-native-component-m3-reference-64-32dp-16dp-radius"
-            .into(),
-        "ui-selected-icon-switches-from-outlined-to-filled".into(),
-        "ui-labels-can-always-show-or-appear-only-for-the-selected-destination".into(),
-        "ui-badges-can-mark-a-destination-with-unread-activity".into(),
-    ]);
-    gap(Dp(24.0));
-    panel(RenderSlot::new(|| {
-        bar_demo(
-            "ui-expressive",
-            5,
-            NavigationBarLabelBehavior::SelectedOnly,
-            3,
-        );
-    }));
-    gap(Dp(16.0));
-    caption("ui-five-destinations-with-selected-only-labels-and-a-badge-on-inbox");
-}
-
-#[tessera]
-fn differences() {
-    bullets(vec![
-        "ui-m2-bottom-navigation-with-shifting-or-fixed-items-and-text-only-states".into(),
-        "ui-m3-a-persistent-container-a-pill-shaped-active-indicator-behind-the-icon-and-filled-select".into(),
-        "ui-m3-labels-can-stay-visible-or-appear-only-on-the-selected-destination".into(),
-    ]);
-    gap(Dp(24.0));
-    panel(RenderSlot::new(|| {
-        bar_demo(
-            "ui-differences",
-            3,
-            NavigationBarLabelBehavior::AlwaysShow,
-            0,
-        );
-    }));
-    gap(Dp(16.0));
-    caption(
-        "ui-m3-navigation-bars-highlight-the-active-destination-with-an-indicator-and-a-filled-icon",
-    );
-}
-
-#[tessera]
 fn variants() {
     panel(RenderSlot::new(|| {
         bar_demo("ui-variant", 4, NavigationBarLabelBehavior::AlwaysShow, 0);
     }));
     gap(Dp(16.0));
     caption("ui-there-is-one-navigation-bar-variant-holding-three-to-five-destinations");
-    gap(Dp(32.0));
-    spec_table(
-        vec!["ui-variant".into(), "M3".into(), "M3 Expressive".into()],
-        vec![vec![
-            "ui-navigation-bar".into(),
-            "ui-available".into(),
-            "ui-available".into(),
-        ]],
-    );
 }
 
 #[tessera]
@@ -726,7 +623,7 @@ fn guide_color() {
     );
     gap(Dp(24.0));
     panel(RenderSlot::new(|| {
-        bar_demo("Primary", 4, NavigationBarLabelBehavior::AlwaysShow, 0);
+        bar_demo("ui-primary", 4, NavigationBarLabelBehavior::AlwaysShow, 0);
     }));
     gap(Dp(16.0));
     caption(

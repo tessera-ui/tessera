@@ -273,23 +273,6 @@ pub(super) fn labeling() {
     gap(Dp(16.0));
     prose("ui-the-menu-item-s-accessibility-label-aligns-with-the-ui-text");
     gap(Dp(16.0));
-    super::spec_table(
-        vec![
-            "ui-element".into(),
-            "ui-a11y-label".into(),
-            "ui-role-web".into(),
-            "ui-role-android-views".into(),
-            "ui-role-jetpack-compose".into(),
-        ],
-        vec![vec![
-            "ui-menu-item-text".into(),
-            "ui-preview".into(),
-            "ui-menu-item".into(),
-            "ui-generic-actionable-element".into(),
-            "ui-generic-actionable-element".into(),
-        ]],
-    );
-    gap(Dp(16.0));
     prose(I18N.format(
         "ui-last-file-action-value",
         [("v0", I18N.text(&notice.get()).into())],

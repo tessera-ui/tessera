@@ -14,39 +14,13 @@ ui-fabs-persist-on-the-screen-when-content-is-scrolling = FABs persist on the sc
 
 ui-small-fab-medium-fab-large-fab = Small · FAB · Medium FAB · Large FAB
 
-ui-may-2025-the-fab-family-gained-small-medium-and-large-sizes-and-the-surface-color-styles-a = May 2025: the FAB family gained small, medium, and large sizes, and the surface color styles are no longer recommended. Use the primary container tone with a clear icon.
-
-ui-small-40dp-fab-56dp-medium-80dp-and-large-96dp = Small (40dp), FAB (56dp), medium (80dp), and large (96dp)
-
-ui-primary-container-is-the-default-secondary-and-tertiary-tones-are-available = Primary container is the default; secondary and tertiary tones are available
-
-ui-surface-color-styles-remain-available-but-are-no-longer-recommended = Surface color styles remain available but are no longer recommended
-
 ui-add = Add
 
-ui-the-56dp-fab-with-a-primary-container-remains-the-recommended-default = The 56dp FAB with a primary container remains the recommended default.
-
-ui-m2-the-fab-used-a-fixed-56dp-container-a-single-accent-color-and-elevation-6-m3-introduced = M2: the FAB used a fixed 56dp container, a single accent color, and elevation 6. M3 introduced color roles, elevation levels tied to interaction, and a state layer that follows the icon color.
-
-ui-m3-expressive-the-family-grew-to-four-sizes-the-icon-scales-with-the-container-and-the-cor = M3 Expressive: the family grew to four sizes, the icon scales with the container, and the corner radius follows the size instead of staying fixed.
-
 ui-corner-radius = Corner radius
-
-ui-accent-fill = Accent fill
-
-ui-primary-secondary-or-tertiary-container = Primary, secondary, or tertiary container
 
 ui-the-fab-family-has-four-sizes-that-share-one-anatomy-the-56dp-fab-is-the-default-small-sui = The FAB family has four sizes that share one anatomy. The 56dp FAB is the default; small suits dense layouts and the larger sizes give the action more presence.
 
 ui-1-small-fab-2-fab-3-medium-fab-4-large-fab = 1 Small FAB · 2 FAB · 3 Medium FAB · 4 Large FAB
-
-ui-small-fab = Small FAB
-
-ui-medium-fab = Medium FAB
-
-ui-large-fab = Large FAB
-
-ui-surface-fab-baseline = Surface FAB (baseline)
 
 ui-choose-a-size-and-a-container-tone-the-icon-scales-with-the-size-and-the-container-keeps-t = Choose a size and a container tone. The icon scales with the size, and the container keeps the same corner treatment across tones.
 
@@ -179,5 +153,3 @@ ui-do-add-button-the-label-names-the-action = Do: “Add, button” — the labe
 ui-don-t-plus-icon-describing-the-glyph-does-not-explain-the-action = Don't: “Plus icon” — describing the glyph does not explain the action.
 
 ui-keep-the-same-label-when-the-fab-hides-and-returns-and-provide-a-tooltip-only-as-a-visual = Keep the same label when the FAB hides and returns, and provide a tooltip only as a visual hint — the accessible name stays on the container.
-
-ui-tessera-examples-on-this-page-use-the-native-floating-action-button-component-four-si = Tessera examples on this page use the native floating_action_button component. Four sizes, six color tones, elevation and state-layer feedback are implemented, together with an accessibility label that names the action.

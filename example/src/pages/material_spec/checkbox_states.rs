@@ -34,9 +34,9 @@ const COLUMNS: [&str; 5] = [
     "ui-pressed",
 ];
 const ROWS: [&str; 6] = [
-    "selected",
-    "mixed",
-    "unselected",
+    "ui-checkbox-selected",
+    "ui-checkbox-mixed",
+    "ui-checkbox-unselected",
     "ui-error-selected",
     "ui-error-mixed",
     "ui-error-unselected",

@@ -40,22 +40,6 @@ ui-cup-size = Cup size
 
 ui-button-groups-can-contain-buttons-and-icon-buttons = Button groups can contain buttons and icon buttons
 
-ui-button-groups-apply-shape-motion-and-width-changes-to-buttons-and-icon-buttons-to-make-the = Button groups apply shape, motion, and width changes to buttons and icon buttons to make them more interactive.
-
-ui-new-component-added-to-catalog = New component added to catalog.
-
-ui-added-standard-button-group = Added standard button group
-
-ui-added-connected-button-group = Added connected button group
-
-ui-use-instead-of-segmented-button-which-is-no-longer-recommended = Use instead of segmented button, which is no longer recommended
-
-ui-applies-default-shape-to-all-buttons-round-or-square = Applies default shape to all buttons: round or square
-
-ui-connected-group = Connected group
-
-ui-button-groups-are-containers-that-hold-buttons-of-many-shapes-and-sizes = Button groups are containers that hold buttons of many shapes and sizes
-
 ui-link = Link
 
 ui-standard-icon-buttons = Standard icon buttons
@@ -74,8 +58,6 @@ ui-standard-button-group = Standard button group
 
 ui-connected-button-group = Connected button group
 
-ui-available-as-segmented-button = Available as segmented button
-
 ui-single-select-group = Single-select group
 
 ui-multi-select-group = Multi-select group
@@ -87,12 +69,6 @@ ui-square-group = Square group
 ui-configurations-for-both-variants-of-button-groups = Configurations for both variants of button groups:
 
 ui-single-select-and-multi-select = Single-select and multi-select
-
-ui-default-shape = Default shape
-
-ui-round-square = Round, square
-
-ui-single-select-multi-select-selection-required = Single-select, multi-select, selection-required
 
 ui-change-the-configuration-then-click-a-choice-focus-enters-the-group-s-first-button-and-the = Change the configuration, then click a choice. Focus enters the group's first button and the horizontal traversal policy wraps at the edges.
 
@@ -415,8 +391,6 @@ ui-delete = Delete
 ui-message-actions = Message actions
 
 ui-label-each-button-within-the-button-group = Label each button within the button group
-
-ui-value-standard-group = { $v0 } standard group
 
 ui-value-group = { $v0 } group
 

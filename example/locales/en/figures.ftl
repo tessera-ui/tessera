@@ -43,8 +43,6 @@ ui-modal-side-sheet-showing-filter-controls = Modal side sheet showing filter co
 
 ui-standard-side-sheet-showing-supplementary-information-about-a-photo = Standard side sheet showing supplementary information about a photo
 
-ui-modal-side-sheet-with-new-color-mappings = Modal side sheet with new color mappings
-
 ui-7-elements-of-a-modal-side-sheet = 7 elements of a modal side sheet
 
 ui-4-elements-of-a-standard-side-sheet = 4 elements of a standard side sheet

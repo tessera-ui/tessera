@@ -990,14 +990,6 @@ pub(super) fn usage_figure(modal: bool) {
     });
 }
 
-/// The M3 modal side sheet with its scrim and 16dp leading corners.
-#[tessera]
-pub(super) fn differences_figure() {
-    stage(640.0, 300.0, "ui-modal-side-sheet-with-new-color-mappings").child(|| {
-        device(Mock::modal(300.0), -40.0, 52.0, 593.0, 400.0);
-    });
-}
-
 fn anatomy_callouts(modal: bool) -> Vec<Callout> {
     if modal {
         let (sx, sy, sw, sh) = sheet_frame(MODAL_ANATOMY, 100.0, 96.0, 800.0, 480.0);

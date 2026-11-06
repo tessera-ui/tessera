@@ -36,10 +36,6 @@ ui-tabs-can-horizontally-scroll-so-a-ui-can-have-as-many-tabs-as-needed = Tabs c
 
 ui-place-tabs-next-to-each-other-as-peers = Place tabs next to each other as peers
 
-ui-layout-icons-and-labels-are-vertically-centered-in-the-container = Layout: Icons and labels are vertically centered in the container
-
-ui-tab-icons-and-labels-are-positioned-in-the-vertical-center-of-the-container = Tab icons and labels are positioned in the vertical center of the container
-
 ui-tabs-organize-groups-of-related-content-that-are-at-the-same-level-of-hierarchy = Tabs organize groups of related content that are at the same level of hierarchy.
 
 ui-tab-labels-can-include-icons-and-text-text-labels-should-be-short = Tab labels can include icons and text. Text labels should be short.
@@ -351,3 +347,5 @@ ui-use-arrow-tab-to-navigate-through-items = Use Arrow/Tab to navigate through i
 ui-don-t-use-space-enter-for-navigating-tabs-space-enter-is-only-used-for-completing-actions = Don't use Space/Enter for navigating tabs. Space/Enter is only used for completing actions.
 
 ui-secondary-tabs-48dp-container-1-2-width-tabs-2dp-full-width-indicator-4dp-label-to-badge-s = Secondary tabs: 48dp container, 1/2 width tabs, 2dp full-width indicator, 4dp label-to-badge spacing
+
+ui-secondary = Secondary

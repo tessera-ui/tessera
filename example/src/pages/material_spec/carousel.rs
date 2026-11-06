@@ -106,28 +106,7 @@ pub(super) fn carousel_spec(route: Option<crate::pages::material_spec::article::
             intro: Some(RenderSlot::new(move || {
                 overview_intro().modal_controller_optional(modal_controller);
             })),
-            sections: vec![
-                SpecSection {
-                    title: "ui-availability-resources",
-                    content: RenderSlot::new(availability),
-                },
-                SpecSection {
-                    title: "ui-updates",
-                    content: RenderSlot::new(move || {
-                        updates().modal_controller_optional(modal_controller);
-                    }),
-                },
-                SpecSection {
-                    title: "ui-differences-from-m2",
-                    content: RenderSlot::new(move || {
-                        differences().modal_controller_optional(modal_controller);
-                    }),
-                },
-                SpecSection {
-                    title: "ui-research",
-                    content: RenderSlot::new(research),
-                },
-            ],
+            sections: vec![],
         },
         ArticlePage {
             title: "ui-guidelines",
@@ -1091,102 +1070,6 @@ fn overview_intro(
     collection(CarouselVariant::MultiBrowse, true).modal_controller_optional(modal_controller);
     gap(Dp(16.0));
     caption("ui-carousels-can-show-items-of-various-sizes");
-}
-
-#[tessera]
-fn availability() {
-    spec_table(
-        vec!["ui-type".into(), "ui-resource".into(), "ui-status".into()],
-        vec![
-            vec![
-                "ui-design".into(),
-                "ui-design-kit-figma".into(),
-                "ui-available".into(),
-            ],
-            vec![
-                "ui-implementation".into(),
-                "Flutter".into(),
-                "ui-available".into(),
-            ],
-            vec![
-                "ui-implementation".into(),
-                "Jetpack Compose".into(),
-                "ui-available".into(),
-            ],
-            vec![
-                "ui-implementation".into(),
-                "Android Views (MDC-Android)".into(),
-                "ui-available".into(),
-            ],
-            vec![
-                "ui-implementation".into(),
-                "Web".into(),
-                "ui-unavailable".into(),
-            ],
-        ],
-    );
-}
-
-#[tessera]
-fn updates(
-    modal_controller: Option<
-        crate::pages::material_spec::article::modal_host::ArticleModalController,
-    >,
-) {
-    subheading("ui-november-2025".into());
-    gap(Dp(8.0));
-    paragraph("ui-new-carousel-layout".into());
-    bullets(vec![
-        "ui-uncontained-multi-aspect-ratio-shows-carousel-items-of-various-widths".into(),
-    ]);
-    gap(Dp(24.0));
-    collection(CarouselVariant::UncontainedMultiAspectRatio, false)
-        .modal_controller_optional(modal_controller);
-    gap(Dp(16.0));
-    caption("ui-new-carousel-layout-uncontained-multi-aspect-ratio");
-    gap(Dp(32.0));
-    subheading("2023".into());
-    gap(Dp(8.0));
-    paragraph("ui-additional-layouts-and-configurations".into());
-    bullets(vec![
-        "ui-uncontained-items-scroll-to-the-edge-of-the-container".into(),
-        "ui-full-screen-one-edge-to-edge-large-item-at-a-time-scrolling-vertically".into(),
-        "ui-centered-carousels-the-center-aligned-hero-layout-shows-at-least-one-large-and-two-small-i".into(),
-        "ui-hero-carousel-layout-at-least-one-large-and-one-small-item-at-a-time".into(),
-        "ui-multi-browse-layout-at-least-one-large-medium-and-small-carousel-item-at-a-time".into(),
-    ]);
-}
-
-#[tessera]
-fn differences(
-    modal_controller: Option<
-        crate::pages::material_spec::article::modal_host::ArticleModalController,
-    >,
-) {
-    paragraph("ui-this-component-is-new-in-material-3".into());
-    gap(Dp(16.0));
-    bullets(vec![
-        "ui-shape-dynamic-carousel-items-change-shape-when-scrolled".into(),
-        "ui-motion-carousel-items-move-at-a-different-speed-than-their-content-creating-a-parallax-eff".into(),
-        "ui-interaction-when-scrolled-carousel-items-snap-into-place-to-maintain-the-same-layout-hero".into(),
-    ]);
-    gap(Dp(24.0));
-    collection(CarouselVariant::Hero, false).modal_controller_optional(modal_controller);
-    gap(Dp(16.0));
-    caption("ui-hero-carousels-scroll-through-one-large-item-at-a-time");
-}
-
-#[tessera]
-fn research() {
-    paragraph("ui-the-material-research-team-conducted-two-studies-quantitative-and-qualitative-with-over-20".into());
-    gap(Dp(16.0));
-    paragraph("ui-summary-of-findings".into());
-    bullets(vec![
-        "ui-participants-thought-carousels-were-a-good-way-to-explore-many-different-kinds-of-content".into(),
-        "ui-a-previewed-or-squished-item-strongly-indicated-that-there-was-more-content-to-swipe-throu".into(),
-        "ui-participants-expected-around-10-items-in-a-carousel-that-scrolled-multiple-items-at-once".into(),
-        "ui-while-some-contexts-were-considered-better-for-some-carousel-designs-all-designs-were-cons".into(),
-    ]);
 }
 
 #[tessera]

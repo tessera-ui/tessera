@@ -16,20 +16,15 @@ use tessera_components::{
         SegmentedButtonDefaults, multi_choice_segmented_button_row, segmented_button,
         single_choice_segmented_button_row,
     },
-    surface::surface,
     text::text,
-    theme::{MaterialTheme, material_theme},
 };
-use tessera_ui::{
-    Callback, Dp, Modifier, RenderSlot, State, accesskit::Role, remember, tessera, use_context,
-};
+use tessera_ui::{Callback, Dp, Modifier, RenderSlot, State, accesskit::Role, remember, tessera};
 
 use crate::res::I18N;
 
 use super::{
-    ACCENT,
     article::{ArticlePage, SpecSection, article},
-    gap, panel, spec_table, subheading, type_style,
+    gap, panel, scheme_panel, spec_table, subheading, type_style,
 };
 
 const LABELS: [&str; 3] = ["ui-day", "ui-week", "ui-month"];
@@ -88,22 +83,12 @@ pub(super) fn segmented_spec(
         ArticlePage {
             title: "ui-overview",
             intro: Some(RenderSlot::new(overview_intro)),
-            sections: vec![
-                SpecSection {
-                    title: "ui-availability-resources",
-                    content: RenderSlot::new(availability),
-                },
-                SpecSection {
-                    title: "ui-m3-expressive-update",
-                    content: RenderSlot::new(move || {
-                        expressive_update(on_recommended.clone());
-                    }),
-                },
-                SpecSection {
-                    title: "ui-differences-from-m2",
-                    content: RenderSlot::new(differences),
-                },
-            ],
+            sections: vec![SpecSection {
+                title: "ui-m3-expressive-update",
+                content: RenderSlot::new(move || {
+                    expressive_update(on_recommended.clone());
+                }),
+            }],
         },
         ArticlePage {
             title: "ui-guidelines",
@@ -327,40 +312,6 @@ fn overview_intro() {
 }
 
 #[tessera]
-fn availability() {
-    spec_table(
-        vec!["ui-type".into(), "ui-resource".into(), "ui-status".into()],
-        vec![
-            vec![
-                "ui-design".into(),
-                "ui-design-kit-figma".into(),
-                "ui-available".into(),
-            ],
-            vec![
-                "ui-implementation".into(),
-                "Flutter".into(),
-                "ui-available".into(),
-            ],
-            vec![
-                "ui-implementation".into(),
-                "Jetpack Compose".into(),
-                "ui-available".into(),
-            ],
-            vec![
-                "ui-implementation".into(),
-                "Android Views (MDC-Android)".into(),
-                "ui-available".into(),
-            ],
-            vec![
-                "ui-implementation".into(),
-                "Web".into(),
-                "ui-unavailable".into(),
-            ],
-        ],
-    );
-}
-
-#[tessera]
 fn expressive_update(on_recommended: Callback) {
     prose(
         "ui-segmented-buttons-are-no-longer-recommended-in-the-material-3-expressive-update-products-t",
@@ -373,26 +324,6 @@ fn expressive_update(on_recommended: Callback) {
         .child(move || {
             text(I18N.text("ui-open-recommended-button-groups"));
         });
-}
-
-#[tessera]
-fn differences() {
-    prose(
-        "ui-color-segmented-buttons-use-the-secondary-container-role-for-selected-segments-and-support",
-    );
-    gap(Dp(24.0));
-    panel(RenderSlot::new(|| {
-        let selected = remember(|| 1_u8);
-        segmented_row(
-            "ui-differences".to_owned(),
-            selected,
-            false,
-            true,
-            false,
-            true,
-            Dp(40.0),
-        );
-    }));
 }
 
 #[tessera]
@@ -559,42 +490,21 @@ fn configurations() {
 #[tessera]
 fn colors() {
     for dark in [false, true] {
-        material_theme()
-            .theme(move || MaterialTheme::from_seed(ACCENT, dark))
-            .child(move || {
-                let scheme = use_context::<MaterialTheme>()
-                    .expect("MaterialTheme must be provided")
-                    .get()
-                    .color_scheme;
-                surface()
-                    .style(scheme.surface.into())
-                    .modifier(Modifier::new().fill_max_width())
-                    .child(move || {
-                        column()
-                            .modifier(Modifier::new().fill_max_width().padding_all(Dp(24.0)))
-                            .children(move || {
-                                subheading(
-                                    if dark {
-                                        "ui-dark-scheme"
-                                    } else {
-                                        "ui-light-scheme"
-                                    }
-                                    .to_owned(),
-                                );
-                                gap(Dp(24.0));
-                                let selected = remember(|| 1_u8);
-                                segmented_row(
-                                    if dark { "ui-dark" } else { "ui-light" }.to_owned(),
-                                    selected,
-                                    false,
-                                    true,
-                                    false,
-                                    true,
-                                    Dp(40.0),
-                                );
-                            });
-                    });
-            });
+        scheme_panel(
+            dark,
+            RenderSlot::new(move || {
+                let selected = remember(|| 1_u8);
+                segmented_row(
+                    if dark { "ui-dark" } else { "ui-light" }.to_owned(),
+                    selected,
+                    false,
+                    true,
+                    false,
+                    true,
+                    Dp(40.0),
+                );
+            }),
+        );
         gap(Dp(24.0));
     }
     subheading("ui-color-roles-4475".into());

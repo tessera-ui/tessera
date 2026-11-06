@@ -43,11 +43,7 @@ pub(super) fn search_spec(route: Option<crate::pages::material_spec::article::Ar
         SpecSection { title: "ui-states", content: RenderSlot::new(states) },
         SpecSection { title: "ui-measurements", content: RenderSlot::new(measurements) },
     ]).route_optional(route.clone()).pages(vec![
-        ArticlePage { title: "ui-overview", intro: Some(RenderSlot::new(overview_intro)), sections: vec![
-            SpecSection { title: "ui-availability-resources", content: RenderSlot::new(availability) },
-            SpecSection { title: "ui-m3-expressive-update", content: RenderSlot::new(expressive_update) },
-            SpecSection { title: "ui-differences-from-m2-to-m3-baseline", content: RenderSlot::new(differences) },
-        ] },
+        ArticlePage { title: "ui-overview", intro: Some(RenderSlot::new(overview_intro)), sections: vec![] },
         ArticlePage { title: "ui-guidelines", intro: None, sections: vec![
             SpecSection { title: "ui-usage", content: RenderSlot::new(|| { prose("ui-use-search-for-products-with-many-items-to-manage-such-as-messages-or-files-keep-the-entry"); gap(Dp(24.0)); subheading("ui-different-ways-to-search".into()); prose("ui-a-search-bar-targets-the-current-view-a-search-app-bar-makes-global-search-a-primary-funct"); gap(Dp(24.0)); live_search(false,false,false); gap(Dp(24.0)); subheading("ui-search-suggestions-results".into()); prose("ui-use-list-items-for-suggestions-and-results-add-relevant-leading-icons-category-labels-avat"); }) },
             SpecSection { title: "ui-placement", content: RenderSlot::new(|| { prose("ui-place-search-near-the-top-of-the-content-and-close-to-what-it-searches-keep-its-internal-e"); gap(Dp(24.0)); subheading("ui-focused-search-layouts".into()); prose("ui-docked-search-opens-below-the-bar-on-medium-and-expanded-windows-full-screen-search-fills"); gap(Dp(24.0)); layout_examples(); }) },
@@ -123,15 +119,6 @@ fn variants() {
     live_search(true, false, false);
     gap(Dp(16.0));
     caption("ui-when-a-person-executes-a-search-results-appear-in-a-list-below-the-search-bar");
-    gap(Dp(32.0));
-    spec_table(
-        vec!["ui-variant".into(), "M3".into(), "M3 Expressive".into()],
-        vec![vec![
-            "ui-search".into(),
-            "ui-available".into(),
-            "ui-available".into(),
-        ]],
-    );
 }
 
 #[tessera]
@@ -149,91 +136,6 @@ fn overview_intro() {
     caption("ui-when-inputting-text-search-suggestions-or-results-appear-below-the-search-bar");
 }
 
-#[tessera]
-fn availability() {
-    spec_table(
-        vec!["ui-type".into(), "ui-resource".into(), "ui-status".into()],
-        vec![
-            vec![
-                "ui-design".into(),
-                "ui-design-kit-figma".into(),
-                "ui-available".into(),
-            ],
-            vec![
-                "ui-implementation".into(),
-                "Android Views (MDC-Android)".into(),
-                "ui-available".into(),
-            ],
-            vec![
-                "ui-implementation".into(),
-                "Android Views (MDC-Android): Expressive".into(),
-                "ui-unavailable".into(),
-            ],
-            vec![
-                "ui-implementation".into(),
-                "Flutter".into(),
-                "ui-available".into(),
-            ],
-            vec![
-                "ui-implementation".into(),
-                "Jetpack Compose".into(),
-                "ui-available".into(),
-            ],
-            vec![
-                "ui-implementation".into(),
-                "Jetpack Compose: Expressive".into(),
-                "ui-available".into(),
-            ],
-            vec![
-                "ui-implementation".into(),
-                "Web".into(),
-                "ui-unavailable".into(),
-            ],
-            vec![
-                "ui-implementation".into(),
-                "Web: Expressive".into(),
-                "ui-unavailable".into(),
-            ],
-        ],
-    );
-    gap(Dp(24.0));
-    prose(
-        "ui-tessera-examples-on-this-page-use-the-native-search-bar-and-docked-search-bar-compone",
-    );
-}
-
-#[tessera]
-fn expressive_update() {
-    prose(
-        "ui-search-has-a-new-visual-style-motion-and-more-flexibility-for-trailing-icons-the-search-ba",
-    );
-    gap(Dp(24.0));
-    subheading("ui-february-2025".into());
-    bullets(vec![
-        "ui-naming-search-bar-and-search-view-are-now-collectively-named-search".into(),
-        "ui-configurations-styles-search-can-be-contained-recommended-or-divided-gaps-can-separate-res".into(),
-        "ui-motion-the-search-bar-grows-wider-when-focused".into(),
-        "ui-supported-platforms-jetpack-compose".into(),
-    ]);
-    gap(Dp(24.0));
-    live_search(true, false, false);
-    gap(Dp(16.0));
-    caption("ui-the-contained-search-style-features-a-persistent-filled-search-container");
-}
-
-#[tessera]
-fn differences() {
-    bullets(vec![
-        "ui-color-new-color-mappings-and-compatibility-with-dynamic-color".into(),
-        "ui-elevation-lower-elevation-and-no-shadow-by-default".into(),
-        "ui-name-search-was-formerly-known-as-open-search-bar".into(),
-        "ui-variants-two-official-variants-of-search-components-search-bar-and-search-view".into(),
-    ]);
-    gap(Dp(24.0));
-    live_search(true, false, false);
-    gap(Dp(16.0));
-    caption("ui-m3-search-bars-are-rounded-use-tonal-surface-and-support-dynamic-color");
-}
 #[tessera]
 fn configurations() {
     subheading("ui-style".into());
@@ -270,35 +172,6 @@ fn configurations() {
             configuration_layout(true, true);
             configuration_layout(false, true);
         });
-    gap(Dp(32.0));
-    spec_table(
-        vec![
-            "ui-category".into(),
-            "ui-configuration".into(),
-            "M3".into(),
-            "M3 Expressive".into(),
-        ],
-        vec![
-            vec![
-                "ui-style".into(),
-                "ui-contained".into(),
-                "--".into(),
-                "ui-available".into(),
-            ],
-            vec![
-                "ui-style".into(),
-                "ui-divided".into(),
-                "ui-available".into(),
-                "ui-not-recommended-use-contained".into(),
-            ],
-            vec![
-                "ui-layout".into(),
-                "ui-docked-full-screen".into(),
-                "ui-available".into(),
-                "ui-available".into(),
-            ],
-        ],
-    );
 }
 
 #[tessera]

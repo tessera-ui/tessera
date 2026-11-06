@@ -185,20 +185,7 @@ pub(super) fn navigation_rail_spec(
             ArticlePage {
                 title: "ui-overview",
                 intro: Some(RenderSlot::new(overview)),
-                sections: vec![
-                    SpecSection {
-                        title: "ui-availability-resources",
-                        content: RenderSlot::new(availability),
-                    },
-                    SpecSection {
-                        title: "ui-m3-expressive-update",
-                        content: RenderSlot::new(expressive_update),
-                    },
-                    SpecSection {
-                        title: "ui-differences-from-m2",
-                        content: RenderSlot::new(differences),
-                    },
-                ],
+                sections: vec![],
             },
             ArticlePage {
                 title: "ui-guidelines",
@@ -442,148 +429,6 @@ fn overview() {
 }
 
 #[tessera]
-fn availability() {
-    spec_table(
-        vec!["ui-type".into(), "ui-resource".into(), "ui-status".into()],
-        vec![
-            vec![
-                "ui-design".into(),
-                "ui-design-kit-figma".into(),
-                "ui-available".into(),
-            ],
-            vec![
-                "ui-implementation".into(),
-                "Flutter".into(),
-                "ui-available".into(),
-            ],
-            vec![
-                "ui-implementation".into(),
-                "Jetpack Compose".into(),
-                "ui-available".into(),
-            ],
-            vec![
-                "ui-implementation".into(),
-                "Jetpack Compose: Expressive".into(),
-                "ui-available".into(),
-            ],
-            vec![
-                "ui-implementation".into(),
-                "Android Views (MDC-Android)".into(),
-                "ui-available".into(),
-            ],
-            vec![
-                "ui-implementation".into(),
-                "Android Views (MDC-Android): Expressive".into(),
-                "ui-available".into(),
-            ],
-            vec![
-                "ui-implementation".into(),
-                "Web".into(),
-                "ui-unavailable".into(),
-            ],
-            vec![
-                "ui-implementation".into(),
-                "Web: Expressive".into(),
-                "ui-unavailable".into(),
-            ],
-        ],
-    );
-    gap(Dp(24.0));
-    prose(
-        "ui-this-page-documents-the-native-navigation-rail-and-navigation-rail-item-components-th",
-    );
-}
-
-#[tessera]
-fn expressive_update() {
-    prose(
-        "ui-may-2025-a-collapsed-and-an-expanded-navigation-rail-replaced-the-baseline-navigation-rail",
-    );
-    gap(Dp(24.0));
-    subheading("ui-variants-and-naming".into());
-    bullets(vec![
-        "ui-baseline-navigation-rail-is-no-longer-recommended".into(),
-        "ui-added-a-collapsed-navigation-rail-that-replaces-the-baseline-rail".into(),
-        "ui-added-an-expanded-navigation-rail-that-replaces-the-navigation-drawer".into(),
-    ]);
-    gap(Dp(24.0));
-    subheading("ui-configurations".into());
-    bullets(vec![
-        "ui-expanded-rail-modality-non-modal-or-modal".into(),
-        "ui-expanded-behavior-transition-to-collapsed-rail-or-hide-when-collapsed".into(),
-    ]);
-    gap(Dp(24.0));
-    subheading("ui-color".into());
-    bullets(vec![
-        "ui-active-label-on-vertical-items-changed-from-on-surface-variant-to-secondary".into(),
-    ]);
-    gap(Dp(32.0));
-    figures::scene(
-        "ui-collapsed-and-expanded-navigation-rails-on-timer-screens",
-        Dp(500.0),
-        RenderSlot::new(|| {
-            timer_screen("ui-collapsed-timer-navigation-rail", Dp(300.0), Dp(440.0))
-                .fab(true)
-                .selected(2);
-            spacer().modifier(Modifier::new().width(Dp(32.0)));
-            timer_screen("ui-expanded-timer-navigation-rail", Dp(400.0), Dp(440.0))
-                .expanded(true)
-                .fab(true)
-                .selected(2);
-        }),
-    );
-    gap(Dp(16.0));
-    caption(
-        "ui-the-collapsed-and-expanded-navigation-rails-match-visually-and-can-transition-into-each-ot",
-    );
-}
-
-#[tessera]
-fn differences() {
-    bullets(vec![
-        "ui-behavior-predictive-back-interaction".into(),
-        "ui-color-new-color-mappings-and-compatibility-with-dynamic-color".into(),
-        "ui-states-the-active-destination-can-be-indicated-with-a-pill-shape-in-a-contrasting-color"
-            .into(),
-    ]);
-    gap(Dp(32.0));
-    figures::pair(
-        RenderSlot::new(|| {
-            figures::example(
-                "ui-m2-navigation-rail",
-                0,
-                "ui-m2-the-navigation-rail-uses-icon-color-weight-and-fill-to-communicate-which-destination-is",
-                RenderSlot::new(|| {
-                    figures::screen("ui-m2-navigation-rail-with-photos", Dp(340.0), Dp(260.0))
-                        .content_kind(2)
-                        .rail(|| {
-                            figures::mock_rail()
-                                .count(3)
-                                .selected(1)
-                                .m2(true)
-                                .width(Dp(80.0));
-                        });
-                }),
-            );
-        }),
-        RenderSlot::new(|| {
-            figures::example(
-                "ui-m3-navigation-rail",
-                0,
-                "ui-m3-the-navigation-rail-uses-a-pill-shaped-active-indicator-to-communicate-which-destinatio",
-                RenderSlot::new(|| {
-                    figures::screen("ui-m3-navigation-rail-with-photos", Dp(340.0), Dp(260.0))
-                        .content_kind(2)
-                        .rail(|| {
-                            figures::mock_rail().count(3).selected(1);
-                        });
-                }),
-            );
-        }),
-    );
-}
-
-#[tessera]
 fn variants() {
     figures::canvas(
         "ui-collapsed-and-expanded-navigation-rail-variants",
@@ -659,27 +504,6 @@ fn variants() {
         1,
         "ui-the-baseline-navigation-rail-is-no-longer-recommended",
     );
-    gap(Dp(32.0));
-    spec_table(
-        vec!["ui-variant".into(), "M3".into(), "M3 Expressive".into()],
-        vec![
-            vec![
-                "ui-collapsed-navigation-rail".into(),
-                "—".into(),
-                "ui-available".into(),
-            ],
-            vec![
-                "ui-expanded-navigation-rail".into(),
-                "—".into(),
-                "ui-available".into(),
-            ],
-            vec![
-                "ui-navigation-rail-baseline".into(),
-                "ui-available".into(),
-                "ui-not-recommended-use-collapsed-navigation-rail".into(),
-            ],
-        ],
-    );
 }
 
 #[tessera]
@@ -735,35 +559,6 @@ fn configurations() {
         "ui-expanded-layout-standard".into(),
         "ui-expanded-layout-modal".into(),
     ]);
-    gap(Dp(32.0));
-    spec_table(
-        vec![
-            "ui-category".into(),
-            "ui-configuration".into(),
-            "M3".into(),
-            "M3 Expressive".into(),
-        ],
-        vec![
-            vec![
-                "ui-expanded-layout".into(),
-                "ui-standard-default".into(),
-                "ui-available-as-navigation-drawer".into(),
-                "ui-available".into(),
-            ],
-            vec![
-                "ui-expanded-layout".into(),
-                "ui-modal".into(),
-                "ui-available-as-modal-navigation-drawer".into(),
-                "ui-available".into(),
-            ],
-            vec![
-                "ui-expanded-behavior".into(),
-                "ui-hide-when-collapsed".into(),
-                "—".into(),
-                "ui-available".into(),
-            ],
-        ],
-    );
 }
 
 #[tessera]
@@ -1526,7 +1321,7 @@ fn baseline() {
         gap(Dp(16.0));
     }
     legend_list(
-        ["active", "inactive"]
+        ["ui-active", "ui-inactive"]
             .into_iter()
             .flat_map(|target| {
                 ["ui-enabled", "ui-hovered", "ui-focused", "ui-pressed"].map(|state| {
@@ -2962,10 +2757,6 @@ fn labeling() {
     gap(Dp(16.0));
     prose(
         "ui-when-the-visible-ui-text-is-ambiguous-accessibility-labels-need-to-be-more-descriptive-for-4411",
-    );
-    gap(Dp(16.0));
-    prose(
-        "ui-note-on-android-views-mdc-android-a-more-descriptive-accessibility-label-is-not-available",
     );
     gap(Dp(24.0));
     figures::scene(

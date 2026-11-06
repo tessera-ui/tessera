@@ -10,7 +10,7 @@ ui-certificate-program = 证书课程
 
 ui-nov-8 = 11 月 8 日
 
-ui-on-call-protocol = 待命协议
+ui-on-call-protocol = 值班规程
 
 ui-nov-5 = 11 月 5 日
 
@@ -22,11 +22,11 @@ ui-oct-12 = 10 月 12 日
 
 ui-cdc-health-literacy = CDC 健康素养
 
-ui-sep-26 = 9月26日
+ui-sep-26 = 9 月 26 日
 
 ui-lee-villanueva = 李·维拉纽瓦
 
-ui-work-files = 工作档案
+ui-work-files = 工作文件
 
 ui-priority = 优先级
 
@@ -40,16 +40,16 @@ ui-oli = 奥利
 
 ui-files = 文件
 
-ui-gmail = 邮箱
+ui-gmail = Gmail
 
-ui-meet = 见面
+ui-meet = Meet
 
-ui-drive = 驱动器
+ui-drive = 云端硬盘
 
 ui-add-to = 添加到
 
 ui-move-to-archive = 移至
-    存档
+    归档
 
 ui-ana-russo = 安娜·罗素
 
@@ -70,3 +70,5 @@ ui-bottom-sheet-marker-value = 底部面板标记 { $v0 }
 ui-bottom-sheet-legend-value = 底部面板图例 { $v0 }
 
 ui-bottom-sheet-variant-value = 底部面板变体 { $v0 }
+
+ui-resume-document = 简历

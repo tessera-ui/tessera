@@ -1,3 +1,3 @@
-ui-date-entry-methods = 日期输入方法
+ui-date-entry-methods = 日期输入方式
 
-ui-accessible-date-input = 可访问的日期输入
+ui-accessible-date-input = 无障碍日期输入

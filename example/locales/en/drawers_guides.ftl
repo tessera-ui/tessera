@@ -313,8 +313,6 @@ ui-the-accessibility-label-for-a-navigation-item-is-typically-the-same-as-the-de
 
 ui-if-the-ui-text-is-correctly-linked-assistive-tech-such-as-a-screenreader-will-read-the-ui = If the UI text is correctly linked, assistive tech (such as a screenreader) will read the UI text followed by the component’s role.
 
-ui-for-android-views-mdc-android-a-more-descriptive-accessibility-label-is-not-available-to-b = For Android Views (MDC-Android), a more descriptive accessibility label is not available to be set and the role is not announced.
-
 ui-when-the-visible-ui-text-is-ambiguous-accessibility-labels-need-to-be-more-descriptive-for = When the visible UI text is ambiguous, accessibility labels need to be more descriptive. For example, a navigation destination visibly labeled Recents would benefit from additional information in its accessibility label to clarify the destination’s intent.
 
 ui-the-navigation-item-is-selected-via-space-enter = The navigation item is selected via Space/Enter

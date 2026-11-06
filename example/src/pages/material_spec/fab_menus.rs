@@ -77,20 +77,7 @@ pub(super) fn fab_menu_spec(route: Option<crate::pages::material_spec::article::
         ArticlePage {
             title: "ui-overview",
             intro: Some(RenderSlot::new(overview_intro)),
-            sections: vec![
-                SpecSection {
-                    title: "ui-availability-resources",
-                    content: RenderSlot::new(availability),
-                },
-                SpecSection {
-                    title: "ui-m3-expressive-update",
-                    content: RenderSlot::new(expressive_update),
-                },
-                SpecSection {
-                    title: "ui-differences-from-m2",
-                    content: RenderSlot::new(differences),
-                },
-            ],
+            sections: vec![],
         },
         ArticlePage {
             title: "ui-guidelines",
@@ -343,98 +330,6 @@ fn overview_intro() {
 }
 
 #[tessera]
-fn availability() {
-    spec_table(
-        vec!["ui-type".into(), "ui-resource".into(), "ui-status".into()],
-        vec![
-            vec![
-                "ui-design".into(),
-                "ui-design-kit-figma".into(),
-                "ui-available".into(),
-            ],
-            vec![
-                "ui-implementation".into(),
-                "Jetpack Compose: Expressive".into(),
-                "ui-available".into(),
-            ],
-            vec![
-                "ui-implementation".into(),
-                "Android Views (MDC-Android): Expressive".into(),
-                "ui-unavailable".into(),
-            ],
-            vec![
-                "ui-implementation".into(),
-                "Web: Expressive".into(),
-                "ui-unavailable".into(),
-            ],
-        ],
-    );
-    gap(Dp(24.0));
-    prose(
-        "ui-tessera-examples-on-this-page-use-the-native-floating-action-button-menu-with-its-close-bu",
-    );
-}
-
-#[tessera]
-fn expressive_update() {
-    subheading("ui-may-2025".into());
-    prose(
-        "ui-the-fab-menu-adds-more-options-to-the-fab-it-should-replace-the-speed-dial-and-any-usage-o",
-    );
-    gap(Dp(24.0));
-    prose("ui-new-component-added-to-catalog-3010");
-    gap(Dp(8.0));
-    bullets(vec![
-        "ui-one-menu-size-that-pairs-with-any-fab".into(),
-        "ui-replaces-any-usage-of-stacked-small-fabs".into(),
-    ]);
-    gap(Dp(24.0));
-    prose("Color:");
-    gap(Dp(8.0));
-    bullets(vec![
-        "ui-contrasting-close-button-and-item-colors".into(),
-        "ui-supports-dynamic-color".into(),
-        "ui-compatible-with-any-fab-color-style".into(),
-    ]);
-    gap(Dp(24.0));
-    panel(RenderSlot::new(|| {
-        menu_demo(
-            "ui-expressive",
-            FloatingActionButtonMenuColor::Tertiary,
-            false,
-            true,
-        );
-    }));
-    gap(Dp(16.0));
-    caption(
-        "ui-the-fab-menu-uses-contrasting-color-and-large-items-to-focus-attention-it-can-open-from-an",
-    );
-}
-
-#[tessera]
-fn differences() {
-    prose(
-        "ui-m2-speed-dials-stacked-several-small-fabs-and-hid-their-labels-the-m3-fab-menu-uses-one-si",
-    );
-    gap(Dp(24.0));
-    bullets(vec![
-        "ui-m2-speed-dial-with-stacked-small-icon-only-fabs".into(),
-        "ui-m3-a-single-fab-menu-whose-labelled-items-expand-from-one-fab".into(),
-    ]);
-    gap(Dp(24.0));
-    panel(RenderSlot::new(|| {
-        menu_demo(
-            "ui-differences",
-            FloatingActionButtonMenuColor::Primary,
-            false,
-            true,
-        );
-    }));
-    gap(Dp(16.0));
-    caption("ui-the-m3-fab-menu-replaces-stacked-small-fabs-with-labelled-expressive-items");
-}
-
-#[tessera]
 fn variants() {
     panel(RenderSlot::new(|| {
         menu_demo(
@@ -446,15 +341,6 @@ fn variants() {
     }));
     gap(Dp(16.0));
     caption("ui-there-s-one-variant-of-fab-menu");
-    gap(Dp(32.0));
-    spec_table(
-        vec!["ui-variant".into(), "M3".into(), "M3 Expressive".into()],
-        vec![vec![
-            "ui-fab-menu".into(),
-            "--".into(),
-            "ui-available".into(),
-        ]],
-    );
 }
 
 #[tessera]
@@ -482,21 +368,6 @@ fn configurations() {
         }));
         gap(Dp(24.0));
     }
-    spec_table(
-        vec![
-            "ui-category".into(),
-            "ui-configuration".into(),
-            "M3".into(),
-            "M3 Expressive".into(),
-        ],
-        vec![vec![
-            "ui-color".into(),
-            "ui-primary-set-secondary-set-tertiary-set".into(),
-            "--".into(),
-            "ui-available".into(),
-        ]],
-    );
-    gap(Dp(32.0));
     subheading("ui-alignment".into());
     prose(
         "ui-the-fab-menu-is-aligned-to-the-trailing-edge-of-the-window-in-right-to-left-languages-it-i",

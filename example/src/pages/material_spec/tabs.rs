@@ -92,16 +92,7 @@ pub(super) fn tabs_spec(route: Option<crate::pages::material_spec::article::Arti
         ArticlePage {
             title: "ui-overview",
             intro: Some(RenderSlot::new(overview_intro)),
-            sections: vec![
-                SpecSection {
-                    title: "ui-availability-resources",
-                    content: RenderSlot::new(availability),
-                },
-                SpecSection {
-                    title: "ui-differences-from-m2",
-                    content: RenderSlot::new(differences),
-                },
-            ],
+            sections: vec![],
         },
         ArticlePage {
             title: "ui-guidelines",
@@ -307,52 +298,6 @@ fn overview_intro() {
     native_tabs_figure(false, false, false, 0, 2);
     gap(Dp(8.0));
     caption("ui-secondary-tabs");
-}
-
-#[tessera]
-fn availability() {
-    spec_table(
-        vec!["ui-type".into(), "ui-resource".into(), "ui-status".into()],
-        vec![
-            vec![
-                "ui-design".into(),
-                "ui-design-kit-figma".into(),
-                "ui-available".into(),
-            ],
-            vec![
-                "ui-implementation".into(),
-                "Flutter".into(),
-                "ui-available".into(),
-            ],
-            vec![
-                "ui-implementation".into(),
-                "Jetpack Compose".into(),
-                "ui-available".into(),
-            ],
-            vec![
-                "ui-implementation".into(),
-                "Android Views (MDC-Android)".into(),
-                "ui-available".into(),
-            ],
-            vec![
-                "ui-implementation".into(),
-                "Web".into(),
-                "ui-available".into(),
-            ],
-        ],
-    );
-}
-
-#[tessera]
-fn differences() {
-    bullets(vec![
-        "ui-color-new-color-mappings-and-compatibility-with-dynamic-color".into(),
-        "ui-layout-icons-and-labels-are-vertically-centered-in-the-container".into(),
-    ]);
-    gap(Dp(32.0));
-    native_tabs_figure(true, true, false, 0, 3);
-    gap(Dp(8.0));
-    caption("ui-tab-icons-and-labels-are-positioned-in-the-vertical-center-of-the-container");
 }
 
 #[tessera]
@@ -986,7 +931,15 @@ fn badge_title(#[prop(into)] label: String, icon_shown: bool, index: usize) {
 #[tessera]
 fn section(primary: bool) {
     panel(RenderSlot::new(move || {
-        sample(if primary { "Primary" } else { "Secondary" }, primary).controls(true);
+        sample(
+            if primary {
+                "ui-primary"
+            } else {
+                "ui-secondary"
+            },
+            primary,
+        )
+        .controls(true);
     }));
     gap(Dp(32.0));
     native_tabs_figure(primary, primary, false, 1, if primary { 3 } else { 2 });

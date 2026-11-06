@@ -31,7 +31,6 @@ use super::{
 mod figures_tests;
 
 const INBOX: u8 = 0;
-const MAIL: u8 = 1;
 const PLAYLIST: u8 = 2;
 const PODCAST: u8 = 3;
 const CONTACTS: u8 = 4;
@@ -186,16 +185,7 @@ pub(super) fn divider_spec(route: Option<crate::pages::material_spec::article::A
         ArticlePage {
             title: "ui-overview",
             intro: Some(RenderSlot::new(overview)),
-            sections: vec![
-                SpecSection {
-                    title: "ui-availability-resources",
-                    content: RenderSlot::new(resources),
-                },
-                SpecSection {
-                    title: "ui-differences-from-m2",
-                    content: RenderSlot::new(differences),
-                },
-            ],
+            sections: vec![],
         },
         ArticlePage {
             title: "ui-guidelines",
@@ -556,12 +546,6 @@ fn entry(kind: u8, index: usize) -> (&'static str, &'static str, &'static str) {
         ),
         ("ui-console-ideas", "ui-do-you-remember-that-cafe", ""),
     ];
-    const MAIL_ROWS: [(&str, &str, &str); 4] = [
-        ("ui-brunch-this-weekend", "ui-i-ll-be-in-your-area", ""),
-        ("ui-oui-oui", "ui-do-you-have-paris-recs", ""),
-        ("ui-graduaci-n-de-in-s", "ui-aqu-tienes-unas-fotos", ""),
-        ("ui-recipe-to-try", "ui-we-should-eat-this", ""),
-    ];
     const PLAYLIST_ROWS: [(&str, &str, &str); 4] = [
         ("ui-glass-grace", "ui-sound-check", ""),
         ("ui-the-fortnightly", "ui-live-sets", ""),
@@ -584,7 +568,6 @@ fn entry(kind: u8, index: usize) -> (&'static str, &'static str, &'static str) {
     ];
     match kind {
         INBOX => INBOX_ROWS[index % 4],
-        MAIL => MAIL_ROWS[index % 4],
         PLAYLIST => PLAYLIST_ROWS[index % 4],
         PODCAST => PODCAST_ROWS[index % 6],
         _ => CONTACT_ROWS[index % 4],
@@ -625,7 +608,7 @@ fn row_item(kind: u8, index: usize) {
         )
         .children(move || {
             match kind {
-                MAIL | PLAYLIST | CONTACTS => {
+                PLAYLIST | CONTACTS => {
                     boxed().modifier(
                         Modifier::new()
                             .size(Dp(36.0), Dp(36.0))
@@ -1087,62 +1070,6 @@ fn overview() {
     });
     gap(Dp(16.0));
     caption("ui-dividers-separating-items-in-a-list");
-}
-
-#[tessera]
-fn resources() {
-    spec_table(
-        vec!["ui-type".into(), "ui-resource".into(), "ui-status".into()],
-        vec![
-            vec![
-                "ui-design".into(),
-                "ui-design-kit-figma".into(),
-                "ui-available".into(),
-            ],
-            vec![
-                "ui-implementation".into(),
-                "Flutter".into(),
-                "ui-available".into(),
-            ],
-            vec!["".into(), "Jetpack Compose".into(), "ui-available".into()],
-            vec![
-                "".into(),
-                "Android Views (MDC-Android)".into(),
-                "ui-available".into(),
-            ],
-            vec!["".into(), "Web".into(), "ui-available".into()],
-        ],
-    );
-}
-
-#[tessera]
-fn differences() {
-    split()
-        .lead(|| {
-            bullets(vec![
-                "ui-color-new-color-mappings-and-compatibility-with-dynamic-color".into(),
-                "ui-configurations-ability-to-have-vertical-dividers".into(),
-            ]);
-        })
-        .figure(|| {
-            stage(
-                218.0,
-                blush(),
-                "ui-inbox-using-inset-dividers-with-new-color-mappings",
-            )
-            .content(|| {
-                phone(312.0, 58.0, 360.0).content(|| {
-                    header("ui-inbox");
-                    section_title("ui-today");
-                    for index in 0..3 {
-                        row_item(MAIL, index);
-                        rule(64.0, 16.0);
-                    }
-                });
-            });
-            gap(Dp(16.0));
-            caption("ui-dividers-have-new-color-mappings");
-        });
 }
 
 #[tessera]

@@ -10,19 +10,17 @@ use tessera_components::{
     row::row,
     shape_def::Shape,
     spacer::spacer,
-    surface::surface,
     text::text,
-    theme::{MaterialTheme, material_theme},
+    theme::MaterialTheme,
 };
 use tessera_ui::{Dp, Modifier, RenderSlot, State, remember, tessera, use_context};
 
 use crate::res::I18N;
 
 use super::{
-    ACCENT,
     annotations::{self, Geometry, SpaceGeometry, dotted, relative, watch, watch_in_space},
     article::{ArticlePage, SpecSection, article},
-    gap, panel, spec_table, subheading, type_style,
+    gap, panel, scheme_panel, spec_table, subheading, type_style,
 };
 
 const VARIANTS: [CardVariant; 3] = [
@@ -73,9 +71,7 @@ pub(super) fn cards_spec(route: Option<crate::pages::material_spec::article::Art
             },
         ],
     ).route_optional(route).pages(vec![
-        ArticlePage {title:"ui-overview",intro:Some(RenderSlot::new(|| {prose("ui-cards-contain-related-elements-about-a-single-subject-they-can-hold-images-headlines-suppo");gap(Dp(24.0));card_variants();})),sections:vec![
-            SpecSection {title:"ui-differences-from-m2",content:RenderSlot::new(|| {prose("ui-cards-use-dynamic-color-mappings-and-lower-resting-elevation-choose-elevated-filled-or-out");gap(Dp(24.0));card_variants();})},
-        ]},
+        ArticlePage {title:"ui-overview",intro:Some(RenderSlot::new(|| {prose("ui-cards-contain-related-elements-about-a-single-subject-they-can-hold-images-headlines-suppo");gap(Dp(24.0));card_variants();})),sections:vec![]},
         ArticlePage {title:"ui-guidelines",intro:None,sections:vec![
             SpecSection {title:"ui-usage",content:RenderSlot::new(|| {prose("ui-keep-each-card-about-one-subject-establish-a-readable-hierarchy-and-use-a-collection-when");gap(Dp(24.0));card_variants();})},
             SpecSection {title:"ui-anatomy",content:RenderSlot::new(card_guideline_anatomy)},
@@ -270,52 +266,32 @@ fn tokens() {
 
 #[tessera]
 fn scheme(variant: CardVariant, dark: bool) {
-    material_theme()
-        .theme(move || MaterialTheme::from_seed(ACCENT, dark))
-        .child(move || {
-            let theme = use_context::<MaterialTheme>()
-                .expect("MaterialTheme must be provided")
-                .get();
-            surface()
-                .style(theme.color_scheme.surface.into())
-                .modifier(Modifier::new().fill_max_width())
-                .child(move || {
-                    column()
-                        .modifier(Modifier::new().fill_max_width().padding_all(Dp(24.0)))
-                        .children(move || {
-                            subheading(
-                                if dark {
-                                    "ui-dark-theme"
+    scheme_panel(
+        dark,
+        RenderSlot::new(move || {
+            sample(
+                variant,
+                true,
+                I18N.format(
+                    "ui-value-value-format-25",
+                    [
+                        ("v0", I18N.text(&name(variant)).into()),
+                        (
+                            "v1",
+                            I18N.text(
+                                &(if dark {
+                                    "ui-dark-7069"
                                 } else {
-                                    "ui-light-theme"
-                                }
-                                .to_owned(),
-                            );
-                            gap(Dp(24.0));
-                            sample(
-                                variant,
-                                true,
-                                I18N.format(
-                                    "ui-value-value-format-25",
-                                    [
-                                        ("v0", I18N.text(&name(variant)).into()),
-                                        (
-                                            "v1",
-                                            I18N.text(
-                                                &(if dark {
-                                                    "ui-dark-7069"
-                                                } else {
-                                                    "ui-light-7070"
-                                                }),
-                                            )
-                                            .into(),
-                                        ),
-                                    ],
-                                ),
-                            );
-                        });
-                });
-        });
+                                    "ui-light-7070"
+                                }),
+                            )
+                            .into(),
+                        ),
+                    ],
+                ),
+            );
+        }),
+    );
 }
 
 #[tessera]

@@ -124,7 +124,7 @@ fn text_field_route_compacts_navigation_and_reveals_retained_outlined_callouts_a
     )
     .unwrap();
     renderer.render_frames(8);
-    click(&mut renderer, "Material Components", None, -600.0, None);
+    click(&mut renderer, "Material components", None, -600.0, None);
     renderer.render_frames(60);
     click(
         &mut renderer,
@@ -300,7 +300,7 @@ fn real_buttons_route_retains_visited_native_state_reveals_cold_sections_and_pre
     )
     .unwrap();
     renderer.render_frames(8);
-    click(&mut renderer, "Material Components", None, -600.0, None);
+    click(&mut renderer, "Material components", None, -600.0, None);
     for _ in 0..90 {
         let tree = renderer.accessibility_snapshot().unwrap();
         if find(&renderer, "Open Buttons specifications", None).is_some()
@@ -566,7 +566,7 @@ fn saving_date_range_configuration_preserves_article_position() {
     )
     .unwrap();
     renderer.render_frames(32);
-    click(&mut renderer, "Material Components", None, -600.0, None);
+    click(&mut renderer, "Material components", None, -600.0, None);
     renderer.render_frames(60);
     click(
         &mut renderer,
@@ -657,7 +657,7 @@ fn carousel_collection_page_keeps_return_visible_and_restores_article_position()
         )
         .unwrap();
         renderer.render_frames(32);
-        click(&mut renderer, "Material Components", None, -600.0, None);
+        click(&mut renderer, "Material components", None, -600.0, None);
         renderer.render_frames(60);
         click(
             &mut renderer,
@@ -855,7 +855,7 @@ fn required_field_remains_pointer_editable_after_article_tab_and_scrolled_reveal
     )
     .unwrap();
     renderer.render_frames(8);
-    click(&mut renderer, "Material Components", None, -600.0, None);
+    click(&mut renderer, "Material components", None, -600.0, None);
     renderer.render_frames(60);
     click(
         &mut renderer,
@@ -1004,7 +1004,7 @@ fn actual_app_drawer_article() -> (HeadlessRenderer, crate::app::AppNavigationHa
     )
     .unwrap();
     renderer.render_frames(8);
-    click(&mut renderer, "Material Components", None, -600.0, None);
+    click(&mut renderer, "Material components", None, -600.0, None);
     renderer.render_frames(60);
     click(
         &mut renderer,
@@ -1262,7 +1262,7 @@ fn live_drawer_route_exit_closes_without_unmounting_the_host_or_losing_session_s
                 .expect("home route app-bar menu");
             tap_app_bounds(&mut renderer, menu.1.bounds().unwrap());
             renderer.render_frames(60);
-            click(&mut renderer, "Material Components", None, -600.0, None);
+            click(&mut renderer, "Material components", None, -600.0, None);
             renderer.render_frames(60);
         } else {
             click(
@@ -1309,7 +1309,7 @@ fn actual_app_rail_article() -> (HeadlessRenderer, crate::app::AppNavigationHand
     )
     .unwrap();
     renderer.render_frames(8);
-    click(&mut renderer, "Material Components", None, -600.0, None);
+    click(&mut renderer, "Material components", None, -600.0, None);
     renderer.render_frames(60);
     click(
         &mut renderer,
@@ -1506,7 +1506,7 @@ fn live_rail_route_exit_clears_modal_focus_and_preserves_selection_on_return() {
             let menu = find(&renderer, "Open navigation drawer", Some(Role::Button)).unwrap();
             tap_app_bounds(&mut renderer, menu.1.bounds().unwrap());
             renderer.render_frames(60);
-            click(&mut renderer, "Material Components", None, -600.0, None);
+            click(&mut renderer, "Material components", None, -600.0, None);
             renderer.render_frames(60);
         } else {
             click(

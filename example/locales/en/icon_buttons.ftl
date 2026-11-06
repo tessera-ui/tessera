@@ -14,14 +14,6 @@ ui-toggle-favorite = Toggle favorite
 
 ui-2-toggle-icon-button = 2  Toggle icon button
 
-ui-extra-small-medium-large-extra-large = Extra small, medium, large, extra large
-
-ui-color-style = Color style
-
-ui-filled-default-tonal-outlined-standard = Filled (default), tonal, outlined, standard
-
-ui-narrow-wide = Narrow, wide
-
 ui-anatomy-add-action = Anatomy add action
 
 ui-1-icon = 1  Icon

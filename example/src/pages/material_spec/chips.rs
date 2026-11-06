@@ -16,19 +16,18 @@ use tessera_components::{
     row::row,
     shape_def::Shape,
     spacer::spacer,
-    surface::surface,
     text::text,
-    theme::{MaterialTheme, material_theme},
+    theme::MaterialTheme,
 };
 use tessera_ui::{Color, Dp, Modifier, RenderSlot, State, remember, tessera, use_context};
 
 use crate::res::I18N;
 
 use super::{
-    ACCENT, INK,
+    INK,
     annotations::{self, Geometry, Rect, dotted, relative, watch},
     article::{ArticlePage, SpecSection, article},
-    gap, panel, spec_table, subheading, type_style,
+    gap, panel, scheme_panel, spec_table, subheading, type_style,
 };
 
 const VARIANTS: [ChipVariant; 4] = [
@@ -125,20 +124,7 @@ pub(super) fn chips_spec(route: Option<crate::pages::material_spec::article::Art
         ArticlePage {
             title: "ui-overview",
             intro: Some(RenderSlot::new(overview)),
-            sections: vec![
-                SpecSection {
-                    title: "ui-availability-resources",
-                    content: RenderSlot::new(resources),
-                },
-                SpecSection {
-                    title: "ui-updates",
-                    content: RenderSlot::new(updates),
-                },
-                SpecSection {
-                    title: "ui-differences-from-m2",
-                    content: RenderSlot::new(differences),
-                },
-            ],
+            sections: vec![],
         },
         ArticlePage {
             title: "ui-guidelines",
@@ -329,138 +315,6 @@ fn overview() {
     });
     gap(Dp(12.0));
     caption("ui-there-are-four-chip-variants-assist-filter-input-and-suggestion");
-}
-
-#[tessera]
-fn resources() {
-    spec_table(
-        vec!["ui-type".into(), "ui-resource".into(), "ui-status".into()],
-        vec![
-            vec![
-                "ui-design".into(),
-                "ui-design-kit-figma".into(),
-                "ui-available".into(),
-            ],
-            vec![
-                "ui-implementation".into(),
-                "Flutter".into(),
-                "ui-available".into(),
-            ],
-            vec![
-                "ui-implementation".into(),
-                "Jetpack Compose".into(),
-                "ui-available".into(),
-            ],
-            vec![
-                "ui-implementation".into(),
-                "Android Views (MDC-Android)".into(),
-                "ui-available".into(),
-            ],
-            vec![
-                "ui-implementation".into(),
-                "Web".into(),
-                "ui-available".into(),
-            ],
-        ],
-    );
-    gap(Dp(24.0));
-    prose(
-        "ui-tessera-examples-on-this-page-use-the-native-chip-component-with-the-flat-and-elevated-sty",
-    );
-}
-
-#[tessera]
-fn updates() {
-    subheading("ui-aug-2024".into());
-    prose("ui-updated-stroke-color-from-outline-to-outline-variant");
-    gap(Dp(24.0));
-    panel(RenderSlot::new(search_stroke));
-    gap(Dp(16.0));
-    caption(
-        "ui-the-stroke-color-was-softened-to-improve-visual-hierarchy-between-chips-and-buttons",
-    );
-}
-
-#[tessera]
-fn search_stroke() {
-    let scheme = use_context::<MaterialTheme>().unwrap().get().color_scheme;
-    row()
-        .cross_axis_alignment(CrossAxisAlignment::Center)
-        .children(move || {
-            boxed()
-                .modifier(Modifier::new().padding_all(Dp(8.0)))
-                .children(move || {
-                    chip()
-                        .input(I18N.text("ui-input"))
-                        .shape_style(ChipShapeStyle::Standard)
-                        .on_remove(|| {});
-                });
-            text("→")
-                .color(scheme.on_surface_variant)
-                .style(type_style(16.0, 24.0));
-            boxed()
-                .modifier(Modifier::new().padding_all(Dp(8.0)))
-                .children(move || {
-                    chip()
-                        .input(I18N.text("ui-input"))
-                        .shape_style(ChipShapeStyle::Standard)
-                        .on_remove(|| {});
-                });
-        });
-}
-
-#[tessera]
-fn differences() {
-    bullets(vec![
-        "ui-color-new-color-mappings-and-compatibility-with-dynamic-color".into(),
-        "ui-shape-rounded-rectangle".into(),
-        "ui-variants-action-chips-have-been-separated-into-assist-chips-and-suggestion-chips-choice-ch".into(),
-    ]);
-    gap(Dp(32.0));
-    panel(RenderSlot::new(move || {
-        column().children(move || {
-            flow_row().item_spacing(Dp(8.0)).children(move || {
-                chip()
-                    .input(I18N.text("ui-input"))
-                    .shape_style(ChipShapeStyle::Standard)
-                    .on_remove(|| {});
-                chip()
-                    .filter(I18N.text("ui-choice"))
-                    .shape_style(ChipShapeStyle::Standard);
-                chip()
-                    .filter(I18N.text("ui-filter"))
-                    .shape_style(ChipShapeStyle::Standard);
-                chip()
-                    .assist(I18N.text("ui-action"))
-                    .shape_style(ChipShapeStyle::Standard);
-            });
-        });
-    }));
-    gap(Dp(12.0));
-    caption("ui-m2-variants-of-chips-are-input-choice-filter-and-action");
-    gap(Dp(32.0));
-    panel(RenderSlot::new(move || {
-        flow_row().item_spacing(Dp(8.0)).children(move || {
-            chip()
-                .assist(I18N.text("ui-assist"))
-                .shape_style(ChipShapeStyle::Standard)
-                .leading_icon(filled::ADD_SVG);
-            chip()
-                .filter(I18N.text("ui-filter"))
-                .shape_style(ChipShapeStyle::Standard)
-                .selected(true)
-                .leading_icon(filled::CHECK_SVG);
-            chip()
-                .input(I18N.text("ui-input"))
-                .shape_style(ChipShapeStyle::Standard)
-                .on_remove(|| {});
-            chip()
-                .suggestion(I18N.text("ui-suggestion"))
-                .shape_style(ChipShapeStyle::Standard);
-        });
-    }));
-    gap(Dp(12.0));
-    caption("ui-m3-variants-of-chips-updated-to-assist-filter-input-and-suggestion");
 }
 
 #[tessera]
@@ -1449,32 +1303,12 @@ fn sample(
 
 #[tessera]
 fn scheme(variant: ChipVariant, dark: bool) {
-    material_theme()
-        .theme(move || MaterialTheme::from_seed(ACCENT, dark))
-        .child(move || {
-            let theme = use_context::<MaterialTheme>()
-                .expect("MaterialTheme must be provided")
-                .get();
-            surface()
-                .style(theme.color_scheme.surface.into())
-                .modifier(Modifier::new().fill_max_width())
-                .child(move || {
-                    column()
-                        .modifier(Modifier::new().fill_max_width().padding_all(Dp(24.0)))
-                        .children(move || {
-                            subheading(
-                                if dark {
-                                    "ui-dark-theme"
-                                } else {
-                                    "ui-light-theme"
-                                }
-                                .to_owned(),
-                            );
-                            gap(Dp(24.0));
-                            examples(variant, true);
-                        });
-                });
-        });
+    scheme_panel(
+        dark,
+        RenderSlot::new(move || {
+            examples(variant, true);
+        }),
+    );
 }
 
 #[tessera]

@@ -70,18 +70,6 @@ ui-can-also-display-information-relevant-to-the-task = Can also display informat
 
 ui-commonly-used-to-confirm-high-risk-actions-like-deleting-progress = Commonly used to confirm high-risk actions like deleting progress
 
-ui-color-new-color-mappings-and-compatibility-with-dynamic-color-2123 = Color: new color mappings and compatibility with dynamic color
-
-ui-layout-greater-padding-to-account-for-the-increased-corner-radius-and-title-size = Layout: greater padding to account for the increased corner-radius and title size
-
-ui-position-option-for-custom-basic-dialog-positioning = Position: option for custom basic dialog positioning
-
-ui-shape-increased-corner-radius = Shape: increased corner-radius
-
-ui-typography-larger-and-darker-headline = Typography: larger and darker headline
-
-ui-new-updates-to-color-layout-position-shape-and-typography = New updates to color, layout, position, shape, and typography
-
 ui-a-dialog-is-a-modal-window-that-appears-in-front-of-app-content-to-provide-critical-inform = A dialog is a modal window that appears in front of app content to provide critical information or ask for a decision. Dialogs disable all app functionality when they appear, and remain on screen until confirmed, dismissed, or a required action has been taken.
 
 ui-dialogs-are-purposefully-interruptive-so-they-should-be-used-sparingly-a-less-disruptive-a = Dialogs are purposefully interruptive, so they should be used sparingly. A less disruptive alternative is to use a dropdown menu, which provides options without interrupting a user's experience.
@@ -401,6 +389,8 @@ ui-event-name = Event name
 ui-overview-event-name = Overview event name
 
 ui-from = From
+
+ui-date-range-to = To
 
 ui-close-overview-dialog = Close overview dialog
 

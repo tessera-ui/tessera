@@ -12,11 +12,7 @@ ui-measurements = Measurements
 
 ui-baseline-app-bars = Baseline app bars
 
-ui-availability-resources = Availability & resources
-
 ui-m3-expressive-update = M3 Expressive update
-
-ui-differences-from-m2 = Differences from M2
 
 ui-search-app-bar = Search app bar
 
@@ -102,10 +98,6 @@ ui-scrolled-app-bar = Scrolled app bar
 
 ui-transparent-app-bar = Transparent app bar
 
-ui-m2-top-app-bar = M2 top app bar
-
-ui-m3-app-bar = M3 app bar
-
 ui-labeled-app-bar = Labeled app bar
 
 ui-80-episodes = 80 episodes
@@ -146,71 +138,9 @@ ui-medium-flexible = Medium flexible
 
 ui-large-flexible = Large flexible
 
-ui-type = Type
-
-ui-resource = Resource
-
 ui-status = Status
 
-ui-design = Design
-
-ui-design-kit-figma = Design Kit (Figma)
-
-ui-available = Available
-
-ui-implementation = Implementation
-
-ui-unavailable = Unavailable
-
-ui-may-2025 = May 2025
-
-ui-the-new-search-app-bar-supports-icons-inside-and-outside-the-search-bar-and-centered-text = The new search app bar supports icons inside and outside the search bar, and centered text. It opens the search view component when selected.
-
-ui-the-new-medium-flexible-and-large-flexible-app-bars-come-with-significant-improvements-and = The new medium flexible and large flexible app bars come with significant improvements, and should replace medium and large app bars, which are no longer recommended. The small app bar is updated with the same flexible improvements.
-
-ui-variants-and-naming = Variants and naming
-
-ui-renamed-component-from-top-app-bar-to-app-bar = Renamed component from top app bar to app bar
-
-ui-added-search-app-bar = Added search app bar
-
-ui-medium-and-large-app-bars-are-no-longer-recommended = Medium and large app bars are no longer recommended
-
-ui-added-medium-flexible-and-large-flexible-app-bars-with = Added medium flexible and large flexible app bars with:
-
-ui-reduced-overall-height = Reduced overall height
-
-ui-larger-title-text = Larger title text
-
 ui-subtitle = Subtitle
-
-ui-left-and-center-aligned-text-options = Left- and center-aligned text options
-
-ui-text-wrapping = Text wrapping
-
-ui-more-flexible-elements-for-imagery-and-filled-buttons = More flexible elements for imagery and filled buttons
-
-ui-added-features-to-small-app-bar = Added features to small app bar:
-
-ui-center-aligned-text-option = Center-aligned text option
-
-ui-expressive-variant = Expressive variant
-
-ui-4-total-app-bar-configurations-search-app-bar-small-medium-flexible-large-flexible = 4 total app bar configurations: search app bar, small, medium flexible, large flexible.
-
-ui-expressive-overview = Expressive overview
-
-ui-color-new-color-mappings-and-compatibility-with-dynamic-color = Color: New color mappings and compatibility with dynamic color
-
-ui-on-scroll-no-drop-shadow-instead-a-color-fill-creates-separation-from-content = On scroll: No drop shadow, instead a color fill creates separation from content
-
-ui-typography-larger-default-text = Typography: Larger default text
-
-ui-layout-smaller-default-height = Layout: Smaller default height
-
-ui-m2-elevation-and-a-drop-shadow-raise-the-top-app-bar-when-content-is-present-underneath = M2: Elevation and a drop shadow raise the top app bar when content is present underneath
-
-ui-m3-on-scroll-a-color-fill-overlay-separates-the-app-bar-from-the-content-beneath = M3: On scroll, a color fill overlay separates the app bar from the content beneath
 
 ui-app-bars-show-information-about-the-page-key-actions-and-navigation-actions-like-back-or-m = App bars show information about the page, key actions, and navigation actions like Back or Menu.
 
@@ -524,25 +454,11 @@ ui-medium = Medium
 
 ui-large = Large
 
-ui-merged-into-small-use-centered-text-configuration = Merged into small. Use centered-text configuration.
-
-ui-medium-baseline = Medium (baseline)
-
-ui-not-recommended-use-medium-flexible = Not recommended. Use medium flexible
-
-ui-large-baseline = Large (baseline)
-
-ui-not-recommended-use-large-flexible = Not recommended. Use large flexible
-
 ui-text-alignment = Text alignment
 
 ui-text-labels-including-supporting-text-can-be-aligned-to-the-leading-edge-or-centered = Text labels, including supporting text, can be aligned to the leading edge or centered
 
-ui-category = Category
-
 ui-configuration = Configuration
-
-ui-leading-edge-default = Leading edge (default)
 
 ui-interactive-configuration = Interactive configuration
 

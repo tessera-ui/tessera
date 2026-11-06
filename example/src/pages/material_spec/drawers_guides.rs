@@ -1510,8 +1510,6 @@ pub(super) fn labeling() {
             prose("ui-the-accessibility-label-for-a-navigation-item-is-typically-the-same-as-the-destination-nam");
             gap(Dp(16.0));
             prose("ui-if-the-ui-text-is-correctly-linked-assistive-tech-such-as-a-screenreader-will-read-the-ui");
-            gap(Dp(16.0));
-            prose("ui-for-android-views-mdc-android-a-more-descriptive-accessibility-label-is-not-available-to-b");
         })
         .end(|| {
             guide(44);

@@ -35,68 +35,6 @@ pub(super) fn overview() {
     paragraph("ui-choose-a-default-button-for-an-action-and-a-toggle-button-for-a-persistent-selection-use-f".into());
     gap(Dp(32.0));
     super::overview_art();
-    gap(Dp(48.0));
-    subheading("ui-availability-resources".into());
-    gap(Dp(24.0));
-    spec_table(
-        vec![
-            "ui-resource".into(),
-            "ui-status".into(),
-            "ui-available-here".into(),
-        ],
-        vec![
-            vec![
-                "ui-native-icon-button".into(),
-                "ui-available".into(),
-                "ui-default-and-toggle-actions-sizing-shapes-and-color-styles".into(),
-            ],
-            vec![
-                "ui-material-icon-assets".into(),
-                "ui-available".into(),
-                "ui-bundled-icons-used-by-the-live-examples".into(),
-            ],
-            vec![
-                "ui-theme-and-accessibility".into(),
-                "ui-available".into(),
-                "ui-theme-colors-accessible-names-keyboard-focus-and-selection".into(),
-            ],
-        ],
-    );
-    gap(Dp(48.0));
-    subheading("ui-may-2025-material-3-expressive".into());
-    gap(Dp(24.0));
-    paragraph("ui-material-3-expressive-expands-icon-buttons-with-five-sizes-narrow-and-wide-proportions-and".into());
-    gap(Dp(24.0));
-    spec_table(
-        vec!["ui-configuration".into(), "ui-expressive-choices".into()],
-        vec![
-            vec![
-                "ui-size".into(),
-                "ui-extra-small-small-medium-large-and-extra-large".into(),
-            ],
-            vec![
-                "ui-shape".into(),
-                "ui-round-and-square-with-pressed-and-selected-shape-feedback".into(),
-            ],
-            vec!["ui-width".into(), "ui-narrow-default-and-wide".into()],
-            vec![
-                "ui-color-style".into(),
-                "ui-filled-tonal-outlined-and-standard".into(),
-            ],
-        ],
-    );
-    gap(Dp(48.0));
-    subheading("ui-differences-from-m2".into());
-    gap(Dp(24.0));
-    paragraph("ui-material-2-commonly-presents-an-icon-action-without-a-persistent-container-material-3-expr".into());
-    gap(Dp(24.0));
-    flow_row()
-        .item_spacing(Dp(24.0))
-        .line_spacing(Dp(24.0))
-        .children(|| {
-            comparison(false);
-            comparison(true);
-        });
 }
 
 #[tessera]
@@ -235,58 +173,6 @@ pub(in crate::pages::material_spec) fn contrast() {
 #[tessera]
 fn paragraph(value: String) {
     text(I18N.text(value)).style(type_style(16.0, 24.0));
-}
-
-#[tessera]
-fn comparison(modern: bool) {
-    let scheme = use_context::<MaterialTheme>().unwrap().get().color_scheme;
-    let selected = remember(|| false);
-    column()
-        .modifier(
-            Modifier::new()
-                .width(Dp(280.0))
-                .padding_all(Dp(24.0))
-                .background_with_shape(
-                    scheme.surface_container_low,
-                    Shape::rounded_rectangle(Dp(24.0)),
-                ),
-        )
-        .children(move || {
-            paragraph(if modern {
-                "Material 3 Expressive".into()
-            } else {
-                "ui-material-2-treatment".into()
-            });
-            gap(Dp(24.0));
-            icon_button()
-                .variant(if modern {
-                    IconButtonVariant::FilledTonal
-                } else {
-                    IconButtonVariant::Standard
-                })
-                .size(IconButtonSize::Small)
-                .shape(if modern && selected.get() {
-                    Shape::rounded_rectangle(Dp(12.0))
-                } else {
-                    Shape::CAPSULE
-                })
-                .selected_optional(if modern { Some(selected.get()) } else { None })
-                .icon(filled::EDIT_SVG)
-                .accessibility_label(I18N.text(if modern {
-                    "ui-toggle-expressive-edit-action"
-                } else {
-                    "ui-activate-standard-edit-action"
-                }))
-                .on_click(move || selected.set(!selected.get()));
-            gap(Dp(16.0));
-            paragraph(if modern {
-                "ui-container-shape-and-persistent-selection".into()
-            } else if selected.get() {
-                "ui-standard-edit-action-activated".into()
-            } else {
-                "ui-recognizable-icon-without-a-persistent-container".into()
-            });
-        });
 }
 
 #[tessera]

@@ -18,10 +18,6 @@ ui-standard-bottom-sheet = Standard bottom sheet
 
 ui-modal-bottom-sheet = Modal bottom sheet
 
-ui-shape-bottom-sheets-have-a-28dp-top-corner-radius = Shape: Bottom sheets have a 28dp top corner radius
-
-ui-layout-new-max-width-of-640dp-and-an-optional-drag-handle-with-an-accessible-48dp-hit-targ = Layout: New max-width of 640dp and an optional drag handle with an accessible 48dp hit target
-
 ui-bottom-sheets-display-supplementary-content-and-actions-on-a-mobile-screen = Bottom sheets display supplementary content and actions on a mobile screen.
 
 ui-bottom-sheet-containing-contacts-and-applications = Bottom sheet containing contacts and applications

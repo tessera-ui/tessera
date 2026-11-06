@@ -107,7 +107,11 @@ fn selection_column(multiple: bool) {
         controller.set_text(&initial_text);
         controller
     });
-    let mode = if multiple { "ui-multiple" } else { "ui-single" };
+    let mode = if multiple {
+        "ui-multiple"
+    } else {
+        "ui-single-selection"
+    };
     column()
         .modifier(
             Modifier::new()

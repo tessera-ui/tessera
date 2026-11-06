@@ -1,3 +1,9 @@
+ui-checkbox-selected = selected
+
+ui-checkbox-mixed = mixed
+
+ui-checkbox-unselected = unselected
+
 ui-error-selected = error selected
 
 ui-error-mixed = error mixed

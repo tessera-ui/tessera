@@ -8,8 +8,6 @@ ui-outlined-card = Outlined card
 
 ui-cards-contain-related-elements-about-a-single-subject-they-can-hold-images-headlines-suppo = Cards contain related elements about a single subject. They can hold images, headlines, supporting text, buttons and lists, and their layout adapts to their contents.
 
-ui-cards-use-dynamic-color-mappings-and-lower-resting-elevation-choose-elevated-filled-or-out = Cards use dynamic color mappings and lower resting elevation. Choose elevated, filled or outlined containment according to the visual emphasis needed.
-
 ui-keep-each-card-about-one-subject-establish-a-readable-hierarchy-and-use-a-collection-when = Keep each card about one subject. Establish a readable hierarchy and use a collection when several subjects belong together. Prefer spacing or dividers when a container would add unnecessary complexity.
 
 ui-cards-in-a-collection = Cards in a collection

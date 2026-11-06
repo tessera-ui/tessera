@@ -130,14 +130,6 @@ ui-keep-labels-and-error-messages-brief-and-easy-to-act-on = Keep labels and err
 
 ui-text-fields-commonly-appear-in-forms-and-dialogs = Text fields commonly appear in forms and dialogs
 
-ui-text-fields-have-new-color-mappings = Text fields have new color mappings
-
-ui-pietersen = Pietersen
-
-ui-outlined-name = Outlined name
-
-ui-filled-name = Filled name
-
 ui-text-fields-let-people-enter-and-edit-text-choose-filled-or-outlined-fields-consistently-w = Text fields let people enter and edit text. Choose filled or outlined fields consistently within a form.
 
 ui-contact-information = Contact information
@@ -337,3 +329,5 @@ ui-lbs = lbs
 ui-read-only-value = Read-only value
 
 ui-invalid-input = Invalid input
+
+ui-dark-prefix = Dark{ " " }

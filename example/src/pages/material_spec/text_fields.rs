@@ -58,10 +58,7 @@ pub(super) fn text_fields_spec(route: Option<crate::pages::material_spec::articl
             },
         ],
     ).route_optional(route.clone()).pages(vec![
-        ArticlePage{title:"ui-overview",intro:Some(RenderSlot::new(overview_variants)),sections:vec![
-            SpecSection{title:"ui-availability-resources",content:RenderSlot::new(availability)},
-            SpecSection{title:"ui-differences-from-m2",content:RenderSlot::new(differences)},
-        ]},
+        ArticlePage{title:"ui-overview",intro:Some(RenderSlot::new(overview_variants)),sections:vec![]},
         ArticlePage{title:"ui-guidelines",intro:Some(RenderSlot::new(field_variants)),sections:vec![
             SpecSection{title:"ui-usage",content:RenderSlot::new(|| {prose("ui-use-a-text-field-when-someone-needs-to-enter-text-into-a-ui-such-as-filling-in-contact-or");gap(Dp(24.0));contact_form(false);gap(Dp(24.0));subheading("ui-outlined-text-fields".into());prose("ui-outlined-text-fields-have-less-visual-emphasis-than-filled-text-fields-when-they-appear-in");gap(Dp(24.0));contact_form(true);})},
             SpecSection{title:"ui-choosing-text-fields",content:RenderSlot::new(|| {subheading("ui-choosing-text-fields".into());prose("ui-both-variants-of-text-field-provide-the-same-functionality-the-variant-used-can-depend-on");gap(Dp(24.0));field_variants();gap(Dp(24.0));subheading("ui-using-both-text-field-variants-on-the-same-screen".into());prose("ui-if-both-variants-of-text-field-are-used-in-a-ui-they-should-be-used-consistently-within-di");gap(Dp(24.0));guidance::variant_regions();})},
@@ -880,83 +877,6 @@ fn overview_variants() {
     field_variant_hero(true);
     gap(Dp(16.0));
     anatomy_legend(vec!["ui-filled-text-field", "ui-outlined-text-field"]);
-}
-
-#[tessera]
-fn availability() {
-    spec_table(
-        vec!["ui-type".into(), "ui-resource".into(), "ui-status".into()],
-        vec![
-            vec![
-                "ui-design".into(),
-                "ui-design-kit-figma".into(),
-                "ui-available".into(),
-            ],
-            vec![
-                "ui-implementation".into(),
-                "Flutter".into(),
-                "ui-available".into(),
-            ],
-            vec![
-                "ui-implementation".into(),
-                "Jetpack Compose".into(),
-                "ui-available".into(),
-            ],
-            vec![
-                "ui-implementation".into(),
-                "Android Views (MDC-Android)".into(),
-                "ui-available".into(),
-            ],
-            vec![
-                "ui-implementation".into(),
-                "Web".into(),
-                "ui-available".into(),
-            ],
-        ],
-    );
-}
-
-#[tessera]
-fn differences() {
-    bullets(vec![
-        "ui-color-new-color-mappings-and-compatibility-with-dynamic-color".into(),
-    ]);
-    gap(Dp(24.0));
-    panel(RenderSlot::new(|| {
-        row()
-            .main_axis_alignment(MainAxisAlignment::Center)
-            .modifier(Modifier::new().fill_max_width())
-            .children(|| {
-                m2_difference_field(false);
-                spacer().modifier(Modifier::new().width(Dp(32.0)));
-                m2_difference_field(true);
-            });
-    }));
-    gap(Dp(16.0));
-    text(I18N.text("ui-text-fields-have-new-color-mappings")).style(type_style(14.0, 20.0));
-}
-
-#[tessera]
-fn m2_difference_field(outlined: bool) {
-    let field = if outlined {
-        text_field().outlined()
-    } else {
-        text_field().filled()
-    };
-    field
-        .label(I18N.text("ui-name"))
-        .initial_text(I18N.text("ui-pietersen"))
-        .accessibility_label(I18N.text(if outlined {
-            "ui-outlined-name"
-        } else {
-            "ui-filled-name"
-        }))
-        .min_width(Dp::ZERO)
-        .presentation_state(InteractionVisualState::Focus)
-        .modifier(Modifier::new().width(Dp(220.0)))
-        .trailing_icon(|| {
-            icon().painter(filled::CANCEL_SVG).size(Dp(24.0));
-        });
 }
 
 #[tessera]
@@ -2275,8 +2195,10 @@ fn specs_anatomy_panel(outlined: bool, dark: bool) {
                                         [
                                             (
                                                 "v0",
-                                                I18N.text(&(if dark { "Dark " } else { "" }))
-                                                    .into(),
+                                                I18N.text(
+                                                    &(if dark { "ui-dark-prefix" } else { "" }),
+                                                )
+                                                .into(),
                                             ),
                                             (
                                                 "v1",
@@ -3761,8 +3683,10 @@ fn field_anatomy_marker(number: usize, x: Dp, y: Dp) {
                             [
                                 (
                                     "v0",
-                                    I18N.text(&(if scheme.is_dark { "Dark " } else { "" }))
-                                        .into(),
+                                    I18N.text(
+                                        &(if scheme.is_dark { "ui-dark-prefix" } else { "" }),
+                                    )
+                                    .into(),
                                 ),
                                 ("v1", (number).into()),
                             ],

@@ -10,47 +10,13 @@ ui-use-instead-of-a-fab-when-label-text-is-needed-to-understand-the-action = Use
 
 ui-1-small-extended-fab-2-medium-extended-fab-3-large-extended-fab = 1  Small extended FAB    2  Medium extended FAB    3  Large extended FAB
 
-ui-may-2025-the-extended-fab-gained-small-medium-and-large-sizes-and-the-baseline-extended-fa = May 2025: the extended FAB gained small, medium, and large sizes, and the baseline extended FAB is no longer recommended. Use the small extended FAB instead.
-
-ui-sizes = Sizes
-
-ui-small-56dp-medium-80dp-and-large-96dp = Small (56dp), medium (80dp), and large (96dp)
-
-ui-type-style = Type style
-
-ui-the-small-extended-fab-uses-title-medium-instead-of-label-large = The small extended FAB uses title medium instead of label large
-
 ui-padding = Padding
 
-ui-inner-padding-was-reduced = Inner padding was reduced
-
-ui-extended-fab-baseline-is-no-longer-recommended = Extended FAB (baseline) is no longer recommended
-
 ui-compose = Compose
-
-ui-the-small-extended-fab-is-the-recommended-size-in-the-expressive-update = The small extended FAB is the recommended size in the expressive update.
-
-ui-m2-extended-fabs-used-a-fixed-48dp-height-a-single-primary-color-and-label-large-type-m3-i = M2: extended FABs used a fixed 48dp height, a single primary color, and label large type. M3 introduced container color roles, elevation levels, and state layers that follow the content color.
-
-ui-m3-expressive-the-container-grew-into-three-sizes-the-label-type-moved-to-title-medium-for = M3 Expressive: the container grew into three sizes, the label type moved to title medium for the small size, and the icon size follows the container height.
-
-ui-single-accent = Single accent
-
-ui-primary-secondary-and-tertiary-containers-or-accents = Primary, secondary, and tertiary containers or accents
 
 ui-three-sizes-share-the-same-anatomy-and-differ-in-height-icon-size-padding-and-label-type-s = Three sizes share the same anatomy and differ in height, icon size, padding, and label type. Small is the recommended default.
 
 ui-1-small-extended-fab-2-medium-extended-fab-3-large-extended-fab-2899 = 1 Small extended FAB · 2 Medium extended FAB · 3 Large extended FAB
-
-ui-small-extended-fab = Small extended FAB
-
-ui-medium-extended-fab = Medium extended FAB
-
-ui-large-extended-fab = Large extended FAB
-
-ui-extended-fab-baseline = Extended FAB (baseline)
-
-ui-not-recommended-use-small-extended-fab = Not recommended. Use small extended FAB.
 
 ui-choose-a-size-a-container-tone-whether-the-leading-icon-is-present-and-whether-the-label-i = Choose a size, a container tone, whether the leading icon is present, and whether the label is expanded. All options keep the same anatomy and interaction feedback.
 
@@ -221,5 +187,3 @@ ui-don-t-compose-edit-pencil-icon-button-the-icon-description-duplicates-the-act
 ui-when-the-label-collapses-keep-the-same-accessible-name-provide-a-visible-label-on-request = When the label collapses, keep the same accessible name. Provide a visible label on request rather than replacing the name with an icon description.
 
 ui-value-activations-value-format-161 = { $v0 } · activations: { $v1 }
-
-ui-tessera-examples-on-this-page-use-the-native-extended-floating-action-button-componen = Tessera examples on this page use the native extended_floating_action_button component. Small, medium, and large sizes, six color tones, optional icons, and label expansion are implemented, together with elevation and state-layer feedback.

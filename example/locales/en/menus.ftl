@@ -24,19 +24,7 @@ ui-vertical-menus-can-include-vibrant-colors-gaps-dividers-and-submenus-to-organ
 
 ui-open-the-live-menu-then-hover-or-focus-share-to-reveal-its-submenu = Open the live menu, then hover or focus Share to reveal its submenu
 
-ui-vertical-menus-were-introduced-with-new-shapes-color-styles-selection-states-and-refined-s = Vertical menus were introduced with new shapes, color styles, selection states, and refined submenu motion. Gaps can be used for a more flexible layout on Android.
-
-ui-added-vertical-menus-recommended-for-new-designs = Added vertical menus, recommended for new designs
-
-ui-baseline-menu-is-still-available = Baseline menu is still available
-
-ui-color-styles-3705 = Color styles:
-
 ui-vibrant = Vibrant
-
-ui-vibrant-colors-help-selected-menu-items-stand-out = Vibrant colors help selected menu items stand out
-
-ui-variants-dropdown-menu-and-exposed-dropdown-menu-are-now-both-referred-to-as-menu-since-th = Variants: Dropdown menu and exposed dropdown menu are now both referred to as menu, since they differ only in the element which opens the menu surface
 
 ui-a-menu-takes-up-less-space-than-a-set-of-radio-buttons-or-chips = A menu takes up less space than a set of radio buttons or chips.
 
@@ -49,8 +37,6 @@ ui-standard-surface-based-lower-visual-emphasis = Standard: Surface-based, lower
 ui-vibrant-tertiary-based-higher-visual-emphasis = Vibrant: Tertiary-based, higher visual emphasis
 
 ui-vibrant-menus-are-more-prominent-and-should-be-used-sparingly = Vibrant menus are more prominent, and should be used sparingly.
-
-ui-on-web-menus-can-open-submenus = On web, menus can open submenus
 
 ui-opening-menus = Opening menus
 
@@ -110,15 +96,11 @@ ui-don-t-use-gaps-in-scrollable-menus = Don't use gaps in scrollable menus
 
 ui-gaps-separate-menu-items-using-expressive-shapes = Gaps separate menu items using expressive shapes
 
-ui-note-gaps-are-not-currently-available-in-the-material-web-library = Note: Gaps are not currently available in the Material web library
-
 ui-dividers-create-a-more-subtle-separation-between-items-use-a-divider-for = Dividers create a more subtle separation between items. Use a divider for:
 
 ui-scrollable-menus = Scrollable menus
 
 ui-text-fields-with-a-dropdown-menu-where-a-grouped-treatment-isn-t-appropriate = Text fields with a dropdown menu, where a grouped treatment isn't appropriate
-
-ui-on-web-use-a-divider-to-separate-menu-items = On web, use a divider to separate menu items.
 
 ui-dividers-separate-menu-items-in-baseline-menus-and-on-web = Dividers separate menu items in baseline menus and on web
 
@@ -167,8 +149,6 @@ ui-submenus-should-open-next-to-the-parent-menu-item-without-overlapping-it = Su
 ui-submenus-are-best-used-on-large-screens-where-there-s-space-see-adaptive-guidance-for-alte = Submenus are best used on large screens where there's space. See adaptive guidance for alternatives on mobile.
 
 ui-position-submenus-to-the-side-of-the-parent-item = Position submenus to the side of the parent item
-
-ui-note-submenus-are-not-currently-available-on-jetpack-compose = Note: Submenus are not currently available on Jetpack Compose
 
 ui-consider-adapting-menus-into-bottom-sheets-on-small-screens-they-have-more-space-to-displa = Consider adapting menus into bottom sheets on small screens. They have more space to display additional items and longer labels.
 
@@ -277,8 +257,6 @@ ui-dividers-and-gaps-can-t-receive-focus = Dividers and gaps can't receive focus
 ui-accessibility-labels-are-used-with-assistive-technology-devices-like-screen-readers = Accessibility labels are used with assistive technology devices like screen readers.
 
 ui-the-accessibility-label-should-be-the-same-as-the-menu-item-text = The accessibility label should be the same as the menu item text.
-
-ui-the-role-is-dependent-on-platform = The role is dependent on platform.
 
 ui-the-menu-item-s-accessibility-label-aligns-with-the-ui-text = The menu item's accessibility label aligns with the UI text
 

@@ -26,16 +26,6 @@ ui-do-you-remember-that-cafe = Do you remember that cafe…
 
 ui-brunch-this-weekend = Brunch this weekend?
 
-ui-i-ll-be-in-your-area = I’ll be in your area…
-
-ui-oui-oui = Oui Oui
-
-ui-do-you-have-paris-recs = Do you have Paris recs?
-
-ui-recipe-to-try = Recipe to try
-
-ui-we-should-eat-this = We should eat this…
-
 ui-glass-grace = Glass & Grace
 
 ui-sound-check = Sound Check
@@ -125,12 +115,6 @@ ui-use-dividers-to-group-things-not-separate-individual-items = Use dividers to 
 ui-podcast-list-with-inset-dividers-between-items = Podcast list with inset dividers between items
 
 ui-dividers-separating-items-in-a-list = Dividers separating items in a list
-
-ui-configurations-ability-to-have-vertical-dividers = Configurations: Ability to have vertical dividers
-
-ui-inbox-using-inset-dividers-with-new-color-mappings = Inbox using inset dividers with new color mappings
-
-ui-dividers-have-new-color-mappings = Dividers have new color mappings
 
 ui-inbox-app-using-full-width-dividers-to-separate-messages = Inbox app using full-width dividers to separate messages
 

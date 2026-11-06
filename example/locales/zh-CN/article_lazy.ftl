@@ -1,1 +1,1 @@
-ui-on-this-page = 在此页面上
+ui-on-this-page = 本页内容

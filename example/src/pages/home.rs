@@ -1,6 +1,6 @@
 use tessera_components::{
-    alignment::CrossAxisAlignment, icon::icon, lazy_list::lazy_column, modifier::ModifierExt,
-    spacer::spacer, text::text, theme::MaterialTheme,
+    alignment::CrossAxisAlignment, column::column, icon::icon, lazy_list::lazy_column,
+    modifier::ModifierExt, row::row, spacer::spacer, text::text, theme::MaterialTheme,
 };
 use tessera_shard::shard;
 use tessera_ui::{Dp, Modifier, use_context};
@@ -18,22 +18,32 @@ pub fn home_page() {
     lazy_column()
         .modifier(Modifier::new().fill_max_size())
         .estimated_item_size(Dp(120.0))
-        .content_padding(Dp(16.0))
+        .content_padding(Dp(24.0))
+        .item_spacing(Dp(24.0))
         .cross_axis_alignment(CrossAxisAlignment::Start)
         .item(move || {
-                text(I18N.text("ui-hello-from-tessera"))
-                    .style(theme.with(|t| t.typography.headline_large));
-                })
-        .item(|| {
-                spacer().modifier(Modifier::new().height(Dp(5.0)));
-                })
+            row()
+                .cross_axis_alignment(CrossAxisAlignment::Center)
+                .children(move || {
+                    icon().size(Dp(96.0)).painter(logo_asset);
+                    spacer().modifier(Modifier::new().width(Dp(24.0)));
+                    column().children(move || {
+                        text(I18N.text("ui-hello-from-tessera"))
+                            .style(theme.with(|t| t.typography.headline_large))
+                            .color(theme.with(|t| t.color_scheme.on_surface));
+                        spacer().modifier(Modifier::new().height(Dp(8.0)));
+                        text(I18N.text("ui-tessera-tagline"))
+                            .style(theme.with(|t| t.typography.title_medium))
+                            .color(theme.with(|t| t.color_scheme.on_surface_variant));
+                    });
+                });
+        })
         .item(move || {
-                icon().size(Dp(200.0)).painter(logo_asset);
-                })
-        .item(|| {
-                spacer().modifier(Modifier::new().height(Dp(5.0)));
-                })
-        .item(move || {
-                text(I18N.text("ui-this-is-a-sample-application-for-the-tessera-ui-framework-tessera-is-a-modern-ui-framework"));
-            });
+            text(I18N.text(
+                "ui-this-is-a-sample-application-for-the-tessera-ui-framework-tessera-is-a-modern-ui-framework",
+            ))
+            .style(theme.with(|t| t.typography.body_large))
+            .color(theme.with(|t| t.color_scheme.on_surface_variant))
+            .modifier(Modifier::new().size_in(None, Some(Dp(720.0)), None, None));
+        });
 }

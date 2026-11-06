@@ -1017,7 +1017,6 @@ pub(super) fn mock_rail(
     fill_indicator: Option<bool>,
     hide_labels: Option<bool>,
     baseline: Option<bool>,
-    m2: Option<bool>,
     badges: Option<bool>,
     label_mode: Option<usize>,
     label_scale: Option<f64>,
@@ -1066,7 +1065,6 @@ pub(super) fn mock_rail(
     let fill_indicator = fill_indicator.unwrap_or(false);
     let hide_labels = hide_labels.unwrap_or(false);
     let baseline = baseline.unwrap_or(false);
-    let m2 = m2.unwrap_or(false);
     let badges = badges.unwrap_or(false);
     let label_mode = label_mode.unwrap_or(0);
     let label_scale = label_scale.unwrap_or(1.0);
@@ -1155,7 +1153,6 @@ pub(super) fn mock_rail(
                         outlined_active,
                         fill_indicator,
                         hide_labels || (active_label_only && !active),
-                        m2,
                         badges,
                         label_mode,
                         label_scale,
@@ -1321,7 +1318,6 @@ fn mock_item(
     outlined_active: bool,
     fill_indicator: bool,
     hide_labels: bool,
-    m2: bool,
     badges: bool,
     label_mode: usize,
     label_scale: f64,
@@ -1343,18 +1339,12 @@ fn mock_item(
         2 | 3 => 0.10,
         _ => 0.0,
     };
-    let indicator = if active && !m2 {
+    let indicator = if active {
         scheme.secondary_container
     } else {
         Color::TRANSPARENT
     };
-    let icon_color = if m2 {
-        if active {
-            scheme.primary
-        } else {
-            scheme.on_surface_variant
-        }
-    } else if active {
+    let icon_color = if active {
         scheme.on_secondary_container
     } else if faded {
         scheme.inverse_primary
@@ -1363,8 +1353,6 @@ fn mock_item(
     };
     let label_color = if faded {
         scheme.inverse_primary
-    } else if m2 && active {
-        scheme.primary
     } else if active && !expanded {
         scheme.secondary
     } else if active {
@@ -1381,7 +1369,7 @@ fn mock_item(
     label_style.font_size = Dp(label_style.font_size.0 * scale);
     label_style.line_height = label_style.line_height.map(|height| Dp(height.0 * scale));
     let label = mock_label(set, index, label_mode);
-    let show_label = !hide_labels && (!m2 || active);
+    let show_label = !hide_labels;
     // Baseline rails without labels use a 56dp circular indicator; with
     // selected-only labels, unlabeled destinations keep the 56dp slot.
     let compact = baseline && !show_label;

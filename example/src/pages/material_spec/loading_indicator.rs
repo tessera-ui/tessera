@@ -5,26 +5,18 @@
 //! Compare indeterminate morphs, determinate progress and contained styles.
 
 use tessera_components::{
-    column::column,
-    flow_row::flow_row,
-    loading_indicator::loading_indicator,
-    modifier::ModifierExt as _,
-    row::row,
-    shape_def::Shape,
-    spacer::spacer,
-    surface::surface,
-    switch::switch,
-    text::text,
-    theme::{MaterialTheme, material_theme},
+    column::column, flow_row::flow_row, loading_indicator::loading_indicator,
+    modifier::ModifierExt as _, row::row, shape_def::Shape, spacer::spacer, surface::surface,
+    switch::switch, text::text, theme::MaterialTheme,
 };
 use tessera_ui::{Dp, Modifier, RenderSlot, remember, tessera, use_context};
 
 use crate::res::I18N;
 
 use super::{
-    ACCENT, INK,
+    INK,
     article::{ArticlePage, SpecSection, article},
-    gap, panel, spec_table, subheading, type_style,
+    gap, panel, scheme_panel, spec_table, subheading, type_style,
 };
 
 #[tessera]
@@ -70,20 +62,7 @@ pub(super) fn loading_indicator_spec(
         ArticlePage {
             title: "ui-overview",
             intro: Some(RenderSlot::new(overview)),
-            sections: vec![
-                SpecSection {
-                    title: "ui-availability-resources",
-                    content: RenderSlot::new(resources),
-                },
-                SpecSection {
-                    title: "ui-m3-expressive-update",
-                    content: RenderSlot::new(expressive),
-                },
-                SpecSection {
-                    title: "ui-differences-from-m2",
-                    content: RenderSlot::new(differences),
-                },
-            ],
+            sections: vec![],
         },
         ArticlePage {
             title: "ui-guidelines",
@@ -207,105 +186,6 @@ fn overview() {
 }
 
 #[tessera]
-fn resources() {
-    spec_table(
-        vec!["ui-type".into(), "ui-resource".into(), "ui-status".into()],
-        vec![
-            vec![
-                "ui-design".into(),
-                "ui-design-kit-figma".into(),
-                "ui-available".into(),
-            ],
-            vec![
-                "ui-implementation".into(),
-                "Jetpack Compose: Expressive".into(),
-                "ui-available".into(),
-            ],
-            vec![
-                "ui-implementation".into(),
-                "Flutter".into(),
-                "ui-unavailable".into(),
-            ],
-            vec![
-                "ui-implementation".into(),
-                "Web".into(),
-                "ui-unavailable".into(),
-            ],
-        ],
-    );
-    gap(Dp(24.0));
-    prose(
-        "ui-tessera-examples-on-this-page-use-the-native-loading-indicator-component-the-indeterm",
-    );
-}
-
-#[tessera]
-fn expressive() {
-    prose(
-        "ui-may-2025-the-loading-indicator-replaces-the-circular-progress-indicator-for-short-indeterm",
-    );
-    gap(Dp(24.0));
-    spec_table(
-        vec!["ui-change".into(), "ui-details".into()],
-        vec![
-            vec![
-                "ui-shape".into(),
-                "ui-a-morphing-shape-instead-of-a-rotating-arc".into(),
-            ],
-            vec![
-                "ui-containment".into(),
-                "ui-a-contained-style-with-primary-container-color".into(),
-            ],
-            vec![
-                "ui-determinate".into(),
-                "ui-the-same-shape-can-express-a-measured-completion".into(),
-            ],
-        ],
-    );
-    gap(Dp(32.0));
-    panel(RenderSlot::new(|| {
-        flow_row().item_spacing(Dp(48.0)).children(|| {
-            spinner("ui-default-loading-indicator");
-            spinner("ui-contained-loading-indicator").contained(true);
-        });
-    }));
-    caption("ui-default-and-contained-styles-share-the-same-morph");
-}
-
-#[tessera]
-fn differences() {
-    prose(
-        "ui-m2-a-circular-progress-indicator-rotated-a-stroke-arc-and-had-no-contained-style-m3-keeps",
-    );
-    gap(Dp(24.0));
-    spec_table(
-        vec!["ui-attribute".into(), "M2".into(), "M3 Expressive".into()],
-        vec![
-            vec![
-                "ui-shape".into(),
-                "ui-rotating-arc".into(),
-                "ui-morphing-shape".into(),
-            ],
-            vec![
-                "ui-size".into(),
-                "40dp".into(),
-                "ui-48dp-target-38dp-shape".into(),
-            ],
-            vec![
-                "ui-containment".into(),
-                "ui-none".into(),
-                "ui-default-or-contained".into(),
-            ],
-            vec![
-                "ui-determinate".into(),
-                "ui-separate-component".into(),
-                "ui-same-component-with-a-progress-value".into(),
-            ],
-        ],
-    );
-}
-
-#[tessera]
 fn variants() {
     prose(
         "ui-loading-indicators-have-a-single-variant-choose-containment-and-a-determinate-value-as-con",
@@ -316,15 +196,6 @@ fn variants() {
     }));
     gap(Dp(16.0));
     caption("ui-1-loading-indicator-3589");
-    gap(Dp(32.0));
-    spec_table(
-        vec!["ui-variant".into(), "M3".into(), "M3 Expressive".into()],
-        vec![vec![
-            "ui-loading-indicator".into(),
-            "--".into(),
-            "ui-available".into(),
-        ]],
-    );
 }
 
 #[tessera]
@@ -387,31 +258,6 @@ fn configurations() {
                 });
             });
     }));
-    gap(Dp(32.0));
-    spec_table(
-        vec![
-            "ui-configuration".into(),
-            "ui-options".into(),
-            "M3 Expressive".into(),
-        ],
-        vec![
-            vec![
-                "ui-containment".into(),
-                "ui-default-contained".into(),
-                "ui-available".into(),
-            ],
-            vec![
-                "ui-progress".into(),
-                "ui-indeterminate-determinate-0-100".into(),
-                "ui-available".into(),
-            ],
-            vec![
-                "ui-paused".into(),
-                "ui-animating-paused".into(),
-                "ui-available".into(),
-            ],
-        ],
-    );
 }
 
 #[tessera]
@@ -492,45 +338,30 @@ fn colors() {
     );
     gap(Dp(24.0));
     for dark in [false, true] {
-        subheading(if dark {
-            "ui-dark-scheme".into()
-        } else {
-            "ui-light-scheme".into()
-        });
-        gap(Dp(24.0));
-        material_theme()
-            .theme(move || MaterialTheme::from_seed(ACCENT, dark))
-            .child(move || {
-                surface()
-                    .modifier(Modifier::new().fill_max_width())
-                    .child(move || {
-                        column()
-                            .modifier(Modifier::new().fill_max_width().padding_all(Dp(24.0)))
-                            .children(move || {
-                                flow_row()
-                                    .item_spacing(Dp(48.0))
-                                    .line_spacing(Dp(24.0))
-                                    .children(move || {
-                                        spinner(if dark {
-                                            "ui-dark-default-loading-indicator"
-                                        } else {
-                                            "ui-light-default-loading-indicator"
-                                        });
-                                        spinner(if dark {
-                                            "ui-dark-contained-loading-indicator"
-                                        } else {
-                                            "ui-light-contained-loading-indicator"
-                                        })
-                                        .contained(true);
-                                    });
-                                gap(Dp(16.0));
-                                text(I18N.text(
-                                    "ui-1-primary-2-primary-container-with-on-primary-container",
-                                ))
-                                .style(type_style(14.0, 20.0));
-                            });
+        scheme_panel(
+            dark,
+            RenderSlot::new(move || {
+                flow_row()
+                    .item_spacing(Dp(48.0))
+                    .line_spacing(Dp(24.0))
+                    .children(move || {
+                        spinner(if dark {
+                            "ui-dark-default-loading-indicator"
+                        } else {
+                            "ui-light-default-loading-indicator"
+                        });
+                        spinner(if dark {
+                            "ui-dark-contained-loading-indicator"
+                        } else {
+                            "ui-light-contained-loading-indicator"
+                        })
+                        .contained(true);
                     });
-            });
+                gap(Dp(16.0));
+                text(I18N.text("ui-1-primary-2-primary-container-with-on-primary-container"))
+                    .style(type_style(14.0, 20.0));
+            }),
+        );
         gap(Dp(32.0));
     }
 }

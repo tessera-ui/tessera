@@ -26,43 +26,11 @@ ui-available-in-primary-secondary-and-tertiary-color-sets = Available in primary
 
 ui-the-fab-menu-comes-in-three-color-sets-primary-secondary-tertiary = The FAB menu comes in three color sets: primary, secondary, tertiary
 
-ui-tessera-examples-on-this-page-use-the-native-floating-action-button-menu-with-its-close-bu = Tessera examples on this page use the native floating action button menu with its close button, labelled items and three color sets.
-
-ui-the-fab-menu-adds-more-options-to-the-fab-it-should-replace-the-speed-dial-and-any-usage-o = The FAB menu adds more options to the FAB. It should replace the speed dial and any usage of stacked small FABs.
-
-ui-new-component-added-to-catalog-3010 = New component added to catalog:
-
-ui-one-menu-size-that-pairs-with-any-fab = One menu size that pairs with any FAB
-
-ui-replaces-any-usage-of-stacked-small-fabs = Replaces any usage of stacked small FABs
-
-ui-contrasting-close-button-and-item-colors = Contrasting close button and item colors
-
-ui-supports-dynamic-color = Supports dynamic color
-
-ui-compatible-with-any-fab-color-style = Compatible with any FAB color style
-
-ui-expressive = Expressive
-
-ui-the-fab-menu-uses-contrasting-color-and-large-items-to-focus-attention-it-can-open-from-an = The FAB menu uses contrasting color and large items to focus attention. It can open from any size FAB
-
-ui-m2-speed-dials-stacked-several-small-fabs-and-hid-their-labels-the-m3-fab-menu-uses-one-si = M2 speed dials stacked several small FABs and hid their labels. The M3 FAB menu uses one size for every FAB and labels each action.
-
-ui-m2-speed-dial-with-stacked-small-icon-only-fabs = M2: speed dial with stacked small icon-only FABs
-
-ui-m3-a-single-fab-menu-whose-labelled-items-expand-from-one-fab = M3: a single FAB menu whose labelled items expand from one FAB
-
-ui-differences = Differences
-
-ui-the-m3-fab-menu-replaces-stacked-small-fabs-with-labelled-expressive-items = The M3 FAB menu replaces stacked small FABs with labelled, expressive items
-
 ui-there-s-one-variant-of-fab-menu = There’s one variant of FAB menu
 
 ui-color-set = Color set
 
 ui-fab-menus-come-in-three-color-sets-each-set-colors-the-close-button-and-the-items-together = FAB menus come in three color sets. Each set colors the close button and the items together.
-
-ui-primary-set-secondary-set-tertiary-set = Primary set, secondary set, tertiary set
 
 ui-the-fab-menu-is-aligned-to-the-trailing-edge-of-the-window-in-right-to-left-languages-it-i = The FAB menu is aligned to the trailing edge of the window. In right-to-left languages it is aligned to the left edge and the layout of elements is mirrored.
 

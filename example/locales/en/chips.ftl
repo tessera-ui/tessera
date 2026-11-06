@@ -30,24 +30,6 @@ ui-chip-elevation-defaults-to-0-but-can-be-elevated-if-they-need-more-visual-sep
 
 ui-there-are-four-chip-variants-assist-filter-input-and-suggestion = There are four chip variants: assist, filter, input, and suggestion
 
-ui-tessera-examples-on-this-page-use-the-native-chip-component-with-the-flat-and-elevated-sty = Tessera examples on this page use the native chip component with the flat and elevated styles, standard shape corners, and an independent remove action for input chips.
-
-ui-aug-2024 = Aug 2024
-
-ui-updated-stroke-color-from-outline-to-outline-variant = Updated stroke color from outline to outline variant.
-
-ui-the-stroke-color-was-softened-to-improve-visual-hierarchy-between-chips-and-buttons = The stroke color was softened to improve visual hierarchy between chips and buttons
-
-ui-shape-rounded-rectangle = Shape: Rounded rectangle
-
-ui-variants-action-chips-have-been-separated-into-assist-chips-and-suggestion-chips-choice-ch = Variants: Action chips have been separated into assist chips and suggestion chips. Choice chips are now a subset of filter chips
-
-ui-choice = Choice
-
-ui-m2-variants-of-chips-are-input-choice-filter-and-action = M2: Variants of chips are input, choice, filter, and action
-
-ui-m3-variants-of-chips-updated-to-assist-filter-input-and-suggestion = M3: Variants of chips updated to assist, filter, input, and suggestion
-
 ui-there-are-four-variants-of-chips-assist-filter-input-and-suggestion = There are four variants of chips: assist, filter, input, and suggestion
 
 ui-chips-help-people-enter-information-make-selections-filter-content-or-trigger-actions-they = Chips help people enter information, make selections, filter content, or trigger actions. They're best used to help people accomplish their current task faster and easier.

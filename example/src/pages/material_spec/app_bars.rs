@@ -59,14 +59,7 @@ pub(super) fn app_bars_spec(route: Option<crate::pages::material_spec::article::
         ArticlePage {
             title: "ui-overview",
             intro: Some(RenderSlot::new(overview_intro)),
-            sections: vec![
-                section("ui-availability-resources", RenderSlot::new(availability)),
-                section(
-                    "ui-m3-expressive-update",
-                    RenderSlot::new(expressive_update),
-                ),
-                section("ui-differences-from-m2", RenderSlot::new(m2_differences)),
-            ],
+            sections: vec![],
         },
         ArticlePage {
             title: "ui-guidelines",
@@ -105,15 +98,10 @@ fn caption(#[prop(into)] value: String) {
 }
 
 #[tessera]
-fn bullets(items: Vec<String>, nested: Option<bool>) {
-    let marker = if nested.unwrap_or(false) {
-        "        ◦  "
-    } else {
-        "•  "
-    };
+fn bullets(items: Vec<String>) {
     column().children(move || {
         for item in items.clone() {
-            text(format!("{marker}{}", I18N.text(item))).style(type_style(16.0, 24.0));
+            text(format!("•  {}", I18N.text(item))).style(type_style(16.0, 24.0));
             gap(Dp(8.0));
         }
     });
@@ -257,7 +245,6 @@ enum Glyph {
     PersonAdd,
     Archive,
     Star,
-    Favorite,
 }
 
 impl Glyph {
@@ -274,7 +261,6 @@ impl Glyph {
             Self::PersonAdd => filled::PERSON_ADD_SVG,
             Self::Archive => filled::ARCHIVE_SVG,
             Self::Star => filled::STAR_SVG,
-            Self::Favorite => filled::FAVORITE_SVG,
         }
     }
 
@@ -291,7 +277,6 @@ impl Glyph {
             Self::PersonAdd => "ui-add-person",
             Self::Archive => "ui-archive",
             Self::Star => "ui-star",
-            Self::Favorite => "ui-favorite",
         }
     }
 }
@@ -309,7 +294,6 @@ struct Preset {
     curved: bool,
     short: bool,
     scrolled: bool,
-    elevated: bool,
     floating: bool,
     heading: bool,
     content: bool,
@@ -327,7 +311,6 @@ const BASE: Preset = Preset {
     curved: false,
     short: false,
     scrolled: false,
-    elevated: false,
     floating: false,
     heading: false,
     content: false,
@@ -350,8 +333,6 @@ const NARROW: usize = 13;
 const FLAT: usize = 14;
 const SCROLLED: usize = 15;
 const FLOATING: usize = 16;
-const M2: usize = 17;
-const M3: usize = 18;
 const LABELED: usize = 19;
 const SUBTITLED: usize = 20;
 const FILLED_SINGLE: usize = 21;
@@ -487,22 +468,6 @@ fn preset_for(kind: usize) -> Preset {
             title: "",
             actions: &[Glyph::Star],
             floating: true,
-            content: true,
-            ..BASE
-        },
-        M2 => Preset {
-            figure: "ui-m2-top-app-bar",
-            title: "Material 2",
-            actions: &[Glyph::Favorite, Glyph::Search, Glyph::More],
-            elevated: true,
-            content: true,
-            ..BASE
-        },
-        M3 => Preset {
-            figure: "ui-m3-app-bar",
-            title: "Material 3",
-            actions: &[Glyph::Share],
-            scrolled: true,
             content: true,
             ..BASE
         },
@@ -657,14 +622,11 @@ fn specimen_bar(kind: usize, status: State<String>) {
         Some(Color::TRANSPARENT)
     } else if preset.scrolled {
         Some(scheme.surface_container)
-    } else if preset.elevated {
-        Some(scheme.primary)
     } else if kind != FLAT && (preset.curved || preset.short || preset.content) {
         Some(scheme.surface_container_low)
     } else {
         None
     };
-    let on_container = preset.elevated.then_some(scheme.on_primary);
     let heading = match preset.subtitle {
         Some(subtitle) => I18N.format(
             "ui-title-subtitle",
@@ -697,11 +659,8 @@ fn specimen_bar(kind: usize, status: State<String>) {
         .subtitle_optional(preset.subtitle.map(str::to_owned))
         .title_area_modifier(title_modifier)
         .title_content_optional(preset.logo.then_some(logo))
-        .elevation(if preset.elevated { Dp(4.0) } else { Dp(0.0) })
+        .elevation(Dp(0.0))
         .container_color_optional(container)
-        .content_color_optional(on_container)
-        .navigation_icon_color_optional(on_container)
-        .action_icon_color_optional(on_container)
         .navigation_icon(move || {
             let preset = preset_for(kind);
             if preset.floating {
@@ -769,125 +728,11 @@ fn overview_intro() {
         "ui-medium-flexible".into(),
         "ui-large-flexible".into(),
     ]);
-}
-
-#[tessera]
-fn availability() {
-    spec_table(
-        vec!["ui-type".into(), "ui-resource".into(), "ui-status".into()],
-        vec![
-            vec![
-                "ui-design".into(),
-                "ui-design-kit-figma".into(),
-                "ui-available".into(),
-            ],
-            vec![
-                "ui-implementation".into(),
-                "Flutter".into(),
-                "ui-available".into(),
-            ],
-            vec![
-                "ui-implementation".into(),
-                "Jetpack Compose".into(),
-                "ui-available".into(),
-            ],
-            vec![
-                "ui-implementation".into(),
-                "Jetpack Compose: Expressive".into(),
-                "ui-available".into(),
-            ],
-            vec![
-                "ui-implementation".into(),
-                "Android Views (MDC-Android)".into(),
-                "ui-available".into(),
-            ],
-            vec![
-                "ui-implementation".into(),
-                "Android Views (MDC-Android): Expressive".into(),
-                "ui-available".into(),
-            ],
-            vec![
-                "ui-implementation".into(),
-                "Web".into(),
-                "ui-unavailable".into(),
-            ],
-            vec![
-                "ui-implementation".into(),
-                "Web: Expressive".into(),
-                "ui-unavailable".into(),
-            ],
-        ],
-    );
     gap(Dp(24.0));
     paragraph(
         "ui-tessera-examples-use-the-native-top-app-bar-component-for-the-small-medium-flexible-a"
             .into(),
     );
-}
-
-#[tessera]
-fn expressive_update() {
-    caption("ui-may-2025");
-    gap(Dp(16.0));
-    paragraph("ui-the-new-search-app-bar-supports-icons-inside-and-outside-the-search-bar-and-centered-text".into());
-    gap(Dp(16.0));
-    paragraph("ui-the-new-medium-flexible-and-large-flexible-app-bars-come-with-significant-improvements-and".into());
-    gap(Dp(32.0));
-    subheading("ui-variants-and-naming".into());
-    gap(Dp(16.0));
-    bullets(vec![
-        "ui-renamed-component-from-top-app-bar-to-app-bar".into(),
-        "ui-added-search-app-bar".into(),
-        "ui-medium-and-large-app-bars-are-no-longer-recommended".into(),
-        "ui-added-medium-flexible-and-large-flexible-app-bars-with".into(),
-    ]);
-    bullets(vec![
-        "ui-reduced-overall-height".into(),
-        "ui-larger-title-text".into(),
-        "ui-subtitle".into(),
-        "ui-left-and-center-aligned-text-options".into(),
-        "ui-text-wrapping".into(),
-        "ui-more-flexible-elements-for-imagery-and-filled-buttons".into(),
-    ])
-    .nested(true);
-    bullets(vec!["ui-added-features-to-small-app-bar".into()]);
-    bullets(vec![
-        "ui-subtitle".into(),
-        "ui-center-aligned-text-option".into(),
-        "ui-more-flexible-elements-for-imagery-and-filled-buttons".into(),
-    ])
-    .nested(true);
-    gap(Dp(24.0));
-    variants_figure("ui-expressive-variant");
-    gap(Dp(16.0));
-    caption(
-        "ui-4-total-app-bar-configurations-search-app-bar-small-medium-flexible-large-flexible",
-    );
-    gap(Dp(32.0));
-    sample("ui-expressive-overview", TopAppBarVariant::MediumFlexible)
-        .subtitle(true)
-        .controls(true);
-}
-
-#[tessera]
-fn m2_differences() {
-    bullets(vec![
-        "ui-color-new-color-mappings-and-compatibility-with-dynamic-color".into(),
-        "ui-on-scroll-no-drop-shadow-instead-a-color-fill-creates-separation-from-content".into(),
-        "ui-typography-larger-default-text".into(),
-        "ui-layout-smaller-default-height".into(),
-    ]);
-    gap(Dp(24.0));
-    guidance_pair(
-        "ui-m2-elevation-and-a-drop-shadow-raise-the-top-app-bar-when-content-is-present-underneath",
-        "ui-m3-on-scroll-a-color-fill-overlay-separates-the-app-bar-from-the-content-beneath",
-    )
-    .first(|| {
-        specimen(M2);
-    })
-    .second(|| {
-        specimen(M3);
-    });
 }
 
 #[tessera]
@@ -2167,31 +2012,6 @@ fn variants() {
             baseline_figure("ui-baseline");
             gap(Dp(16.0));
             numbered(vec!["ui-medium".into(), "ui-large".into()]);
-            gap(Dp(32.0));
-            spec_table(
-                vec!["ui-variant".into(), "M3".into(), "M3 Expressive".into()],
-                vec![
-                    vec!["ui-search-app-bar".into(), "--".into(), "ui-available".into()],
-                    vec!["ui-small".into(), "ui-available".into(), "ui-available".into()],
-                    vec![
-                        "ui-center-aligned".into(),
-                        "ui-available".into(),
-                        "ui-merged-into-small-use-centered-text-configuration".into(),
-                    ],
-                    vec![
-                        "ui-medium-baseline".into(),
-                        "ui-available".into(),
-                        "ui-not-recommended-use-medium-flexible".into(),
-                    ],
-                    vec!["ui-medium-flexible".into(), "--".into(), "ui-available".into()],
-                    vec![
-                        "ui-large-baseline".into(),
-                        "ui-available".into(),
-                        "ui-not-recommended-use-large-flexible".into(),
-                    ],
-                    vec!["ui-large-flexible".into(), "--".into(), "ui-available".into()],
-                ],
-            );
         });
 }
 
@@ -2215,29 +2035,6 @@ fn configurations() {
             }));
             gap(Dp(16.0));
             caption("ui-text-labels-including-supporting-text-can-be-aligned-to-the-leading-edge-or-centered");
-            gap(Dp(32.0));
-            spec_table(
-                vec![
-                    "ui-category".into(),
-                    "ui-configuration".into(),
-                    "M3".into(),
-                    "M3 Expressive".into(),
-                ],
-                vec![
-                    vec![
-                        "ui-text-alignment".into(),
-                        "ui-leading-edge-default".into(),
-                        "ui-available".into(),
-                        "ui-available".into(),
-                    ],
-                    vec![
-                        "ui-text-alignment".into(),
-                        "ui-centered".into(),
-                        "--".into(),
-                        "ui-available".into(),
-                    ],
-                ],
-            );
             gap(Dp(112.0));
             subheading("ui-interactive-configuration".to_owned());
             gap(Dp(24.0));

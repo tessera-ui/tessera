@@ -141,9 +141,6 @@ fn page_figure_fixture(page: u8) {
                 2 => {
                     states();
                 }
-                3 => {
-                    differences_figure();
-                }
                 5 => {
                     visibility_examples();
                 }

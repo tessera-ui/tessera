@@ -2,20 +2,6 @@ ui-use-radio-buttons-not-switches-when-only-one-item-can-be-selected-from-a-list
     • Labels should be scannable.
     • Selected items are more prominent than unselected items.
 
-ui-resources-availability = Resources & availability
-
-ui-native-radio-button-and-radio-group = Native radio button and radio group
-
-ui-available-in-this-example = Available in this example
-
-ui-theme-colors-and-bundled-icons = Theme colors and bundled icons
-
-ui-available-in-the-interactive-figures = Available in the interactive figures
-
-ui-keyboard-and-accessibility-semantics = Keyboard and accessibility semantics
-
-ui-available-on-the-live-controls = Available on the live controls
-
 ui-what-s-new = What's new
 
 ui-radio-buttons-use-new-color-mappings-and-support-dynamic-color-selected-icons-use-primary = Radio buttons use new color mappings and support dynamic color. Selected icons use primary; unselected icons use on surface variant. Adjacent text retains the on surface color.

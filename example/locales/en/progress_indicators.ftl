@@ -34,16 +34,6 @@ ui-use-one-linear-or-circular-indicator-per-process-close-to-its-content = Use o
 
 ui-expressive-wavy-indicators-keep-the-same-meaning-as-the-flat-ones = Expressive wavy indicators keep the same meaning as the flat ones.
 
-ui-the-material-3-expressive-update-adds-wavy-progress-indicators-the-wavy-active-indicator-u = The Material 3 expressive update adds wavy progress indicators. The wavy active indicator uses the same color roles and states as the flat one, and its amplitude grows with the reported progress, so determinate and indeterminate behavior stay readable.
-
-ui-expressive-linear = Expressive linear
-
-ui-expressive-circular-determinate = Expressive circular determinate
-
-ui-expressive-circular-indeterminate = Expressive circular indeterminate
-
-ui-color-progress-indicators-use-the-primary-role-for-the-active-indicator-and-the-secondary = Color: progress indicators use the primary role for the active indicator and the secondary container role for the track, with dynamic color support. Shape: flat indicators keep fully rounded ends, and the expressive update adds an optional wavy form. Motion: indeterminate indicators animate continuously instead of using an M2 sweeping bar.
-
 ui-two-shapes-cover-four-combinations-a-linear-or-circular-track-each-with-a-determinate-or-i = Two shapes cover four combinations: a linear or circular track, each with a determinate or indeterminate active indicator.
 
 ui-variant-determinate = Variant determinate

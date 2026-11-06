@@ -78,28 +78,6 @@ ui-use-a-search-app-bar-to-provide-an-emphasized-global-entry-point = Use a sear
 
 ui-when-inputting-text-search-suggestions-or-results-appear-below-the-search-bar = When inputting text, search suggestions or results appear below the search bar
 
-ui-search-has-a-new-visual-style-motion-and-more-flexibility-for-trailing-icons-the-search-ba = Search has a new visual style, motion, and more flexibility for trailing icons. The search bar and search view are now collectively named search.
-
-ui-february-2025 = February 2025
-
-ui-naming-search-bar-and-search-view-are-now-collectively-named-search = Naming: Search bar and search view are now collectively named search
-
-ui-configurations-styles-search-can-be-contained-recommended-or-divided-gaps-can-separate-res = Configurations: Styles: Search can be contained (recommended) or divided; gaps can separate results into groups
-
-ui-motion-the-search-bar-grows-wider-when-focused = Motion: The search bar grows wider when focused
-
-ui-supported-platforms-jetpack-compose = Supported platforms: Jetpack Compose
-
-ui-the-contained-search-style-features-a-persistent-filled-search-container = The contained search style features a persistent, filled search container
-
-ui-elevation-lower-elevation-and-no-shadow-by-default = Elevation: Lower elevation and no shadow by default
-
-ui-name-search-was-formerly-known-as-open-search-bar = Name: Search was formerly known as open search bar
-
-ui-variants-two-official-variants-of-search-components-search-bar-and-search-view = Variants: Two official variants of search components: search bar and search view
-
-ui-m3-search-bars-are-rounded-use-tonal-surface-and-support-dynamic-color = M3 search bars are rounded, use tonal surface, and support dynamic color
-
 ui-style = Style
 
 ui-search-comes-in-two-styles = Search comes in two styles:
@@ -113,12 +91,6 @@ ui-the-contained-style-has-a-persistent-filled-container-expressive-motion-and-r
 ui-the-divided-baseline-style-uses-a-divider-to-separate-the-search-bar-from-suggestions-and = The divided (baseline) style uses a divider to separate the search bar from suggestions and results
 
 ui-search-suggestions-and-results-appear-in-customizable-lists-with-two-layout-options-full-s = Search suggestions and results appear in customizable lists, with two layout options: full-screen and docked.
-
-ui-divided = Divided
-
-ui-not-recommended-use-contained = Not recommended. Use contained.
-
-ui-docked-full-screen = Docked, full-screen
 
 ui-eli = Eli
 
@@ -253,5 +225,3 @@ ui-width-height = Width / height
 ui-240dp-min-2-3-screen-max = 240dp min; 2/3 screen max
 
 ui-leading-trailing-padding-6983 = Leading / trailing padding
-
-ui-tessera-examples-on-this-page-use-the-native-search-bar-and-docked-search-bar-compone = Tessera examples on this page use the native search_bar and docked_search_bar components. The contained style keeps a filled container above the results; the divided style is the baseline treatment.

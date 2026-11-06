@@ -860,22 +860,6 @@ pub(super) fn baseline_variant() {
     caption(
         "ui-a-baseline-menu-has-square-corners-as-compared-to-a-vertical-menu-s-round-corners-and-expr",
     );
-    gap(Dp(24.0));
-    spec_table(
-        vec!["ui-variant".into(), "M3".into(), "M3 Expressive".into()],
-        vec![
-            vec![
-                "ui-vertical-menus".into(),
-                "--".into(),
-                "ui-available".into(),
-            ],
-            vec![
-                "ui-menu-baseline".into(),
-                "ui-available".into(),
-                "ui-available".into(),
-            ],
-        ],
-    );
 }
 
 #[tessera]
@@ -1563,62 +1547,6 @@ pub(super) fn focus_examples() {
         });
 }
 
-#[tessera]
-pub(super) fn m2_comparison() {
-    let scheme = use_context::<MaterialTheme>().unwrap().get().color_scheme;
-    let gray = Color::from_rgb(0.82, 0.82, 0.82);
-    let gray_menu = Color::from_rgb(0.86, 0.86, 0.86);
-    let m3_backdrop = scheme.surface_container_low;
-    flow_row()
-        .item_spacing(Dp(32.0))
-        .line_spacing(Dp(32.0))
-        .children(move || {
-            for m3 in [false, true] {
-                column()
-                    .modifier(Modifier::new().width(Dp(320.0)))
-                    .children(move || {
-                        boxed()
-                            .alignment(Alignment::Center)
-                            .modifier(
-                                Modifier::new()
-                                    .fill_max_width()
-                                    .height(Dp(240.0))
-                                    .background_with_shape(
-                                        if m3 { m3_backdrop } else { gray },
-                                        Shape::rounded_rectangle(Dp(24.0)),
-                                    ),
-                            )
-                            .children(move || {
-                                let mut group =
-                                    menu_group().modifier(Modifier::new().width(Dp(176.0)));
-                                if !m3 {
-                                    group = group
-                                        .shape(Shape::rounded_rectangle(Dp(4.0)))
-                                        .container_color(gray_menu);
-                                }
-                                group.children(move || {
-                                    for label in ["ui-share", "ui-get-link", "ui-edit-name"] {
-                                        let item = menu_item()
-                                            .label(I18N.text(label))
-                                            .close_on_click(false)
-                                            .on_click(|| {});
-                                        if !m3 {
-                                            item.shape(Shape::RECTANGLE).height(Dp(48.0));
-                                        }
-                                    }
-                                });
-                            });
-                        gap(Dp(12.0));
-                        caption(if m3 {
-                            "ui-m3-menus-feature-new-color-mappings-and-dynamic-color"
-                        } else {
-                            "ui-m2-former-menu-colors-don-t-contrast-with-the-background"
-                        });
-                    });
-            }
-        });
-}
-
 /// Static placement diagram showing where a menu can appear around its trigger.
 #[tessera]
 pub(super) fn placement_figure() {
@@ -2011,36 +1939,4 @@ fn slot_swatch_row(ink: Color, swatches: Vec<Color>) {
                 );
             }
         });
-}
-
-#[tessera]
-pub(super) fn resources() {
-    spec_table(
-        vec!["ui-type".into(), "ui-resource".into(), "ui-status".into()],
-        [
-            ("ui-design", "ui-design-kit-figma", "ui-available"),
-            ("ui-implementation", "Flutter", "ui-available"),
-            ("ui-implementation", "Jetpack Compose", "ui-available"),
-            (
-                "ui-implementation",
-                "Jetpack Compose: Expressive",
-                "ui-available",
-            ),
-            (
-                "ui-implementation",
-                "Android Views (MDC-Android)",
-                "ui-available",
-            ),
-            (
-                "ui-implementation",
-                "Android Views (MDC-Android): Expressive",
-                "ui-unavailable",
-            ),
-            ("ui-implementation", "Web", "ui-available"),
-            ("ui-implementation", "Web: Expressive", "ui-unavailable"),
-        ]
-        .into_iter()
-        .map(|(kind, resource, status)| vec![kind.into(), resource.into(), status.into()])
-        .collect(),
-    );
 }

@@ -77,7 +77,6 @@ const FOCUS_DONT: u8 = 26;
 const FOCUS_RETURN: u8 = 27;
 const FOCUS_NEXT: u8 = 28;
 const A11Y_DARK: u8 = 29;
-const RETRY: u8 = 30;
 const TABLET_MEDIUM: u8 = 31;
 const TABLET_LEFT: u8 = 32;
 const TABLET_CENTER: u8 = 33;
@@ -129,16 +128,7 @@ pub(super) fn snackbars_spec(route: Option<crate::pages::material_spec::article:
         ArticlePage {
             title: "ui-overview",
             intro: Some(RenderSlot::new(overview)),
-            sections: vec![
-                SpecSection {
-                    title: "ui-availability-resources",
-                    content: RenderSlot::new(resources),
-                },
-                SpecSection {
-                    title: "ui-differences-from-m2",
-                    content: RenderSlot::new(differences),
-                },
-            ],
+            sections: vec![],
         },
         ArticlePage {
             title: "ui-guidelines",
@@ -667,14 +657,6 @@ fn phone_spec(scene: u8) -> Phone {
             dark: true,
             bars: one(bar(above_nav, "ui-email-sent", Some("ui-undo"))),
             ..list
-        },
-        RETRY => Phone {
-            bars: one(bar(
-                NAV_Y - 72.0,
-                "ui-can-t-send-photo-retry-in-5-seconds",
-                Some("ui-retry"),
-            )),
-            ..photos
         },
         TABLET_MEDIUM => Phone {
             bars: one(tablet_bar(
@@ -2058,54 +2040,6 @@ fn overview() {
 }
 
 #[tessera]
-fn resources() {
-    spec_table(
-        vec!["ui-type".into(), "ui-resource".into(), "ui-status".into()],
-        vec![
-            vec![
-                "ui-design".into(),
-                "ui-design-kit-figma".into(),
-                "ui-available".into(),
-            ],
-            vec![
-                "ui-implementation".into(),
-                "Flutter".into(),
-                "ui-available".into(),
-            ],
-            vec![
-                "ui-implementation".into(),
-                "Jetpack Compose".into(),
-                "ui-available".into(),
-            ],
-            vec![
-                "ui-implementation".into(),
-                "Android Views (MDC-Android)".into(),
-                "ui-available".into(),
-            ],
-            vec![
-                "ui-implementation".into(),
-                "Web".into(),
-                "ui-unavailable".into(),
-            ],
-        ],
-    );
-    gap(Dp(24.0));
-    prose(
-        "ui-live-examples-on-this-page-use-the-native-tessera-snackbar-and-snackbar-host-device-s",
-    );
-}
-
-#[tessera]
-fn differences() {
-    bullets(vec![
-        "ui-color-new-color-mappings-and-compatibility-with-dynamic-color",
-        "ui-behavior-clarified-that-snackbars-can-either-appear-temporarily-dismissive-or-persist-unti",
-    ]);
-    gap(Dp(24.0));
-    phone_guide(RETRY, NOTE, "ui-snackbars-have-new-color-mappings");
-}
-
-#[tessera]
 fn usage() {
     prose(
         "ui-snackbars-inform-users-of-a-process-that-an-app-has-performed-or-will-perform-they-appear",
@@ -2701,12 +2635,6 @@ fn web_requirements() {
     );
     gap(Dp(24.0));
     panel(RenderSlot::new(actionable_demo));
-    gap(Dp(24.0));
-    text(I18N.text("ui-note-material-web-doesn-t-yet-include-the-snackbar-component-this-guidance-still-applies-t"))
-        .style(TextStyle {
-            font_weight: 700,
-            ..type_style(16.0, 24.0)
-        });
 }
 
 #[tessera]
@@ -2835,7 +2763,6 @@ fn focus() {
     gap(Dp(12.0));
     bullets(vec![
         "ui-ideally-focus-should-either-return-to-the-element-that-triggered-the-snackbar-or-go-to-the",
-        "ui-on-android-compose-focus-may-move-to-the-nearest-visible-element-or-to-the-first-actionabl",
     ]);
     gap(Dp(24.0));
     phone_guide(

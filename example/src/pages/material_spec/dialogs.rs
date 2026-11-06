@@ -142,16 +142,7 @@ pub(super) fn dialogs_spec(route: Option<crate::pages::material_spec::article::A
                     intro: Some(RenderSlot::new(move || {
                         overview_intro(open, full, saved);
                     })),
-                    sections: vec![
-                        SpecSection {
-                            title: "ui-availability-resources",
-                            content: RenderSlot::new(availability),
-                        },
-                        SpecSection {
-                            title: "ui-differences-from-m2",
-                            content: RenderSlot::new(differences),
-                        },
-                    ],
+                    sections: vec![],
                 },
                 ArticlePage {
                     title: "ui-guidelines",
@@ -1040,56 +1031,6 @@ fn overview_intro(open: State<bool>, full: State<bool>, saved: State<bool>) {
     variant_pair();
     gap(Dp(32.0));
     launch(open, full, saved);
-}
-
-#[tessera]
-fn availability() {
-    spec_table(
-        vec!["ui-type".into(), "ui-resource".into(), "ui-status".into()],
-        vec![
-            vec![
-                "ui-design".into(),
-                "ui-design-kit-figma".into(),
-                "ui-available".into(),
-            ],
-            vec![
-                "ui-implementation".into(),
-                "Flutter".into(),
-                "ui-available".into(),
-            ],
-            vec![
-                "ui-implementation".into(),
-                "Jetpack Compose".into(),
-                "ui-available".into(),
-            ],
-            vec![
-                "ui-implementation".into(),
-                "Android Views (MDC-Android)".into(),
-                "ui-available".into(),
-            ],
-            vec![
-                "ui-implementation".into(),
-                "Web".into(),
-                "ui-available".into(),
-            ],
-        ],
-    );
-}
-
-#[tessera]
-fn differences() {
-    bullets(vec![
-        "ui-color-new-color-mappings-and-compatibility-with-dynamic-color-2123".into(),
-        "ui-layout-greater-padding-to-account-for-the-increased-corner-radius-and-title-size"
-            .into(),
-        "ui-position-option-for-custom-basic-dialog-positioning".into(),
-        "ui-shape-increased-corner-radius".into(),
-        "ui-typography-larger-and-darker-headline".into(),
-    ]);
-    gap(Dp(24.0));
-    basic_figure(false);
-    gap(Dp(16.0));
-    caption("ui-new-updates-to-color-layout-position-shape-and-typography");
 }
 
 #[tessera]
@@ -2396,7 +2337,7 @@ dialog_canvas(1024.0, 622.0, RenderSlot::new(move || {
                             dialog_plain_input(24.0, 216.0, 364.0, "ui-event-name".into(), "".into(), "ui-overview-event-name".into(), scale);
                             spacer().modifier(Modifier::new().offset(Dp(24.0 * scale), Dp(295.0 * scale))
                                 .size(Dp(364.0 * scale), Dp(scale)).background(scheme.outline_variant));
-                            for (index, caption) in ["ui-from", "To"].into_iter().enumerate() {
+                            for (index, caption) in ["ui-from", "ui-date-range-to"].into_iter().enumerate() {
                                 let y = 318.0 + index as f64 * 104.0;
                                 text(I18N.text(caption)).style(dialog_type_style(12.0, 16.0, scale)).color(scheme.on_surface_variant)
                                     .modifier(Modifier::new().offset(Dp(24.0 * scale), Dp(y * scale)));
@@ -2866,7 +2807,7 @@ fn full_spec_figure(mode: usize) {
                                     spacer().modifier(watch(geometry, "divider").semantics(SemanticsArgs { test_tag: Some("dialog-figure-divider".into()), merge_descendants: true,
 ..Default::default() }).offset(Dp(if mode == 0 {27.0} else {24.0} * scale), Dp(if mode == 0 {290.0} else {295.0} * scale))
                                         .size(Dp(if mode == 0 {358.0} else {364.0} * scale), Dp(scale)).background(scheme.outline_variant));
-                                    for (row, caption) in ["ui-from", "To"].into_iter().enumerate() {
+                                    for (row, caption) in ["ui-from", "ui-date-range-to"].into_iter().enumerate() {
                                         if mode == 0 && row == 1 {continue;}
                                         let top = if mode == 0 {318.0} else {316.0 + row as f64 * 104.0};
                                         text(I18N.text(caption)).style(dialog_type_style(12.0, 16.0, scale)).color(scheme.on_surface_variant)

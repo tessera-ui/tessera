@@ -10,9 +10,8 @@ use tessera_components::{
     material_icons::filled,
     modifier::{ModifierExt as _, SemanticsArgs},
     shape_def::Shape,
-    surface::surface,
     text::text,
-    theme::{MaterialTheme, material_theme},
+    theme::MaterialTheme,
 };
 use tessera_ui::{
     Dp, Modifier, RenderSlot, State, accesskit::Role, remember, tessera, use_context,
@@ -21,10 +20,9 @@ use tessera_ui::{
 use crate::res::I18N;
 
 use super::{
-    ACCENT,
     annotations::{self, Geometry, dotted, relative, watch},
     article::{ArticlePage, SpecSection, article},
-    gap, panel, spec_table, subheading, type_style,
+    gap, panel, scheme_panel, spec_table, subheading, type_style,
 };
 
 #[cfg(all(test, not(target_family = "wasm")))]
@@ -81,10 +79,7 @@ pub(super) fn lists_spec(route: Option<crate::pages::material_spec::article::Art
             },
         ],
     ).route_optional(route.clone()).pages(vec![
-        ArticlePage {title:"ui-overview",intro:Some(RenderSlot::new(list_reading_examples)),sections:vec![
-            SpecSection {title:"ui-m3-expressive-update",content:RenderSlot::new(|| {prose("ui-expressive-lists-introduce-segmented-shapes-highlighted-selection-and-flexible-content-slo");gap(Dp(24.0));panel(RenderSlot::new(|| {mode_demo(ListItemSelectionMode::Multiple,false,true,true,"ui-overview-selection");}));})},
-            SpecSection {title:"ui-differences-from-m2-to-m3-baseline",content:RenderSlot::new(|| {prose("ui-baseline-lists-standardize-color-spacing-heights-and-alignment-content-determines-a-one-tw");gap(Dp(24.0));list_reading_examples();})},
-        ]},
+        ArticlePage {title:"ui-overview",intro:Some(RenderSlot::new(list_reading_examples)),sections:vec![]},
         ArticlePage {title:"ui-guidelines",intro:None,sections:vec![
             SpecSection {title:"ui-usage",content:RenderSlot::new(|| {prose("ui-order-related-items-logically-and-use-consistent-formatting-so-people-can-find-and-act-on");gap(Dp(24.0));list_reading_examples();})},
             SpecSection {title:"ui-anatomy",content:RenderSlot::new(list_guideline_anatomy)},
@@ -417,42 +412,22 @@ fn anatomy() {
 
 #[tessera]
 fn scheme(dark: bool) {
-    material_theme()
-        .theme(move || MaterialTheme::from_seed(ACCENT, dark))
-        .child(move || {
-            let theme = use_context::<MaterialTheme>()
-                .expect("MaterialTheme must be provided")
-                .get();
-            surface()
-                .style(theme.color_scheme.surface.into())
-                .modifier(Modifier::new().fill_max_width())
-                .child(move || {
-                    column()
-                        .modifier(Modifier::new().fill_max_width().padding_all(Dp(24.0)))
-                        .children(move || {
-                            subheading(
-                                if dark {
-                                    "ui-dark-theme"
-                                } else {
-                                    "ui-light-theme"
-                                }
-                                .to_owned(),
-                            );
-                            gap(Dp(24.0));
-                            mode_demo(
-                                ListItemSelectionMode::Single,
-                                false,
-                                true,
-                                true,
-                                if dark {
-                                    "ui-dark-list"
-                                } else {
-                                    "ui-light-list"
-                                },
-                            );
-                        });
-                });
-        });
+    scheme_panel(
+        dark,
+        RenderSlot::new(move || {
+            mode_demo(
+                ListItemSelectionMode::Single,
+                false,
+                true,
+                true,
+                if dark {
+                    "ui-dark-list"
+                } else {
+                    "ui-light-list"
+                },
+            );
+        }),
+    );
 }
 
 #[tessera]
@@ -1045,6 +1020,7 @@ fn list_focus() {
 mod collection_article_tests {
     use std::time::Duration;
 
+    use tessera_components::theme::material_theme;
     use tessera_ui::{
         HeadlessConfig, HeadlessRenderer, MOUSE_POINTER_ID, PressKeyEventType, PxPosition,
         accesskit::Node,

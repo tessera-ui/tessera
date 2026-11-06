@@ -1,7 +1,8 @@
 use std::mem;
 
 use tessera_components::{
-    lazy_list::lazy_column, modifier::ModifierExt, slider::slider, text::text, theme::MaterialTheme,
+    column::column, lazy_list::lazy_column, modifier::ModifierExt, row::row, slider::slider,
+    spacer::spacer, text::text, theme::MaterialTheme,
 };
 use tessera_shard::shard;
 use tessera_ui::{
@@ -67,39 +68,50 @@ pub fn custom_shader_page() {
     lazy_column()
         .modifier(Modifier::new().fill_max_size())
         .estimated_item_size(Dp(120.0))
-        .content_padding(Dp(16.0))
-        .item_spacing(Dp(14.0))
+        .content_padding(Dp(24.0))
+        .item_spacing(Dp(16.0))
         .item(move || {
-            text(I18N.text("ui-custom-shader")).style(theme.with(|t| t.typography.headline_large));
+            text(I18N.text("ui-custom-shader"))
+                .style(theme.with(|t| t.typography.headline_large))
+                .color(theme.with(|t| t.color_scheme.on_surface));
         })
         .item(move || {
-            text(I18N.text("ui-a-ray-tracing-demo"));
+            text(I18N.text("ui-a-ray-tracing-demo"))
+                .style(theme.with(|t| t.typography.body_large))
+                .color(theme.with(|t| t.color_scheme.on_surface_variant))
+                .modifier(Modifier::new().size_in(None, Some(Dp(720.0)), None, None));
         })
         .item(move || {
             raymarch_canvas(
                 Modifier::new()
                     .size(RAYMARCH_CANVAS_WIDTH, RAYMARCH_CANVAS_HEIGHT)
-                    .clip_to_bounds()
-                    .border(
-                        Dp(1.0),
-                        theme.with(|t| t.color_scheme.outline.with_alpha(0.7)),
-                    ),
+                    .clip_shape(theme.with(|t| t.shapes.extra_large)),
                 time_scale_slider,
             );
         })
         .item(move || {
-            text(I18N.format(
-                "ui-time-scale-valuex",
-                [("v0", format!("{:.2}", time_scale).into())],
-            ));
-        })
-        .item(move || {
-            text(I18N.text("ui-animation-speed"));
-        })
-        .item(move || {
-            slider()
-                .value(time_scale_slider.get())
-                .on_change(move |value| time_scale_slider.set(value.clamp(0.0, 1.0)));
+            column()
+                .modifier(Modifier::new().width(RAYMARCH_CANVAS_WIDTH))
+                .children(move || {
+                    row().children(move || {
+                        text(I18N.text("ui-animation-speed"))
+                            .style(theme.with(|t| t.typography.title_small))
+                            .color(theme.with(|t| t.color_scheme.on_surface));
+                        spacer().modifier(Modifier::new().weight(1.0));
+                        text(I18N.format(
+                            "ui-time-scale-valuex",
+                            [("v0", format!("{:.2}", time_scale).into())],
+                        ))
+                        .style(theme.with(|t| t.typography.label_large))
+                        .color(theme.with(|t| t.color_scheme.on_surface_variant));
+                    });
+                    spacer().modifier(Modifier::new().height(Dp(8.0)));
+                    slider()
+                        .modifier(Modifier::new().fill_max_width())
+                        .value(time_scale_slider.get())
+                        .accessibility_label(I18N.text("ui-animation-speed"))
+                        .on_change(move |value| time_scale_slider.set(value.clamp(0.0, 1.0)));
+                });
         });
 }
 

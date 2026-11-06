@@ -18,24 +18,7 @@ ui-switch-between-common-slider-tokens-and-the-five-size-token-sets = Switch bet
 
 ui-slider-token-set-selector = Slider token set selector
 
-ui-no-default = No (default)
-
-ui-horizontal-default = Horizontal (default)
-
 ui-vertical = Vertical
-
-ui-xs-default = XS (default)
-
-ui-available-on-android-views-mdc-android-available-as-tokens-on-other-platforms = Available on Android Views (MDC-Android).
-    Available as tokens on other platforms.*
-
-ui-no-default-yes = No (default), Yes
-
-ui-available-as-discrete-slider = Available as “discrete” slider
-
-ui-value-indicator-5305 = Value Indicator
-
-ui-configurations-only-available-using-tokens-don-t-have-implemented-presets-in-code-to = *Configurations only available using tokens don’t have implemented presets in code. To change the size, swap the default size tokens md.comp.slider.xsmall.[...] with those of the desired size.
 
 ui-slider-disabled-active-stop-indicator-container-color-md-comp-slider-disabled-active = Slider disabled active stop indicator container color
     md.comp.slider.disabled.active.stop-indicator.container.color

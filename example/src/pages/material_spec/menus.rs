@@ -93,20 +93,7 @@ pub(super) fn menus_spec(route: Option<crate::pages::material_spec::article::Art
         ArticlePage {
             title: "ui-overview",
             intro: Some(RenderSlot::new(overview_intro)),
-            sections: vec![
-                SpecSection {
-                    title: "ui-availability-resources",
-                    content: RenderSlot::new(guides::resources),
-                },
-                SpecSection {
-                    title: "ui-m3-expressive-update",
-                    content: RenderSlot::new(expressive),
-                },
-                SpecSection {
-                    title: "ui-differences-from-m2",
-                    content: RenderSlot::new(differences),
-                },
-            ],
+            sections: vec![],
         },
         ArticlePage {
             title: "ui-guidelines",
@@ -227,41 +214,6 @@ fn overview_intro() {
 }
 
 #[tessera]
-fn expressive() {
-    guides::caption("ui-november-2025");
-    gap(Dp(8.0));
-    prose(
-        "ui-vertical-menus-were-introduced-with-new-shapes-color-styles-selection-states-and-refined-s",
-    );
-    gap(Dp(16.0));
-    prose("Variants:");
-    gap(Dp(8.0));
-    guides::bullets(strings(&[
-        "ui-added-vertical-menus-recommended-for-new-designs",
-        "ui-baseline-menu-is-still-available",
-    ]));
-    prose("ui-color-styles-3705");
-    gap(Dp(8.0));
-    guides::bullets(strings(&["ui-standard", "ui-vibrant"]));
-    gap(Dp(16.0));
-    panel(RenderSlot::new(|| {
-        menu_sample(true, MenuColorStyle::Vibrant);
-    }));
-    gap(Dp(12.0));
-    guides::caption("ui-vibrant-colors-help-selected-menu-items-stand-out");
-}
-
-#[tessera]
-fn differences() {
-    guides::bullets(strings(&[
-        "ui-color-new-color-mappings-and-compatibility-with-dynamic-color",
-        "ui-variants-dropdown-menu-and-exposed-dropdown-menu-are-now-both-referred-to-as-menu-since-th",
-    ]));
-    gap(Dp(24.0));
-    guides::m2_comparison();
-}
-
-#[tessera]
 fn usage() {
     prose(
         "ui-use-a-menu-to-show-a-temporary-set-of-actions-to-show-actions-on-screen-at-all-times-use-a",
@@ -280,8 +232,6 @@ fn usage() {
     prose("ui-vibrant-menus-are-more-prominent-and-should-be-used-sparingly");
     gap(Dp(24.0));
     guides::line_spacing_figure();
-    gap(Dp(12.0));
-    guides::caption("ui-on-web-menus-can-open-submenus");
     gap(Dp(32.0));
     subheading("ui-opening-menus".into());
     gap(Dp(8.0));
@@ -373,8 +323,6 @@ fn guideline_anatomy() {
     }));
     gap(Dp(12.0));
     guides::caption("ui-gaps-separate-menu-items-using-expressive-shapes");
-    gap(Dp(8.0));
-    guides::caption("ui-note-gaps-are-not-currently-available-in-the-material-web-library");
     gap(Dp(24.0));
     subheading("ui-dividers".into()).level(4);
     gap(Dp(8.0));
@@ -384,7 +332,6 @@ fn guideline_anatomy() {
         "ui-scrollable-menus",
         "ui-text-fields-with-a-dropdown-menu-where-a-grouped-treatment-isn-t-appropriate",
     ]));
-    prose("ui-on-web-use-a-divider-to-separate-menu-items");
     gap(Dp(16.0));
     panel(RenderSlot::new(|| {
         menu_sample(false, MenuColorStyle::Standard);
@@ -467,8 +414,6 @@ fn placement() {
     guides::line_spacing_figure();
     gap(Dp(12.0));
     guides::caption("ui-position-submenus-to-the-side-of-the-parent-item");
-    gap(Dp(8.0));
-    guides::caption("ui-note-submenus-are-not-currently-available-on-jetpack-compose");
 }
 
 #[tessera]
@@ -670,8 +615,6 @@ fn labeling() {
     prose("ui-accessibility-labels-are-used-with-assistive-technology-devices-like-screen-readers");
     gap(Dp(8.0));
     prose("ui-the-accessibility-label-should-be-the-same-as-the-menu-item-text");
-    gap(Dp(8.0));
-    prose("ui-the-role-is-dependent-on-platform");
     gap(Dp(24.0));
     accessibility_figures::labeling();
     gap(Dp(12.0));
@@ -733,16 +676,6 @@ fn configurations() {
     configurations_figure();
     gap(Dp(16.0));
     guides::legend(strings(&["ui-standard", "ui-grouped"]));
-    gap(Dp(24.0));
-    spec_table(
-        strings(&["ui-category", "ui-configuration", "M3", "M3 Expressive"]),
-        vec![
-            strings(&["ui-color", "ui-standard", "ui-available", "ui-available"]),
-            strings(&["ui-color", "ui-vibrant", "--", "ui-available"]),
-            strings(&["ui-layout", "ui-standard", "ui-available", "ui-available"]),
-            strings(&["ui-layout", "ui-grouped", "--", "ui-available"]),
-        ],
-    );
 }
 
 #[tessera]
@@ -1376,9 +1309,9 @@ fn menu_color_figure(style: MenuColorStyle, dark: bool) {
     let scheme = use_context::<MaterialTheme>().unwrap().get().color_scheme;
     let mode = if dark { "ui-dark" } else { "ui-light" };
     let emphasis = if style == MenuColorStyle::Standard {
-        "standard"
+        "ui-standard"
     } else {
-        "vibrant"
+        "ui-vibrant"
     };
     boxed()
         .alignment(Alignment::Center)

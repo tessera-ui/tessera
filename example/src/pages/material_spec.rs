@@ -5,12 +5,12 @@ use tessera_components::{
     modifier::{ModifierExt as _, SemanticsArgs},
     shape_def::Shape,
     spacer::spacer,
-    surface::surface,
+    surface::{SurfaceStyle, surface},
     text::text,
     text_table::{TextTableCell, TextTableHeading, text_table},
-    theme::TextStyle,
+    theme::{MaterialTheme, TextStyle, material_theme},
 };
-use tessera_ui::{Color, Dp, Modifier, RenderSlot, tessera};
+use tessera_ui::{Color, Dp, Modifier, RenderSlot, tessera, use_context};
 
 use crate::res::I18N;
 
@@ -161,6 +161,42 @@ fn panel(content: RenderSlot) {
                     column()
                         .cross_axis_alignment(CrossAxisAlignment::Center)
                         .children_shared(content);
+                });
+        });
+}
+
+#[tessera]
+fn scheme_panel(dark: bool, content: RenderSlot) {
+    material_theme()
+        .theme(move || MaterialTheme::from_seed(ACCENT, dark))
+        .child(move || {
+            let scheme = use_context::<MaterialTheme>()
+                .expect("MaterialTheme must be provided")
+                .get()
+                .color_scheme;
+            surface()
+                .style(SurfaceStyle::FilledOutlined {
+                    fill_color: scheme.surface,
+                    border_color: scheme.outline_variant,
+                    border_width: Dp(1.0),
+                })
+                .shape(Shape::rounded_rectangle(Dp(24.0)))
+                .modifier(Modifier::new().fill_max_width())
+                .child(move || {
+                    column()
+                        .modifier(Modifier::new().fill_max_width().padding_all(Dp(24.0)))
+                        .children(move || {
+                            subheading(
+                                if dark {
+                                    "ui-dark-theme"
+                                } else {
+                                    "ui-light-theme"
+                                }
+                                .to_owned(),
+                            );
+                            gap(Dp(24.0));
+                            content.render();
+                        });
                 });
         });
 }

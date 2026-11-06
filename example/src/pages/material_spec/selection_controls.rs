@@ -18,7 +18,7 @@ use tessera_components::{
     surface::{SurfaceStyle, surface},
     switch::switch,
     text::text,
-    theme::{MaterialTheme, material_theme},
+    theme::MaterialTheme,
 };
 use tessera_ui::{
     Callback, Dp, FocusRequester, Modifier, RenderSlot, State, remember, tessera, use_context,
@@ -29,7 +29,7 @@ use crate::res::I18N;
 use super::{
     ACCENT, INK,
     article::SpecSection,
-    gap, panel,
+    gap, panel, scheme_panel,
     selection_articles::{Kind, option_label, selection_article},
     spec_table, type_style,
 };
@@ -473,27 +473,13 @@ fn checkbox_anatomy() {
 
 #[tessera]
 fn color_scheme(is_switch: bool, dark: bool) {
-    material_theme()
-        .theme(move || MaterialTheme::from_seed(ACCENT, dark))
-        .child(move || {
-            surface()
-                .modifier(Modifier::new().fill_max_width())
-                .child(move || {
-                    column()
-                        .modifier(Modifier::new().fill_max_width().padding_all(Dp(32.0)))
-                        .children(move || {
-                            text(I18N.text(if dark {
-                                "ui-dark-scheme"
-                            } else {
-                                "ui-light-scheme"
-                            }))
-                            .style(type_style(24.0, 32.0));
-                            gap(Dp(24.0));
-                            setting_row(is_switch, true, "ui-selected");
-                            setting_row(is_switch, false, "ui-unselected");
-                        });
-                });
-        });
+    scheme_panel(
+        dark,
+        RenderSlot::new(move || {
+            setting_row(is_switch, true, "ui-selected");
+            setting_row(is_switch, false, "ui-unselected");
+        }),
+    );
 }
 
 #[tessera]

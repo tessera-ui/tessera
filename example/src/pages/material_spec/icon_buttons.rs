@@ -9,7 +9,7 @@ use tessera_components::{
     material_icons::{filled, outlined},
     modifier::{InteractionVisualState, ModifierExt as _},
     shape_def::Shape,
-    surface::{RipplePresentation, surface},
+    surface::RipplePresentation,
     text::text,
     theme::{MaterialTheme, material_theme},
     tooltip::{TooltipController, TooltipPlacement, tooltip_anchor, tooltip_provider},
@@ -23,7 +23,7 @@ use super::{
     action_articles::{Kind, action_article},
     annotations::{self, Geometry, dotted, relative, watch},
     article::SpecSection,
-    gap, panel, spec_table, subheading, type_style,
+    gap, panel, scheme_panel, subheading, type_style,
 };
 
 #[path = "icon_button_context.rs"]
@@ -348,59 +348,6 @@ fn variants() {
 #[tessera]
 fn configurations() {
     figures::configs();
-    gap(Dp(24.0));
-    spec_table(
-        vec![
-            "ui-category".into(),
-            "ui-options".into(),
-            "M3".into(),
-            "M3 Expressive".into(),
-        ],
-        vec![
-            vec![
-                "ui-size".into(),
-                "ui-small-default".into(),
-                "ui-available".into(),
-                "ui-available".into(),
-            ],
-            vec![
-                "ui-size".into(),
-                "ui-extra-small-medium-large-extra-large".into(),
-                "—".into(),
-                "ui-available".into(),
-            ],
-            vec![
-                "ui-shape".into(),
-                "ui-round-default".into(),
-                "ui-available".into(),
-                "ui-available".into(),
-            ],
-            vec![
-                "ui-shape".into(),
-                "ui-square".into(),
-                "—".into(),
-                "ui-available".into(),
-            ],
-            vec![
-                "ui-color-style".into(),
-                "ui-filled-default-tonal-outlined-standard".into(),
-                "ui-available".into(),
-                "ui-available".into(),
-            ],
-            vec![
-                "ui-width".into(),
-                "ui-default".into(),
-                "ui-available".into(),
-                "ui-available".into(),
-            ],
-            vec![
-                "ui-width".into(),
-                "ui-narrow-wide".into(),
-                "—".into(),
-                "ui-available".into(),
-            ],
-        ],
-    );
 }
 
 #[tessera]
@@ -521,38 +468,20 @@ fn style_examples(enabled: bool) {
 }
 
 #[tessera]
-fn scheme(dark: bool) {
-    material_theme()
-        .theme(move || MaterialTheme::from_seed(ACCENT, dark))
-        .child(move || {
-            let theme = use_context::<MaterialTheme>()
-                .expect("MaterialTheme must be provided")
-                .get();
-            surface()
-                .style(theme.color_scheme.surface.into())
-                .modifier(Modifier::new().fill_max_width().padding_all(Dp(24.0)))
-                .child(move || {
-                    column().children(move || {
-                        subheading(
-                            if dark {
-                                "ui-dark-theme"
-                            } else {
-                                "ui-light-theme"
-                            }
-                            .to_owned(),
-                        );
-                        gap(Dp(24.0));
-                        style_examples(true);
-                    });
-                });
-        });
-}
-
-#[tessera]
 fn colors() {
-    scheme(false);
+    scheme_panel(
+        false,
+        RenderSlot::new(|| {
+            style_examples(true);
+        }),
+    );
     gap(Dp(24.0));
-    scheme(true);
+    scheme_panel(
+        true,
+        RenderSlot::new(|| {
+            style_examples(true);
+        }),
+    );
 }
 
 #[tessera]

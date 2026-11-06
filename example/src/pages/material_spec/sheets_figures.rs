@@ -459,20 +459,6 @@ pub(super) fn variants_figure() {
     );
 }
 
-/// Floating M3 modal bottom sheet above a scrim.
-#[tessera]
-pub(super) fn m2_figure() {
-    stage(
-        600.0,
-        370.0,
-        RenderSlot::new(|| {
-            phone(100.0, 46.0, 400.0, 360.0).scrim(true).overlay(|| {
-                sheet(0.0, 164.0, 386.0, 200.0).handle(21.0);
-            });
-        }),
-    );
-}
-
 /// Bottom sheet anatomy with dark or outlined numbered markers.
 #[tessera]
 pub(super) fn anatomy_figure(outlined: bool) {
@@ -559,7 +545,7 @@ fn files_list(tablet: bool) {
         ("ui-certificate-program", Glyph::Folder, "ui-nov-8"),
         ("ui-on-call-protocol", Glyph::Document, "ui-nov-5"),
         ("ui-cover-letter-template", Glyph::Document, "ui-oct-28"),
-        ("ui-resume", Glyph::Document, "ui-oct-12"),
+        ("ui-resume-document", Glyph::Document, "ui-oct-12"),
         ("ui-cdc-health-literacy", Glyph::Document, "ui-sep-26"),
     ];
     let (first, pitch, icon_x, name_x, owner_x, divider) = if tablet {

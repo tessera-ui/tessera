@@ -201,16 +201,7 @@ fn sheet_article(
             intro: Some(RenderSlot::new(move || {
                 overview_intro(modal_open).session_optional(session);
             })),
-            sections: vec![
-                SpecSection {
-                    title: "ui-availability-resources",
-                    content: RenderSlot::new(availability),
-                },
-                SpecSection {
-                    title: "ui-differences-from-m2",
-                    content: RenderSlot::new(differences),
-                },
-            ],
+            sections: vec![],
         },
         ArticlePage {
             title: "ui-guidelines",
@@ -350,58 +341,6 @@ fn overview_intro(open: State<bool>, session: Option<LiveSideSheetSession>) {
     variants_legend();
     gap(Dp(24.0));
     launch(open).session_optional(session);
-}
-
-#[tessera]
-fn availability() {
-    spec_table(
-        vec!["ui-type".into(), "ui-resource".into(), "ui-status".into()],
-        vec![
-            vec![
-                "ui-design".into(),
-                "ui-design-kit-figma".into(),
-                "ui-available".into(),
-            ],
-            vec![
-                "ui-implementation".into(),
-                "Flutter".into(),
-                "ui-unavailable".into(),
-            ],
-            vec![
-                "ui-implementation".into(),
-                "Jetpack Compose".into(),
-                "ui-unavailable".into(),
-            ],
-            vec![
-                "ui-implementation".into(),
-                "Android Views (MDC-Android)".into(),
-                "ui-available".into(),
-            ],
-            vec![
-                "ui-implementation".into(),
-                "Web".into(),
-                "ui-unavailable".into(),
-            ],
-        ],
-    );
-}
-
-#[tessera]
-fn differences() {
-    split()
-        .start_weight(0.5)
-        .start(|| {
-            bullets(vec![
-                "ui-right-to-left-rtl-language-support-with-left-side-sheet".into(),
-                "ui-color-new-color-mappings-and-compatibility-with-dynamic-color-2123".into(),
-                "ui-shape-modal-side-sheets-have-a-16dp-corner-radius".into(),
-            ]);
-        })
-        .end(|| {
-            figures::differences_figure();
-            gap(Dp(16.0));
-            caption("ui-side-sheets-have-new-color-mappings-to-support-dynamic-color");
-        });
 }
 
 struct Token {

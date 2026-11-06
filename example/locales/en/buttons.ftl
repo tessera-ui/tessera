@@ -28,19 +28,9 @@ ui-toggle-button = Toggle button
 
 ui-default = Default
 
-ui-toggle-selection = Toggle (selection)
-
 ui-small-button-padding = Small button padding
 
-ui-small-default = Small (default)
-
-ui-round-default = Round (default)
-
 ui-square = Square
-
-ui-elevated-filled-default-tonal-outlined-text = Elevated, filled (default), tonal, outlined, text
-
-ui-not-recommended-use-16dp = Not recommended. Use 16dp
 
 ui-live-configuration = Live configuration
 
@@ -210,43 +200,11 @@ ui-two-shape-options-round-and-square = Two shape options: round and square
 
 ui-keep-labels-concise-and-use-sentence-case = Keep labels concise and use sentence case
 
-ui-buttons-now-have-a-wider-variety-of-shapes-and-sizes-toggle-functionality-and-can-change-s = Buttons now have a wider variety of shapes and sizes, toggle functionality, and can change shape when selected.
-
-ui-variants-and-naming-921 = Variants and naming:
-
-ui-default-and-toggle-selection = Default and toggle (selection)
-
-ui-color-styles-are-now-configurations-elevated-filled-tonal-outlined-text = Color styles are now configurations (elevated, filled, tonal, outlined, text)
-
 ui-round-and-square = Round and square
-
-ui-shape-morphs-when-pressed = Shape morphs when pressed
-
-ui-shape-morphs-when-selected = Shape morphs when selected
-
-ui-small-existing-default = Small (existing, default)
-
-ui-new-padding-for-small-buttons = New padding for small buttons:
-
-ui-16dp-recommended-to-match-padding-of-new-sizes = 16dp (recommended to match padding of new sizes)
-
-ui-24dp-no-longer-recommended = 24dp (no longer recommended)
 
 ui-five-sizes = Five sizes
 
 ui-two-shapes = Two shapes
-
-ui-two-small-padding-widths = Two small padding widths
-
-ui-color-new-color-mappings-and-compatibility-with-dynamic-color-icons-and-labels-now-share-t = Color: New color mappings and compatibility with dynamic color. Icons and labels now share the same color. Neutral text button is no longer recommended.
-
-ui-icons-standard-size-for-leading-and-trailing-icons-is-now-20dp = Icons: Standard size for leading and trailing icons is now 20dp
-
-ui-shape-fully-rounded-corner-radius-and-additional-height-options = Shape: Fully-rounded corner radius and additional height options
-
-ui-m2-buttons-have-a-height-of-36dp-and-slightly-rounded-corner-radius = M2: Buttons have a height of 36dp and slightly rounded corner radius
-
-ui-m3-default-buttons-are-taller-at-40dp-and-have-fully-rounded-corners = M3: Default buttons are taller at 40dp and have fully rounded corners
 
 ui-buttons-communicate-actions-that-people-can-take-they-are-typically-placed-throughout-the = Buttons communicate actions that people can take. They are typically placed throughout the UI, in places like:
 
@@ -571,5 +529,3 @@ ui-hovered-7079 = hovered
 ui-focused-7080 = focused
 
 ui-pressed-7081 = pressed
-
-ui-button-7082 = BUTTON

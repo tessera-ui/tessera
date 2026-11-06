@@ -12,8 +12,6 @@ ui-segments-are-for-selection-not-for-navigation = Segments are for selection, n
 
 ui-segmented-buttons-are-no-longer-recommended-in-the-material-3-expressive-update-products-t = Segmented buttons are no longer recommended in the Material 3 expressive update. Products that adopt the expressive style should use a connected button group instead, which keeps most of the same functionality with an updated visual design.
 
-ui-color-segmented-buttons-use-the-secondary-container-role-for-selected-segments-and-support = Color: segmented buttons use the secondary container role for selected segments and support dynamic color. Shape: segments use fully rounded ends with a shared outline instead of separate rectangles. Selection: a checkmark and a container fill replace the M2 underline.
-
 ui-tokens = Tokens
 
 ui-unselected-label = Unselected label

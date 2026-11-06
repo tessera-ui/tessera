@@ -14,17 +14,11 @@ ui-same-size-range-as-buttons-and-icon-buttons-xs-s-m-l-xl = Same size range as 
 
 ui-split-buttons-are-made-of-a-common-button-and-a-menu-icon-button = Split buttons are made of a common button and a menu icon button
 
-ui-the-split-button-has-a-separate-menu-button-that-spins-and-changes-shape-when-activated-it = The split button has a separate menu button that spins and changes shape when activated. It can be used alongside other buttons of the same size.
-
-ui-split-buttons-have-the-same-five-recommended-sizes-as-label-and-icon-buttons = Split buttons have the same five recommended sizes as label and icon buttons
-
 ui-a-split-button-pairs-a-leading-action-with-a-trailing-menu-segment = A split button pairs a leading action with a trailing menu segment
 
 ui-split-buttons-come-in-four-color-configurations = Split buttons come in four color configurations.
 
 ui-split-buttons-use-the-same-five-sizes-as-buttons-and-icon-buttons-small-is-the-default = Split buttons use the same five sizes as buttons and icon buttons. Small is the default.
-
-ui-elevated-filled-tonal-outlined = Elevated, filled, tonal, outlined
 
 ui-split-button-token-sets-are-organized-by-size-each-size-defines-the-container-height-the-i = Split button token sets are organized by size. Each size defines the container height, the inner and outer corner, the content padding and the trailing icon size.
 
@@ -161,7 +155,5 @@ ui-medium-split-button-56dp-container-24-24dp-inner-padding-26dp-menu-icon = Med
 ui-small-and-large-split-buttons-keep-the-same-leading-trailing-structure = Small and large split buttons keep the same leading/trailing structure
 
 ui-main-action-count = { $caption }: { $count } main actions
-
-ui-tessera-examples-on-this-page-use-the-native-split-button-layout-with-its-leading-and = Tessera examples on this page use the native split_button_layout with its leading and trailing segments, five sizes and four color variants.
 
 ui-more-main-action-options = More { "{" }main action{ "}" } options

@@ -598,10 +598,10 @@ fn date_article_switches_real_chapters_and_unmounts_inactive_pages() {
     .unwrap();
     renderer.render_frames(4);
     for (page, present, absent) in [
-        ("Overview", "Differences from M2", "Tokens & specs"),
-        ("Guidelines", "Usage", "Differences from M2"),
-        ("Accessibility", "Date entry methods", "Usage"),
-        ("Specs", "Tokens & specs", "Date entry methods"),
+        ("Overview", None, "Tokens & specs"),
+        ("Guidelines", Some("Usage"), "Date entry methods"),
+        ("Accessibility", Some("Date entry methods"), "Usage"),
+        ("Specs", Some("Tokens & specs"), "Date entry methods"),
     ] {
         activate(&mut renderer, page);
         let snapshot = renderer.accessibility_snapshot().unwrap();
@@ -610,13 +610,14 @@ fn date_article_switches_real_chapters_and_unmounts_inactive_pages() {
                 && crate::has_label(&node, page)
                 && node.is_selected() == Some(true)
         }));
-        assert!(
-            snapshot
-                .nodes
-                .iter()
-                .any(|(_, node)| node.role() == Role::Heading && crate::has_label(&node, present)),
-            "missing {present} on {page}"
-        );
+        if let Some(present) = present {
+            assert!(
+                snapshot.nodes.iter().any(|(_, node)| {
+                    node.role() == Role::Heading && crate::has_label(&node, present)
+                }),
+                "missing {present} on {page}"
+            );
+        }
         assert!(
             !snapshot
                 .nodes

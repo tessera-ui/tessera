@@ -54,10 +54,6 @@ ui-selected-date-indicator = Selected date indicator
 
 ui-calendar-columns = Calendar columns
 
-ui-material-provides-design-and-implementation-resources-for-date-selection-availability-belo = Material provides design and implementation resources for date selection. Availability below describes the Material libraries; these live examples use Tessera.
-
-ui-m3-uses-larger-titles-and-labels-with-more-spacing-for-48dp-touch-targets-new-dynamic-colo = M3 uses larger titles and labels with more spacing for 48dp touch targets, new dynamic-color mappings and no modal shadow. The former desktop picker is now the docked date picker; the former mobile picker and input are now modal date picker and modal date input. These names describe behavior, not a device type.
-
 ui-choose-a-calendar-for-nearby-dates-and-text-entry-for-dates-in-the-distant-past-or-future = Choose a calendar for nearby dates and text entry for dates in the distant past or future, such as a date of birth. Offer a single date for an event or an inclusive range for a reservation. Show past, present and future dates as the task allows, and distinguish today from the selected date.
 
 ui-each-variant-exposes-its-selection-navigation-and-confirmation-controls = Each variant exposes its selection, navigation and confirmation controls.

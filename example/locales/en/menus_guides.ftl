@@ -96,10 +96,6 @@ ui-disabled-menu-items-can-receive-focus = Disabled menu items can receive focus
 
 ui-a-divider-or-gap-can-t-receive-focus = A divider or gap can't receive focus
 
-ui-m3-menus-feature-new-color-mappings-and-dynamic-color = M3: Menus feature new color mappings and dynamic color
-
-ui-m2-former-menu-colors-don-t-contrast-with-the-background = M2: Former menu colors don't contrast with the background
-
 ui-share-with-a-contact = Share with a contact
 
 ui-copy-link-to-photo = Copy link to photo

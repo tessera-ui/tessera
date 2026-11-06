@@ -1,1 +1,1 @@
-ui-anatomy-marker-1 = 解剖标记 1
+ui-anatomy-marker-1 = 结构标记 1

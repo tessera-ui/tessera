@@ -1,7 +1,7 @@
-ui-dragable-glass = Dragable glass
+ui-drag-the-glass-lens = Drag the glass lens across the tiles to see how it refracts and blurs the content behind it.
 
-ui-the-quick-brown-fox-jumps-over-the-lazy-dog = The quick brown fox jumps over the lazy dog.
+ui-glass-lens = Glass lens
 
-ui-reset = Reset
+ui-reset-lens-position = Reset position
 
 ui-blur-radius = Blur radius

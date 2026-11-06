@@ -6,14 +6,6 @@ ui-present-a-continuous-vertical-index-of-related-content-and-actions = Present 
 
 ui-list-baseline = List (baseline)
 
-ui-expressive-lists-introduce-segmented-shapes-highlighted-selection-and-flexible-content-slo = Expressive lists introduce segmented shapes, highlighted selection and flexible content slots. Use this treatment for new designs.
-
-ui-overview-selection = Overview selection
-
-ui-differences-from-m2-to-m3-baseline = Differences from M2 to M3 baseline
-
-ui-baseline-lists-standardize-color-spacing-heights-and-alignment-content-determines-a-one-tw = Baseline lists standardize color, spacing, heights and alignment. Content determines a one-, two- or three-line item's height; taller rows align their contents toward the top.
-
 ui-order-related-items-logically-and-use-consistent-formatting-so-people-can-find-and-act-on = Order related items logically and use consistent formatting so people can find and act on a particular item. Keep labels concise and supporting text easy to scan.
 
 ui-people-must-be-able-to-reach-list-items-identify-their-purpose-and-activate-or-select-them = People must be able to reach list items, identify their purpose and activate or select them with assistive technology.

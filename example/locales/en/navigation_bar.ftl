@@ -10,26 +10,6 @@ ui-show-the-active-destination-with-an-indicator-and-a-selected-icon = Show the 
 
 ui-a-navigation-bar-shows-the-app-s-primary-destinations-and-highlights-the-active-one = A navigation bar shows the app's primary destinations and highlights the active one
 
-ui-the-m3-navigation-bar-keeps-the-same-structure-as-the-baseline-a-container-with-an-active = The M3 navigation bar keeps the same structure as the baseline: a container with an active indicator behind the selected destination's icon, paired with a label.
-
-ui-active-indicator-56-32dp-in-the-native-component-m3-reference-64-32dp-16dp-radius = Active indicator 56 × 32dp in the native component (M3 reference: 64 × 32dp, 16dp radius)
-
-ui-selected-icon-switches-from-outlined-to-filled = Selected icon switches from outlined to filled
-
-ui-labels-can-always-show-or-appear-only-for-the-selected-destination = Labels can always show, or appear only for the selected destination
-
-ui-badges-can-mark-a-destination-with-unread-activity = Badges can mark a destination with unread activity
-
-ui-five-destinations-with-selected-only-labels-and-a-badge-on-inbox = Five destinations with selected-only labels and a badge on Inbox
-
-ui-m2-bottom-navigation-with-shifting-or-fixed-items-and-text-only-states = M2: bottom navigation with shifting or fixed items and text-only states
-
-ui-m3-a-persistent-container-a-pill-shaped-active-indicator-behind-the-icon-and-filled-select = M3: a persistent container, a pill-shaped active indicator behind the icon, and filled selected icons
-
-ui-m3-labels-can-stay-visible-or-appear-only-on-the-selected-destination = M3 labels can stay visible or appear only on the selected destination
-
-ui-m3-navigation-bars-highlight-the-active-destination-with-an-indicator-and-a-filled-icon = M3 navigation bars highlight the active destination with an indicator and a filled icon
-
 ui-there-is-one-navigation-bar-variant-holding-three-to-five-destinations = There is one navigation bar variant, holding three to five destinations
 
 ui-cycle-destination-count = Cycle destination count
@@ -160,6 +140,6 @@ ui-announce-each-destination-with-its-label-role-and-position-in-the-bar = Annou
 
 ui-value-navigation-bar-example = { $v0 } navigation bar example
 
-ui-selected-destination = { $caption } destination: { $destination }
+ui-primary = Primary
 
-ui-tessera-examples-on-this-page-use-the-native-navigation-bar-and-navigation-bar-item-c = Tessera examples on this page use the native navigation_bar and navigation_bar_item components with three to five destinations, label behavior and badges.
+ui-selected-destination = { $caption } destination: { $destination }

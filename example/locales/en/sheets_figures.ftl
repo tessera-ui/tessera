@@ -70,3 +70,5 @@ ui-bottom-sheet-marker-value = Bottom sheet marker { $v0 }
 ui-bottom-sheet-legend-value = Bottom sheet legend { $v0 }
 
 ui-bottom-sheet-variant-value = Bottom sheet variant { $v0 }
+
+ui-resume-document = Resume

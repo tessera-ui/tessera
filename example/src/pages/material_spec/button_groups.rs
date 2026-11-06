@@ -195,16 +195,7 @@ pub(super) fn button_groups_spec(
         ArticlePage {
             title: "ui-overview",
             intro: Some(RenderSlot::new(overview)),
-            sections: vec![
-                SpecSection {
-                    title: "ui-availability-resources",
-                    content: RenderSlot::new(resources),
-                },
-                SpecSection {
-                    title: "ui-m3-expressive-update",
-                    content: RenderSlot::new(expressive),
-                },
-            ],
+            sections: vec![],
         },
         ArticlePage {
             title: "ui-guidelines",
@@ -413,81 +404,6 @@ fn overview() {
 }
 
 #[tessera]
-fn resources() {
-    spec_table(
-        vec!["ui-type".into(), "ui-resource".into(), "ui-status".into()],
-        vec![
-            vec![
-                "ui-design".into(),
-                "ui-design-kit-figma".into(),
-                "ui-available".into(),
-            ],
-            vec![
-                "ui-implementation".into(),
-                "Jetpack Compose: Expressive".into(),
-                "ui-available".into(),
-            ],
-            vec![
-                "".into(),
-                "Android Views (MDC-Android): Expressive".into(),
-                "ui-available".into(),
-            ],
-            vec!["".into(), "Web: Expressive".into(), "ui-unavailable".into()],
-        ],
-    );
-}
-
-#[tessera]
-fn expressive() {
-    prose(
-        "ui-button-groups-apply-shape-motion-and-width-changes-to-buttons-and-icon-buttons-to-make-the",
-    );
-    gap(Dp(32.0));
-    subheading("ui-may-2025".into());
-    gap(Dp(8.0));
-    prose("ui-new-component-added-to-catalog");
-    gap(Dp(16.0));
-    prose("ui-variants-and-naming-921");
-    bullets(vec![
-        "ui-added-standard-button-group".into(),
-        "ui-added-connected-button-group".into(),
-        "ui-use-instead-of-segmented-button-which-is-no-longer-recommended".into(),
-    ]);
-    gap(Dp(16.0));
-    prose("Configurations:");
-    bullets(vec![
-        "ui-works-with-all-button-sizes-xs-s-m-l-and-xl".into(),
-        "ui-applies-default-shape-to-all-buttons-round-or-square".into(),
-    ]);
-    gap(Dp(32.0));
-    panel(RenderSlot::new(move || {
-        column()
-            .cross_axis_alignment(CrossAxisAlignment::Center)
-            .children(move || {
-                for size in [
-                    ButtonGroupsSize::ExtraSmall,
-                    ButtonGroupsSize::Small,
-                    ButtonGroupsSize::Medium,
-                ] {
-                    group(mixed_items(), ButtonGroupsStyle::Standard)
-                        .size(size)
-                        .selected(vec![1])
-                        .label(I18N.format(
-                            "ui-value-standard-group",
-                            [("v0", I18N.text(&size_name(size)).into())],
-                        ));
-                    gap(Dp(12.0));
-                }
-                gap(Dp(12.0));
-                group(label_items(), ButtonGroupsStyle::Connected)
-                    .selected(vec![0])
-                    .label(I18N.text("ui-connected-group"));
-            });
-    }));
-    caption("ui-button-groups-are-containers-that-hold-buttons-of-many-shapes-and-sizes");
-}
-
-#[tessera]
 fn variants() {
     panel(RenderSlot::new(move || {
         row()
@@ -560,22 +476,6 @@ fn variants() {
         "ui-standard-button-group".into(),
         "ui-connected-button-group".into(),
     ]);
-    gap(Dp(32.0));
-    spec_table(
-        vec!["ui-variant".into(), "M3".into(), "M3 Expressive".into()],
-        vec![
-            vec![
-                "ui-standard-button-group".into(),
-                "--".into(),
-                "ui-available".into(),
-            ],
-            vec![
-                "ui-connected-button-group".into(),
-                "ui-available-as-segmented-button".into(),
-                "ui-available".into(),
-            ],
-        ],
-    );
 }
 
 #[tessera]
@@ -650,35 +550,6 @@ fn configurations() {
         "ui-single-select-and-multi-select".into(),
         "ui-round-and-square".into(),
     ]);
-    gap(Dp(32.0));
-    spec_table(
-        vec![
-            "ui-category".into(),
-            "ui-configuration".into(),
-            "M3".into(),
-            "M3 Expressive".into(),
-        ],
-        vec![
-            vec![
-                "ui-size".into(),
-                "XS, S, M, L, XL".into(),
-                "--".into(),
-                "ui-available".into(),
-            ],
-            vec![
-                "ui-default-shape".into(),
-                "ui-round-square".into(),
-                "--".into(),
-                "ui-available".into(),
-            ],
-            vec![
-                "ui-selection".into(),
-                "ui-single-select-multi-select-selection-required".into(),
-                "ui-available-as-segmented-button".into(),
-                "ui-available".into(),
-            ],
-        ],
-    );
     gap(Dp(48.0));
     subheading("ui-live-configuration".into());
     gap(Dp(8.0));

@@ -27,9 +27,6 @@ ui-photo-deleted = Photo deleted
 
 ui-email-sent = Email sent
 
-ui-can-t-send-photo-retry-in-5-seconds = Can’t send photo.
-    Retry in 5 seconds.
-
 ui-your-photo-was-saved-to-the-vacation-album-5320 = Your photo was saved to the Vacation album
 
 ui-your-photo-was-saved-to-the-vacation-album-and-is-ready-to-share = Your photo was saved to the Vacation album and is ready to share
@@ -232,10 +229,6 @@ ui-can-disappear-on-their-own-or-remain-on-screen-until-the-user-takes-action = 
 
 ui-diagram-of-snackbar-placement = Diagram of snackbar placement
 
-ui-behavior-clarified-that-snackbars-can-either-appear-temporarily-dismissive-or-persist-unti = Behavior: Clarified that snackbars can either appear temporarily (dismissive) or persist until the user takes an action (non-dismissive)
-
-ui-snackbars-have-new-color-mappings = Snackbars have new color mappings
-
 ui-snackbars-inform-users-of-a-process-that-an-app-has-performed-or-will-perform-they-appear = Snackbars inform users of a process that an app has performed or will perform. They appear temporarily, towards the bottom of the screen.
 
 ui-they-shouldn-t-interrupt-the-user-experience-people-can-browse-the-page-content-without-be = They shouldn’t interrupt the user experience. People can browse the page content without being required to interact with the snackbar.
@@ -434,8 +427,6 @@ ui-live-tessera-example-save-changes-its-own-label-to-saved-before-the-4-second-
 
 ui-alternatively-add-actions-to-the-snackbar-so-it-doesn-t-dismiss-until-acted-on-actionable = Alternatively, add actions to the snackbar so it doesn’t dismiss until acted on. Actionable snackbars shouldn’t auto-dismiss.
 
-ui-note-material-web-doesn-t-yet-include-the-snackbar-component-this-guidance-still-applies-t = Note: Material Web doesn’t yet include the snackbar component. This guidance still applies to custom-made snackbars.
-
 ui-delete-photo = Delete photo
 
 ui-photo-in-album-yes = Photo in album: yes
@@ -457,8 +448,6 @@ ui-focus-returns-from-the-snackbar-1-to-the-previously-focused-element-2 = Focus
 ui-focus-exits-the-snackbar-differently-per-platform = Focus exits the snackbar differently per platform:
 
 ui-ideally-focus-should-either-return-to-the-element-that-triggered-the-snackbar-or-go-to-the = Ideally, focus should either return to the element that triggered the snackbar, or go to the next most logical element on the page.
-
-ui-on-android-compose-focus-may-move-to-the-nearest-visible-element-or-to-the-first-actionabl = On Android Compose, focus may move to the nearest visible element, or to the first actionable item on the page.
 
 ui-if-the-previously-focused-element-is-no-longer-on-the-page-focus-should-move-from-the-snac = If the previously focused element is no longer on the page, focus should move from the snackbar (1) to the next most logical element (2)
 
@@ -495,7 +484,5 @@ ui-restore-value = Restore { $v0 }
 ui-snackbar-result-value = Snackbar result: { $v0 }
 
 ui-snackbar-visible-value = Snackbar visible: { $v0 }
-
-ui-live-examples-on-this-page-use-the-native-tessera-snackbar-and-snackbar-host-device-s = Live examples on this page use the native Tessera snackbar and snackbar_host. Device scenes in Guidelines and Accessibility are static illustrations without focusable controls.
 
 ui-in-tessera-snackbar-host-keeps-the-current-focus-when-a-notification-appears-and-rest = In Tessera, snackbar_host keeps the current focus when a notification appears and restores the previous target when the last notification closes while its controls own focus. A shortcut that moves focus to an actionable snackbar is app-defined; this example does not register one.

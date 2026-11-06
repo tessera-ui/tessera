@@ -1,6 +1,6 @@
 ui-office = 办公室
 
-ui-clear-shipping-selection = 明确运输选择
+ui-clear-shipping-selection = 清除配送方式选择
 
 ui-english = 英语
 

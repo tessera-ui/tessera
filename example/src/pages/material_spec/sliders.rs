@@ -54,12 +54,7 @@ pub(super) fn slider_spec(route: Option<crate::pages::material_spec::article::Ar
     ]).route_optional(route.clone()).hero(hero).pages(vec![
         ArticlePage{title:"ui-overview",intro:Some(RenderSlot::new(||{
             prose("ui-sliders-select-a-value-or-range-along-a-track-use-standard-centered-or-range-variants-show");gap(Dp(32.0));variants();
-        })),sections:vec![
-            section("ui-availability-resources",RenderSlot::new(availability)),
-            section("ui-m3-expressive-update",RenderSlot::new(||{prose("ui-the-may-2025-update-adds-horizontal-and-vertical-orientations-five-sizes-from-xs-to-xl-and");gap(Dp(24.0));configurations();})),
-            section("ui-previous-updates",RenderSlot::new(||{subheading("ui-visual-refresh-to-improve-non-text-contrast".into());prose("ui-the-december-2023-refresh-adds-centered-and-range-configurations-refreshed-color-mappings");gap(Dp(24.0));anatomy();})),
-            section("ui-differences-from-m2",RenderSlot::new(||{prose("ui-material-3-replaces-the-circular-handle-with-a-vertical-handle-and-introduces-dynamic-colo");gap(Dp(24.0));colors();})),
-        ]},
+        })),sections:vec![]},
         ArticlePage{title:"ui-guidelines",intro:None,sections:vec![
             section("ui-usage",RenderSlot::new(||{prose("ui-use-sliders-to-adjust-continuous-settings-such-as-volume-brightness-or-filter-intensity-ap");gap(Dp(24.0));immediate_example();gap(Dp(24.0));prose("ui-standard-sliders-start-at-a-minimum-centered-sliders-place-zero-in-the-middle-range-slider");gap(Dp(24.0));variants();})),
             section("ui-anatomy",RenderSlot::new(||{anatomy();gap(Dp(24.0));subheading("ui-track".into());prose("ui-the-track-represents-the-full-available-range-the-active-section-runs-from-the-minimum-to");gap(Dp(24.0));subheading("ui-handle".into());prose("ui-move-the-handle-to-select-a-value-a-range-slider-has-separate-minimum-and-maximum-handles");})),
@@ -88,39 +83,6 @@ pub(super) fn slider_spec(route: Option<crate::pages::material_spec::article::Ar
 
 fn section(title: &'static str, content: RenderSlot) -> SpecSection {
     SpecSection { title, content }
-}
-
-#[tessera]
-fn availability() {
-    spec_table(
-        vec!["ui-type".into(), "ui-resource".into(), "ui-status".into()],
-        vec![
-            vec![
-                "ui-design".into(),
-                "ui-design-kit-figma".into(),
-                "ui-available".into(),
-            ],
-            vec![
-                "ui-implementation".into(),
-                "Jetpack Compose: Expressive".into(),
-                "ui-available".into(),
-            ],
-            vec![
-                "ui-implementation".into(),
-                "Android Views (MDC-Android): Expressive".into(),
-                "ui-unavailable".into(),
-            ],
-            vec![
-                "ui-implementation".into(),
-                "Web: Expressive".into(),
-                "ui-unavailable".into(),
-            ],
-        ],
-    );
-    gap(Dp(24.0));
-    prose(
-        "ui-tessera-examples-on-this-page-use-the-native-slider-with-standard-centered-and-range-confi",
-    );
 }
 
 #[tessera]
@@ -404,32 +366,6 @@ pub(super) fn variants() {
         });
         gap(Dp(12.0));
     }
-    gap(Dp(80.0));
-    spec_table(
-        vec!["ui-variant".into(), "M3".into(), "M3 Expressive".into()],
-        vec![
-            vec![
-                "ui-standard".into(),
-                "ui-available-as-continuous-slider".into(),
-                "ui-available".into(),
-            ],
-            vec![
-                "ui-centered".into(),
-                "ui-available-web-only".into(),
-                "ui-available".into(),
-            ],
-            vec![
-                "ui-range".into(),
-                "ui-available".into(),
-                "ui-available".into(),
-            ],
-            vec![
-                "ui-discrete".into(),
-                "ui-available".into(),
-                "ui-available-as-stops-configuration".into(),
-            ],
-        ],
-    );
 }
 
 #[tessera]
@@ -555,8 +491,6 @@ pub(super) fn configurations() {
     configuration_legend(1, "ui-inset-icon".into());
     configuration_legend(2, "ui-stops".into());
     configuration_legend(3, "ui-value-indicator".into());
-    gap(Dp(32.0));
-    super::sliders_tokens::availability();
 }
 
 #[tessera]
@@ -939,13 +873,23 @@ fn color_panel(width: Dp, height: Dp, dark: bool) {
                                         .value(state.get())
                                         .on_change(move |next| state.set(next))
                                         .inset_icon(filled::VOLUME_UP_SVG)
-                                        .accessibility_label(I18N.format(
-                                            "ui-value-value-inset-color-roles",
-                                            [
-                                                ("v0", I18N.text(&label).into()),
-                                                ("v1", I18N.text(&name).into()),
-                                            ],
-                                        ));
+                                        .accessibility_label(
+                                            I18N.format(
+                                                "ui-value-value-inset-color-roles",
+                                                [
+                                                    ("v0", I18N.text(&label).into()),
+                                                    (
+                                                        "v1",
+                                                        I18N.text(if name == "inactive" {
+                                                            "ui-inactive"
+                                                        } else {
+                                                            "ui-active"
+                                                        })
+                                                        .into(),
+                                                    ),
+                                                ],
+                                            ),
+                                        );
                                 });
                         }
                     });
@@ -1514,10 +1458,20 @@ fn slider_measurement_figure() {
                                                 .value_indicator(
                                                     SliderValueIndicatorVisibility::Always,
                                                 )
-                                                .accessibility_label(I18N.format(
-                                                    "ui-value-slider-measurements",
-                                                    [("v0", I18N.text(&name).into())],
-                                                ));
+                                                .accessibility_label(
+                                                    I18N.format(
+                                                        "ui-value-slider-measurements",
+                                                        [(
+                                                            "v0",
+                                                            I18N.text(if name == "first" {
+                                                                "ui-first"
+                                                            } else {
+                                                                "ui-second"
+                                                            })
+                                                            .into(),
+                                                        )],
+                                                    ),
+                                                );
                                         });
                                 }
                             });

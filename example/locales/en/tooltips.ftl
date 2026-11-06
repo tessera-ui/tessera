@@ -12,8 +12,6 @@ ui-use-rich-tooltips-to-provide-more-details-like-describing-the-value-of-a-feat
 
 ui-rich-tooltips-can-include-an-optional-title-link-and-buttons = Rich tooltips can include an optional title, link, and buttons
 
-ui-shape-rich-tooltips-have-more-rounded-corners = Shape: Rich tooltips have more rounded corners
-
 ui-receive-a-tooltip-message = Receive a tooltip message
 
 ui-activate-a-tooltip-with-a-keyboard-or-switch-input = Activate a tooltip with a keyboard or switch input
@@ -169,12 +167,6 @@ ui-plain-and-rich-tooltip-variants = Plain and rich tooltip variants
 
 ui-plain-tooltip-6538 = Plain Tooltip
 
-ui-material-2-and-material-3-tooltip-comparison = Material 2 and Material 3 tooltip comparison
-
-ui-m2-rich-tooltips-have-slightly-rounded-corners = M2: Rich tooltips have slightly rounded corners
-
-ui-m3-rich-tooltips-have-more-rounded-corners-and-support-dynamic-color = M3: Rich tooltips have more rounded corners and support dynamic color
-
 ui-plain-tooltip-target-placement = Plain tooltip target placement
 
 ui-add-to-list = Add to list
@@ -195,9 +187,11 @@ ui-configure-permissions-for-selected-service-accounts-you-can-add-and-remove-se
 
 ui-permission-settings-link-illustration = permission settings link illustration
 
+ui-visit = Visit{ " " }
+
 ui-permission-settings = permission settings
 
-ui-for-details =  for details.
+ui-for-details = { " " }for details.
 
 ui-request-access-action-illustration = Request access action illustration
 

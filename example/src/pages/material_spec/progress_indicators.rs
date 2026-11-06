@@ -12,22 +12,19 @@ use tessera_components::{
     flow_row::flow_row,
     modifier::ModifierExt as _,
     progress::{circular_progress_indicator, linear_progress_indicator},
-    surface::surface,
     text::text,
-    theme::{MaterialTheme, material_theme},
     wavy_progress::{circular_wavy_progress_indicator, linear_wavy_progress_indicator},
 };
 use tessera_ui::{
     Dp, FrameNanosControl, Modifier, RenderSlot, current_frame_nanos, receive_frame_nanos,
-    remember, tessera, use_context,
+    remember, tessera,
 };
 
 use crate::res::I18N;
 
 use super::{
-    ACCENT,
     article::{ArticlePage, SpecSection, article},
-    gap, panel, spec_table, subheading, type_style,
+    gap, panel, scheme_panel, spec_table, subheading, type_style,
 };
 
 #[tessera]
@@ -73,20 +70,7 @@ pub(super) fn progress_indicators_spec(
         ArticlePage {
             title: "ui-overview",
             intro: Some(RenderSlot::new(overview_intro)),
-            sections: vec![
-                SpecSection {
-                    title: "ui-availability-resources",
-                    content: RenderSlot::new(availability),
-                },
-                SpecSection {
-                    title: "ui-m3-expressive-update",
-                    content: RenderSlot::new(expressive_update),
-                },
-                SpecSection {
-                    title: "ui-differences-from-m2",
-                    content: RenderSlot::new(differences),
-                },
-            ],
+            sections: vec![],
         },
         ArticlePage {
             title: "ui-guidelines",
@@ -342,75 +326,6 @@ fn overview_intro() {
 }
 
 #[tessera]
-fn availability() {
-    spec_table(
-        vec!["ui-type".into(), "ui-resource".into(), "ui-status".into()],
-        vec![
-            vec![
-                "ui-design".into(),
-                "ui-design-kit-figma".into(),
-                "ui-available".into(),
-            ],
-            vec![
-                "ui-implementation".into(),
-                "Flutter".into(),
-                "ui-available".into(),
-            ],
-            vec![
-                "ui-implementation".into(),
-                "Jetpack Compose".into(),
-                "ui-available".into(),
-            ],
-            vec![
-                "ui-implementation".into(),
-                "Android Views (MDC-Android)".into(),
-                "ui-available".into(),
-            ],
-            vec![
-                "ui-implementation".into(),
-                "Web".into(),
-                "ui-unavailable".into(),
-            ],
-        ],
-    );
-}
-
-#[tessera]
-fn expressive_update() {
-    prose(
-        "ui-the-material-3-expressive-update-adds-wavy-progress-indicators-the-wavy-active-indicator-u",
-    );
-    gap(Dp(24.0));
-    panel(RenderSlot::new(|| {
-        linear_sample("ui-expressive-linear".to_owned(), true, 0.55, true, false);
-        gap(Dp(32.0));
-        flow_row().item_spacing(Dp(48.0)).children(|| {
-            circular_sample(
-                "ui-expressive-circular-determinate".to_owned(),
-                true,
-                0.6,
-                true,
-                false,
-            );
-            circular_sample(
-                "ui-expressive-circular-indeterminate".to_owned(),
-                false,
-                0.0,
-                true,
-                false,
-            );
-        });
-    }));
-}
-
-#[tessera]
-fn differences() {
-    prose(
-        "ui-color-progress-indicators-use-the-primary-role-for-the-active-indicator-and-the-secondary",
-    );
-}
-
-#[tessera]
 fn variants() {
     prose(
         "ui-two-shapes-cover-four-combinations-a-linear-or-circular-track-each-with-a-determinate-or-i",
@@ -644,57 +559,36 @@ fn anatomy() {
 #[tessera]
 fn colors() {
     for dark in [false, true] {
-        material_theme()
-            .theme(move || MaterialTheme::from_seed(ACCENT, dark))
-            .child(move || {
-                let scheme = use_context::<MaterialTheme>()
-                    .expect("MaterialTheme must be provided")
-                    .get()
-                    .color_scheme;
-                surface()
-                    .style(scheme.surface.into())
-                    .modifier(Modifier::new().fill_max_width())
-                    .child(move || {
-                        column()
-                            .modifier(Modifier::new().fill_max_width().padding_all(Dp(24.0)))
-                            .children(move || {
-                                subheading(
-                                    if dark {
-                                        "ui-dark-scheme"
-                                    } else {
-                                        "ui-light-scheme"
-                                    }
-                                    .to_owned(),
-                                );
-                                gap(Dp(24.0));
-                                linear_sample(
-                                    if dark {
-                                        "ui-dark-linear"
-                                    } else {
-                                        "ui-light-linear"
-                                    }
-                                    .to_owned(),
-                                    true,
-                                    0.5,
-                                    false,
-                                    false,
-                                );
-                                gap(Dp(32.0));
-                                circular_sample(
-                                    if dark {
-                                        "ui-dark-circular"
-                                    } else {
-                                        "ui-light-circular"
-                                    }
-                                    .to_owned(),
-                                    true,
-                                    0.5,
-                                    false,
-                                    false,
-                                );
-                            });
-                    });
-            });
+        scheme_panel(
+            dark,
+            RenderSlot::new(move || {
+                linear_sample(
+                    if dark {
+                        "ui-dark-linear"
+                    } else {
+                        "ui-light-linear"
+                    }
+                    .to_owned(),
+                    true,
+                    0.5,
+                    false,
+                    false,
+                );
+                gap(Dp(32.0));
+                circular_sample(
+                    if dark {
+                        "ui-dark-circular"
+                    } else {
+                        "ui-light-circular"
+                    }
+                    .to_owned(),
+                    true,
+                    0.5,
+                    false,
+                    false,
+                );
+            }),
+        );
         gap(Dp(24.0));
     }
     subheading("ui-color-roles-4475".into());

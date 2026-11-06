@@ -16,7 +16,6 @@ use tessera_components::{
     row::row,
     shape_def::Shape,
     spacer::spacer,
-    surface::surface,
     text::text,
     theme::{MaterialTheme, material_theme},
 };
@@ -30,7 +29,7 @@ use crate::res::I18N;
 use super::{
     ACCENT, INK,
     article::{ArticlePage, SpecSection, article},
-    gap, panel, spec_table, subheading, type_style,
+    gap, panel, scheme_panel, spec_table, subheading, type_style,
 };
 
 const STYLES: [ButtonVariant; 5] = [
@@ -114,20 +113,7 @@ pub(super) fn buttons_spec(route: Option<crate::pages::material_spec::article::A
         ArticlePage {
             title: "ui-overview",
             intro: Some(RenderSlot::new(overview)),
-            sections: vec![
-                SpecSection {
-                    title: "ui-availability-resources",
-                    content: RenderSlot::new(resources),
-                },
-                SpecSection {
-                    title: "ui-m3-expressive-update",
-                    content: RenderSlot::new(expressive),
-                },
-                SpecSection {
-                    title: "ui-differences-from-m2",
-                    content: RenderSlot::new(differences),
-                },
-            ],
+            sections: vec![],
         },
         ArticlePage {
             title: "ui-guidelines",
@@ -359,22 +345,6 @@ fn variants() {
     }));
     gap(Dp(16.0));
     legend(vec!["ui-default-button", "ui-toggle-button"]);
-    gap(Dp(32.0));
-    spec_table(
-        vec!["ui-variant".into(), "M3".into(), "M3 Expressive".into()],
-        vec![
-            vec![
-                "ui-default".into(),
-                "ui-available".into(),
-                "ui-available".into(),
-            ],
-            vec![
-                "ui-toggle-selection".into(),
-                "--".into(),
-                "ui-available".into(),
-            ],
-        ],
-    );
 }
 
 #[tessera]
@@ -387,59 +357,6 @@ fn configurations() {
         "ui-color",
         "ui-small-button-padding",
     ]);
-    gap(Dp(32.0));
-    spec_table(
-        vec![
-            "ui-category".into(),
-            "ui-configuration".into(),
-            "M3".into(),
-            "M3 Expressive".into(),
-        ],
-        vec![
-            vec![
-                "ui-size".into(),
-                "ui-small-default".into(),
-                "ui-available".into(),
-                "ui-available".into(),
-            ],
-            vec![
-                "ui-size".into(),
-                "XS, M, L, XL".into(),
-                "--".into(),
-                "ui-available".into(),
-            ],
-            vec![
-                "ui-shape".into(),
-                "ui-round-default".into(),
-                "ui-available".into(),
-                "ui-available".into(),
-            ],
-            vec![
-                "ui-shape".into(),
-                "ui-square".into(),
-                "--".into(),
-                "ui-available".into(),
-            ],
-            vec![
-                "ui-color".into(),
-                "ui-elevated-filled-default-tonal-outlined-text".into(),
-                "ui-available".into(),
-                "ui-available".into(),
-            ],
-            vec![
-                "ui-small-button-padding".into(),
-                "24dp".into(),
-                "ui-available".into(),
-                "ui-not-recommended-use-16dp".into(),
-            ],
-            vec![
-                "ui-small-button-padding".into(),
-                "16dp".into(),
-                "--".into(),
-                "ui-available".into(),
-            ],
-        ],
-    );
     gap(Dp(48.0));
     subheading("ui-live-configuration".into());
     gap(Dp(8.0));
@@ -543,33 +460,19 @@ fn anatomy(labels: Vec<&'static str>) {
 
 #[tessera]
 fn color_examples(dark: bool) {
-    material_theme()
-        .theme(move || MaterialTheme::from_seed(ACCENT, dark))
-        .child(move || {
-            surface()
-                .modifier(Modifier::new().fill_max_width())
-                .child(move || {
-                    column()
-                        .modifier(Modifier::new().fill_max_width().padding_all(Dp(32.0)))
-                        .children(move || {
-                            text(I18N.text(if dark {
-                                "ui-dark-scheme"
-                            } else {
-                                "ui-light-scheme"
-                            }))
-                            .style(type_style(24.0, 32.0));
-                            gap(Dp(24.0));
-                            style_grid(
-                                vec![
-                                    "ui-1-default",
-                                    "ui-2-toggle-unselected",
-                                    "ui-3-toggle-selected",
-                                ],
-                                vec!["A", "B", "C", "D", "E"],
-                            );
-                        });
-                });
-        });
+    scheme_panel(
+        dark,
+        RenderSlot::new(move || {
+            style_grid(
+                vec![
+                    "ui-1-default",
+                    "ui-2-toggle-unselected",
+                    "ui-3-toggle-selected",
+                ],
+                vec!["A", "B", "C", "D", "E"],
+            );
+        }),
+    );
 }
 
 #[tessera]
@@ -1527,36 +1430,6 @@ fn style_grid(columns: Vec<&'static str>, rows: Vec<&'static str>) {
 }
 
 #[tessera]
-fn m2_button(style: ButtonVariant) {
-    let scheme = use_context::<MaterialTheme>().unwrap().get().color_scheme;
-    let (container, content) = match style {
-        ButtonVariant::Elevated => (scheme.surface_container_low, scheme.primary),
-        ButtonVariant::Filled => (scheme.primary, scheme.on_primary),
-        ButtonVariant::Tonal => (scheme.secondary_container, scheme.on_secondary_container),
-        ButtonVariant::Outlined | ButtonVariant::Text => (Color::TRANSPARENT, scheme.primary),
-    };
-    let border = if style == ButtonVariant::Outlined {
-        scheme.outline
-    } else {
-        Color::TRANSPARENT
-    };
-    boxed()
-        .alignment(Alignment::Center)
-        .modifier(
-            Modifier::new()
-                .height(Dp(36.0))
-                .border_with_shape(Dp(1.0), border, Shape::rounded_rectangle(Dp(4.0)))
-                .background_with_shape(container, Shape::rounded_rectangle(Dp(4.0)))
-                .padding_symmetric(Dp(16.0), Dp::ZERO),
-        )
-        .children(move || {
-            text(I18N.text("ui-button-7082"))
-                .color(content)
-                .style(type_style(14.0, 20.0));
-        });
-}
-
-#[tessera]
 fn style_example(style: ButtonVariant, #[prop(into)] label: String) {
     panel(RenderSlot::new(move || {
         button_preview(
@@ -1641,152 +1514,6 @@ fn overview() {
     ]);
     gap(Dp(32.0));
     overview_art();
-}
-
-#[tessera]
-fn resources() {
-    spec_table(
-        vec!["ui-type".into(), "ui-resource".into(), "ui-status".into()],
-        vec![
-            vec![
-                "ui-design".into(),
-                "ui-design-kit-figma".into(),
-                "ui-available".into(),
-            ],
-            vec![
-                "ui-implementation".into(),
-                "Flutter".into(),
-                "ui-available".into(),
-            ],
-            vec![
-                "ui-implementation".into(),
-                "Jetpack Compose".into(),
-                "ui-available".into(),
-            ],
-            vec![
-                "ui-implementation".into(),
-                "Jetpack Compose: Expressive".into(),
-                "ui-available".into(),
-            ],
-            vec![
-                "ui-implementation".into(),
-                "Android Views (MDC-Android)".into(),
-                "ui-available".into(),
-            ],
-            vec![
-                "ui-implementation".into(),
-                "Android Views (MDC-Android): Expressive".into(),
-                "ui-available".into(),
-            ],
-            vec![
-                "ui-implementation".into(),
-                "Web".into(),
-                "ui-available".into(),
-            ],
-            vec![
-                "ui-implementation".into(),
-                "Web: Expressive".into(),
-                "ui-unavailable".into(),
-            ],
-        ],
-    );
-}
-
-#[tessera]
-fn expressive() {
-    subheading("ui-may-2025".into()).level(4);
-    gap(Dp(16.0));
-    prose(
-        "ui-buttons-now-have-a-wider-variety-of-shapes-and-sizes-toggle-functionality-and-can-change-s",
-    );
-    for (title, items) in [
-        (
-            "ui-variants-and-naming-921",
-            vec![
-                "ui-default-and-toggle-selection",
-                "ui-color-styles-are-now-configurations-elevated-filled-tonal-outlined-text",
-            ],
-        ),
-        (
-            "Shapes:",
-            vec![
-                "ui-round-and-square",
-                "ui-shape-morphs-when-pressed",
-                "ui-shape-morphs-when-selected",
-            ],
-        ),
-        (
-            "Sizes:",
-            vec![
-                "ui-extra-small",
-                "ui-small-existing-default",
-                "ui-medium",
-                "ui-large",
-                "ui-extra-large",
-            ],
-        ),
-        (
-            "ui-new-padding-for-small-buttons",
-            vec![
-                "ui-16dp-recommended-to-match-padding-of-new-sizes",
-                "ui-24dp-no-longer-recommended",
-            ],
-        ),
-    ] {
-        gap(Dp(16.0));
-        prose(title);
-        bullets(items.into_iter().map(String::from).collect());
-    }
-    gap(Dp(32.0));
-    config_figure(vec![0, 1, 2, 4]);
-    gap(Dp(16.0));
-    legend(vec![
-        "ui-five-sizes",
-        "ui-toggle-selection",
-        "ui-two-shapes",
-        "ui-two-small-padding-widths",
-    ]);
-}
-
-#[tessera]
-fn differences() {
-    bullets(vec![
-        "ui-color-new-color-mappings-and-compatibility-with-dynamic-color-icons-and-labels-now-share-t".into(),
-        "ui-icons-standard-size-for-leading-and-trailing-icons-is-now-20dp".into(),
-        "ui-shape-fully-rounded-corner-radius-and-additional-height-options".into(),
-    ]);
-    gap(Dp(24.0));
-    m2_m3_figure();
-    gap(Dp(16.0));
-    legend(vec![
-        "ui-m2-buttons-have-a-height-of-36dp-and-slightly-rounded-corner-radius",
-        "ui-m3-default-buttons-are-taller-at-40dp-and-have-fully-rounded-corners",
-    ]);
-}
-
-#[tessera]
-fn m2_m3_figure() {
-    panel(RenderSlot::new(|| {
-        column()
-            .modifier(Modifier::new().fill_max_width())
-            .children(|| {
-                marked(
-                    1,
-                    RenderSlot::new(|| {
-                        flow_row()
-                            .item_spacing(Dp(16.0))
-                            .line_spacing(Dp(16.0))
-                            .children(|| {
-                                for style in STYLES {
-                                    m2_button(style);
-                                }
-                            });
-                    }),
-                );
-                gap(Dp(32.0));
-                marked(2, RenderSlot::new(|| config_row(3)));
-            });
-    }));
 }
 
 #[tessera]

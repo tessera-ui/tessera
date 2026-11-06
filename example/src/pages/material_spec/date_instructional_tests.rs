@@ -822,7 +822,7 @@ fn real_date_article_routes_instructional_dialogs_above_scrolled_content_and_kee
     )
     .unwrap();
     renderer.render_frames(8);
-    click_article_target(&mut renderer, "Material Components", None);
+    click_article_target(&mut renderer, "Material components", None);
     for _ in 0..90 {
         let tree = renderer.accessibility_snapshot().unwrap();
         if tree.nodes.iter().any(|(_, node)| {

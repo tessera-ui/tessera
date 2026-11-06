@@ -126,10 +126,6 @@ ui-large-badge-label-tracking = Large badge label tracking
 
 ui-large-badge-label-weight = Large badge label weight
 
-ui-dark-scheme = Dark scheme
-
-ui-light-scheme = Light scheme
-
 ui-dark-navigation-bar = Dark navigation bar
 
 ui-light-navigation-bar = Light navigation bar
@@ -183,8 +179,6 @@ ui-anchor-badges-inside-the-icon-bounding-box-at-the-upper-trailing-edge-of-the-
 ui-limit-content-to-four-characters-including-a-plus-sign = Limit content to four characters, including a plus sign.
 
 ui-keep-the-default-color-mapping-so-badges-stand-out = Keep the default color mapping so badges stand out.
-
-ui-color-badges-use-new-color-mappings-and-support-dynamic-color-keep-the-default-error-and-o = Color: Badges use new color mappings and support dynamic color. Keep the default error and on-error roles for readable contrast.
 
 ui-a-small-badge-is-a-shape-with-no-text-a-large-badge-adds-a-label-so-it-can-carry-a-count-o = A small badge is a shape with no text. A large badge adds a label so it can carry a count or a short status.
 
