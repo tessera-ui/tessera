@@ -26,8 +26,8 @@ indextree = "4.7.4"
 slotmap = "1.1.1"
 rustc-hash = "2.1.1"
 tessera-macros = { path = "../crates/tessera-macros", version = "0.4.4" }
-accesskit = "0.24.0"
-accesskit_winit = { package = "tessera-accesskit-winit", version = "0.32.2", path = "../crates/tessera-accesskit/platforms/winit" }
+accesskit = { version = "0.25.2", path = "../crates/tessera-accesskit/accesskit" }
+accesskit_winit = { package = "tessera-accesskit-winit", version = "0.34.2", path = "../crates/tessera-accesskit/adapters/winit" }
 smallvec = "1.15.1"
 downcast-rs = "2.0.2"
 dyn-clone = "1.0.20"

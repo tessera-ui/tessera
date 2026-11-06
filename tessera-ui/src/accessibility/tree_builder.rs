@@ -6,7 +6,7 @@
 
 use std::collections::BTreeMap;
 
-use accesskit::{Node, NodeId as AccessKitNodeId, Rect, Tree, TreeId, TreeUpdate};
+use accesskit::{Node, NodeId as AccessKitNodeId, Rect, TreeId, TreeInfo, TreeUpdate};
 use indextree::NodeId as ComponentNodeId;
 use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
 
@@ -380,7 +380,7 @@ impl AccessibilityIndex {
                 .into_iter()
                 .map(|(key, entry)| (key, entry.node.clone()))
                 .collect(),
-            tree: Some(Tree::new(root)),
+            tree: Some(TreeInfo::new(root)),
             tree_id: TreeId::ROOT,
             focus,
         })

@@ -404,7 +404,7 @@ mod tests {
                     (SemanticId(0), root),
                     (SemanticId(2), branch),
                 ],
-                tree: Some(accesskit::Tree::new(SemanticId(0))),
+                tree: Some(accesskit::TreeInfo::new(SemanticId(0))),
                 focus: SemanticId(1),
             },
             owner.identity(),
