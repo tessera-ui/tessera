@@ -1,16 +1,18 @@
 use tessera_components::{
-    alignment::Alignment,
+    alignment::{Alignment, CrossAxisAlignment},
     app_bar::top_app_bar,
     boxed::boxed,
     button::button,
     column::column,
     icon::icon,
     icon_button::icon_button,
-    material_icons::filled,
+    material_icons::{filled, outlined},
     modifier::ModifierExt as _,
     navigation_drawer::navigation_drawer_item,
+    row::row,
     scaffold::scaffold,
     side_sheet::{SideSheetController, modal_side_sheet_provider},
+    spacer::spacer,
     surface::surface,
     text::text,
     theme::{MaterialTheme, material_theme},
@@ -154,13 +156,15 @@ pub(crate) fn app(
                                     column()
                                         .modifier(Modifier::new().fill_max_width())
                                         .children(move || {
+                                            drawer_header();
                                             nav_item(
                                                 "ui-home",
                                                 HomePageDestination {},
                                                 nav_controller,
                                                 side_sheet_controller,
                                             )
-                                            .icon_asset(filled::HOME_SVG);
+                                            .icon_asset(outlined::HOME_SVG)
+                                            .selected_icon_asset(filled::HOME_SVG);
                                             nav_item(
                                                 "ui-material-components",
                                                 MaterialComponentsPageDestination {
@@ -170,21 +174,24 @@ pub(crate) fn app(
                                                 nav_controller,
                                                 side_sheet_controller,
                                             )
-                                            .icon_asset(filled::WIDGETS_SVG);
+                                            .icon_asset(outlined::WIDGETS_SVG)
+                                            .selected_icon_asset(filled::WIDGETS_SVG);
                                             nav_item(
                                                 "ui-glass-components",
                                                 GlassComponentsPageDestination {},
                                                 nav_controller,
                                                 side_sheet_controller,
                                             )
-                                            .icon_asset(filled::BLUR_ON_SVG);
+                                            .icon_asset(outlined::WATER_DROP_SVG)
+                                            .selected_icon_asset(filled::WATER_DROP_SVG);
                                             nav_item(
                                                 "ui-custom-shader",
                                                 CustomShaderPageDestination {},
                                                 nav_controller,
                                                 side_sheet_controller,
                                             )
-                                            .icon_asset(filled::GRADIENT_SVG);
+                                            .icon_asset(outlined::PALETTE_SVG)
+                                            .selected_icon_asset(filled::PALETTE_SVG);
                                         });
                                 });
                         });
@@ -220,13 +227,40 @@ pub(crate) fn app(
 }
 
 #[tessera]
+fn drawer_header() {
+    let theme = use_context::<MaterialTheme>().unwrap().get();
+    let logo = if theme.color_scheme.is_dark {
+        crate::res::LOGO_DARK_PNG
+    } else {
+        crate::res::LOGO_PNG
+    };
+    row()
+        .modifier(
+            Modifier::new()
+                .fill_max_width()
+                .height(Dp(56.0))
+                .padding_symmetric(Dp(16.0), Dp::ZERO),
+        )
+        .cross_axis_alignment(CrossAxisAlignment::Center)
+        .children(move || {
+            icon().painter(logo).size(Dp(28.0));
+            spacer().modifier(Modifier::new().width(Dp(12.0)));
+            text("Tessera")
+                .style(theme.typography.title_large)
+                .color(theme.color_scheme.on_surface);
+        });
+}
+
+#[tessera]
 fn nav_item<D: RouterDestination + Clone + PartialEq>(
     #[prop(into)] headline: String,
     destination: D,
     nav_controller: State<RouterController>,
     side_sheet_controller: State<SideSheetController>,
     icon_asset: Option<Asset>,
+    selected_icon_asset: Option<Asset>,
 ) {
+    let selected = nav_controller.with(RouterController::current_is::<D>);
     let item = navigation_drawer_item()
         .label(I18N.text(headline))
         .on_click(move || {
@@ -237,8 +271,13 @@ fn nav_item<D: RouterDestination + Clone + PartialEq>(
                 }
             });
         })
-        .selected(nav_controller.with(RouterController::current_is::<D>));
-    if let Some(asset) = icon_asset {
+        .selected(selected);
+    let asset = if selected {
+        selected_icon_asset.or(icon_asset)
+    } else {
+        icon_asset
+    };
+    if let Some(asset) = asset {
         item.icon(move || {
             icon().painter(asset).size(Dp(24.0));
         });
