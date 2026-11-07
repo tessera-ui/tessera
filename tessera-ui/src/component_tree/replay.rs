@@ -11,7 +11,7 @@ use crate::{
     focus::{FocusHandleId, FocusRegistrationKind},
 };
 
-use super::ComponentTree;
+use super::{ComponentTree, sibling_index};
 
 #[derive(Default)]
 pub(super) struct ReplayAncestry {
@@ -57,9 +57,7 @@ impl ComponentTree {
             {
                 result.coordinate_space = Some(node.instance_key);
             }
-            result
-                .order
-                .push(self.composition_order.get(&id).copied().unwrap_or_default());
+            result.order.push(sibling_index(id, &self.tree));
             if let Some(semantics) = self
                 .metadatas
                 .get(&id)

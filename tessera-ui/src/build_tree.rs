@@ -15,8 +15,6 @@ use crate::{
         begin_recompose_context_slot_epoch, drop_context_slots_for_instance_logic_ids,
         remove_context_read_dependencies, reset_context_read_dependencies, with_context_snapshot,
     },
-    layout::{DefaultLayoutNode, NoopDrawModifier},
-    modifier::Modifier,
     runtime::{
         TesseraRuntime, begin_frame_component_replay_tracking, begin_frame_layout_dirty_tracking,
         begin_recompose_slot_epoch, clear_frame_nanos_receivers, drop_slots_for_instance_logic_ids,
@@ -361,23 +359,10 @@ impl Drop for BuildRootNodeGuard {
 
 fn push_build_root_node() -> BuildRootNodeGuard {
     TesseraRuntime::with_mut(|runtime| {
-        runtime.component_tree.add_node(ComponentNode {
-            fn_name: "__tessera_build_root".to_string(),
-            role: NodeRole::Composition,
-            layout_children: None,
-            #[cfg(feature = "profiling")]
-            subtree_len: 1,
-            children_scale: 1.0,
-            instance_logic_id: 0,
-            instance_key: 0,
-            interaction: None,
-            layout_coordinate_space: false,
-            modifier: Modifier::default(),
-            layout_node: Box::new(DefaultLayoutNode),
-            draw_node: Box::new(NoopDrawModifier),
-            replay: None,
-            props_unchanged_from_previous: false,
-        });
+        runtime.component_tree.add_node(ComponentNode::new(
+            "__tessera_build_root",
+            NodeRole::Composition,
+        ));
     });
     BuildRootNodeGuard
 }

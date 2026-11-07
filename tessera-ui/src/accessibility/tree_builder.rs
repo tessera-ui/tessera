@@ -12,7 +12,9 @@ use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
 
 use crate::{
     accessibility::AccessibilityId,
-    component_tree::{ComponentNodeMetaDatas, ComponentNodeTree, ComputedData, NodeRole},
+    component_tree::{
+        ComponentNodeMetaDatas, ComponentNodeTree, ComputedData, NodeRole, sibling_index,
+    },
     focus::{FocusOwner, bind_focus_owner},
     px::PxPosition,
 };
@@ -85,7 +87,6 @@ impl AccessibilityIndex {
         tree: &ComponentNodeTree,
         metadatas: &ComponentNodeMetaDatas,
         root: ComponentNodeId,
-        order: &HashMap<ComponentNodeId, usize>,
     ) -> usize {
         #[cfg(test)]
         {
@@ -188,14 +189,14 @@ impl AccessibilityIndex {
                     // logical reading order.
                     skip_composition_order = metadata.placement_order.is_some();
                     path.push(metadata.placement_order.map_or_else(
-                        || order.get(&ancestor).copied().unwrap_or_default(),
+                        || sibling_index(ancestor, tree),
                         |order| usize::try_from(order).unwrap_or(usize::MAX),
                     ));
                     if ancestor != root && metadata.abs_position.is_none() {
                         visible = false;
                     }
                 } else if !skip_composition_order {
-                    path.push(order.get(&ancestor).copied().unwrap_or_default());
+                    path.push(sibling_index(ancestor, tree));
                 }
                 if let Some(semantics) =
                     metadata.and_then(|metadata| metadata.accessibility.as_deref())
@@ -397,13 +398,9 @@ pub(crate) fn build_tree_update(
 ) -> Option<TreeUpdate> {
     let mut index = AccessibilityIndex::default();
     let changed = root.descendants(tree).collect();
-    let order = root
-        .descendants(tree)
-        .flat_map(|id| id.children(tree).enumerate().map(|(order, id)| (id, order)))
-        .collect();
     index.invalidate(&changed, &HashSet::default());
     index.set_label(label, root);
-    index.update(tree, metadatas, root, &order);
+    index.update(tree, metadatas, root);
     index.tree_update(tree, focused, true)
 }
 
@@ -810,10 +807,9 @@ mod tests {
     use accesskit::{Action, Role};
 
     use crate::{
-        Modifier, Px,
+        Px,
         accessibility::AccessibilityNode,
         component_tree::{ComponentNode, NodeRole},
-        layout::{DefaultLayoutNode, NoopDrawModifier},
     };
 
     use super::*;
@@ -824,23 +820,7 @@ mod tests {
         parent: Option<ComponentNodeId>,
         accessibility: Option<AccessibilityNode>,
     ) -> ComponentNodeId {
-        let id = tree.new_node(ComponentNode {
-            fn_name: "test_node".to_string(),
-            role: NodeRole::Layout,
-            layout_children: None,
-            #[cfg(feature = "profiling")]
-            subtree_len: 1,
-            children_scale: 1.0,
-            instance_logic_id: 0,
-            instance_key: 0,
-            interaction: None,
-            layout_coordinate_space: false,
-            modifier: Modifier::default(),
-            layout_node: Box::new(DefaultLayoutNode),
-            draw_node: Box::new(NoopDrawModifier),
-            replay: None,
-            props_unchanged_from_previous: false,
-        });
+        let id = tree.new_node(ComponentNode::new("test_node", NodeRole::Layout));
         tree[id].get_mut().instance_key = usize::from(id) as u64;
         if let Some(parent) = parent {
             parent.append(id, tree);
@@ -884,12 +864,7 @@ mod tests {
             &[root, unchanged, child].into_iter().collect(),
             &HashSet::default(),
         );
-        index.update(
-            &tree,
-            &metadatas,
-            root,
-            &[(unchanged, 0), (child, 1)].into_iter().collect(),
-        );
+        index.update(&tree, &metadatas, root);
         assert!(
             index
                 .tree_update(&tree, None, false)
@@ -924,12 +899,7 @@ mod tests {
             assert!(index.removed.len() <= 1);
             assert!(index.geometry_changed.len() <= 1);
         }
-        index.update(
-            &tree,
-            &metadatas,
-            root,
-            &[(unchanged, 0), (child, 1)].into_iter().collect(),
-        );
+        index.update(&tree, &metadatas, root);
         let delta = index.tree_update(&tree, None, false).unwrap();
         assert_eq!(delta.nodes.len(), 2);
         let current = delta
@@ -989,13 +959,9 @@ mod tests {
                 ..AccessibilityNode::new()
             }),
         );
-        let order = [(parent, 0), (child, 0), (sibling, 1)]
-            .into_iter()
-            .chain(wrappers.iter().copied().map(|id| (id, 0)))
-            .collect();
         let mut index = AccessibilityIndex::default();
         index.invalidate(&root.descendants(&tree).collect(), &HashSet::default());
-        index.update(&tree, &metadatas, root, &order);
+        index.update(&tree, &metadatas, root);
         let initial = index.tree_update(&tree, Some(child), true).unwrap();
         assert_eq!(
             initial
@@ -1016,14 +982,11 @@ mod tests {
                 .description(),
             Some("First hint")
         );
-        assert_eq!(index.update(&tree, &metadatas, root, &order), 0);
+        assert_eq!(index.update(&tree, &metadatas, root), 0);
         assert!(index.tree_update(&tree, Some(child), false).is_none());
 
         index.invalidate(&wrappers.iter().copied().collect(), &HashSet::default());
-        assert_eq!(
-            index.update(&tree, &metadatas, root, &order),
-            wrappers.len()
-        );
+        assert_eq!(index.update(&tree, &metadatas, root), wrappers.len());
         assert_eq!(index.ancestor_visits, 0);
         assert!(index.tree_update(&tree, Some(child), false).is_none());
 
@@ -1035,10 +998,7 @@ mod tests {
             .unwrap()
             .tooltip = Some("Updated hint".into());
         index.invalidate(&[parent].into_iter().collect(), &HashSet::default());
-        assert_eq!(
-            index.update(&tree, &metadatas, root, &order),
-            wrappers.len() + 2
-        );
+        assert_eq!(index.update(&tree, &metadatas, root), wrappers.len() + 2);
         let delta = index.tree_update(&tree, Some(child), false).unwrap();
         assert_eq!(delta.nodes.len(), 2);
         assert_eq!(delta.focus, child_key);
@@ -1061,7 +1021,7 @@ mod tests {
 
         metadatas.get_mut(&parent).unwrap().accessibility = None;
         index.invalidate(&[parent].into_iter().collect(), &HashSet::default());
-        index.update(&tree, &metadatas, root, &order);
+        index.update(&tree, &metadatas, root);
         let delta = index.tree_update(&tree, Some(child), false).unwrap();
         assert_eq!(delta.focus, child_key);
         assert_eq!(delta.nodes.len(), 2);
@@ -1078,7 +1038,7 @@ mod tests {
             &wrappers.iter().copied().chain([child]).collect(),
             &HashSet::default(),
         );
-        index.update(&tree, &metadatas, root, &order);
+        index.update(&tree, &metadatas, root);
         assert!(index.ancestor_visits > 0);
         let delta = index.tree_update(&tree, Some(child), false).unwrap();
         assert_eq!(delta.nodes.len(), 1);
@@ -1115,7 +1075,7 @@ mod tests {
         let key = tree[old].get().instance_key;
         let mut index = AccessibilityIndex::default();
         index.invalidate(&[root, old].into_iter().collect(), &HashSet::default());
-        index.update(&tree, &metadatas, root, &[(old, 0)].into_iter().collect());
+        index.update(&tree, &metadatas, root);
         let initial = index.tree_update(&tree, None, true).unwrap();
         let children = initial
             .nodes
@@ -1138,7 +1098,7 @@ mod tests {
         );
         tree[new].get_mut().instance_key = key;
         index.invalidate(&[new].into_iter().collect(), &[old].into_iter().collect());
-        index.update(&tree, &metadatas, root, &[(new, 0)].into_iter().collect());
+        index.update(&tree, &metadatas, root);
         let delta = index.tree_update(&tree, None, false).unwrap();
         assert_eq!(delta.nodes.len(), 1);
         assert_eq!(delta.nodes[0].0, AccessKitNodeId(key));
@@ -1193,7 +1153,7 @@ mod tests {
         let changed = [root, wrapper, child].into_iter().collect();
         index.invalidate(&changed, &HashSet::default());
         index.set_label(Some("Fixture"), root);
-        index.update(&tree, &metadatas, root, &HashMap::default());
+        index.update(&tree, &metadatas, root);
         let update = index.tree_update(&tree, None, true).expect("tree update");
         assert_eq!(update.nodes.len(), 2);
         assert_eq!(
@@ -1212,7 +1172,7 @@ mod tests {
         metadatas.get_mut(&child).unwrap().abs_position =
             Some(PxPosition::from_f32_xy(20.5, 25.25));
         index.invalidate_geometry(&[child].into_iter().collect());
-        index.update(&tree, &metadatas, root, &HashMap::default());
+        index.update(&tree, &metadatas, root);
         assert_eq!(index.ancestor_visits, 0);
         let delta = index.tree_update(&tree, None, false).unwrap();
         assert_eq!(delta.nodes.len(), 1);
@@ -1231,7 +1191,7 @@ mod tests {
 
         metadatas.get_mut(&child).unwrap().abs_position = None;
         index.invalidate_geometry(&[child].into_iter().collect());
-        index.update(&tree, &metadatas, root, &HashMap::default());
+        index.update(&tree, &metadatas, root);
         let hidden = index.tree_update(&tree, None, true).unwrap();
         assert!(
             !hidden
@@ -1242,7 +1202,7 @@ mod tests {
         metadatas.get_mut(&child).unwrap().abs_position =
             Some(PxPosition::from_f32_xy(20.5, 25.25));
         index.invalidate_geometry(&[child].into_iter().collect());
-        index.update(&tree, &metadatas, root, &HashMap::default());
+        index.update(&tree, &metadatas, root);
         let restored = index.tree_update(&tree, None, true).unwrap();
         assert!(node(&restored, child).supports_action(Action::Focus));
         assert_eq!(restored.focus, accesskit_id(child));
@@ -1296,12 +1256,9 @@ mod tests {
         );
         metadatas.get_mut(&content).unwrap().placement_order = Some(1);
         metadatas.get_mut(&navigation).unwrap().placement_order = Some(0);
-        let order = [(content_wrapper, 0), (navigation_wrapper, 1)]
-            .into_iter()
-            .collect();
         let mut index = AccessibilityIndex::default();
         index.invalidate(&root.descendants(&tree).collect(), &HashSet::default());
-        index.update(&tree, &metadatas, root, &order);
+        index.update(&tree, &metadatas, root);
         let initial = index.tree_update(&tree, Some(navigation), true).unwrap();
         assert_eq!(
             node(&initial, root).children(),
@@ -1314,7 +1271,7 @@ mod tests {
         index.invalidate_geometry(&metadatas.placement_order_changed);
         index.invalidate_placement_order(&metadatas.placement_order_changed);
         metadatas.placement_order_changed.clear();
-        index.update(&tree, &metadatas, root, &order);
+        index.update(&tree, &metadatas, root);
         let delta = index.tree_update(&tree, Some(navigation), false).unwrap();
         assert_eq!(
             node(&delta, root).children(),
@@ -1745,7 +1702,7 @@ mod tests {
         }));
         let mut owner = FocusOwner::new();
         owner.sync_from_component_tree(root, &tree);
-        owner.sync_layout_from_component_tree(root, &tree, &metadatas);
+        owner.sync_layout_from_component_tree(&tree, &metadatas);
         let request = || accesskit::ActionRequest {
             action: Action::Focus,
             target_tree: TreeId::ROOT,

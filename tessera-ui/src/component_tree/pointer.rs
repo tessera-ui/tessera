@@ -93,7 +93,6 @@ impl PointerIndex {
         &mut self,
         tree: &ComponentNodeTree,
         metadatas: &ComponentNodeMetaDatas,
-        order: &HashMap<NodeId, usize>,
         changed: &HashSet<NodeId>,
         removed: &HashSet<NodeId>,
     ) -> usize {
@@ -298,7 +297,7 @@ impl PointerIndex {
             let path = retained_order.unwrap_or_else(|| {
                 let mut path: Vec<_> = id
                     .ancestors(tree)
-                    .map(|id| order.get(&id).copied().unwrap_or_default())
+                    .map(|id| super::sibling_index(id, tree))
                     .collect();
                 path.reverse();
                 path

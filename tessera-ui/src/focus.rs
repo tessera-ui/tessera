@@ -13,6 +13,7 @@ use crate::{
     NodeId, PxPosition, PxRect,
     component_tree::{
         ComponentNodeMetaDatas, ComponentNodeTree, NodeRole, nearest_replay_boundary_instance_key,
+        sibling_index,
     },
     execution_context::{with_execution_context, with_execution_context_mut},
     prop::CallbackWith,
@@ -1295,7 +1296,6 @@ impl FocusOwner {
     pub(crate) fn sync_changes(
         &mut self,
         tree: &ComponentNodeTree,
-        composition_order: &HashMap<NodeId, usize>,
         changed: &HashSet<NodeId>,
         removed: &HashSet<NodeId>,
     ) {
@@ -1374,12 +1374,7 @@ impl FocusOwner {
             let order: Vec<_> = node_id
                 .ancestors(tree)
                 .filter(|id| tree[*id].parent().is_some())
-                .map(|id| {
-                    (
-                        u64::MAX,
-                        composition_order.get(&id).copied().unwrap_or_default(),
-                    )
-                })
+                .map(|id| (u64::MAX, sibling_index(id, tree)))
                 .collect::<Vec<_>>()
                 .into_iter()
                 .rev()
@@ -1416,7 +1411,6 @@ impl FocusOwner {
     pub(crate) fn sync_geometry_changes(
         &mut self,
         tree: &ComponentNodeTree,
-        composition_order: &HashMap<NodeId, usize>,
         metadatas: &ComponentNodeMetaDatas,
         changed: &HashSet<NodeId>,
     ) {
@@ -1470,7 +1464,7 @@ impl FocusOwner {
                             .get(&id)
                             .and_then(|metadata| metadata.placement_order)
                             .unwrap_or(u64::MAX),
-                        composition_order.get(&id).copied().unwrap_or(0),
+                        sibling_index(id, tree),
                     ))
                 })
                 .collect::<Vec<_>>();
@@ -1524,36 +1518,17 @@ impl FocusOwner {
             .copied()
             .filter(|node| !changed.contains(node))
             .collect();
-        let order = root_node
-            .descendants(tree)
-            .flat_map(|parent| {
-                parent
-                    .children(tree)
-                    .enumerate()
-                    .map(|(order, id)| (id, order))
-            })
-            .collect();
-        self.sync_changes(tree, &order, &changed, &removed);
+        self.sync_changes(tree, &changed, &removed);
     }
 
     #[cfg(test)]
     pub(crate) fn sync_layout_from_component_tree(
         &mut self,
-        root_node: NodeId,
         tree: &ComponentNodeTree,
         metadatas: &ComponentNodeMetaDatas,
     ) {
         let changed = self.handles_by_component.keys().copied().collect();
-        let order = root_node
-            .descendants(tree)
-            .flat_map(|parent| {
-                parent
-                    .children(tree)
-                    .enumerate()
-                    .map(|(order, id)| (id, order))
-            })
-            .collect();
-        self.sync_geometry_changes(tree, &order, metadatas, &changed);
+        self.sync_geometry_changes(tree, metadatas, &changed);
     }
 
     pub(crate) fn commit_pending(&mut self) {

@@ -1,5 +1,6 @@
 use std::{
     collections::HashMap,
+    num::NonZeroUsize,
     ops::{Add, AddAssign},
     sync::{Arc, OnceLock},
 };
@@ -59,6 +60,7 @@ pub(crate) struct ComponentNode {
     /// layout node.
     pub(crate) role: NodeRole,
     pub(crate) layout_children: Option<Arc<[NodeId]>>,
+    pub(crate) sibling_index: Option<NonZeroUsize>,
     #[cfg(feature = "profiling")]
     pub(crate) subtree_len: usize,
     pub(crate) children_scale: f32,
@@ -86,6 +88,7 @@ impl ComponentNode {
             fn_name: fn_name.to_owned(),
             role,
             layout_children: None,
+            sibling_index: None,
             #[cfg(feature = "profiling")]
             subtree_len: 1,
             children_scale: 1.0,
@@ -317,6 +320,13 @@ impl Default for ComponentNodeMetaData {
     fn default() -> Self {
         Self::none()
     }
+}
+
+pub(crate) fn sibling_index(id: NodeId, tree: &ComponentNodeTree) -> usize {
+    tree[id].get().sibling_index.map_or_else(
+        || id.preceding_siblings(tree).skip(1).count(),
+        |index| index.get() - 1,
+    )
 }
 
 pub(crate) fn direct_layout_children(node_id: NodeId, tree: &ComponentNodeTree) -> Arc<[NodeId]> {

@@ -3952,7 +3952,7 @@ mod tests {
     use crate::execution_context::{
         reset_execution_context, with_execution_context, with_execution_context_mut,
     };
-    use crate::layout::{DefaultLayoutNode, MeasureScope, NoopDrawModifier};
+    use crate::layout::MeasureScope;
     use crate::modifier::{LayoutModifierChild, LayoutModifierInput, LayoutModifierNode};
     use crate::prop::{CallbackWith, ComponentReplayData, RenderSlot, make_component_runner};
     use crate::tessera;
@@ -4356,23 +4356,9 @@ mod tests {
         reset_layout_dirty_tracking();
         begin_recompose_slot_epoch();
         let root_node = TesseraRuntime::with_mut(|runtime| {
-            runtime.component_tree.add_node(ComponentNode {
-                fn_name: "root".to_string(),
-                role: NodeRole::Layout,
-                layout_children: None,
-                #[cfg(feature = "profiling")]
-                subtree_len: 1,
-                children_scale: 1.0,
-                instance_logic_id: 0,
-                instance_key: 0,
-                interaction: None,
-                layout_coordinate_space: false,
-                modifier: Modifier::default(),
-                layout_node: Box::new(DefaultLayoutNode),
-                draw_node: Box::new(NoopDrawModifier),
-                replay: None,
-                props_unchanged_from_previous: false,
-            })
+            runtime
+                .component_tree
+                .add_node(ComponentNode::new("root", NodeRole::Layout))
         });
 
         let state = {
@@ -4762,23 +4748,9 @@ mod tests {
         let _runtime_scope = _runtime_session.enter();
         begin_recompose_slot_epoch();
         let root_node = TesseraRuntime::with_mut(|runtime| {
-            runtime.component_tree.add_node(ComponentNode {
-                fn_name: "root".to_string(),
-                role: NodeRole::Composition,
-                layout_children: None,
-                #[cfg(feature = "profiling")]
-                subtree_len: 1,
-                children_scale: 1.0,
-                instance_logic_id: 0,
-                instance_key: 0,
-                interaction: None,
-                layout_coordinate_space: false,
-                modifier: Modifier::default(),
-                layout_node: Box::new(DefaultLayoutNode),
-                draw_node: Box::new(NoopDrawModifier),
-                replay: None,
-                props_unchanged_from_previous: false,
-            })
+            runtime
+                .component_tree
+                .add_node(ComponentNode::new("root", NodeRole::Composition))
         });
         let _phase_guard = push_phase(RuntimePhase::Build);
 

@@ -45,7 +45,7 @@ pub use node::{
 
 pub(crate) use node::{
     ComponentNode, ComponentNodeMetaData, ComponentNodeMetaDatas, ComponentNodeTree, NodeRole,
-    WindowDragRequest, WindowRequests, direct_layout_children, measure_node,
+    WindowDragRequest, WindowRequests, direct_layout_children, measure_node, sibling_index,
 };
 
 #[cfg(feature = "profiling")]
@@ -557,7 +557,6 @@ pub struct ComponentTree {
     replay_ancestry: replay::ReplayAncestry,
     replay_changed_parents: HashSet<NodeId>,
     node_ids_by_instance_key: HashMap<u64, indextree::NodeId>,
-    composition_order: HashMap<NodeId, usize>,
     changed_frame_nodes: HashSet<NodeId>,
     removed_frame_nodes: HashSet<NodeId>,
     removed_focus_owners: HashSet<u64>,
@@ -645,7 +644,6 @@ impl ComponentTree {
             replay_ancestry: replay::ReplayAncestry::default(),
             replay_changed_parents: HashSet::default(),
             node_ids_by_instance_key: HashMap::default(),
-            composition_order: HashMap::default(),
             changed_frame_nodes: HashSet::default(),
             removed_frame_nodes: HashSet::default(),
             removed_focus_owners: HashSet::default(),
@@ -675,7 +673,6 @@ impl ComponentTree {
         self.removed_frame_nodes
             .extend(self.node_ids_by_instance_key.values().copied());
         self.changed_frame_nodes.clear();
-        self.composition_order.clear();
         #[cfg(feature = "profiling")]
         {
             self.profiler_nodes_cache.clear();
@@ -758,12 +755,8 @@ impl ComponentTree {
         self.accessibility_index
             .invalidate(&self.metadatas.paint_changed, &HashSet::default());
         if immediate {
-            self.accessibility_index.update(
-                &self.tree,
-                &self.metadatas,
-                root,
-                &self.composition_order,
-            )
+            self.accessibility_index
+                .update(&self.tree, &self.metadatas, root)
         } else {
             0
         }
@@ -777,7 +770,7 @@ impl ComponentTree {
         let root = self.tree.get_node_id_at(NonZero::new(1)?)?;
         self.accessibility_index.set_label(label, root);
         self.accessibility_index
-            .update(&self.tree, &self.metadatas, root, &self.composition_order);
+            .update(&self.tree, &self.metadatas, root);
         self.accessibility_index.tree_update(
             &self.tree,
             self.focus_owner.active_component_node_id(),
@@ -961,7 +954,6 @@ impl ComponentTree {
                 self.removed_frame_nodes.insert(*node_id);
                 self.changed_frame_nodes.remove(node_id);
                 self.metadatas.remove(node_id);
-                self.composition_order.remove(node_id);
             }
             detached_root_id.remove_subtree(&mut self.tree);
         }
@@ -1091,7 +1083,6 @@ impl ComponentTree {
         current_node_id.insert_before(candidate_node_id, &mut self.tree);
         self.metadatas.remove(&current_node_id);
         self.remove_position_observer(current_node_id);
-        self.composition_order.remove(&current_node_id);
         self.changed_frame_nodes.remove(&current_node_id);
         self.removed_frame_nodes.insert(current_node_id);
         self.changed_frame_nodes.insert(candidate_node_id);
@@ -1141,8 +1132,10 @@ impl ComponentTree {
         id.detach(&mut self.tree);
         self.remove_position_observer(id);
         self.replay_reuse_candidates.remove(&node.instance_key);
-        node.layout_children = self.tree[id].get_mut().layout_children.take();
-        let previous = std::mem::replace(self.tree[id].get_mut(), node);
+        let old = self.tree[id].get_mut();
+        node.layout_children = old.layout_children.take();
+        node.sibling_index = old.sibling_index;
+        let previous = std::mem::replace(old, node);
         self.attach_build_node(id);
         self.metadatas.mark_paint_dirty(id);
         (
@@ -1216,15 +1209,20 @@ impl ComponentTree {
         let mut children = Vec::new();
         #[cfg(feature = "profiling")]
         let mut subtree_len = 1_usize;
-        for (order, child_id) in node_id.children(&self.tree).enumerate() {
-            if self
-                .composition_order
-                .insert(child_id, order)
-                .is_some_and(|previous| previous != order)
+        let mut next_child = node_id.first_child(&self.tree);
+        let mut index = NonZero::<usize>::MIN;
+        while let Some(child_id) = next_child {
+            next_child = child_id.next_sibling(&self.tree);
+            if self.tree[child_id]
+                .get_mut()
+                .sibling_index
+                .replace(index)
+                .is_some_and(|previous| previous != index)
             {
                 self.metadatas.placement_order_dirty.insert(child_id);
                 self.metadatas.mark_geometry_dirty(child_id);
             }
+            index = index.saturating_add(1);
             let child = self.tree[child_id].get();
             #[cfg(feature = "profiling")]
             {
@@ -1671,7 +1669,6 @@ impl ComponentTree {
         self.pointer_work.0 = self.pointer_index.update(
             &self.tree,
             &self.metadatas,
-            &self.composition_order,
             &changed,
             &self.removed_frame_nodes,
         ) as u64;
@@ -2401,12 +2398,8 @@ impl ComponentTree {
             .invalidate(&changed_frame_nodes, &removed_frame_nodes);
         self.accessibility_index
             .invalidate(&changed_frame_nodes, &removed_frame_nodes);
-        self.focus_owner.sync_changes(
-            &self.tree,
-            &self.composition_order,
-            &changed_frame_nodes,
-            &removed_frame_nodes,
-        );
+        self.focus_owner
+            .sync_changes(&self.tree, &changed_frame_nodes, &removed_frame_nodes);
         self.focus_owner.commit_pending();
 
         record_frame_stage(&mut stage_timer, "consumer_attachments");
@@ -2479,7 +2472,6 @@ impl ComponentTree {
                 geometry_changes.extend(changed_frame_nodes.iter().copied());
                 self.focus_owner.sync_geometry_changes(
                     &self.tree,
-                    &self.composition_order,
                     &self.metadatas,
                     &geometry_changes,
                 );
@@ -2542,7 +2534,6 @@ impl ComponentTree {
         focus_geometry_changes.extend(changed_frame_nodes.iter().copied());
         self.focus_owner.sync_geometry_changes(
             &self.tree,
-            &self.composition_order,
             &self.metadatas,
             &focus_geometry_changes,
         );
@@ -4313,8 +4304,6 @@ mod tests {
     use crate::{
         Px,
         component_tree::{ComponentNode, NodeRole},
-        layout::{DefaultLayoutNode, NoopDrawModifier},
-        modifier::Modifier,
     };
 
     fn node_with_role(
@@ -4324,21 +4313,9 @@ mod tests {
         instance_key: u64,
     ) -> ComponentNode {
         ComponentNode {
-            fn_name: name.to_string(),
-            role,
-            layout_children: None,
-            #[cfg(feature = "profiling")]
-            subtree_len: 1,
-            children_scale: 1.0,
             instance_logic_id,
             instance_key,
-            interaction: None,
-            layout_coordinate_space: false,
-            modifier: Modifier::default(),
-            layout_node: Box::new(DefaultLayoutNode),
-            draw_node: Box::new(NoopDrawModifier),
-            replay: None,
-            props_unchanged_from_previous: false,
+            ..ComponentNode::new(name, role)
         }
     }
 
@@ -5161,7 +5138,7 @@ mod tests {
             );
             tree.focus_owner.sync_from_component_tree(root, &tree.tree);
             tree.focus_owner
-                .sync_layout_from_component_tree(root, &tree.tree, &tree.metadatas);
+                .sync_layout_from_component_tree(&tree.tree, &tree.metadatas);
             if position.is_none() {
                 assert_eq!(
                     tree.focus_owner.active_component_node_id(),
@@ -5833,19 +5810,19 @@ mod tests {
         populate_layout_metadata(root, &tree.tree, &mut tree.metadatas);
         tree.focus_owner.sync_from_component_tree(root, &tree.tree);
         tree.focus_owner
-            .sync_layout_from_component_tree(root, &tree.tree, &tree.metadatas);
+            .sync_layout_from_component_tree(&tree.tree, &tree.metadatas);
         tree.focus_owner.request_focus(registration.id);
         assert_eq!(tree.focus_owner.active_component_node_id(), Some(target));
 
         scope.detach(&mut tree.tree);
         tree.focus_owner.sync_from_component_tree(root, &tree.tree);
         tree.focus_owner
-            .sync_layout_from_component_tree(root, &tree.tree, &tree.metadatas);
+            .sync_layout_from_component_tree(&tree.tree, &tree.metadatas);
         assert_eq!(tree.focus_owner.active_component_node_id(), None);
         root.append(scope, &mut tree.tree);
         tree.focus_owner.sync_from_component_tree(root, &tree.tree);
         tree.focus_owner
-            .sync_layout_from_component_tree(root, &tree.tree, &tree.metadatas);
+            .sync_layout_from_component_tree(&tree.tree, &tree.metadatas);
         assert_eq!(tree.focus_owner.active_component_node_id(), Some(target));
     }
 
