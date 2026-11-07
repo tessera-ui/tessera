@@ -2138,6 +2138,19 @@ where
         if let Some(app) = self.app.as_ref() {
             crate::window_insets::platform::refresh(app.window(), event_loop);
         }
+        #[cfg(target_os = "ios")]
+        {
+            // UIKit can coalesce view redraws while the Metal sublayer presents.
+            if self.redraw_request_pending.load(Ordering::Acquire) {
+                self.handle_redraw_requested(event_loop);
+            }
+            let flow = if self.redraw_request_pending.load(Ordering::Acquire) {
+                ControlFlow::Poll
+            } else {
+                ControlFlow::Wait
+            };
+            event_loop.set_control_flow(flow);
+        }
     }
 
     #[tracing::instrument(level = "debug", skip(self, event_loop))]

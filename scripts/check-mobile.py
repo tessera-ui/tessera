@@ -52,8 +52,18 @@ def valid(record):
     )
 
 
-def verify(read, background, foreground):
-    initial = wait(read, lambda records: valid(frame(records)))
+def verify(read, background, foreground, *, require_runtime_redraw=False):
+    def ready(records):
+        if not require_runtime_redraw:
+            return valid(frame(records))
+        frames = (record for record in records if record.get("type") == "frame")
+        next(frames, None)
+        return any(
+            "runtime_invalidation" in record.get("redraw_reasons", []) and valid(record)
+            for record in frames
+        )
+
+    initial = wait(read, ready)
     background()
     suspended = wait(read, lambda records: any(item.get("type") == "runtime" and item.get("kind") == "suspended"
                                               for item in records[len(initial):]))
@@ -62,7 +72,7 @@ def verify(read, background, foreground):
         following = records[len(suspended):]
         position = next((i for i, item in enumerate(following)
                          if item.get("type") == "runtime" and item.get("kind") == "resumed"), None)
-        return position is not None and valid(frame(following[position + 1:]))
+        return position is not None and ready(following[position + 1:])
     restored = wait(read, resumed)
     print(json.dumps({"first_frame": frame(initial)["frame"], "restored_frame": frame(restored)["frame"]}))
 
@@ -110,7 +120,12 @@ def ios(udid, bundle):
         return trace.read_text() if trace.exists() else ""
     pid = launch().split(":")[-1].strip()
     try:
-        verify(read, lambda: run("xcrun", "simctl", "launch", udid, "com.apple.mobilesafari"), launch)
+        verify(
+            read,
+            lambda: run("xcrun", "simctl", "launch", udid, "com.apple.mobilesafari"),
+            launch,
+            require_runtime_redraw=True,
+        )
         assert launch().split(":")[-1].strip() == pid, "Application restarted instead of resuming"
         run("xcrun", "simctl", "io", udid, "screenshot", str(output / "ios-portrait.png"))
         run("xcrun", "simctl", "terminate", udid, identifier)
